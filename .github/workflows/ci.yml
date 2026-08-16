@@ -181,6 +181,13 @@ jobs:
       # (token audience, type, expiry, bypass secret, redirect targets).
       - name: Ingress protection + auth gate tests
         run: pnpm --filter server test:protection
+      # Env is owned by the deployment record: these pin that removing a var
+      # reaches the pod, and that a namespace sync never writes the live pod
+      # spec back over the stored config.
+      - name: Environment variable ownership tests
+        run: pnpm --filter server test:env-removal
+      - name: Notification routing + scope tests
+        run: pnpm --filter server test:notifications
 
   e2e:
     needs: changes

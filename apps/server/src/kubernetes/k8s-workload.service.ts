@@ -1619,55 +1619,33 @@ export class K8sWorkloadService {
           });
         }
         
-        const containerEnv = k8sDeployment.spec.template.spec.containers?.[0]?.env || [];
-        const envKeys = new Set<string>();
-
-        for (const envVar of containerEnv) {
-          if (!envVar?.name) {
-            continue;
+        // Env belongs to the deployment record, never to the live pod spec, so
+        // this only seeds a Deployment we have just adopted from outside
+        // Orchard. Reading it back for a record we already own would rewrite the
+        // user's config from the cluster: the injected extras (HOST,
+        // FORCE_COLOR) would land as if they had typed them, and every secret
+        // var would be dropped, since those reach the container through a
+        // secretKeyRef and carry no inline value to read.
+        if (!existingRecord) {
+          const containerEnv = k8sDeployment.spec.template.spec.containers?.[0]?.env || [];
+          const adopted = containerEnv
+            .filter((envVar) => envVar?.name && envVar.value !== undefined && envVar.value !== null)
+            .map((envVar) => ({
+              deploymentId: deploymentRecord.id,
+              key: String(envVar.name),
+              value: String(envVar.value),
+            }));
+          if (adopted.length > 0) {
+            await this.prisma.deploymentEnvVar.createMany({ data: adopted, skipDuplicates: true });
           }
-
-          if (envVar.value === undefined || envVar.value === null) {
-            continue;
+          const referenced = containerEnv.filter((envVar) => envVar?.name && envVar.valueFrom);
+          if (referenced.length > 0) {
+            this.logger.warn(
+              `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and were not imported: ${referenced
+                .map((envVar) => envVar.name)
+                .join(', ')}`,
+            );
           }
-
-          const key = String(envVar.name);
-          const value = String(envVar.value);
-          envKeys.add(key);
-
-          await this.prisma.deploymentEnvVar.upsert({
-            where: {
-              deploymentId_key: {
-                deploymentId: deploymentRecord.id,
-                key,
-              },
-            },
-            update: {
-              value,
-            },
-            create: {
-              deploymentId: deploymentRecord.id,
-              key,
-              value,
-            },
-          });
-        }
-
-        if (envKeys.size > 0) {
-          await this.prisma.deploymentEnvVar.deleteMany({
-            where: {
-              deploymentId: deploymentRecord.id,
-              key: {
-                notIn: Array.from(envKeys),
-              },
-            },
-          });
-        } else {
-          await this.prisma.deploymentEnvVar.deleteMany({
-            where: {
-              deploymentId: deploymentRecord.id,
-            },
-          });
         }
 
         try {

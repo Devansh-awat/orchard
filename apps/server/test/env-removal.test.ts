@@ -371,3 +371,125 @@ test('the container env op targets the container by index and replaces the whole
     value: [{ name: 'A', value: '1' }],
   });
 });
+
+/**
+ * The other direction. `syncNamespaceToDatabase` pulls live cluster state into
+ * the DB, and it used to pull env with it: every inline `containers[0].env`
+ * entry was upserted over the stored config and every stored key absent from
+ * the live spec was deleted. Two things fall out of that, and both destroy a
+ * user's configuration rather than merely showing it wrong:
+ *
+ *  - secrets reach the container through a secretKeyRef and carry no inline
+ *    value, so they were skipped on the way in and then deleted on the way out;
+ *  - HOST and FORCE_COLOR are injected at the k8s layer, so they came back as
+ *    if the user had typed them.
+ *
+ * Env belongs to the deployment record. The cluster only gets to seed it for a
+ * Deployment we are adopting, which is the one case where the DB knows nothing.
+ */
+
+function syncFixture(options: { existingRecord: any; env: k8s.V1EnvVar[] }) {
+  const calls: { method: string; args: any[] }[] = [];
+  const record = (method: string) => (...args: any[]) => {
+    calls.push({ method, args });
+    return Promise.resolve(method === 'deploymentEnvVar.createMany' ? { count: 0 } : []);
+  };
+
+  const prisma = {
+    project: { findFirst: async () => ({ id: 'p1', namespace: NAMESPACE }) },
+    environment: { findFirst: async () => ({ id: 'e1' }) },
+    deployment: {
+      findFirst: async () => options.existingRecord,
+      update: async () => options.existingRecord,
+      create: async () => ({ id: 'd-new' }),
+      findMany: async () => [],
+      delete: record('deployment.delete'),
+    },
+    deploymentEnvVar: {
+      createMany: record('deploymentEnvVar.createMany'),
+      upsert: record('deploymentEnvVar.upsert'),
+      deleteMany: record('deploymentEnvVar.deleteMany'),
+    },
+  };
+
+  const appsApi = {
+    async listNamespacedDeployment() {
+      return {
+        body: {
+          items: [
+            {
+              metadata: { name: NAME },
+              spec: {
+                replicas: 1,
+                template: { spec: { containers: [{ name: NAME, image: 'demo:v1', env: options.env }] } },
+              },
+              status: { availableReplicas: 1 },
+            },
+          ],
+        },
+      };
+    },
+  };
+  // No Service object: the ports half of the sync is not what these pin.
+  const coreApi = {
+    async readNamespacedService() {
+      throw Object.assign(new Error('not found'), { response: { statusCode: 404 } });
+    },
+  };
+  const kubernetes = {
+    kc: { makeApiClient: (type: any) => (type === k8s.CoreV1Api ? coreApi : appsApi) },
+    ensureKubeConfig() {},
+  };
+
+  const service = new K8sWorkloadService(prisma as any, kubernetes as any, {} as any);
+  return { service, calls };
+}
+
+const LIVE_ENV: k8s.V1EnvVar[] = [
+  { name: 'HOST', value: '0.0.0.0' },
+  { name: 'FORCE_COLOR', value: '1' },
+  { name: 'JOBS', value: '1' },
+  { name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } },
+];
+
+test('syncing a namespace never rewrites the env of an app Orchard already owns', async () => {
+  const { service, calls } = syncFixture({ existingRecord: { id: 'd1' }, env: LIVE_ENV });
+
+  await service.syncNamespaceToDatabase(NAMESPACE);
+
+  const envWrites = calls.filter((c) => c.method.startsWith('deploymentEnvVar.'));
+  assert.deepEqual(envWrites, [], 'the live pod spec must not write to deployment_env_vars');
+});
+
+test('a secret var is never deleted just because the pod spec has no inline value', async () => {
+  const { service, calls } = syncFixture({
+    existingRecord: { id: 'd1' },
+    // Everything routes through the Secret, which is what emptied the whole set.
+    env: [{ name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } }],
+  });
+
+  await service.syncNamespaceToDatabase(NAMESPACE);
+
+  assert.ok(
+    !calls.some((c) => c.method === 'deploymentEnvVar.deleteMany'),
+    'syncing must never delete stored env vars',
+  );
+});
+
+test('adopting a Deployment Orchard did not create seeds its inline env once', async () => {
+  const { service, calls } = syncFixture({ existingRecord: null, env: LIVE_ENV });
+
+  await service.syncNamespaceToDatabase(NAMESPACE);
+
+  const created = calls.filter((c) => c.method === 'deploymentEnvVar.createMany');
+  assert.equal(created.length, 1, 'an adopted deployment should be seeded exactly once');
+  assert.deepEqual(
+    created[0].args[0].data.map((row: any) => row.key).sort(),
+    ['FORCE_COLOR', 'HOST', 'JOBS'],
+    'only inline values can be adopted; a secretKeyRef has no value to read',
+  );
+  assert.ok(
+    !calls.some((c) => c.method === 'deploymentEnvVar.deleteMany'),
+    'seeding a fresh record has nothing to delete',
+  );
+});
