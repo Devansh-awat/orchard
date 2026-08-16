@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.7.0...frontend/v1.7.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* app settings keep the previous app's values when switching mid-build ([64eeb32](https://github.com/LeafdTK/leaf/commit/64eeb324d7c5432bb9115c7fc8794e1ae3dee525))
+* app settings left blank when the page opens during a build ([b09cf5a](https://github.com/LeafdTK/leaf/commit/b09cf5a40d0cb8b3b9e52f1dba263e95208b0a13))
+
 ## [1.7.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.6.0...frontend/v1.7.0) (2026-08-15)
 
 

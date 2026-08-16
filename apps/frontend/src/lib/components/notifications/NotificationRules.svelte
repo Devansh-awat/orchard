@@ -123,7 +123,12 @@
 					type: formType,
 					config:
 						formType === 'email'
-							? { recipients: formRecipients.split(',').map((r) => r.trim()).filter(Boolean) }
+							? {
+									recipients: formRecipients
+										.split(',')
+										.map((r) => r.trim())
+										.filter(Boolean)
+								}
 							: { url: formUrl.trim() },
 					scopeType,
 					scopeId

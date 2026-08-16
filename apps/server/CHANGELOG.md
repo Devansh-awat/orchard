@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.1](https://github.com/LeafdTK/leaf/compare/server/v2.7.0...server/v2.7.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* namespace sync overwriting deployment env from the live pod spec ([0f2e671](https://github.com/LeafdTK/leaf/commit/0f2e6717fdb83d3ce134fe3e195434e7370e0bf5))
+
 ## [2.7.0](https://github.com/LeafdTK/leaf/compare/server/v2.6.1...server/v2.7.0) (2026-08-15)
 
 

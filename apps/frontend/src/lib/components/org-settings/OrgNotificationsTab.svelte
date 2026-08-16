@@ -1,9 +1,23 @@
 <script lang="ts">
-	import { Check, Copy, History, Loader2, Pencil, Plus, Send, Trash2, TriangleAlert } from 'lucide-svelte';
+	import {
+		Check,
+		Copy,
+		History,
+		Loader2,
+		Pencil,
+		Plus,
+		Send,
+		Trash2,
+		TriangleAlert
+	} from 'lucide-svelte';
 	import { Bell } from '@jis3r/icons';
 	import { Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
-	import { CHANNEL_TYPE_META, NotificationRules, replayChannel } from '$lib/components/notifications';
+	import {
+		CHANNEL_TYPE_META,
+		NotificationRules,
+		replayChannel
+	} from '$lib/components/notifications';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { toasts } from '$lib/stores';
