@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.0](https://github.com/LeafdTK/leaf/compare/server/v2.8.0...server/v2.9.0) (2026-08-18)
+
+
+### Features
+
+* mcp goes stateless on the 2026-07-28 spec ([6631bec](https://github.com/LeafdTK/leaf/commit/6631bec61ac8e7a32693f03ce67396dc371d2797))
+
 ## [2.8.0](https://github.com/LeafdTK/leaf/compare/server/v2.7.1...server/v2.8.0) (2026-08-18)
 
 
