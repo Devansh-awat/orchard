@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { MirrorInformer } from '../src/mirror/mirror-informer';
 import { PodMirrorConsumer } from '../src/mirror/consumers/pod-mirror.consumer';
+import { computePodStatus } from '../src/mirror/pod-status';
 
 const prisma = new PrismaClient();
 
@@ -369,4 +370,77 @@ test('the prune drops pod rows the cluster no longer lists and clears their aler
   await ageCrashState(90_000);
   await consumer.sweepCrashStates();
   assert.equal(await prisma.deploymentCrashState.count({ where: { deploymentId } }), 0);
+});
+
+// --- pod status derivation ---------------------------------------------------
+
+function pod(over: {
+  phase?: string;
+  ready?: boolean;
+  scheduled?: boolean;
+  waiting?: string;
+  deleting?: boolean;
+}) {
+  const ready = over.ready ?? false;
+  const conditions: any[] = [];
+  if (over.scheduled ?? true) conditions.push({ type: 'PodScheduled', status: 'True' });
+  conditions.push({ type: 'Ready', status: ready ? 'True' : 'False' });
+  return {
+    metadata: {
+      name: 'p',
+      namespace: NS,
+      ...(over.deleting ? { deletionTimestamp: new Date().toISOString() } : {}),
+    },
+    status: {
+      phase: over.phase ?? 'Running',
+      conditions,
+      containerStatuses: [
+        {
+          name: 'app',
+          ready,
+          restartCount: 0,
+          state: over.waiting ? { waiting: { reason: over.waiting } } : { running: {} },
+        },
+      ],
+    },
+  } as never;
+}
+
+test('a running pod waiting on its health check is starting, not scheduled', () => {
+  // The app is up and serving; only readiness has not passed. "Scheduled" told
+  // the user about a milestone the pod cleared long ago.
+  assert.equal(computePodStatus(pod({ phase: 'Running', ready: false })), 'starting');
+  assert.equal(computePodStatus(pod({ phase: 'Running', ready: true })), 'ready');
+});
+
+test('scheduled still means assigned to a node with nothing running yet', () => {
+  assert.equal(computePodStatus(pod({ phase: 'Pending', scheduled: true })), 'scheduled');
+  assert.equal(computePodStatus(pod({ phase: 'Pending', scheduled: false })), 'pending');
+});
+
+test('every stuck waiting reason reads as crashing, not as progress', () => {
+  for (const reason of [
+    'CrashLoopBackOff',
+    'ImagePullBackOff',
+    'ErrImagePull',
+    'ErrImagePullBackOff',
+    'CreateContainerError',
+    'CreateContainerConfigError',
+    'RunContainerError',
+    'InvalidImageName',
+  ]) {
+    assert.equal(
+      computePodStatus(pod({ phase: 'Pending', waiting: reason })),
+      'crashing',
+      `${reason} should read as crashing`,
+    );
+  }
+});
+
+test('a pod being deleted is terminating, even mid crash loop', () => {
+  assert.equal(computePodStatus(pod({ phase: 'Running', ready: true, deleting: true })), 'terminating');
+  assert.equal(
+    computePodStatus(pod({ phase: 'Running', waiting: 'CrashLoopBackOff', deleting: true })),
+    'terminating',
+  );
 });

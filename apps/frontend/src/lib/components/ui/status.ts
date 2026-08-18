@@ -45,6 +45,7 @@ export function resourceStatus(status?: string, buildStatus?: string): StatusMet
 		case 'scaling':
 		case 'restarting':
 		case 'scheduled':
+		case 'starting':
 		case 'deploying':
 		case 'updating':
 		case 'building':
@@ -158,6 +159,8 @@ export function podStatus(phase?: string): StatusMeta {
 		case 'running':
 		case 'ready':
 			return meta('success', capitalize(p));
+		case 'starting':
+			return meta('progress', 'Starting', true);
 		case 'pending':
 		case 'scheduled':
 			return meta('progress', capitalize(p), true);

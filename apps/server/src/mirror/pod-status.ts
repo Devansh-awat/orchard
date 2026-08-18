@@ -19,17 +19,50 @@ export function latestTermination(
   return best;
 }
 
-const BACKOFF_REASONS = new Set([
+// Waiting reasons that mean the container will not come up on its own. A
+// missing secret key (CreateContainerConfigError) or a typo'd tag
+// (InvalidImageName) is just as stuck as a crash loop, so all of them read as
+// `crashing` rather than as a benign progress state.
+export const POD_BACKOFF_REASONS = new Set([
   'crashloopbackoff',
   'imagepullbackoff',
   'errimagepull',
+  'errimagepullbackoff',
   'createcontainererror',
+  'createcontainerconfigerror',
+  'runcontainererror',
+  'invalidimagename',
 ]);
 
-// Mirrors k8s-workload.service getDeploymentPods status derivation so the
-// stored `pods` table matches what the live pod path reports.
+export function podBackoffReason(
+  containerStatuses: k8s.V1ContainerStatus[] | undefined,
+): string | null {
+  for (const c of containerStatuses ?? []) {
+    const reason = c?.state?.waiting?.reason;
+    if (reason && POD_BACKOFF_REASONS.has(String(reason).toLowerCase())) return reason;
+  }
+  return null;
+}
+
+/**
+ * The one place a pod's phase, conditions and container states turn into the
+ * status Orchard shows. Every read path goes through this — the mirror, the
+ * legacy informer and the live workload lookups — so the stored `pods` rows and
+ * a live cluster query can never disagree.
+ *
+ *   terminating  the pod is being deleted
+ *   crashing     a container is stuck in a backoff reason
+ *   ready        running and passing readiness
+ *   starting     running, readiness not satisfied yet
+ *   scheduled    assigned to a node, containers not up
+ *   pending      not yet scheduled
+ */
 export function computePodStatus(pod: k8s.V1Pod): string {
+  if (pod.metadata?.deletionTimestamp) return 'terminating';
+
   const containerStatuses = pod.status?.containerStatuses ?? [];
+  if (podBackoffReason(containerStatuses)) return 'crashing';
+
   const phase = pod.status?.phase?.toLowerCase() || 'pending';
   const conditions = pod.status?.conditions ?? [];
   const isScheduled = conditions.some((c) => c.type === 'PodScheduled' && c.status === 'True');
@@ -37,22 +70,12 @@ export function computePodStatus(pod: k8s.V1Pod): string {
   const allContainersReady =
     containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
 
-  let status = phase;
   if (phase === 'running') {
-    if (isReady && allContainersReady) status = 'ready';
-    else if (isScheduled) status = 'scheduled';
-    else status = 'pending';
-  } else if (phase === 'pending' && isScheduled) {
-    status = 'scheduled';
+    // A running pod already has a node, so `scheduled` would be telling the
+    // user something they stopped needing to know. What is actually happening
+    // is that the container is up and its health check has not passed yet.
+    return isReady && allContainersReady ? 'ready' : 'starting';
   }
-
-  for (const c of containerStatuses) {
-    const reason = c?.state?.waiting?.reason;
-    if (reason && BACKOFF_REASONS.has(String(reason).toLowerCase())) {
-      status = 'crashing';
-      break;
-    }
-  }
-
-  return status;
+  if (phase === 'pending') return isScheduled ? 'scheduled' : 'pending';
+  return phase;
 }

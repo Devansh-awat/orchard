@@ -20,6 +20,7 @@ import {
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-patch';
+import { computePodStatus } from '../mirror/pod-status';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -32,27 +33,6 @@ import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-pat
  * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
  * below so the bodies stay byte-identical.
  */
-const POD_BACKOFF_REASONS = new Set([
-  'crashloopbackoff',
-  'imagepullbackoff',
-  'errimagepull',
-  'errimagepullbackoff',
-  'createcontainererror',
-  'createcontainerconfigerror',
-  'runcontainererror',
-  'invalidimagename',
-]);
-
-function podBackoffReason(containerStatuses: any[] | undefined): string | null {
-  for (const c of containerStatuses ?? []) {
-    const reason = c?.state?.waiting?.reason;
-    if (reason && POD_BACKOFF_REASONS.has(String(reason).toLowerCase())) {
-      return reason;
-    }
-  }
-  return null;
-}
-
 function resolvePvcClaimName(vol: { name?: string; pvcName?: string | null }): string {
   const claimName = vol.pvcName?.trim() || vol.name?.trim();
   if (!claimName) {
@@ -2341,23 +2321,7 @@ export class K8sWorkloadService {
           0,
         );
 
-        const podPhase = pod.status?.phase?.toLowerCase() || 'pending';
-        const conditions = pod.status?.conditions || [];
-        const isScheduled = conditions.some((c) => c.type === 'PodScheduled' && c.status === 'True');
-        const isReady = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
-        const allContainersReady =
-          containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
-        let computedStatus = podPhase;
-        if (podPhase === 'running') {
-          if (isReady && allContainersReady) computedStatus = 'ready';
-          else if (isScheduled) computedStatus = 'scheduled';
-          else computedStatus = 'pending';
-        } else if (podPhase === 'pending' && isScheduled) {
-          computedStatus = 'scheduled';
-        }
-        if (podBackoffReason(containerStatuses)) {
-          computedStatus = 'crashing';
-        }
+        const computedStatus = computePodStatus(pod);
 
         const warnings: any[] = [];
         for (const cs of containerStatuses) {
@@ -2458,30 +2422,7 @@ export class K8sWorkloadService {
         const podName = pod.metadata?.name;
         const events = podName ? await this.getPodEvents(podName, cleanNamespace) : [];
 
-        // Determine accurate pod status based on conditions and container readiness
-        const podPhase = pod.status?.phase?.toLowerCase() || 'pending';
-        const conditions = pod.status?.conditions || [];
-        const isScheduled = conditions.some(c => c.type === 'PodScheduled' && c.status === 'True');
-        const isReady = conditions.some(c => c.type === 'Ready' && c.status === 'True');
-        const allContainersReady = containerStatuses.length > 0 && containerStatuses.every(c => c.ready === true);
-
-        let computedStatus = podPhase;
-        if (podPhase === 'running') {
-          if (isReady && allContainersReady) {
-            computedStatus = 'ready';
-          } else if (isScheduled) {
-            computedStatus = 'scheduled';
-          } else {
-            computedStatus = 'pending';
-          }
-        } else if (podPhase === 'pending') {
-          if (isScheduled) {
-            computedStatus = 'scheduled';
-          }
-        }
-        if (podBackoffReason(containerStatuses)) {
-          computedStatus = 'crashing';
-        }
+        const computedStatus = computePodStatus(pod);
 
         return {
           name: podName,
@@ -2637,19 +2578,7 @@ export class K8sWorkloadService {
         if (!deploymentName) continue;
 
         const containerStatuses = pod.status?.containerStatuses ?? [];
-        const phase = pod.status?.phase?.toLowerCase() ?? 'pending';
-        const conditions = pod.status?.conditions ?? [];
-        const isReady = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
-        const allContainersReady =
-          containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
-
-        let computedStatus = phase;
-        if (phase === 'running') {
-          computedStatus = isReady && allContainersReady ? 'ready' : 'pending';
-        }
-        if (podBackoffReason(containerStatuses)) {
-          computedStatus = 'crashing';
-        }
+        const computedStatus = computePodStatus(pod);
 
         const totalRestarts = containerStatuses.reduce(
           (sum, c) => sum + (c.restartCount ?? 0),
