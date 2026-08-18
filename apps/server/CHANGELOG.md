@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.8.0](https://github.com/LeafdTK/leaf/compare/server/v2.7.1...server/v2.8.0) (2026-08-18)
+
+
+### Features
+
+* command-k finds every app and database a person built ([607324f](https://github.com/LeafdTK/leaf/commit/607324f4b48a258eb9494179795cd937d4b77ae9))
+* mirror engine resumes watches, batches writes, and tracks crash state in the db ([4d870d4](https://github.com/LeafdTK/leaf/commit/4d870d409161663ddf0728e37bfaa2f072ec2856))
+
+
+### Bug Fixes
+
+* a running pod waiting on its health check said scheduled ([dbb5085](https://github.com/LeafdTK/leaf/commit/dbb508525e4dc847adfd54439a22edd13deef449))
+* the pod manifest handed env values to project viewers ([9f83ff4](https://github.com/LeafdTK/leaf/commit/9f83ff4934576962b056f30cbbd76ac75543bdcd))
+
 ## [2.7.1](https://github.com/LeafdTK/leaf/compare/server/v2.7.0...server/v2.7.1) (2026-08-16)
 
 

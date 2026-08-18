@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.7.1...frontend/v1.8.0) (2026-08-18)
+
+
+### Features
+
+* command-k finds every app and database a person built ([607324f](https://github.com/LeafdTK/leaf/commit/607324f4b48a258eb9494179795cd937d4b77ae9))
+
+
+### Bug Fixes
+
+* a running pod waiting on its health check said scheduled ([dbb5085](https://github.com/LeafdTK/leaf/commit/dbb508525e4dc847adfd54439a22edd13deef449))
+
 ## [1.7.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.7.0...frontend/v1.7.1) (2026-08-16)
 
 
