@@ -658,6 +658,7 @@ model Deployment {
   githubDeployments GitHubDeployment[]
   webhookTokens     DeploymentWebhookToken[]
   jobSteps          JobStep[]
+  crashState        DeploymentCrashState?
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -843,7 +844,26 @@ model Pod {
 
   @@unique([deploymentId, name])
   @@index([deploymentId], map: "idx_pods_deployment")
+  @@index([status], map: "idx_pods_status")
   @@map("pods")
+}
+
+// Debounced crash/recovery state per deployment, derived from the mirrored
+// `pods` rows rather than from in-process timers — so it survives shard
+// failover and a crash that resolves while no replica was watching still
+// resolves here. Both edges are level-triggered: a deployment is announced
+// crashing once it has held a crashing pod for CRASH_CONFIRM, and recovered
+// once it has held none for RECOVER_CONFIRM.
+model DeploymentCrashState {
+  deploymentId  String    @id @map("deployment_id") @db.Uuid
+  crashingSince DateTime? @map("crashing_since") @db.Timestamp(6)
+  healthySince  DateTime? @map("healthy_since") @db.Timestamp(6)
+  notifiedAt    DateTime? @map("notified_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@map("deployment_crash_states")
 }
 
 model K8sObject {
@@ -878,6 +898,11 @@ model K8sMirrorHeartbeat {
   lastResyncAt    DateTime? @map("last_resync_at") @db.Timestamp(6)
   resyncRepairs   Int       @default(0) @map("resync_repairs")
   resourceVersion String?   @map("resource_version") @db.VarChar(30)
+  // Whether the holder's informers currently have a live watch. The heartbeat
+  // timestamp only proves the replica is alive; without this a shard whose
+  // list+watch has been failing in a loop still looks fresh.
+  healthy         Boolean   @default(true)
+  lastError       String?   @map("last_error") @db.VarChar(300)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@map("k8s_mirror_heartbeats")

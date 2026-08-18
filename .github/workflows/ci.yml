@@ -233,6 +233,10 @@ jobs:
           cd apps/server && pnpm exec prisma migrate deploy
       - name: Build server
         run: pnpm --filter server build
+      # Mirror engine SQL (batch upsert, natural-key replacement, array-bound
+      # stale sweep) and the debounced crash/recovery state machine.
+      - name: Mirror engine tests
+        run: pnpm --filter server test:mirror
       - name: Boot server + run RBAC e2e
         run: |
           (cd apps/server && node dist/main &)

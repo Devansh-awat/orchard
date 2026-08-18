@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
-import { MirrorEventType, MirrorRefs } from '../mirror-informer';
+import { MirrorEventType, MirrorObjectKey, MirrorRefs } from '../mirror-informer';
 import { computePodStatus, latestTermination } from '../pod-status';
 
 export { computePodStatus, latestTermination } from '../pod-status';
@@ -12,8 +12,15 @@ export { computePodStatus, latestTermination } from '../pod-status';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
 const EMIT_COALESCE_MS = 250;
-const CRASH_NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;
-const CRASH_CONFIRM_MS = 30 * 1000;
+
+// A container in CrashLoopBackOff briefly leaves the backoff state every time
+// it restarts, so both edges are debounced: a deployment must hold a crashing
+// pod this long before it is announced, and must hold none for the recovery
+// window before it is called recovered. The UI's own pod warnings are derived
+// straight from the mirrored rows and are not debounced — this only governs
+// outbound notifications.
+const CRASH_CONFIRM_MS = 30_000;
+const RECOVER_CONFIRM_MS = 60_000;
 
 interface Ctx {
   deploymentId: string;
@@ -27,13 +34,6 @@ interface PendingEmit {
   timer: ReturnType<typeof setTimeout>;
 }
 
-interface CrashTrack {
-  crashing: boolean;
-  notifiedCrash: boolean;
-  lastNotifiedAt: number;
-  confirmTimer?: ReturnType<typeof setTimeout>;
-}
-
 @Injectable()
 export class PodMirrorConsumer implements OnModuleDestroy {
   private readonly logger = new Logger(PodMirrorConsumer.name);
@@ -43,8 +43,6 @@ export class PodMirrorConsumer implements OnModuleDestroy {
   private readonly lastEmit = new Map<string, number>();
 
   private readonly pending = new Map<string, PendingEmit>();
-
-  private readonly crashTracks = new Map<string, CrashTrack>();
 
   private stopped = false;
 
@@ -59,22 +57,24 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     this.stopped = true;
     for (const p of this.pending.values()) clearTimeout(p.timer);
     this.pending.clear();
-    for (const t of this.crashTracks.values()) {
-      if (t.confirmTimer) clearTimeout(t.confirmTimer);
-    }
-    this.crashTracks.clear();
   }
 
-  async pruneStalePods(listed: k8s.V1Pod[]): Promise<void> {
-    const liveNames = listed
-      .map((pod) => pod.metadata?.name)
-      .filter((name): name is string => !!name);
+  async pruneStalePods(seen: MirrorObjectKey[]): Promise<void> {
+    const liveNames = seen.map((s) => s.name).filter((name): name is string => !!name);
     if (liveNames.length === 0) return;
-    const result = await this.prisma.pod.deleteMany({
-      where: { name: { notIn: liveNames } },
-    });
-    if (result.count > 0) {
-      this.logger.log(`pruned ${result.count} stale pod rows not present in the cluster`);
+    // `= ANY($1)` binds the name set as one array parameter. An `IN (...)` list
+    // binds one parameter per pod and blows the statement's parameter budget on
+    // a large cluster.
+    const removed = await this.prisma.$queryRaw<{ deployment_id: string }[]>`
+      DELETE FROM "pods"
+      WHERE NOT ("name" = ANY(${liveNames}::varchar[]))
+      RETURNING "deployment_id"
+    `;
+    if (removed.length === 0) return;
+    this.logger.log(`pruned ${removed.length} stale pod rows not present in the cluster`);
+    // Dropping the last crashing pod of a deployment has to clear its alert.
+    for (const deploymentId of new Set(removed.map((r) => r.deployment_id))) {
+      await this.reconcileCrashState(deploymentId);
     }
   }
 
@@ -93,8 +93,12 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     const ctx = await this.resolveCtx(ns, depName);
     if (!ctx) return;
 
-    await this.syncPod(type, ctx.deploymentId, pod);
-    void this.trackCrashState(type, ctx);
+    const statusChanged = await this.syncPod(type, ctx.deploymentId, pod);
+
+    // Only a pod whose own status moved can move the deployment's aggregate
+    // crash state. Most watch events are resourceVersion churn, and those now
+    // cost nothing beyond the row write.
+    if (statusChanged) await this.reconcileCrashState(ctx.deploymentId);
 
     if (type !== 'delete') {
       void this.logCapture.capture(ctx.deploymentId, ns, pod);
@@ -155,9 +159,14 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     };
   }
 
-  private async syncPod(type: MirrorEventType, deploymentId: string, pod: k8s.V1Pod) {
+  /** Returns whether the pod's derived status changed (or the row appeared/vanished). */
+  private async syncPod(
+    type: MirrorEventType,
+    deploymentId: string,
+    pod: k8s.V1Pod,
+  ): Promise<boolean> {
     const name = pod.metadata?.name;
-    if (!name) return;
+    if (!name) return false;
 
     try {
       const existing = await this.prisma.pod.findUnique({
@@ -166,11 +175,10 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       });
 
       if (type === 'delete') {
-        if (existing) {
-          await this.prisma.pod.deleteMany({ where: { deploymentId, name } });
-          await this.recordTransition(deploymentId, name, existing.status, 'deleted', null, null);
-        }
-        return;
+        if (!existing) return false;
+        await this.prisma.pod.deleteMany({ where: { deploymentId, name } });
+        await this.recordTransition(deploymentId, name, existing.status, 'deleted', null, null);
+        return true;
       }
 
       const containerStatuses = pod.status?.containerStatuses ?? [];
@@ -196,20 +204,21 @@ export class PodMirrorConsumer implements OnModuleDestroy {
         update: data,
       });
 
-      if (!existing || existing.status !== status) {
-        await this.recordTransition(
-          deploymentId,
-          name,
-          existing?.status ?? null,
-          status,
-          term?.reason ?? null,
-          term?.exitCode ?? null,
-        );
-      }
+      if (existing && existing.status === status) return false;
+      await this.recordTransition(
+        deploymentId,
+        name,
+        existing?.status ?? null,
+        status,
+        term?.reason ?? null,
+        term?.exitCode ?? null,
+      );
+      return true;
     } catch (err) {
       this.logger.warn(
         `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`,
       );
+      return false;
     }
   }
 
@@ -226,88 +235,125 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       .catch(() => {});
   }
 
-  private async trackCrashState(type: MirrorEventType, ctx: Ctx) {
+  /**
+   * Bring one deployment's persisted crash state in line with its mirrored pod
+   * rows. Safe to call from anywhere and as often as you like — it reads the
+   * current cluster picture rather than accumulating in-process state, so a
+   * shard failover mid-crash neither loses nor duplicates a notification.
+   */
+  async reconcileCrashState(deploymentId: string): Promise<void> {
+    if (this.stopped) return;
     try {
-      const pods = await this.prisma.pod.findMany({
-        where: { deploymentId: ctx.deploymentId },
-        select: { status: true },
-      });
-      const crashing = pods.some((p) => p.status === 'crashing');
-      const track = this.crashTracks.get(ctx.deploymentId);
-
-      if (!track) {
-        if (type === 'add') {
-          this.crashTracks.set(ctx.deploymentId, { crashing, notifiedCrash: false, lastNotifiedAt: 0 });
-          return;
-        }
-        this.crashTracks.set(ctx.deploymentId, { crashing: false, notifiedCrash: false, lastNotifiedAt: 0 });
-        if (crashing) this.scheduleCrashConfirm(ctx);
-        return;
-      }
-
-      if (crashing && !track.crashing) {
-        this.scheduleCrashConfirm(ctx);
-        return;
-      }
-
-      if (!crashing && track.crashing) {
-        if (track.confirmTimer) {
-          clearTimeout(track.confirmTimer);
-          track.confirmTimer = undefined;
-        }
-        track.crashing = false;
-        if (track.notifiedCrash) {
-          track.notifiedCrash = false;
-          this.notifications
-            .notifyPodState(ctx.deploymentId, 'recovered')
-            .catch((err) => this.logger.warn(`recovery notification failed for ${ctx.deploymentId}: ${err?.message ?? err}`));
-        }
-      }
-
-      if (pods.length === 0) {
-        const remaining = this.crashTracks.get(ctx.deploymentId);
-        if (remaining?.confirmTimer) clearTimeout(remaining.confirmTimer);
-        this.crashTracks.delete(ctx.deploymentId);
-      }
+      const [crashing, total] = await this.prisma.$transaction([
+        this.prisma.pod.count({ where: { deploymentId, status: 'crashing' } }),
+        this.prisma.pod.count({ where: { deploymentId } }),
+      ]);
+      await this.applyCrashState(deploymentId, crashing, total);
     } catch (err) {
-      this.logger.warn(`trackCrashState(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
+      this.logger.warn(
+        `reconcileCrashState(${deploymentId}) failed: ${(err as Error)?.message ?? err}`,
+      );
     }
   }
 
-  private scheduleCrashConfirm(ctx: Ctx) {
-    const track = this.crashTracks.get(ctx.deploymentId);
-    if (!track) return;
-    track.crashing = true;
-    if (track.confirmTimer) return;
-    track.confirmTimer = setTimeout(() => {
-      track.confirmTimer = undefined;
-      void this.confirmCrash(ctx);
-    }, CRASH_CONFIRM_MS);
-  }
+  private async applyCrashState(
+    deploymentId: string,
+    crashingPods: number,
+    totalPods: number,
+  ): Promise<void> {
+    const state = await this.prisma.deploymentCrashState.findUnique({ where: { deploymentId } });
+    const now = new Date();
 
-  private async confirmCrash(ctx: Ctx) {
-    if (this.stopped) return;
-    const track = this.crashTracks.get(ctx.deploymentId);
-    if (!track || !track.crashing || track.notifiedCrash) return;
-    try {
-      const crashingPod = await this.prisma.pod.findFirst({
-        where: { deploymentId: ctx.deploymentId, status: 'crashing' },
-        select: { lastTerminationReason: true, lastExitCode: true },
-      });
-      if (!crashingPod) {
-        track.crashing = false;
+    if (crashingPods > 0) {
+      if (!state || !state.crashingSince) {
+        await this.prisma.deploymentCrashState.upsert({
+          where: { deploymentId },
+          create: { deploymentId, crashingSince: now, healthySince: null, notifiedAt: null },
+          update: { crashingSince: now, healthySince: null, notifiedAt: null },
+        });
         return;
       }
-      const now = Date.now();
-      if (now - track.lastNotifiedAt < CRASH_NOTIFY_COOLDOWN_MS) return;
-      track.notifiedCrash = true;
-      track.lastNotifiedAt = now;
-      const detail = crashingPod.lastTerminationReason
-        ? `${crashingPod.lastTerminationReason}${crashingPod.lastExitCode != null ? ` (exit code ${crashingPod.lastExitCode})` : ''}`
+      if (state.healthySince) {
+        await this.prisma.deploymentCrashState.updateMany({
+          where: { deploymentId },
+          data: { healthySince: null },
+        });
+      }
+      if (state.notifiedAt) return;
+      if (now.getTime() - state.crashingSince.getTime() < CRASH_CONFIRM_MS) return;
+
+      // Claim the notification with a conditional write so the shard holder and
+      // the sweeper can't both send it.
+      const claimed = await this.prisma.deploymentCrashState.updateMany({
+        where: { deploymentId, notifiedAt: null },
+        data: { notifiedAt: now },
+      });
+      if (claimed.count === 0) return;
+
+      const pod = await this.prisma.pod.findFirst({
+        where: { deploymentId, status: 'crashing' },
+        select: { lastTerminationReason: true, lastExitCode: true },
+      });
+      const detail = pod?.lastTerminationReason
+        ? `${pod.lastTerminationReason}${pod.lastExitCode != null ? ` (exit code ${pod.lastExitCode})` : ''}`
         : undefined;
-      await this.notifications.notifyPodState(ctx.deploymentId, 'crashing', detail);
+      await this.notifications.notifyPodState(deploymentId, 'crashing', detail);
+      return;
+    }
+
+    if (!state) return;
+
+    if (!state.healthySince) {
+      await this.prisma.deploymentCrashState.updateMany({
+        where: { deploymentId },
+        data: { healthySince: now, crashingSince: state.notifiedAt ? state.crashingSince : null },
+      });
+      return;
+    }
+    if (now.getTime() - state.healthySince.getTime() < RECOVER_CONFIRM_MS) return;
+
+    if (!state.notifiedAt) {
+      // The crash cleared before it was ever announced — drop the episode.
+      await this.prisma.deploymentCrashState.deleteMany({
+        where: { deploymentId, notifiedAt: null },
+      });
+      return;
+    }
+
+    const claimed = await this.prisma.deploymentCrashState.deleteMany({
+      where: { deploymentId, notifiedAt: { not: null } },
+    });
+    if (claimed.count === 0) return;
+    // No pods at all means the app was scaled down or torn down, not recovered.
+    if (totalPods > 0) await this.notifications.notifyPodState(deploymentId, 'recovered');
+  }
+
+  /**
+   * Level-triggered pass over every deployment that either holds crash state or
+   * currently has a crashing pod. This is what fires the debounced transitions
+   * (nothing schedules an in-process timer for them) and what heals state that
+   * drifted while no replica held the pods shard.
+   */
+  async sweepCrashStates(): Promise<void> {
+    if (this.stopped) return;
+    try {
+      const [tracked, crashing] = await this.prisma.$transaction([
+        this.prisma.deploymentCrashState.findMany({ select: { deploymentId: true } }),
+        this.prisma.pod.findMany({
+          where: { status: 'crashing' },
+          select: { deploymentId: true },
+          distinct: ['deploymentId'],
+        }),
+      ]);
+      const ids = new Set([
+        ...tracked.map((t) => t.deploymentId),
+        ...crashing.map((c) => c.deploymentId),
+      ]);
+      for (const id of ids) {
+        await this.reconcileCrashState(id);
+      }
     } catch (err) {
-      this.logger.warn(`confirmCrash(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
+      this.logger.warn(`crash state sweep failed: ${(err as Error)?.message ?? err}`);
     }
   }
 

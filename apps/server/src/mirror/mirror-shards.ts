@@ -1,6 +1,6 @@
 import * as k8s from '@kubernetes/client-node';
 import { LABEL_JOB_ID } from '../jobs/jobs-orchestrator.service';
-import { MirrorRefs, MirrorResourceConfig } from './mirror-informer';
+import { MirrorListOptions, MirrorListPage, MirrorRefs, MirrorResourceConfig } from './mirror-informer';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
@@ -25,18 +25,42 @@ export interface MirrorShardDeps {
 }
 
 interface K8sListBody {
-  body: { items?: any[]; metadata?: { resourceVersion?: string } };
+  body: {
+    items?: any[];
+    metadata?: { resourceVersion?: string; _continue?: string; continue?: string };
+  };
 }
 
-function toListResult(res: K8sListBody): { items: any[]; resourceVersion: string } {
+// The typed clients deserialize ListMeta.continue to `_continue`; CustomObjectsApi
+// hands back the raw JSON, where it stays `continue`.
+function toListResult(res: K8sListBody): MirrorListPage {
+  const meta = res.body.metadata ?? {};
   return {
     items: res.body.items ?? [],
-    resourceVersion: res.body.metadata?.resourceVersion ?? '',
+    resourceVersion: meta.resourceVersion ?? '',
+    continueToken: meta._continue ?? meta.continue ?? null,
   };
 }
 
 export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
   const byNamespace = (obj: any) => deps.namespaceRefs(obj.metadata?.namespace ?? '');
+
+  const core = (kc: k8s.KubeConfig) => kc.makeApiClient(k8s.CoreV1Api);
+
+  const listPods = async (
+    kc: k8s.KubeConfig,
+    opts: MirrorListOptions,
+    labelSelector: string,
+  ): Promise<MirrorListPage> =>
+    toListResult(
+      await core(kc).listPodForAllNamespaces(
+        undefined,
+        opts.continueToken,
+        undefined,
+        labelSelector,
+        opts.limit,
+      ),
+    );
 
   return [
     {
@@ -48,15 +72,10 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: '/api/v1/pods',
           labelSelector: ORCHARD_SELECTOR,
-          list: async (kc) =>
-            toListResult(
-              await kc
-                .makeApiClient(k8s.CoreV1Api)
-                .listPodForAllNamespaces(undefined, undefined, undefined, ORCHARD_SELECTOR),
-            ),
+          list: (kc, opts) => listPods(kc, opts, ORCHARD_SELECTOR),
           mapRefs: (obj) => deps.pods.mapRefs(obj),
           onEvent: (type, obj) => deps.pods.onEvent(type, obj),
-          onListComplete: (items) => deps.pods.pruneStalePods(items),
+          onListComplete: (seen) => deps.pods.pruneStalePods(seen),
         },
       ],
     },
@@ -69,12 +88,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: '/api/v1/pods',
           labelSelector: CNPG_POD_SELECTOR,
-          list: async (kc) =>
-            toListResult(
-              await kc
-                .makeApiClient(k8s.CoreV1Api)
-                .listPodForAllNamespaces(undefined, undefined, undefined, CNPG_POD_SELECTOR),
-            ),
+          list: (kc, opts) => listPods(kc, opts, CNPG_POD_SELECTOR),
           mapRefs: (obj) => deps.cnpg.mapPodRefs(obj),
           onEvent: (type, obj) => deps.cnpg.onPodEvent(type, obj),
         },
@@ -82,11 +96,21 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           kind: 'Cluster',
           apiVersion: 'postgresql.cnpg.io/v1',
           watchPath: '/apis/postgresql.cnpg.io/v1/clusters',
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
               (await kc
                 .makeApiClient(k8s.CustomObjectsApi)
-                .listClusterCustomObject('postgresql.cnpg.io', 'v1', 'clusters')) as K8sListBody,
+                .listClusterCustomObject(
+                  'postgresql.cnpg.io',
+                  'v1',
+                  'clusters',
+                  undefined,
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  undefined,
+                  opts.limit,
+                )) as K8sListBody,
             ),
           mapRefs: (obj) => deps.cnpg.mapClusterRefs(obj),
           onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj),
@@ -102,11 +126,17 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'apps/v1',
           watchPath: '/apis/apps/v1/deployments',
           labelSelector: ORCHARD_SELECTOR,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
               await kc
                 .makeApiClient(k8s.AppsV1Api)
-                .listDeploymentForAllNamespaces(undefined, undefined, undefined, ORCHARD_SELECTOR),
+                .listDeploymentForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  ORCHARD_SELECTOR,
+                  opts.limit,
+                ),
             ),
           mapRefs: (obj) => deps.workloads.mapRefs(obj),
           onEvent: (type, obj) => deps.workloads.onEvent(type, obj),
@@ -122,12 +152,18 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'batch/v1',
           watchPath: '/apis/batch/v1/jobs',
           labelSelector: LABEL_JOB_ID,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
               await kc
                 .makeApiClient(k8s.BatchV1Api)
-                .listJobForAllNamespaces(undefined, undefined, undefined, LABEL_JOB_ID),
-          ),
+                .listJobForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  LABEL_JOB_ID,
+                  opts.limit,
+                ),
+            ),
           mapRefs: (obj) => deps.jobs.mapRefs(obj),
           onEvent: (type, obj) => deps.jobs.onEvent(type, obj),
         },
@@ -136,11 +172,17 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'batch/v1',
           watchPath: '/apis/batch/v1/cronjobs',
           labelSelector: LABEL_JOB_ID,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
               await kc
                 .makeApiClient(k8s.BatchV1Api)
-                .listCronJobForAllNamespaces(undefined, undefined, undefined, LABEL_JOB_ID),
+                .listCronJobForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  LABEL_JOB_ID,
+                  opts.limit,
+                ),
             ),
           mapRefs: (obj) => deps.jobs.mapRefs(obj),
         },
@@ -155,11 +197,17 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'networking.k8s.io/v1',
           watchPath: '/apis/networking.k8s.io/v1/ingresses',
           labelSelector: INGRESS_SELECTOR,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
               await kc
                 .makeApiClient(k8s.NetworkingV1Api)
-                .listIngressForAllNamespaces(undefined, undefined, undefined, INGRESS_SELECTOR),
+                .listIngressForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  INGRESS_SELECTOR,
+                  opts.limit,
+                ),
             ),
           mapRefs: byNamespace,
         },
@@ -168,11 +216,15 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: '/api/v1/services',
           labelSelector: ORCHARD_SELECTOR,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
-              await kc
-                .makeApiClient(k8s.CoreV1Api)
-                .listServiceForAllNamespaces(undefined, undefined, undefined, ORCHARD_SELECTOR),
+              await core(kc).listServiceForAllNamespaces(
+                undefined,
+                opts.continueToken,
+                undefined,
+                ORCHARD_SELECTOR,
+                opts.limit,
+              ),
             ),
           mapRefs: byNamespace,
         },
@@ -187,16 +239,15 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: '/api/v1/persistentvolumeclaims',
           labelSelector: ORCHARD_SELECTOR,
-          list: async (kc) =>
+          list: async (kc, opts) =>
             toListResult(
-              await kc
-                .makeApiClient(k8s.CoreV1Api)
-                .listPersistentVolumeClaimForAllNamespaces(
-                  undefined,
-                  undefined,
-                  undefined,
-                  ORCHARD_SELECTOR,
-                ),
+              await core(kc).listPersistentVolumeClaimForAllNamespaces(
+                undefined,
+                opts.continueToken,
+                undefined,
+                ORCHARD_SELECTOR,
+                opts.limit,
+              ),
             ),
           mapRefs: byNamespace,
         },

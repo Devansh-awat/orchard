@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { LeaseService } from '../coordination/lease.service';
+import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
 import { MirrorInformer, MirrorRefs } from './mirror-informer';
@@ -17,6 +17,7 @@ const BALANCE_INTERVAL_MS = 15_000;
 const FLUSH_INTERVAL_MS = 10_000;
 const RESYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const STALE_MS = 60_000;
 const TRANSITION_RETENTION_DAYS = 30;
@@ -26,7 +27,14 @@ interface ShardRuntime {
   def: MirrorShardDef;
   elector: Elector;
   informers: MirrorInformer[];
-  activity: { lastListAt: Date | null; lastEventAt: Date | null; resourceVersion: string | null };
+  activity: {
+    lastListAt: Date | null;
+    lastEventAt: Date | null;
+    resourceVersion: string | null;
+    // Per-informer watch health. A shard is only healthy when every one of its
+    // informers has a live watch.
+    unhealthy: Map<string, string>;
+  };
   resyncTimer?: ReturnType<typeof setInterval>;
 }
 
@@ -37,6 +45,8 @@ export interface ShardHealth {
   lastEventAt: Date | null;
   lastResyncAt: Date | null;
   resyncRepairs: number;
+  healthy: boolean;
+  lastError: string | null;
   stale: boolean;
 }
 
@@ -94,7 +104,12 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
           shouldAcquire: () => this.canAcquireMore(),
         }),
         informers: [],
-        activity: { lastListAt: null, lastEventAt: null, resourceVersion: null },
+        activity: {
+          lastListAt: null,
+          lastEventAt: null,
+          resourceVersion: null,
+          unhealthy: new Map(),
+        },
       };
       runtime.elector.on('acquired', () => {
         void this.startShard(runtime);
@@ -125,6 +140,9 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       setInterval(() => {
         void this.retention();
       }, RETENTION_INTERVAL_MS),
+      setInterval(() => {
+        void this.sweepCrashStates();
+      }, CRASH_SWEEP_INTERVAL_MS),
     ];
     for (const t of this.timers) t.unref?.();
     this.logger.log(`mirror initialized with ${defs.length} shards (${this.lease.replicaIdentity})`);
@@ -156,7 +174,13 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         lastEventAt: row.lastEventAt,
         lastResyncAt: row.lastResyncAt,
         resyncRepairs: row.resyncRepairs,
-        stale: !row.holder || now - row.updatedAt.getTime() > STALE_MS,
+        healthy: row.healthy,
+        lastError: row.lastError,
+        // The heartbeat timestamp only proves the holder's process is alive —
+        // it is written on a timer regardless of whether the watch works. A
+        // shard is stale when nobody holds it, when the holder stopped
+        // heartbeating, or when the holder says its watch is down.
+        stale: !row.holder || now - row.updatedAt.getTime() > STALE_MS || !row.healthy,
       });
     }
     for (const runtime of this.shards.values()) {
@@ -168,6 +192,8 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
           lastEventAt: null,
           lastResyncAt: null,
           resyncRepairs: 0,
+          healthy: false,
+          lastError: null,
           stale: true,
         });
       }
@@ -211,6 +237,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
   private async startShard(runtime: ShardRuntime): Promise<void> {
     if (runtime.informers.length > 0) return;
     this.logger.log(`starting shard ${runtime.def.name}`);
+    runtime.activity.unhealthy.clear();
     runtime.informers = runtime.def.resources.map(
       (config) =>
         new MirrorInformer(this.kubernetes.kc!, this.prisma, runtime.def.name, config, {
@@ -220,6 +247,11 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
           },
           onWatchEvent: () => {
             runtime.activity.lastEventAt = new Date();
+          },
+          onHealthChange: (healthy, error) => {
+            if (healthy) runtime.activity.unhealthy.delete(config.kind);
+            else runtime.activity.unhealthy.set(config.kind, error ?? 'watch down');
+            void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
           },
         }),
     );
@@ -305,11 +337,14 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async writeHeartbeat(runtime: ShardRuntime, holder: string): Promise<void> {
+    const failures = [...runtime.activity.unhealthy.entries()];
     const data = {
       holder,
       lastListAt: runtime.activity.lastListAt,
       lastEventAt: runtime.activity.lastEventAt,
       resourceVersion: runtime.activity.resourceVersion,
+      healthy: failures.length === 0,
+      lastError: failures.length === 0 ? null : failures.map(([k, e]) => `${k}: ${e}`).join('; ').slice(0, 300),
     };
     await this.prisma.k8sMirrorHeartbeat
       .upsert({
@@ -337,8 +372,18 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     } catch {}
   }
 
+  // Crash/recovery notifications are debounced, so something has to notice when
+  // a window elapses. Running it on the global leader keeps it to one replica;
+  // the state itself lives in Postgres, so it does not matter whether that is
+  // the replica holding the pods shard.
+  private async sweepCrashStates(): Promise<void> {
+    if (!this.enabled) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
+    await this.podConsumer.sweepCrashStates();
+  }
+
   private async retention(): Promise<void> {
-    if (!this.lease.isHolder('orchard-global-leader')) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
     const cutoff = new Date(Date.now() - TRANSITION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     await this.prisma.podTransition.deleteMany({ where: { at: { lt: cutoff } } }).catch(() => {});
     const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
