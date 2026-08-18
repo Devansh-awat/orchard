@@ -37,9 +37,35 @@ export class KubernetesController {
     const userId = await this.resolveUserId(req);
     if (mode === 'edit') {
       await this.authz.requireProjectEdit(project.id, userId, action);
-    } else {
-      await this.authz.requireProjectView(project.id, userId);
+      return { projectId: project.id, canEdit: true };
     }
+    const access = await this.authz.requireProjectView(project.id, userId);
+    return { projectId: project.id, canEdit: access.canEdit };
+  }
+
+  /**
+   * Viewers get env var values nulled on the deployment path
+   * (`scrubDeploymentForViewer`); the pod manifest carries the same values in
+   * `spec.containers[].env` and has to match. Secret-flagged vars reach the
+   * container through `secretKeyRef` and were never in the manifest to begin
+   * with, so `valueFrom` entries are left intact.
+   */
+  private static scrubPodForViewer(pod: any): any {
+    if (!pod?.spec) return pod;
+    const scrubContainers = (containers: any[] | undefined) =>
+      containers?.map((c: any) => ({
+        ...c,
+        env: c.env?.map((e: any) => (e?.value !== undefined ? { ...e, value: null } : e)),
+      }));
+    return {
+      ...pod,
+      spec: {
+        ...pod.spec,
+        containers: scrubContainers(pod.spec.containers),
+        initContainers: scrubContainers(pod.spec.initContainers),
+        ephemeralContainers: scrubContainers(pod.spec.ephemeralContainers),
+      },
+    };
   }
 
   private async resolveUserId(req: any): Promise<string> {
@@ -96,16 +122,18 @@ export class KubernetesController {
     @Query('namespace') namespace?: string,
     @Query('live') live?: string,
   ) {
-    await this.resolveNamespace(namespace, req, 'view');
+    const access = await this.resolveNamespace(namespace, req, 'view');
+    const scrub = (pod: any) =>
+      access.canEdit ? pod : KubernetesController.scrubPodForViewer(pod);
     if (live === '1' || live === 'true') {
-      return this.k8sWorkload.getPod(podName, namespace);
+      return scrub(await this.k8sWorkload.getPod(podName, namespace));
     }
     const object = await this.prisma.k8sObject.findFirst({
       where: { kind: 'Pod', namespace, name: podName },
       select: { manifest: true },
     });
-    if (!object) return this.k8sWorkload.getPod(podName, namespace);
-    return object.manifest;
+    if (!object) return scrub(await this.k8sWorkload.getPod(podName, namespace));
+    return scrub(object.manifest);
   }
 
   @Delete('pods/:podName')
