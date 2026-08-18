@@ -8,6 +8,7 @@
 	import { onMount } from 'svelte';
 	import { IconTile } from '$lib/components/ui';
 	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
+	import { searchResults, segments, type Person, type TreeItem } from './quick-search';
 	import {
 		motionPopover as motionPopoverBase,
 		motionBackdrop as motionBackdropBase,
@@ -26,19 +27,14 @@
 		enabled: open && !!orgSlug
 	}));
 
-	interface TreeItem {
-		id: string;
-		name: string;
-		type: 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
-		href: string;
-		slug?: string;
-		image?: string;
-		faviconUrl?: string | null;
-		ingressHost?: string;
-		children?: TreeItem[];
-	}
-
 	type ProjectRef = { id: string; name: string; slug: string };
+	type CreatorRef = {
+		id: string;
+		username?: string | null;
+		firstName?: string | null;
+		lastName?: string | null;
+		imageUrl?: string | null;
+	};
 	type OverviewLite = {
 		deployments?: Array<{
 			id: string;
@@ -48,10 +44,24 @@
 			faviconUrl?: string | null;
 			ingresses?: Array<{ host: string }>;
 			project?: ProjectRef;
+			creator?: CreatorRef | null;
 		}>;
-		databases?: Array<{ id: string; name: string; project?: ProjectRef }>;
+		databases?: Array<{
+			id: string;
+			name: string;
+			project?: ProjectRef;
+			creator?: CreatorRef | null;
+		}>;
 		projects?: ProjectRef[];
 	};
+
+	function toPerson(c: CreatorRef | null | undefined): Person | undefined {
+		if (!c) return undefined;
+		const full = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+		const name = full || c.username || '';
+		if (!name) return undefined;
+		return { id: c.id, name, username: c.username ?? undefined, imageUrl: c.imageUrl };
+	}
 
 	const searchTree = $derived.by<TreeItem[]>(() => {
 		const data = overview.data as OverviewLite | undefined;
@@ -81,7 +91,8 @@
 				href: `/${orgSlug}/deployments/${d.id}`,
 				image: d.image,
 				faviconUrl: d.faviconUrl,
-				ingressHost: d.ingresses?.[0]?.host.split('/')[0]
+				ingressHost: d.ingresses?.[0]?.host.split('/')[0],
+				owner: toPerson(d.creator)
 			});
 		}
 		for (const db of data.databases ?? []) {
@@ -90,7 +101,8 @@
 				id: db.id,
 				name: db.name,
 				type: 'database',
-				href: `/${orgSlug}/databases/${db.id}`
+				href: `/${orgSlug}/databases/${db.id}`,
+				owner: toPerson(db.creator)
 			});
 		}
 		for (const p of data.projects ?? []) ensureProject(p);
@@ -116,153 +128,7 @@
 		}
 	}
 
-	// ── Fuzzy match (substring + subsequence) returning a score and char ranges ──
-	type Span = [number, number];
-	interface Match {
-		score: number;
-		spans: Span[];
-	}
-
-	function fuzzy(text: string, q: string): Match | null {
-		if (!q) return null;
-		const t = text.toLowerCase();
-		const Q = q.toLowerCase();
-		if (t === Q) return { score: 1000, spans: [[0, t.length]] };
-		const idx = t.indexOf(Q);
-		if (idx === 0) return { score: 850 - (t.length - Q.length), spans: [[0, Q.length]] };
-		if (idx > 0)
-			return { score: 700 - idx * 3 - (t.length - Q.length), spans: [[idx, idx + Q.length]] };
-		// Word-boundary subsequence: prefer matches that start at word boundaries.
-		let ti = 0;
-		let qi = 0;
-		let runStart = -1;
-		const spans: Span[] = [];
-		let boundaryHits = 0;
-		while (ti < t.length && qi < Q.length) {
-			if (t[ti] === Q[qi]) {
-				if (runStart < 0) {
-					runStart = ti;
-					if (ti === 0 || /[\s\-_./]/.test(t[ti - 1])) boundaryHits++;
-				}
-				qi++;
-				if (qi === Q.length || t[ti + 1] !== Q[qi]) {
-					spans.push([runStart, ti + 1]);
-					runStart = -1;
-				}
-			}
-			ti++;
-		}
-		if (qi < Q.length) return null;
-		// Penalize gappy matches; reward boundary-aligned ones.
-		const span = (spans[spans.length - 1]?.[1] ?? 0) - spans[0][0];
-		return { score: 350 - (span - Q.length) * 2 + boundaryHits * 25, spans };
-	}
-
-	// ── Walk the tree, attaching the project ancestor to each leaf ──
-	interface Flat {
-		item: TreeItem;
-		project?: TreeItem;
-	}
-	function flatten(items: TreeItem[], project?: TreeItem): Flat[] {
-		const out: Flat[] = [];
-		for (const item of items) {
-			if (item.type === 'ingress') continue; // ingress detail route is gone
-			if (item.type === 'project') {
-				out.push({ item, project: item });
-				if (item.children) out.push(...flatten(item.children, item));
-			} else {
-				out.push({ item, project });
-				if (item.children) out.push(...flatten(item.children, project));
-			}
-		}
-		return out;
-	}
-
-	interface Hit {
-		item: TreeItem;
-		project?: TreeItem;
-		score: number;
-		spans: Span[];
-		via: 'self' | 'project';
-	}
-	interface Group {
-		key: string;
-		project?: TreeItem;
-		projectSpans?: Span[];
-		projectMatched: boolean;
-		items: Hit[];
-		topScore: number;
-	}
-
-	const result = $derived.by<{ groups: Group[]; flat: Hit[] }>(() => {
-		const Q = query.trim();
-		if (!Q) return { groups: [], flat: [] };
-		const flat = flatten(searchTree);
-
-		const projectMatch = new Map<string, Match>();
-		for (const { item } of flat) {
-			if (item.type === 'project') {
-				const m = fuzzy(item.name, Q);
-				if (m) projectMatch.set(item.id, m);
-			}
-		}
-
-		const hits: Hit[] = [];
-		const seen = new Set<string>();
-
-		for (const { item, project } of flat) {
-			const m = fuzzy(item.name, Q);
-			if (m) {
-				const bonus = item.type === 'project' ? 200 : 100;
-				hits.push({ item, project, score: m.score + bonus, spans: m.spans, via: 'self' });
-				seen.add(item.id);
-			}
-		}
-
-		// Cascade: any project that matched contributes its descendants.
-		for (const { item, project } of flat) {
-			if (item.type === 'project') continue;
-			if (!project || !projectMatch.has(project.id)) continue;
-			if (seen.has(item.id)) continue;
-			const pm = projectMatch.get(project.id)!;
-			hits.push({ item, project, score: pm.score - 80, spans: [], via: 'project' });
-			seen.add(item.id);
-		}
-
-		// Group by project; root bucket for items with no project.
-		const groupMap = new Map<string, Group>();
-		for (const h of hits) {
-			const key = h.project?.id ?? '__root';
-			let g = groupMap.get(key);
-			if (!g) {
-				const pm = h.project ? projectMatch.get(h.project.id) : undefined;
-				g = {
-					key,
-					project: h.project,
-					projectSpans: pm?.spans,
-					projectMatched: !!pm,
-					items: [],
-					topScore: 0
-				};
-				groupMap.set(key, g);
-			}
-			g.items.push(h);
-			if (h.score > g.topScore) g.topScore = h.score;
-		}
-
-		const groups = [...groupMap.values()];
-		for (const g of groups) {
-			g.items.sort((a, b) => b.score - a.score);
-		}
-		groups.sort((a, b) => b.topScore - a.topScore);
-
-		// Flat ordered list mirroring render order — used for keyboard navigation.
-		const flatHits: Hit[] = [];
-		for (const g of groups) {
-			for (const h of g.items) flatHits.push(h);
-		}
-		return { groups, flat: flatHits };
-	});
+	const result = $derived(searchResults(searchTree, query));
 
 	const totalCount = $derived(result.flat.length);
 
@@ -334,23 +200,6 @@
 			window.removeEventListener('open-quick-search', openSearch);
 		};
 	});
-
-	// ── Highlight matched character ranges ──
-	function segments(
-		name: string,
-		spans: Span[] | undefined
-	): Array<{ text: string; hit: boolean }> {
-		if (!spans || spans.length === 0) return [{ text: name, hit: false }];
-		const out: Array<{ text: string; hit: boolean }> = [];
-		let cursor = 0;
-		for (const [s, e] of spans) {
-			if (s > cursor) out.push({ text: name.slice(cursor, s), hit: false });
-			out.push({ text: name.slice(s, e), hit: true });
-			cursor = e;
-		}
-		if (cursor < name.length) out.push({ text: name.slice(cursor), hit: false });
-		return out;
-	}
 
 	// ── Motion ──
 	function motionPopover(closing: () => boolean, onClosed: () => void) {
@@ -438,7 +287,7 @@
 				<input
 					type="text"
 					class="quick-search-input"
-					placeholder="Search projects, apps and databases"
+					placeholder="Search projects, apps, databases and people"
 					bind:value={query}
 				/>
 				{#if query}
@@ -467,7 +316,8 @@
 							<span class="quick-search-empty-glyph"><Search size={18} /></span>
 							<p class="quick-search-empty-text">Search everything in this org</p>
 							<p class="quick-search-empty-hint">
-								Type a project, app or database. A project name reveals everything inside it.
+								Type a project, app, database or person. A project name reveals everything inside
+								it, and a name or username reveals everything they built.
 							</p>
 						</div>
 					{:else if totalCount === 0}
@@ -477,7 +327,30 @@
 					{:else}
 						{@const flat = result.flat}
 						{#each result.groups as group (group.key)}
-							{#if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
+							{#if group.person}
+								<div class="quick-search-group-header">
+									{#if group.person.imageUrl}
+										<img class="qs-person-avatar" src={group.person.imageUrl} alt="" />
+									{:else}
+										<span class="qs-person-avatar qs-person-avatar--fallback">
+											{group.person.name.charAt(0).toUpperCase()}
+										</span>
+									{/if}
+									<span class="quick-search-group-label">
+										{#each segments(group.person.name, group.personField === 'name' ? group.personSpans : undefined) as seg, si (si)}
+											<span class:hl={seg.hit}>{seg.text}</span>
+										{/each}
+									</span>
+									{#if group.person.username}
+										<span class="quick-search-group-handle">
+											{#each segments(`@${group.person.username}`, group.personField === 'username' ? group.personSpans : undefined, 1) as seg, si (si)}
+												<span class:hl={seg.hit}>{seg.text}</span>
+											{/each}
+										</span>
+									{/if}
+									<span class="quick-search-group-pill">person</span>
+								</div>
+							{:else if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
 								<div class="quick-search-group-header">
 									<span class="quick-search-group-label">
 										{#each segments(group.project.name, group.projectSpans) as seg, si (si)}
@@ -496,7 +369,8 @@
 									type="button"
 									class="quick-search-item"
 									class:is-selected={isSelected}
-									class:is-nested={!!group.project && hit.item.id !== group.project.id}
+									class:is-nested={!!group.person ||
+										(!!group.project && hit.item.id !== group.project.id)}
 									onclick={() => handleSelect(hit.item)}
 									onmouseenter={(e) => {
 										selectedIndex = flatIndex;
@@ -511,7 +385,7 @@
 												<span class:hl={seg.hit}>{seg.text}</span>
 											{/each}
 										</div>
-										{#if hit.via === 'project' && hit.project}
+										{#if hit.via !== 'self' && hit.project}
 											<div class="quick-search-item-sub">in {hit.project.name}</div>
 										{/if}
 									</div>
@@ -692,6 +566,36 @@
 	}
 
 	.quick-search-group-label :global(.hl) {
+		color: var(--accent);
+	}
+
+	.qs-person-avatar {
+		width: 1.125rem;
+		height: 1.125rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-pill);
+		object-fit: cover;
+		box-shadow: inset 0 0 0 1px var(--rule);
+	}
+
+	.qs-person-avatar--fallback {
+		display: grid;
+		place-items: center;
+		font-size: var(--text-micro);
+		font-weight: 700;
+		color: var(--accent);
+		background: var(--accent-subtle);
+	}
+
+	.quick-search-group-handle {
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		color: var(--text-faint);
+	}
+
+	.quick-search-group-handle :global(.hl) {
 		color: var(--accent);
 	}
 

@@ -1501,6 +1501,17 @@ export class ProjectsService {
             organizationId: true,
           },
         },
+        // Matches the deployment summary so a person search covers everything
+        // they own, not just their apps. No email, same as everywhere else.
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });

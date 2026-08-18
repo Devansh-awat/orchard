@@ -677,6 +677,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             organizationId: true,
           },
         },
+        // Lets the org-wide search resolve a person to their apps. Deliberately
+        // no email — that is scrubbed from viewers everywhere else too.
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });
