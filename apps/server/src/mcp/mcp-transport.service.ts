@@ -1,83 +1,99 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+import {
+  createMcpHandler,
+  type AuthInfo,
+  type McpRequestContext,
+  type McpHttpHandler,
+} from '@modelcontextprotocol/server';
+import { toNodeHandler, type NodeMcpRequestHandler } from '@modelcontextprotocol/node';
 import { createOrchardMcpServer } from './server';
-import type { ActingUser } from './client';
+import { McpOAuthService } from './mcp-oauth.service';
 
-interface TransportEntry {
-  transport: StreamableHTTPServerTransport;
-  // Owner of this MCP session, taken from the JWT `sub` claim at creation.
-  // Subsequent requests reusing the same session id MUST present a bearer
-  // whose sub matches — otherwise a leaked `mcp-session-id` lets any other
-  // authenticated MCP user dispatch tool calls against this transport's
-  // `OrchardClient`, running as the original creator against the
-  // first-party API.
-  ownerSub: string;
+// Identity we thread from the validated bearer to the per-request server via
+// AuthInfo.extra (pass-through — the handler never reads headers itself).
+interface McpAuthExtra {
+  sub: string;
+  email?: string;
+  externalAuthId?: string;
+  sessionId: string;
 }
 
 @Injectable()
 export class McpTransportService implements OnModuleDestroy {
-  private readonly transports = new Map<string, TransportEntry>();
+  // 2026-07-28 stateless serving. createMcpHandler builds a fresh McpServer per
+  // request via the factory and holds nothing between requests: no session map,
+  // no Mcp-Session-Id, so restarts and multiple replicas can't strand a
+  // client. A 2025-era client (today's Claude) is still served through the
+  // handler's built-in legacy fallback, so this is drop-in for existing
+  // connections.
+  private readonly handler: McpHttpHandler = createMcpHandler((ctx) =>
+    this.buildServer(ctx),
+  );
+
+  // The handler does no auth of its own; we gate every request with our own
+  // bearer validation (which enforces session revocation) and pass the result
+  // through as AuthInfo. toNodeHandler bridges Express <-> web Request/Response,
+  // including SSE streaming.
+  private readonly nodeHandler: NodeMcpRequestHandler = toNodeHandler({
+    fetch: (request, options) => this.authenticateAndDispatch(request, options),
+  });
+
+  constructor(private readonly oauth: McpOAuthService) {}
+
+  async handle(req: ExpressRequest, res: ExpressResponse): Promise<void> {
+    await this.nodeHandler(req, res, req.body);
+  }
 
   async onModuleDestroy() {
-    for (const [sid, entry] of this.transports) {
-      try {
-        await entry.transport.close();
-      } catch {}
-      this.transports.delete(sid);
-    }
+    await this.handler.close();
   }
 
-  /**
-   * Resolve a session for a caller. Returns `undefined` if the session
-   * does not exist OR if the caller's `sub` does not match the session's
-   * owner. Treating "doesn't exist" and "exists but not yours" identically
-   * keeps a leaked session id from being usable as an existence oracle.
-   */
-  getTransportForCaller(
-    sessionId: string,
-    callerSub: string,
-  ): StreamableHTTPServerTransport | undefined {
-    const entry = this.transports.get(sessionId);
-    if (!entry) return undefined;
-    if (entry.ownerSub !== callerSub) return undefined;
-    return entry.transport;
-  }
-
-  hasTransport(sessionId: string): boolean {
-    return this.transports.has(sessionId);
-  }
-
-  deleteTransport(sessionId: string) {
-    this.transports.delete(sessionId);
-  }
-
-  registerTransport(
-    sessionId: string,
-    transport: StreamableHTTPServerTransport,
-    ownerSub: string,
-  ) {
-    this.transports.set(sessionId, { transport, ownerSub });
-  }
-
-  async createSession(
-    orchardToken: string,
-    ownerSub: string,
-    actingUser: ActingUser,
-  ): Promise<{ transport: StreamableHTTPServerTransport; ownerSub: string }> {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
+  private buildServer(ctx: McpRequestContext) {
+    // authInfo is always present: authenticateAndDispatch refuses the request
+    // before calling handler.fetch when the bearer is missing or invalid.
+    const extra = (ctx.authInfo?.extra ?? {}) as Partial<McpAuthExtra>;
+    return createOrchardMcpServer(ctx.authInfo?.token, {
+      sub: extra.sub as string,
+      email: extra.email,
+      externalAuthId: extra.externalAuthId,
+      sessionId: extra.sessionId as string,
     });
+  }
 
-    const server = createOrchardMcpServer(orchardToken, actingUser);
+  private async authenticateAndDispatch(
+    request: Request,
+    options?: { parsedBody?: unknown },
+  ): Promise<Response> {
+    // M-6: bind every dispatch to the bearer's `sub`. The per-request server
+    // built for this call holds an OrchardClient minted with this caller's
+    // identity, so validating here (and caching nothing) is what keeps one
+    // user's tool calls from ever running as another.
+    const auth = await this.oauth.validateBearerTokenWithSub(
+      request.headers.get('authorization') ?? undefined,
+    );
+    if (!auth) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'WWW-Authenticate': `Bearer resource_metadata="${this.oauth.resourceMetadataUrl}", scope="mcp:access"`,
+        },
+      });
+    }
 
-    transport.onclose = () => {
-      const sid = (transport as any).sessionId;
-      if (sid) this.transports.delete(sid);
+    const authInfo: AuthInfo = {
+      token: auth.token,
+      clientId: '',
+      scopes: ['mcp:access'],
+      extra: {
+        sub: auth.sub,
+        email: auth.email,
+        externalAuthId: auth.externalAuthId,
+        sessionId: auth.sessionId,
+      } satisfies McpAuthExtra,
     };
 
-    await server.connect(transport);
-
-    return { transport, ownerSub };
+    return this.handler.fetch(request, { ...options, authInfo });
   }
 }

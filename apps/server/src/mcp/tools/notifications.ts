@@ -1,5 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import { McpServer } from '@modelcontextprotocol/server';
+import { z } from 'zod4';
 import { OrchardClient } from '../client';
 import {
   NOTIFICATION_EVENTS,

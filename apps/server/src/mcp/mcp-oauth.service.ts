@@ -39,12 +39,55 @@ const REFRESH_TOKEN_TTL = '30d';
 export class McpOAuthService {
   private readonly oauthClients = new Map<string, OAuthClient>();
 
-  private readonly authCodes = new Map<string, AuthCodeEntry>();
-
   constructor(
     private readonly sessions: SessionsService,
     private readonly prisma: PrismaService,
   ) {}
+
+  // Auth codes and pending-authorize state live in Postgres (mcp_oauth_codes)
+  // rather than process memory so the `/authorize` -> `/authorize/complete` ->
+  // `/token` flow survives restarts and works across replicas. The `id` is the
+  // lookup key: the one-time auth code, or `pending_<state>` /
+  // `client_state_<state>` for the in-flight handshake.
+  private async getCode(id: string): Promise<AuthCodeEntry | undefined> {
+    const row = await this.prisma.mcpOauthCode.findUnique({ where: { id } });
+    if (!row) return undefined;
+    return {
+      clientId: row.clientId,
+      redirectUri: row.redirectUri,
+      codeChallenge: row.codeChallenge ?? undefined,
+      codeChallengeMethod: row.codeChallengeMethod ?? undefined,
+      orchardToken: row.orchardToken,
+      expiresAt: row.expiresAt.getTime(),
+    };
+  }
+
+  private async putCode(id: string, entry: AuthCodeEntry): Promise<void> {
+    const data = {
+      clientId: entry.clientId,
+      redirectUri: entry.redirectUri,
+      codeChallenge: entry.codeChallenge ?? null,
+      codeChallengeMethod: entry.codeChallengeMethod ?? null,
+      orchardToken: entry.orchardToken,
+      expiresAt: new Date(entry.expiresAt),
+    };
+    await this.prisma.mcpOauthCode.upsert({
+      where: { id },
+      create: { id, ...data },
+      update: data,
+    });
+  }
+
+  // deleteMany so a missing row is a no-op rather than a throw.
+  private async deleteCode(id: string): Promise<void> {
+    await this.prisma.mcpOauthCode.deleteMany({ where: { id } });
+  }
+
+  private pruneExpiredCodes(): void {
+    this.prisma.mcpOauthCode
+      .deleteMany({ where: { expiresAt: { lt: new Date() } } })
+      .catch(() => {});
+  }
 
   private async getClient(clientId: string): Promise<OAuthClient | null> {
     if (!clientId) return null;
@@ -217,8 +260,12 @@ export class McpOAuthService {
       return { error: 'invalid_redirect_uri' };
     }
 
+    // Opportunistically sweep expired rows so single-use codes and abandoned
+    // authorize handshakes don't accumulate.
+    this.pruneExpiredCodes();
+
     const mcpState = randomBytes(16).toString('hex');
-    this.authCodes.set(`pending_${mcpState}`, {
+    await this.putCode(`pending_${mcpState}`, {
       clientId: query.client_id,
       redirectUri: query.redirect_uri,
       codeChallenge: query.code_challenge,
@@ -226,7 +273,7 @@ export class McpOAuthService {
       orchardToken: '',
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
-    this.authCodes.set(`client_state_${mcpState}`, {
+    await this.putCode(`client_state_${mcpState}`, {
       clientId: query.state || '',
       redirectUri: '',
       orchardToken: '',
@@ -257,8 +304,8 @@ export class McpOAuthService {
     const { mcp_state, session_token } = body;
     console.error(`[MCP OAuth] Complete authorization: mcp_state=${mcp_state}`);
 
-    const pending = this.authCodes.get(`pending_${mcp_state}`);
-    const clientStateEntry = this.authCodes.get(`client_state_${mcp_state}`);
+    const pending = await this.getCode(`pending_${mcp_state}`);
+    const clientStateEntry = await this.getCode(`client_state_${mcp_state}`);
 
     if (!pending || pending.expiresAt < Date.now()) {
       console.error(`[MCP OAuth] Complete auth failed: pending not found or expired`);
@@ -295,7 +342,7 @@ export class McpOAuthService {
 
     const mcpAuthCode = randomBytes(32).toString('hex');
     console.error(`[MCP OAuth] MCP auth code created, redirecting to ${pending.redirectUri}`);
-    this.authCodes.set(mcpAuthCode, {
+    await this.putCode(mcpAuthCode, {
       clientId: pending.clientId,
       redirectUri: pending.redirectUri,
       codeChallenge: pending.codeChallenge,
@@ -304,8 +351,8 @@ export class McpOAuthService {
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
-    this.authCodes.delete(`pending_${mcp_state}`);
-    this.authCodes.delete(`client_state_${mcp_state}`);
+    await this.deleteCode(`pending_${mcp_state}`);
+    await this.deleteCode(`client_state_${mcp_state}`);
 
     const redirectUrl = new URL(pending.redirectUri);
     redirectUrl.searchParams.set('code', mcpAuthCode);
@@ -442,11 +489,11 @@ export class McpOAuthService {
       return { error: 'unsupported_grant_type' };
     }
 
-    const authCode = body.code ? this.authCodes.get(body.code) : undefined;
-    console.error(`[MCP OAuth] Token exchange: authCode found=${!!authCode}, authCodes size=${this.authCodes.size}`);
+    const authCode = body.code ? await this.getCode(body.code) : undefined;
+    console.error(`[MCP OAuth] Token exchange: authCode found=${!!authCode}`);
     if (!body.code || !authCode || authCode.expiresAt < Date.now()) {
       console.error(`[MCP OAuth] Token exchange failed: invalid_grant (not found or expired)`);
-      if (body.code) this.authCodes.delete(body.code);
+      if (body.code) await this.deleteCode(body.code);
       return { error: 'invalid_grant' };
     }
 
@@ -490,7 +537,7 @@ export class McpOAuthService {
     }
 
     const orchardToken = authCode.orchardToken;
-    this.authCodes.delete(body.code);
+    await this.deleteCode(body.code);
 
     // Recover the identity claims from the access token minted at
     // authorization time so the refresh token carries the same identity.

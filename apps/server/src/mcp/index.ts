@@ -1,14 +1,9 @@
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { createOrchardMcpServer } from './server';
 
-async function main() {
-  const server = createOrchardMcpServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('Orchard MCP Server running on stdio');
-}
-
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+// serveStdio drives the 2026-07-28 protocol over stdio and, by default, also
+// serves a 2025-era client that opens with the legacy `initialize` handshake
+// (options.legacy = 'serve'). The factory has no per-connection auth — the
+// local CLI authenticates to the Orchard API via the ORCHARD_API_TOKEN env.
+serveStdio(() => createOrchardMcpServer());
+console.error('Orchard MCP Server running on stdio');

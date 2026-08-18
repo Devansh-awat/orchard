@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { OrchardClient, type ActingUser } from './client';
 import { registerQueryTools } from './tools/query';
 import { registerDeploymentTools } from './tools/deployments';
@@ -9,10 +9,13 @@ import { registerJobTools } from './tools/jobs';
 import { registerDangerousTools } from './tools/dangerous';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
-  const server = new McpServer({
-    name: 'orchard',
-    version: '1.0.0',
-  });
+  const server = new McpServer(
+    {
+      name: 'orchard',
+      version: '1.0.0',
+    },
+    { capabilities: { tools: {} } },
+  );
 
   const client = token || actingUser
     ? new OrchardClient(process.env.ORCHARD_API_URL, token, actingUser)

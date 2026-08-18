@@ -1,5 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import { McpServer } from '@modelcontextprotocol/server';
+import { z } from 'zod4';
 import { OrchardClient } from '../client';
 
 export function registerResourceTools(server: McpServer, client: OrchardClient) {
@@ -299,7 +299,7 @@ Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings f
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),
         parameters: z
-          .record(z.string())
+          .record(z.string(), z.string())
           .describe(
             'Parameter map, e.g. { "max_connections": "200", "work_mem": "16MB", "log_min_duration_statement": "1000" }',
           ),
@@ -426,7 +426,7 @@ The template engine will validate parameters and create resources in order, wiri
       inputSchema: {
         projectId: z.string().describe('The project UUID to deploy the template into'),
         templateId: z.string().describe('The template UUID to deploy'),
-        parameters: z.record(z.any()).describe('Parameter values as a JSON object, e.g. { "appName": "my-app", "image": "nginx:latest", "port": 3000 }'),
+        parameters: z.record(z.string(), z.any()).describe('Parameter values as a JSON object, e.g. { "appName": "my-app", "image": "nginx:latest", "port": 3000 }'),
       },
     },
     async ({ projectId, templateId, parameters }) => {
