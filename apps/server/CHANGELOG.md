@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.0](https://github.com/LeafdTK/leaf/compare/server/v2.9.0...server/v2.10.0) (2026-08-20)
+
+
+### Features
+
+* a fresh instance mints a setup token to claim superadmin ([a3742b9](https://github.com/LeafdTK/leaf/commit/a3742b98ae987937ffa4fef7061c651f6b351757))
+* github app is created through the manifest flow instead of six pasted values ([a81f05c](https://github.com/LeafdTK/leaf/commit/a81f05c6eeaa5a81b410d3a7682f2c09e1023170))
+
 ## [2.9.0](https://github.com/LeafdTK/leaf/compare/server/v2.8.0...server/v2.9.0) (2026-08-18)
 
 
