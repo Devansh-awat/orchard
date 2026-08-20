@@ -1,22 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Stable keys for instance settings. Each may have a matching env override.
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
 
 export interface ToggleState {
-  // Effective value after applying the env override.
   enabled: boolean;
-  // The stored admin-panel value (ignored while an env override is active).
   dbValue: boolean;
-  // null = no override; true/false = env pins the value and the toggle is locked.
   envOverride: boolean | null;
 }
 
-// DB-backed instance settings with an env-var override layer. A key's env var,
-// when explicitly set to 'true'/'false', wins over the stored value at read
-// time; otherwise the admin-panel toggle (persisted here) decides.
 @Injectable()
 export class InstanceSettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -24,6 +17,32 @@ export class InstanceSettingsService {
   private async getRaw(key: string): Promise<string | null> {
     const row = await this.prisma.instanceSetting.findUnique({ where: { key } });
     return row?.value ?? null;
+  }
+
+  get(key: string): Promise<string | null> {
+    return this.getRaw(key);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    await this.prisma.instanceSetting.upsert({
+      where: { key },
+      create: { key, value },
+      update: { value },
+    });
+  }
+
+  async createIfAbsent(key: string, value: string): Promise<boolean> {
+    try {
+      await this.prisma.instanceSetting.create({ data: { key, value } });
+      return true;
+    } catch (e: any) {
+      if (e?.code === 'P2002') return false;
+      throw e;
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.prisma.instanceSetting.deleteMany({ where: { key } });
   }
 
   async setBool(key: string, value: boolean): Promise<void> {

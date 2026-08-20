@@ -22,6 +22,7 @@ import { SsoModule } from './sso/sso.module';
 import { ScimModule } from './scim/scim.module';
 import { NodesModule } from './nodes/nodes.module';
 import { InstanceSettingsModule } from './instance-settings/instance-settings.module';
+import { SetupModule } from './setup/setup.module';
 import { QuotasModule } from './quotas/quotas.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
 import { EventsModule } from './events/events.module';
@@ -62,6 +63,7 @@ import { ApplyModule } from './apply/apply.module';
     EmailModule,
     AdminModule,
     InstanceSettingsModule,
+    SetupModule,
     WebhooksModule,
     TemplatesModule,
     ComposeStacksModule,
