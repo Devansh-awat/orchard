@@ -106,7 +106,7 @@ export class GitHubController {
       return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
     }
 
-    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientId = this.githubService.getOAuthClientId();
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
 
     // Pass the session token as OAuth state so the callback can identify the

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException } from '@nestjs/comm
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
+import { GithubAppConfigService } from './github-app-config.service';
 import {
   detectApps,
   primaryApp,
@@ -118,9 +119,17 @@ interface CachedRepos {
 
 @Injectable()
 export class GitHubService {
-  private readonly clientId: string;
+  private get clientId(): string {
+    return this.appConfig.get().clientId;
+  }
 
-  private readonly clientSecret: string;
+  private get clientSecret(): string {
+    return this.appConfig.get().clientSecret;
+  }
+
+  getOAuthClientId(): string | null {
+    return this.appConfig.get().clientId;
+  }
 
   private readonly repoCache = new Map<string, CachedRepos>();
 
@@ -129,14 +138,8 @@ export class GitHubService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
-  ) {
-    this.clientId = process.env.GITHUB_CLIENT_ID;
-    this.clientSecret = process.env.GITHUB_CLIENT_SECRET;
-
-    if (!this.clientId || !this.clientSecret) {
-      console.warn('GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.');
-    }
-  }
+    private readonly appConfig: GithubAppConfigService,
+  ) {}
 
   private getCacheKey(accessToken: string, maxPages: number): string {
     return `${accessToken.substring(0, 10)}_${maxPages}`;
@@ -1162,11 +1165,10 @@ export class GitHubService {
 
   // Generate a JWT for GitHub App authentication
   private generateAppJwt(): string {
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKey = process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const { appId, privateKey } = this.appConfig.get();
 
     if (!appId || !privateKey) {
-      throw new BadRequestException('GitHub App not configured. Set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.');
+      throw new BadRequestException('GitHub App not configured. Create one from Admin, or set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.');
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -1375,7 +1377,7 @@ export class GitHubService {
 
   // Get GitHub App webhook secret
   getAppWebhookSecret(): string {
-    const secret = process.env.GITHUB_APP_WEBHOOK_SECRET;
+    const secret = this.appConfig.get().webhookSecret;
     if (!secret) {
       throw new BadRequestException('GitHub App webhook secret not configured');
     }
@@ -1976,7 +1978,7 @@ export class GitHubService {
 
   // Get GitHub App installation URL
   getAppInstallationUrl(): string {
-    const appSlug = process.env.GITHUB_APP_SLUG;
+    const appSlug = this.appConfig.get().slug;
     if (!appSlug) {
       throw new BadRequestException('GitHub App slug not configured');
     }
