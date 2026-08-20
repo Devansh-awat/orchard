@@ -1,4 +1,4 @@
-{{- if .Values.tenantSandbox.enabled }}
+{{- if and .Values.tenantSandbox.enabled .Values.tenantSandbox.runtimeClassName }}
 # gVisor RuntimeClass. Tenant-app Deployments created via the API set
 # `runtimeClassName: gvisor` (gated by Values.tenantSandbox.runtimeClassName
 # / TENANT_RUNTIME_CLASS env var on the server) so their pods run under

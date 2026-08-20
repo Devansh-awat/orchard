@@ -1,4 +1,4 @@
-{{- if or .Values.builderSandbox.enabled .Values.sandbox.enabled }}
+{{- if and (or .Values.builderSandbox.enabled .Values.sandbox.enabled) .Values.builderSandbox.runtimeClassName }}
 # Kata Containers RuntimeClass. The image-build Jobs (`orchard-builders`
 # namespace) set `runtimeClassName: kata` when BUILDER_RUNTIME_CLASS is
 # configured on the server, and AI sandbox pods (`orchard-sandboxes`
