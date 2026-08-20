@@ -22,11 +22,74 @@ ORCHARD_TUNNEL_TOKEN=${ORCHARD_TUNNEL_TOKEN:-}
 ORCHARD_UPDATE_POLICY=${ORCHARD_UPDATE_POLICY:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 
+START_TS=$(date +%s)
+IS_TTY=false
+if [ -t 1 ]; then IS_TTY=true; fi
+
+STEP_N=0
+STEP_TOTAL=12
+REMAINING=0
+
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 warn() { printf '\033[1;33m  ! %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[1;31m  x %s\033[0m\n' "$*" >&2; exit 1; }
+
+fmt_secs() {
+  if [ "$1" -ge 60 ]; then printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); else printf '%ds' "$1"; fi
+}
+
+step() {
+  local title=$1 cost=${2:-0} left=""
+  STEP_N=$((STEP_N + 1))
+  if [ "$REMAINING" -gt 45 ]; then left=", ~$(fmt_secs "$REMAINING") left"; fi
+  printf '\n\033[1;32m==> [%d/%d] %s\033[0m \033[2m(%s elapsed%s)\033[0m\n' \
+    "$STEP_N" "$STEP_TOTAL" "$title" "$(fmt_secs $(($(date +%s) - START_TS)))" "$left"
+  REMAINING=$((REMAINING - cost))
+  if [ "$REMAINING" -lt 0 ]; then REMAINING=0; fi
+}
+
+run_step() {
+  local label=$1 typical=$2
+  shift 2
+  local log t0 pid rc=0 i=0 beat=0 secs
+  log=$(mktemp)
+  t0=$(date +%s)
+
+  "$@" >"$log" 2>&1 &
+  pid=$!
+
+  while kill -0 "$pid" 2>/dev/null; do
+    secs=$(($(date +%s) - t0))
+    if [ "$IS_TTY" = true ]; then
+      printf '\r    \033[1;36m%s\033[0m %s \033[2m%s / ~%s\033[0m\033[K' \
+        "$(printf '%s' '|/-\' | cut -c$((i % 4 + 1)))" "$label" "$(fmt_secs "$secs")" "$typical"
+      i=$((i + 1))
+    elif [ "$secs" -ge $((beat + 30)) ]; then
+      beat=$secs
+      printf '    %s ... %s elapsed (typically %s)\n' "$label" "$(fmt_secs "$secs")" "$typical"
+    fi
+    sleep 1
+  done
+
+  wait "$pid" || rc=$?
+  secs=$(($(date +%s) - t0))
+
+  if [ "$rc" -ne 0 ]; then
+    if [ "$IS_TTY" = true ]; then printf '\r\033[K'; fi
+    printf '\033[1;31m  x %s failed after %s\033[0m\n' "$label" "$(fmt_secs "$secs")" >&2
+    tail -25 "$log" >&2
+    rm -f "$log"
+    exit 1
+  fi
+
+  if [ "$IS_TTY" = true ]; then
+    printf '\r    \033[1;32mok\033[0m %s \033[2m%s\033[0m\033[K\n' "$label" "$(fmt_secs "$secs")"
+  else
+    printf '    ok %s (%s)\n' "$label" "$(fmt_secs "$secs")"
+  fi
+  rm -f "$log"
+}
 
 ask() {
   local prompt=$1 default=${2:-} answer
@@ -186,7 +249,7 @@ collect_domains() {
 
 wait_for_dns() {
   local host=$1 tries=0 resolved
-  [ "$ASSUME_YES" = true ] && return 0
+  if [ "$ASSUME_YES" = true ]; then return 0; fi
   printf '    waiting for %s to resolve' "$host"
   while [ $tries -lt 60 ]; do
     resolved=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR==1{print $1}' || true)
@@ -225,66 +288,86 @@ choose_update_policy() {
   info "update policy: $ORCHARD_UPDATE_POLICY"
 }
 
+k3s_download() {
+  curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \
+    --disable=traefik \
+    --write-kubeconfig-mode=644 \
+    --service-node-port-range="$NODE_PORT_RANGE"
+}
+
+wait_for_node() {
+  local tries=0
+  until [ "$(kubectl get nodes --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do
+    tries=$((tries + 1))
+    if [ $tries -ge 90 ]; then
+      journalctl -u k3s --no-pager -n 30 2>/dev/null \
+        | grep -aiE 'level=(error|fatal)|server is not ready' | tail -3 >&2
+      return 1
+    fi
+    sleep 2
+  done
+  kubectl wait --for=condition=Ready node --all --timeout=180s >/dev/null
+}
+
 install_k3s() {
-  step "Installing k3s"
+  step "Installing k3s" 120
 
   if command -v k3s >/dev/null 2>&1; then
     info "k3s already installed, leaving it alone"
   else
-    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \
-      --disable=traefik \
-      --write-kubeconfig-mode=644 \
-      --service-node-port-range="$NODE_PORT_RANGE"
+    run_step "downloading and starting k3s" 1m k3s_download
   fi
 
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-  local tries=0
-  until kubectl get nodes >/dev/null 2>&1; do
-    tries=$((tries + 1))
-    [ $tries -lt 60 ] || die "k3s did not become ready"
-    sleep 2
-  done
-  kubectl wait --for=condition=Ready node --all --timeout=180s >/dev/null
-  info "cluster is up"
+  run_step "waiting for the node to be ready" 30s wait_for_node
 }
 
-ensure_helm() {
-  command -v helm >/dev/null 2>&1 && return
-  step "Installing Helm"
+helm_download() {
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 }
 
-install_operators() {
-  step "Installing platform operators"
+ensure_helm() {
+  step "Installing Helm" 20
+  if command -v helm >/dev/null 2>&1; then
+    info "helm already installed"
+    return
+  fi
+  run_step "downloading helm" 20s helm_download
+}
 
-  kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml" >/dev/null
-
+add_helm_repos() {
   helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
   helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null 2>&1 || true
   helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
   helm repo update >/dev/null
+}
 
-  info "Traefik"
-  helm upgrade --install traefik traefik/traefik \
+install_operators() {
+  step "Installing platform operators" 240
+
+  run_step "Gateway API CRDs" 15s \
+    kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml"
+
+  run_step "fetching chart repositories" 20s add_helm_repos
+
+  run_step "Traefik" 1m30s helm upgrade --install traefik traefik/traefik \
     --namespace traefik --create-namespace \
     --set providers.kubernetesGateway.enabled=true \
     --set gateway.enabled=false \
-    --wait --timeout 10m >/dev/null
+    --wait --timeout 10m
 
-  info "CloudNativePG"
-  helm upgrade --install cnpg cnpg/cloudnative-pg \
+  run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
     --namespace cnpg-system --create-namespace \
-    --wait --timeout 10m >/dev/null
+    --wait --timeout 10m
 
   if [ -n "$CERT_ISSUER" ]; then
-    info "cert-manager"
-    helm upgrade --install cert-manager jetstack/cert-manager \
+    run_step "cert-manager" 1m30s helm upgrade --install cert-manager jetstack/cert-manager \
       --namespace cert-manager --create-namespace \
       --set crds.enabled=true \
-      --wait --timeout 10m >/dev/null
+      --wait --timeout 10m
     install_cluster_issuer
   else
-    info "cert-manager skipped (TLS terminates at the tunnel)"
+    info "cert-manager skipped, TLS terminates at the tunnel"
   fi
 }
 
@@ -320,7 +403,7 @@ EOF
 }
 
 install_registry() {
-  step "Installing the bundled registry (zot)"
+  step "Installing the bundled registry (zot)" 105
 
   kubectl create namespace orchard >/dev/null 2>&1 || true
 
@@ -414,20 +497,28 @@ configs:
     tls:
       insecure_skip_verify: true
 EOF
+  run_step "reloading k3s with the registry mirror" 45s restart_k3s
+  run_step "starting the registry" 1m \
+    kubectl -n orchard rollout status deploy/zot --timeout=5m
+  info "registry ready at $REGISTRY_HOST, mirrored to 127.0.0.1:$ZOT_NODE_PORT"
+}
+
+restart_k3s() {
   systemctl restart k3s
   local tries=0
   until kubectl get --raw /readyz >/dev/null 2>&1; do
     tries=$((tries + 1))
-    [ $tries -lt 60 ] || die "k3s did not come back after loading the registry mirror"
+    [ $tries -lt 90 ] || return 1
     sleep 2
   done
-  kubectl -n orchard rollout status deploy/zot --timeout=5m >/dev/null
-  info "registry ready at $REGISTRY_HOST (mirrored to 127.0.0.1:$ZOT_NODE_PORT)"
 }
 
 install_tunnel() {
-  [ "$INGRESS_MODE" = tunnel ] || return 0
-  step "Installing cloudflared"
+  step "Installing cloudflared" 45
+  if [ "$INGRESS_MODE" != tunnel ]; then
+    info "not needed in $INGRESS_MODE mode"
+    return 0
+  fi
 
   kubectl create namespace cloudflared >/dev/null 2>&1 || true
   kubectl -n cloudflared create secret generic tunnel-token \
@@ -460,7 +551,8 @@ spec:
             requests: { cpu: 20m, memory: 32Mi }
             limits: { cpu: 500m, memory: 256Mi }
 EOF
-  kubectl -n cloudflared rollout status deploy/cloudflared --timeout=5m >/dev/null
+  run_step "connecting the tunnel" 30s \
+    kubectl -n cloudflared rollout status deploy/cloudflared --timeout=5m
 }
 
 size_workloads() {
@@ -470,12 +562,12 @@ size_workloads() {
   fi
 
   BUILD_CACHE_GB=$((DISK_GB / 5))
-  [ "$BUILD_CACHE_GB" -gt 60 ] && BUILD_CACHE_GB=60
-  [ "$BUILD_CACHE_GB" -lt 5 ] && BUILD_CACHE_GB=5
+  if [ "$BUILD_CACHE_GB" -gt 60 ]; then BUILD_CACHE_GB=60; fi
+  if [ "$BUILD_CACHE_GB" -lt 5 ]; then BUILD_CACHE_GB=5; fi
 
   REGISTRY_SIZE_GB=$((DISK_GB / 5))
-  [ "$REGISTRY_SIZE_GB" -gt 50 ] && REGISTRY_SIZE_GB=50
-  [ "$REGISTRY_SIZE_GB" -lt 5 ] && REGISTRY_SIZE_GB=5
+  if [ "$REGISTRY_SIZE_GB" -gt 50 ]; then REGISTRY_SIZE_GB=50; fi
+  if [ "$REGISTRY_SIZE_GB" -lt 5 ]; then REGISTRY_SIZE_GB=5; fi
 
   info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G"
 }
@@ -490,7 +582,7 @@ write_values() {
   if [ "$USE_TLS" = true ]; then
     scheme=https; entrypoint=websecure; tls_enabled=true
   fi
-  [ "$INGRESS_MODE" = tunnel ] && scheme=https
+  if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; fi
 
   JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
   ENCRYPTION_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
@@ -605,18 +697,19 @@ EOF
 }
 
 install_orchard() {
-  step "Installing Orchard"
+  step "Installing Orchard" 300
 
   local args=(upgrade --install orchard "$CHART_REF"
     --namespace orchard --create-namespace
     -f "$VALUES_FILE" --wait --timeout 20m)
-  [ -n "$ORCHARD_VERSION" ] && args+=(--version "$ORCHARD_VERSION")
+  if [ -n "$ORCHARD_VERSION" ]; then args+=(--version "$ORCHARD_VERSION"); fi
 
-  helm "${args[@]}"
+  info "pulling images and waiting for postgres, redis and the api to be ready"
+  run_step "orchard" 4m helm "${args[@]}"
 }
 
 install_updater() {
-  step "Installing the updater"
+  step "Installing the updater" 5
 
   cat > /usr/local/bin/orchard-update <<EOF
 #!/usr/bin/env bash
@@ -655,10 +748,12 @@ EOF
 
 summary() {
   local scheme=https
-  [ "$USE_TLS" = false ] && [ "$INGRESS_MODE" != tunnel ] && scheme=http
+  if [ "$USE_TLS" = false ]; then [ "$INGRESS_MODE" != tunnel ] && scheme=http; fi
 
   step "Done"
   cat <<EOF
+
+  Installed in $(fmt_secs $(($(date +%s) - START_TS))).
 
   Orchard is running at $scheme://$ORCHARD_DOMAIN
   Apps get subdomains of $ORCHARD_APP_DOMAIN
@@ -682,7 +777,9 @@ EOF
 }
 
 main() {
-  bold "Orchard installer"
+  REMAINING=760
+  printf '\n\033[1;32m  Orchard installer\033[0m\n'
+  printf '\033[2m  Single box, single command. Roughly 10 minutes on a clean machine.\033[0m\n'
   preflight
   detect_network
   choose_ingress_mode
