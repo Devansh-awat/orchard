@@ -11,7 +11,7 @@ VALUES_FILE="$STATE_DIR/values.yaml"
 K3S_VERSION=${K3S_VERSION:-v1.31.5+k3s1}
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.2.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
-ZOT_NODE_PORT=${ORCHARD_ZOT_NODE_PORT:-30500}
+ZOT_NODE_PORT=${ORCHARD_ZOT_NODE_PORT:-30100}
 REGISTRY_HOST=${ORCHARD_REGISTRY_HOST:-registry.orchard.local}
 
 ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-}
@@ -21,6 +21,9 @@ ORCHARD_INGRESS_MODE=${ORCHARD_INGRESS_MODE:-}
 ORCHARD_TUNNEL_TOKEN=${ORCHARD_TUNNEL_TOKEN:-}
 ORCHARD_UPDATE_POLICY=${ORCHARD_UPDATE_POLICY:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
+
+IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
+IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
 
 START_TS=$(date +%s)
 IS_TTY=false
@@ -143,7 +146,9 @@ preflight() {
     warn "an existing Kubernetes cluster is reachable from this shell."
     warn "This installer creates its own k3s cluster and will not touch it."
     warn "To install into that cluster instead, use the Helm chart: docs/self-hosting.md"
-    [ "$(ask 'Continue and create a new k3s cluster? (yes/no)' no)" = yes ] || exit 1
+    if [ "$(ask 'Continue and create a new k3s cluster? (yes/no)' no)" != yes ]; then
+      die "stopped so the existing cluster is left alone"
+    fi
   fi
 
   if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
@@ -153,6 +158,12 @@ preflight() {
   if [ -w /dev/kvm ]; then
     info "KVM present (VM-isolated builds available as an opt-in later)"
   fi
+
+  local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-}
+  if [ "$ZOT_NODE_PORT" -lt "$lo" ] || [ "$ZOT_NODE_PORT" -gt "$hi" ]; then
+    die "ORCHARD_ZOT_NODE_PORT ($ZOT_NODE_PORT) must fall inside ORCHARD_NODE_PORT_RANGE ($NODE_PORT_RANGE)"
+  fi
+  info "node ports: $NODE_PORT_RANGE, registry on $ZOT_NODE_PORT"
 }
 
 detect_network() {
@@ -498,7 +509,7 @@ configs:
       insecure_skip_verify: true
 EOF
   run_step "reloading k3s with the registry mirror" 45s restart_k3s
-  run_step "starting the registry" 1m \
+  run_step "starting the registry" 2m \
     kubectl -n orchard rollout status deploy/zot --timeout=5m
   info "registry ready at $REGISTRY_HOST, mirrored to 127.0.0.1:$ZOT_NODE_PORT"
 }
@@ -595,6 +606,7 @@ createNamespace: false
 image:
   registry: $IMAGE_REGISTRY
   repository: $IMAGE_REPOSITORY
+  pullPolicy: $IMAGE_PULL_POLICY
 
 signupMode: open
 datadog:
@@ -602,12 +614,16 @@ datadog:
 
 frontend:
   replicas: 1
+  image:
+    tag: $IMAGE_TAG
   env:
     - { name: PUBLIC_APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
     - { name: PUBLIC_OAUTH_PROVIDER, value: none }
 
 server:
   replicas: 1
+  image:
+    tag: $IMAGE_TAG
   env:
     - { name: JWT_SECRET, value: "$JWT_SECRET" }
     - { name: SECRETS_ENCRYPTION_KEY, value: "$ENCRYPTION_KEY" }
@@ -615,8 +631,6 @@ server:
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN }
     - { name: MAX_CONCURRENT_BUILDS, value: "$MAX_BUILDS" }
-    - { name: K8S_STORAGE_CLASS, value: local-path }
-    - { name: K8S_INGRESS_CLASS, value: traefik }
     - { name: DOCKER_REGISTRY_PUSH, value: zot.orchard.svc.cluster.local:5000 }
     - { name: DOCKER_REGISTRY_PULL, value: $REGISTRY_HOST }
     - { name: REGISTRY_HTTP_HOSTS, value: zot.orchard.svc.cluster.local:5000 }
@@ -698,6 +712,8 @@ EOF
 
 install_orchard() {
   step "Installing Orchard" 300
+
+  kubectl create namespace network >/dev/null 2>&1 || true
 
   local args=(upgrade --install orchard "$CHART_REF"
     --namespace orchard --create-namespace
