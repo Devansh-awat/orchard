@@ -31,6 +31,9 @@ Two things it cannot work out on its own: your **domain**, and an **email for
 Let's Encrypt**. Everything else is detected: architecture, memory, free disk,
 free ports, whether you are behind NAT.
 
+amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
+to run on anything else rather than leave you with apps that cannot start.
+
 It also asks how traffic should reach the box:
 
 - **public**: you have a routable IP; point DNS at it and Let's Encrypt issues

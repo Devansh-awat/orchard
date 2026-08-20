@@ -48,15 +48,9 @@ preflight() {
 
   case "$(uname -m)" in
     x86_64|amd64) ARCH=amd64 ;;
-    aarch64|arm64) ARCH=arm64 ;;
-    *) die "unsupported architecture $(uname -m); Orchard needs amd64 or arm64" ;;
+    *) die "amd64 only for now: image builds target linux/amd64, so apps built on a $(uname -m) box would not run on it" ;;
   esac
   info "architecture: $ARCH"
-
-  if [ "$ARCH" = arm64 ]; then
-    warn "image builds currently target linux/amd64 unconditionally."
-    warn "Apps built on this box will not run here until that is fixed."
-  fi
 
   MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
   [ "$MEM_MB" -ge 3500 ] || die "need at least 4Gi of RAM, found ${MEM_MB}Mi"
