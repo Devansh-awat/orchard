@@ -717,11 +717,15 @@ install_orchard() {
 
   local args=(upgrade --install orchard "$CHART_REF"
     --namespace orchard --create-namespace
-    -f "$VALUES_FILE" --wait --timeout 20m)
+    -f "$VALUES_FILE" --timeout 20m)
   if [ -n "$ORCHARD_VERSION" ]; then args+=(--version "$ORCHARD_VERSION"); fi
 
-  info "pulling images and waiting for postgres, redis and the api to be ready"
-  run_step "orchard" 4m helm "${args[@]}"
+  run_step "applying the chart" 40s helm "${args[@]}"
+  run_step "postgres" 3m kubectl -n orchard wait --for=condition=Ready \
+    cluster.postgresql.cnpg.io/orchard-db --timeout=10m
+  run_step "redis" 30s kubectl -n orchard rollout status deploy/redis --timeout=5m
+  run_step "the api" 3m kubectl -n orchard rollout status deploy/server --timeout=10m
+  run_step "the web app" 1m kubectl -n orchard rollout status deploy/frontend --timeout=5m
 }
 
 install_updater() {
@@ -731,8 +735,10 @@ install_updater() {
 #!/usr/bin/env bash
 set -euo pipefail
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-exec helm upgrade --install orchard "$CHART_REF" \\
-  --namespace orchard -f "$VALUES_FILE" --wait --timeout 20m "\$@"
+helm upgrade --install orchard "$CHART_REF" \\
+  --namespace orchard -f "$VALUES_FILE" --timeout 20m "\$@"
+kubectl -n orchard rollout status deploy/server --timeout=10m
+kubectl -n orchard rollout status deploy/frontend --timeout=5m
 EOF
   chmod +x /usr/local/bin/orchard-update
 
