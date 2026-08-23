@@ -14,6 +14,7 @@ import {
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
 import { injectBuildArgsScript } from './build-args';
+import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import { BuildJobInformerService, BuildJobObservation } from './build-job-informer.service';
 
 interface BuildJobOptions {
@@ -847,9 +848,21 @@ ${registryConfigs}
       dockerfileFlag = dockerfilePath.substring(dockerfilePath.lastIndexOf('/') + 1);
     }
 
-    // Build the depot build command parts safely
-    const buildArgLines = Object.entries(envVars)
-      .map(([key]) => `--build-arg "${key}=\${${key}}"`)
+    // Build the depot build command parts safely.
+    //
+    // The values reach the script through the environment rather than the
+    // command line so they stay out of the process list, but they are carried
+    // under generated names: exporting them under the user's own names lets a
+    // variable called PATH or DOCKER_CONFIG reconfigure the container running
+    // the build. Indexes rather than a prefix, so a deployment that already has
+    // an ORCHARD_BUILD_ARG_-shaped key cannot collide with a real one.
+    const depotBuildArgs = Object.entries(envVars).map(([key, value], index) => ({
+      key,
+      envName: `ORCHARD_BUILD_ARG_${index}`,
+      value,
+    }));
+    const buildArgLines = depotBuildArgs
+      .map(({ key, envName }) => `--build-arg "${key}=\${${envName}}"`)
       .join(' ');
 
     // Same lint behavior as the BuildKit path: without this, a repo's
@@ -914,9 +927,8 @@ echo "=== Super Build completed ==="
         { name: 'REGISTRY_HOST', value: this.harborRegistryPush },
         { name: 'REGISTRY_USER', value: process.env.HARBOR_USERNAME || 'admin' },
         { name: 'REGISTRY_PASS', value: process.env.HARBOR_PASSWORD || '' },
-        // Pass env vars so build-args can reference them via ${KEY}
-        ...Object.entries(envVars).map(([key, value]) => ({
-          name: key,
+        ...depotBuildArgs.map(({ envName, value }) => ({
+          name: envName,
           value,
         })),
       ],
@@ -1154,12 +1166,17 @@ exit $EXIT_CODE
       buildFromRoot = false,
       buildType = 'dockerfile',
       rootDirectory,
-      envVars = {},
+      envVars: requestedEnvVars = {},
       buildWithDepot = false,
       cacheTenantKey,
       persistentBuildCache = false,
       localContextUrl,
     } = options;
+
+    // Filter once, here, so every consumer below agrees on the set: the ARG
+    // declarations, the build args, the Railpack secrets that read the
+    // container's own environment, and the container environment itself.
+    const envVars = buildSafeEnv(requestedEnvVars);
 
     // Sanitize the tenant key for use as a PVC subPath. Anything outside
     // [a-z0-9-] gets squashed; missing key collapses to "_shared" which is
@@ -1579,12 +1596,7 @@ fi
           command: ['/bin/sh', '-c'],
           args: [clientScript],
           workingDir: '/workspace',
-          env: [
-            ...Object.entries(envVars).map(([key, value]) => ({
-              name: key,
-              value,
-            })),
-          ],
+          env: builderContainerEnv(envVars),
           volumeMounts: [
             { name: 'workspace', mountPath: '/workspace' },
           ],
@@ -1621,6 +1633,12 @@ fi
             ? []
             : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
           { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}` },
+          ...builderContainerEnv(envVars),
+          // After the user's variables, not before. A build that pulls assets
+          // from S3 sets AWS_ACCESS_KEY_ID for perfectly good reasons, and it
+          // reaches the build by value as a --build-arg, so losing the race
+          // here costs it nothing — while losing it the other way points our
+          // cache exporter at someone else's bucket.
           ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
             {
               name: 'AWS_ACCESS_KEY_ID',
@@ -1643,10 +1661,6 @@ fi
               }
             },
           ] : []),
-          ...Object.entries(envVars).map(([key, value]) => ({
-            name: key,
-            value,
-          })),
         ],
         volumeMounts: [
           { name: 'workspace', mountPath: '/workspace' },
@@ -2421,7 +2435,15 @@ exit $rc`,
             if (containerStatuses) {
               for (const cs of containerStatuses) {
                 if (cs.state?.terminated) {
-                  failureReasons.push(`Container ${cs.name} terminated: ${cs.state.terminated.reason || 'Unknown'} - ${cs.state.terminated.message || 'No message'}`);
+                  // The exit code is the only thing BuildKit leaves behind when
+                  // it dies before producing output, and the summarizer drops
+                  // any reason line that carries no detail. Without it a build
+                  // that exited 127 reports as whatever the pusher said when
+                  // its sibling container vanished underneath it.
+                  const exit = cs.state.terminated.exitCode;
+                  const detail = cs.state.terminated.message
+                    || (typeof exit === 'number' ? `exit code ${exit}` : 'No message');
+                  failureReasons.push(`Container ${cs.name} terminated: ${cs.state.terminated.reason || 'Unknown'} - ${detail}`);
                   console.error(`[ImageBuilder] Container failure:`, JSON.stringify(cs.state.terminated));
                 }
                 if (cs.state?.waiting) {

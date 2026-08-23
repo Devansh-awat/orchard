@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { GithubAppConfigService } from './github-app-config.service';
+import { parseDockerfileEnvVars } from './dockerfile-env';
 import {
   detectApps,
   primaryApp,
@@ -638,46 +639,7 @@ export class GitHubService {
   }
 
   parseEnvVars(dockerfileContent: string): { key: string; value: string }[] {
-    const envVars: { key: string; value: string }[] = [];
-    const lines = dockerfileContent.split('\n');
-    const seenKeys = new Set<string>();
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.toUpperCase().startsWith('ENV ')) {
-        const rest = trimmed.substring(4).trim();
-        // Handle ENV KEY=VALUE KEY2=VALUE2 format
-        const kvMatches = rest.matchAll(/([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g);
-        let matched = false;
-        for (const m of kvMatches) {
-          matched = true;
-          const key = m[1];
-          let value = m[2];
-          // Strip surrounding quotes
-          if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-          }
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            envVars.push({ key, value });
-          }
-        }
-        // Handle ENV KEY VALUE format (single key-value, no equals sign)
-        if (!matched) {
-          const spaceMatch = rest.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+(.+)$/);
-          if (spaceMatch) {
-            const key = spaceMatch[1];
-            const value = spaceMatch[2].trim();
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              envVars.push({ key, value });
-            }
-          }
-        }
-      }
-    }
-
-    return envVars;
+    return parseDockerfileEnvVars(dockerfileContent);
   }
 
   async getDockerfileInfo(
