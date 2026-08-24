@@ -16,6 +16,11 @@ model User {
   firstName                   String?   @map("first_name") @db.VarChar(100)
   lastName                    String?   @map("last_name") @db.VarChar(100)
   imageUrl                    String?   @map("image_url") @db.VarChar(500)
+  // Where imageUrl came from: 'upload' (the user picked it), 'gravatar' (found
+  // by email lookup and cached to R2), or 'none' (they deleted one and do not
+  // want it re-imported). Null means never resolved, so a lookup is due.
+  imageSource                 String?   @map("image_source") @db.VarChar(20)
+  avatarCheckedAt             DateTime? @map("avatar_checked_at") @db.Timestamp(6)
   githubId                    String?   @unique @map("github_id") @db.VarChar(255)
   githubUsername              String?   @map("github_username") @db.VarChar(255)
   githubAccessToken           String?   @map("github_access_token") @db.Text

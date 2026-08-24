@@ -371,7 +371,10 @@ export class OAuthController {
       await this.storageService.deleteFile(user.imageUrl).catch(() => {});
     }
 
-    const updatedUser = await this.usersService.updateProfile(user.id, { imageUrl });
+    const updatedUser = await this.usersService.updateProfile(user.id, {
+      imageUrl,
+      imageSource: 'upload',
+    });
     return updatedUser;
   }
 
@@ -384,7 +387,12 @@ export class OAuthController {
       await this.storageService.deleteFile(user.imageUrl).catch(() => {});
     }
 
-    const updatedUser = await this.usersService.updateProfile(user.id, { imageUrl: null });
+    // 'none' is a standing opt-out: without it the next sign-in would just
+    // re-import the Gravatar they only now finished deleting.
+    const updatedUser = await this.usersService.updateProfile(user.id, {
+      imageUrl: null,
+      imageSource: 'none',
+    });
     return updatedUser;
   }
 }

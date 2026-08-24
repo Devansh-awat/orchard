@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailAvatarService } from './email-avatar.service';
 
 const MAX_SEEN_UPDATES = 100;
 
@@ -41,6 +42,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly emailAvatar: EmailAvatarService,
   ) {}
 
   private cacheGet(key: string): any | null {
@@ -152,6 +154,11 @@ export class UsersService {
       });
     }
 
+    // Import a Gravatar/Libravatar picture if they have one. Deliberately not
+    // awaited: sign-in must not block on an outbound probe to a third party,
+    // and the generated mascot already covers the gap until it lands.
+    void this.ensureImageUrl(user).catch(() => {});
+
     return user;
   }
 
@@ -177,8 +184,22 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Resolve a user's picture, importing one from an email avatar service on
+   * first sight. Fire-and-forget from auth paths: the caller should not wait on
+   * an outbound HTTP probe, and a miss just leaves the generated mascot up.
+   */
   async ensureImageUrl(user: any): Promise<string | null> {
-    return user.imageUrl || null;
+    if (!user?.id || !user?.email) return user?.imageUrl || null;
+    const resolved = await this.emailAvatar.ensure({
+      id: user.id,
+      email: user.email,
+      imageUrl: user.imageUrl ?? null,
+      imageSource: user.imageSource ?? null,
+      avatarCheckedAt: user.avatarCheckedAt ?? null,
+    });
+    if (resolved && resolved !== user.imageUrl) this.invalidateUserCache(user);
+    return resolved;
   }
 
   async getUserIdFromExternalAuthId(externalAuthId: string): Promise<string> {
@@ -276,7 +297,7 @@ export class UsersService {
     return user;
   }
 
-  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null }) {
+  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null; imageSource?: string | null }) {
     // If username is being updated, check format and uniqueness
     if (data.username !== undefined) {
       if (!/^[a-zA-Z0-9_-]{1,39}$/.test(data.username)) {
@@ -300,6 +321,7 @@ export class UsersService {
         ...(data.username !== undefined && { username: data.username }),
         ...(data.setupCompleted !== undefined && { setupCompleted: data.setupCompleted }),
         ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+        ...(data.imageSource !== undefined && { imageSource: data.imageSource }),
       },
       select: {
         id: true,
@@ -308,6 +330,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         imageUrl: true,
+        imageSource: true,
         externalAuthId: true,
         setupCompleted: true,
         seenUpdates: true,
