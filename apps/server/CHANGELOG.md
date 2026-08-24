@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.0](https://github.com/LeafdTK/leaf/compare/server/v2.13.0...server/v2.14.0) (2026-08-24)
+
+
+### Features
+
+* multi-provider sso with org login pages and per-org admin controls ([00cc117](https://github.com/LeafdTK/leaf/commit/00cc1172b6cbf07c896f9dfe641b997f08686e07))
+
 ## [2.13.0](https://github.com/LeafdTK/leaf/compare/server/v2.12.0...server/v2.13.0) (2026-08-24)
 
 

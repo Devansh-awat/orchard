@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/LeafdTK/leaf/compare/cli/v0.8.0...cli/v0.9.0) (2026-08-24)
+
+
+### Features
+
+* multi-provider sso with org login pages and per-org admin controls ([00cc117](https://github.com/LeafdTK/leaf/commit/00cc1172b6cbf07c896f9dfe641b997f08686e07))
+
 ## [0.8.0](https://github.com/LeafdTK/leaf/compare/cli/v0.7.0...cli/v0.8.0) (2026-08-05)
 
 

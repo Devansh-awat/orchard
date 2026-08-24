@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.12.0...frontend/v1.13.0) (2026-08-24)
+
+
+### Features
+
+* multi-provider sso with org login pages and per-org admin controls ([00cc117](https://github.com/LeafdTK/leaf/commit/00cc1172b6cbf07c896f9dfe641b997f08686e07))
+
+
+### Bug Fixes
+
+* style the mcp and cli consent pages against the design system ([153103c](https://github.com/LeafdTK/leaf/commit/153103c3f514c3d81d8ac330bc509db081ed82c4))
+
 ## [1.12.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.11.0...frontend/v1.12.0) (2026-08-24)
 
 
