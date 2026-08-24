@@ -307,11 +307,11 @@
 							{#if currentUser}
 								<div class="setup-profile-preview">
 									<img
-									src={avatarUrl(currentUser)}
-									style="filter: {avatarFilter(currentUser)}"
-									alt="Profile"
-									class="setup-profile-avatar"
-								/>
+										src={avatarUrl(currentUser)}
+										style="filter: {avatarFilter(currentUser)}"
+										alt="Profile"
+										class="setup-profile-avatar"
+									/>
 									<div>
 										<p class="setup-profile-name">
 											{firstName || 'First'}

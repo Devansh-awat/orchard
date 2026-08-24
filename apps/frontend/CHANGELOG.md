@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.10.0...frontend/v1.11.0) (2026-08-24)
+
+
+### Features
+
+* 191 mascots plus hue variations so avatars stop colliding ([4eb64ea](https://github.com/LeafdTK/leaf/commit/4eb64ea5a8958a9f9b06c66cd4bcd5afbb20584f))
+
+
+### Bug Fixes
+
+* call them read replicas, not standbys ([168256f](https://github.com/LeafdTK/leaf/commit/168256fdf83841997f501fb1cc9af39ccf44d1bd))
+
 ## [1.10.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.9.0...frontend/v1.10.0) (2026-08-24)
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.12.0](https://github.com/LeafdTK/leaf/compare/server/v2.11.0...server/v2.12.0) (2026-08-24)
+
+
+### Features
+
+* import a profile picture from gravatar when the email has one ([296e97c](https://github.com/LeafdTK/leaf/commit/296e97c879b488d729fed03454fc3661ba01491e))
+
+
+### Bug Fixes
+
+* call them read replicas, not standbys ([168256f](https://github.com/LeafdTK/leaf/commit/168256fdf83841997f501fb1cc9af39ccf44d1bd))
+
 ## [2.11.0](https://github.com/LeafdTK/leaf/compare/server/v2.10.0...server/v2.11.0) (2026-08-24)
 
 

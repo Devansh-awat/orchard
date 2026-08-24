@@ -207,7 +207,7 @@ const MASCOTS = [
 	'yak',
 	'yellow-chick',
 	'yellow-duckling',
-	'zebra',
+	'zebra'
 ] as const;
 
 /** Rotations applied over the base art. Step 0 is the original colourway. */

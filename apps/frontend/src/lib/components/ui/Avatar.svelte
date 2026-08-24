@@ -32,7 +32,12 @@
 	style="width: {size}px; height: {size}px; font-size: {Math.round(size * 0.42)}px;"
 >
 	<span class="ui-avatar-fb" aria-hidden="true">{initial}</span>
-	<RemoteImg {src} alt={label} class="ui-avatar-img" style={filter ? `filter: ${filter}` : undefined} />
+	<RemoteImg
+		{src}
+		alt={label}
+		class="ui-avatar-img"
+		style={filter ? `filter: ${filter}` : undefined}
+	/>
 </span>
 
 <style>

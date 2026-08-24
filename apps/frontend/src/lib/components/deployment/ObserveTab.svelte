@@ -1295,7 +1295,11 @@
 										<button class="eg-assign" type="button" {...attrs}>
 											{#if group.assignee}
 												<span class="eg-avatar">
-													<img src={avatarUrl(group.assignee)} style="filter: {avatarFilter(group.assignee)}" alt="" />
+													<img
+														src={avatarUrl(group.assignee)}
+														style="filter: {avatarFilter(group.assignee)}"
+														alt=""
+													/>
 												</span>
 												<span>@{group.assignee.username}</span>
 											{:else}
