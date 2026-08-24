@@ -3,7 +3,9 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { user, isSignedIn, apiFetch } from '$lib/stores';
-	import { Loader2, Terminal } from 'lucide-svelte';
+	import { Terminal } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	let port = $derived($page.url.searchParams.get('port') || '');
 	let state = $derived($page.url.searchParams.get('state') || '');
@@ -75,131 +77,179 @@
 </script>
 
 <svelte:head>
-	<title>Authorize CLI — Orchard</title>
+	<title>Authorize CLI - Orchard</title>
 </svelte:head>
 
-<div class="login-page">
-	<div class="login-bg">
-		<div class="login-orb login-orb-1"></div>
-		<div class="login-orb login-orb-2"></div>
-		<div class="login-orb login-orb-3"></div>
-		<div class="login-orb login-orb-4"></div>
-		<div class="login-grid-overlay"></div>
-	</div>
+<div class="consent-page">
+	<div class="consent-stack">
+		<div class="consent-brand" {@attach motionStagger({ index: 0 })}>
+			<img src="/logo/logofull.svg" alt="Orchard" class="consent-logo logo-light" />
+			<img src="/logo/logofulldm.svg" alt="Orchard" class="consent-logo logo-dark" />
+		</div>
 
-	<div class="login-container">
-		<div class="login-hero">
-			<div class="login-hero-content">
-				<img src="/logo/logofulldm.svg" alt="Orchard" class="login-hero-logo" />
-				<p class="login-hero-subtitle">
-					The <strong>Orchard CLI</strong> on this computer is requesting access to your account.
+		{#if error}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorization failed</h1>
+			<p class="consent-error" {@attach motionStagger({ index: 2 })}>{error}</p>
+		{:else if done}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorized</h1>
+			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
+				Token sent to your terminal. You can close this tab.
+			</p>
+		{:else}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorize CLI access</h1>
+			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
+				The <strong>Orchard CLI</strong> on this computer is requesting access to your account.
+			</p>
+
+			<div class="cli-details" {@attach motionStagger({ index: 3 })}>
+				<p class="cli-label">A personal API token will be created and sent to:</p>
+				<p class="cli-host"><Terminal class="h-4 w-4" /> 127.0.0.1:{port}</p>
+				<p class="cli-name">{label}</p>
+				<p class="cli-warning">
+					Only approve if you just ran <code>orchard auth login</code> on this machine.
 				</p>
-				<div class="cli-details">
-					<p class="cli-label">A personal API token will be created and sent to:</p>
-					<p class="cli-host"><Terminal class="h-4 w-4" /> 127.0.0.1:{port}</p>
-					<p class="cli-name">{label}</p>
-					<p class="cli-warning">
-						Only approve if you just ran <code>orchard auth login</code> on this machine.
-					</p>
-				</div>
 			</div>
-		</div>
 
-		<div class="login-form-side">
-			{#if error}
-				<div class="login-panel" style="text-align:center;">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Authorization Failed</h2>
-					</div>
-					<p class="login-error">{error}</p>
-				</div>
-			{:else if done}
-				<div class="login-panel" style="text-align:center;">
-					<div class="login-panel-header"><h2 class="login-panel-title">Authorized</h2></div>
-					<p class="login-success">Token sent to your terminal. You can close this tab.</p>
-				</div>
-			{:else if $isSignedIn}
-				<div class="login-panel">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Authorize CLI access</h2>
-						<p class="login-panel-desc">Signed in as <strong>{$user?.email}</strong></p>
-					</div>
-					<button class="login-primary" onclick={authorize} disabled={authorizing}>
-						{#if authorizing}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-						{authorizing ? 'Authorizing…' : 'Authorize'}
-					</button>
-					<button class="login-back" style="margin-top:.75rem" onclick={deny}>Cancel</button>
-				</div>
-			{:else}
-				<div class="login-panel">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Sign in to authorize</h2>
-					</div>
-					<button class="login-primary" onclick={signIn}>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
-								points="10 17 15 12 10 7"
-							/><line x1="15" y1="12" x2="3" y2="12" /></svg
-						>
-						Continue with Hack Club
-					</button>
-				</div>
-			{/if}
-		</div>
+			<div class="consent-action" {@attach motionStagger({ index: 4 })}>
+				{#if $isSignedIn}
+					<p class="consent-identity">Signed in as <strong>{$user?.email}</strong></p>
+					<Button variant="primary" class="w-full" onclick={authorize} loading={authorizing}>
+						{authorizing ? 'Authorizing...' : 'Authorize'}
+					</Button>
+					<Button variant="ghost" class="w-full" onclick={deny}>Cancel</Button>
+				{:else}
+					<Button variant="primary" class="w-full" onclick={signIn}>Continue with Hack Club</Button>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </div>
 
 <style>
+	.consent-page {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem 1.5rem;
+		background: var(--bg-app);
+	}
+
+	.consent-stack {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 100%;
+		max-width: 22rem;
+		text-align: center;
+	}
+
+	.consent-brand {
+		margin-bottom: 1.75rem;
+	}
+
+	.consent-logo {
+		height: 1.75rem;
+		width: auto;
+	}
+
+	.consent-title {
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		color: var(--text-default);
+		margin: 0 0 0.5rem;
+	}
+
+	.consent-subtitle {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+		margin: 0;
+	}
+
+	.consent-subtitle strong {
+		color: var(--text-default);
+		font-weight: 600;
+	}
+
+	.consent-action {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+
+	.consent-identity {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+		margin: 0;
+	}
+
+	.consent-identity strong {
+		color: var(--text-default);
+		font-weight: 600;
+	}
+
+	.consent-error {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--status-error);
+		margin: 0;
+	}
+
 	.cli-details {
+		width: 100%;
 		margin-top: 1.5rem;
 		padding: 1rem;
 		border-radius: var(--radius-sm);
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
 		text-align: left;
 	}
+
 	.cli-label {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		opacity: 0.75;
-		margin: 0 0 0.5rem 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+		margin: 0 0 0.5rem;
 	}
+
 	.cli-host {
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: var(--text-title-3);
-		line-height: var(--lh-title-3);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		margin: 0 0 0.25rem 0;
+		font-family: var(--font-mono);
+		color: var(--text-default);
+		margin: 0 0 0.25rem;
 	}
+
 	.cli-name {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		opacity: 0.6;
-		margin: 0 0 0.75rem 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		margin: 0 0 0.75rem;
 	}
+
 	.cli-warning {
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
-		opacity: 0.8;
+		color: var(--text-muted);
 		margin: 0;
 		padding-top: 0.75rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		border-top: 1px solid var(--border-default);
 	}
+
 	.cli-warning code {
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		background: rgba(255, 255, 255, 0.08);
+		font-family: var(--font-mono);
+		background: var(--bg-sunken);
+		color: var(--text-default);
 		padding: 0.1rem 0.25rem;
 		border-radius: var(--radius-xs);
 	}

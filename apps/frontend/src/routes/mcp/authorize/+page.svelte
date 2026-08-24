@@ -3,7 +3,9 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { user, isSignedIn, apiFetch } from '$lib/stores';
-	import { Loader2, KeyRound } from 'lucide-svelte';
+	import { KeyRound } from 'lucide-svelte';
+	import { Button, Input } from '$lib/components/ui';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	let mcpState = $derived($page.url.searchParams.get('mcp_state') || '');
 	let mcpServer = $derived($page.url.searchParams.get('mcp_server') || '');
@@ -242,97 +244,61 @@
 	<title>Authorize MCP Access - Orchard</title>
 </svelte:head>
 
-<div class="login-page">
-	<div class="login-bg">
-		<div class="login-orb login-orb-1"></div>
-		<div class="login-orb login-orb-2"></div>
-		<div class="login-orb login-orb-3"></div>
-		<div class="login-orb login-orb-4"></div>
-		<div class="login-grid-overlay"></div>
-	</div>
-
-	<div class="login-container">
-		<div class="login-hero">
-			<div class="login-hero-content">
-				<img src="/logo/logofulldm.svg" alt="Orchard" class="login-hero-logo" />
-				<p class="login-hero-subtitle">
-					<strong>{clientName}</strong> is requesting access to your Orchard account via MCP.
-				</p>
-				{#if redirectUri}
-					<div class="mcp-consent-details">
-						<p class="mcp-consent-label">
-							After you approve, your authorization code will be sent to:
-						</p>
-						<p class="mcp-consent-host">{redirectHost || redirectUri}</p>
-						<p class="mcp-consent-uri">{redirectUri}</p>
-						<p class="mcp-consent-warning">
-							Only approve if you recognize this destination. Anyone with access to that URL can use
-							your Orchard account.
-						</p>
-					</div>
-				{/if}
-			</div>
+<div class="consent-page">
+	<div class="consent-stack">
+		<div class="consent-brand" {@attach motionStagger({ index: 0 })}>
+			<img src="/logo/logofull.svg" alt="Orchard" class="consent-logo logo-light" />
+			<img src="/logo/logofulldm.svg" alt="Orchard" class="consent-logo logo-dark" />
 		</div>
 
-		<div class="login-form-side">
-			{#if error}
-				<div class="login-panel" style="text-align: center;">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Authorization Failed</h2>
-					</div>
-					<p class="login-error">{error}</p>
-				</div>
-			{:else if authorized}
-				<div class="login-panel" style="text-align: center;">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Authorized</h2>
-					</div>
-					<p class="login-success">Redirecting back to the application...</p>
-				</div>
-			{:else if $isSignedIn}
-				<div class="login-panel">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Authorize MCP Access</h2>
-						<p class="login-panel-desc">Signed in as <strong>{$user?.email}</strong></p>
-					</div>
+		{#if error}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorization failed</h1>
+			<p class="consent-error" {@attach motionStagger({ index: 2 })}>{error}</p>
+		{:else if authorized}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorized</h1>
+			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
+				Redirecting back to {clientName}...
+			</p>
+		{:else}
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>
+				Authorize MCP access
+			</h1>
+			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
+				<strong>{clientName}</strong> is requesting access to your Orchard account.
+			</p>
 
-					<button class="login-primary" onclick={completeAuthorization} disabled={authorizing}>
-						{#if authorizing}
-							<Loader2 class="h-4 w-4 animate-spin" />
-						{/if}
+			{#if redirectUri}
+				<div class="consent-details" {@attach motionStagger({ index: 3 })}>
+					<p class="consent-label">After you approve, your authorization code will be sent to:</p>
+					<p class="consent-host">{redirectHost || redirectUri}</p>
+					<p class="consent-uri">{redirectUri}</p>
+					<p class="consent-warning">
+						Only approve if you recognize this destination. Anyone with access to that URL can use
+						your Orchard account.
+					</p>
+				</div>
+			{/if}
+
+			<div class="consent-action" {@attach motionStagger({ index: 4 })}>
+				{#if $isSignedIn}
+					<p class="consent-identity">Signed in as <strong>{$user?.email}</strong></p>
+					<Button
+						variant="primary"
+						class="w-full"
+						onclick={completeAuthorization}
+						loading={authorizing}
+					>
 						{authorizing ? 'Authorizing...' : 'Authorize'}
-					</button>
-				</div>
-			{:else}
-				<div class="login-panel">
-					<div class="login-panel-header">
-						<h2 class="login-panel-title">Sign in to authorize</h2>
-					</div>
-
-					<button class="login-primary" onclick={signInWithHackClub}>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
-								points="10 17 15 12 10 7"
-							/><line x1="15" y1="12" x2="3" y2="12" /></svg
-						>
+					</Button>
+				{:else}
+					<Button variant="primary" class="w-full" onclick={signInWithHackClub}>
 						Continue with Hack Club
-					</button>
+					</Button>
 
-					<div class="login-divider">
-						<span>or continue with email</span>
-					</div>
+					<div class="consent-divider"><span>or continue with email</span></div>
 
 					<form
-						class="login-form"
+						class="consent-form"
 						novalidate
 						onsubmit={(e) => {
 							e.preventDefault();
@@ -340,32 +306,31 @@
 							else verifyOtp();
 						}}
 					>
-						<label class="login-label" for="otp-email">Email address</label>
-						<input
-							class="input login-input"
+						<Input
 							type="email"
 							placeholder="you@example.com"
 							id="otp-email"
 							bind:value={otpEmail}
 							autocomplete="email"
+							error={!!otpError}
 							required
 						/>
 						{#if otpStep === 'code'}
-							<label class="login-label" for="otp-code">Verification code</label>
-							<div class="login-otp-row">
-								<input
-									class="input login-input login-code"
+							<div class="consent-otp-row">
+								<Input
 									type="text"
+									class="consent-code"
 									inputmode="numeric"
 									maxlength="6"
 									placeholder="000000"
 									id="otp-code"
 									bind:value={otpCode}
 									autocomplete="one-time-code"
+									error={!!otpError}
 								/>
-								<button
+								<Button
+									variant="ghost"
 									type="button"
-									class="login-back"
 									onclick={() => {
 										otpStep = 'email';
 										otpCode = '';
@@ -373,97 +338,217 @@
 									}}
 								>
 									Back
-								</button>
+								</Button>
 							</div>
 						{/if}
 						{#if otpError}
-							<p class="login-error">{otpError}</p>
+							<p class="consent-error">{otpError}</p>
 						{/if}
 						{#if otpMessage}
-							<p class="login-success">{otpMessage}</p>
+							<p class="consent-success">{otpMessage}</p>
 						{/if}
-						<button
-							class="btn btn-primary login-submit"
+						<Button
+							variant="primary"
+							class="w-full"
 							type="submit"
-							disabled={otpRequesting || otpVerifying}
+							loading={otpRequesting || otpVerifying}
 						>
-							{#if otpRequesting || otpVerifying}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{/if}
-							{otpStep === 'email' ? 'Send code' : 'Verify & Authorize'}
-						</button>
+							{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}
+						</Button>
 					</form>
 
 					{#if passkeySupported}
-						<div class="login-passkey">
-							<label class="login-label" for="passkey-email">Passkey sign in</label>
-							<input
-								class="input login-input"
+						<div class="consent-divider"><span>or use a passkey</span></div>
+						<div class="consent-form">
+							<Input
 								type="email"
 								placeholder="Email (optional)"
 								id="passkey-email"
 								bind:value={passkeyEmail}
 							/>
-							<button
-								class="btn btn-secondary login-passkey-btn"
+							<Button
+								variant="secondary"
+								class="w-full"
 								type="button"
 								onclick={signInWithPasskey}
-								disabled={passkeyLoading}
+								loading={passkeyLoading}
 							>
-								{#if passkeyLoading}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
 								<KeyRound class="h-4 w-4" />
-								Sign in with Passkey
-							</button>
+								Sign in with passkey
+							</Button>
 							{#if passkeyError}
-								<p class="login-error">{passkeyError}</p>
+								<p class="consent-error">{passkeyError}</p>
 							{/if}
 						</div>
 					{/if}
-				</div>
-			{/if}
-		</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </div>
 
 <style>
-	.mcp-consent-details {
-		margin-top: 1.5rem;
-		padding: 1rem;
-		border-radius: var(--radius-sm);
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		text-align: left;
+	.consent-page {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem 1.5rem;
+		background: var(--bg-app);
 	}
-	.mcp-consent-label {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		opacity: 0.75;
-		margin: 0 0 0.5rem 0;
+
+	.consent-stack {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 100%;
+		max-width: 22rem;
+		text-align: center;
 	}
-	.mcp-consent-host {
+
+	.consent-brand {
+		margin-bottom: 1.75rem;
+	}
+
+	.consent-logo {
+		height: 1.75rem;
+		width: auto;
+	}
+
+	.consent-title {
 		font-size: var(--text-title-3);
 		line-height: var(--lh-title-3);
 		font-weight: 600;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		margin: 0 0 0.25rem 0;
-		word-break: break-all;
+		letter-spacing: -0.02em;
+		color: var(--text-default);
+		margin: 0 0 0.5rem;
 	}
-	.mcp-consent-uri {
+
+	.consent-subtitle {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+		margin: 0;
+	}
+
+	.consent-subtitle strong {
+		color: var(--text-default);
+		font-weight: 600;
+	}
+
+	.consent-details {
+		width: 100%;
+		margin-top: 1.5rem;
+		padding: 1rem;
+		border-radius: var(--radius-sm);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		text-align: left;
+	}
+
+	.consent-label {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		opacity: 0.6;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		margin: 0 0 0.75rem 0;
+		color: var(--text-muted);
+		margin: 0 0 0.5rem;
+	}
+
+	.consent-host {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		font-family: var(--font-mono);
+		color: var(--text-default);
+		margin: 0 0 0.25rem;
 		word-break: break-all;
 	}
-	.mcp-consent-warning {
+
+	.consent-uri {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		font-family: var(--font-mono);
+		margin: 0 0 0.75rem;
+		word-break: break-all;
+	}
+
+	.consent-warning {
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
-		opacity: 0.8;
+		color: var(--text-muted);
 		margin: 0;
 		padding-top: 0.75rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		border-top: 1px solid var(--border-default);
+	}
+
+	.consent-action {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+
+	.consent-identity {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+		margin: 0;
+	}
+
+	.consent-identity strong {
+		color: var(--text-default);
+		font-weight: 600;
+	}
+
+	.consent-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.consent-otp-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.consent-otp-row :global(.consent-code) {
+		flex: 1;
+		min-width: 0;
+		text-align: center;
+		font-family: var(--font-mono);
+		letter-spacing: 0.3em;
+	}
+
+	.consent-divider {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+	}
+
+	.consent-divider::before,
+	.consent-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--border-default);
+	}
+
+	.consent-error {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--status-error);
+		margin: 0;
+	}
+
+	.consent-success {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--status-success);
+		margin: 0;
 	}
 </style>
