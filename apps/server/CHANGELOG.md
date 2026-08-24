@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.0](https://github.com/LeafdTK/leaf/compare/server/v2.12.0...server/v2.13.0) (2026-08-24)
+
+
+### Features
+
+* show the internal cluster address under every port ([7f77da8](https://github.com/LeafdTK/leaf/commit/7f77da80f41be677ec7acdcfc361ffcfc0542c62))
+
 ## [2.12.0](https://github.com/LeafdTK/leaf/compare/server/v2.11.0...server/v2.12.0) (2026-08-24)
 
 

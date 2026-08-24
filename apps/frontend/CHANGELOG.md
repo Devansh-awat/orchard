@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.11.0...frontend/v1.12.0) (2026-08-24)
+
+
+### Features
+
+* show the internal cluster address under every port ([7f77da8](https://github.com/LeafdTK/leaf/commit/7f77da80f41be677ec7acdcfc361ffcfc0542c62))
+
 ## [1.11.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.10.0...frontend/v1.11.0) (2026-08-24)
 
 
