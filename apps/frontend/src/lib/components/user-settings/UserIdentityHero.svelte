@@ -4,7 +4,7 @@
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
 	import { Button, Input } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { avatarUrl, avatarFilter } from '$lib/avatar';
 
 	interface UserData {
 		firstName?: string;
@@ -114,7 +114,12 @@
 	<div class="uh-top">
 		<div class="uh-avatar-wrap">
 			<div class="uh-avatar">
-				<img src={avatarUrl(user)} alt={displayName} class="uh-avatar-img" />
+				<img
+					src={avatarUrl(user)}
+					style="filter: {avatarFilter(user)}"
+					alt={displayName}
+					class="uh-avatar-img"
+				/>
 			</div>
 			<div class="uh-avatar-actions">
 				<button

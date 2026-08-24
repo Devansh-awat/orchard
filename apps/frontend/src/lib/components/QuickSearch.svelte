@@ -7,7 +7,7 @@
 	import { Search, CornerDownLeft, Database, LayoutTemplate, X } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { IconTile } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { avatarUrl, avatarFilter } from '$lib/avatar';
 	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
 	import { searchResults, segments, type Person, type TreeItem } from './quick-search';
 	import {
@@ -330,7 +330,12 @@
 						{#each result.groups as group (group.key)}
 							{#if group.person}
 								<div class="quick-search-group-header">
-									<img class="qs-person-avatar" src={avatarUrl(group.person)} alt="" />
+									<img
+										class="qs-person-avatar"
+										src={avatarUrl(group.person)}
+										style="filter: {avatarFilter(group.person)}"
+										alt=""
+									/>
 									<span class="quick-search-group-label">
 										{#each segments(group.person.name, group.personField === 'name' ? group.personSpans : undefined) as seg, si (si)}
 											<span class:hl={seg.hit}>{seg.text}</span>

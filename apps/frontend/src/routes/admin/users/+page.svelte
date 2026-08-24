@@ -11,7 +11,7 @@
 		ChevronRight
 	} from 'lucide-svelte';
 	import { Modal, Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { avatarUrl, avatarFilter } from '$lib/avatar';
 
 	interface UserItem {
 		id: string;
@@ -216,6 +216,7 @@
 								<div class="flex items-center gap-3">
 									<img
 										src={avatarUrl(user)}
+										style="filter: {avatarFilter(user)}"
 										alt={user.firstName || user.email}
 										class="h-8 w-8 rounded-full object-cover"
 									/>

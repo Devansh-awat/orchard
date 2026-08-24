@@ -4,7 +4,7 @@
 	// from the user's id. The initial sits underneath as a base layer purely so
 	// a failed image request degrades to a letter instead of a hole.
 	import RemoteImg from './RemoteImg.svelte';
-	import { avatarUrl, avatarInitial, type AvatarUser } from '$lib/avatar';
+	import { avatarUrl, avatarFilter, avatarInitial, type AvatarUser } from '$lib/avatar';
 
 	let {
 		user,
@@ -21,6 +21,7 @@
 	} = $props();
 
 	const src = $derived(avatarUrl(user));
+	const filter = $derived(avatarFilter(user));
 	const initial = $derived(avatarInitial(user));
 	const label = $derived(alt ?? `${user?.name || user?.username || user?.email || 'User'} avatar`);
 </script>
@@ -31,7 +32,7 @@
 	style="width: {size}px; height: {size}px; font-size: {Math.round(size * 0.42)}px;"
 >
 	<span class="ui-avatar-fb" aria-hidden="true">{initial}</span>
-	<RemoteImg {src} alt={label} class="ui-avatar-img" />
+	<RemoteImg {src} alt={label} class="ui-avatar-img" style={filter ? `filter: ${filter}` : undefined} />
 </span>
 
 <style>

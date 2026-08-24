@@ -4,7 +4,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
-	import { avatarUrl } from '$lib/avatar';
+	import { avatarUrl, avatarFilter } from '$lib/avatar';
 
 	let {
 		projectMembers,
@@ -156,7 +156,12 @@
 									onclick={() => onAddMember(om.user.email)}
 									disabled={addingMember}
 								>
-									<img src={avatarUrl(om.user)} alt="" class="pj-member-avatar" />
+									<img
+										src={avatarUrl(om.user)}
+										style="filter: {avatarFilter(om.user)}"
+										alt=""
+										class="pj-member-avatar"
+									/>
 									<div class="pj-member-info">
 										<span class="pj-member-name">
 											{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user
@@ -232,7 +237,12 @@
 							from: { y: -10 }
 						})}
 					>
-						<img src={avatarUrl(m.user)} alt="" class="pj-member-avatar" />
+						<img
+							src={avatarUrl(m.user)}
+							style="filter: {avatarFilter(m.user)}"
+							alt=""
+							class="pj-member-avatar"
+						/>
 						<div class="pj-member-info">
 							<span class="pj-member-name">
 								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user

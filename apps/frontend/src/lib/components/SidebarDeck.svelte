@@ -28,7 +28,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { avatarUrl, avatarFilter } from '$lib/avatar';
 	import {
 		springRotate,
 		springCollapse,
@@ -316,7 +316,7 @@
 
 {#snippet userAvatarEl()}
 	<span class="deck-user-avatar">
-		<RemoteImg src={avatarUrl($user)} />
+		<RemoteImg src={avatarUrl($user)} style="filter: {avatarFilter($user)}" />
 	</span>
 {/snippet}
 
