@@ -262,6 +262,8 @@ model Organization {
   description String?  @db.Text
   avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
   plan        String?  @db.VarChar(50)
+  // Vanity host only. SSO lives at /<slug> on the main domain; a subdomain
+  // that still resolves just redirects there.
   subdomain   String?  @unique @db.VarChar(100)
   createdBy   String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
@@ -297,7 +299,8 @@ model Organization {
   members              OrganizationMember[]
   invitations          OrganizationInvitation[]
   projects             Project[]
-  ssoConfig            SsoConfig?
+  ssoSettings          OrgSsoSettings?
+  identityProviders    IdentityProvider[]
   nodeAssignments      OrgNodeAssignment[]
   scimTokens           ScimToken[]
   scimDeprovisioned    ScimDeprovisionedMember[]
@@ -1387,42 +1390,108 @@ model ComposeStack {
   @@map("compose_stacks")
 }
 
-model SsoConfig {
-  id             String @id @default(uuid()) @db.Uuid
-  organizationId String @unique @map("organization_id") @db.Uuid
+enum SsoProtocol {
+  oidc
+  saml
+  oauth2
 
-  // Provider type: "oidc" or "saml"
-  provider String @db.VarChar(10)
+  @@map("sso_protocol")
+}
 
-  // OIDC configuration
-  oidcIssuerUrl    String? @map("oidc_issuer_url") @db.VarChar(500)
-  oidcClientId     String? @map("oidc_client_id") @db.VarChar(255)
-  oidcClientSecret String? @map("oidc_client_secret") @db.Text
-  oidcScopes       String? @map("oidc_scopes") @db.VarChar(500)
+// One configured way in. A row with organizationId = null is instance-wide and
+// renders on the platform login page for everyone; a row with an organizationId
+// belongs to that org and only renders on its own login page at /<org-slug>.
+// Both scopes run the exact same flows, so "Sign in with Google" for the whole
+// instance and "Sign in with Acme Okta" for one org are the same object.
+//
+// `protocol` is how we talk to the IdP; `preset` is only which catalogue entry
+// filled the form in (see sso/presets.ts). GitHub is oauth2 rather than oidc
+// because it has no discovery document and no id_token.
+//
+// callbackPath exists because a redirect URI is a contract with the IdP, not a
+// derived value: rows migrated off the old sso_configs table keep the URL their
+// IdP already has registered, and everything created since derives the new one.
+model IdentityProvider {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
 
-  // SAML configuration
+  slug     String      @db.VarChar(64)
+  name     String      @db.VarChar(120)
+  protocol SsoProtocol
+  preset   String      @default("generic") @db.VarChar(32)
+  enabled  Boolean     @default(true)
+
+  buttonLabel String? @map("button_label") @db.VarChar(80)
+  iconUrl     String? @map("icon_url") @db.VarChar(500)
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  // OIDC / OAuth2. issuerUrl drives discovery; the explicit endpoint columns
+  // are for oauth2 providers and for IdPs whose discovery document lies.
+  issuerUrl        String? @map("issuer_url") @db.VarChar(500)
+  clientId         String? @map("client_id") @db.VarChar(255)
+  clientSecret     String? @map("client_secret") @db.Text
+  scopes           String? @db.VarChar(500)
+  authorizationUrl String? @map("authorization_url") @db.VarChar(500)
+  tokenUrl         String? @map("token_url") @db.VarChar(500)
+  userinfoUrl      String? @map("userinfo_url") @db.VarChar(500)
+
+  // SAML 2.0
   samlEntryPoint  String? @map("saml_entry_point") @db.VarChar(500)
   samlIssuer      String? @map("saml_issuer") @db.VarChar(500)
+  samlIdpEntityId String? @map("saml_idp_entity_id") @db.VarChar(500)
   samlCertificate String? @map("saml_certificate") @db.Text
   samlMetadataUrl String? @map("saml_metadata_url") @db.VarChar(500)
 
-  // Login page customization
+  callbackPath String? @map("callback_path") @db.VarChar(500)
+
+  // Provisioning policy
+  jitProvisioning      Boolean          @default(true) @map("jit_provisioning")
+  defaultRole          OrganizationRole @default(member) @map("default_role")
+  allowedDomains       String[]         @default([]) @map("allowed_domains")
+  requireVerifiedEmail Boolean          @default(true) @map("require_verified_email")
+
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId], map: "idx_identity_providers_org")
+  @@map("identity_providers")
+}
+
+// Org-level SSO posture, separate from any single provider so that adding a
+// second IdP doesn't reopen questions already answered ("is SSO on", "is it
+// mandatory", "which email domains route here").
+//
+// Two switches, two owners. platformEnabled belongs to the instance
+// superadmin: it is how the operator turns SSO on or off for one tenant
+// without touching that tenant's config. enabled belongs to the org owner.
+// Login requires both, so an operator revoking access can't be undone from
+// inside the org.
+model OrgSsoSettings {
+  organizationId String @id @map("organization_id") @db.Uuid
+
+  platformEnabled Boolean @default(true) @map("platform_enabled")
+  enabled         Boolean @default(false)
+  enforced        Boolean @default(false)
+
+  // Sign-ins for these email domains get routed to this org's login page.
+  emailDomains String[] @default([]) @map("email_domains")
+
   loginLogoUrl      String? @map("login_logo_url") @db.VarChar(500)
   loginPrimaryColor String? @map("login_primary_color") @db.VarChar(7)
   loginBgColor      String? @map("login_bg_color") @db.VarChar(7)
   loginWelcomeText  String? @map("login_welcome_text") @db.VarChar(500)
-
-  // State
-  enabled  Boolean @default(false)
-  enforced Boolean @default(false)
+  loginTagline      String? @map("login_tagline") @db.VarChar(500)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId], map: "idx_sso_config_org")
-  @@map("sso_configs")
+  @@map("org_sso_settings")
 }
 
 // A destination and nothing else: where bytes go. Routing lives in

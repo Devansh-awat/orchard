@@ -2,8 +2,13 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import Redis from 'ioredis';
 
 export interface OidcState {
-  orgId: string;
+  providerId: string;
+  // null for instance-wide providers, which authenticate against the platform
+  // rather than into one organization.
+  orgId: string | null;
   codeVerifier: string;
+  nonce?: string;
+  returnTo?: string;
 }
 
 const TTL_MS = 10 * 60 * 1000;

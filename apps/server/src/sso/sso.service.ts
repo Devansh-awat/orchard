@@ -1,773 +1,821 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-// openid-client is ESM only. Loading it lazily keeps this file a CommonJS
-// module rather than forcing a require() of an ES module at import time.
-import type * as OpenIdClient from 'openid-client' with { 'resolution-mode': 'import' };
-import { SAML } from '@node-saml/node-saml';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
+import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
+import { generateServiceProviderMetadata } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
-import { OAuthService } from '../auth/oauth.service';
-import { SessionsService } from '../auth/sessions.service';
-import { UsersService, sanitizeUsername } from '../users/users.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { K8sNetworkService } from '../kubernetes/k8s-network.service';
-import { OidcStateStore } from './oidc-state.store';
 import { AuditService } from '../audit/audit.service';
+import { SsoCryptoService } from './sso-crypto.service';
+import { findPreset, resolveIssuerUrl } from './presets';
 
-const RESERVED_SUBDOMAINS = new Set([
-  'www', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
-  'ssh', 'ns1', 'ns2', 'cdn', 'app', 'dashboard', 'login', 'auth',
-  'status', 'docs', 'help', 'support', 'billing', 'blog',
-]);
+export interface ProviderInput {
+  name?: string;
+  slug?: string;
+  preset?: string;
+  protocol?: SsoProtocol;
+  enabled?: boolean;
+  buttonLabel?: string | null;
+  iconUrl?: string | null;
+  sortOrder?: number;
+  issuerUrl?: string | null;
+  tenant?: string | null;
+  domain?: string | null;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  scopes?: string | null;
+  authorizationUrl?: string | null;
+  tokenUrl?: string | null;
+  userinfoUrl?: string | null;
+  samlEntryPoint?: string | null;
+  samlIssuer?: string | null;
+  samlIdpEntityId?: string | null;
+  samlCertificate?: string | null;
+  samlMetadataUrl?: string | null;
+  jitProvisioning?: boolean;
+  defaultRole?: OrganizationRole;
+  allowedDomains?: string[];
+  requireVerifiedEmail?: boolean;
+}
+
+export interface SettingsInput {
+  enabled?: boolean;
+  enforced?: boolean;
+  emailDomains?: string[];
+  loginLogoUrl?: string | null;
+  loginPrimaryColor?: string | null;
+  loginBgColor?: string | null;
+  loginWelcomeText?: string | null;
+  loginTagline?: string | null;
+}
+
+// What admin reads see instead of a stored secret. Writes that echo it back
+// are treated as "unchanged" rather than stored, so a client that round-trips
+// its own GET can't overwrite a real secret with the mask.
+const SECRET_MASK = '••••••••';
+const SAML_CERT_MASK = '(configured)';
+
+function isMask(value: string | null | undefined): boolean {
+  return value === SECRET_MASK || value === SAML_CERT_MASK;
+}
+
+const RESERVED_PROVIDER_SLUGS = new Set(['new', 'callback', 'start', 'metadata', 'discover']);
 
 @Injectable()
 export class SsoService {
-  private openidClient: Promise<typeof OpenIdClient> | null = null;
-
-  private loadOpenIdClient(): Promise<typeof OpenIdClient> {
-    this.openidClient ??= import('openid-client');
-    return this.openidClient;
-  }
-
   private readonly logger = new Logger(SsoService.name);
-
-  private readonly encryptionKey: Buffer | null;
 
   private readonly backendUrl: string;
 
-  private readonly baseDomain: string;
-
-  private readonly platformNamespace: string;
-
-  private readonly platformServiceName: string;
-
-  private readonly platformServicePort: number;
-  // M-3: OIDC state lives behind OidcStateStore — currently in-memory, but
-  // single-use (atomic get+delete) and TTL-bounded. The interface lets a
-  // future commit swap in a shared store (Redis, Prisma table) without
-  // touching this service when multi-replica SSO is needed.
+  private readonly frontendUrl: string;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly oauthService: OAuthService,
-    private readonly usersService: UsersService,
-    private readonly kubernetesService: KubernetesService,
-    private readonly k8sNetwork: K8sNetworkService,
-    private readonly sessionsService: SessionsService,
-    private readonly oidcStateStore: OidcStateStore,
+    private readonly crypto: SsoCryptoService,
     private readonly audit: AuditService,
   ) {
-    const secret = process.env.SSO_ENCRYPTION_KEY;
-    if (secret) {
-      this.encryptionKey = scryptSync(secret, 'sso-salt', 32);
-    } else {
-      this.encryptionKey = null;
-    }
     this.backendUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
-    this.baseDomain = process.env.BASE_DOMAIN || 'orchard.my';
-    this.platformNamespace = process.env.PLATFORM_NAMESPACE || 'default';
-    this.platformServiceName = process.env.PLATFORM_SERVICE_NAME || 'leaf-frontend';
-    this.platformServicePort = parseInt(process.env.PLATFORM_SERVICE_PORT || '3000', 10);
+    this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   }
 
-  // ========== Encryption helpers ==========
+  // ========== URLs ==========
 
-  encrypt(plaintext: string): string {
-    if (!this.encryptionKey) {
-      throw new Error('SSO_ENCRYPTION_KEY is not configured; refusing to store SSO secrets in plaintext');
-    }
-    const iv = randomBytes(16);
-    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+  /**
+   * Where the IdP sends the user back. Providers migrated from the old
+   * per-org config keep their original path in `callbackPath`, because the
+   * redirect URI is registered on the IdP side and moving it breaks the
+   * connection until someone updates it there.
+   */
+  callbackUrl(provider: Pick<IdentityProvider, 'id' | 'callbackPath'>): string {
+    return `${this.backendUrl}${provider.callbackPath || `/apiv1/sso/callback/${provider.id}`}`;
   }
 
-  decrypt(ciphertext: string): string {
-    if (!this.encryptionKey) {
-      throw new Error('SSO_ENCRYPTION_KEY is not configured; cannot decrypt SSO secret');
-    }
-    const parts = ciphertext.split(':');
-    if (parts.length !== 3) {
-      throw new Error('Invalid SSO ciphertext format');
-    }
-    const [ivHex, authTagHex, encryptedHex] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-    const encrypted = Buffer.from(encryptedHex, 'hex');
-    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  /** SP entity id / SAML audience. Stable per provider. */
+  entityId(provider: Pick<IdentityProvider, 'id' | 'organizationId' | 'samlIssuer'>): string {
+    return provider.samlIssuer || `orchard-sso-${provider.organizationId ?? 'instance'}-${provider.id}`;
   }
 
-  // ========== Subdomain resolution ==========
+  orgLoginUrl(slug: string): string {
+    return `${this.frontendUrl}/${slug}/login`;
+  }
 
-  async resolveBySubdomain(subdomain: string) {
+  async loginUrlForOrg(organizationId: string): Promise<string | null> {
     const org = await this.prisma.organization.findUnique({
-      where: { subdomain },
-      include: { ssoConfig: true },
+      where: { id: organizationId },
+      select: { slug: true },
+    });
+    return org ? this.orgLoginUrl(org.slug) : null;
+  }
+
+  // ========== Public login surfaces ==========
+
+  /**
+   * Everything the org login page at /<slug> needs. Returns null when the org
+   * doesn't exist or SSO isn't live for it, and the caller collapses both into
+   * one 404 so this can't be used to enumerate organizations.
+   */
+  async getOrgLoginContext(slug: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { slug: slug.toLowerCase() },
+      include: {
+        ssoSettings: true,
+        identityProviders: { where: { enabled: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
+      },
     });
 
-    if (!org) {
-      throw new NotFoundException('Organization not found for this subdomain');
-    }
+    if (!org) return null;
+    const settings = org.ssoSettings;
+    if (!settings?.enabled || !settings.platformEnabled) return null;
 
-    return org;
-  }
-
-  async getPublicBranding(subdomain: string) {
-    const org = await this.resolveBySubdomain(subdomain);
-    const sso = org.ssoConfig;
+    const providers = org.identityProviders.filter((p) => this.isUsable(p));
+    if (providers.length === 0) return null;
 
     return {
       organizationId: org.id,
       name: org.name,
       slug: org.slug,
       avatarUrl: org.avatarUrl,
-      ssoEnabled: sso?.enabled ?? false,
-      ssoEnforced: sso?.enforced ?? false,
-      provider: sso?.provider ?? null,
-      loginLogoUrl: sso?.loginLogoUrl ?? null,
-      loginPrimaryColor: sso?.loginPrimaryColor ?? null,
-      loginBgColor: sso?.loginBgColor ?? null,
-      loginWelcomeText: sso?.loginWelcomeText ?? null,
+      enforced: settings.enforced,
+      branding: {
+        logoUrl: settings.loginLogoUrl,
+        primaryColor: settings.loginPrimaryColor,
+        bgColor: settings.loginBgColor,
+        welcomeText: settings.loginWelcomeText,
+        tagline: settings.loginTagline,
+      },
+      providers: providers.map((p) => this.publicProvider(p)),
     };
   }
 
-  // ========== Subdomain management ==========
-
-  async setSubdomain(organizationId: string, subdomain: string | null) {
-    if (subdomain !== null) {
-      const normalized = subdomain.toLowerCase().trim();
-
-      if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
-        throw new BadRequestException(
-          'Subdomain must be 3-50 characters, alphanumeric and hyphens only, cannot start or end with a hyphen',
-        );
-      }
-
-      if (RESERVED_SUBDOMAINS.has(normalized)) {
-        throw new BadRequestException('This subdomain is reserved');
-      }
-
-      // Transactionally re-check uniqueness and write the new subdomain.
-      const { result, oldSubdomain } = await this.prisma.$transaction(
-        async (tx) => {
-          const current = await tx.organization.findUnique({
-            where: { id: organizationId },
-            select: { subdomain: true },
-          });
-          const currentSubdomain = current?.subdomain ?? null;
-
-          const conflict = await tx.organization.findFirst({
-            where: { subdomain: normalized, NOT: { id: organizationId } },
-            select: { id: true },
-          });
-          if (conflict) {
-            throw new ConflictException('This subdomain is already taken');
-          }
-
-          const updated = await tx.organization.update({
-            where: { id: organizationId },
-            data: { subdomain: normalized },
-          });
-
-          return { result: updated, oldSubdomain: currentSubdomain };
-        },
-      );
-
-      // Ingress work happens AFTER the DB commit. On failure, compensate by
-      // reverting the subdomain back to its previous value.
-      try {
-        if (oldSubdomain && oldSubdomain !== normalized) {
-          await this.deleteSsoIngress(oldSubdomain);
-        }
-        await this.ensureSsoIngress(normalized);
-      } catch (err) {
-        this.logger.error(
-          `Ingress provisioning failed for subdomain ${normalized}; reverting DB to ${oldSubdomain ?? 'null'}`,
-          err instanceof Error ? err.stack : String(err),
-        );
-        try {
-          await this.prisma.organization.update({
-            where: { id: organizationId },
-            data: { subdomain: oldSubdomain },
-          });
-        } catch (revertErr) {
-          this.logger.error(
-            `Failed to revert subdomain after ingress failure for org ${organizationId}`,
-            revertErr instanceof Error ? revertErr.stack : String(revertErr),
-          );
-        }
-        throw err;
-      }
-
-      return result;
-    }
-
-    // Subdomain is being cleared
-    const { result, oldSubdomain } = await this.prisma.$transaction(
-      async (tx) => {
-        const current = await tx.organization.findUnique({
-          where: { id: organizationId },
-          select: { subdomain: true },
-        });
-        const currentSubdomain = current?.subdomain ?? null;
-
-        const updated = await tx.organization.update({
-          where: { id: organizationId },
-          data: { subdomain: null },
-        });
-
-        return { result: updated, oldSubdomain: currentSubdomain };
-      },
-    );
-
-    if (oldSubdomain) {
-      try {
-        await this.deleteSsoIngress(oldSubdomain);
-      } catch (err) {
-        this.logger.error(
-          `Failed to delete SSO ingress for ${oldSubdomain}; reverting DB`,
-          err instanceof Error ? err.stack : String(err),
-        );
-        try {
-          await this.prisma.organization.update({
-            where: { id: organizationId },
-            data: { subdomain: oldSubdomain },
-          });
-        } catch (revertErr) {
-          this.logger.error(
-            `Failed to revert subdomain clear for org ${organizationId}`,
-            revertErr instanceof Error ? revertErr.stack : String(revertErr),
-          );
-        }
-        throw err;
-      }
-    }
-
-    return result;
-  }
-
-  private ssoIngressName(subdomain: string): string {
-    return `sso-${subdomain}`.substring(0, 63);
-  }
-
-  private async ensureSsoIngress(subdomain: string) {
-    const host = `${subdomain}.${this.baseDomain}`;
-    const ingressName = this.ssoIngressName(subdomain);
-    const tlsSecretName = `sso-tls-${subdomain}`;
-
-    // Let createIngress handle entrypoints + HTTPS redirect middleware
-    // automatically via the TLS path (hasTls = true when tlsSecretName is set).
-    const ingressOpts = {
-      namespace: this.platformNamespace,
-      name: ingressName,
-      host,
-      path: '/',
-      pathType: 'Prefix',
-      serviceName: this.platformServiceName,
-      servicePort: this.platformServicePort,
-      tlsSecretName,
-      tlsHosts: [host],
-      annotations: {
-        'cert-manager.io/cluster-issuer': 'letsencrypt-prod',
-      },
-    };
-
-    try {
-      await this.k8sNetwork.createIngress(ingressOpts);
-      this.logger.log(`Created SSO ingress "${ingressName}" for ${host}`);
-    } catch (error) {
-      if (error?.response?.error === 'Ingress already exists') {
-        try {
-          await this.k8sNetwork.updateIngress(ingressOpts);
-          this.logger.log(`Updated SSO ingress "${ingressName}" for ${host}`);
-        } catch (updateErr) {
-          this.logger.error(`Failed to update SSO ingress for ${host}:`, updateErr);
-        }
-      } else {
-        this.logger.error(`Failed to create SSO ingress for ${host}:`, error);
-      }
-    }
-  }
-
-  private async deleteSsoIngress(subdomain: string) {
-    const ingressName = this.ssoIngressName(subdomain);
-    try {
-      await this.k8sNetwork.deleteIngress(
-        this.platformNamespace,
-        ingressName,
-      );
-      this.logger.log(`Deleted SSO ingress "${ingressName}"`);
-    } catch (error) {
-      // Ignore 404 — ingress may not exist
-      this.logger.warn(`Failed to delete SSO ingress "${ingressName}": ${error?.message}`);
-    }
-  }
-
-  // ========== SSO Config CRUD ==========
-
-  async getSsoConfig(organizationId: string) {
-    const config = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
+  /**
+   * Legacy lookup: vanity subdomains still point at an org's login page. Falls
+   * back to reading the label as a slug, because a host like acme.orchard.my
+   * is just as likely to be the org's slug as a subdomain someone reserved.
+   */
+  async getOrgLoginContextBySubdomain(subdomain: string) {
+    const label = subdomain.toLowerCase();
+    const org = await this.prisma.organization.findFirst({
+      where: { subdomain: label },
+      select: { slug: true },
     });
+    return this.getOrgLoginContext(org?.slug ?? label);
+  }
 
-    if (!config) return null;
+  /** Legacy lookup: the old login URL addressed an org by uuid. */
+  async getOrgLoginContextById(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { slug: true },
+    });
+    if (!org) return null;
+    return this.getOrgLoginContext(org.slug);
+  }
 
-    // Mask secrets
+  /**
+   * Instance-wide providers rendered on the platform login page.
+   *
+   * The env-configured provider (AUTH_PROVIDER, the old hardcoded button) is
+   * returned alongside the database ones so the login page is a single list
+   * and no provider is special-cased in the UI. It keeps its own /auth/login
+   * flow — this is a rendering hint, not a re-route.
+   */
+  async getInstanceProviders() {
+    const providers = await this.prisma.identityProvider.findMany({
+      where: { organizationId: null, enabled: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    const configured = providers.filter((p) => this.isUsable(p)).map((p) => this.publicProvider(p));
+    const env = this.envProvider();
+    return env ? [env, ...configured] : configured;
+  }
+
+  envProvider() {
+    const configured =
+      process.env.AUTH_PROVIDER ?? (process.env.HACKCLUB_CLIENT_ID ? 'hackclub' : 'none');
+    if (configured === 'none') return null;
+    const name =
+      process.env.AUTH_PROVIDER_LABEL || (configured === 'hackclub' ? 'Hack Club' : 'SSO');
     return {
-      ...config,
-      oidcClientSecret: config.oidcClientSecret ? '••••••••' : null,
-      samlCertificate: config.samlCertificate ? '(configured)' : null,
+      id: 'env',
+      slug: 'env',
+      name,
+      preset: configured === 'hackclub' ? 'hackclub' : 'generic',
+      protocol: SsoProtocol.oidc,
+      label: `Continue with ${name}`,
+      iconUrl: null,
+      startUrl: '/apiv1/auth/login',
+      source: 'env' as const,
     };
   }
 
-  async upsertSsoConfig(organizationId: string, data: {
-    provider: 'oidc' | 'saml';
-    oidcIssuerUrl?: string;
-    oidcClientId?: string;
-    oidcClientSecret?: string;
-    oidcScopes?: string;
-    samlEntryPoint?: string;
-    samlIssuer?: string;
-    samlCertificate?: string;
-    samlMetadataUrl?: string;
-    loginLogoUrl?: string;
-    loginPrimaryColor?: string;
-    loginBgColor?: string;
-    loginWelcomeText?: string;
-    enabled?: boolean;
-    enforced?: boolean;
-  }) {
-    // Validate based on provider
-    if (data.provider === 'oidc') {
-      if (!data.oidcIssuerUrl || !data.oidcClientId) {
-        throw new BadRequestException('OIDC requires issuer URL and client ID');
-      }
-    } else if (data.provider === 'saml') {
-      if (!data.samlEntryPoint && !data.samlMetadataUrl) {
-        throw new BadRequestException('SAML requires either an entry point URL or metadata URL');
-      }
-    } else {
-      throw new BadRequestException('Provider must be "oidc" or "saml"');
-    }
+  /**
+   * Email-domain routing: the "enter your work email" box on the platform login
+   * page. Only reveals an org that has claimed the domain AND has SSO live, so
+   * a stranger can't map the tenant list by guessing domains.
+   */
+  async discoverByEmail(email: string) {
+    const domain = (email || '').toLowerCase().trim().split('@')[1];
+    if (!domain) return null;
 
-    // Encrypt secrets
-    const configData: any = {
-      provider: data.provider,
-      oidcIssuerUrl: data.oidcIssuerUrl ?? null,
-      oidcClientId: data.oidcClientId ?? null,
-      oidcClientSecret: data.oidcClientSecret ? this.encrypt(data.oidcClientSecret) : null,
-      oidcScopes: data.oidcScopes ?? 'openid email profile',
-      samlEntryPoint: data.samlEntryPoint ?? null,
-      samlIssuer: data.samlIssuer ?? null,
-      samlCertificate: data.samlCertificate ? this.encrypt(data.samlCertificate) : null,
-      samlMetadataUrl: data.samlMetadataUrl ?? null,
-      loginLogoUrl: data.loginLogoUrl ?? null,
-      loginPrimaryColor: data.loginPrimaryColor ?? null,
-      loginBgColor: data.loginBgColor ?? null,
-      loginWelcomeText: data.loginWelcomeText ?? null,
-      enabled: data.enabled ?? false,
-      enforced: data.enforced ?? false,
-    };
-
-    return this.prisma.ssoConfig.upsert({
-      where: { organizationId },
-      create: {
-        organizationId,
-        ...configData,
-      },
-      update: configData,
-    });
-  }
-
-  async deleteSsoConfig(organizationId: string) {
-    const existing = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('SSO config not found');
-    }
-
-    return this.prisma.ssoConfig.delete({
-      where: { organizationId },
-    });
-  }
-
-  // ========== OIDC Flow ==========
-
-  async initiateOidcLogin(organizationId: string): Promise<string> {
-    const config = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
-    });
-
-    if (!config || config.provider !== 'oidc' || !config.enabled) {
-      throw new BadRequestException('OIDC SSO is not configured or enabled for this organization');
-    }
-
-    const issuerUrl = config.oidcIssuerUrl;
-    const clientId = config.oidcClientId;
-    const clientSecret = config.oidcClientSecret ? this.decrypt(config.oidcClientSecret) : undefined;
-
-    const openidClient = await this.loadOpenIdClient();
-    const oidcConfig = await openidClient.discovery(
-      new URL(issuerUrl),
-      clientId,
-      clientSecret ? { client_secret: clientSecret } : undefined,
-    );
-
-    const redirectUri = `${this.backendUrl}/apiv1/sso/${organizationId}/callback/oidc`;
-    const scopes = config.oidcScopes || 'openid email profile';
-
-    const codeVerifier = openidClient.randomPKCECodeVerifier();
-    const codeChallenge = await openidClient.calculatePKCECodeChallenge(codeVerifier);
-
-    // Opaque random state; the real {orgId, codeVerifier} is held server-side
-    // (Redis-backed) and looked up on callback. Prevents an attacker from
-    // forging state.
-    const state = randomBytes(32).toString('hex');
-    await this.oidcStateStore.set(state, {
-      orgId: organizationId,
-      codeVerifier,
-    });
-
-    const parameters: Record<string, string> = {
-      redirect_uri: redirectUri,
-      scope: scopes,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      state,
-    };
-
-    const authUrl = openidClient.buildAuthorizationUrl(oidcConfig, parameters);
-    return authUrl.href;
-  }
-
-  async handleOidcCallback(organizationId: string, callbackUrl: URL, state: string) {
-    const config = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
-      include: { organization: true },
-    });
-
-    if (!config || config.provider !== 'oidc') {
-      throw new BadRequestException('OIDC SSO is not configured for this organization');
-    }
-
-    if (!config.enabled) {
-      throw new UnauthorizedException('SSO is disabled for this organization');
-    }
-
-    // Look up server-side state; consume is single-use and TTL-bounded.
-    const stateData = await this.oidcStateStore.consume(state);
-    if (!stateData) {
-      throw new BadRequestException('Invalid or expired SSO state');
-    }
-    if (stateData.orgId !== organizationId) {
-      throw new BadRequestException('Organization mismatch in SSO state');
-    }
-
-    const clientId = config.oidcClientId;
-    const clientSecret = config.oidcClientSecret ? this.decrypt(config.oidcClientSecret) : undefined;
-
-    const openidClient = await this.loadOpenIdClient();
-    const oidcConfig = await openidClient.discovery(
-      new URL(config.oidcIssuerUrl),
-      clientId,
-      clientSecret ? { client_secret: clientSecret } : undefined,
-    );
-
-    const tokens = await openidClient.authorizationCodeGrant(oidcConfig, callbackUrl, {
-      pkceCodeVerifier: stateData.codeVerifier,
-      expectedState: state,
-    });
-
-    if ((tokens.claims() as any)?.email_verified === false) {
-      throw new UnauthorizedException('email not verified');
-    }
-
-    const claims = tokens.claims();
-    const email = claims.email as string;
-    const name = (claims.name as string) || email.split('@')[0];
-
-    if (!email) {
-      throw new BadRequestException('SSO provider did not return an email address');
-    }
-
-    // Resolve user and ensure org membership
-    return this.resolveAndAuthenticateUser(organizationId, email, name, config.organization, {
-      email_verified: (claims as any).email_verified,
-    });
-  }
-
-  // M-3: state cleanup is now Redis TTL-driven; in-memory fallback in
-  // OidcStateStore handles its own lazy GC.
-
-  // ========== SAML Flow ==========
-
-  async initiateSamlLogin(organizationId: string): Promise<string> {
-    const config = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
-    });
-
-    if (!config || config.provider !== 'saml' || !config.enabled) {
-      throw new BadRequestException('SAML SSO is not configured or enabled for this organization');
-    }
-
-    const saml = this.buildSamlClient(config, organizationId);
-    const loginUrl = await saml.getAuthorizeUrlAsync(
-      `${this.backendUrl}/apiv1/sso/${organizationId}/callback/saml`,
-      undefined,
-      {},
-    );
-
-    return loginUrl;
-  }
-
-  async handleSamlCallback(organizationId: string, samlResponse: string) {
-    const config = await this.prisma.ssoConfig.findUnique({
-      where: { organizationId },
-      include: { organization: true },
-    });
-
-    if (!config || config.provider !== 'saml') {
-      throw new BadRequestException('SAML SSO is not configured for this organization');
-    }
-
-    if (!config.enabled) {
-      throw new UnauthorizedException('SSO is disabled for this organization');
-    }
-
-    const saml = this.buildSamlClient(config, organizationId);
-    const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: samlResponse });
-
-    if (!profile) {
-      throw new BadRequestException('SAML response validation failed');
-    }
-
-    const email = profile.nameID || (profile as any).email;
-    const name = `${(profile as any).firstName || ''  } ${  (profile as any).lastName || ''}` || email;
-
-    if (!email) {
-      throw new BadRequestException('SAML provider did not return an email address');
-    }
-
-    // SAML has no standard email_verified claim. The IdP itself is the trust
-    // anchor here — an org admin explicitly configured it — so treat a
-    // successfully validated SAML assertion as proof the IdP vouches for the
-    // email. This makes the SAML and OIDC paths symmetric: both arrive at
-    // resolveAndAuthenticateUser with email_verified set, so the explicit-false
-    // hard-fail and the SSO_REQUIRE_EMAIL_VERIFIED gate both apply uniformly.
-    return this.resolveAndAuthenticateUser(organizationId, email, name.trim(), config.organization, {
-      email_verified: true,
-    });
-  }
-
-  private buildSamlClient(config: any, organizationId: string): SAML {
-    const audience = config.samlIssuer || `orchard-sso-${organizationId}`;
-    // TODO: SsoConfig schema currently has no `samlIdpIssuer`/`samlIdpEntityId`
-    // field; once added, set `idpIssuer` to that value to bind the assertion
-    // to the configured IdP entityID.
-    return new SAML({
-      callbackUrl: `${this.backendUrl}/apiv1/sso/${organizationId}/callback/saml`,
-      entryPoint: config.samlEntryPoint,
-      issuer: audience,
-      audience,
-      idpCert: config.samlCertificate ? this.decrypt(config.samlCertificate) : '',
-      wantAuthnResponseSigned: true,
-      wantAssertionsSigned: true,
-    });
-  }
-
-  // ========== Shared user resolution ==========
-
-  private getSsoDefaultRoleForOrg(organizationId: string): 'member' | 'guest' {
-    const raw = process.env.SSO_DEFAULT_ROLE;
-    if (!raw) return 'member';
-    try {
-      const parsed = JSON.parse(raw);
-      const role = String(parsed?.[organizationId] ?? '').toLowerCase();
-      return role === 'guest' ? 'guest' : 'member';
-    } catch {
-      return 'member';
-    }
-  }
-
-  private getAllowedDomainsForOrg(organizationId: string): string[] | null {
-    // SsoConfig schema lacks an allowedDomains column; fall back to an
-    // env-driven per-org allowlist: SSO_ALLOWED_EMAIL_DOMAINS={"orgId":["x"]}
-    const raw = process.env.SSO_ALLOWED_EMAIL_DOMAINS;
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw);
-      const list = parsed?.[organizationId];
-      if (!Array.isArray(list) || list.length === 0) return null;
-      return list.map((d: string) => String(d).toLowerCase());
-    } catch {
-      return null;
-    }
-  }
-
-  private async resolveAndAuthenticateUser(
-    organizationId: string,
-    email: string,
-    name: string,
-    organization: any,
-    claims?: { email_verified?: boolean | undefined },
-  ) {
-    const normalizedEmail = email.toLowerCase().trim();
-
-    // 1) email_verified hard-fail when explicitly false.
-    if (claims && claims.email_verified === false) {
-      throw new UnauthorizedException('email not verified');
-    }
-
-    // 2) Optional per-org domain allowlist (env-driven, case-insensitive).
-    const allowed = this.getAllowedDomainsForOrg(organizationId);
-    if (allowed) {
-      const domain = normalizedEmail.split('@')[1] || '';
-      if (!allowed.includes(domain)) {
-        throw new UnauthorizedException('Email domain not allowed for this organization');
-      }
-    } else {
-      // Default-on: SSO_REQUIRE_EMAIL_VERIFIED gates the path. An IdP that
-      // omits the email_verified claim is treated as unverified, because an
-      // attacker who can attach a hostile IdP and choose any subject for it
-      // shouldn't get a free pass by simply not asserting verification.
-      // Operators with a pre-existing IdP that doesn't emit the claim must
-      // explicitly opt out by setting SSO_REQUIRE_EMAIL_VERIFIED=false.
-      const requireVerified = (process.env.SSO_REQUIRE_EMAIL_VERIFIED ?? 'true').toLowerCase() !== 'false';
-      if (requireVerified && (!claims || claims.email_verified !== true)) {
-        throw new UnauthorizedException('email not verified');
-      }
-    }
-
-    // Find existing user by email
-    let user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
-
-    // 3) Cross-org takeover defense: if an existing user owns this email but
-    // is NOT already a member of this org, refuse. Otherwise an attacker who
-    // controls an IdP for org B can impersonate any platform user whose
-    // email they know by triggering SSO for B with their email.
-    if (user) {
-      const existingMembership = await this.prisma.organizationMember.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId,
-            userId: user.id,
-          },
-        },
-      });
-      if (!existingMembership) {
-        // Generic message: distinguishing "email exists elsewhere" from "email
-        // unknown" lets a malicious IdP enumerate platform users.
-        throw new UnauthorizedException('SSO authentication failed');
-      }
-    }
-
-    if (!user) {
-      const baseUsername = sanitizeUsername(normalizedEmail.split('@')[0]);
-      let username = baseUsername;
-      let counter = 1;
-      while (await this.prisma.user.findUnique({ where: { username } })) {
-        username = `${baseUsername}${counter}`;
-        counter++;
-      }
-
-      const nameParts = name.split(' ');
-      user = await this.prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          username,
-          firstName: nameParts[0] || null,
-          lastName: nameParts.slice(1).join(' ') || null,
-        },
-      });
-      void this.audit.log({
-        action: 'user.signed_up',
-        actorUserId: user.id,
-        actorEmail: user.email,
-        organizationId,
-        targetType: 'user',
-        targetId: user.id,
-        metadata: { signup_method: 'sso' },
-      });
-    }
-
-    // Ensure user is a member of the organization (auto-provision)
-    const membership = await this.prisma.organizationMember.findUnique({
+    const settings = await this.prisma.orgSsoSettings.findFirst({
       where: {
-        organizationId_userId: {
-          organizationId,
-          userId: user.id,
-        },
+        enabled: true,
+        platformEnabled: true,
+        emailDomains: { has: domain },
       },
+      include: { organization: { select: { slug: true, name: true, avatarUrl: true } } },
     });
+    if (!settings) return null;
 
-    if (!membership) {
-      // M-5: SSO auto-provisioning is the trusted "every identity in the
-      // bound IdP is a member of this org" model. Role defaults to 'member';
-      // operators can override via SSO_DEFAULT_ROLE={"orgId":"guest"} when
-      // they want every new IdP identity to land as a project-less guest
-      // until an admin explicitly assigns project membership. Anything
-      // unrecognised falls back to 'member' so a typo doesn't silently
-      // escalate access.
-      const role = this.getSsoDefaultRoleForOrg(organizationId);
-      await this.prisma.organizationMember.create({
-        data: {
-          organizationId,
-          userId: user.id,
-          role,
-        },
-      });
-      // Audit the implicit grant. Without this, an org admin reviewing the
-      // member list has no way to distinguish "Alice was invited and joined"
-      // from "Alice authenticated against the bound IdP and got auto-added"
-      // — a meaningful distinction when investigating an IdP compromise.
-      void this.audit.log({
-        action: 'org.member.joined',
-        actorUserId: user.id,
-        actorEmail: user.email,
-        organizationId,
-        targetType: 'user',
-        targetId: user.id,
-        targetLabel: user.email,
-        metadata: { role, via: 'sso_auto_provision' },
-      });
-    }
-
-    // Mark setup as completed for SSO users
-    if (!user.setupCompleted) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { setupCompleted: true },
-      });
-    }
-
-    // Generate session token
-    const displayName = user.firstName
-      ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
-      : user.username;
-
-    // Create a tracked session so the resulting JWT is revocable (H6).
-    const sessionId = await this.sessionsService.createSession({
-      userId: user.id,
-      authMethod: 'sso',
+    const providerCount = await this.prisma.identityProvider.count({
+      where: { organizationId: settings.organizationId, enabled: true },
     });
-    const token = await this.oauthService.generateSessionTokenForUser(
-      user.id,
-      user.email,
-      displayName,
-      'otp', // reuse 'otp' auth method type for SSO sessions
-      sessionId,
-    );
+    if (providerCount === 0) return null;
 
     return {
-      token,
-      user,
-      organizationSlug: organization.slug,
+      slug: settings.organization.slug,
+      name: settings.organization.name,
+      avatarUrl: settings.organization.avatarUrl,
+      enforced: settings.enforced,
+      loginUrl: `/${settings.organization.slug}/login`,
     };
   }
+
+  /**
+   * A provider is usable when it has enough config to actually complete a
+   * flow. Half-configured rows stay out of the login page rather than
+   * rendering a button that dead-ends on the IdP.
+   */
+  private isUsable(p: IdentityProvider): boolean {
+    if (p.protocol === SsoProtocol.saml) {
+      return Boolean(p.samlEntryPoint && p.samlCertificate);
+    }
+    if (p.protocol === SsoProtocol.oauth2) {
+      return Boolean(p.clientId && p.authorizationUrl && p.tokenUrl && p.userinfoUrl);
+    }
+    return Boolean(p.issuerUrl && p.clientId);
+  }
+
+  publicProvider(p: IdentityProvider) {
+    const preset = findPreset(p.preset);
+    return {
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      preset: p.preset,
+      protocol: p.protocol,
+      label: p.buttonLabel || preset?.buttonLabel || `Continue with ${p.name}`,
+      iconUrl: p.iconUrl,
+      startUrl: `/apiv1/sso/start/${p.id}`,
+      source: 'database' as const,
+    };
+  }
+
+  /** Admin view: full config with secrets replaced by a presence marker. */
+  adminProvider(p: IdentityProvider) {
+    return {
+      id: p.id,
+      organizationId: p.organizationId,
+      slug: p.slug,
+      name: p.name,
+      preset: p.preset,
+      protocol: p.protocol,
+      enabled: p.enabled,
+      buttonLabel: p.buttonLabel,
+      iconUrl: p.iconUrl,
+      sortOrder: p.sortOrder,
+      issuerUrl: p.issuerUrl,
+      clientId: p.clientId,
+      clientSecret: p.clientSecret ? SECRET_MASK : null,
+      scopes: p.scopes,
+      authorizationUrl: p.authorizationUrl,
+      tokenUrl: p.tokenUrl,
+      userinfoUrl: p.userinfoUrl,
+      samlEntryPoint: p.samlEntryPoint,
+      samlIssuer: p.samlIssuer,
+      samlIdpEntityId: p.samlIdpEntityId,
+      samlCertificate: p.samlCertificate ? SECRET_MASK : null,
+      samlMetadataUrl: p.samlMetadataUrl,
+      jitProvisioning: p.jitProvisioning,
+      defaultRole: p.defaultRole,
+      allowedDomains: p.allowedDomains,
+      requireVerifiedEmail: p.requireVerifiedEmail,
+      usable: this.isUsable(p),
+      lastUsedAt: p.lastUsedAt,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      callbackUrl: this.callbackUrl(p),
+      entityId: this.entityId(p),
+      metadataUrl: p.protocol === SsoProtocol.saml ? `${this.backendUrl}/apiv1/sso/providers/${p.id}/metadata` : null,
+    };
+  }
+
+  // ========== Provider CRUD ==========
+
+  listProviders(organizationId: string | null) {
+    return this.prisma.identityProvider
+      .findMany({
+        where: { organizationId },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      })
+      .then((rows) => rows.map((r) => this.adminProvider(r)));
+  }
+
+  private async requireProvider(id: string, organizationId: string | null) {
+    const provider = await this.prisma.identityProvider.findUnique({ where: { id } });
+    if (!provider || provider.organizationId !== organizationId) {
+      throw new NotFoundException('Identity provider not found');
+    }
+    return provider;
+  }
+
+  async getProviderForAdmin(id: string, organizationId: string | null) {
+    return this.adminProvider(await this.requireProvider(id, organizationId));
+  }
+
+  /**
+   * JIT provisioning may hand out member/guest/admin, never owner. Org admins
+   * can manage SSO, and letting one configure a provider whose next fresh
+   * IdP identity lands as owner would be a quiet admin-to-owner escalation.
+   */
+  private safeDefaultRole(role: OrganizationRole | undefined): OrganizationRole {
+    if (!role) return OrganizationRole.member;
+    if (role === OrganizationRole.owner) {
+      throw new BadRequestException('SSO provisioning cannot grant the owner role');
+    }
+    return role;
+  }
+
+  /**
+   * Admin-supplied IdP URLs drive server-side fetches, which makes them an
+   * SSRF primitive: an org admin is not trusted with cluster-internal HTTP.
+   * Blocks loopback, RFC1918, link-local, and cluster DNS names. Self-hosters
+   * whose IdP genuinely lives on internal DNS (in-cluster Keycloak/Dex) can
+   * opt out with SSO_ALLOW_INTERNAL_IDP=true. DNS rebinding is out of scope —
+   * this is a bar-raiser at the config surface, not a network policy.
+   */
+  private assertIdpUrl(raw: string | null | undefined, label: string) {
+    if (!raw) return;
+    if ((process.env.SSO_ALLOW_INTERNAL_IDP || '').toLowerCase() === 'true') return;
+
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      throw new BadRequestException(`${label} is not a valid URL`);
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new BadRequestException(`${label} must be an http(s) URL`);
+    }
+
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const blockedHosts = new Set(['localhost', '0.0.0.0', 'metadata.google.internal']);
+    const blockedSuffixes = ['.localhost', '.local', '.internal', '.svc', '.cluster.local'];
+
+    const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(host);
+    const privateV4 =
+      v4 &&
+      (() => {
+        const a = Number(v4[1]);
+        const b = Number(v4[2]);
+        return (
+          a === 0 || a === 10 || a === 127 || (a === 169 && b === 254)
+          || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+        );
+      })();
+    const privateV6 =
+      host.includes(':')
+      && (host === '::1' || host === '::' || host.startsWith('fc') || host.startsWith('fd')
+        || host.startsWith('fe80') || host.startsWith('::ffff:'));
+
+    if (
+      blockedHosts.has(host)
+      || blockedSuffixes.some((s) => host.endsWith(s))
+      || privateV4
+      || privateV6
+    ) {
+      throw new BadRequestException(
+        `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`,
+      );
+    }
+  }
+
+  private slugify(input: string): string {
+    return input
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 64);
+  }
+
+  private async uniqueSlug(organizationId: string | null, desired: string, ignoreId?: string) {
+    const base = this.slugify(desired) || 'sso';
+    let candidate = RESERVED_PROVIDER_SLUGS.has(base) ? `${base}-sso` : base;
+    let n = 2;
+     
+    while (await this.slugTaken(organizationId, candidate, ignoreId)) {
+      candidate = `${base}-${n}`;
+      n += 1;
+    }
+    return candidate;
+  }
+
+  private async slugTaken(organizationId: string | null, slug: string, ignoreId?: string) {
+    const hit = await this.prisma.identityProvider.findFirst({
+      where: { organizationId, slug, ...(ignoreId ? { NOT: { id: ignoreId } } : {}) },
+      select: { id: true },
+    });
+    return Boolean(hit);
+  }
+
+  /**
+   * Turn the admin form into column values. Presets fill in what the admin
+   * didn't type; a blank secret means "keep what's stored" so the UI never has
+   * to round-trip a client secret it was only ever shown a mask of.
+   */
+  private async buildProviderData(
+    input: ProviderInput,
+    existing: IdentityProvider | null,
+    organizationId: string | null,
+  ) {
+    const presetId = input.preset ?? existing?.preset ?? 'generic';
+    const preset = findPreset(presetId);
+    if (!preset) throw new BadRequestException(`Unknown provider preset "${presetId}"`);
+
+    const protocol = input.protocol ?? existing?.protocol ?? preset.protocol;
+    const name = (input.name ?? existing?.name ?? preset.name).trim();
+    if (!name) throw new BadRequestException('Provider name is required');
+
+    const data: Record<string, unknown> = {
+      name,
+      preset: presetId,
+      protocol,
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      buttonLabel: input.buttonLabel ?? existing?.buttonLabel ?? null,
+      iconUrl: input.iconUrl ?? existing?.iconUrl ?? null,
+      sortOrder: input.sortOrder ?? existing?.sortOrder ?? 0,
+      jitProvisioning: input.jitProvisioning ?? existing?.jitProvisioning ?? true,
+      defaultRole: this.safeDefaultRole(input.defaultRole ?? existing?.defaultRole),
+      allowedDomains: (input.allowedDomains ?? existing?.allowedDomains ?? [])
+        .map((d) => d.toLowerCase().trim().replace(/^@/, ''))
+        .filter(Boolean),
+      requireVerifiedEmail: input.requireVerifiedEmail ?? existing?.requireVerifiedEmail ?? true,
+    };
+
+    if (protocol === SsoProtocol.saml) {
+      let entryPoint = input.samlEntryPoint ?? existing?.samlEntryPoint ?? null;
+      let certificate = isMask(input.samlCertificate) ? null : input.samlCertificate ?? null;
+      let idpEntityId = input.samlIdpEntityId ?? existing?.samlIdpEntityId ?? null;
+      const metadataUrl = input.samlMetadataUrl ?? existing?.samlMetadataUrl ?? null;
+
+      if (metadataUrl && (!entryPoint || (!certificate && !existing?.samlCertificate))) {
+        const parsed = await this.fetchIdpMetadata(metadataUrl);
+        entryPoint = entryPoint || parsed.entryPoint;
+        certificate = certificate || parsed.certificate;
+        idpEntityId = idpEntityId || parsed.entityId;
+      }
+
+      if (!entryPoint) {
+        throw new BadRequestException('SAML needs a sign-in URL, or a metadata URL we can read one from');
+      }
+      if (!certificate && !existing?.samlCertificate) {
+        throw new BadRequestException('SAML needs the IdP signing certificate');
+      }
+
+      data.samlEntryPoint = entryPoint;
+      data.samlMetadataUrl = metadataUrl;
+      data.samlIdpEntityId = idpEntityId;
+      data.samlIssuer = input.samlIssuer ?? existing?.samlIssuer ?? null;
+      if (certificate) data.samlCertificate = this.crypto.encrypt(this.normalizeCertificate(certificate));
+    } else {
+      const issuerUrl = resolveIssuerUrl(preset, {
+        issuerUrl: input.issuerUrl ?? (input.tenant || input.domain ? null : existing?.issuerUrl),
+        tenant: input.tenant,
+        domain: input.domain,
+      }) ?? existing?.issuerUrl ?? null;
+
+      const clientId = (input.clientId ?? existing?.clientId ?? '').trim();
+      if (!clientId) throw new BadRequestException('Client ID is required');
+
+      if (protocol === SsoProtocol.oidc && !issuerUrl) {
+        throw new BadRequestException('Issuer URL is required for OpenID Connect');
+      }
+
+      data.issuerUrl = issuerUrl;
+      data.clientId = clientId;
+      data.scopes = input.scopes ?? existing?.scopes ?? preset.scopes;
+      data.authorizationUrl = input.authorizationUrl ?? existing?.authorizationUrl ?? preset.authorizationUrl ?? null;
+      data.tokenUrl = input.tokenUrl ?? existing?.tokenUrl ?? preset.tokenUrl ?? null;
+      data.userinfoUrl = input.userinfoUrl ?? existing?.userinfoUrl ?? preset.userinfoUrl ?? null;
+
+      if (protocol === SsoProtocol.oauth2 && !(data.authorizationUrl && data.tokenUrl && data.userinfoUrl)) {
+        throw new BadRequestException('OAuth2 providers need authorization, token, and userinfo URLs');
+      }
+
+      // Every one of these is fetched server-side (discovery, token exchange,
+      // userinfo, connection test), so each is an SSRF primitive if it can
+      // point inside the cluster. Checked at write time, where only admins are.
+      this.assertIdpUrl(issuerUrl, 'Issuer URL');
+      this.assertIdpUrl(data.authorizationUrl as string | null, 'Authorization URL');
+      this.assertIdpUrl(data.tokenUrl as string | null, 'Token URL');
+      this.assertIdpUrl(data.userinfoUrl as string | null, 'Userinfo URL');
+
+      if (input.clientSecret && !isMask(input.clientSecret)) {
+        data.clientSecret = this.crypto.encrypt(input.clientSecret);
+      } else if (!existing?.clientSecret && protocol === SsoProtocol.oidc) {
+        // Public clients are legitimate (PKCE, no secret), so this is allowed —
+        // but it is worth a log line when an admin probably just forgot.
+        this.logger.warn(`Identity provider "${name}" saved without a client secret (org ${organizationId ?? 'instance'})`);
+      }
+    }
+
+    return data;
+  }
+
+  async createProvider(
+    organizationId: string | null,
+    input: ProviderInput,
+    actor: { userId: string; email?: string },
+  ) {
+    const data = await this.buildProviderData(input, null, organizationId);
+    const slug = await this.uniqueSlug(organizationId, input.slug || (data.name as string));
+
+    const created = await this.prisma.identityProvider.create({
+      data: { ...(data as any), organizationId, slug },
+    });
+
+    void this.audit.log({
+      action: 'org.sso.provider.created',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: organizationId ?? undefined,
+      targetType: 'sso_provider',
+      targetId: created.id,
+      targetLabel: created.name,
+      metadata: { protocol: created.protocol, preset: created.preset, scope: organizationId ? 'organization' : 'instance' },
+    });
+
+    return this.adminProvider(created);
+  }
+
+  async updateProvider(
+    id: string,
+    organizationId: string | null,
+    input: ProviderInput,
+    actor: { userId: string; email?: string },
+  ) {
+    const existing = await this.requireProvider(id, organizationId);
+    const data = await this.buildProviderData(input, existing, organizationId);
+
+    let { slug } = existing;
+    if (input.slug && this.slugify(input.slug) !== existing.slug) {
+      slug = await this.uniqueSlug(organizationId, input.slug, id);
+    }
+
+    const updated = await this.prisma.identityProvider.update({
+      where: { id },
+      data: { ...(data as any), slug },
+    });
+
+    void this.audit.log({
+      action: 'org.sso.provider.updated',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: organizationId ?? undefined,
+      targetType: 'sso_provider',
+      targetId: updated.id,
+      targetLabel: updated.name,
+      metadata: { enabled: updated.enabled, protocol: updated.protocol },
+    });
+
+    return this.adminProvider(updated);
+  }
+
+  async deleteProvider(
+    id: string,
+    organizationId: string | null,
+    actor: { userId: string; email?: string },
+  ) {
+    const existing = await this.requireProvider(id, organizationId);
+    await this.prisma.identityProvider.delete({ where: { id } });
+
+    void this.audit.log({
+      action: 'org.sso.provider.deleted',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId: organizationId ?? undefined,
+      targetType: 'sso_provider',
+      targetId: id,
+      targetLabel: existing.name,
+    });
+
+    return { success: true };
+  }
+
+  // ========== Org settings ==========
+
+  async getSettings(organizationId: string) {
+    const settings = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
+    if (settings) return settings;
+    return {
+      organizationId,
+      platformEnabled: true,
+      enabled: false,
+      enforced: false,
+      emailDomains: [] as string[],
+      loginLogoUrl: null,
+      loginPrimaryColor: null,
+      loginBgColor: null,
+      loginWelcomeText: null,
+      loginTagline: null,
+    };
+  }
+
+  async updateSettings(
+    organizationId: string,
+    input: SettingsInput,
+    actor: { userId: string; email?: string },
+  ) {
+    const current = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
+
+    if (input.enabled && !(current?.platformEnabled ?? true)) {
+      throw new ConflictException('SSO is disabled for this organization by the platform administrator');
+    }
+
+    if (input.enabled) {
+      const usable = await this.prisma.identityProvider.count({
+        where: { organizationId, enabled: true },
+      });
+      if (usable === 0) {
+        throw new BadRequestException('Add and enable at least one identity provider before turning SSO on');
+      }
+    }
+
+    const domains = (input.emailDomains ?? current?.emailDomains ?? [])
+      .map((d) => d.toLowerCase().trim().replace(/^@/, ''))
+      .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+
+    // Colors land inside a style attribute on the login page; only a plain
+    // hex value survives so nothing else can ride along into the CSS.
+    const hexColor = (v: string | null) => (v && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
+
+    const data = {
+      enabled: input.enabled ?? current?.enabled ?? false,
+      enforced: input.enforced ?? current?.enforced ?? false,
+      emailDomains: domains,
+      loginLogoUrl: input.loginLogoUrl ?? current?.loginLogoUrl ?? null,
+      loginPrimaryColor: hexColor(input.loginPrimaryColor ?? current?.loginPrimaryColor ?? null),
+      loginBgColor: hexColor(input.loginBgColor ?? current?.loginBgColor ?? null),
+      loginWelcomeText: input.loginWelcomeText ?? current?.loginWelcomeText ?? null,
+      loginTagline: input.loginTagline ?? current?.loginTagline ?? null,
+    };
+
+    const saved = await this.prisma.orgSsoSettings.upsert({
+      where: { organizationId },
+      create: { organizationId, ...data },
+      update: data,
+    });
+
+    if (current?.enabled !== saved.enabled || current?.enforced !== saved.enforced) {
+      void this.audit.log({
+        action: 'org.sso.settings.updated',
+        actorUserId: actor.userId,
+        actorEmail: actor.email,
+        organizationId,
+        targetType: 'organization',
+        targetId: organizationId,
+        metadata: { enabled: saved.enabled, enforced: saved.enforced },
+      });
+    }
+
+    return saved;
+  }
+
+  /** Superadmin switch. Turning it off also drops the org's own enable flag. */
+  async setPlatformEnabled(
+    organizationId: string,
+    platformEnabled: boolean,
+    actor: { userId: string; email?: string },
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const saved = await this.prisma.orgSsoSettings.upsert({
+      where: { organizationId },
+      create: { organizationId, platformEnabled, enabled: false },
+      update: platformEnabled ? { platformEnabled } : { platformEnabled, enabled: false, enforced: false },
+    });
+
+    void this.audit.log({
+      action: 'admin.sso.platform_toggled',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      organizationId,
+      targetType: 'organization',
+      targetId: organizationId,
+      metadata: { platformEnabled },
+    });
+
+    return saved;
+  }
+
+  /** Per-org SSO status for the admin console list. */
+  async getPlatformStatuses() {
+    const rows = await this.prisma.orgSsoSettings.findMany({
+      include: { organization: { select: { id: true, name: true, slug: true } } },
+    });
+    const counts = await this.prisma.identityProvider.groupBy({
+      by: ['organizationId'],
+      _count: { _all: true },
+      where: { organizationId: { not: null } },
+    });
+    const byOrg = new Map(counts.map((c) => [c.organizationId as string, c._count._all]));
+    return rows.map((r) => ({
+      organizationId: r.organizationId,
+      name: r.organization.name,
+      slug: r.organization.slug,
+      platformEnabled: r.platformEnabled,
+      enabled: r.enabled,
+      enforced: r.enforced,
+      emailDomains: r.emailDomains,
+      providerCount: byOrg.get(r.organizationId) ?? 0,
+      loginUrl: this.orgLoginUrl(r.organization.slug),
+    }));
+  }
+
+  // ========== SAML helpers ==========
+
+  private normalizeCertificate(pem: string): string {
+    return pem
+      .replace(/-----BEGIN CERTIFICATE-----/g, '')
+      .replace(/-----END CERTIFICATE-----/g, '')
+      .replace(/\s+/g, '');
+  }
+
+  /**
+   * Pull the sign-in URL and signing certificate out of an IdP metadata
+   * document so the admin doesn't have to copy them by hand.
+   *
+   * Deliberately a scoped text extraction rather than a full XML parse: this
+   * runs once at config time on a document the admin pointed us at, and the
+   * values it produces are shown back to them before anything authenticates
+   * against them. Signature validation of live assertions is node-saml's job.
+   */
+  private async fetchIdpMetadata(url: string) {
+    this.assertIdpUrl(url, 'Metadata URL');
+    let xml: string;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      xml = await res.text();
+    } catch (err) {
+      throw new BadRequestException(
+        `Could not read IdP metadata: ${err instanceof Error ? err.message : 'request failed'}`,
+      );
+    }
+    return this.parseIdpMetadata(xml);
+  }
+
+  parseIdpMetadata(xml: string) {
+    const entityId = /entityID="([^"]+)"/i.exec(xml)?.[1] ?? null;
+
+    const ssoServices = [...xml.matchAll(/<[^>]*SingleSignOnService[^>]*>/gi)].map((m) => m[0]);
+    const pick = (binding: string) =>
+      ssoServices.find((tag) => tag.includes(binding))?.match(/Location="([^"]+)"/i)?.[1] ?? null;
+    const entryPoint =
+      pick('HTTP-Redirect') ?? pick('HTTP-POST') ?? ssoServices[0]?.match(/Location="([^"]+)"/i)?.[1] ?? null;
+
+    const signingBlock = /<[^>]*KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/[^>]*KeyDescriptor>/i.exec(xml);
+    const certSource = signingBlock?.[1] ?? xml;
+    const certificate = /<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i
+      .exec(certSource)?.[1]
+      ?.replace(/\s+/g, '') ?? null;
+
+    if (!entryPoint && !certificate) {
+      throw new BadRequestException('That URL did not look like SAML IdP metadata');
+    }
+    return { entityId, entryPoint, certificate };
+  }
+
+  /** SP metadata for the admin to hand to their IdP. */
+  async getSpMetadata(providerId: string): Promise<string> {
+    const provider = await this.prisma.identityProvider.findUnique({ where: { id: providerId } });
+    if (!provider || provider.protocol !== SsoProtocol.saml) {
+      throw new NotFoundException('SAML provider not found');
+    }
+    return generateServiceProviderMetadata({
+      issuer: this.entityId(provider),
+      callbackUrl: this.callbackUrl(provider),
+      wantAssertionsSigned: true,
+      identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+    });
+  }
+
 }

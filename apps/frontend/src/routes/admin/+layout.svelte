@@ -8,6 +8,7 @@
 		Building2,
 		LayoutDashboard,
 		Server,
+		KeyRound,
 		Activity,
 		Gauge,
 		ScrollText
@@ -26,6 +27,7 @@
 		{ href: '/admin/users', label: 'Users', icon: Users, exact: false },
 		{ href: '/admin/organizations', label: 'Organizations', icon: Building2, exact: false },
 		{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
+		{ href: '/admin/sso', label: 'SSO', icon: KeyRound, exact: false },
 		{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false },
 		{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false },
 		{ href: '/admin/audit-logs', label: 'Audit Log', icon: ScrollText, exact: false }

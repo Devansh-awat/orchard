@@ -1,12 +1,14 @@
 <script lang="ts">
 	import './home-page.css';
+	import '$lib/components/login/login.css';
 	import AsciiVine from '$lib/components/AsciiVine.svelte';
-	import { Button, Input } from '$lib/components/ui';
+	import { Button, Skeleton } from '$lib/components/ui';
+	import { EmailAuthPanel, ProviderButtons } from '$lib/components/login';
+	import type { LoginProvider, DiscoveredOrg } from '$lib/components/login';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { env } from '$env/dynamic/public';
 	import {
 		user,
 		isSignedIn,
@@ -22,7 +24,6 @@
 		Plus,
 		Users,
 		FolderKanban,
-		KeyRound,
 		Rocket,
 		Database,
 		Globe,
@@ -66,30 +67,55 @@
 		if (!u) return '';
 		return u.firstName || u.name || u.username || u.email?.split('@')[0] || '';
 	});
-	let passkeySupported = $state(false);
-
-	type OtpStep = 'email' | 'code';
-	let otpEmail = $state('');
-	let otpCode = $state('');
-	let otpStep = $state<OtpStep>('email');
-	let otpRequesting = $state(false);
-	let otpVerifying = $state(false);
-	let otpMessage = $state<string | null>(null);
-	let otpError = $state<string | null>(null);
-
-	let passkeyEmail = $state('');
-	let passkeyLoading = $state(false);
-	let passkeyError = $state<string | null>(null);
-
-	let privateBetaBlocked = $state(false);
-	let signupsDisabled = $state(false);
+	let blocked = $state<'private_beta' | 'signups_disabled' | null>(null);
 
 	const vineTone =
 		browser && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
-	const oauthProvider = env.PUBLIC_OAUTH_PROVIDER || 'hackclub';
-	const oauthLabel =
-		env.PUBLIC_OAUTH_PROVIDER_LABEL || (oauthProvider === 'hackclub' ? 'Hack Club' : 'SSO');
+	// Sign-in options come from the API: instance-wide identity providers an
+	// admin configured, plus the env-configured one when there is one. Nothing
+	// about which providers exist is baked into this page.
+	let providers = $state<LoginProvider[]>([]);
+	let providersLoaded = $state(false);
+	let loginEmail = $state('');
+	let discovered = $state<DiscoveredOrg | null>(null);
+
+	async function fetchProviders() {
+		try {
+			const res = await apiFetch('/apiv1/sso/providers');
+			if (res.ok) providers = await res.json();
+		} catch {
+			providers = [];
+		} finally {
+			providersLoaded = true;
+		}
+	}
+
+	/**
+	 * Work-email routing: if the address belongs to an org running its own
+	 * IdP, hand the sign-in over to that org's login page instead of emailing
+	 * a code that its enforcement policy would reject anyway.
+	 */
+	async function routeToOrgSso(email: string): Promise<boolean> {
+		try {
+			const res = await apiFetch('/apiv1/sso/discover', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email })
+			});
+			if (!res.ok) return false;
+			const data = await res.json();
+			if (!data?.organization) return false;
+			discovered = data.organization as DiscoveredOrg;
+			if (discovered.enforced) {
+				await goto(discovered.loginUrl);
+				return true;
+			}
+			return false;
+		} catch {
+			return false;
+		}
+	}
 
 	async function fetchWorkspaces() {
 		loading = true;
@@ -160,11 +186,6 @@
 	}
 
 	onMount(() => {
-		if (browser && typeof window !== 'undefined') {
-			passkeySupported =
-				window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
-		}
-
 		if ($isSignedIn) {
 			if ($user?.setupCompleted === false) {
 				goto('/setup', { replaceState: true });
@@ -178,6 +199,7 @@
 			fetchWorkspaces();
 		} else {
 			loading = false;
+			fetchProviders();
 		}
 	});
 
@@ -236,230 +258,6 @@
 		});
 	}
 
-	async function requestOtp() {
-		if (otpRequesting) return;
-
-		const email = otpEmail.trim().toLowerCase();
-		if (!email) {
-			otpError = 'Enter the email address you use with Orchard.';
-			return;
-		}
-
-		otpRequesting = true;
-		otpError = null;
-
-		try {
-			const response = await apiFetch('/apiv1/auth/otp/request', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ email })
-			});
-
-			const data = await response.json().catch(() => ({}));
-
-			if (!response.ok) {
-				throw new Error(data?.message || 'Could not send the OTP email.');
-			}
-
-			otpStep = 'code';
-			otpMessage = data?.message || 'Check your inbox for a 6-digit code.';
-			otpCode = '';
-		} catch (err) {
-			otpError = err instanceof Error ? err.message : 'Failed to send OTP email.';
-		} finally {
-			otpRequesting = false;
-		}
-	}
-
-	async function verifyOtp() {
-		if (otpVerifying) return;
-
-		const email = otpEmail.trim().toLowerCase();
-		const code = otpCode.trim();
-
-		if (!email) {
-			otpError = 'Please enter your email.';
-			return;
-		}
-
-		if (!code || code.length !== 6) {
-			otpError = 'Enter the 6-digit code we sent you.';
-			return;
-		}
-
-		otpVerifying = true;
-		otpError = null;
-
-		try {
-			const response = await apiFetch('/apiv1/auth/otp/verify', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ email, code })
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				if (
-					response.status === 403 &&
-					(data?.message === 'private_beta' || data?.message === 'signups_disabled')
-				) {
-					signupsDisabled = data.message === 'signups_disabled';
-					privateBetaBlocked = true;
-					return;
-				}
-				throw new Error(data?.message || 'Invalid OTP code.');
-			}
-
-			const data = await response.json().catch(() => null);
-			await handlePostAuth('Signed in with your email', data?.user);
-		} catch (err) {
-			otpError = err instanceof Error ? err.message : 'Failed to verify code.';
-		} finally {
-			otpVerifying = false;
-		}
-	}
-
-	let authMode = $state<'start' | 'passkey' | 'code'>('start');
-	let authChecking = $state(false);
-
-	async function continueWithEmail() {
-		if (authChecking || otpRequesting) return;
-
-		const email = otpEmail.trim().toLowerCase();
-		if (!email) {
-			otpError = 'Enter the email address you use with Orchard.';
-			return;
-		}
-
-		authChecking = true;
-		otpError = null;
-		passkeyError = null;
-
-		try {
-			let hasPasskeys = false;
-			if (passkeySupported) {
-				try {
-					const response = await apiFetch(
-						`/apiv1/auth/passkey/check?email=${encodeURIComponent(email)}`
-					);
-					const data = await response.json().catch(() => ({}));
-					hasPasskeys = Boolean(data?.hasPasskeys);
-				} catch {
-					hasPasskeys = false;
-				}
-			}
-
-			if (hasPasskeys) {
-				passkeyEmail = email;
-				authMode = 'passkey';
-				await signInWithPasskey();
-			} else {
-				await requestOtp();
-				if (otpStep === 'code') authMode = 'code';
-			}
-		} finally {
-			authChecking = false;
-		}
-	}
-
-	async function useCodeInstead() {
-		passkeyError = null;
-		await requestOtp();
-		if (otpStep === 'code') authMode = 'code';
-	}
-
-	function resetAuth() {
-		authMode = 'start';
-		otpStep = 'email';
-		otpCode = '';
-		otpMessage = null;
-		otpError = null;
-		passkeyError = null;
-	}
-
-	async function signInWithPasskey() {
-		if (passkeyLoading) return;
-
-		if (!browser || typeof window === 'undefined') {
-			passkeyError = 'Passkeys are not supported in this environment.';
-			return;
-		}
-
-		if (!window.isSecureContext) {
-			passkeyError = 'Passkeys require https:// or http://localhost.';
-			return;
-		}
-
-		if (!window.PublicKeyCredential) {
-			passkeyError = 'Passkeys are not supported on this device.';
-			return;
-		}
-
-		passkeyLoading = true;
-		passkeyError = null;
-
-		try {
-			const response = await apiFetch('/apiv1/auth/passkey/authenticate/options', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					email: passkeyEmail.trim() || undefined
-				})
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Could not start passkey authentication.');
-			}
-
-			const options = await response.json();
-
-			const { startAuthentication } = await import('@simplewebauthn/browser');
-			const credential = await startAuthentication({
-				optionsJSON: options
-			});
-
-			const verifyResponse = await apiFetch('/apiv1/auth/passkey/authenticate/verify', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					response: credential
-				})
-			});
-
-			if (!verifyResponse.ok) {
-				const data = await verifyResponse.json().catch(() => ({}));
-				if (
-					verifyResponse.status === 403 &&
-					(data?.message === 'private_beta' || data?.message === 'signups_disabled')
-				) {
-					signupsDisabled = data.message === 'signups_disabled';
-					privateBetaBlocked = true;
-					return;
-				}
-				throw new Error(data?.message || 'Passkey authentication failed.');
-			}
-
-			const data = await verifyResponse.json().catch(() => null);
-			await handlePostAuth('Signed in with your passkey', data?.user);
-		} catch (err) {
-			if (err instanceof Error && err.name === 'NotAllowedError') {
-				passkeyError = 'Passkey request was cancelled.';
-			} else {
-				passkeyError = err instanceof Error ? err.message : 'Passkey sign-in failed.';
-			}
-		} finally {
-			passkeyLoading = false;
-		}
-	}
 </script>
 
 {#if !$isSignedIn}
@@ -474,13 +272,13 @@
 				<h1 class="lg2-headline">Welcome <em>back</em>.</h1>
 			</div>
 			<div class="lg2-card">
-				{#if privateBetaBlocked}
+				{#if blocked}
 					<div class="lg-beta">
 						<h2 class="lg-beta-title">
-							{signupsDisabled ? 'Signups disabled' : 'Private beta'}
+							{blocked === 'signups_disabled' ? 'Signups disabled' : 'Private beta'}
 						</h2>
 						<p class="lg-beta-desc">
-							{signupsDisabled
+							{blocked === 'signups_disabled'
 								? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
 								: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
 						</p>
@@ -488,123 +286,34 @@
 							variant="primary"
 							class="lg-wide"
 							onclick={() => {
-								privateBetaBlocked = false;
+								blocked = null;
 							}}
 						>
 							Back to sign in
 						</Button>
 					</div>
 				{:else}
-					{#if oauthProvider !== 'none'}
-						<Button variant="primary" class="lg-wide" onclick={() => user.signIn()}>
-							Continue with {oauthLabel}
-						</Button>
+					{#if providers.length}
+						<ProviderButtons {providers} />
+						<div class="lg-divider"><span>or</span></div>
+					{:else if !providersLoaded}
+						<Skeleton height="2.25rem" />
 						<div class="lg-divider"><span>or</span></div>
 					{/if}
-					{#if authMode === 'start'}
-						<form
-							class="lg-form"
-							novalidate
-							onsubmit={(e) => {
-								e.preventDefault();
-								continueWithEmail();
-							}}
-						>
-							<label class="lg-label" for="otp-email">Email address</label>
-							<Input
-								type="email"
-								name="email"
-								placeholder="you@example.com"
-								id="otp-email"
-								bind:value={otpEmail}
-								autocomplete="email webauthn"
-								required
-								class="lg-wide"
-							/>
-							{#if otpError}
-								<p class="lg-error">{otpError}</p>
-							{/if}
-							<Button
-								variant="secondary"
-								type="submit"
-								loading={authChecking || otpRequesting}
-								class="lg-wide lg-action"
-							>
-								Continue
-							</Button>
-						</form>
-					{:else if authMode === 'passkey'}
-						<div class="lg-step">
-							<div class="lg-step-head">
-								<p class="lg-step-title">{otpEmail}</p>
-							</div>
-							<Button
-								variant="secondary"
-								class="lg-wide"
-								loading={passkeyLoading}
-								onclick={signInWithPasskey}
-							>
-								{#if !passkeyLoading}
-									<KeyRound class="h-4 w-4" />
-								{/if}
-								Sign in with your passkey
-							</Button>
-							{#if passkeyError}
-								<p class="lg-error">{passkeyError}</p>
-							{/if}
-							<Button
-								variant="ghost"
-								class="lg-wide"
-								loading={otpRequesting}
-								onclick={useCodeInstead}
-							>
-								Email me a code instead
-							</Button>
-							{#if otpError}
-								<p class="lg-error">{otpError}</p>
-							{/if}
-							<Button variant="ghost" size="sm" class="lg-center" onclick={resetAuth}>Back</Button>
-						</div>
-					{:else}
-						<form
-							class="lg-form"
-							novalidate
-							onsubmit={(e) => {
-								e.preventDefault();
-								verifyOtp();
-							}}
-						>
-							<div class="lg-step-head">
-								<p class="lg-step-title">{otpEmail}</p>
-								{#if otpMessage}
-									<p class="lg-step-hint">{otpMessage}</p>
-								{/if}
-							</div>
-							<label class="lg-label" for="otp-code">Verification code</label>
-							<Input
-								type="text"
-								name="code"
-								inputmode="numeric"
-								maxlength="6"
-								placeholder="000000"
-								id="otp-code"
-								bind:value={otpCode}
-								autocomplete="one-time-code"
-								class="lg-wide lg-code"
-							/>
-							{#if otpError}
-								<p class="lg-error">{otpError}</p>
-							{/if}
-							<Button
-								variant="secondary"
-								type="submit"
-								loading={otpVerifying}
-								class="lg-wide lg-action"
-							>
-								Verify
-							</Button>
-							<Button variant="ghost" size="sm" class="lg-center" onclick={resetAuth}>Back</Button>
-						</form>
+
+					<EmailAuthPanel
+						bind:email={loginEmail}
+						onAuthenticated={handlePostAuth}
+						onBlocked={(reason) => {
+							blocked = reason;
+						}}
+						onSsoRedirect={routeToOrgSso}
+					/>
+
+					{#if discovered && !discovered.enforced}
+						<a class="lg-org-hint" href={discovered.loginUrl}>
+							Sign in through {discovered.name} instead
+						</a>
 					{/if}
 				{/if}
 			</div>

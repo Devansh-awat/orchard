@@ -103,33 +103,6 @@
 	let publicIp = $state('');
 	let publicIpSaving = $state(false);
 
-	let ssoTab = $state<'config' | 'branding'>('config');
-	let ssoConfig = $state<any>(null);
-	let ssoLoading = $state(false);
-	let ssoSaving = $state(false);
-	let ssoSubdomain = $state('');
-	let ssoSubdomainSaving = $state(false);
-	let ssoProvider = $state<'oidc' | 'saml'>('oidc');
-	let ssoOidcIssuerUrl = $state('');
-	let ssoOidcClientId = $state('');
-	let ssoOidcClientSecret = $state('');
-	let ssoOidcScopes = $state('openid email profile');
-	let ssoSamlEntryPoint = $state('');
-	let ssoSamlIssuer = $state('');
-	let ssoSamlCertificate = $state('');
-	let ssoSamlMetadataUrl = $state('');
-	let ssoEnabled = $state(false);
-	let ssoEnforced = $state(false);
-	let ssoLoginLogoUrl = $state('');
-	let ssoLoginPrimaryColor = $state('#6366f1');
-	let ssoLoginBgColor = $state('#0a0a0f');
-	let ssoLoginWelcomeText = $state('');
-	let ssoTestResult = $state<{ success: boolean; testLoginUrl?: string; error?: string } | null>(
-		null
-	);
-	let ssoTesting = $state(false);
-	let ssoDeleting = $state(false);
-	let showDeleteSsoModal = $state(false);
 
 	let notifLoading = $state(false);
 	let notifChannels = $state<NotificationChannel[]>([]);
@@ -216,17 +189,15 @@
 						: [])
 				]
 			},
-			...(isEnterprise
-				? [
-						{
-							label: 'Access',
-							items: [
-								{ id: 'sso', label: 'SSO', href: `/${organizationSlug}/settings?tab=sso` },
-								{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }
-							]
-						}
-					]
-				: []),
+			{
+				label: 'Access',
+				items: [
+					{ id: 'sso', label: 'SSO', href: `/${organizationSlug}/settings?tab=sso` },
+					...(isEnterprise
+						? [{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }]
+						: [])
+				]
+			},
 			{
 				label: 'Activity',
 				items: [
@@ -267,8 +238,6 @@
 					await fetchBackupSettings();
 					await fetchNotificationChannels();
 					if (data.plan === 'enterprise') {
-						ssoSubdomain = data.subdomain || '';
-						await fetchSsoConfig();
 						await fetchScimTokens();
 					}
 				} else {
@@ -447,36 +416,6 @@
 		}
 	}
 
-	async function fetchSsoConfig() {
-		if (!organization || !isEnterprise) return;
-		ssoLoading = true;
-		try {
-			const r = await apiFetch(`/apiv1/organizations/${organization.id}/sso`);
-			if (r.ok) {
-				const d = await r.json();
-				if (d && !d.configured === false) {
-					ssoConfig = d;
-					ssoProvider = d.provider || 'oidc';
-					ssoOidcIssuerUrl = d.oidcIssuerUrl || '';
-					ssoOidcClientId = d.oidcClientId || '';
-					ssoOidcScopes = d.oidcScopes || 'openid email profile';
-					ssoSamlEntryPoint = d.samlEntryPoint || '';
-					ssoSamlIssuer = d.samlIssuer || '';
-					ssoSamlMetadataUrl = d.samlMetadataUrl || '';
-					ssoEnabled = d.enabled || false;
-					ssoEnforced = d.enforced || false;
-					ssoLoginLogoUrl = d.loginLogoUrl || '';
-					ssoLoginPrimaryColor = d.loginPrimaryColor || '#6366f1';
-					ssoLoginBgColor = d.loginBgColor || '#0a0a0f';
-					ssoLoginWelcomeText = d.loginWelcomeText || '';
-				}
-			}
-		} catch (e) {
-			console.error('Failed to fetch SSO config:', e);
-		} finally {
-			ssoLoading = false;
-		}
-	}
 
 	function startEditing() {
 		editingName = organization?.name || '';
@@ -832,116 +771,6 @@
 		}
 	}
 
-	async function saveSubdomain() {
-		if (!organization) return;
-		ssoSubdomainSaving = true;
-		try {
-			const r = await apiFetch(`/apiv1/organizations/${organization.id}/subdomain`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ subdomain: ssoSubdomain || null })
-			});
-			if (!r.ok) {
-				const d = await r.json();
-				throw new Error(d.message || 'Failed to update subdomain');
-			}
-			toasts.add({ title: 'Subdomain updated', color: 'success' });
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
-				color: 'error'
-			});
-		} finally {
-			ssoSubdomainSaving = false;
-		}
-	}
-
-	async function saveSsoConfig() {
-		if (!organization) return;
-		ssoSaving = true;
-		try {
-			const body: any = {
-				provider: ssoProvider,
-				enabled: ssoEnabled,
-				enforced: ssoEnforced,
-				loginLogoUrl: ssoLoginLogoUrl || null,
-				loginPrimaryColor: ssoLoginPrimaryColor || null,
-				loginBgColor: ssoLoginBgColor || null,
-				loginWelcomeText: ssoLoginWelcomeText || null
-			};
-			if (ssoProvider === 'oidc') {
-				body.oidcIssuerUrl = ssoOidcIssuerUrl;
-				body.oidcClientId = ssoOidcClientId;
-				if (ssoOidcClientSecret) body.oidcClientSecret = ssoOidcClientSecret;
-				body.oidcScopes = ssoOidcScopes;
-			} else {
-				body.samlEntryPoint = ssoSamlEntryPoint;
-				body.samlIssuer = ssoSamlIssuer;
-				if (ssoSamlCertificate) body.samlCertificate = ssoSamlCertificate;
-				body.samlMetadataUrl = ssoSamlMetadataUrl;
-			}
-			const r = await apiFetch(`/apiv1/organizations/${organization.id}/sso`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			if (!r.ok) {
-				const d = await r.json();
-				throw new Error(d.message || 'Failed to save SSO config');
-			}
-			toasts.add({ title: 'SSO configuration saved', color: 'success' });
-			ssoOidcClientSecret = '';
-			ssoSamlCertificate = '';
-			await fetchSsoConfig();
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to save',
-				color: 'error'
-			});
-		} finally {
-			ssoSaving = false;
-		}
-	}
-
-	async function testSsoConnection() {
-		if (!organization) return;
-		ssoTesting = true;
-		ssoTestResult = null;
-		try {
-			const r = await apiFetch(`/apiv1/organizations/${organization.id}/sso/test`, {
-				method: 'POST'
-			});
-			ssoTestResult = await r.json();
-		} catch {
-			ssoTestResult = { success: false, error: 'Failed to test connection' };
-		} finally {
-			ssoTesting = false;
-		}
-	}
-
-	async function deleteSsoConfig() {
-		if (!organization || ssoDeleting) return;
-		ssoDeleting = true;
-		try {
-			const r = await apiFetch(`/apiv1/organizations/${organization.id}/sso`, { method: 'DELETE' });
-			if (!r.ok) throw new Error('Failed to delete');
-			toasts.add({ title: 'SSO configuration deleted', color: 'success' });
-			ssoConfig = null;
-			ssoEnabled = false;
-			ssoEnforced = false;
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete',
-				color: 'error'
-			});
-		} finally {
-			ssoDeleting = false;
-		}
-	}
-
 	async function fetchScimTokens() {
 		if (!organization) return;
 		scimLoading = true;
@@ -1181,40 +1010,8 @@
 						onToggleChannel={toggleNotificationChannel}
 					/>
 				{/if}
-				{#if activeTab === 'sso' && isEnterprise}
-					<OrgSsoTab
-						{organization}
-						{isOwner}
-						{baseDomain}
-						{ssoLoading}
-						{ssoSaving}
-						bind:ssoTab
-						{ssoConfig}
-						bind:ssoSubdomain
-						{ssoSubdomainSaving}
-						bind:ssoProvider
-						bind:ssoOidcIssuerUrl
-						bind:ssoOidcClientId
-						bind:ssoOidcClientSecret
-						bind:ssoOidcScopes
-						bind:ssoSamlEntryPoint
-						bind:ssoSamlIssuer
-						bind:ssoSamlCertificate
-						bind:ssoSamlMetadataUrl
-						bind:ssoEnabled
-						bind:ssoEnforced
-						bind:ssoLoginLogoUrl
-						bind:ssoLoginPrimaryColor
-						bind:ssoLoginBgColor
-						bind:ssoLoginWelcomeText
-						{ssoTestResult}
-						{ssoTesting}
-						{ssoDeleting}
-						onSaveSubdomain={saveSubdomain}
-						onSaveSsoConfig={saveSsoConfig}
-						onTestSsoConnection={testSsoConnection}
-						onDeleteSsoConfig={() => (showDeleteSsoModal = true)}
-					/>
+				{#if activeTab === 'sso'}
+					<OrgSsoTab {organization} {isOwner} {baseDomain} />
 				{/if}
 				{#if activeTab === 'scim' && isEnterprise}
 					<OrgScimTab
@@ -1261,16 +1058,6 @@
 	onconfirm={() => {
 		if (channelToDelete) deleteNotificationChannel(channelToDelete.id);
 	}}
-	oncancel={() => {}}
-/>
-
-<ConfirmModal
-	bind:open={showDeleteSsoModal}
-	title="Delete SSO configuration?"
-	description="This <strong>disables SSO login</strong> for the organization. Members who sign in through your identity provider will no longer be able to log in with it."
-	html
-	confirmLabel="Delete SSO config"
-	onconfirm={deleteSsoConfig}
 	oncancel={() => {}}
 />
 

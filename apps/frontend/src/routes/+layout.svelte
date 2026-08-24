@@ -42,6 +42,18 @@
 
 	const publicRoutes = ['/invite', '/oauth/callback', '/sso', '/mcp', '/cli', '/auth/protect'];
 
+	// /<org>/login is the org's own SSO entry point and is meant to be reached
+	// signed out, so it can't be bounced back to the platform login page.
+	// It also paints before auth has bootstrapped: it is a signed-out page by
+	// definition, and a tenant's branded login screen should not open on the
+	// app's boot spinner.
+	const isOrgLoginRoute = $derived($page.route.id === '/[orgSlug=orgSlug]/login');
+
+	function isPublicPath(pathname: string) {
+		if (pathname === '/' || publicRoutes.some((route) => pathname.startsWith(route))) return true;
+		return /^\/[^/]+\/login\/?$/.test(pathname);
+	}
+
 	// After a deploy, the chunks a running tab knows about no longer exist
 	// on the server, so client-side navigation loads nothing until a reload.
 	// When a new build is detected, turn the next navigation into a full
@@ -71,7 +83,15 @@
 	$effect(() => {
 		if (loading || $isSignedIn) return;
 		const path = $page.url.pathname;
-		if (path === '/' || publicRoutes.some((route) => path.startsWith(route))) return;
+		if (isPublicPath(path)) return;
+		// Anything under an org's own tree bounces to that org's login page
+		// rather than the platform one, so an SSO-only tenant lands where it
+		// can actually sign in. The route id is what matched, so this can't
+		// misfire on /setup or /admin.
+		if ($page.route.id?.startsWith('/[orgSlug=orgSlug]') && $page.params.orgSlug) {
+			goto(`/${$page.params.orgSlug}/login`, { replaceState: true });
+			return;
+		}
 		goto('/', { replaceState: true });
 	});
 
@@ -144,7 +164,7 @@
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
-	{#if loading}
+	{#if loading && !isOrgLoginRoute}
 		<div
 			class="flex h-screen items-center justify-center"
 			style="background-color: var(--center-channel-bg);"

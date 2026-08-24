@@ -3,9 +3,6 @@ import { env } from '$env/dynamic/public';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 
-// Routes that are allowed on SSO subdomains
-const SSO_ALLOWED_PATHS = ['/sso', '/oauth/callback', '/apiv1/'];
-
 export const handle: Handle = async ({ event, resolve }) => {
 	// Merge consecutive slashes (`//ysws//projects` → `/ysws/projects`).
 	// Doubled slashes still render a page but break every exact-match on
@@ -27,21 +24,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const subdomain = host.replace(`.${BASE_DOMAIN}`, '');
 			event.locals.subdomain = subdomain;
 
-			// Rewrite root path to /sso for subdomain requests
-			if (pathname === '/') {
-				event.url.pathname = '/sso';
-				return resolve(event, { transformPageChunk: undefined });
-			}
-
-			// Block all routes except SSO-related paths on subdomains
-			const isAllowed = SSO_ALLOWED_PATHS.some((p) => pathname.startsWith(p));
-			if (!isAllowed) {
-				// Redirect non-SSO paths back to the main domain
-				const mainUrl = `https://${BASE_DOMAIN}${pathname}${event.url.search}`;
-				return new Response(null, {
-					status: 302,
-					headers: { Location: mainUrl }
-				});
+			// An org's subdomain is a vanity address now, not a place the app
+			// runs: login lives at /<org-slug> on the main domain. The apex
+			// serves everything, so nothing here needs a per-subdomain
+			// allowlist any more — the whole host forwards.
+			if (!pathname.startsWith('/apiv1/')) {
+				const target =
+					pathname === '/'
+						? `https://${BASE_DOMAIN}/sso?org=${encodeURIComponent(subdomain)}`
+						: `https://${BASE_DOMAIN}${pathname}${event.url.search}`;
+				return new Response(null, { status: 302, headers: { Location: target } });
 			}
 		}
 	}

@@ -5,6 +5,8 @@ import { requestAuthStorage } from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';
 
+export type AuthMethod = 'sso' | 'instance_sso' | 'oauth' | 'otp' | 'passkey' | 'password';
+
 export interface OrgAccess {
   organizationId: string;
   role: OrganizationRole;
@@ -86,7 +88,7 @@ export class AuthorizationService {
   /**
    * H-1: If the user is a member of any organization with SSO enforced, refuse
    * non-SSO authentication paths (OTP, passkey, password, Hack Club OAuth).
-   * Without this gate, `SsoConfig.enforced=true` is purely cosmetic — an admin
+   * Without this gate, `OrgSsoSettings.enforced=true` is purely cosmetic — an admin
    * who offboards a user from the IdP cannot prevent them from logging back
    * in via OTP to the same email, defeating the whole point of enforcement.
    *
@@ -94,11 +96,14 @@ export class AuthorizationService {
    * that they manage SSO config and need a way back in if it breaks.
    *
    * The `authMethod` param is the method the caller is about to use; only
-   * 'sso' satisfies enforcement. Anything else throws.
+   * 'sso' satisfies enforcement. Anything else throws — including
+   * 'instance_sso', the platform-wide identity providers, because an org that
+   * enforces its own IdP is not asking to also trust the instance's Google
+   * button.
    */
   async assertSsoNotEnforced(
     user: { id: string; isSuperAdmin?: boolean | null } | null,
-    authMethod: 'sso' | 'oauth' | 'otp' | 'passkey' | 'password',
+    authMethod: AuthMethod,
   ): Promise<void> {
     if (authMethod === 'sso') return;
     if (user?.isSuperAdmin) return;
@@ -106,7 +111,7 @@ export class AuthorizationService {
       const enforced = await this.prisma.organizationMember.findFirst({
         where: {
           userId: user.id,
-          organization: { ssoConfig: { is: { enforced: true, enabled: true } } },
+          organization: { ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } } },
         },
         select: { organizationId: true },
       });
@@ -132,7 +137,7 @@ export class AuthorizationService {
    */
   async assertSsoNotEnforcedForEmail(
     email: string,
-    authMethod: 'sso' | 'oauth' | 'otp' | 'passkey' | 'password',
+    authMethod: AuthMethod,
   ): Promise<void> {
     if (authMethod === 'sso') return;
     const normalized = email.toLowerCase().trim();
@@ -141,7 +146,7 @@ export class AuthorizationService {
       where: {
         email: normalized,
         expiresAt: { gt: new Date() },
-        organization: { ssoConfig: { is: { enforced: true, enabled: true } } },
+        organization: { ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } } },
       },
       select: { organizationId: true },
     });

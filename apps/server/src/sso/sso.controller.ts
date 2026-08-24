@@ -3,145 +3,196 @@ import {
   Get,
   Post,
   Param,
+  Query,
   Req,
   Res,
   Body,
+  Header,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { SsoProtocol } from '@prisma/client';
 import { SsoService } from './sso.service';
+import { SsoLoginService, SsoLoginResult } from './sso-login.service';
 import { Public } from '../auth/decorators';
 import { setSessionCookie } from '../auth/cookies';
 
 @Public()
 @Controller('sso')
 export class SsoController {
-  constructor(private readonly ssoService: SsoService) {}
+  private readonly logger = new Logger(SsoController.name);
 
-  // H-2: cookie attributes come from ../auth/cookies — shared across OAuth,
-  // SSO, and passwordless flows.
+  constructor(
+    private readonly sso: SsoService,
+    private readonly login: SsoLoginService,
+  ) {}
 
-  /**
-   * Get public branding info for a subdomain. Only returns data when SSO is
-   * actually enabled — otherwise responds 404 (same shape as an unknown
-   * subdomain) so unauthenticated callers can't enumerate which orgs reserved
-   * a subdomain.
-   */
-  @Get('subdomain/:subdomain')
-  async getSubdomainBranding(@Param('subdomain') subdomain: string) {
-    try {
-      const branding = await this.ssoService.getPublicBranding(subdomain);
-      if (!branding.ssoEnabled) {
-        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
-      }
-      return branding;
-    } catch (err) {
-      if (err instanceof HttpException && err.getStatus() === HttpStatus.NOT_FOUND) {
-        throw err;
-      }
-      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
-    }
+  private get frontendUrl(): string {
+    return process.env.FRONTEND_URL || 'http://localhost:3000';
+  }
+
+  /** Identity providers offered to everyone on the platform login page. */
+  @Get('providers')
+  getInstanceProviders() {
+    return this.sso.getInstanceProviders();
   }
 
   /**
-   * Initiate SSO login for an organization. Any error path collapses to a 404
-   * so unauthenticated callers can't tell "org doesn't exist" from "SSO not
-   * configured" by inspecting the response.
+   * Login-page payload for one organization, keyed on its slug — the same slug
+   * that addresses it everywhere else in the product. 404 covers both "no such
+   * org" and "SSO not live here" so this can't enumerate tenants.
    */
-  @Get(':orgId/login')
-  async initiateLogin(
-    @Param('orgId') orgId: string,
+  @Get('org/:slug')
+  async getOrgLogin(@Param('slug') slug: string) {
+    const context = await this.sso.getOrgLoginContext(slug);
+    if (!context) throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+    return context;
+  }
+
+  /**
+   * Resolve a legacy vanity subdomain to the org whose login page replaced it.
+   * The frontend calls this once when someone lands on acme.orchard.my.
+   */
+  @Get('subdomain/:subdomain')
+  async resolveSubdomain(@Param('subdomain') subdomain: string) {
+    const context = await this.sso.getOrgLoginContextBySubdomain(subdomain);
+    if (!context) throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+    return { slug: context.slug, name: context.name };
+  }
+
+  /** Work-email routing for the platform login page. Always 200. */
+  @Post('discover')
+  async discover(@Body('email') email: string) {
+    const match = email ? await this.sso.discoverByEmail(email) : null;
+    return { organization: match };
+  }
+
+  @Get('start/:providerId')
+  async start(
+    @Param('providerId') providerId: string,
+    @Query('returnTo') returnTo: string | undefined,
     @Res() res: Response,
   ) {
     try {
-      const org = await this.ssoService.resolveBySubdomain(orgId).catch(() => null);
-      const organizationId = org ? org.id : orgId;
-
-      const config = await this.ssoService.getSsoConfig(organizationId);
-      if (!config) {
-        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
-      }
-
-      let redirectUrl: string;
-      if (config.provider === 'oidc') {
-        redirectUrl = await this.ssoService.initiateOidcLogin(organizationId);
-      } else if (config.provider === 'saml') {
-        redirectUrl = await this.ssoService.initiateSamlLogin(organizationId);
-      } else {
-        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
-      }
-
-      return res.redirect(redirectUrl);
+      const url = await this.login.startLogin(providerId, returnTo);
+      return res.redirect(url);
     } catch (err) {
-      console.error('SSO login initiation error:', err);
+      this.logger.warn(`SSO start failed for ${providerId}: ${(err as Error).message}`);
+      return res.redirect(`${this.frontendUrl}?error=sso_failed`);
+    }
+  }
+
+  @Get('callback/:providerId')
+  async callback(
+    @Param('providerId') providerId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      const provider = await this.login.loadLoginProvider(providerId);
+      const state = req.query.state as string;
+      if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
+
+      const result = provider.protocol === SsoProtocol.oauth2
+        ? await this.login.handleOAuth2Callback(providerId, req.query.code as string, state)
+        : await this.login.handleOidcCallback(providerId, this.requestUrl(req), state);
+
+      return this.finish(res, result);
+    } catch (err) {
+      return this.fail(res, err);
+    }
+  }
+
+  /** SAML assertion consumer service. */
+  @Post('callback/:providerId')
+  async samlCallback(
+    @Param('providerId') providerId: string,
+    @Body('SAMLResponse') samlResponse: string,
+    @Body('RelayState') relayState: string,
+    @Res() res: Response,
+  ) {
+    try {
+      if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
+      const result = await this.login.handleSamlCallback(providerId, samlResponse, relayState);
+      return this.finish(res, result);
+    } catch (err) {
+      return this.fail(res, err);
+    }
+  }
+
+  /** SP metadata, for pasting into the IdP. */
+  @Get('providers/:providerId/metadata')
+  @Header('Content-Type', 'application/xml')
+  async metadata(@Param('providerId') providerId: string) {
+    return this.sso.getSpMetadata(providerId);
+  }
+
+  // ========== Legacy routes ==========
+  // The org-scoped callback URLs predate identity providers and are registered
+  // on IdPs we don't control, so they keep working forever. New connections
+  // use /sso/callback/:providerId.
+
+  @Get(':orgId/login')
+  async legacyLogin(@Param('orgId') orgId: string, @Res() res: Response) {
+    try {
+      const org = await this.sso.getOrgLoginContextById(orgId);
+      if (!org) throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+      return res.redirect(this.sso.orgLoginUrl(org.slug));
+    } catch {
       throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
     }
   }
 
-  /**
-   * OIDC callback endpoint.
-   */
   @Get(':orgId/callback/oidc')
-  async oidcCallback(
+  async legacyOidcCallback(
     @Param('orgId') orgId: string,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     try {
-      const callbackUrl = new URL(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
       const state = req.query.state as string;
-
-      if (!state) {
-        throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
-      }
-
-      const result = await this.ssoService.handleOidcCallback(orgId, callbackUrl, state);
-
-      setSessionCookie(res, result.token);
-
-      const frontendUrl = this.getFrontendRedirectUrl(result.organizationSlug);
-      return res.redirect(`${frontendUrl}/oauth/callback`);
+      if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
+      const provider = await this.login.findLegacyProvider(orgId, SsoProtocol.oidc);
+      const result = await this.login.handleOidcCallback(provider.id, this.requestUrl(req), state);
+      return this.finish(res, result);
     } catch (err) {
-      console.error('OIDC callback error:', err);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}?error=sso_failed`);
+      return this.fail(res, err);
     }
   }
 
-  /**
-   * SAML ACS (Assertion Consumer Service) endpoint.
-   */
   @Post(':orgId/callback/saml')
-  async samlCallback(
+  async legacySamlCallback(
     @Param('orgId') orgId: string,
     @Body('SAMLResponse') samlResponse: string,
+    @Body('RelayState') relayState: string,
     @Res() res: Response,
   ) {
     try {
-      if (!samlResponse) {
-        throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
-      }
-
-      const result = await this.ssoService.handleSamlCallback(orgId, samlResponse);
-
-      setSessionCookie(res, result.token);
-
-      const frontendUrl = this.getFrontendRedirectUrl(result.organizationSlug);
-      return res.redirect(`${frontendUrl}/oauth/callback`);
+      if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
+      const provider = await this.login.findLegacyProvider(orgId, SsoProtocol.saml);
+      const result = await this.login.handleSamlCallback(provider.id, samlResponse, relayState);
+      return this.finish(res, result);
     } catch (err) {
-      console.error('SAML callback error:', err);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}?error=sso_failed`);
+      return this.fail(res, err);
     }
   }
 
-  private getFrontendRedirectUrl(orgSlug: string): string {
-    const baseDomain = process.env.BASE_DOMAIN;
-    const org = orgSlug; // use slug for subdomain redirect if available
-    if (baseDomain) {
-      return `https://${org}.${baseDomain}`;
-    }
-    return process.env.FRONTEND_URL || 'http://localhost:5173';
+  private requestUrl(req: Request): URL {
+    return new URL(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  }
+
+  private finish(res: Response, result: SsoLoginResult) {
+    setSessionCookie(res, result.token);
+    return res.redirect(result.redirectTo);
+  }
+
+  private fail(res: Response, err: unknown) {
+    this.logger.warn(`SSO callback failed: ${err instanceof Error ? err.message : String(err)}`);
+    const reason = err instanceof Error && /private_beta|signups_disabled/.test(err.message)
+      ? err.message
+      : 'sso_failed';
+    return res.redirect(`${this.frontendUrl}?error=${encodeURIComponent(reason)}`);
   }
 }

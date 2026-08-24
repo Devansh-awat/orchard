@@ -93,12 +93,42 @@ server:
 ```
 
 Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
-For SSO against your own IdP, set `AUTH_PROVIDER=oidc` plus the
-`AUTH_OAUTH_*` env (issuer discovery, PKCE-less code flow, claim mapping;
-works with Keycloak, Authentik, Dex, Google, ...), and
-`PUBLIC_OAUTH_PROVIDER=oidc` / `PUBLIC_OAUTH_PROVIDER_LABEL` on the frontend
-for the login button. Hack Club OAuth is the `hackclub` preset. Enterprise
-SSO/SCIM is additionally configurable per organization in the UI.
+
+## Single sign-on
+
+SSO is configured in the UI, at two levels.
+
+**Platform-wide** (Admin -> SSO): identity providers offered to everyone on
+the login page. Pick a preset (Google, Microsoft Entra, GitHub, GitLab, Okta,
+Auth0, Keycloak, Authentik, OneLogin, JumpCloud) or configure a generic
+OpenID Connect or SAML 2.0 provider, paste the client credentials, and copy
+the redirect URL it generates into the provider. Each connection carries its
+own policy: whether it may create accounts, the role new members get, an
+optional email-domain allowlist, and whether a verified email is required.
+
+The same page has the per-organization kill switch. Turning SSO off for one
+organization leaves its configuration intact but stops sign-ins, and the org
+owner cannot re-enable it from their own settings.
+
+**Per organization** (org settings -> SSO): an org configures its own
+providers the same way, and gets a branded login page at
+`https://<your-domain>/<org-slug>` — no subdomain or DNS record needed. An
+org that lists its email domains also captures anyone typing a matching
+address on the platform login page. "Require single sign-on" blocks email
+codes, passkeys, and platform providers for that org's members.
+
+Secrets (client secrets, signing certificates) are encrypted at rest with
+`SSO_ENCRYPTION_KEY`; without it the server refuses to store them.
+
+IdP URLs pointing at internal addresses (loopback, RFC1918, `.svc`,
+`.cluster.local`, cloud metadata) are rejected at save time, since they drive
+server-side fetches. If your IdP genuinely runs on internal DNS, set
+`SSO_ALLOW_INTERNAL_IDP=true`.
+
+A single env-configured provider is still supported and renders alongside the
+database ones: `AUTH_PROVIDER=oidc` plus the `AUTH_OAUTH_*` env, or
+`AUTH_PROVIDER=hackclub` for the Hack Club preset. `AUTH_PROVIDER=none`
+disables it. SCIM provisioning is configured per organization in the UI.
 
 ## Node scheduling
 
