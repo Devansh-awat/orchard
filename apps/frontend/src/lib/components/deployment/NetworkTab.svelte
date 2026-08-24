@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Lock, Shield, Check } from 'lucide-svelte';
+	import { Loader2, Lock, Shield, Check, Network } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
 	import { Button, SectionCard, Select, SegmentedControl } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
@@ -766,133 +766,157 @@
 									}
 								]}
 					{#each displayedPorts as port, portIndex (port.id ?? `${port.targetPort}/${port.protocol ?? 'TCP'}`)}
+						{@const internalUrl =
+							port.internalUrl ??
+							(service.internalHost
+								? `${service.internalHost}:${port.port ?? port.targetPort}`
+								: null)}
 						<div
-							class="svc-port-row flex items-center gap-2 rounded-xl px-4 py-3"
+							class="svc-port-block svc-port-row rounded-xl"
 							class:svc-port-editing={serviceEditForms[service.id]}
 							style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
 						>
-							{#if serviceEditForms[service.id]}
-								<div style="flex: 1; min-width: 80px; max-width: 120px;">
-									<input
-										type="number"
-										min="1"
-										class="input text-sm"
-										placeholder="80"
-										value={serviceEditForms[service.id].ports[portIndex]?.containerPort ??
-											port.targetPort}
-										oninput={(event) => {
-											const val = Number((event.currentTarget as HTMLInputElement).value);
-											onUpdateServiceEditPort(service.id, portIndex, {
-												containerPort: val,
-												servicePort: val
-											});
-										}}
-									/>
-								</div>
-								<div class="svc-protocol-toggle">
-									<button
-										type="button"
-										class="svc-proto-btn"
-										class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
-											?.protocol ?? port.protocol) === 'TCP'}
-										onclick={() =>
-											onUpdateServiceEditPort(service.id, portIndex, { protocol: 'TCP' })}
-										>TCP</button
+							<div class="flex items-center gap-2 px-4 py-3">
+								{#if serviceEditForms[service.id]}
+									<div style="flex: 1; min-width: 80px; max-width: 120px;">
+										<input
+											type="number"
+											min="1"
+											class="input text-sm"
+											placeholder="80"
+											value={serviceEditForms[service.id].ports[portIndex]?.containerPort ??
+												port.targetPort}
+											oninput={(event) => {
+												const val = Number((event.currentTarget as HTMLInputElement).value);
+												onUpdateServiceEditPort(service.id, portIndex, {
+													containerPort: val,
+													servicePort: val
+												});
+											}}
+										/>
+									</div>
+									<div class="svc-protocol-toggle">
+										<button
+											type="button"
+											class="svc-proto-btn"
+											class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
+												?.protocol ?? port.protocol) === 'TCP'}
+											onclick={() =>
+												onUpdateServiceEditPort(service.id, portIndex, { protocol: 'TCP' })}
+											>TCP</button
+										>
+										<button
+											type="button"
+											class="svc-proto-btn"
+											class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
+												?.protocol ?? port.protocol) === 'UDP'}
+											onclick={() =>
+												onUpdateServiceEditPort(service.id, portIndex, { protocol: 'UDP' })}
+											>UDP</button
+										>
+									</div>
+								{:else}
+									<span
+										class="text-sm font-mono font-medium"
+										style="color: var(--center-channel-color);">{port.targetPort}</span
 									>
-									<button
-										type="button"
-										class="svc-proto-btn"
-										class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
-											?.protocol ?? port.protocol) === 'UDP'}
-										onclick={() =>
-											onUpdateServiceEditPort(service.id, portIndex, { protocol: 'UDP' })}
-										>UDP</button
+									<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]"
+										>{port.protocol}</span
 									>
-								</div>
-							{:else}
-								<span
-									class="text-sm font-mono font-medium"
-									style="color: var(--center-channel-color);">{port.targetPort}</span
-								>
-								<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]"
-									>{port.protocol}</span
-								>
-								{#if port.publicEnabled && port.publicPort}
-									{@const pubEndpoint = `${PUBLIC_DEPLOYMENT_DOMAIN}:${port.publicPort}`}
-									<button
-										type="button"
-										class="svc-public-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono"
-										onclick={() => {
-											navigator.clipboard.writeText(pubEndpoint);
-											toasts.add({
-												title: 'Copied public endpoint',
-												description: pubEndpoint,
-												color: 'success'
-											});
-										}}
-										title="Click to copy public endpoint"
-									>
-										<Wifi size={12} class="h-3 w-3" />
-										<span>{pubEndpoint}</span>
-										<Copy size={12} class="h-3 w-3 opacity-60" />
-									</button>
+									{#if port.publicEnabled && port.publicPort}
+										{@const pubEndpoint = `${PUBLIC_DEPLOYMENT_DOMAIN}:${port.publicPort}`}
+										<button
+											type="button"
+											class="svc-public-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono"
+											onclick={() => {
+												navigator.clipboard.writeText(pubEndpoint);
+												toasts.add({
+													title: 'Copied public endpoint',
+													description: pubEndpoint,
+													color: 'success'
+												});
+											}}
+											title="Click to copy public endpoint"
+										>
+											<Wifi size={12} class="h-3 w-3" />
+											<span>{pubEndpoint}</span>
+											<Copy size={12} class="h-3 w-3 opacity-60" />
+										</button>
+									{/if}
 								{/if}
-							{/if}
-							<div class="flex-1"></div>
-							{#if !serviceEditForms[service.id] && port.id}
-								{#if port.publicEnabled}
+								<div class="flex-1"></div>
+								{#if !serviceEditForms[service.id] && port.id}
+									{#if port.publicEnabled}
+										<button
+											type="button"
+											class="btn btn-ghost btn-sm"
+											onclick={() => onTogglePortPublic(service.id, port.id, true)}
+											disabled={portPublicBusyId === port.id}
+											title="Stop exposing this port publicly"
+										>
+											{#if portPublicBusyId === port.id}
+												<Loader2 class="h-3.5 w-3.5 animate-spin" />
+											{:else}
+												<Lock class="h-3.5 w-3.5" />
+											{/if}
+											<span class="ml-1 text-xs">Unexpose</span>
+										</button>
+									{:else}
+										<button
+											type="button"
+											class="btn btn-secondary btn-sm"
+											onclick={() => onTogglePortPublic(service.id, port.id, false)}
+											disabled={portPublicBusyId === port.id}
+											title={`Open a public ${port.protocol || 'TCP'} endpoint for non-HTTP traffic`}
+										>
+											{#if portPublicBusyId === port.id}
+												<Loader2 class="h-3.5 w-3.5 animate-spin" />
+											{:else}
+												<Wifi size={14} class="h-3.5 w-3.5" />
+											{/if}
+											<span class="ml-1 text-xs">Expose {port.protocol || 'TCP'}</span>
+										</button>
+									{/if}
+								{/if}
+								{#if !serviceEditForms[service.id]}
 									<button
 										type="button"
 										class="btn btn-ghost btn-sm"
-										onclick={() => onTogglePortPublic(service.id, port.id, true)}
-										disabled={portPublicBusyId === port.id}
-										title="Stop exposing this port publicly"
+										title="Edit port"
+										onclick={() => onToggleServiceEdit(service)}
 									>
-										{#if portPublicBusyId === port.id}
-											<Loader2 class="h-3.5 w-3.5 animate-spin" />
-										{:else}
-											<Lock class="h-3.5 w-3.5" />
-										{/if}
-										<span class="ml-1 text-xs">Unexpose</span>
-									</button>
-								{:else}
-									<button
-										type="button"
-										class="btn btn-secondary btn-sm"
-										onclick={() => onTogglePortPublic(service.id, port.id, false)}
-										disabled={portPublicBusyId === port.id}
-										title={`Open a public ${port.protocol || 'TCP'} endpoint for non-HTTP traffic`}
-									>
-										{#if portPublicBusyId === port.id}
-											<Loader2 class="h-3.5 w-3.5 animate-spin" />
-										{:else}
-											<Wifi size={14} class="h-3.5 w-3.5" />
-										{/if}
-										<span class="ml-1 text-xs">Expose {port.protocol || 'TCP'}</span>
+										<Settings size={14} class="h-3.5 w-3.5" />
 									</button>
 								{/if}
-							{/if}
-							{#if !serviceEditForms[service.id]}
 								<button
 									type="button"
 									class="btn btn-ghost btn-sm"
-									title="Edit port"
-									onclick={() => onToggleServiceEdit(service)}
+									style="color: var(--error-text-color);"
+									onclick={() => onDeleteService(service.id)}
+									disabled={serviceDeletingId === service.id}
 								>
-									<Settings size={14} class="h-3.5 w-3.5" />
+									{#if serviceDeletingId === service.id}<Loader2
+											class="h-3.5 w-3.5 animate-spin"
+										/>{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
+								</button>
+							</div>
+							{#if internalUrl && !serviceEditForms[service.id]}
+								<button
+									type="button"
+									class="svc-internal-row"
+									onclick={() =>
+										onCopyInternalUrl(internalUrl, `${service.id}:${port.id ?? portIndex}`)}
+									title="Copy internal address"
+								>
+									<Network size={12} class="h-3 w-3 shrink-0 opacity-60" />
+									<span class="svc-internal-url">{internalUrl}</span>
+									{#if copiedUrlId === `${service.id}:${port.id ?? portIndex}`}
+										<Check size={12} class="h-3 w-3 shrink-0" />
+									{:else}
+										<Copy size={12} class="h-3 w-3 shrink-0 opacity-50" />
+									{/if}
 								</button>
 							{/if}
-							<button
-								type="button"
-								class="btn btn-ghost btn-sm"
-								style="color: var(--error-text-color);"
-								onclick={() => onDeleteService(service.id)}
-								disabled={serviceDeletingId === service.id}
-							>
-								{#if serviceDeletingId === service.id}<Loader2
-										class="h-3.5 w-3.5 animate-spin"
-									/>{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
-							</button>
 						</div>
 					{/each}
 					{#if serviceEditForms[service.id]}

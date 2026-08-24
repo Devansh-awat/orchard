@@ -4194,18 +4194,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return services.map((service) => {
-      const serviceName = service.name;
+      const host = `${service.name}.${namespace}.svc.cluster.local`;
       const ports = service.ports || [];
-      
-      const internalUrls = ports.map((port: any) => {
-        const portNumber = port.port || service.port || 80;
-        return `${serviceName}.${namespace}.svc.cluster.local:${portNumber}`;
-      });
+
+      // Address the Service's own port, not the container's targetPort: in-cluster
+      // traffic hits the Service, which is what forwards to targetPort on the pod.
+      // The two are equal for anything created through the UI, but a service
+      // built any other way would otherwise be advertised on an unroutable port.
+      const portsWithUrls = ports.map((port: any) => ({
+        ...port,
+        internalUrl: `${host}:${port.port || port.targetPort || service.port || 80}`,
+      }));
+
+      const internalUrls = portsWithUrls.map((p: any) => p.internalUrl);
+      const fallback = `${host}:${service.port || 80}`;
 
       return {
         ...service,
-        internalUrl: internalUrls.length > 0 ? internalUrls[0] : `${serviceName}.${namespace}.svc.cluster.local:${service.port || 80}`,
-        internalUrls: internalUrls.length > 0 ? internalUrls : [`${serviceName}.${namespace}.svc.cluster.local:${service.port || 80}`],
+        ports: portsWithUrls.length > 0 ? portsWithUrls : ports,
+        internalHost: host,
+        internalUrl: internalUrls.length > 0 ? internalUrls[0] : fallback,
+        internalUrls: internalUrls.length > 0 ? internalUrls : [fallback],
       };
     });
   }

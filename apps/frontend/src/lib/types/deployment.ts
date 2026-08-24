@@ -30,6 +30,7 @@ export interface ServicePortConfig {
 	nodePort?: number | null;
 	publicEnabled?: boolean;
 	publicPort?: number | null;
+	internalUrl?: string;
 }
 
 export interface Service {
@@ -43,6 +44,7 @@ export interface Service {
 	externalIp?: string | null;
 	domain?: string | null;
 	ports?: ServicePortConfig[];
+	internalHost?: string;
 	internalUrl?: string;
 	internalUrls?: string[];
 }

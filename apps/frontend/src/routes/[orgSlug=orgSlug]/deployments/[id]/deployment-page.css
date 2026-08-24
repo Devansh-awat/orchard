@@ -3446,3 +3446,40 @@ a.dep-meta-lead-link:hover {
 .dep-stack > .da-stack {
 	margin-top: var(--space-2);
 }
+
+/* Per-port internal cluster address, under the port's controls */
+.svc-internal-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	width: 100%;
+	padding: 0.5rem 1rem 0.625rem;
+	border: none;
+	border-top: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+	background: none;
+	color: var(--text-muted);
+	font-size: var(--text-caption);
+	text-align: left;
+	cursor: pointer;
+	transition:
+		color var(--dur-fast),
+		background-color var(--dur-fast);
+}
+
+.svc-internal-row:hover {
+	color: var(--text-default);
+	background-color: var(--bg-hover);
+}
+
+.svc-internal-url {
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
+}
+
+.svc-port-block {
+	overflow: hidden;
+}
