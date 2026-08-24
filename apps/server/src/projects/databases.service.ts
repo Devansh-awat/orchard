@@ -97,6 +97,29 @@ export class DatabasesService {
 
   private readonly IMPORT_BOOST_MEMORY_BYTES = 1024 * 1024 * 1024;
 
+  // Ceiling on CNPG instances per cluster (1 primary + N-1 standbys). Every
+  // extra instance is a full pod plus its own PVC, so self-hosters running on
+  // a small cluster will want this lower — and a big one, higher.
+  get maxReplicas(): number {
+    const raw = Number.parseInt(process.env.MAX_DATABASE_REPLICAS || '', 10);
+    return Number.isFinite(raw) && raw >= 1 ? raw : 5;
+  }
+
+  /** Validate a user-supplied replica count against the instance ceiling. */
+  resolveReplicas(input: number | null | undefined): number {
+    if (input == null) return 1;
+    const n = Number(input);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new BadRequestException('Replicas must be a whole number of at least 1');
+    }
+    if (n > this.maxReplicas) {
+      throw new BadRequestException(
+        `Replicas cannot exceed ${this.maxReplicas} on this instance`,
+      );
+    }
+    return n;
+  }
+
   /**
    * Build the R2/backup config object that gets handed to the in-cluster
    * barman sidecar. When the r2-proxy is enabled we mint a per-cluster fake
@@ -265,6 +288,7 @@ export class DatabasesService {
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
       pgMajor?: number;
+      replicas?: number | null;
       nodePoolId?: string | null;
       placementOverride?: unknown;
     },
@@ -398,6 +422,8 @@ export class DatabasesService {
       }
     }
 
+    const replicas = this.resolveReplicas(data.replicas);
+
     const dbResources = await this.quotasService.resolvePodResources(projectId, {
       cpuRequestMilli: data.cpuRequestMilli ?? null,
       memoryRequestBytes: data.memoryRequestBytes ?? null,
@@ -412,12 +438,19 @@ export class DatabasesService {
       provisionResources.cpuMilli !== dbResources.cpuMilli ||
       provisionResources.memoryBytes !== dbResources.memoryBytes;
 
+    // Each instance is a full pod at the resolved size, so a 3-replica cluster
+    // bills three times over against the org cap and the owner's allowance.
+    const provisionTotal = {
+      cpuMilli: provisionResources.cpuMilli * replicas,
+      memoryBytes: provisionResources.memoryBytes * replicas,
+    };
+
     try {
-      await this.quotasService.enforceOrgCapForNewPod(project.organizationId, provisionResources);
+      await this.quotasService.enforceOrgCapForNewPod(project.organizationId, provisionTotal);
       await this.quotasService.enforceMemberAllowanceForNewPod(
         project.organizationId,
         project.ownerId,
-        provisionResources,
+        provisionTotal,
       );
     } catch (e: any) {
       if (importBoosted) {
@@ -454,6 +487,7 @@ export class DatabasesService {
         storageSize,
         r2,
         resources: provisionResources,
+        instances: replicas,
         placement: dbPlacement,
         importFrom,
         imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`,
@@ -483,6 +517,7 @@ export class DatabasesService {
           namespace,
           clusterName,
           storageSize,
+          replicas,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
           memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
           importBoosted,
@@ -536,7 +571,7 @@ export class DatabasesService {
       targetType: 'database',
       targetId: database.id,
       targetLabel: database.name,
-      metadata: { mode: 'cnpg', storageSize },
+      metadata: { mode: 'cnpg', storageSize, replicas },
     });
 
     return stripR2ProxyCreds(database as any);
@@ -622,10 +657,20 @@ export class DatabasesService {
       } catch { /* ignore */ }
     }
 
+    // All three exist for any CNPG cluster; on a single-instance one -ro simply
+    // has no endpoints behind it, which the UI shows as inactive rather than
+    // hiding, since it goes live the moment a standby joins.
+    const endpoints =
+      database.mode === 'cnpg' && database.clusterName && database.namespace
+        ? this.k8sCnpg.clusterEndpoints(database.namespace, database.clusterName)
+        : null;
+
     const result: any = {
       ...database,
       connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.host}:${database.port}/${database.dbName}`,
       internalHost: `${database.host}:${database.port}`,
+      endpoints,
+      maxReplicas: this.maxReplicas,
       publicHostname,
       publicConnectionString,
       liveStatus,
@@ -1091,6 +1136,85 @@ export class DatabasesService {
     return { success: true };
   }
 
+  /**
+   * Scale a CNPG cluster to `replicas` total instances (1 primary + N-1 standbys).
+   *
+   * Quota is charged on the delta, the same way deployment scaling works: growing
+   * by Δ instances adds Δ pods' worth of the cluster's per-instance resources to
+   * the org cap and the project owner's allowance, while shrinking is always
+   * allowed. The write lands before the K8s patch is acknowledged as complete,
+   * so the row and the cluster agree even if the standby takes a while to join.
+   */
+  async updateDatabaseReplicas(
+    databaseId: string,
+    replicas: number,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Replicas require a CNPG-backed database');
+    }
+    if (database.importBoosted) {
+      throw new BadRequestException(
+        'Replicas cannot be changed while the initial import is running. Try again once provisioning completes.',
+      );
+    }
+
+    const desired = this.resolveReplicas(replicas);
+    const current = Math.max(1, database.replicas ?? 1);
+    if (desired === current) {
+      return stripR2ProxyCreds(database as any);
+    }
+
+    const delta = desired - current;
+    if (delta > 0) {
+      const perInstance = await this.quotasService.resolvePodResources(database.projectId, {
+        cpuRequestMilli: database.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
+      }, 'postgres');
+      const requested = {
+        cpuMilli: perInstance.cpuMilli * delta,
+        memoryBytes: perInstance.memoryBytes * delta,
+      };
+      await this.quotasService.enforceOrgCapForNewPod(
+        database.project.organizationId,
+        requested,
+      );
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        database.project.organizationId,
+        database.project.ownerId,
+        requested,
+      );
+    }
+
+    await this.k8sCnpg.updateCnpgClusterInstances(
+      database.namespace,
+      database.clusterName,
+      desired,
+    );
+
+    const updated = await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { replicas: desired },
+    });
+
+    void this.audit.log({
+      action: 'database.replicas.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+      metadata: { replicas: [current, desired] },
+    });
+
+    return stripR2ProxyCreds(updated as any);
+  }
+
   async restartDatabase(databaseId: string, clerkId: string, userData?: any) {
     const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -1455,6 +1579,7 @@ export class DatabasesService {
             sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || undefined,
             r2: restoreR2.r2,
             newClusterName: predictedNewClusterName,
+            instances: database.replicas ?? 1,
             imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`,
           },
         );

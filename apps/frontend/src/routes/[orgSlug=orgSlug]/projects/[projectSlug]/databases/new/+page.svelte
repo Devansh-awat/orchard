@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import {
@@ -12,7 +13,7 @@
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, Field, Input, Select } from '$lib/components/ui';
+	import { Button, Field, Input, Select, Slider } from '$lib/components/ui';
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -25,6 +26,14 @@
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let restoreFromUrl = $state('');
+	let replicas = $state(1);
+	let maxReplicas = $state(5);
+
+	const replicaHint = $derived(
+		replicas === 1
+			? 'A single instance. If its node goes down the database goes with it.'
+			: `One primary and ${replicas - 1} hot ${replicas === 2 ? 'standby' : 'standbys'}, each a full pod with its own volume. Uses ${replicas}x the CPU and memory below.`
+	);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -55,6 +64,20 @@
 		}
 	}
 
+	async function fetchLimits() {
+		try {
+			const response = await apiFetch('/apiv1/databases/limits');
+			if (!response.ok) return;
+			const limits = await response.json();
+			if (Number.isFinite(limits?.maxReplicas)) {
+				maxReplicas = Math.max(1, limits.maxReplicas);
+				replicas = Math.min(replicas, maxReplicas);
+			}
+		} catch {
+			// Non-fatal: the slider keeps the default ceiling and the API still validates.
+		}
+	}
+
 	async function handleSubmit() {
 		if (!project || !name.trim()) return;
 
@@ -72,7 +95,8 @@
 					cpuRequestMilli: resourceCpuMilli,
 					memoryRequestBytes: resourceMemoryBytes,
 					restoreFromUrl: restoreFromUrl.trim() || undefined,
-					pgMajor
+					pgMajor,
+					replicas
 				})
 			});
 
@@ -105,6 +129,8 @@
 			fetchProject();
 		}
 	});
+
+	onMount(fetchLimits);
 </script>
 
 <div class="nd-page">
@@ -210,6 +236,20 @@
 					/>
 				</Field>
 
+				<Field label="Instances" hint={replicaHint}>
+					<div class="nd-replicas">
+						<Slider
+							bind:value={replicas}
+							min={1}
+							max={maxReplicas}
+							label="PostgreSQL instances"
+							ticks
+							disabled={submitting}
+						/>
+						<span class="nd-replicas-value">{replicas}</span>
+					</div>
+				</Field>
+
 				<Field label="Resources">
 					<ResourcePicker
 						bind:cpuMilli={resourceCpuMilli}
@@ -286,6 +326,21 @@
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
+	}
+
+	.nd-replicas {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+	}
+
+	.nd-replicas-value {
+		font-family: var(--font-mono);
+		font-size: var(--text-headline);
+		font-weight: 600;
+		color: var(--text-default);
+		min-width: 1.25rem;
+		text-align: right;
 	}
 
 	.nd-hint {

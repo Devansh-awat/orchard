@@ -1123,6 +1123,10 @@ model Database {
   containerName       String? @map("container_name") @db.VarChar(100)
   storageSize         String? @map("storage_size") @db.VarChar(20)
   clusterName         String? @map("cluster_name") @db.VarChar(100)
+  // Total CNPG instances: 1 primary + (replicas - 1) hot standbys. Every
+  // instance gets its own pod and its own PVC, so this multiplies the
+  // cluster's CPU/memory footprint against the org cap and member allowance.
+  replicas            Int     @default(1)
   pgMajor             Int     @default(17) @map("pg_major")
   pgParameters        Json?   @map("pg_parameters")
   sharedPreloadLibs   Json?   @map("shared_preload_libs")

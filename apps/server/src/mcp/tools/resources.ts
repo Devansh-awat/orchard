@@ -91,14 +91,23 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
           .positive()
           .optional()
           .describe('Memory request in bytes (e.g. 536870912 = 512Mi).'),
+        replicas: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            'Total PostgreSQL instances: 1 primary plus (replicas - 1) hot standbys. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.',
+          ),
       },
     },
-    async ({ projectId, name, storageSize, restoreFromUrl, cpuRequestMilli, memoryRequestBytes }) => {
+    async ({ projectId, name, storageSize, restoreFromUrl, cpuRequestMilli, memoryRequestBytes, replicas }) => {
       const body: Record<string, unknown> = { name };
       if (storageSize) body.storageSize = storageSize;
       if (restoreFromUrl) body.restoreFromUrl = restoreFromUrl;
       if (cpuRequestMilli != null) body.cpuRequestMilli = cpuRequestMilli;
       if (memoryRequestBytes != null) body.memoryRequestBytes = memoryRequestBytes;
+      if (replicas != null) body.replicas = replicas;
       const database = await client.post(`/projects/${projectId}/databases`, body);
       return { content: [{ type: 'text', text: JSON.stringify(database, null, 2) }] };
     },
@@ -188,6 +197,42 @@ Pass null for either field to clear it and fall back to the default.`,
       if (cpuRequestMilli !== undefined) body.cpuRequestMilli = cpuRequestMilli;
       if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
       const result = await client.patch(`/databases/${databaseId}/resources`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_database_limits',
+    {
+      description:
+        'Instance-wide limits for managed databases, currently just maxReplicas — the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
+      annotations: { readOnlyHint: true },
+      inputSchema: {},
+    },
+    async () => {
+      const limits = await client.get('/databases/limits');
+      return { content: [{ type: 'text', text: JSON.stringify(limits, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'scale_database',
+    {
+      description: `Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) hot standbys. Use this for read scaling and high availability — with more than one instance CNPG fails over to a standby automatically when the primary dies.
+Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
+Scaling up is not instant — a new standby has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID'),
+        replicas: z
+          .number()
+          .int()
+          .positive()
+          .describe('Total instance count, at least 1. The ceiling comes from get_database_limits.'),
+      },
+    },
+    async ({ databaseId, replicas }) => {
+      const result = await client.patch(`/databases/${databaseId}/replicas`, { replicas });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

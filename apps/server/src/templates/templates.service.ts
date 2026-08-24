@@ -294,6 +294,7 @@ export class TemplatesService implements OnModuleInit {
               {
                 name: config.name,
                 templateInstanceId: instance.id,
+                replicas: config.replicas ? Number(config.replicas) : 1,
                 cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
                 memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
               },

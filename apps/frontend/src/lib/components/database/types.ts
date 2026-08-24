@@ -25,9 +25,12 @@ export interface DatabaseDetail {
 	}[];
 	cpuRequestMilli?: number | null;
 	memoryRequestBytes?: number | null;
+	replicas?: number;
+	maxReplicas?: number;
 	clusterName?: string | null;
 	connectionString: string;
 	internalHost: string;
+	endpoints?: { rw: string; ro: string; r: string } | null;
 	createdAt: string;
 	backupsEnabled?: boolean;
 	backupScheduleCron?: string | null;

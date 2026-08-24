@@ -36,7 +36,8 @@
 		DatabaseHeader,
 		DeleteModal,
 		DatabaseAlerts,
-		QueriesTab
+		QueriesTab,
+		ReplicasCard
 	} from '$lib/components/database';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import type {
@@ -232,6 +233,12 @@
 	let resourceMemoryBytes = $state<number | null>(null);
 	let resourcesDirty = $state(false);
 	let savingResources = $state(false);
+
+	// Replicas. `replicasDirty` guards the same way `resourcesDirty` does: a
+	// silent refetch must not snap the slider back while an edit is pending.
+	let scaleReplicas = $state(1);
+	let replicasDirty = $state(false);
+	let savingReplicas = $state(false);
 
 	// Tabs
 	const tabSections = [
@@ -458,6 +465,9 @@
 				resourceMemoryBytes =
 					database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
 			}
+			if (!replicasDirty) {
+				scaleReplicas = Math.max(1, database?.replicas ?? 1);
+			}
 		} catch (e) {
 			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
 		} finally {
@@ -517,6 +527,40 @@
 			});
 		} finally {
 			savingResources = false;
+		}
+	}
+
+	async function scaleDatabase() {
+		if (!database) return;
+		savingReplicas = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/replicas`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ replicas: scaleReplicas })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to scale database');
+			}
+			toasts.add({
+				title: `Scaling to ${scaleReplicas}`,
+				description:
+					scaleReplicas === 1
+						? 'Standbys are being retired.'
+						: 'New standbys clone the primary before they report ready.',
+				color: 'success'
+			});
+			replicasDirty = false;
+			await fetchDatabase(true);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to scale database',
+				color: 'error'
+			});
+		} finally {
+			savingReplicas = false;
 		}
 	}
 
@@ -1298,6 +1342,15 @@
 			{:else if activeTab === 'resources'}
 				<section class="tab-panel">
 					{#if database?.mode !== 'shared'}
+						{#if database?.mode === 'cnpg'}
+							<ReplicasCard
+								{database}
+								bind:replicas={scaleReplicas}
+								bind:replicasDirty
+								saving={savingReplicas}
+								onScale={scaleDatabase}
+							/>
+						{/if}
 						<ResourceLimits
 							entity={database}
 							bind:resourceCpuMilli

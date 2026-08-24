@@ -314,14 +314,20 @@ export class ProjectsService {
       cpuRequestMilli: data.cpuRequestMilli,
       memoryRequestBytes: data.memoryRequestBytes,
     }, 'postgres');
-    await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, {
-      cpuMilli: resolved.cpuMilli,
-      memoryBytes: resolved.memoryBytes,
-    });
+    // The new size applies to every instance in the cluster, not just the primary.
+    const instances = Math.max(1, database.replicas ?? 1);
+    const requested = {
+      cpuMilli: resolved.cpuMilli * instances,
+      memoryBytes: resolved.memoryBytes * instances,
+    };
+    await this.quotasService.enforceOrgCapForNewPod(
+      database.project.organizationId,
+      requested,
+    );
     await this.quotasService.enforceMemberAllowanceForNewPod(
       database.project.organizationId,
       database.project.ownerId,
-      { cpuMilli: resolved.cpuMilli, memoryBytes: resolved.memoryBytes },
+      requested,
     );
 
     await this.k8sCnpg.updateCnpgClusterResources(

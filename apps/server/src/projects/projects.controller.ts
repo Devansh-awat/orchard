@@ -492,6 +492,7 @@ export class ProjectsController {
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
       pgMajor?: number;
+      replicas?: number | null;
       nodePoolId?: string | null;
       placementOverride?: unknown;
     },
@@ -1796,6 +1797,13 @@ export class DatabasesController {
     return this.projectsService.listDatabasesSummary(req.user.sub, orgId);
   }
 
+  // Instance-wide database limits the create form needs before a database
+  // exists. Declared above @Get(':id') so it isn't swallowed by the wildcard.
+  @Get('limits')
+  async getDatabaseLimits() {
+    return { maxReplicas: this.databases.maxReplicas };
+  }
+
   @Get(':id')
 
   async getDatabase(@Param('id') id: string, @Request() req, @Query('fast') fast?: string) {
@@ -1866,6 +1874,18 @@ export class DatabasesController {
       cpuRequestMilli: body.cpuRequestMilli ?? null,
       memoryRequestBytes: body.memoryRequestBytes ?? null,
     }, user.id);
+  }
+
+  @Patch(':id/replicas')
+  async updateDatabaseReplicas(
+    @Param('id') id: string,
+    @Body() body: { replicas?: number },
+    @Request() req,
+  ) {
+    return this.databases.updateDatabaseReplicas(id, Number(body?.replicas), req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Post(':id/stop')

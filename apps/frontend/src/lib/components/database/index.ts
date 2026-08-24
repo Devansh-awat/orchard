@@ -7,6 +7,7 @@ export { default as SettingsTab } from './SettingsTab.svelte';
 export { default as DatabaseHeader } from './DatabaseHeader.svelte';
 export { default as DeleteModal } from './DeleteModal.svelte';
 export { default as DatabaseAlerts } from './DatabaseAlerts.svelte';
+export { default as ReplicasCard } from './ReplicasCard.svelte';
 export type {
 	DatabaseDetail,
 	Backup,

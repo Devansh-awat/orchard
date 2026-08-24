@@ -65,6 +65,51 @@
 		{ id: 'jdbc', label: 'JDBC' }
 	] as const;
 
+	const instances = $derived(Math.max(1, database.replicas ?? 1));
+
+	// CNPG publishes one service per read/write role. -ro exists on a
+	// single-instance cluster but has no endpoints behind it, so it is shown
+	// dimmed rather than hidden: it becomes live the moment a standby joins.
+	const endpointRows = $derived.by(() => {
+		const e = database.endpoints;
+		if (!e) return [];
+		return [
+			{
+				key: 'rw',
+				host: e.rw,
+				label: 'Read-write',
+				note: 'Always the current primary, and it follows a failover. Writes must use this.',
+				idle: false
+			},
+			{
+				key: 'ro',
+				host: e.ro,
+				label: 'Read-only',
+				note:
+					instances > 1
+						? 'Standbys only, load balanced across them. Replication lag means reads can be slightly stale.'
+						: 'Standbys only. Nothing answers here until this cluster runs more than one instance.',
+				idle: instances < 2
+			},
+			{
+				key: 'r',
+				host: e.r,
+				label: 'Read',
+				note: 'Every instance including the primary, load balanced. Safe to use at any size.',
+				idle: false
+			}
+		];
+	});
+
+	function endpointUri(host: string) {
+		const pw = showConnectionString ? database.dbPassword : '••••••••';
+		return `postgresql://${database.dbUser}:${pw}@${host}:${database.port}/${database.dbName}`;
+	}
+
+	function endpointCopyUri(host: string) {
+		return `postgresql://${database.dbUser}:${database.dbPassword}@${host}:${database.port}/${database.dbName}`;
+	}
+
 	const dlRows = $derived([
 		{ key: 'host', label: 'Host', value: database.host, copy: database.host },
 		{ key: 'port', label: 'Port', value: String(database.port), copy: String(database.port) },
@@ -156,6 +201,39 @@
 			{@render detailList()}
 		</div>
 	</div>
+
+	{#if endpointRows.length > 0}
+		<SectionCard
+			title="Cluster endpoints"
+			description="Three in-cluster hostnames route to different members of the cluster. Point writes at read-write and spread reads across the others."
+		>
+			<div class="dbc-eps">
+				{#each endpointRows as ep (ep.key)}
+					<div class="dbc-ep" class:dbc-ep--idle={ep.idle}>
+						<div class="dbc-ep-head">
+							<Badge tone={ep.key === 'rw' ? 'info' : 'neutral'}>{ep.label}</Badge>
+							<code class="dbc-ep-suffix">-{ep.key}</code>
+						</div>
+						<div class="dbc-ep-row">
+							<code class="dbc-ep-uri">{endpointUri(ep.host)}</code>
+							<Button
+								variant="ghost"
+								size="sm"
+								class="shrink-0"
+								onclick={() => onCopy(endpointCopyUri(ep.host), `ep-${ep.key}`)}
+								aria-label={`Copy ${ep.label.toLowerCase()} connection string`}
+							>
+								{#if copiedField === `ep-${ep.key}`}<Check class="h-3.5 w-3.5" />{:else}<Copy
+										class="h-3.5 w-3.5"
+									/>{/if}
+							</Button>
+						</div>
+						<p class="dbc-ep-note">{ep.note}</p>
+					</div>
+				{/each}
+			</div>
+		</SectionCard>
+	{/if}
 
 	{#if database.mode === 'cnpg'}
 		<SectionCard
@@ -312,6 +390,50 @@
 		display: flex;
 		gap: 0.25rem;
 		flex-shrink: 0;
+	}
+	.dbc-eps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+	}
+	.dbc-ep--idle {
+		opacity: 0.55;
+	}
+	.dbc-ep-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.375rem;
+	}
+	.dbc-ep-suffix {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+	}
+	.dbc-ep-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.625rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background-color: var(--bg-sunken);
+		min-width: 0;
+	}
+	.dbc-ep-uri {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-footnote);
+		color: var(--text-default);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		flex: 1;
+		min-width: 0;
+	}
+	.dbc-ep-note {
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+		margin: 0.375rem 0 0;
 	}
 	.dbc-dl {
 		display: grid;

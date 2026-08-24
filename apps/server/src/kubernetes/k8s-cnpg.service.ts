@@ -214,6 +214,55 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     } catch { /* ignore — pod listing/deletion is best-effort */ }
   }
 
+  /**
+   * The three services CNPG publishes for every cluster.
+   *
+   * `-rw` always points at the current primary and is the only one that accepts
+   * writes; `-ro` load-balances across the standbys only (and has no endpoints
+   * at all on a single-instance cluster); `-r` load-balances across every
+   * instance including the primary, so it is the safe read endpoint at any size.
+   */
+  clusterEndpoints(namespace: string, clusterName: string) {
+    const suffix = `${namespace}.svc.cluster.local`;
+    return {
+      rw: `${clusterName}-rw.${suffix}`,
+      ro: `${clusterName}-ro.${suffix}`,
+      r: `${clusterName}-r.${suffix}`,
+    };
+  }
+
+  /**
+   * Set the cluster's instance count (1 primary + N-1 hot standbys).
+   *
+   * Deliberately does NOT force-delete pods the way updateCnpgClusterResources
+   * does: the operator grows the cluster by cloning the primary into a fresh
+   * PVC and shrinks it by retiring the highest-numbered standby, and deleting
+   * pods underneath that would abort a join or trigger a needless failover.
+   */
+  async updateCnpgClusterInstances(
+    namespace: string,
+    clusterName: string,
+    instances: number,
+  ) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const desired = Math.max(1, Math.trunc(instances));
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const patch = [{ op: 'replace', path: '/spec/instances', value: desired }];
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/json-patch+json' } },
+    );
+  }
+
   async expandCnpgClusterStorage(
     namespace: string,
     clusterName: string,
@@ -1005,6 +1054,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     imageName?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
     resources?: { cpuMilli: number; memoryBytes: number };
+    instances?: number;
     placement?: ResolvedPlacement;
     importFrom?: {
       host: string;
@@ -1054,7 +1104,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     const clusterSpec: any = {
-      instances: 1,
+      instances: Math.max(1, Math.trunc(options.instances || 1)),
       imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
       primaryUpdateStrategy: 'unsupervised',
       storage: {
@@ -1657,6 +1707,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       sharedPreloadLibraries?: string[];
       r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
       newClusterName?: string;
+      instances?: number;
     },
   ): Promise<{ host: string; port: number; newClusterName: string }> {
     this.ensureKubeConfig();
@@ -1687,7 +1738,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     const spec: any = {
-      instances: 1,
+      instances: Math.max(1, Math.trunc(options.instances || 1)),
       imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
       storage: { size: options.storageSize || '1Gi', storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn' },
       bootstrap: {

@@ -543,6 +543,7 @@ export class QuotasService {
             name: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
+            replicas: true,
           },
         },
         templateInstances: {
@@ -584,8 +585,11 @@ export class QuotasService {
         });
       }
       for (const db of p.databases) {
-        const c = db.cpuRequestMilli ?? 0;
-        const m = db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0;
+        // A CNPG cluster runs `replicas` instances, each a full pod at the
+        // configured size — same arithmetic as a scaled deployment.
+        const instances = Math.max(1, db.replicas ?? 1);
+        const c = (db.cpuRequestMilli ?? 0) * instances;
+        const m = (db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0) * instances;
         cpu += c;
         mem += m;
         breakdown.push({
@@ -596,7 +600,7 @@ export class QuotasService {
           projectName: p.name,
           cpuMilli: c,
           memoryBytes: m,
-          replicas: 1,
+          replicas: instances,
         });
       }
     }
