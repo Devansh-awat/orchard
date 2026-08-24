@@ -97,7 +97,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
           .positive()
           .optional()
           .describe(
-            'Total PostgreSQL instances: 1 primary plus (replicas - 1) hot standbys. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.',
+            'Total PostgreSQL instances: 1 primary plus (replicas - 1) read replicas. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.',
           ),
       },
     },
@@ -218,9 +218,9 @@ Pass null for either field to clear it and fall back to the default.`,
   server.registerTool(
     'scale_database',
     {
-      description: `Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) hot standbys. Use this for read scaling and high availability — with more than one instance CNPG fails over to a standby automatically when the primary dies.
+      description: `Change how many PostgreSQL instances a database cluster runs: 1 primary plus (replicas - 1) read replicas. The replicas are streaming hot standbys: they serve reads a few milliseconds behind the primary AND act as failover targets, so this buys read scaling and high availability at once. It does not buy write throughput, which is still one primary.
 Each instance is a full pod with its own volume, so scaling from 1 to 3 triples the cluster's CPU and memory usage; the API charges the difference against the organization cap and the project owner's member allowance and returns an error if it does not fit. Scaling down is always permitted.
-Scaling up is not instant — a new standby has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
+Scaling up is not instant — a new replica has to clone the primary before it reports ready. Reads that must never hit stale data should keep using the "rw" endpoint. See get_database for the rw/ro/r endpoints.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),

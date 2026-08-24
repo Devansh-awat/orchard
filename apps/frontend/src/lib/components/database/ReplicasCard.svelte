@@ -24,7 +24,7 @@
 	const description = $derived(
 		replicas === 1
 			? 'One instance. Reads and writes both go to it, and it has nothing to fail over to.'
-			: `One primary and ${replicas - 1} hot ${replicas === 2 ? 'standby' : 'standbys'}. Standbys stream from the primary, serve reads on the read endpoints, and one is promoted automatically if the primary goes away.`
+			: `One primary and ${replicas - 1} read ${replicas === 2 ? 'replica' : 'replicas'}. Replicas stream from the primary and serve reads on the read endpoints, a few milliseconds behind. They double as failover targets: if the primary goes away one is promoted automatically.`
 	);
 </script>
 
@@ -61,12 +61,12 @@
 			<p class="rc-warn">
 				Adding {replicas - current}
 				{replicas - current === 1 ? 'instance' : 'instances'} multiplies this cluster's CPU and memory
-				against your quota. Each new standby clones the primary before it reports ready.
+				against your quota. Each new replica clones the primary before it reports ready.
 			</p>
 		{:else if replicas < current}
 			<p class="rc-warn">
 				Removing {current - replicas}
-				{current - replicas === 1 ? 'instance' : 'instances'}. The highest numbered standbys are
+				{current - replicas === 1 ? 'instance' : 'instances'}. The highest numbered replicas are
 				retired and their volumes deleted.
 			</p>
 		{/if}

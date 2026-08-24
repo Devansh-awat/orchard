@@ -547,8 +547,8 @@
 				title: `Scaling to ${scaleReplicas}`,
 				description:
 					scaleReplicas === 1
-						? 'Standbys are being retired.'
-						: 'New standbys clone the primary before they report ready.',
+						? 'Read replicas are being retired.'
+						: 'New replicas clone the primary before they report ready.',
 				color: 'success'
 			});
 			replicasDirty = false;

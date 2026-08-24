@@ -32,7 +32,7 @@
 	const replicaHint = $derived(
 		replicas === 1
 			? 'A single instance. If its node goes down the database goes with it.'
-			: `One primary and ${replicas - 1} hot ${replicas === 2 ? 'standby' : 'standbys'}, each a full pod with its own volume. Uses ${replicas}x the CPU and memory below.`
+			: `One primary and ${replicas - 1} read ${replicas === 2 ? 'replica' : 'replicas'}, each a full pod with its own volume. Uses ${replicas}x the CPU and memory below.`
 	);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
