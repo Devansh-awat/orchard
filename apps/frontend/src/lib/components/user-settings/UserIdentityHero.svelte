@@ -4,6 +4,7 @@
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
 	import { Button, Input } from '$lib/components/ui';
+	import { avatarUrl } from '$lib/avatar';
 
 	interface UserData {
 		firstName?: string;
@@ -113,11 +114,7 @@
 	<div class="uh-top">
 		<div class="uh-avatar-wrap">
 			<div class="uh-avatar">
-				{#if user?.imageUrl}
-					<img src={user.imageUrl} alt={displayName} class="uh-avatar-img" />
-				{:else}
-					<span class="uh-avatar-letter">{displayName[0]}</span>
-				{/if}
+				<img src={avatarUrl(user)} alt={displayName} class="uh-avatar-img" />
 			</div>
 			<div class="uh-avatar-actions">
 				<button
@@ -268,11 +265,6 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-	}
-	.uh-avatar-letter {
-		font-size: var(--text-title-1);
-		line-height: var(--lh-title-1);
-		font-weight: 700;
 	}
 	.uh-avatar-actions {
 		position: absolute;

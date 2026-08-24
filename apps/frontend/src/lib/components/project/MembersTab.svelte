@@ -4,6 +4,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
+	import { avatarUrl } from '$lib/avatar';
 
 	let {
 		projectMembers,
@@ -155,13 +156,7 @@
 									onclick={() => onAddMember(om.user.email)}
 									disabled={addingMember}
 								>
-									{#if om.user.imageUrl}
-										<img src={om.user.imageUrl} alt="" class="pj-member-avatar" />
-									{:else}
-										<div class="pj-member-avatar pj-member-avatar--letter">
-											{(om.user.firstName ?? om.user.email).charAt(0).toUpperCase()}
-										</div>
-									{/if}
+									<img src={avatarUrl(om.user)} alt="" class="pj-member-avatar" />
 									<div class="pj-member-info">
 										<span class="pj-member-name">
 											{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user
@@ -237,13 +232,7 @@
 							from: { y: -10 }
 						})}
 					>
-						{#if m.user.imageUrl}
-							<img src={m.user.imageUrl} alt="" class="pj-member-avatar" />
-						{:else}
-							<div class="pj-member-avatar pj-member-avatar--letter">
-								{(m.user.firstName ?? m.user.email).charAt(0).toUpperCase()}
-							</div>
-						{/if}
+						<img src={avatarUrl(m.user)} alt="" class="pj-member-avatar" />
 						<div class="pj-member-info">
 							<span class="pj-member-name">
 								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user

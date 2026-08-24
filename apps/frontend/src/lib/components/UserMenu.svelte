@@ -2,8 +2,9 @@
 	import { user, pendingInvitations } from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
 	import { Moon, Monitor, Palette, Mail } from 'lucide-svelte';
-	import { User, Settings, LogOut, Sun, ChevronUp, KeyRound } from '@jis3r/icons';
+	import { Settings, LogOut, Sun, ChevronUp, KeyRound } from '@jis3r/icons';
 	import { browser } from '$app/environment';
+	import { Avatar } from '$lib/components/ui';
 	import {
 		motionPopover,
 		motionStagger as motionStaggerBase,
@@ -105,25 +106,7 @@
 			aria-label="User menu"
 			{@attach springHover()}
 		>
-			{#if $user?.imageUrl}
-				<img
-					src={$user.imageUrl}
-					alt={$user.name || $user.username || 'User'}
-					class="h-9 w-9 rounded-xl object-cover"
-				/>
-			{:else}
-				<div class="sidebar-footer-avatar">
-					{#if $user?.username || $user?.name || $user?.firstName}
-						<span class="text-sm font-medium"
-							>{($user?.username || $user?.name || $user?.firstName || 'U')
-								.charAt(0)
-								.toUpperCase()}</span
-						>
-					{:else}
-						<User size={16} />
-					{/if}
-				</div>
-			{/if}
+			<Avatar user={$user} size={36} shape="rounded" />
 			{#if $pendingInvitations.length > 0}
 				<span class="sidebar-notification-dot"></span>
 			{/if}
@@ -140,17 +123,7 @@
 			{@attach springHover({ lift: -1 })}
 		>
 			<div class="relative">
-				{#if $user?.imageUrl}
-					<img
-						src={$user.imageUrl}
-						alt={$user.name || $user.username || 'User'}
-						class="h-8 w-8 rounded-lg object-cover"
-					/>
-				{:else}
-					<div class="user-menu-avatar-fallback">
-						<User size={16} />
-					</div>
-				{/if}
+				<Avatar user={$user} size={32} shape="rounded" />
 				{#if $pendingInvitations.length > 0}
 					<span class="user-menu-notification-dot"></span>
 				{/if}
@@ -183,17 +156,7 @@
 		>
 			<!-- User info -->
 			<div class="user-menu-profile" {@attach motionStagger(0)}>
-				{#if $user?.imageUrl}
-					<img
-						src={$user.imageUrl}
-						alt={$user.name || $user.username || 'User'}
-						class="user-menu-profile-avatar"
-					/>
-				{:else}
-					<div class="user-menu-profile-avatar-fallback">
-						<User size={20} />
-					</div>
-				{/if}
+				<Avatar user={$user} size={36} shape="rounded" />
 				<div class="user-menu-profile-info">
 					<p class="user-menu-name text-sm font-semibold">
 						{$user?.name || $user?.firstName || $user?.username}
@@ -366,17 +329,6 @@
 		background-color: var(--sidebar-text-hover-bg);
 	}
 
-	.user-menu-avatar-fallback {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
-		color: var(--sidebar-text-active-border);
-	}
 
 	.user-menu-name {
 		color: var(--sidebar-text);
@@ -423,25 +375,7 @@
 		border-bottom: 1px solid var(--surface-border);
 	}
 
-	.user-menu-profile-avatar {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: var(--radius-md);
-		object-fit: cover;
-		flex-shrink: 0;
-	}
 
-	.user-menu-profile-avatar-fallback {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: var(--radius-md);
-		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
-		color: var(--sidebar-text-active-border);
-	}
 
 	.user-menu-profile-info {
 		min-width: 0;
@@ -585,18 +519,4 @@
 		}
 	}
 
-	.sidebar-footer-avatar {
-		display: flex;
-		width: 2.25rem;
-		height: 2.25rem;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--radius-md);
-		background-color: var(--sidebar-text-hover-bg);
-		color: var(--sidebar-text);
-		transition: background-color var(--dur-fast) ease;
-	}
-	.sidebar-footer-avatar:hover {
-		background-color: var(--sidebar-text-active-bg);
-	}
 </style>

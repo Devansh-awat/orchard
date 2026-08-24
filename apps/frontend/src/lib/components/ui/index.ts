@@ -39,4 +39,5 @@ export { default as Stepper } from './Stepper.svelte';
 export { default as SettingsRail } from './SettingsRail.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as Slider } from './Slider.svelte';
+export { default as Avatar } from './Avatar.svelte';
 export { default as ColorField } from './ColorField.svelte';

@@ -16,6 +16,7 @@
 		type GroveThread
 	} from '$lib/components/grove/grove';
 	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
+	import { avatarUrl } from '$lib/avatar';
 
 	let categories = $state<GroveCategory[]>([]);
 	let threads = $state<GroveThread[]>([]);
@@ -240,11 +241,7 @@
 						<h2 class="gv-card-title">{t.title}</h2>
 						<p class="gv-card-snippet">{t.snippet}</p>
 						<div class="gv-card-foot">
-							{#if t.author.imageUrl}
-								<img src={t.author.imageUrl} alt="" class="gv-av" loading="lazy" decoding="async" />
-							{:else}
-								<span class="gv-av" style={projectSwatch(t.author.username)}></span>
-							{/if}
+							<img src={avatarUrl(t.author)} alt="" class="gv-av" loading="lazy" decoding="async" />
 							<span class="gv-author">{t.author.username}</span>
 							<span class="gv-when">{timeAgo(t.lastActivityAt)}</span>
 							{#if t.images.length > 0}

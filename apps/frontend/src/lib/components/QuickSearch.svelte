@@ -7,6 +7,7 @@
 	import { Search, CornerDownLeft, Database, LayoutTemplate, X } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { IconTile } from '$lib/components/ui';
+	import { avatarUrl } from '$lib/avatar';
 	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
 	import { searchResults, segments, type Person, type TreeItem } from './quick-search';
 	import {
@@ -329,13 +330,7 @@
 						{#each result.groups as group (group.key)}
 							{#if group.person}
 								<div class="quick-search-group-header">
-									{#if group.person.imageUrl}
-										<img class="qs-person-avatar" src={group.person.imageUrl} alt="" />
-									{:else}
-										<span class="qs-person-avatar qs-person-avatar--fallback">
-											{group.person.name.charAt(0).toUpperCase()}
-										</span>
-									{/if}
+									<img class="qs-person-avatar" src={avatarUrl(group.person)} alt="" />
 									<span class="quick-search-group-label">
 										{#each segments(group.person.name, group.personField === 'name' ? group.personSpans : undefined) as seg, si (si)}
 											<span class:hl={seg.hit}>{seg.text}</span>
@@ -576,15 +571,6 @@
 		border-radius: var(--radius-pill);
 		object-fit: cover;
 		box-shadow: inset 0 0 0 1px var(--rule);
-	}
-
-	.qs-person-avatar--fallback {
-		display: grid;
-		place-items: center;
-		font-size: var(--text-micro);
-		font-weight: 700;
-		color: var(--accent);
-		background: var(--accent-subtle);
 	}
 
 	.quick-search-group-handle {

@@ -3,6 +3,7 @@
 	import { user, showOnboarding, lastAcceptedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { Loader2, User, Github, PartyPopper, ArrowRight, Check, Link2 } from 'lucide-svelte';
 	import { Modal, Button, Field, Input } from '$lib/components/ui';
+	import { avatarUrl } from '$lib/avatar';
 
 	type Step = 'profile' | 'github' | 'welcome';
 
@@ -191,13 +192,13 @@
 							</div>
 						</div>
 
-						{#if currentUser?.imageUrl}
+						{#if currentUser}
 							<div
 								class="flex items-center gap-4 rounded-xl p-4"
 								style="background-color: var(--control-bg);"
 							>
 								<img
-									src={currentUser.imageUrl}
+									src={avatarUrl(currentUser)}
 									alt="Profile"
 									class="h-14 w-14 rounded-2xl object-cover ring-2 ring-[var(--surface-border)]"
 								/>

@@ -15,6 +15,7 @@
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
+	import { avatarUrl } from '$lib/avatar';
 	import {
 		Clock,
 		Boxes,
@@ -1294,11 +1295,7 @@
 										<button class="eg-assign" type="button" {...attrs}>
 											{#if group.assignee}
 												<span class="eg-avatar">
-													{#if group.assignee.imageUrl}
-														<img src={group.assignee.imageUrl} alt="" />
-													{:else}
-														{group.assignee.username.slice(0, 1).toUpperCase()}
-													{/if}
+													<img src={avatarUrl(group.assignee)} alt="" />
 												</span>
 												<span>@{group.assignee.username}</span>
 											{:else}
@@ -1314,11 +1311,7 @@
 									{#each orgMembers as m (m.id)}
 										<MenuItem onclick={() => assignError(group, m.id)}>
 											<span class="eg-avatar">
-												{#if m.imageUrl}
-													<img src={m.imageUrl} alt="" />
-												{:else}
-													{m.username.slice(0, 1).toUpperCase()}
-												{/if}
+												<img src={avatarUrl(m)} alt="" />
 											</span>
 											<span class="eg-menu-row">@{m.username}</span>
 										</MenuItem>

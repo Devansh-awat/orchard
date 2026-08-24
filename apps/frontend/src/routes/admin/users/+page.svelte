@@ -11,6 +11,7 @@
 		ChevronRight
 	} from 'lucide-svelte';
 	import { Modal, Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
+	import { avatarUrl } from '$lib/avatar';
 
 	interface UserItem {
 		id: string;
@@ -213,20 +214,11 @@
 						>
 							<td class="px-4 py-3">
 								<div class="flex items-center gap-3">
-									{#if user.imageUrl}
-										<img
-											src={user.imageUrl}
-											alt={user.firstName || user.email}
-											class="h-8 w-8 rounded-full object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold"
-											style="background-color: var(--control-bg); color: var(--center-channel-color);"
-										>
-											{(user.firstName?.[0] || user.email[0]).toUpperCase()}
-										</div>
-									{/if}
+									<img
+										src={avatarUrl(user)}
+										alt={user.firstName || user.email}
+										class="h-8 w-8 rounded-full object-cover"
+									/>
 									<div>
 										<p class="font-medium">
 											{user.firstName || ''}
