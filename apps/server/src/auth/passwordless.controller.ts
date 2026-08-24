@@ -610,6 +610,11 @@ export class PasswordlessController {
       });
     }
 
+    // OTP sign-in does not go through findOrCreateByExternalAuthId, so it needs
+    // its own hook or email-avatar import would only ever work for OAuth users.
+    // Unawaited: never make someone wait on a third-party probe to log in.
+    void this.usersService.ensureImageUrl(user).catch(() => {});
+
     return user;
   }
 }

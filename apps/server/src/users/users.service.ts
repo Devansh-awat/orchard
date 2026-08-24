@@ -250,7 +250,10 @@ export class UsersService {
             ...(identifierIsUuid ? {} : { externalAuthId: identifier }),
             ...(userData.firstName && { firstName: userData.firstName }),
             ...(userData.lastName && { lastName: userData.lastName }),
-            ...(userData.imageUrl && { imageUrl: userData.imageUrl }),
+            // Provenance matters even on this legacy path: an imageUrl with no
+            // source recorded looks 'never resolved' to the email-avatar lookup,
+            // which would then feel free to overwrite it.
+            ...(userData.imageUrl && { imageUrl: userData.imageUrl, imageSource: 'upload' }),
           },
         });
         this.invalidateUserCache(previous);
@@ -281,6 +284,7 @@ export class UsersService {
             firstName: userData.firstName || null,
             lastName: userData.lastName || null,
             imageUrl: userData.imageUrl || null,
+            ...(userData.imageUrl ? { imageSource: 'upload' } : {}),
           },
         });
         void this.audit.log({

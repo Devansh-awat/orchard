@@ -162,17 +162,36 @@ export class EmailAvatarService {
       const stored = await this.store(hashes.sha256, found);
       if (!stored) break;
 
-      await this.prisma.user.update({
-        where: { id: user.id },
+      // Re-assert provenance in the WHERE clause, not just in the guard above.
+      // This runs unawaited while the user is free to hit "upload photo", and
+      // the probe plus download is seconds long — an unconditional update here
+      // would happily overwrite a picture they chose in the meantime.
+      //
+      // Spelled as an explicit OR rather than `notIn: ['upload','none']`
+      // because SQL `NOT IN` never matches NULL, and a null imageSource (never
+      // resolved) is precisely the common case this has to match.
+      const claimed = await this.prisma.user.updateMany({
+        where: {
+          id: user.id,
+          OR: [{ imageSource: null }, { imageSource: 'gravatar' }],
+        },
         data: { imageUrl: stored, imageSource: 'gravatar', avatarCheckedAt: new Date() },
       });
+      if (claimed.count === 0) {
+        this.logger.log(`skipped ${provider.id} import for ${user.id}: picture set meanwhile`);
+        return null;
+      }
       this.logger.log(`imported ${provider.id} avatar for user ${user.id}`);
       return stored;
     }
 
-    // Record the miss so we don't re-probe on every single sign-in.
-    await this.prisma.user.update({
-      where: { id: user.id },
+    // Record the miss so we don't re-probe on every single sign-in. Same
+    // conditional guard: only stamp rows we would still be allowed to write.
+    await this.prisma.user.updateMany({
+      where: {
+        id: user.id,
+        OR: [{ imageSource: null }, { imageSource: 'gravatar' }],
+      },
       data: { avatarCheckedAt: new Date() },
     });
     return user.imageUrl;
