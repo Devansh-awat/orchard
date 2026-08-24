@@ -237,7 +237,13 @@
 				</div>
 				<h1 class="gt-title">{thread.title}</h1>
 				<div class="gt-author-row">
-					<img src={avatarUrl(thread.author)} alt="" class="gt-av" loading="lazy" decoding="async" />
+					<img
+						src={avatarUrl(thread.author)}
+						alt=""
+						class="gt-av"
+						loading="lazy"
+						decoding="async"
+					/>
 					<span class="gt-author">{thread.author.username}</span>
 					<span class="gt-when" title={thread.createdAt}>{timeAgo(thread.createdAt)}</span>
 					<button
@@ -311,7 +317,13 @@
 				</h2>
 				{#each thread.replies as reply, i (reply.id)}
 					<div class="gt-reply" {@attach motionStagger({ index: i, from: { y: 8 } })}>
-						<img src={avatarUrl(reply.author)} alt="" class="gt-av" loading="lazy" decoding="async" />
+						<img
+							src={avatarUrl(reply.author)}
+							alt=""
+							class="gt-av"
+							loading="lazy"
+							decoding="async"
+						/>
 						<div class="gt-reply-main">
 							<div class="gt-reply-head">
 								<span class="gt-author">{reply.author.username}</span>

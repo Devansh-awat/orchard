@@ -80,7 +80,6 @@ export function avatarUrl(user: AvatarUser | null | undefined): string {
 
 /** Single-letter fallback for the rare case an avatar image itself fails to load. */
 export function avatarInitial(user: AvatarUser | null | undefined): string {
-	const source =
-		user?.firstName || user?.name || user?.username || user?.email || '?';
+	const source = user?.firstName || user?.name || user?.username || user?.email || '?';
 	return source.charAt(0).toUpperCase();
 }

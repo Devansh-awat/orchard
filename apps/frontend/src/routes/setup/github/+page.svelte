@@ -120,8 +120,7 @@
 
 				{#if status?.configured}
 					<Alert tone="success" title={status.slug ? `Connected as ${status.slug}` : 'Connected'}>
-						App ID {status.appId}. Install it on the accounts whose repositories you want to
-						deploy.
+						App ID {status.appId}. Install it on the accounts whose repositories you want to deploy.
 					</Alert>
 
 					{#if locked}

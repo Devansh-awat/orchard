@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.11.0](https://github.com/LeafdTK/leaf/compare/server/v2.10.0...server/v2.11.0) (2026-08-24)
+
+
+### Features
+
+* managed databases can run standby replicas ([f0c0ab3](https://github.com/LeafdTK/leaf/commit/f0c0ab3c2e425fe59605c71a9b34c9a6621bec5a))
+
+
+### Bug Fixes
+
+* stop scraping a dockerfile's own PATH into the env vars that run our builder ([0fb6e0d](https://github.com/LeafdTK/leaf/commit/0fb6e0d6b1cabcc084c8d5608b7c0edb19c110d9))
+
 ## [2.10.0](https://github.com/LeafdTK/leaf/compare/server/v2.9.0...server/v2.10.0) (2026-08-20)
 
 

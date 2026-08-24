@@ -99,7 +99,7 @@
 						<Field
 							label="Setup token"
 							hint="Printed in the server logs on first boot."
-							error={error}
+							{error}
 							for="claim-token"
 						>
 							<Input
@@ -112,12 +112,7 @@
 							/>
 						</Field>
 						<div class="claim-actions">
-							<Button
-								type="submit"
-								variant="primary"
-								loading={submitting}
-								disabled={!token.trim()}
-							>
+							<Button type="submit" variant="primary" loading={submitting} disabled={!token.trim()}>
 								<ShieldCheck size={15} />
 								Claim instance
 							</Button>

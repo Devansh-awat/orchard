@@ -329,7 +329,6 @@
 		background-color: var(--sidebar-text-hover-bg);
 	}
 
-
 	.user-menu-name {
 		color: var(--sidebar-text);
 	}
@@ -374,8 +373,6 @@
 		margin-bottom: 0.25rem;
 		border-bottom: 1px solid var(--surface-border);
 	}
-
-
 
 	.user-menu-profile-info {
 		min-width: 0;
@@ -518,5 +515,4 @@
 			opacity: 0.5;
 		}
 	}
-
 </style>

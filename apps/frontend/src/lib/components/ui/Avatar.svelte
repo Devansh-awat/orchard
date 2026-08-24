@@ -22,9 +22,7 @@
 
 	const src = $derived(avatarUrl(user));
 	const initial = $derived(avatarInitial(user));
-	const label = $derived(
-		alt ?? `${user?.name || user?.username || user?.email || 'User'} avatar`
-	);
+	const label = $derived(alt ?? `${user?.name || user?.username || user?.email || 'User'} avatar`);
 </script>
 
 <span

@@ -130,7 +130,11 @@
 				style="left: {((tick - min) / span) * 100}%;"
 			></span>
 		{/each}
-		<div class="ui-slider-thumb" class:ui-slider-thumb--dragging={dragging} style="left: {percent}%;"></div>
+		<div
+			class="ui-slider-thumb"
+			class:ui-slider-thumb--dragging={dragging}
+			style="left: {percent}%;"
+		></div>
 	</div>
 </div>
 

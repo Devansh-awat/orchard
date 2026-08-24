@@ -66,8 +66,8 @@
 		{:else if replicas < current}
 			<p class="rc-warn">
 				Removing {current - replicas}
-				{current - replicas === 1 ? 'instance' : 'instances'}. The highest numbered standbys are retired
-				and their volumes deleted.
+				{current - replicas === 1 ? 'instance' : 'instances'}. The highest numbered standbys are
+				retired and their volumes deleted.
 			</p>
 		{/if}
 
@@ -81,7 +81,13 @@
 					replicasDirty = false;
 				}}>Reset</Button
 			>
-			<Button variant="primary" size="sm" disabled={!replicasDirty} loading={saving} onclick={onScale}>
+			<Button
+				variant="primary"
+				size="sm"
+				disabled={!replicasDirty}
+				loading={saving}
+				onclick={onScale}
+			>
 				{saving ? 'Scaling...' : `Scale to ${replicas}`}
 			</Button>
 		</div>

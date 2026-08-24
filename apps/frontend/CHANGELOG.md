@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.9.0...frontend/v1.10.0) (2026-08-24)
+
+
+### Features
+
+* everyone gets a mascot for a default profile picture ([73eaa67](https://github.com/LeafdTK/leaf/commit/73eaa6753645611a2c18a220110d40537252dbfd))
+* managed databases can run standby replicas ([f0c0ab3](https://github.com/LeafdTK/leaf/commit/f0c0ab3c2e425fe59605c71a9b34c9a6621bec5a))
+
 ## [1.9.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.8.0...frontend/v1.9.0) (2026-08-20)
 
 
