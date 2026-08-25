@@ -331,8 +331,7 @@ export class McpOAuthService {
       return { error: 'Invalid session token' };
     }
 
-    // H6: Require a sessionId on the originating session token so consent can
-    // only be granted from a real, live login rather than a bare JWT.
+    // H6: consent may only be granted from a real, live login.
     if (!payload.sessionId) {
       return { error: 'Session token missing session binding' };
     }
@@ -340,12 +339,6 @@ export class McpOAuthService {
       return { error: 'Session expired, sign in again' };
     }
 
-    // Give the grant its own session row rather than riding the browser's.
-    // Sharing one meant every scoped revocation — an org role edit, a project
-    // role edit — tore down the user's MCP clients as collateral. This row is
-    // still a real session, so SuperAdminGuard's check and "sign out
-    // everywhere" both keep working, and it shows up individually revocable in
-    // the sessions UI under the client's own name.
     const client = await this.getClient(pending.clientId);
     const mcpSessionId = await this.sessions.createSession({
       userId: payload.sub,
