@@ -15,7 +15,8 @@ import {
 import { cacheEvictInitContainer } from './cache-evict';
 import { injectBuildArgsScript } from './build-args';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
-import { BuildJobInformerService, BuildJobObservation } from './build-job-informer.service';
+import { BuildJobInformerService } from './build-job-informer.service';
+import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -2623,6 +2624,7 @@ exit $rc`,
     let lastKnownPhase = 'unknown';
     let pollCount = 0;
     let missingSince: number | null = null;
+    let lastTerminalSignalAt = 0;
 
     console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
     await this.seedLogOffsets(jobName, deploymentId);
@@ -2832,13 +2834,24 @@ exit $rc`,
         await this.appendLog(deploymentId, `Warning: Error checking build status: ${error.message}`, 'WARNING');
       }
 
+      const waitStartedAt = Date.now();
       const terminal = this.jobInformer
         ? await this.jobInformer.waitForTerminal(jobName, pollInterval)
-        : await new Promise<BuildJobObservation | null>((resolve) => {
-          setTimeout(() => resolve(null), pollInterval);
-        });
-      if (terminal) {
+        : null;
+      const earlyWakeEarned = isUnseenTerminalSignal(terminal, lastTerminalSignalAt);
+      if (earlyWakeEarned && terminal) {
+        lastTerminalSignalAt = terminal.at;
         console.log(`[ImageBuilder] Job ${jobName} reached ${terminal.phase} via watch after ${Math.floor((Date.now() - startTime) / 1000)}s`);
+      }
+      const settleMs = remainingIntervalMs(
+        pollInterval,
+        Date.now() - waitStartedAt,
+        earlyWakeEarned,
+      );
+      if (settleMs > 0) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, settleMs);
+        });
       }
     }
 

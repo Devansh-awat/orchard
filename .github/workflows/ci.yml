@@ -188,6 +188,11 @@ jobs:
         run: pnpm --filter server test:env-removal
       - name: Notification routing + scope tests
         run: pnpm --filter server test:notifications
+      # The build watch loop is paced by the informer. Pins that an already-seen
+      # terminal observation can never collapse the poll interval to zero, which
+      # is what let a deleted job spin thousands of API calls into a 15s window.
+      - name: Build poll pacing tests
+        run: pnpm --filter server test:build-pacing
 
   e2e:
     needs: changes
