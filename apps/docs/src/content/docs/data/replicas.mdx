@@ -1,0 +1,51 @@
+---
+title: Read replicas
+description: Add read-only copies of a database to spread query load.
+sidebar:
+  order: 3
+---
+
+import Diagram from "../../../components/Diagram.astro";
+
+A managed database can run **read replicas**: additional PostgreSQL instances
+that stream from the primary and serve read-only queries.
+
+They are useful for read-heavy workloads, analytics queries you do not want
+competing with production traffic, and reporting tools that should never be able
+to write.
+
+## Endpoints
+
+Adding replicas gives the cluster two addresses:
+
+| Endpoint       | Serves                                    |
+| -------------- | ----------------------------------------- |
+| `pg-<name>-rw` | Reads and writes, always the primary      |
+| `pg-<name>-ro` | Reads only, load-balanced across replicas |
+
+Point your application's primary connection at `-rw` and any read-only consumer
+at `-ro`. Sending writes to `-ro` fails; that is the point.
+
+<Diagram
+  caption="Writes only ever reach the primary; -ro spreads reads across replicas."
+  code={`flowchart LR
+  APP[Your app] -->|reads + writes| RW[["pg-name-rw"]]
+  RPT[Reporting / analytics] -->|reads only| RO[["pg-name-ro"]]
+  RW --> P[(Primary)]
+  RO --> S1[(Replica 1)]
+  RO --> S2[(Replica 2)]
+  P -.->|async stream| S1
+  P -.->|async stream| S2`}
+/>
+
+## Replication lag
+
+Replicas are asynchronous. A row written to the primary is not instantly visible
+on a replica, so read-after-write against `-ro` can return stale data. Anything
+that reads its own writes should use `-rw`.
+
+## Cost
+
+Each replica is a full copy of the database: same storage, same CPU and memory
+sizing. Two replicas means roughly three times the resource footprint. Add them
+because query load needs spreading, not by default.

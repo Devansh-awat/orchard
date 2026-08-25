@@ -1,0 +1,33 @@
+{
+  "name": "docs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 5174",
+    "build": "pnpm generate && astro build",
+    "preview": "astro preview --port 5174",
+    "generate": "tsx scripts/generate.ts",
+    "check": "astro check",
+    "format": "prettier --write .",
+    "lint": "prettier --check .",
+    "check:generated": "bash scripts/check-generated.sh"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "^0.3.2",
+    "@astrojs/starlight": "^0.41.9",
+    "astro": "^7.2.6",
+    "sharp": "^0.34.5",
+    "starlight-openapi": "^0.26.1",
+    "mermaid": "^11.12.0",
+    "@astrojs/mdx": "^7.0.8"
+  },
+  "devDependencies": {
+    "@orchard/contracts": "workspace:*",
+    "prettier": "^3.7.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.1"
+  }
+}

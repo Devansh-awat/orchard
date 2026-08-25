@@ -10,7 +10,11 @@
     "build:server": "pnpm --filter server build",
     "lint": "eslint apps/server/src apps/frontend/src && node apps/frontend/scripts/check-design.mjs",
     "lint:fix": "eslint apps/server/src apps/frontend/src --fix",
-    "prisma:generate": "pnpm --filter server prisma:generate"
+    "prisma:generate": "pnpm --filter server prisma:generate",
+    "dev:docs": "pnpm --filter docs dev",
+    "dev:landing": "pnpm --filter landing dev",
+    "docs:generate": "pnpm --filter docs generate",
+    "build:docs": "pnpm --filter docs build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

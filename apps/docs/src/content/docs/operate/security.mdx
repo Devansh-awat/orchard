@@ -1,0 +1,141 @@
+---
+title: Security and isolation
+description: What Orchard isolates by default, what it does not, and what running untrusted code actually requires.
+sidebar:
+  order: 6
+---
+
+import Diagram from "../../../components/Diagram.astro";
+
+Orchard separates tenants at the **network** layer by default. It does **not**
+separate them at the **kernel** layer unless you install a sandbox runtime and
+turn it on.
+
+That distinction is the whole page. If you are running your own code, or code
+from people you trust, the defaults are reasonable. If you are running code you
+do not trust, keep reading.
+
+## Network isolation: on by default
+
+Every tenant namespace gets a `default-deny-all` NetworkPolicy covering both
+ingress and egress. From inside a tenant pod, the allowed paths are:
+
+| Direction | Allowed                                                               |
+| --------- | --------------------------------------------------------------------- |
+| Ingress   | Pods in the same namespace, and the ingress controllers               |
+| Egress    | Pods in the same namespace                                            |
+| Egress    | `kube-dns`, on UDP and TCP 53                                         |
+| Egress    | The ingress controller namespace                                      |
+| Egress    | The public internet                                                   |
+| Egress    | Other tenant namespaces, which are themselves default-deny on ingress |
+
+That last row sounds worse than it is: reaching another tenant namespace only
+lands on what that tenant has explicitly published, which is the same surface
+the public internet already has.
+
+<Diagram
+  caption="Default-deny in both directions, with a short allow-list."
+  code={`flowchart TD
+  POD[Tenant pod]
+  POD -->|allowed| SAME[Same namespace]
+  POD -->|allowed| DNS[kube-dns :53]
+  POD -->|allowed| ING[Ingress controllers]
+  POD -->|allowed| NET[Public internet]
+  POD -.->|blocked| API[Kube API server]
+  POD -.->|blocked| IMDS[Cloud metadata<br/>169.254.0.0/16]
+  POD -.->|blocked| PLAT[Platform Postgres<br/>registry, server]
+  POD -.->|blocked| OTHER[Other tenants'<br/>unpublished services]`}
+/>
+
+What this blocks is more interesting:
+
+- **The Kubernetes API server.** A tenant pod cannot talk to it.
+- **Cloud metadata (`169.254.0.0/16`).** No IMDS credential theft.
+- **RFC1918 ranges where the platform's own infrastructure lives**, so no
+  reaching the control-plane database, the registry, or the API server host.
+- **Other tenants' unpublished services.**
+
+## Kernel isolation: off by default
+
+By default, tenant pods and build jobs share the host kernel, like ordinary
+containers. A container escape is a host compromise.
+
+Two optional runtimes change that, and **neither is installed by the
+one-command installer**:
+
+| Setting          | Runtime          | Protects                                              |
+| ---------------- | ---------------- | ----------------------------------------------------- |
+| `tenantSandbox`  | gVisor (`runsc`) | Tenant app pods, via a user-space kernel              |
+| `builderSandbox` | Kata Containers  | Image builds, by wrapping the pod in a lightweight VM |
+
+Builds are the sharper edge. BuildKit needs `privileged: true`, which gVisor
+refuses, so builds use Kata instead: privileged-inside-a-VM is fine, and a
+malicious Dockerfile cannot reach the host kernel. **Without `builderSandbox`,
+image builds run with host-level privileges** — the same posture as
+Docker-based platforms, and genuinely fine when whoever wrote the Dockerfile
+already owns the box.
+
+Sandboxes (the [dev environments](/run/sandboxes/)) are the exception: they run
+as Kata VMs already, with internet egress only.
+
+## Turning kernel isolation on
+
+The runtimes are node-level and vary by distribution, which is why they are not
+installed for you.
+
+1. Install the runtime on **every** node. On Talos these are the
+   `siderolabs/gvisor` and `siderolabs/kata-containers` system extensions;
+   elsewhere, follow the runtime's own instructions.
+2. Confirm the RuntimeClass exists and a smoke-test pod using it actually runs:
+
+   ```bash
+   kubectl get runtimeclass gvisor
+   ```
+
+3. Only then enable it. On an installer-based instance, edit
+   `/etc/orchard/values.yaml` and run `orchard-update`:
+
+   ```yaml
+   tenantSandbox:
+     enabled: true
+     runtimeClassName: gvisor
+   builderSandbox:
+     enabled: true
+     runtimeClassName: kata
+   ```
+
+Order matters. Flip the flag before the runtime exists and new tenant pods fail
+to schedule with `no runtime for "runsc" is configured`.
+
+## If you are running untrusted code
+
+Be honest about the threat model. "Untrusted" means a user can run a process you
+did not write, which includes letting strangers deploy from their own
+repositories.
+
+In that case, treat the following as required rather than optional:
+
+- **`builderSandbox` with Kata.** Builds execute arbitrary Dockerfiles with
+  host-level privileges without it. This is the single most important one.
+- **`tenantSandbox` with gVisor**, so a compromised app does not share a kernel
+  with everything else on the node.
+- **Quotas**, so one tenant cannot exhaust the cluster. See
+  [Quotas and usage](/teams/quotas/).
+- **Node pools**, to keep untrusted workloads on hardware you are willing to
+  lose. See [Nodes and pools](/operate/nodes/).
+- **`invite_only` or `closed` signups**, so the set of people who can run code
+  is a set you chose.
+
+Without those, a single-box Orchard running strangers' code is roughly as
+exposed as giving them Docker on that box. That is a fine trade for a homelab
+and a bad one for anything else.
+
+## What Orchard does not claim
+
+It is not a multi-tenant hosting provider out of the box. There is no per-tenant
+kernel, no hardware isolation, and no guarantee that a determined attacker who
+escapes a container cannot reach the node.
+
+The pieces to raise that bar are all here and documented. They are just not on
+by default, because they need node-level changes that would fail confusingly on
+a machine that is not ready for them.

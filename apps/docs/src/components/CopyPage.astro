@@ -1,0 +1,295 @@
+---
+/**
+ * Page actions, in the spirit of GitBook's: copy the page as markdown, hand it
+ * to an assistant, wire the docs MCP server into an editor, or print to PDF.
+ *
+ * The markdown always comes from the `.md` sibling route so there is a single
+ * source of truth. The path is derived from the pathname rather than the route
+ * entry, because Starlight's content layer exposes `id`, not `slug`.
+ */
+const path = Astro.url.pathname.replace(/\/$/, "");
+const mdPath = path ? `${path}.md` : "/index.md";
+
+const site = "https://docs.orchard.my";
+const mdUrl = `${site}${mdPath}`;
+
+const ask = `Read ${mdUrl} and answer my questions about it.`;
+const chatgpt = `https://chatgpt.com/?q=${encodeURIComponent(ask)}`;
+const claude = `https://claude.ai/new?q=${encodeURIComponent(ask)}`;
+
+---
+
+<div class="page-actions" data-md={mdPath}>
+  <button type="button" class="pa-main" data-copy>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+    <span data-label>Copy page</span>
+  </button>
+
+  <button
+    type="button"
+    class="pa-toggle"
+    aria-expanded="false"
+    aria-haspopup="true"
+    aria-label="More page actions"
+    data-toggle
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="m6 9 6 6 6-6"></path>
+    </svg>
+  </button>
+
+  <div class="pa-menu" data-menu hidden>
+    <a class="pa-item" href={chatgpt} target="_blank" rel="noopener">
+      <span class="pa-item-title">Open in ChatGPT</span>
+      <span class="pa-item-sub">Ask ChatGPT about this page</span>
+    </a>
+    <a class="pa-item" href={claude} target="_blank" rel="noopener">
+      <span class="pa-item-title">Open in Claude</span>
+      <span class="pa-item-sub">Ask Claude about this page</span>
+    </a>
+
+    <div class="pa-sep" role="separator"></div>
+
+    <button type="button" class="pa-item" data-copy>
+      <span class="pa-item-title">Copy page</span>
+      <span class="pa-item-sub">Copy page as Markdown for LLMs</span>
+    </button>
+    <a class="pa-item" href={mdPath}>
+      <span class="pa-item-title">View as Markdown</span>
+      <span class="pa-item-sub">View this page as plain text</span>
+    </a>
+
+    <div class="pa-sep" role="separator"></div>
+
+    <button type="button" class="pa-item" data-print>
+      <span class="pa-item-title">Export as PDF</span>
+      <span class="pa-item-sub">Print this page to a PDF</span>
+    </button>
+  </div>
+</div>
+
+<style>
+  .page-actions {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    margin-block: 0.75rem 0;
+  }
+
+  .pa-main,
+  .pa-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--o-rule);
+    background: var(--o-raised);
+    color: var(--sl-color-gray-2);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0.3125rem 0.75rem;
+  }
+
+  .pa-main {
+    border-radius: 999px 0 0 999px;
+    border-inline-end: none;
+  }
+
+  .pa-toggle {
+    border-radius: 0 999px 999px 0;
+    padding-inline: 0.5rem;
+  }
+
+  .pa-main:hover,
+  .pa-toggle:hover,
+  .pa-toggle[aria-expanded="true"] {
+    background: var(--o-fill-quiet);
+    color: var(--sl-color-white);
+  }
+
+  .pa-main svg,
+  .pa-toggle svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .pa-menu {
+    position: absolute;
+    top: calc(100% + 0.375rem);
+    inset-inline-start: 0;
+    z-index: 60;
+    min-width: 17rem;
+    padding: 0.25rem;
+    border: 1px solid var(--o-rule);
+    border-radius: var(--o-radius-control);
+    background: var(--o-raised);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 12px 28px rgb(0 0 0 / 0.09);
+  }
+
+  :root[data-theme="dark"] .pa-menu {
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.5);
+  }
+
+  .pa-menu[hidden] {
+    display: none;
+  }
+
+  .pa-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+    width: 100%;
+    text-align: start;
+    padding: 0.4375rem 0.5rem;
+    border: none;
+    border-radius: calc(var(--o-radius-control) - 0.25rem);
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .pa-item:hover {
+    background: var(--o-fill-quiet);
+  }
+
+  .pa-item-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+
+  .pa-item-sub {
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .pa-sep {
+    height: 1px;
+    margin: 0.25rem 0.25rem;
+    background: var(--o-rule-soft);
+  }
+
+  @media print {
+    .page-actions {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>(".page-actions").forEach((root) => {
+    const toggle = root.querySelector<HTMLButtonElement>("[data-toggle]");
+    const menu = root.querySelector<HTMLElement>("[data-menu]");
+    const label = root.querySelector<HTMLElement>("[data-label]");
+    const md = root.dataset.md;
+    if (!toggle || !menu || !md) return;
+
+    /*
+     * Fetch the markdown up front rather than inside the click handler.
+     * Awaiting a fetch first drops the user-activation that Safari requires
+     * for a clipboard write, so the copy silently fails there.
+     */
+    let markdown: string | null = null;
+    let pending: Promise<void> | null = null;
+
+    const prime = () => {
+      if (markdown !== null || pending) return pending ?? Promise.resolve();
+      pending = fetch(md)
+        .then((res) => res.text())
+        .then((text) => {
+          markdown = text;
+        })
+        .catch(() => {})
+        .finally(() => {
+          pending = null;
+        });
+      return pending;
+    };
+
+    prime();
+    root.addEventListener("pointerenter", prime, { once: true });
+
+    /*
+     * The async clipboard API refuses when the document is not focused, which
+     * happens more than you would think (devtools, automation, some window
+     * managers). Fall back to a hidden textarea, which has no such rule.
+     */
+    const write = async (text: string): Promise<boolean> => {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch {
+        /* fall through */
+      }
+      try {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.top = "-1000px";
+        area.style.opacity = "0";
+        document.body.append(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        area.remove();
+        return ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const close = () => {
+      menu.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+    };
+
+    toggle.addEventListener("click", () => {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!root.contains(event.target as Node)) close();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+
+    const flash = (el: HTMLElement, text: string) => {
+      const original = el.textContent;
+      el.textContent = text;
+      setTimeout(() => (el.textContent = original), 1600);
+    };
+
+    root.querySelectorAll<HTMLElement>("[data-copy]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const target =
+          button.querySelector<HTMLElement>(".pa-item-title") ?? label;
+        if (markdown === null) await prime();
+        const ok = markdown !== null && (await write(markdown));
+        if (target) flash(target, ok ? "Copied" : "Copy failed");
+        close();
+      });
+    });
+
+    root
+      .querySelector<HTMLElement>("[data-print]")
+      ?.addEventListener("click", () => {
+        close();
+        window.print();
+      });
+  });
+</script>

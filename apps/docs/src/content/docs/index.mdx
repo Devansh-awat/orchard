@@ -1,0 +1,71 @@
+---
+title: Orchard
+description: Orchard runs on your own Kubernetes cluster and turns a GitHub repo into a running app.
+template: splash
+hero:
+  tagline: Push a repo. Get a running app. On the cluster you already own.
+  actions:
+    - text: Install Orchard
+      link: /start/install/
+      icon: right-arrow
+    - text: What is Orchard
+      link: /start/what-is-orchard/
+      variant: minimal
+    - text: Source
+      link: https://github.com/LeafdTK/leaf
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid stagger>
+  <Card title="Deploy something" icon="rocket">
+    Point Orchard at a GitHub repo. It reads the Dockerfile, builds on your
+    cluster, and gives the app an HTTPS URL.
+
+    [First deploy →](/start/first-deploy/)
+
+  </Card>
+
+  <Card title="Run the platform" icon="setting">
+    One command on a fresh Linux box, or the Helm chart on a cluster you
+    already operate.
+
+    [Install →](/start/install/)
+
+  </Card>
+
+  <Card title="Drive it from an agent" icon="puzzle">
+    Every capability in the dashboard is exposed as an MCP tool, so Claude and
+    friends can deploy, provision and debug.
+
+    [MCP →](/mcp/)
+
+  </Card>
+
+  <Card title="Automate it" icon="seti:powershell">
+    The CLI speaks the same API as the dashboard, and prints JSON when piped.
+
+    [CLI reference →](/reference/cli/)
+
+  </Card>
+</CardGrid>
+
+## What it does
+
+Orchard is a self-hosted platform that sits on top of Kubernetes. You install it
+into a cluster you control, and it turns that cluster into something closer to a
+PaaS: connect a repo, get builds, an HTTPS URL, a Postgres database next to your
+app, live logs, cron jobs, rollbacks, and a team model with roles and SSO.
+
+Nothing phones home. There is no hosted control plane in the middle: the
+scheduler is your cluster, the registry is yours, and the data stays on your
+hardware.
+
+## Where to start
+
+- Never seen it before → [What is Orchard](/start/what-is-orchard/)
+- Have a Linux box → [Install](/start/install/)
+- Have a cluster already → [Install on an existing cluster](/start/install/#an-existing-cluster)
+- Want the API → [API reference](/api/)

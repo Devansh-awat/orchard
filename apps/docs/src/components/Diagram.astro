@@ -1,0 +1,132 @@
+---
+/**
+ * A Mermaid diagram, rendered in the browser and themed from the docs tokens.
+ *
+ * Mermaid is large, so it is imported dynamically and only on pages that
+ * actually contain a diagram. Re-renders when the theme changes, because the
+ * colours are baked into the generated SVG rather than inherited.
+ */
+interface Props {
+  code: string;
+  caption?: string;
+}
+
+const { code, caption } = Astro.props;
+---
+
+<figure class="diagram">
+  <pre class="diagram-src" data-diagram>{code.trim()}</pre>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .diagram {
+    margin-block: 1.5rem;
+  }
+
+  .diagram-src {
+    margin: 0;
+    padding: 1.25rem;
+    border: 1px solid var(--o-rule);
+    border-radius: var(--o-radius-control);
+    background: var(--o-raised);
+    overflow-x: auto;
+    text-align: center;
+    /* Until Mermaid replaces it, keep the source readable rather than raw. */
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    color: var(--sl-color-gray-3);
+    white-space: pre;
+  }
+
+  .diagram-src[data-rendered] {
+    white-space: normal;
+    font-family: inherit;
+  }
+
+  .diagram-src :global(svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  @media print {
+    .diagram-src {
+      break-inside: avoid;
+    }
+  }
+</style>
+
+<script>
+  const nodes = document.querySelectorAll<HTMLElement>("[data-diagram]");
+  if (nodes.length) {
+    const sources = new Map<HTMLElement, string>();
+    nodes.forEach((node) => sources.set(node, node.textContent ?? ""));
+
+    const palette = () => {
+      const css = getComputedStyle(document.documentElement);
+      const read = (name: string, fallback: string) =>
+        css.getPropertyValue(name).trim() || fallback;
+      const dark = document.documentElement.dataset.theme === "dark";
+      return {
+        dark,
+        raised: read("--o-raised", dark ? "#121214" : "#ffffff"),
+        line: dark ? "#5d4a4e" : "#d8c8cb",
+        text: read("--sl-color-white", dark ? "#f6eef0" : "#2c1a1d"),
+        accent: read("--o-accent", "#c93a4f"),
+        tint: dark ? "#2a1b1f" : "#fdeef0",
+      };
+    };
+
+    const render = async () => {
+      const { default: mermaid } = await import("mermaid");
+      const p = palette();
+
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        fontFamily: "var(--sl-font)",
+        theme: "base",
+        themeVariables: {
+          background: p.raised,
+          primaryColor: p.tint,
+          primaryTextColor: p.text,
+          primaryBorderColor: p.accent,
+          secondaryColor: p.raised,
+          tertiaryColor: p.raised,
+          lineColor: p.line,
+          textColor: p.text,
+          mainBkg: p.tint,
+          nodeBorder: p.accent,
+          clusterBkg: "transparent",
+          clusterBorder: p.line,
+          edgeLabelBackground: p.raised,
+        },
+      });
+
+      let i = 0;
+      for (const [node, source] of sources) {
+        try {
+          const { svg } = await mermaid.render(`diagram-${i++}`, source);
+          node.innerHTML = svg;
+          node.dataset.rendered = "true";
+        } catch {
+          /* leave the source visible if it will not parse */
+        }
+      }
+    };
+
+    render();
+
+    // The generated SVG bakes in colours, so a theme flip needs a re-render.
+    new MutationObserver((records) => {
+      if (records.some((r) => r.attributeName === "data-theme")) render();
+    }).observe(document.documentElement, { attributes: true });
+  }
+</script>
