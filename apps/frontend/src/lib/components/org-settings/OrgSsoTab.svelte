@@ -26,7 +26,7 @@
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
 	import SsoProviderModal from './SsoProviderModal.svelte';
-	import type { ProviderDraft, SsoOverview, SsoProvider, SsoSettings } from './sso-types';
+	import type { ProviderDraft, SsoDomain, SsoOverview, SsoProvider, SsoSettings } from './sso-types';
 	import { draftToPayload, DEFAULT_LOGIN_ACCENT, DEFAULT_LOGIN_BG } from './sso-types';
 
 	let {
@@ -57,7 +57,10 @@
 	let providerToDelete = $state<SsoProvider | null>(null);
 	let showDeleteModal = $state(false);
 
-	let domainsDraft = $state('');
+	let newDomain = $state('');
+	let addingDomain = $state(false);
+	let verifyingDomain = $state<string | null>(null);
+	let domainError = $state<string | null>(null);
 	let logoUrl = $state('');
 	let welcomeText = $state('');
 	let tagline = $state('');
@@ -68,6 +71,7 @@
 
 	const settings = $derived(overview?.settings ?? null);
 	const providers = $derived(overview?.providers ?? []);
+	const domains = $derived(overview?.domains ?? []);
 	const locked = $derived(settings ? !settings.platformEnabled : false);
 	const canEnable = $derived(providers.some((p) => p.enabled && p.usable));
 
@@ -83,7 +87,6 @@
 			if (!res.ok) throw new Error('Could not load SSO settings');
 			const data = (await res.json()) as SsoOverview;
 			overview = data;
-			domainsDraft = data.settings.emailDomains.join(', ');
 			logoUrl = data.settings.loginLogoUrl ?? '';
 			welcomeText = data.settings.loginWelcomeText ?? '';
 			tagline = data.settings.loginTagline ?? '';
@@ -201,16 +204,68 @@
 		);
 	}
 
-	async function saveDomains() {
-		await patchSettings(
-			{
-				emailDomains: domainsDraft
-					.split(/[\s,]+/)
-					.map((d) => d.trim().replace(/^@/, ''))
-					.filter(Boolean)
-			},
-			'Email domains updated'
-		);
+	async function addDomain() {
+		if (!organization || addingDomain) return;
+		const value = newDomain.trim();
+		if (!value) return;
+
+		addingDomain = true;
+		domainError = null;
+		try {
+			const res = await apiFetch(`/apiv1/organizations/${organization.id}/sso/domains`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ domain: value })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data?.message || 'Could not add that domain');
+			newDomain = '';
+			await load(organization.id);
+		} catch (e) {
+			domainError = e instanceof Error ? e.message : 'Could not add that domain';
+		} finally {
+			addingDomain = false;
+		}
+	}
+
+	async function verifyDomain(domain: SsoDomain) {
+		if (!organization || verifyingDomain) return;
+		verifyingDomain = domain.id;
+		domainError = null;
+		try {
+			const res = await apiFetch(
+				`/apiv1/organizations/${organization.id}/sso/domains/${domain.id}/verify`,
+				{ method: 'POST' }
+			);
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data?.message || 'Could not check DNS');
+			if (data?.verified) {
+				toasts.add({ title: `${domain.domain} verified`, color: 'success' });
+			}
+			await load(organization.id);
+		} catch (e) {
+			domainError = e instanceof Error ? e.message : 'Could not check DNS';
+		} finally {
+			verifyingDomain = null;
+		}
+	}
+
+	async function removeDomain(domain: SsoDomain) {
+		if (!organization) return;
+		try {
+			const res = await apiFetch(
+				`/apiv1/organizations/${organization.id}/sso/domains/${domain.id}`,
+				{ method: 'DELETE' }
+			);
+			if (!res.ok) throw new Error('Could not remove that domain');
+			await load(organization.id);
+		} catch (e) {
+			toasts.add({
+				title: 'Could not remove that domain',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		}
 	}
 
 	async function saveSubdomain() {
@@ -402,19 +457,93 @@
 			{/if}
 		</div>
 
-		<!-- Routing -->
+		<!-- Domains -->
 		<div class="sso-block">
 			<h3 class="sso-block-title">Email domains</h3>
-			<Field
-				label="Domains that belong to this organization"
-				for="sso-domains"
-				hint="Someone typing an address at one of these domains on the platform login page is sent here instead."
+			<p class="sso-hint">
+				Proving you own a domain lets work addresses at it route here from the platform login page,
+				and lets your providers create accounts for people at that domain who have never signed in
+				before. Until then, new people join by invitation.
+			</p>
+
+			<form
+				class="sso-inline"
+				onsubmit={(e) => {
+					e.preventDefault();
+					addDomain();
+				}}
 			>
-				<div class="sso-inline">
-					<Input id="sso-domains" bind:value={domainsDraft} placeholder="acme.com, acme.io" />
-					<Button variant="secondary" loading={savingSettings} onclick={saveDomains}>Save</Button>
+				<Input bind:value={newDomain} placeholder="acme.com" disabled={locked} />
+				<Button variant="secondary" type="submit" loading={addingDomain} disabled={locked}>
+					Add domain
+				</Button>
+			</form>
+
+			{#if domainError}
+				<Alert tone="error">{domainError}</Alert>
+			{/if}
+
+			{#each domains as domain (domain.id)}
+				<div class="sso-domain">
+					<div class="sso-domain-head">
+						<span class="sso-domain-name">{domain.domain}</span>
+						<Badge tone={domain.verified ? 'success' : 'warning'}>
+							{domain.verified ? 'Verified' : 'Pending'}
+						</Badge>
+						<div class="sso-item-actions">
+							{#if !domain.verified}
+								<Button
+									variant="secondary"
+									size="sm"
+									loading={verifyingDomain === domain.id}
+									onclick={() => verifyDomain(domain)}
+								>
+									Check DNS
+								</Button>
+							{/if}
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => removeDomain(domain)}
+								aria-label="Remove domain"
+							>
+								<Trash2 size={14} />
+							</Button>
+						</div>
+					</div>
+
+					{#if !domain.verified}
+						<p class="sso-hint">Add this TXT record at your DNS provider, then check again.</p>
+						<div class="sso-copy-row">
+							<span class="sso-copy-label">Name</span>
+							<code class="sso-copy-value">{domain.recordName}</code>
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => copyText(domain.recordName, `n-${domain.id}`)}
+								aria-label="Copy record name"
+							>
+								{#if copied === `n-${domain.id}`}<Check size={13} />{:else}<Copy size={13} />{/if}
+							</Button>
+						</div>
+						<div class="sso-copy-row">
+							<span class="sso-copy-label">Value</span>
+							<code class="sso-copy-value">{domain.recordValue}</code>
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => copyText(domain.recordValue, `v-${domain.id}`)}
+								aria-label="Copy record value"
+							>
+								{#if copied === `v-${domain.id}`}<Check size={13} />{:else}<Copy size={13} />{/if}
+							</Button>
+						</div>
+						{#if domain.lastError}
+							<p class="sso-domain-error">{domain.lastError}</p>
+						{/if}
+					{/if}
 				</div>
-			</Field>
+			{/each}
 		</div>
 
 		<!-- Branding -->
@@ -630,6 +759,66 @@
 		display: flex;
 		align-items: center;
 		gap: 0.1rem;
+	}
+
+	.sso-domain {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-surface);
+	}
+
+	.sso-domain-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.sso-domain-name {
+		flex: 1;
+		min-width: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 500;
+		color: var(--text-default);
+	}
+
+	.sso-domain-error {
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--status-warning);
+		margin: 0;
+	}
+
+	.sso-copy-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.sso-copy-label {
+		width: 3.5rem;
+		flex-shrink: 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+
+	.sso-copy-value {
+		flex: 1;
+		min-width: 0;
+		font-family: var(--font-mono);
+		font-size: var(--text-caption);
+		color: var(--text-default);
+		background: var(--bg-raised);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 0.3rem 0.5rem;
+		overflow-x: auto;
+		white-space: nowrap;
 	}
 
 	.sso-inline {

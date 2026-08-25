@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { findPreset, resolveIssuerUrl } from './presets';
+import { OrgDomainsService } from './org-domains.service';
 
 export interface ProviderInput {
   name?: string;
@@ -44,7 +45,6 @@ export interface ProviderInput {
 export interface SettingsInput {
   enabled?: boolean;
   enforced?: boolean;
-  emailDomains?: string[];
   loginLogoUrl?: string | null;
   loginPrimaryColor?: string | null;
   loginBgColor?: string | null;
@@ -76,6 +76,7 @@ export class SsoService {
     private readonly prisma: PrismaService,
     private readonly crypto: SsoCryptoService,
     private readonly audit: AuditService,
+    private readonly domains: OrgDomainsService,
   ) {
     this.backendUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -220,12 +221,14 @@ export class SsoService {
     const domain = (email || '').toLowerCase().trim().split('@')[1];
     if (!domain) return null;
 
+    // Only a domain the org has proved it owns routes traffic. A self-asserted
+    // claim on gmail.com would otherwise collect every gmail user who typed
+    // their address on the platform login page.
+    const owner = await this.domains.ownerOf(domain);
+    if (!owner) return null;
+
     const settings = await this.prisma.orgSsoSettings.findFirst({
-      where: {
-        enabled: true,
-        platformEnabled: true,
-        emailDomains: { has: domain },
-      },
+      where: { organizationId: owner, enabled: true, platformEnabled: true },
       include: { organization: { select: { slug: true, name: true, avatarUrl: true } } },
     });
     if (!settings) return null;
@@ -623,10 +626,9 @@ export class SsoService {
     if (settings) return settings;
     return {
       organizationId,
-      platformEnabled: true,
+      platformEnabled: false,
       enabled: false,
       enforced: false,
-      emailDomains: [] as string[],
       loginLogoUrl: null,
       loginPrimaryColor: null,
       loginBgColor: null,
@@ -642,7 +644,7 @@ export class SsoService {
   ) {
     const current = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
 
-    if (input.enabled && !(current?.platformEnabled ?? true)) {
+    if (input.enabled && !(current?.platformEnabled ?? false)) {
       throw new ConflictException('SSO is disabled for this organization by the platform administrator');
     }
 
@@ -655,10 +657,6 @@ export class SsoService {
       }
     }
 
-    const domains = (input.emailDomains ?? current?.emailDomains ?? [])
-      .map((d) => d.toLowerCase().trim().replace(/^@/, ''))
-      .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
-
     // Colors land inside a style attribute on the login page; only a plain
     // hex value survives so nothing else can ride along into the CSS.
     const hexColor = (v: string | null) => (v && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
@@ -666,7 +664,6 @@ export class SsoService {
     const data = {
       enabled: input.enabled ?? current?.enabled ?? false,
       enforced: input.enforced ?? current?.enforced ?? false,
-      emailDomains: domains,
       loginLogoUrl: input.loginLogoUrl ?? current?.loginLogoUrl ?? null,
       loginPrimaryColor: hexColor(input.loginPrimaryColor ?? current?.loginPrimaryColor ?? null),
       loginBgColor: hexColor(input.loginBgColor ?? current?.loginBgColor ?? null),
@@ -728,25 +725,31 @@ export class SsoService {
 
   /** Per-org SSO status for the admin console list. */
   async getPlatformStatuses() {
-    const rows = await this.prisma.orgSsoSettings.findMany({
-      include: { organization: { select: { id: true, name: true, slug: true } } },
+    // Driven off organizations, not settings rows: SSO is off until an
+    // administrator allows it, so most orgs have no settings row at all and
+    // listing from that side would hide exactly the orgs waiting to be
+    // enabled.
+    const orgs = await this.prisma.organization.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        ssoSettings: true,
+        _count: { select: { identityProviders: true, domains: true } },
+      },
+      orderBy: { name: 'asc' },
     });
-    const counts = await this.prisma.identityProvider.groupBy({
-      by: ['organizationId'],
-      _count: { _all: true },
-      where: { organizationId: { not: null } },
-    });
-    const byOrg = new Map(counts.map((c) => [c.organizationId as string, c._count._all]));
-    return rows.map((r) => ({
-      organizationId: r.organizationId,
-      name: r.organization.name,
-      slug: r.organization.slug,
-      platformEnabled: r.platformEnabled,
-      enabled: r.enabled,
-      enforced: r.enforced,
-      emailDomains: r.emailDomains,
-      providerCount: byOrg.get(r.organizationId) ?? 0,
-      loginUrl: this.orgLoginUrl(r.organization.slug),
+
+    return orgs.map((org) => ({
+      organizationId: org.id,
+      name: org.name,
+      slug: org.slug,
+      platformEnabled: org.ssoSettings?.platformEnabled ?? false,
+      enabled: org.ssoSettings?.enabled ?? false,
+      enforced: org.ssoSettings?.enforced ?? false,
+      providerCount: org._count.identityProviders,
+      domainCount: org._count.domains,
+      loginUrl: this.orgLoginUrl(org.slug),
     }));
   }
 

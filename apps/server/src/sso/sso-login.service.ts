@@ -21,6 +21,7 @@ import { signupMode } from '../auth/signup-mode';
 import { OidcStateStore } from './oidc-state.store';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
+import { OrgDomainsService } from './org-domains.service';
 
 interface IdpProfile {
   email: string;
@@ -52,6 +53,7 @@ export class SsoLoginService {
     private readonly sessionsService: SessionsService,
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
+    private readonly domains: OrgDomainsService,
   ) {
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   }
@@ -372,6 +374,10 @@ export class SsoLoginService {
       // SSO sessions ride the same token shape as OTP ones.
       'otp',
       sessionId,
+      // An org's IdP vouches for the identity inside that org and nowhere
+      // else, so the session it produces is confined there. Instance-wide
+      // providers are configured by the platform operator and stay unconfined.
+      provider.organizationId ?? undefined,
     );
 
     return { token, userId: user.id, redirectTo: this.safeReturnTo(returnTo) };
@@ -429,8 +435,15 @@ export class SsoLoginService {
    * org's IdP just because it asserted that email. Whoever controls an IdP can
    * assert any address, so a match on email alone would let one tenant
    * impersonate any user of the platform whose address they know. Access needs
-   * a second fact that didn't come from the IdP — an existing membership, or
-   * an invitation the org already sent to that address.
+   * a second fact that didn't come from the IdP, and the only one that counts
+   * is an existing membership.
+   *
+   * A pending invitation is NOT that second fact. Any org admin can create one
+   * for any address without the recipient ever acting, so treating it as proof
+   * would let an admin mint an invite and then walk into the account behind
+   * that address. Invitations are accepted by the person holding the emailed
+   * token, in their own session — the same rule the direct-add path already
+   * refuses to bend.
    */
   private async resolveOrgUser(provider: IdentityProvider, email: string, name: string) {
     const organizationId = provider.organizationId;
@@ -440,22 +453,37 @@ export class SsoLoginService {
       const membership = await this.prisma.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId, userId: user.id } },
       });
-      if (membership) return user;
-
-      const invitation = await this.prisma.organizationInvitation.findFirst({
-        where: { organizationId, email, expiresAt: { gt: new Date() } },
-      });
-      if (!invitation) {
+      if (!membership) {
         // Generic on purpose: telling the caller "that email exists elsewhere"
         // turns this endpoint into a user-enumeration oracle for any tenant.
         throw new UnauthorizedException('SSO authentication failed');
       }
-
-      await this.acceptInvitation(invitation, user.id);
+      // A tenant's IdP must never be able to mint a platform-operator session:
+      // that would turn "admin of one org" into "admin of the instance".
+      if (user.isSuperAdmin) {
+        this.logger.warn(
+          `Refused org SSO for superadmin ${user.id} via provider ${provider.id} (org ${organizationId})`,
+        );
+        throw new UnauthorizedException('SSO authentication failed');
+      }
       return user;
     }
 
     if (!provider.jitProvisioning) {
+      throw new UnauthorizedException('SSO authentication failed');
+    }
+
+    // Creating an account is claiming an address, so an org may only do it
+    // inside a namespace it has proved it owns (DNS TXT, see OrgDomain).
+    // Otherwise any tenant admin could point a hostile IdP at
+    // ceo@bigcorp.com and pre-create that account before its owner ever
+    // signs up. People outside a verified domain join by invitation, where
+    // the emailed token proves they hold the mailbox.
+    const domain = email.split('@')[1] || '';
+    if (!(await this.domains.isVerifiedFor(organizationId, domain))) {
+      this.logger.warn(
+        `Refused SSO account creation for ${domain} in org ${organizationId}: domain not verified`,
+      );
       throw new UnauthorizedException('SSO authentication failed');
     }
 

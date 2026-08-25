@@ -249,6 +249,268 @@
         ]
       }
     },
+    "/admin/instance-settings/userspace-scheduling": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/userspace-scheduling",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/userspace-scheduling",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/node-pools": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/node-pools",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/node-pools",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/node-pools/{id}": {
+      "delete": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /admin/node-pools/:id",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/node-pools/:id",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/node-pools/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/nodes": {
       "get": {
         "description": "Auth: superadmin",
@@ -466,6 +728,106 @@
           }
         ],
         "summary": "POST /admin/nodes/:id/assignments/:orgId",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/nodes/{id}/labels": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/nodes/:id/labels",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/nodes/{id}/taints": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/nodes/:id/taints",
         "tags": [
           "admin"
         ]
@@ -850,6 +1212,360 @@
           }
         ],
         "summary": "POST /admin/organizations/:id/quota/disconnect",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/organizations": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/organizations",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/organizations/{organizationId}": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/sso/organizations/:organizationId",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/providers": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/providers",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/sso/providers",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/providers/{providerId}": {
+      "delete": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /admin/sso/providers/:providerId",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/sso/providers/:providerId",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/sso/providers/:providerId",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/sso/providers/{providerId}/test": {
+      "post": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/sso/providers/:providerId/test",
         "tags": [
           "admin"
         ]
@@ -4245,6 +4961,56 @@
         ]
       }
     },
+    "/databases/{id}/replicas": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /databases/:id/replicas",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/resources": {
       "patch": {
         "description": "Auth: authenticated (scope: deploy)",
@@ -4991,6 +5757,36 @@
           }
         ],
         "summary": "Expand the storage volume of a database (grow only, max 200Gi)",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/limits": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/limits",
         "tags": [
           "databases"
         ]
@@ -20421,6 +21217,56 @@
         ]
       }
     },
+    "/deployments/{id}/placement": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /deployments/:id/placement",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/pods": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -22160,6 +23006,56 @@
           }
         ],
         "summary": "Rolling-restart all pods of a deployment",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/retry-apply": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /deployments/:id/retry-apply",
         "tags": [
           "deployments"
         ]
@@ -25119,6 +26015,36 @@
         "summary": "GET /endpoints",
         "tags": [
           "endpoints"
+        ]
+      }
+    },
+    "/engine/health": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /engine/health",
+        "tags": [
+          "engine"
         ]
       }
     },
@@ -29972,6 +30898,36 @@
         ]
       }
     },
+    "/node-pools": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /node-pools",
+        "tags": [
+          "node-pools"
+        ]
+      }
+    },
     "/observe/deployments/{id}/build-logs/stream": {
       "get": {
         "description": "Auth: authenticated",
@@ -31679,44 +32635,6 @@
       }
     },
     "/organizations/{id}/sso": {
-      "delete": {
-        "description": "Auth: authenticated",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {},
-                  "type": "object"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "summary": "DELETE /organizations/:id/sso",
-        "tags": [
-          "organizations"
-        ]
-      },
       "get": {
         "description": "Auth: authenticated",
         "parameters": [
@@ -31754,8 +32672,10 @@
         "tags": [
           "organizations"
         ]
-      },
-      "put": {
+      }
+    },
+    "/organizations/{id}/sso/providers": {
+      "get": {
         "description": "Auth: authenticated",
         "parameters": [
           {
@@ -31767,16 +32687,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "content": {
@@ -31798,13 +32708,11 @@
             "cookieAuth": []
           }
         ],
-        "summary": "PUT /organizations/:id/sso",
+        "summary": "GET /organizations/:id/sso/providers",
         "tags": [
           "organizations"
         ]
-      }
-    },
-    "/organizations/{id}/sso/test": {
+      },
       "post": {
         "description": "Auth: authenticated",
         "parameters": [
@@ -31848,7 +32756,265 @@
             "cookieAuth": []
           }
         ],
-        "summary": "POST /organizations/:id/sso/test",
+        "summary": "POST /organizations/:id/sso/providers",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/providers/{providerId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /organizations/:id/sso/providers/:providerId",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /organizations/:id/sso/providers/:providerId",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /organizations/:id/sso/providers/:providerId",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/providers/{providerId}/test": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/sso/providers/:providerId/test",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/settings": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /organizations/:id/sso/settings",
         "tags": [
           "organizations"
         ]
@@ -41987,6 +43153,28 @@
         ]
       }
     },
+    "/scim/v2/*": {
+      "all": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "ALL /scim/v2/*",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
     "/scim/v2/Groups": {
       "get": {
         "description": "Auth: public",
@@ -42208,6 +43396,28 @@
           }
         },
         "summary": "PUT /scim/v2/Groups/:id",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/scim/v2/Me": {
+      "all": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "ALL /scim/v2/Me",
         "tags": [
           "scim"
         ]
@@ -42569,6 +43779,190 @@
         ]
       }
     },
+    "/setup/claim": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /setup/claim",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/github-app": {
+      "delete": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /setup/github-app",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/github-app/callback": {
+      "get": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /setup/github-app/callback",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/github-app/manifest": {
+      "post": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /setup/github-app/manifest",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/github-app/status": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /setup/github-app/status",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/status": {
+      "get": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /setup/status",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/ssh-identities": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -42922,6 +44316,228 @@
           }
         },
         "summary": "GET /sso/:orgId/login",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/callback/{providerId}": {
+      "get": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /sso/callback/:providerId",
+        "tags": [
+          "sso"
+        ]
+      },
+      "post": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /sso/callback/:providerId",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/discover": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /sso/discover",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/org/{slug}": {
+      "get": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /sso/org/:slug",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/providers": {
+      "get": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /sso/providers",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/providers/{providerId}/metadata": {
+      "get": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /sso/providers/:providerId/metadata",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/sso/start/{providerId}": {
+      "get": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /sso/start/:providerId",
         "tags": [
           "sso"
         ]

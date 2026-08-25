@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SsoService } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
 import { SsoCryptoService } from './sso-crypto.service';
+import { OrgDomainsService } from './org-domains.service';
 import { SsoController } from './sso.controller';
 import { SsoAdminController } from './sso-admin.controller';
 import { SsoInstanceController } from './sso-instance.controller';
@@ -17,7 +18,7 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
 @Module({
   imports: [PrismaModule, AuthModule, UsersModule, OrganizationsModule, KubernetesModule],
   controllers: [SsoController, SsoAdminController, SsoInstanceController, VanityDomainController],
-  providers: [SsoService, SsoLoginService, SsoCryptoService, VanityDomainService, OidcStateStore],
-  exports: [SsoService],
+  providers: [SsoService, SsoLoginService, SsoCryptoService, OrgDomainsService, VanityDomainService, OidcStateStore],
+  exports: [SsoService, OrgDomainsService],
 })
 export class SsoModule {}

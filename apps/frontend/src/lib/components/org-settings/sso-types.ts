@@ -59,7 +59,6 @@ export interface SsoSettings {
 	platformEnabled: boolean;
 	enabled: boolean;
 	enforced: boolean;
-	emailDomains: string[];
 	loginLogoUrl: string | null;
 	loginPrimaryColor: string | null;
 	loginBgColor: string | null;
@@ -67,9 +66,22 @@ export interface SsoSettings {
 	loginTagline: string | null;
 }
 
+export interface SsoDomain {
+	id: string;
+	domain: string;
+	verified: boolean;
+	verifiedAt: string | null;
+	lastCheckedAt: string | null;
+	lastError: string | null;
+	recordName: string;
+	recordType: 'TXT';
+	recordValue: string;
+}
+
 export interface SsoOverview {
 	settings: SsoSettings;
 	providers: SsoProvider[];
+	domains: SsoDomain[];
 	presets: SsoProviderPreset[];
 	loginUrl: string | null;
 }

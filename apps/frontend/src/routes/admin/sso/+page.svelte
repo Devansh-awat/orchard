@@ -20,7 +20,7 @@
 		platformEnabled: boolean;
 		enabled: boolean;
 		enforced: boolean;
-		emailDomains: string[];
+		domainCount: number;
 		providerCount: number;
 		loginUrl: string;
 	}
@@ -288,8 +288,8 @@
 
 			{#if !filteredOrgs.length}
 				<EmptyState
-					title="No organizations have touched SSO yet"
-					description="An entry appears here the first time an organization configures single sign-on."
+					title="No organizations match"
+					description="Single sign-on is off for every organization until you allow it here."
 				/>
 			{:else}
 				<ul class="asso-list">
@@ -300,8 +300,9 @@
 								<span class="asso-row-meta">
 									/{org.slug} · {org.providerCount}
 									{org.providerCount === 1 ? 'connection' : 'connections'}
-									{#if org.emailDomains.length}
-										· {org.emailDomains.join(', ')}
+									{#if org.domainCount}
+										· {org.domainCount}
+										{org.domainCount === 1 ? 'domain' : 'domains'}
 									{/if}
 								</span>
 							</div>

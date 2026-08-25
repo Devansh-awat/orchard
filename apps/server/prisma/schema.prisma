@@ -301,6 +301,7 @@ model Organization {
   projects             Project[]
   ssoSettings          OrgSsoSettings?
   identityProviders    IdentityProvider[]
+  domains              OrgDomain[]
   nodeAssignments      OrgNodeAssignment[]
   scimTokens           ScimToken[]
   scimDeprovisioned    ScimDeprovisionedMember[]
@@ -1473,12 +1474,12 @@ model IdentityProvider {
 model OrgSsoSettings {
   organizationId String @id @map("organization_id") @db.Uuid
 
-  platformEnabled Boolean @default(true) @map("platform_enabled")
+  // Off until a platform administrator turns it on for this tenant. SSO lets
+  // an org bind an external identity source to platform accounts, so it is
+  // opt-in per tenant rather than something a new org simply has.
+  platformEnabled Boolean @default(false) @map("platform_enabled")
   enabled         Boolean @default(false)
   enforced        Boolean @default(false)
-
-  // Sign-ins for these email domains get routed to this org's login page.
-  emailDomains String[] @default([]) @map("email_domains")
 
   loginLogoUrl      String? @map("login_logo_url") @db.VarChar(500)
   loginPrimaryColor String? @map("login_primary_color") @db.VarChar(7)
@@ -1492,6 +1493,43 @@ model OrgSsoSettings {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("org_sso_settings")
+}
+
+// An email domain an organization claims, and whether it has proved it.
+//
+// Proof is a DNS TXT record at _orchard-challenge.<domain>, which only someone
+// who controls the domain can publish. That proof is what separates "we would
+// like to own these addresses" from "we do", and two things hang off it:
+//
+//   - routing: typing a work address on the platform login page sends you to
+//     the owning org, so a tenant cannot claim gmail.com and collect the
+//     traffic of everyone who types a gmail address.
+//   - provisioning: an org IdP may only mint NEW accounts inside a namespace
+//     the org owns. Without it, any tenant admin could point a hostile IdP at
+//     ceo@bigcorp.com and pre-create that account before its real owner ever
+//     signs up — the squatting half of the SSO threat model.
+//
+// Unverified rows are harmless placeholders; nothing reads them but the
+// settings screen. Verification is exclusive: the partial unique index in the
+// migration lets many orgs *claim* a domain but only one hold it.
+model OrgDomain {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  domain            String    @db.VarChar(253)
+  verificationToken String    @map("verification_token") @db.VarChar(80)
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamp(6)
+  lastCheckedAt     DateTime? @map("last_checked_at") @db.Timestamp(6)
+  lastError         String?   @map("last_error") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, domain])
+  @@index([domain], map: "idx_org_domains_domain")
+  @@map("org_domains")
 }
 
 // A destination and nothing else: where bytes go. Routing lives in

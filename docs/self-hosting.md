@@ -112,10 +112,18 @@ owner cannot re-enable it from their own settings.
 
 **Per organization** (org settings -> SSO): an org configures its own
 providers the same way, and gets a branded login page at
-`https://<your-domain>/<org-slug>` — no subdomain or DNS record needed. An
-org that lists its email domains also captures anyone typing a matching
-address on the platform login page. "Require single sign-on" blocks email
+`https://<your-domain>/<org-slug>`, with no subdomain to set up. An org that
+has verified an email domain also captures anyone typing a matching address on
+the platform login page. "Require single sign-on" blocks email
 codes, passkeys, and platform providers for that org's members.
+
+Single sign-on is off for every organization until a platform administrator
+allows it. An organization proves it owns an email domain by publishing a TXT record at
+`_orchard-challenge.<domain>`. Verification is what allows an org's provider to
+create accounts for people at that domain who have never signed in before, and
+what routes those addresses to its login page. Only one organization can hold a
+domain. Without it, an org's members join by invitation, where the emailed link
+proves the recipient holds the mailbox.
 
 Secrets (client secrets, signing certificates) are encrypted at rest with
 `SSO_ENCRYPTION_KEY`; without it the server refuses to store them.

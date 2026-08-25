@@ -15,6 +15,7 @@ export interface TokenPayload {
   externalAuthId?: string;
   authMethod?: 'oauth' | 'otp' | 'passkey';
   sessionId?: string;
+  orgScope?: string;
   iat: number;
   exp: number;
 }
@@ -256,6 +257,9 @@ export class OAuthService {
     name: string,
     authMethod: 'otp' | 'passkey',
     sessionId?: string,
+    // Confines the session to one organization. Set for sign-ins that came
+    // from that org's own identity provider; see RequestAuthContext.
+    orgScope?: string,
   ): Promise<string> {
     const payload: Record<string, unknown> = {
       email,
@@ -263,6 +267,7 @@ export class OAuthService {
       authMethod,
     };
     if (sessionId) payload.sessionId = sessionId;
+    if (orgScope) payload.orgScope = orgScope;
 
     const token = await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })
@@ -296,6 +301,7 @@ export class OAuthService {
         externalAuthId: (payload.externalAuthId ?? payload.hackClubId) as string | undefined,
         authMethod: (payload.authMethod as 'oauth' | 'otp' | 'passkey') || 'oauth',
         sessionId: payload.sessionId as string | undefined,
+        orgScope: payload.orgScope as string | undefined,
         iat: payload.iat as number,
         exp: payload.exp as number,
       };

@@ -13,7 +13,46 @@ import {
   ApiTokenScopeName,
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
-import { requestAuthStorage } from './request-context';
+import { requestAuthStorage, RequestAuthContext } from './request-context';
+
+/**
+ * Namespaces an organization-scoped session may never touch.
+ *
+ * A session minted by one org's identity provider is confined to that org
+ * (see RequestAuthContext.sessionOrgId), and the confinement is only worth
+ * anything if the session cannot trade itself in for an unconfined one. Each
+ * of these is a way to do exactly that: mint an API token, enrol a passkey,
+ * move the account's email, adopt an SSH key, or accept an invitation into
+ * some other tenant. The org tree itself is gated in AuthorizationService.
+ *
+ * Read-only self-identity stays reachable so the app can render.
+ */
+const ORG_SCOPED_DENY = ['auth/', 'ssh-identities', 'invitations', 'users/', 'setup', 'admin/'];
+// Method-qualified: reading your own identity is fine, editing it is not.
+const ORG_SCOPED_ALLOW = ['GET auth/me', 'GET auth/logout'];
+
+function deniedToOrgScopedSession(method: string, path: string): boolean {
+  const p = path.replace(/^\/?(apiv1\/)?/, '').replace(/\/+$/, '');
+  if (ORG_SCOPED_ALLOW.includes(`${method.toUpperCase()} ${p}`)) return false;
+  return ORG_SCOPED_DENY.some((d) => p === d.replace(/\/$/, '') || p.startsWith(d));
+}
+
+/**
+ * Publish the request's auth restrictions.
+ *
+ * The context object is created by a middleware in main.ts and mutated here,
+ * rather than installed with enterWith(): a guard's enterWith() frequently
+ * does not survive into the handler, which would silently drop every
+ * restriction below.
+ */
+function publishAuthContext(ctx: RequestAuthContext) {
+  const store = requestAuthStorage.getStore();
+  if (store) {
+    Object.assign(store, ctx);
+    return;
+  }
+  requestAuthStorage.enterWith(ctx);
+}
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
@@ -111,7 +150,7 @@ export class SuperAdminGuard implements CanActivate {
         sessionId: actingSessionId,
         viaMcpGateway: true,
       };
-      requestAuthStorage.enterWith({});
+      publishAuthContext({});
 
       const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(REQUIRES_SUPERADMIN_KEY, [
         context.getHandler(),
@@ -132,6 +171,7 @@ export class SuperAdminGuard implements CanActivate {
 
     // Try JWT first, then fall back to API token
     let authenticated = false;
+    let orgScopeDenied = false;
 
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
@@ -189,19 +229,36 @@ export class SuperAdminGuard implements CanActivate {
       // Touch session in background
       this.sessionsService.touchSession(sessionId).catch(() => {});
 
-      request['auth'] = { userId: dbUserId };
+      // Sessions minted by an organization's own IdP carry that org, and are
+      // confined to it for the rest of the request.
+      const orgScope = payload.orgScope as string | undefined;
+      if (orgScope && deniedToOrgScopedSession(request.method, request.path)) {
+        // Recorded rather than thrown: this block's catch falls through to the
+        // API-token path, which would turn the refusal into a generic 401.
+        orgScopeDenied = true;
+      }
+
+      request['auth'] = { userId: dbUserId, sessionOrgId: orgScope };
       request['user'] = {
         sub: dbUserId,
         email: payload.email,
         name: payload.name,
         externalAuthId,
         sessionId,
+        orgScope,
       };
-      // Session-auth: no token-scope restrictions to publish to the request context.
-      requestAuthStorage.enterWith({});
+      // Session-auth: no token-scope restrictions to publish, but an org-scoped
+      // session publishes its confinement so AuthorizationService can enforce it.
+      publishAuthContext(orgScope ? { sessionOrgId: orgScope } : {});
       authenticated = true;
     } catch {
       // JWT failed — try API token lookup
+    }
+
+    if (orgScopeDenied) {
+      throw new ForbiddenException(
+        'This sign-in is scoped to a single organization and cannot manage account credentials',
+      );
     }
 
     if (!authenticated) {
@@ -238,7 +295,7 @@ export class SuperAdminGuard implements CanActivate {
         tokenProjectIds: restrictedProjectIds,
       };
       request['tokenScopes'] = scopes;
-      requestAuthStorage.enterWith({
+      publishAuthContext({
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
         tokenProjectIds: restrictedProjectIds,
@@ -270,7 +327,12 @@ export class SuperAdminGuard implements CanActivate {
       return true;
     }
 
-    // Default (no decorator) OR explicit @SuperAdmin(): require superadmin
+    // Default (no decorator) OR explicit @SuperAdmin(): require superadmin.
+    // An org-scoped session never qualifies, whatever the underlying account
+    // is — otherwise one tenant's IdP could reach the platform console.
+    if (request['user']?.orgScope) {
+      throw new ForbiddenException('Superadmin access required');
+    }
     const userId = request['user'].sub as string;
     const user = await this.prisma.user.findFirst({
       where: {

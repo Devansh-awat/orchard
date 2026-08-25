@@ -166,6 +166,13 @@ export class AuthorizationService {
     const tokenCtx = requestAuthStorage.getStore();
     const tokenIsProjectScoped =
       !!tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0;
+
+    // Tenant confinement: a session minted by one org's IdP sees only that org,
+    // whatever the underlying account is a member of. Same 404 shape as a
+    // non-member, so the session cannot even discover the user's other orgs.
+    if (tokenCtx?.sessionOrgId && tokenCtx.sessionOrgId !== organizationId) {
+      return null;
+    }
     if (await this.isSuperAdmin(userId)) {
       // Confirm the org actually exists. Without this, superadmins probing a
       // random UUID got a synthetic owner membership and downstream endpoints
@@ -291,6 +298,12 @@ export class AuthorizationService {
       if (!tokenCtx.tokenProjectIds.includes(projectId)) {
         return null;
       }
+    }
+    // Tenant confinement, applied to the project tree as well: most resources
+    // (deployments, databases, ingresses) authorize through here by project id
+    // without an org id ever being named, so the check has to live here too.
+    if (tokenCtx?.sessionOrgId && tokenCtx.sessionOrgId !== organizationId) {
+      return null;
     }
     if (await this.isSuperAdmin(userId)) {
       return {
@@ -425,6 +438,9 @@ export class AuthorizationService {
    */
   async listVisibleProjectIds(organizationId: string, userId: string): Promise<string[] | null> {
     const tokenCtx = requestAuthStorage.getStore();
+    if (tokenCtx?.sessionOrgId && tokenCtx.sessionOrgId !== organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
     const tokenAllowList =
       tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0
         ? tokenCtx.tokenProjectIds

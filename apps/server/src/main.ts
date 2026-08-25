@@ -18,6 +18,7 @@ import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
 import { ProtectionService } from './auth/protection.service';
+import { requestAuthStorage } from './auth/request-context';
 
 // dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
 // telemetry MUST run before Nest is imported so OTel instrumentation hooks
@@ -94,6 +95,18 @@ async function bootstrap() {
   }
 
   app.use(cookieParser());
+
+  // Own the request's auth context from the very first middleware frame.
+  //
+  // The guard used to establish this with AsyncLocalStorage.enterWith(), which
+  // is not reliable from inside a guard: the handler often resumes on a context
+  // captured before the guard ran, and getStore() comes back undefined. That
+  // silently disabled every restriction published this way — project-scoped API
+  // tokens as well as org-scoped sessions. Running the whole request inside
+  // run() and letting the guard mutate this object keeps it visible everywhere.
+  app.use((_req: unknown, _res: unknown, next: () => void) => {
+    requestAuthStorage.run({}, next);
+  });
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   // Hosts that are part of the platform itself (login, status page, docs,

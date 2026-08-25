@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { SessionsService } from '../auth/sessions.service';
+import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 
 @Injectable()
@@ -59,10 +60,19 @@ export class OrganizationsService {
 
     const isSuperAdmin = await this.authz.isSuperAdmin(user.id);
 
+    // This listing reads memberships directly rather than going through
+    // AuthorizationService, so tenant confinement has to be repeated here —
+    // otherwise an org-scoped session could still enumerate the account's
+    // other organizations by name, even while unable to open them.
+    const sessionOrgId = requestAuthStorage.getStore()?.sessionOrgId;
+
+    const memberOf = { members: { some: { userId: user.id } } };
+    let orgFilter: Record<string, unknown> | undefined = memberOf;
+    if (sessionOrgId) orgFilter = { id: sessionOrgId, ...memberOf };
+    else if (isSuperAdmin) orgFilter = undefined;
+
     const orgs = await this.prisma.organization.findMany({
-      where: isSuperAdmin
-        ? undefined
-        : { members: { some: { userId: user.id } } },
+      where: orgFilter,
       include: {
         _count: {
           select: {
