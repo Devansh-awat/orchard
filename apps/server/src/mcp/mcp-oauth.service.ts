@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { SignJWT, jwtVerify } from 'jose';
-import { SessionsService } from '../auth/sessions.service';
+import {
+  SessionsService,
+  MCP_SESSION_AUTH_METHOD,
+  MCP_SESSION_TTL_MS,
+} from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface OAuthClient {
@@ -231,7 +235,7 @@ export class McpOAuthService {
     state?: string;
     code_challenge?: string;
     code_challenge_method?: string;
-  }): Promise<{ error?: string; redirectUrl?: string }> {
+  }): Promise<{ error?: string; error_description?: string; redirectUrl?: string }> {
     console.error(`[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`);
     if (query.response_type !== 'code') {
       console.error(`[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`);
@@ -253,7 +257,11 @@ export class McpOAuthService {
     const client = await this.getClient(query.client_id);
     if (!client) {
       console.error(`[MCP OAuth] Authorize failed: unknown client_id=${query.client_id}`);
-      return { error: 'invalid_client' };
+      return {
+        error: 'invalid_client',
+        error_description:
+          'Unknown client_id. This client was never registered with this server, or its registration was issued by a different one. Clear any manually configured OAuth Client ID and let the client register itself.',
+      };
     }
     if (!client.redirectUris.includes(query.redirect_uri)) {
       console.error(`[MCP OAuth] Authorize failed: redirect_uri not registered for client`);
@@ -323,21 +331,36 @@ export class McpOAuthService {
       return { error: 'Invalid session token' };
     }
 
-    // H6: Require a sessionId on the originating session token so MCP tokens
-    // inherit session revocation. Pre-fix, MCP tokens lived 7 days regardless
-    // of whether the user signed out everywhere.
+    // H6: Require a sessionId on the originating session token so consent can
+    // only be granted from a real, live login rather than a bare JWT.
     if (!payload.sessionId) {
       return { error: 'Session token missing session binding' };
     }
-    // Carry the same sessionId so SuperAdminGuard's session check applies on
-    // every MCP request, and shorten lifetime to 1d.
+    if (!(await this.sessions.validateSession(payload.sessionId))) {
+      return { error: 'Session expired, sign in again' };
+    }
+
+    // Give the grant its own session row rather than riding the browser's.
+    // Sharing one meant every scoped revocation — an org role edit, a project
+    // role edit — tore down the user's MCP clients as collateral. This row is
+    // still a real session, so SuperAdminGuard's check and "sign out
+    // everywhere" both keep working, and it shows up individually revocable in
+    // the sessions UI under the client's own name.
+    const client = await this.getClient(pending.clientId);
+    const mcpSessionId = await this.sessions.createSession({
+      userId: payload.sub,
+      authMethod: MCP_SESSION_AUTH_METHOD,
+      deviceName: client?.name || 'MCP Client',
+      ttlMs: MCP_SESSION_TTL_MS,
+    });
+
     const orchardToken = await this.mintAccessToken({
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
       externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
-      sessionId: payload.sessionId,
+      sessionId: mcpSessionId,
     });
 
     const mcpAuthCode = randomBytes(32).toString('hex');
@@ -464,7 +487,7 @@ export class McpOAuthService {
     }
     // Sliding window: an actively-refreshing MCP client keeps its underlying
     // session alive instead of dying at the fixed 7-day mark.
-    await this.sessions.extendSession(payload.sessionId);
+    await this.sessions.extendSession(payload.sessionId, MCP_SESSION_TTL_MS);
 
     console.error(`[MCP OAuth] Refresh succeeded for sub=${payload.sub}`);
     return {

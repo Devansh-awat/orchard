@@ -60,7 +60,12 @@ export class McpOAuthController {
     });
 
     if (result.error) {
-      return res.status(HttpStatus.BAD_REQUEST).json({ error: result.error });
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        error: result.error,
+        ...(result.error_description
+          ? { error_description: result.error_description }
+          : {}),
+      });
     }
 
     return res.redirect(result.redirectUrl!);

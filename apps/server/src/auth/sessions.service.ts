@@ -13,6 +13,19 @@ import { AuditService } from '../audit/audit.service';
 
 const GEO_LOOKUP_TIMEOUT_MS = 1500;
 
+// Sessions backing an MCP grant are tagged with this auth method so scoped
+// revocation (org/project membership changes) can leave them alone. A browser
+// login dying because a role changed is correct; an MCP client losing its
+// connection because someone edited an unrelated project role is not.
+export const MCP_SESSION_AUTH_METHOD = 'mcp';
+
+// Must match REFRESH_TOKEN_TTL in mcp-oauth.service.ts. When the session
+// expired before the refresh token did, clients spent up to 23 days holding a
+// token the server had already stopped honouring.
+export const MCP_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const BROWSER_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
@@ -30,16 +43,18 @@ export class SessionsService {
     ipAddress?: string;
     userAgent?: string;
     authMethod?: string;
+    deviceName?: string;
+    ttlMs?: number;
   }): Promise<string> {
-    const deviceName = params.userAgent
-      ? this.parseDeviceName(params.userAgent)
-      : null;
+    const deviceName =
+      params.deviceName ??
+      (params.userAgent ? this.parseDeviceName(params.userAgent) : null);
 
     const location = params.ipAddress
       ? await this.lookupLocation(params.ipAddress)
       : null;
 
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + (params.ttlMs ?? BROWSER_SESSION_TTL_MS));
 
     const session = await this.prisma.session.create({
       data: {
@@ -101,7 +116,7 @@ export class SessionsService {
    * extended — revoked or already-expired sessions stay dead, so
    * "sign out everywhere" still wins.
    */
-  async extendSession(sessionId: string): Promise<void> {
+  async extendSession(sessionId: string, ttlMs = BROWSER_SESSION_TTL_MS): Promise<void> {
     await this.prisma.session.updateMany({
       where: {
         id: sessionId,
@@ -109,7 +124,7 @@ export class SessionsService {
         expiresAt: { gt: new Date() },
       },
       data: {
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + ttlMs),
         lastActiveAt: new Date(),
       },
     });
@@ -194,13 +209,26 @@ export class SessionsService {
     return sessionRes.count;
   }
 
-  // Revokes only browser sessions, leaving API tokens intact. Used when a user
-  // is removed from one org/project but may still hold tokens scoped to other
-  // resources they still belong to — full revocation would nuke unrelated work.
-  // Project-scoped tokens for the affected resource are pruned at the call site.
+  // Revokes only browser sessions, leaving API tokens and MCP grants intact.
+  // Used when a user is removed from one org/project but may still hold tokens
+  // scoped to other resources they still belong to — full revocation would nuke
+  // unrelated work. Project-scoped tokens for the affected resource are pruned
+  // at the call site.
+  //
+  // MCP sessions are excluded deliberately. The callers are membership and role
+  // changes, and their stated goal is to force a fresh authz lookup on the next
+  // request — which MCP already does per request, since authorization is
+  // resolved from the DB rather than from a claim baked into the token. Killing
+  // them here bought no safety and broke every connected MCP client any time an
+  // admin touched a role. Use revokeAllSessions for "sign out everywhere",
+  // which is still unconditional and does take MCP grants with it.
   async revokeUserSessions(userId: string): Promise<number> {
     const res = await this.prisma.session.updateMany({
-      where: { userId, revokedAt: null },
+      where: {
+        userId,
+        revokedAt: null,
+        authMethod: { not: MCP_SESSION_AUTH_METHOD },
+      },
       data: { revokedAt: new Date() },
     });
     return res.count;
