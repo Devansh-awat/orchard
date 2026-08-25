@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.1](https://github.com/LeafdTK/leaf/compare/server/v2.14.0...server/v2.14.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* give mcp grants their own session so role changes stop killing them ([7ab489c](https://github.com/LeafdTK/leaf/commit/7ab489c2fdaee21de8c2bd3374a4d3c1b6ee0fce))
+
 ## [2.14.0](https://github.com/LeafdTK/leaf/compare/server/v2.13.0...server/v2.14.0) (2026-08-24)
 
 
