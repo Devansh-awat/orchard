@@ -1170,6 +1170,14 @@ export class GitHubService {
 
     if (!response.ok) {
       const error = await response.text();
+      if (response.status === 404) {
+        await this.prisma.gitHubAppInstallation
+          .updateMany({
+            where: { installationId, suspendedAt: null },
+            data: { suspendedAt: new Date() },
+          })
+          .catch(() => {});
+      }
       throw new BadRequestException(`Failed to get installation access token: ${error}`);
     }
 
@@ -1372,7 +1380,8 @@ export class GitHubService {
           return { installationId: installation.installationId };
         }
       } catch (e) {
-        console.warn(`[GitHub App] Failed to check repo access for installation ${installation.installationId}:`, e);
+        const reason = e instanceof Error ? e.message : String(e);
+        console.warn(`[GitHub App] Failed to check repo access for installation ${installation.installationId}: ${reason}`);
       }
     }
 
