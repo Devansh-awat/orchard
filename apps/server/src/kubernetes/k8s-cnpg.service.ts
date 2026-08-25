@@ -1883,6 +1883,17 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       if (out.includes('does not exist') || out.includes('shared_preload_libraries')) {
         return { installed: false, reason: 'extension_missing', queries: [] };
       }
+      if (
+        out.includes('the database system is shutting down')
+        || out.includes('the database system is starting up')
+        || out.includes('the database system is in recovery mode')
+        || out.includes('could not connect to server')
+        || out.includes('connection refused')
+      ) {
+        throw new ServiceUnavailableException(
+          'The database is restarting. Query statistics are unavailable right now.',
+        );
+      }
       throw new Error(`query stats failed: ${r.stderr || r.stdout}`);
     }
     try {
