@@ -1070,7 +1070,10 @@ export class DatabasesService {
       }
     }
 
-    await this.prisma.database.delete({ where: { id: databaseId } });
+    const removed = await this.prisma.database.deleteMany({ where: { id: databaseId } });
+    if (removed.count === 0) {
+      return { success: true, message: `Database "${database.name}" deleted` };
+    }
 
     this.notifications
       .purgeScope('database', databaseId)
