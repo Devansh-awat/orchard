@@ -26,7 +26,13 @@
 	import { ProviderIcon } from '$lib/components/login';
 	import { apiFetch, toasts } from '$lib/stores';
 	import SsoProviderModal from './SsoProviderModal.svelte';
-	import type { ProviderDraft, SsoDomain, SsoOverview, SsoProvider, SsoSettings } from './sso-types';
+	import type {
+		ProviderDraft,
+		SsoDomain,
+		SsoOverview,
+		SsoProvider,
+		SsoSettings
+	} from './sso-types';
 	import { draftToPayload, DEFAULT_LOGIN_ACCENT, DEFAULT_LOGIN_BG } from './sso-types';
 
 	let {
@@ -550,10 +556,19 @@
 		<div class="sso-block">
 			<h3 class="sso-block-title">Login page</h3>
 			<Field label="Logo URL" for="sso-logo">
-				<Input id="sso-logo" type="url" bind:value={logoUrl} placeholder="https://acme.com/logo.svg" />
+				<Input
+					id="sso-logo"
+					type="url"
+					bind:value={logoUrl}
+					placeholder="https://acme.com/logo.svg"
+				/>
 			</Field>
 			<Field label="Heading" for="sso-welcome">
-				<Input id="sso-welcome" bind:value={welcomeText} placeholder={`Sign in to ${organization?.name ?? ''}`} />
+				<Input
+					id="sso-welcome"
+					bind:value={welcomeText}
+					placeholder={`Sign in to ${organization?.name ?? ''}`}
+				/>
 			</Field>
 			<Field label="Subheading" for="sso-tagline">
 				<Input id="sso-tagline" bind:value={tagline} placeholder="Use your work account" />

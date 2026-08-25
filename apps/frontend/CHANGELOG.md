@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.13.0...frontend/v1.14.0) (2026-08-25)
+
+
+### Features
+
+* dns-verified org domains, tenant-scoped sso sessions, sso off by default ([61eeaa7](https://github.com/LeafdTK/leaf/commit/61eeaa7716bad680433f7fdc93d1f7f87506b796))
+
 ## [1.13.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.12.0...frontend/v1.13.0) (2026-08-24)
 
 

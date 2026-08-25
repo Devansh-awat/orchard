@@ -257,7 +257,6 @@
 			color: 'success'
 		});
 	}
-
 </script>
 
 {#if !$isSignedIn}

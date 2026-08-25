@@ -103,7 +103,6 @@
 	let publicIp = $state('');
 	let publicIpSaving = $state(false);
 
-
 	let notifLoading = $state(false);
 	let notifChannels = $state<NotificationChannel[]>([]);
 	let notifSaving = $state(false);
@@ -415,7 +414,6 @@
 			notifTogglingId = null;
 		}
 	}
-
 
 	function startEditing() {
 		editingName = organization?.name || '';

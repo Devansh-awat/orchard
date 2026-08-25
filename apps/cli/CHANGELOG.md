@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/LeafdTK/leaf/compare/cli/v0.9.0...cli/v0.10.0) (2026-08-25)
+
+
+### Features
+
+* dns-verified org domains, tenant-scoped sso sessions, sso off by default ([61eeaa7](https://github.com/LeafdTK/leaf/commit/61eeaa7716bad680433f7fdc93d1f7f87506b796))
+
 ## [0.9.0](https://github.com/LeafdTK/leaf/compare/cli/v0.8.0...cli/v0.9.0) (2026-08-24)
 
 

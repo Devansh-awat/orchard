@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.15.0](https://github.com/LeafdTK/leaf/compare/server/v2.14.1...server/v2.15.0) (2026-08-25)
+
+
+### Features
+
+* dns-verified org domains, tenant-scoped sso sessions, sso off by default ([61eeaa7](https://github.com/LeafdTK/leaf/commit/61eeaa7716bad680433f7fdc93d1f7f87506b796))
+
+
+### Bug Fixes
+
+* make deleting an already-deleted database idempotent ([56c8093](https://github.com/LeafdTK/leaf/commit/56c8093d0c7402ec83b1a67ee1d6de7200cdf646))
+* return 503 not 500 when query stats hit a restarting database ([c43d7a6](https://github.com/LeafdTK/leaf/commit/c43d7a66f1ab4192f14e1972142ea1fbc722e163))
+* stop logging an error when a build outlives its deployment ([4f918ea](https://github.com/LeafdTK/leaf/commit/4f918eab4dc61e5a7d143282c84a1fc9ec20b476))
+* stop the build watch loop spinning when the informer reports a cached terminal ([08f5b56](https://github.com/LeafdTK/leaf/commit/08f5b567b8074b1a1233faf189652b4fffc0d784))
+* suspend github installations that github no longer has ([9a40d23](https://github.com/LeafdTK/leaf/commit/9a40d23117e6f9869597a2fd989220d4ae052498))
+
 ## [2.14.1](https://github.com/LeafdTK/leaf/compare/server/v2.14.0...server/v2.14.1) (2026-08-25)
 
 

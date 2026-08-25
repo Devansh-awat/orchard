@@ -238,7 +238,12 @@
 		<div class="lg-step-head">
 			<p class="lg-step-title">{email}</p>
 		</div>
-		<Button variant="secondary" class="lg-wide" loading={passkeyLoading} onclick={signInWithPasskey}>
+		<Button
+			variant="secondary"
+			class="lg-wide"
+			loading={passkeyLoading}
+			onclick={signInWithPasskey}
+		>
 			{#if !passkeyLoading}
 				<KeyRound class="h-4 w-4" />
 			{/if}

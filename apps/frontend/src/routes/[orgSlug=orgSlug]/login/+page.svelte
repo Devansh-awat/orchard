@@ -73,11 +73,7 @@
 	<div class="ol-shell">
 		<div class="ol-hero">
 			{#if branding.logoUrl || context.avatarUrl}
-				<RemoteImg
-					src={branding.logoUrl || context.avatarUrl}
-					alt={context.name}
-					class="ol-logo"
-				/>
+				<RemoteImg src={branding.logoUrl || context.avatarUrl} alt={context.name} class="ol-logo" />
 			{:else}
 				<span class="ol-monogram" aria-hidden="true">{context.name.slice(0, 1)}</span>
 			{/if}

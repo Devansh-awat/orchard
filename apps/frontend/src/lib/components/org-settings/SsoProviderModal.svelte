@@ -122,7 +122,10 @@
 			</Field>
 
 			{#if has('tenant')}
-				<Field label={draft.preset === 'microsoft' ? 'Directory (tenant) ID' : 'Realm'} for="spm-tenant">
+				<Field
+					label={draft.preset === 'microsoft' ? 'Directory (tenant) ID' : 'Realm'}
+					for="spm-tenant"
+				>
 					<Input id="spm-tenant" bind:value={draft.tenant} placeholder="organizations" />
 				</Field>
 			{/if}
@@ -180,7 +183,11 @@
 					/>
 				</Field>
 				<Field label="IdP entity ID" for="spm-saml-entity">
-					<Input id="spm-saml-entity" bind:value={draft.samlIdpEntityId} placeholder="urn:idp:acme" />
+					<Input
+						id="spm-saml-entity"
+						bind:value={draft.samlIdpEntityId}
+						placeholder="urn:idp:acme"
+					/>
 				</Field>
 				<Field label="Signing certificate" for="spm-saml-cert">
 					<textarea

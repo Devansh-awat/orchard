@@ -260,9 +260,7 @@
 				Redirecting back to {clientName}...
 			</p>
 		{:else}
-			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>
-				Authorize MCP access
-			</h1>
+			<h1 class="consent-title" {@attach motionStagger({ index: 1 })}>Authorize MCP access</h1>
 			<p class="consent-subtitle" {@attach motionStagger({ index: 2 })}>
 				<strong>{clientName}</strong> is requesting access to your Orchard account.
 			</p>
