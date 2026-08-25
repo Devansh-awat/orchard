@@ -523,8 +523,9 @@ export class ImageBuilderService {
         where: { id: deploymentId },
         select: { buildStepTimestamps: true },
       });
+      if (!deployment) return;
 
-      const timestamps = (deployment?.buildStepTimestamps as Record<string, number> | null) || {};
+      const timestamps = (deployment.buildStepTimestamps as Record<string, number> | null) || {};
       timestamps[step] = Date.now();
 
       await this.prisma.deployment.update({
@@ -532,6 +533,7 @@ export class ImageBuilderService {
         data: { buildStep: step, buildStepTimestamps: timestamps },
       });
     } catch (error) {
+      if ((error as { code?: string })?.code === 'P2025') return;
       console.error('[ImageBuilder] Failed to set build step:', error);
     }
   }
