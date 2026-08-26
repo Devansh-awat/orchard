@@ -10,17 +10,10 @@
 
 <br>
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?style=for-the-badge&labelColor=1a0f11)](LICENSE)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-native-c93a4f?style=for-the-badge&logo=kubernetes&logoColor=white&labelColor=1a0f11)](https://kubernetes.io)
-[![Self-hosted](https://img.shields.io/badge/self--hosted-always-c93a4f?style=for-the-badge&labelColor=1a0f11)](https://docs.orchard.my/start/install/)
-[![Hack Club](https://img.shields.io/badge/Hack%20Club-project-c93a4f?style=for-the-badge&labelColor=1a0f11)](https://hackclub.com)
-
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
-![Svelte](https://img.shields.io/badge/Svelte-FF3E00?style=flat-square&logo=svelte&logoColor=white)
-![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![Helm](https://img.shields.io/badge/Helm-0F1689?style=flat-square&logo=helm&logoColor=white)
+[![Release](https://github.com/LeafdTK/leaf/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/LeafdTK/leaf/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?labelColor=1a0f11)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-docs.orchard.my-c93a4f?labelColor=1a0f11)](https://docs.orchard.my)
+[![Helm chart](https://img.shields.io/badge/helm-ghcr.io%2Fleafdtk%2Fleaf-c93a4f?labelColor=1a0f11)](https://github.com/LeafdTK/leaf/pkgs/container/leaf%2Fcharts%2Forchard)
 
 **[Documentation](https://docs.orchard.my)** ·
 [Install](https://docs.orchard.my/start/install/) ·
