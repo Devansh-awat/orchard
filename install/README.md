@@ -102,21 +102,83 @@ DNS-01 issuer; see [SETUP-wildcards.md](../infra/charts/orchard/SETUP-wildcards.
 **Public TCP/UDP in tunnel mode.** Cloudflare Tunnels carry HTTP only, so
 publicly exposed databases and raw ports are unavailable there.
 
-## Environment overrides
+## Running it non-interactively
 
-Every prompt has an environment variable, so the whole thing can run unattended:
+Nothing prompts when every answer is supplied. Each flag has an environment
+variable equivalent, and **flags win over environment variables**. Run
+`./install.sh --help` for the same list at the terminal.
+
+`--yes` is what suppresses the prompts. Without it the installer still asks, it
+just pre-fills what you gave it.
 
 ```bash
-ORCHARD_ASSUME_YES=true \
-ORCHARD_DOMAIN=orchard.example.com \
-ORCHARD_APP_DOMAIN=apps.example.com \
-ORCHARD_ACME_EMAIL=me@example.com \
-ORCHARD_INGRESS_MODE=public \
-ORCHARD_UPDATE_POLICY=manual \
-  sudo -E bash install.sh
+sudo ./install.sh --yes \
+  --mode public \
+  --domain orchard.example.com \
+  --app-domain apps.example.com \
+  --email me@example.com \
+  --updates manual
 ```
 
-Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
-`ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
-`ORCHARD_ZOT_NODE_PORT`, `ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
-`K3S_VERSION`, `GATEWAY_API_VERSION`.
+### How traffic gets in
+
+| Flag | Environment variable | Meaning |
+|---|---|---|
+| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted. |
+| `--domain <host>` | `ORCHARD_DOMAIN` | Where the Orchard UI lives. Defaults to an `sslip.io` name in `lan` mode. |
+| `--app-domain <host>` | `ORCHARD_APP_DOMAIN` | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`. |
+| `--email <address>` | `ORCHARD_ACME_EMAIL` | Let's Encrypt contact. Required in `public` mode. |
+| `--tunnel-token <token>` | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode. |
+
+### Behaviour
+
+| Flag | Environment variable | Default |
+|---|---|---|
+| `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes` |
+| `--yes`, `-y` | `ORCHARD_ASSUME_YES` | `false` |
+| `--help`, `-h` | | |
+| | `NO_COLOR` | unset. Any value disables colour. |
+
+### Versions and images
+
+| Flag | Environment variable | Default |
+|---|---|---|
+| `--chart <ref>` | `ORCHARD_CHART` | `oci://ghcr.io/leafdtk/leaf/charts/orchard` |
+| `--chart-version <semver>` | `ORCHARD_VERSION` | latest |
+| `--image-tag <tag>` | `ORCHARD_IMAGE_TAG` | `latest` |
+| `--image-pull-policy <policy>` | `ORCHARD_IMAGE_PULL_POLICY` | `Always` |
+| `--image-registry <host>` | `ORCHARD_IMAGE_REGISTRY` | `ghcr.io` |
+| `--image-repository <path>` | `ORCHARD_IMAGE_REPOSITORY` | `leafdtk/leaf` |
+
+The image tag is pinned rather than inherited from the chart's `appVersion`,
+because the server and the frontend are versioned independently and one
+`appVersion` cannot name both.
+
+### Cluster
+
+| Flag | Environment variable | Default |
+|---|---|---|
+| `--k3s-version <version>` | `K3S_VERSION` | `v1.31.5+k3s1` |
+| `--gateway-api-version <ver>` | `GATEWAY_API_VERSION` | `v1.2.1` |
+| `--node-port-range <lo-hi>` | `ORCHARD_NODE_PORT_RANGE` | `30000-30100` |
+| `--registry-port <port>` | `ORCHARD_ZOT_NODE_PORT` | `30100` |
+| `--registry-host <host>` | `ORCHARD_REGISTRY_HOST` | `registry.orchard.local` |
+| `--state-dir <path>` | `ORCHARD_STATE_DIR` | `/etc/orchard` |
+
+The node port range is what your apps can claim, so it is also the range you
+forward on a router. The registry port must sit inside it; the installer refuses
+to start if it does not.
+
+## Seeing what an install looks like
+
+`./demo.sh` runs the installer's real interface against fake work. It touches
+nothing, so it is safe anywhere:
+
+```bash
+./demo.sh                     # the happy path, roughly a minute
+DEMO_SPEED=4 ./demo.sh        # four times faster
+DEMO_FAIL=cert-manager ./demo.sh   # watch a step fail
+```
+
+It sources `install.sh` for its rendering rather than copying it, so what you
+see is what a real install prints.

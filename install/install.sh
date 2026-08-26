@@ -29,25 +29,104 @@ START_TS=$(date +%s)
 IS_TTY=false
 if [ -t 1 ]; then IS_TTY=true; fi
 
-STEP_N=0
-STEP_TOTAL=12
-REMAINING=0
+if [ "$IS_TTY" = true ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
+  C_GREEN=$'\033[38;5;114m'; C_LEAF=$'\033[38;5;150m'
+  C_AMBER=$'\033[38;5;179m'; C_RED=$'\033[38;5;174m'; C_GREY=$'\033[38;5;245m'
+else
+  C_RESET=''; C_DIM=''; C_BOLD=''
+  C_GREEN=''; C_LEAF=''; C_AMBER=''; C_RED=''; C_GREY=''
+fi
 
-bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-info() { printf '    %s\n' "$*"; }
-warn() { printf '\033[1;33m  ! %s\033[0m\n' "$*" >&2; }
-die() { printf '\033[1;31m  x %s\033[0m\n' "$*" >&2; exit 1; }
+WIDTH=68
+SPINNER=('...' '.. ' '.  ' ' . ' '  .' ' ..')
+if [ "$IS_TTY" = true ]; then
+  SPINNER=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+fi
+
+PLAN_TITLES=(
+  "Check this machine"
+  "Find how traffic gets in"
+  "Choose domains"
+  "Install k3s"
+  "Install Helm"
+  "Install platform operators"
+  "Install the container registry"
+  "Install the Cloudflare tunnel"
+  "Write the configuration"
+  "Install Orchard"
+  "Install the updater"
+  "Finish"
+)
+PLAN_COSTS=(6 6 6 120 20 240 105 45 4 300 4 0)
+
+STEP_N=0
+STEP_TOTAL=${#PLAN_TITLES[@]}
+REMAINING=0
 
 fmt_secs() {
   if [ "$1" -ge 60 ]; then printf '%dm%02ds' $(($1 / 60)) $(($1 % 60)); else printf '%ds' "$1"; fi
 }
 
+elapsed() { fmt_secs $(($(date +%s) - START_TS)); }
+
+rule() {
+  local n=$1 out=''
+  while [ "$n" -gt 0 ]; do out="${out}─"; n=$((n - 1)); done
+  printf '%s' "$out"
+}
+
+pad_line() {
+  local text=$1 plain
+  plain=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;]*m//g')
+  printf '%s%s│%s %s%*s %s│%s\n' \
+    '  ' "$C_GREEN" "$C_RESET" "$text" $((WIDTH - ${#plain} - 2)) '' "$C_GREEN" "$C_RESET"
+}
+
+box_top() { printf '%s%s╭%s╮%s\n' '  ' "$C_GREEN" "$(rule $WIDTH)" "$C_RESET"; }
+box_bottom() { printf '%s%s╰%s╯%s\n' '  ' "$C_GREEN" "$(rule $WIDTH)" "$C_RESET"; }
+
+banner() {
+  printf '\n'
+  box_top
+  pad_line ""
+  pad_line "$C_LEAF$C_BOLD  ORCHARD$C_RESET$C_DIM   self-hosted app platform$C_RESET"
+  pad_line ""
+  pad_line "$C_DIM  One box, one command. About 10 minutes on a clean machine.$C_RESET"
+  pad_line ""
+  box_bottom
+  printf '\n'
+}
+
+show_plan() {
+  printf '  %sWhat happens next%s\n' "$C_BOLD" "$C_RESET"
+  local i=0
+  while [ "$i" -lt "$STEP_TOTAL" ]; do
+    printf '  %s%2d  %s%s\n' "$C_GREY" $((i + 1)) "${PLAN_TITLES[$i]}" "$C_RESET"
+    i=$((i + 1))
+  done
+  printf '\n'
+}
+
+info() { printf '      %s%s%s\n' "$C_GREY" "$*" "$C_RESET"; }
+note() { printf '      %s\n' "$*"; }
+bold() { printf '  %s%s%s\n' "$C_BOLD" "$*" "$C_RESET"; }
+warn() { printf '   %s!%s  %s%s%s\n' "$C_AMBER" "$C_RESET" "$C_AMBER" "$*" "$C_RESET" >&2; }
+die() { printf '\n   %sx  %s%s\n\n' "$C_RED" "$*" "$C_RESET" >&2; exit 1; }
+
 step() {
-  local title=$1 cost=${2:-0} left=""
+  local title left='' head
+  title=${PLAN_TITLES[$STEP_N]}
+  local cost=${PLAN_COSTS[$STEP_N]}
   STEP_N=$((STEP_N + 1))
-  if [ "$REMAINING" -gt 45 ]; then left=", ~$(fmt_secs "$REMAINING") left"; fi
-  printf '\n\033[1;32m==> [%d/%d] %s\033[0m \033[2m(%s elapsed%s)\033[0m\n' \
-    "$STEP_N" "$STEP_TOTAL" "$title" "$(fmt_secs $(($(date +%s) - START_TS)))" "$left"
+
+  if [ "$REMAINING" -gt 45 ]; then left=" ${C_DIM}·${C_RESET} ${C_GREY}~$(fmt_secs "$REMAINING") left${C_RESET}"; fi
+  head="  ${C_GREEN}${C_BOLD}${STEP_N}/${STEP_TOTAL}${C_RESET}  ${C_BOLD}${title}${C_RESET}"
+
+  printf '\n%s\n' "$head"
+  printf '  %s%s%s  %s%s elapsed%s%s\n' \
+    "$C_GREEN" "$(rule 4)" "$C_RESET" "$C_GREY" "$(elapsed)" "$C_RESET" "$left"
+
   REMAINING=$((REMAINING - cost))
   if [ "$REMAINING" -lt 0 ]; then REMAINING=0; fi
 }
@@ -55,7 +134,8 @@ step() {
 run_step() {
   local label=$1 typical=$2
   shift 2
-  local log t0 pid rc=0 i=0 beat=0 secs
+  local log t0 pid rc=0 i=0 beat=0 secs frame
+
   log=$(mktemp)
   t0=$(date +%s)
 
@@ -65,12 +145,13 @@ run_step() {
   while kill -0 "$pid" 2>/dev/null; do
     secs=$(($(date +%s) - t0))
     if [ "$IS_TTY" = true ]; then
-      printf '\r    \033[1;36m%s\033[0m %s \033[2m%s / ~%s\033[0m\033[K' \
-        "$(printf '%s' '|/-\' | cut -c$((i % 4 + 1)))" "$label" "$(fmt_secs "$secs")" "$typical"
+      frame=${SPINNER[$((i % ${#SPINNER[@]}))]}
+      printf '\r      %s%s%s %s %s%s / ~%s%s\033[K' \
+        "$C_LEAF" "$frame" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$typical" "$C_RESET"
       i=$((i + 1))
     elif [ "$secs" -ge $((beat + 30)) ]; then
       beat=$secs
-      printf '    %s ... %s elapsed (typically %s)\n' "$label" "$(fmt_secs "$secs")" "$typical"
+      printf '      .. %s  %s elapsed (typically %s)\n' "$label" "$(fmt_secs "$secs")" "$typical"
     fi
     sleep 1
   done
@@ -80,18 +161,105 @@ run_step() {
 
   if [ "$rc" -ne 0 ]; then
     if [ "$IS_TTY" = true ]; then printf '\r\033[K'; fi
-    printf '\033[1;31m  x %s failed after %s\033[0m\n' "$label" "$(fmt_secs "$secs")" >&2
-    tail -25 "$log" >&2
+    printf '      %sx%s %s %sfailed after %s%s\n\n' \
+      "$C_RED" "$C_RESET" "$label" "$C_RED" "$(fmt_secs "$secs")" "$C_RESET" >&2
+    sed 's/^/        /' "$log" | tail -25 >&2
+    printf '\n' >&2
     rm -f "$log"
     exit 1
   fi
 
   if [ "$IS_TTY" = true ]; then
-    printf '\r    \033[1;32mok\033[0m %s \033[2m%s\033[0m\033[K\n' "$label" "$(fmt_secs "$secs")"
+    printf '\r      %s✓%s %s %s%s%s\033[K\n' \
+      "$C_GREEN" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$C_RESET"
   else
-    printf '    ok %s (%s)\n' "$label" "$(fmt_secs "$secs")"
+    printf '      ok %s (%s)\n' "$label" "$(fmt_secs "$secs")"
   fi
   rm -f "$log"
+}
+
+usage() {
+  cat <<'EOF'
+
+  Orchard installer
+
+  Usage:
+    install.sh [flags]
+
+  Every flag has an environment variable equivalent. Flags win.
+
+  How traffic gets in
+    --mode <public|tunnel|lan>   ORCHARD_INGRESS_MODE   how the internet reaches this box
+    --domain <host>              ORCHARD_DOMAIN         where the Orchard UI lives
+    --app-domain <host>          ORCHARD_APP_DOMAIN     wildcard parent for deployed apps
+    --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, public mode
+    --tunnel-token <token>       ORCHARD_TUNNEL_TOKEN   Cloudflare Tunnel token, tunnel mode
+
+  Behaviour
+    --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
+    --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
+    --help, -h                                         show this and exit
+
+  Versions and images
+    --chart <ref>                ORCHARD_CHART          helm chart, OCI ref or local path
+    --chart-version <semver>     ORCHARD_VERSION        pin the chart version
+    --image-tag <tag>            ORCHARD_IMAGE_TAG      image tag for server and frontend
+    --image-pull-policy <policy> ORCHARD_IMAGE_PULL_POLICY
+    --image-registry <host>      ORCHARD_IMAGE_REGISTRY
+    --image-repository <path>    ORCHARD_IMAGE_REPOSITORY
+
+  Cluster
+    --k3s-version <version>      K3S_VERSION
+    --gateway-api-version <ver>  GATEWAY_API_VERSION
+    --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
+    --registry-port <port>       ORCHARD_ZOT_NODE_PORT    must sit inside the range
+    --registry-host <host>       ORCHARD_REGISTRY_HOST    name the kubelet pulls by
+    --state-dir <path>           ORCHARD_STATE_DIR        where values.yaml is written
+
+  Also honoured: NO_COLOR disables all colour.
+
+  Fully non-interactive example:
+
+    ORCHARD_ASSUME_YES=true install.sh \
+      --mode public \
+      --domain orchard.example.com \
+      --app-domain apps.example.com \
+      --email me@example.com \
+      --updates manual
+
+EOF
+}
+
+need_value() {
+  if [ -z "${2:-}" ]; then die "$1 needs a value"; fi
+}
+
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --mode) need_value "$1" "${2:-}"; ORCHARD_INGRESS_MODE=$2; shift 2 ;;
+      --domain) need_value "$1" "${2:-}"; ORCHARD_DOMAIN=$2; shift 2 ;;
+      --app-domain) need_value "$1" "${2:-}"; ORCHARD_APP_DOMAIN=$2; shift 2 ;;
+      --email) need_value "$1" "${2:-}"; ORCHARD_ACME_EMAIL=$2; shift 2 ;;
+      --tunnel-token) need_value "$1" "${2:-}"; ORCHARD_TUNNEL_TOKEN=$2; shift 2 ;;
+      --updates) need_value "$1" "${2:-}"; ORCHARD_UPDATE_POLICY=$2; shift 2 ;;
+      --chart) need_value "$1" "${2:-}"; CHART_REF=$2; shift 2 ;;
+      --chart-version) need_value "$1" "${2:-}"; ORCHARD_VERSION=$2; shift 2 ;;
+      --image-tag) need_value "$1" "${2:-}"; IMAGE_TAG=$2; shift 2 ;;
+      --image-pull-policy) need_value "$1" "${2:-}"; IMAGE_PULL_POLICY=$2; shift 2 ;;
+      --image-registry) need_value "$1" "${2:-}"; IMAGE_REGISTRY=$2; shift 2 ;;
+      --image-repository) need_value "$1" "${2:-}"; IMAGE_REPOSITORY=$2; shift 2 ;;
+      --k3s-version) need_value "$1" "${2:-}"; K3S_VERSION=$2; shift 2 ;;
+      --gateway-api-version) need_value "$1" "${2:-}"; GATEWAY_API_VERSION=$2; shift 2 ;;
+      --node-port-range) need_value "$1" "${2:-}"; NODE_PORT_RANGE=$2; shift 2 ;;
+      --registry-port) need_value "$1" "${2:-}"; ZOT_NODE_PORT=$2; shift 2 ;;
+      --registry-host) need_value "$1" "${2:-}"; REGISTRY_HOST=$2; shift 2 ;;
+      --state-dir) need_value "$1" "${2:-}"; STATE_DIR=$2; VALUES_FILE="$STATE_DIR/values.yaml"; shift 2 ;;
+      -y|--yes) ASSUME_YES=true; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) usage; die "unknown flag: $1" ;;
+    esac
+  done
 }
 
 ask() {
@@ -107,7 +275,7 @@ ask() {
 }
 
 preflight() {
-  step "Checking this machine"
+  step
 
   [ "$(id -u)" -eq 0 ] || die "run as root (k3s needs it)"
   [ "$(uname -s)" = Linux ] || die "Linux only; this is $(uname -s)"
@@ -167,7 +335,7 @@ preflight() {
 }
 
 detect_network() {
-  step "Working out how traffic reaches this box"
+  step
 
   PUBLIC_IP=$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)
   LOCAL_IPS=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 || true)
@@ -216,7 +384,7 @@ choose_ingress_mode() {
 }
 
 collect_domains() {
-  step "Domains"
+  step
 
   if [ "$INGRESS_MODE" = lan ]; then
     ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-orchard.${PRIMARY_IP//./-}.sslip.io}
@@ -321,7 +489,7 @@ wait_for_node() {
 }
 
 install_k3s() {
-  step "Installing k3s" 120
+  step
 
   if command -v k3s >/dev/null 2>&1; then
     info "k3s already installed, leaving it alone"
@@ -338,7 +506,7 @@ helm_download() {
 }
 
 ensure_helm() {
-  step "Installing Helm" 20
+  step
   if command -v helm >/dev/null 2>&1; then
     info "helm already installed"
     return
@@ -354,7 +522,7 @@ add_helm_repos() {
 }
 
 install_operators() {
-  step "Installing platform operators" 240
+  step
 
   run_step "Gateway API CRDs" 15s \
     kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml"
@@ -414,7 +582,7 @@ EOF
 }
 
 install_registry() {
-  step "Installing the bundled registry (zot)" 105
+  step
 
   kubectl create namespace orchard >/dev/null 2>&1 || true
 
@@ -525,7 +693,7 @@ restart_k3s() {
 }
 
 install_tunnel() {
-  step "Installing cloudflared" 45
+  step
   if [ "$INGRESS_MODE" != tunnel ]; then
     info "not needed in $INGRESS_MODE mode"
     return 0
@@ -584,7 +752,7 @@ size_workloads() {
 }
 
 write_values() {
-  step "Writing $VALUES_FILE"
+  step
 
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
@@ -715,7 +883,7 @@ EOF
 }
 
 install_orchard() {
-  step "Installing Orchard" 300
+  step
 
   kubectl create namespace network >/dev/null 2>&1 || true
 
@@ -733,7 +901,7 @@ install_orchard() {
 }
 
 install_updater() {
-  step "Installing the updater" 5
+  step
 
   cat > /usr/local/bin/orchard-update <<EOF
 #!/usr/bin/env bash
@@ -776,36 +944,49 @@ summary() {
   local scheme=https
   if [ "$USE_TLS" = false ]; then [ "$INGRESS_MODE" != tunnel ] && scheme=http; fi
 
-  step "Done"
-  cat <<EOF
+  step
 
-  Installed in $(fmt_secs $(($(date +%s) - START_TS))).
+  printf '\n'
+  box_top
+  pad_line ""
+  pad_line "$C_LEAF$C_BOLD  Orchard is ready$C_RESET$C_GREY   installed in $(elapsed)$C_RESET"
+  pad_line ""
+  pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN"
+  pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN"
+  pad_line ""
+  pad_line "  ${C_GREY}Config${C_RESET}     $VALUES_FILE"
+  pad_line "  ${C_GREY}Upgrade${C_RESET}    orchard-update"
+  pad_line "  ${C_GREY}Logs${C_RESET}       kubectl -n orchard logs -f deploy/server"
+  pad_line ""
+  box_bottom
 
-  Orchard is running at $scheme://$ORCHARD_DOMAIN
-  Apps get subdomains of $ORCHARD_APP_DOMAIN
+  printf '\n  %sOne more step%s\n' "$C_BOLD" "$C_RESET"
+  note "Sign up with the first account, then claim the instance. Its setup"
+  note "token is printed in the server log on first boot:"
+  printf '\n      %skubectl -n orchard logs deploy/server | grep -A2 %s\n' \
+    "$C_LEAF" "'no superadmin'$C_RESET"
+  printf '\n'
+  info "Restart the server to mint a fresh token if it expires."
+  printf '\n'
 
-  Sign up with the first account, then claim the instance. The setup token is
-  printed in the server log on first boot:
-
-    kubectl -n orchard logs deploy/server | grep -A2 'no superadmin'
-
-  Restart the server to mint a fresh token if it expires.
-
-  Config:   $VALUES_FILE
-  Upgrade:  orchard-update
-  Logs:     kubectl -n orchard logs -f deploy/server
-
-EOF
   if [ "$INGRESS_MODE" = tunnel ]; then
-    warn "Tunnel mode: public TCP/UDP ports and public databases are unavailable."
+    warn "Tunnel mode carries HTTP only, so public databases and raw TCP ports are off."
   fi
   warn "Builds run with host-level privileges. Only give build access to people you trust."
+  printf '\n'
 }
 
 main() {
-  REMAINING=760
-  printf '\n\033[1;32m  Orchard installer\033[0m\n'
-  printf '\033[2m  Single box, single command. Roughly 10 minutes on a clean machine.\033[0m\n'
+  parse_args "$@"
+  local i=0
+  REMAINING=0
+  while [ "$i" -lt "$STEP_TOTAL" ]; do
+    REMAINING=$((REMAINING + PLAN_COSTS[i]))
+    i=$((i + 1))
+  done
+
+  banner
+  show_plan
   preflight
   detect_network
   choose_ingress_mode
@@ -823,4 +1004,6 @@ main() {
   summary
 }
 
-main "$@"
+if [ "${ORCHARD_LIB_ONLY:-}" != "1" ]; then
+  main "$@"
+fi
