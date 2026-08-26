@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { Sparkles, Plus, RefreshCw } from 'lucide-svelte';
+	import { Sparkles, Plus, RefreshCw, SquareTerminal } from 'lucide-svelte';
 	import { EmptyState as UiEmptyState, Button } from '$lib/components/ui';
+	import CliModal from '$lib/components/CliModal.svelte';
 
 	let {
 		variant,
@@ -13,6 +14,8 @@
 		orgSlug: string;
 		loadError?: { status: number; message: string } | null;
 	} = $props();
+
+	let cliOpen = $state(false);
 </script>
 
 {#if variant === 'error' && loadError}
@@ -34,7 +37,11 @@
 	>
 		{#snippet icon()}<Sparkles size={28} />{/snippet}
 		<Button variant="primary" href="/{orgSlug}/new"><Plus size={15} /> New app</Button>
+		<Button variant="ghost" onclick={() => (cliOpen = true)}>
+			<SquareTerminal size={15} /> Or use the terminal
+		</Button>
 	</UiEmptyState>
+	<CliModal bind:open={cliOpen} />
 {:else}
 	<UiEmptyState
 		title="No projects to show yet"

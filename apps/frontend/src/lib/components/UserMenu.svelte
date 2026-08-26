@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { user, pendingInvitations } from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
-	import { Moon, Monitor, Palette, Mail } from 'lucide-svelte';
+	import { Moon, Monitor, Palette, Mail, SquareTerminal } from 'lucide-svelte';
 	import { Settings, LogOut, Sun, ChevronUp, KeyRound } from '@jis3r/icons';
 	import { browser } from '$app/environment';
 	import { Avatar } from '$lib/components/ui';
+	import CliModal from './CliModal.svelte';
 	import {
 		motionPopover,
 		motionStagger as motionStaggerBase,
@@ -19,6 +20,7 @@
 	let { collapsed = false }: Props = $props();
 
 	let open = $state(false);
+	let cliOpen = $state(false);
 	let render = $state(false);
 	$effect(() => {
 		if (open) render = true;
@@ -239,6 +241,18 @@
 					>
 					MCP Server
 				</a>
+				<button
+					type="button"
+					class="user-menu-item"
+					onclick={() => {
+						open = false;
+						cliOpen = true;
+					}}
+					{@attach springHover({ lift: -1 })}
+				>
+					<SquareTerminal size={16} />
+					Command Line
+				</button>
 				<a
 					href="/user/settings?tab=tokens"
 					class="user-menu-item"
@@ -273,6 +287,8 @@
 		</div>
 	{/if}
 </div>
+
+<CliModal bind:open={cliOpen} />
 
 <style>
 	.user-menu.is-collapsed {
