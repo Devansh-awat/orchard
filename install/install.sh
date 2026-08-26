@@ -595,6 +595,9 @@ write_values() {
   fi
   if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; fi
 
+  local cookie_secure=true
+  if [ "$scheme" = http ]; then cookie_secure=false; fi
+
   JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
   ENCRYPTION_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
   SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
@@ -630,6 +633,7 @@ server:
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN }
+    - { name: SESSION_COOKIE_SECURE, value: "$cookie_secure" }
     - { name: MAX_CONCURRENT_BUILDS, value: "$MAX_BUILDS" }
     - { name: DOCKER_REGISTRY_PUSH, value: zot.orchard.svc.cluster.local:5000 }
     - { name: DOCKER_REGISTRY_PULL, value: $REGISTRY_HOST }
