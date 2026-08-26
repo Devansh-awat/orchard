@@ -6234,6 +6234,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -7291,6 +7298,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -8318,6 +8332,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -9302,6 +9323,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -10326,6 +10354,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -11327,6 +11362,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -12661,6 +12703,13 @@
                       },
                       "type": "array"
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -13722,6 +13771,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -14715,6 +14771,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -15908,6 +15971,13 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -17139,6 +17209,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -18487,6 +18564,13 @@
                       },
                       "type": "array"
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "ingresses": {
                       "items": {
                         "properties": {
@@ -19456,6 +19540,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "installCommand": {
                       "type": [
                         "string",
@@ -20104,6 +20195,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -21676,6 +21774,354 @@
         ]
       }
     },
+    "/deployments/{id}/pull-policy": {
+      "patch": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "imagePullPolicy": {
+                    "description": "Always re-pulls on every pod start, which is what makes Restart pick up a moved tag like :latest. IfNotPresent reuses the layer already cached on the node.",
+                    "enum": [
+                      "Always",
+                      "IfNotPresent"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "imagePullPolicy"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "autoDeployBranch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "autoDeployEnabled": {
+                      "type": "boolean"
+                    },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "buildError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "buildFromRoot": {
+                      "type": "boolean"
+                    },
+                    "buildLogs": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "buildStatus": {
+                      "type": "string"
+                    },
+                    "buildStep": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "buildStepTimestamps": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "buildType": {
+                      "enum": [
+                        "dockerfile",
+                        "railpack"
+                      ],
+                      "type": "string"
+                    },
+                    "buildWithDepot": {
+                      "type": "boolean"
+                    },
+                    "composeServiceName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "composeStackId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cpuRequestMilli": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "deployStrategy": {
+                      "enum": [
+                        "rollingUpdate",
+                        "recreate"
+                      ],
+                      "type": "string"
+                    },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "environmentId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "githubBranch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "githubInstallationId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "githubRepo": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "healthCheckCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "healthCheckEnabled": {
+                      "type": "boolean"
+                    },
+                    "healthCheckInterval": {
+                      "type": "number"
+                    },
+                    "healthCheckPath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "healthCheckPort": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "healthCheckRetries": {
+                      "type": "number"
+                    },
+                    "healthCheckTimeout": {
+                      "type": "number"
+                    },
+                    "healthCheckType": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "livenessEnabled": {
+                      "type": "boolean"
+                    },
+                    "memoryRequestBytes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "namespace": {
+                      "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "persistentBuildCache": {
+                      "type": "boolean"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "readinessEnabled": {
+                      "type": "boolean"
+                    },
+                    "replicas": {
+                      "type": "number"
+                    },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startupEnabled": {
+                      "type": "boolean"
+                    },
+                    "startupFailureThreshold": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "tailscaleExposed": {
+                      "type": "boolean"
+                    },
+                    "tailscaleHostname": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "templateInstanceId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectId",
+                    "name",
+                    "namespace",
+                    "replicas",
+                    "status",
+                    "buildStatus",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Change whether Kubernetes re-pulls the image on every pod start",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/rebuild": {
       "post": {
         "description": "Auth: authenticated (scope: deploy)",
@@ -21927,6 +22373,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -22887,6 +23340,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "installCommand": {
                       "type": [
                         "string",
@@ -23383,6 +23843,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -24417,6 +24884,13 @@
                         "null"
                       ]
                     },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "installCommand": {
                       "type": [
                         "string",
@@ -24829,6 +25303,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -27924,6 +28405,13 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "imagePullPolicy": {
+                          "enum": [
+                            "Always",
+                            "IfNotPresent"
+                          ],
+                          "type": "string"
                         },
                         "installCommand": {
                           "type": [
@@ -35475,6 +35963,13 @@
                           "null"
                         ]
                       },
+                      "imagePullPolicy": {
+                        "enum": [
+                          "Always",
+                          "IfNotPresent"
+                        ],
+                        "type": "string"
+                      },
                       "ingresses": {
                         "items": {
                           "properties": {
@@ -36261,6 +36756,14 @@
                   "image": {
                     "type": "string"
                   },
+                  "imagePullPolicy": {
+                    "description": "Defaults to IfNotPresent. Use Always when the image tag can move.",
+                    "enum": [
+                      "Always",
+                      "IfNotPresent"
+                    ],
+                    "type": "string"
+                  },
                   "memoryRequestBytes": {
                     "type": [
                       "integer",
@@ -36576,6 +37079,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {
@@ -37741,6 +38251,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "imagePullPolicy": {
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
                     },
                     "ingresses": {
                       "items": {

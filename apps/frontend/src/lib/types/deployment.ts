@@ -167,6 +167,7 @@ export interface Deployment {
 	totalCpuUsage?: number | null;
 	totalMemoryUsage?: number | null;
 	deployStrategy?: 'rollingUpdate' | 'recreate';
+	imagePullPolicy?: 'Always' | 'IfNotPresent';
 	warnings?: { podName: string; message: string; timestamp: string }[];
 	project?: {
 		id: string;

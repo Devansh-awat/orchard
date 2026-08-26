@@ -104,7 +104,7 @@
 			defaultValue: '',
 			requiresRestart: true,
 			autoSized: true,
-			help: 'Memory reserved for caching shared data, taken from this database\'s memory limit before anything else runs. Restart required.'
+			help: "Memory reserved for caching shared data, taken from this database's memory limit before anything else runs. Restart required."
 		},
 		{
 			key: 'work_mem',

@@ -142,6 +142,8 @@ jobs:
       - name: Prettier (check only)
         if: env.SAME_REPO != 'true'
         run: pnpm --filter frontend exec prettier --check .
+      - name: Unit tests
+        run: pnpm --filter frontend test
       - name: Build
         run: pnpm --filter frontend build
 

@@ -667,13 +667,14 @@ export class ProjectsController {
       autoUrl?: boolean;
       nodePoolId?: string | null;
       placementOverride?: unknown;
+      imagePullPolicy?: 'Always' | 'IfNotPresent';
     },
     @Request() req
   ) {
-    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride } = body;
+    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy } = body;
     const result = await this.deployments.createDeployment(
       id,
-      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride },
+      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy },
       req.user.sub,
       {
         email: req.user.email,
@@ -928,6 +929,22 @@ export class DeploymentsController {
       throw new ForbiddenException('Your role does not allow you to change the deploy strategy');
     }
     return this.deployments.updateDeploymentStrategy(id, body.strategy, user.id);
+  }
+
+  @Patch(':id/pull-policy')
+  async updateDeploymentPullPolicy(
+    @Param('id') id: string,
+    @Body() body: { imagePullPolicy: 'Always' | 'IfNotPresent' },
+    @Request() req,
+  ) {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to change the image pull policy');
+    }
+    return this.deployments.updateDeploymentPullPolicy(id, body.imagePullPolicy, user.id);
   }
 
   @Patch(':id/image')

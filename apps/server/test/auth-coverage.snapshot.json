@@ -252,6 +252,7 @@
   "PATCH /deployments/:id/image": "authenticated",
   "PATCH /deployments/:id/name": "authenticated",
   "PATCH /deployments/:id/placement": "authenticated",
+  "PATCH /deployments/:id/pull-policy": "authenticated",
   "PATCH /deployments/:id/resources": "authenticated",
   "PATCH /deployments/:id/strategy": "authenticated",
   "PATCH /environments/:id": "authenticated",

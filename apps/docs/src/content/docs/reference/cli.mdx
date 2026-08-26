@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **298 commands** are available.
+override the saved context. **300 commands** are available.
 
 ## api
 
@@ -793,6 +793,7 @@ orchard create
 | `--name` | string |  | deployment name (required) |
 | `--output-dir` | string |  | directory of built static files; serves the app as a static site |
 | `--port` | int | `0` | port the container listens on (server default 80 / EXPOSE autodetect) |
+| `--pull-policy` | string |  | re-pull the image on every pod start: always\|ifnotpresent (--image only) |
 | `--railpack` | bool | `false` | build with railpack instead of a Dockerfile |
 | `--replicas` | int | `0` | number of replicas (server default 1) |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
@@ -1000,6 +1001,26 @@ orchard pods <id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--live` | bool | `false` | query the cluster directly (includes usage and warnings) |
+
+### `orchard deploy pull-policy`
+
+Manage whether the image is re-pulled on every pod start
+
+```bash
+orchard pull-policy
+```
+
+### `orchard deploy pull-policy set`
+
+Set the image pull policy
+
+```bash
+orchard set <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--policy` | string |  | pull policy: always\|ifnotpresent (required) |
 
 ### `orchard deploy rebuild`
 

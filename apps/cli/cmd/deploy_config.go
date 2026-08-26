@@ -423,6 +423,56 @@ func deployStrategySetCmd() *cobra.Command {
 	return c
 }
 
+func deployPullPolicyCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "pull-policy",
+		Short: "Manage whether the image is re-pulled on every pod start",
+	}
+	c.AddCommand(deployPullPolicySetCmd())
+	return c
+}
+
+func deployPullPolicySetCmd() *cobra.Command {
+	var policy string
+	c := &cobra.Command{
+		Use:   "set <id>",
+		Short: "Set the image pull policy",
+		Long: `Set the image pull policy for a deployment.
+
+With ifnotpresent (the default) the node reuses the image layer it already has,
+so pushing a new :latest and restarting changes nothing. With always, a restart
+re-pulls the tag.
+
+Only relevant for deployments pinned to a moving tag. Apps built from GitHub get
+a unique tag per build.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var normalized string
+			switch strings.ToLower(policy) {
+			case "always":
+				normalized = "Always"
+			case "ifnotpresent":
+				normalized = "IfNotPresent"
+			default:
+				return fmt.Errorf("--policy must be always or ifnotpresent, got %q", policy)
+			}
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			body := map[string]any{"imagePullPolicy": normalized}
+			if err := cl.Send(cmd.Context(), http.MethodPatch, deployPath(args[0], "pull-policy"), body, nil); err != nil {
+				return err
+			}
+			output.Successf("set pull policy of %s to %s", args[0], normalized)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&policy, "policy", "", "pull policy: always|ifnotpresent (required)")
+	_ = c.MarkFlagRequired("policy")
+	return c
+}
+
 func deployHealthCheckCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "health-check",

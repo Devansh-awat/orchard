@@ -241,6 +241,7 @@ const deploymentBase = z
     buildStep: z.string().nullable().optional(),
     buildType: z.enum(['dockerfile', 'railpack']).optional(),
     deployStrategy: z.enum(['rollingUpdate', 'recreate']).optional(),
+    imagePullPolicy: z.enum(['Always', 'IfNotPresent']).optional(),
     githubRepo: z.string().nullable().optional(),
     githubBranch: z.string().nullable().optional(),
     dockerfilePath: z.string().nullable().optional(),
@@ -490,6 +491,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       volumes: z.array(volumeInput).optional(),
       cpuRequestMilli: z.number().int().nullable().optional(),
       memoryRequestBytes: z.number().int().nullable().optional(),
+      imagePullPolicy: z
+        .enum(['Always', 'IfNotPresent'])
+        .optional()
+        .describe('Defaults to IfNotPresent. Use Always when the image tag can move.'),
     }),
     response: deploymentWithRelations,
   },
@@ -550,6 +555,18 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: 'Change the deploy strategy',
     scope: 'deploy',
     request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate']) }),
+    response: deploymentBase,
+  },
+  'PATCH /deployments/:id/pull-policy': {
+    summary: 'Change whether Kubernetes re-pulls the image on every pod start',
+    scope: 'deploy',
+    request: z.object({
+      imagePullPolicy: z
+        .enum(['Always', 'IfNotPresent'])
+        .describe(
+          'Always re-pulls on every pod start, which is what makes Restart pick up a moved tag like :latest. IfNotPresent reuses the layer already cached on the node.',
+        ),
+    }),
     response: deploymentBase,
   },
   'PUT /deployments/:id/volumes': {

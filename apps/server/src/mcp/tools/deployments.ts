@@ -36,9 +36,15 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           .describe(
             'Memory request in bytes per pod (e.g. 536870912 = 512Mi). Subject to project / org / per-member quotas.',
           ),
+        imagePullPolicy: z
+          .enum(['Always', 'IfNotPresent'])
+          .optional()
+          .describe(
+            'Defaults to IfNotPresent. Set Always when the tag can move (latest, main, stable, or no tag), so restarting the deployment re-pulls it instead of reusing the node\'s cached layer.',
+          ),
       },
     },
-    async ({ projectId, name, image, replicas, port, env, cpuRequestMilli, memoryRequestBytes }) => {
+    async ({ projectId, name, image, replicas, port, env, cpuRequestMilli, memoryRequestBytes, imagePullPolicy }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments`, {
         name,
         image,
@@ -47,6 +53,7 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
         ...(memoryRequestBytes != null && { memoryRequestBytes }),
+        ...(imagePullPolicy != null && { imagePullPolicy }),
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
     },
@@ -254,7 +261,8 @@ Pass null for either field to clear it and fall back to the project / org defaul
   server.registerTool(
     'restart_deployment',
     {
-      description: 'Restart a deployment (rolling restart of all pods)',
+      description: `Restart a deployment (rolling restart of all pods).
+Whether this re-pulls the image depends on the deployment's pull policy: under the default IfNotPresent the node reuses its cached layer, so restarting will NOT pick up a new push to a mutable tag like :latest. Set \`update_deployment_pull_policy\` to Always first if that is what you are trying to do.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID to restart'),

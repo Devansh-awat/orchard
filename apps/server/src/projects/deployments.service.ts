@@ -4364,6 +4364,48 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async updateDeploymentPullPolicy(
+    deploymentId: string,
+    policy: 'Always' | 'IfNotPresent',
+    userId?: string,
+  ) {
+    if (policy !== 'Always' && policy !== 'IfNotPresent') {
+      throw new BadRequestException('Invalid image pull policy');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change the image pull policy');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change image pull policy');
+    }
+
+    // Unlike :id/image this is allowed on GitHub-built deployments: it changes
+    // how the image is fetched, not which image runs, so the next build cannot
+    // overwrite it. Only push to k8s if the object exists yet; otherwise the
+    // stored value is picked up by createDeployment.
+    const k8sExists = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
+    if (k8sExists) {
+      await this.k8sWorkload.updateDeploymentPullPolicy(
+        deployment.name,
+        deployment.namespace,
+        policy,
+      );
+    }
+
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { imagePullPolicy: policy },
+    });
+  }
+
   async updateDeploymentImage(deploymentId: string, image: string, userId?: string) {
     const trimmed = (image ?? '').toString().trim();
     if (!trimmed) {
@@ -4522,6 +4564,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       environmentId?: string;
       nodePoolId?: string | null;
       placementOverride?: unknown;
+      imagePullPolicy?: 'Always' | 'IfNotPresent';
     },
     clerkId: string,
     userData?: {
@@ -4663,6 +4706,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // the DB so the UI shows the truth from the moment the deployment exists.
     const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
     const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
+    const initialPullPolicy: 'Always' | 'IfNotPresent' =
+      data.imagePullPolicy === 'Always' ? 'Always' : 'IfNotPresent';
     const deploymentResult = await this.k8sWorkload.createDeployment({
       namespace: environment.namespace,
       name,
@@ -4678,6 +4723,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       placementOverride,
       resources: podResources,
       deployStrategy: initialStrategy,
+      imagePullPolicy: initialPullPolicy,
     });
 
     let createdDeployment;
@@ -4697,6 +4743,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           composeStackId: data.composeStackId ?? null,
           composeServiceName: data.composeServiceName ?? null,
           deployStrategy: initialStrategy,
+          imagePullPolicy: initialPullPolicy,
           nodePoolId: data.nodePoolId ?? null,
           placementOverride: (placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
@@ -6042,6 +6089,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             cpuRequestMilli: true,
             memoryRequestBytes: true,
             deployStrategy: true,
+            imagePullPolicy: true,
             nodePoolId: true,
             placementOverride: true,
             project: { select: { organizationId: true, ownerId: true } },
@@ -6049,6 +6097,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         });
         const buildStrategy: 'rollingUpdate' | 'recreate' =
           (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+        const buildPullPolicy: 'Always' | 'IfNotPresent' =
+          (deploymentRow?.imagePullPolicy as 'Always' | 'IfNotPresent') ?? 'IfNotPresent';
         const deployPlacement = deploymentRow
           ? await this.resolvePlacementForProject(deploymentRow.projectId)
           : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
@@ -6114,6 +6164,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             placementOverride: deployOverride,
             resources: rebuildResources,
             deployStrategy: buildStrategy,
+            imagePullPolicy: buildPullPolicy,
             healthCheck,
           });
         } else {

@@ -168,6 +168,10 @@ export interface CreateDeploymentOptions {
   // (RollingUpdate) is used. Caller is responsible for forcing 'recreate' when
   // a PVC volume is attached.
   deployStrategy?: 'rollingUpdate' | 'recreate';
+  // Whether the kubelet re-pulls the image on every pod start. Omitted means
+  // IfNotPresent, which is right for the unique per-build tags a GitHub deploy
+  // produces and wrong for an image-source app pinned to a mutable tag.
+  imagePullPolicy?: 'Always' | 'IfNotPresent';
 }
 
 export interface UpdateDeploymentEnvOptions {

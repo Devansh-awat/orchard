@@ -722,7 +722,7 @@ export class K8sWorkloadService {
       const container: k8s.V1Container = {
         name: cleanName,
         image: cleanImage,
-        imagePullPolicy: 'IfNotPresent',
+        imagePullPolicy: options.imagePullPolicy ?? 'IfNotPresent',
         ports: sanitizedPorts.map((port) => ({
           name: port.name,
           containerPort: port.containerPort,
@@ -2034,6 +2034,62 @@ export class K8sWorkloadService {
     }
 
     return { success: true, deployment: cleanName, namespace: cleanNamespace, strategy };
+  }
+
+  // imagePullPolicy lives in the pod template, so patching it changes the
+  // template hash and the Deployment controller rolls a new ReplicaSet on its
+  // own. No restartedAt annotation needed, and patching it to the value it
+  // already has is correctly a no-op.
+  async updateDeploymentPullPolicy(
+    deploymentName: string,
+    namespace: string,
+    policy: 'Always' | 'IfNotPresent',
+  ) {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const cleanName = String(deploymentName).trim();
+    const cleanNamespace = String(namespace).trim();
+
+    // The tenant container is named after the deployment (see createDeployment),
+    // which is the same assumption updateDeploymentImage makes. Strategic merge
+    // patch keys containers by name, so a wrong name would silently append a
+    // second container rather than fail.
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: cleanName, imagePullPolicy: policy }],
+          },
+        },
+      },
+    };
+
+    try {
+      await api.patchNamespacedDeployment(
+        cleanName,
+        cleanNamespace,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Deployment not found',
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`,
+        });
+      }
+      throw new BadRequestException({
+        error: 'Failed to update image pull policy',
+        message: error.message,
+      });
+    }
+
+    return { success: true, deployment: cleanName, namespace: cleanNamespace, policy };
   }
 
   async updateDeploymentImage(deploymentName: string, namespace: string, image: string) {

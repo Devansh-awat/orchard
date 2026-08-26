@@ -565,6 +565,12 @@ model Deployment {
   buildStep            String?            @map("build_step") @db.VarChar(50)
   buildType            BuildType          @default(dockerfile) @map("build_type")
   deployStrategy       DeploymentStrategy @default(rollingUpdate) @map("deploy_strategy")
+  // Kubernetes re-pulls the image on every pod start under Always. Default stays
+  // IfNotPresent because GitHub builds get a unique v<timestamp> tag per build,
+  // so re-pulling would be pure waste. It matters for image-source apps pinned
+  // to a mutable tag like :latest, where a restart otherwise reuses whatever
+  // layer the node already had cached.
+  imagePullPolicy      ImagePullPolicy    @default(IfNotPresent) @map("image_pull_policy")
   githubRepo           String?            @map("github_repo") @db.VarChar(500)
   githubBranch         String?            @map("github_branch") @db.VarChar(255)
   dockerfilePath       String?            @map("dockerfile_path") @db.VarChar(500)
@@ -1091,6 +1097,13 @@ enum DeploymentStrategy {
   recreate
 
   @@map("deployment_strategy")
+}
+
+enum ImagePullPolicy {
+  Always
+  IfNotPresent
+
+  @@map("image_pull_policy_kind")
 }
 
 model DeploymentVolume {

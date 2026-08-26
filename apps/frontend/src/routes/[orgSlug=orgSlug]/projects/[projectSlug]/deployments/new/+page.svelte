@@ -40,13 +40,15 @@
 		Badge,
 		Skeleton,
 		ToggleRow,
-		Stepper
+		Stepper,
+		SegmentedControl
 	} from '$lib/components/ui';
 	import {
 		frameworkLabel,
 		appDirLabel,
 		FRAMEWORK_CHOICES,
 		FRAMEWORK_PRESETS,
+		isMutableTag,
 		type DetectedApp
 	} from '$lib/components/deployment/deployment-helpers';
 
@@ -107,6 +109,7 @@
 	// Form state
 	let name = $state('');
 	let image = $state('');
+	let imagePullPolicy = $state<'Always' | 'IfNotPresent'>('IfNotPresent');
 	let repoUrl = $state('');
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
@@ -855,6 +858,7 @@
 				}
 			} else {
 				body.image = image.trim();
+				body.imagePullPolicy = imagePullPolicy;
 			}
 
 			const response = await apiFetch(endpoint, {
@@ -1020,6 +1024,30 @@
 							>
 								<Input bind:value={image} placeholder="ghcr.io/org/app:latest" class="font-mono" />
 							</Field>
+							<Field
+								label="Pull policy"
+								hint={imagePullPolicy === 'Always'
+									? 'Every pod start fetches the image again, so restarting picks up a new push to this tag.'
+									: 'Pods reuse the image already on the node. Best for tags that never move.'}
+							>
+								<SegmentedControl
+									label="Image pull policy"
+									bind:value={imagePullPolicy}
+									options={[
+										{ value: 'IfNotPresent', label: 'Use cached' },
+										{ value: 'Always', label: 'Always re-pull' }
+									]}
+								/>
+							</Field>
+							{#if isMutableTag(image) && imagePullPolicy !== 'Always'}
+								<div class="nd-warning" style="margin-top: 0.75rem;">
+									<p class="nd-warning-title">This tag can move</p>
+									<p class="nd-warning-desc">
+										Restarting reuses the image already on the node, so pushing over this tag will
+										not show up. Choose Always re-pull if you plan to push over it.
+									</p>
+								</div>
+							{/if}
 						{:else}
 							{#if !githubLinked}
 								<div class="nd-warning" style="margin-bottom: 0.75rem;">

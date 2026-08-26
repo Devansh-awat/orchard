@@ -111,6 +111,12 @@ func (s *deploymentScreen) viewAdvanced(height int, strip string) string {
 	}
 	row("Strategy", stTitle.Render(strategy)+stMuted.Render("  (t toggles)"))
 
+	pullPolicy := d.ImagePullPolicy
+	if pullPolicy == "" {
+		pullPolicy = "IfNotPresent"
+	}
+	row("Pull policy", stTitle.Render(pullPolicy))
+
 	hc := onOff(d.HealthCheckEnabled)
 	if d.HealthCheckEnabled {
 		target := d.HealthCheckPath

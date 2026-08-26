@@ -112,6 +112,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
         cpuRequestMilli: true,
         memoryRequestBytes: true,
         deployStrategy: true,
+        imagePullPolicy: true,
         buildStatus: true,
       },
     });
@@ -155,6 +156,17 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     if (dep.spec?.strategy?.type && strategy !== row.deployStrategy) {
       changes.deployStrategy = strategy;
       adopted.push(`strategy=${strategy}`);
+    }
+
+    // Guarded rather than adopted blindly: k8s also allows `Never`, which is not
+    // in our enum and would fail the write for every other field in this batch.
+    const pullPolicy = container?.imagePullPolicy;
+    if (
+      (pullPolicy === 'Always' || pullPolicy === 'IfNotPresent') &&
+      pullPolicy !== row.imagePullPolicy
+    ) {
+      changes.imagePullPolicy = pullPolicy;
+      adopted.push(`pullPolicy=${pullPolicy}`);
     }
 
     if (Object.keys(changes).length === 0) return;

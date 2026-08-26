@@ -165,3 +165,45 @@ export const FRAMEWORK_CHOICES = [
 	'rust',
 	'php'
 ];
+
+const MUTABLE_TAGS = new Set([
+	'latest',
+	'main',
+	'master',
+	'stable',
+	'edge',
+	'dev',
+	'develop',
+	'nightly',
+	'prod',
+	'production',
+	'release'
+]);
+
+export function imageTag(image: string): string | null {
+	const noDigest = String(image ?? '')
+		.trim()
+		.split('@')[0];
+	if (!noDigest) return null;
+	let remainder = noDigest;
+	const slashIdx = noDigest.indexOf('/');
+	if (slashIdx > 0) {
+		const maybeHost = noDigest.slice(0, slashIdx);
+		if (maybeHost.includes('.') || maybeHost.includes(':') || maybeHost === 'localhost') {
+			remainder = noDigest.slice(slashIdx + 1);
+		}
+	}
+	const colonIdx = remainder.lastIndexOf(':');
+	if (colonIdx === -1) return null;
+	return remainder.slice(colonIdx + 1) || null;
+}
+
+export function isMutableTag(image: string | null | undefined): boolean {
+	const raw = String(image ?? '').trim();
+	if (!raw) return false;
+	if (raw.includes('@sha256:')) return false;
+	const tag = imageTag(raw);
+	if (tag === null) return true;
+	if (MUTABLE_TAGS.has(tag.toLowerCase())) return true;
+	return /^v?\d+(\.\d+)?$/.test(tag);
+}

@@ -31,6 +31,7 @@ type DepDetail struct {
 	GithubRepo        string   `json:"githubRepo"`
 	GithubBranch      string   `json:"githubBranch"`
 	DeployStrategy    string   `json:"deployStrategy"`
+	ImagePullPolicy   string   `json:"imagePullPolicy"`
 	TotalCPUUsage     flexNum  `json:"totalCpuUsage"`
 	TotalMemoryUsage  flexNum  `json:"totalMemoryUsage"`
 	CPURequestMilli   *flexNum `json:"cpuRequestMilli"`

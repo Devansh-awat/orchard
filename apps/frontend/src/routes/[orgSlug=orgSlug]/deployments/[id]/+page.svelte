@@ -186,6 +186,7 @@
 		totalCpuUsage?: number | null;
 		totalMemoryUsage?: number | null;
 		deployStrategy?: 'rollingUpdate' | 'recreate';
+		imagePullPolicy?: 'Always' | 'IfNotPresent';
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		project?: {
 			id: string;
@@ -600,6 +601,45 @@
 			});
 		} finally {
 			savingStrategy = false;
+		}
+	}
+
+	let pullPolicy = $state<'Always' | 'IfNotPresent'>('IfNotPresent');
+	let savingPullPolicy = $state(false);
+
+	async function savePullPolicy(next: 'Always' | 'IfNotPresent') {
+		if (!deployment || savingPullPolicy || next === pullPolicy) return;
+		savingPullPolicy = true;
+		const previous = pullPolicy;
+		pullPolicy = next;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/pull-policy`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ imagePullPolicy: next })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update pull policy');
+			}
+			toasts.add({
+				title: next === 'Always' ? 'Now re-pulling on every start' : 'Using the cached image',
+				description:
+					next === 'Always'
+						? 'Restart the app to pick up a new push to this tag.'
+						: 'Restarting reuses the image already on the node.',
+				color: 'success'
+			});
+			await fetchDeployment();
+		} catch (e) {
+			pullPolicy = previous;
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
+		} finally {
+			savingPullPolicy = false;
 		}
 	}
 
@@ -1279,6 +1319,10 @@
 			// Seed deploy strategy from the persisted value.
 			if (!savingStrategy) {
 				strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+			}
+
+			if (!savingPullPolicy) {
+				pullPolicy = (data.imagePullPolicy as 'Always' | 'IfNotPresent') ?? 'IfNotPresent';
 			}
 
 			// Org quota defaults are fetched lazily when the resources tab is opened.
@@ -2977,6 +3021,9 @@
 							{savingImage}
 							onSaveResources={saveResources}
 							onSaveImage={saveImage}
+							{pullPolicy}
+							{savingPullPolicy}
+							onSavePullPolicy={savePullPolicy}
 							bind:volumes
 							bind:isEditingVolumes
 							{savingVolumes}

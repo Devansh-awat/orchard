@@ -45,6 +45,7 @@ func deployCmd() *cobra.Command {
 		deployResourcesCmd(),
 		deployVolumesCmd(),
 		deployStrategyCmd(),
+		deployPullPolicyCmd(),
 		deployHealthCheckCmd(),
 		deployBuildRootCmd(),
 		deployKilledCmd(),
@@ -185,6 +186,7 @@ func deployRenderKV(raw map[string]any) {
 		{"replicas", pick(raw, "replicas")},
 		{"namespace", pick(raw, "namespace")},
 		{"strategy", pick(raw, "deployStrategy")},
+		{"pull policy", pick(raw, "imagePullPolicy")},
 	}
 	for _, opt := range [][2]string{
 		{"build type", pick(raw, "buildType")},
@@ -210,6 +212,7 @@ func deployCreateCmd() *cobra.Command {
 	var (
 		name, image, github, dockerfile, memory, envFile   string
 		rootDir, installCmd, buildCmd, startCmd, outputDir string
+		pullPolicy                                         string
 		railpack, buildRoot, autoURL                       bool
 		port, replicas, cpu                                int
 		envs                                               []string
@@ -226,6 +229,21 @@ func deployCreateCmd() *cobra.Command {
 			}
 			if image != "" && (dockerfile != "" || railpack || buildRoot) {
 				return errors.New("--dockerfile, --railpack and --build-root only apply to --github deployments")
+			}
+			// GitHub builds get a unique tag per build, so the policy is
+			// meaningless there and accepting it would just be misleading.
+			if pullPolicy != "" && github != "" {
+				return errors.New("--pull-policy only applies to --image deployments")
+			}
+			var normalizedPullPolicy string
+			switch strings.ToLower(pullPolicy) {
+			case "":
+			case "always":
+				normalizedPullPolicy = "Always"
+			case "ifnotpresent":
+				normalizedPullPolicy = "IfNotPresent"
+			default:
+				return fmt.Errorf("--pull-policy must be always or ifnotpresent, got %q", pullPolicy)
 			}
 			envList, err := deployEnvArgs(envs, envFile)
 			if err != nil {
@@ -295,6 +313,9 @@ func deployCreateCmd() *cobra.Command {
 				path += "/from-github"
 			} else {
 				body["image"] = image
+				if normalizedPullPolicy != "" {
+					body["imagePullPolicy"] = normalizedPullPolicy
+				}
 			}
 
 			var raw map[string]any
@@ -327,6 +348,7 @@ func deployCreateCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&name, "name", "", "deployment name (required)")
 	c.Flags().StringVar(&image, "image", "", "Docker image reference (e.g. nginx:latest)")
+	c.Flags().StringVar(&pullPolicy, "pull-policy", "", "re-pull the image on every pod start: always|ifnotpresent (--image only)")
 	c.Flags().StringVar(&github, "github", "", "GitHub source as owner/repo[#branch]")
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")

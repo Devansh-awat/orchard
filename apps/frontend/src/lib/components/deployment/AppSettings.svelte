@@ -68,8 +68,11 @@
 		imageInput = $bindable(''),
 		imageDirty,
 		savingImage,
+		pullPolicy,
+		savingPullPolicy,
 		onSaveResources,
 		onSaveImage,
+		onSavePullPolicy,
 		volumes = $bindable([]),
 		isEditingVolumes = $bindable(false),
 		savingVolumes,
@@ -135,8 +138,11 @@
 		imageInput: string;
 		imageDirty: boolean;
 		savingImage: boolean;
+		pullPolicy?: 'Always' | 'IfNotPresent';
+		savingPullPolicy?: boolean;
 		onSaveResources: () => void;
 		onSaveImage: () => void;
+		onSavePullPolicy?: (next: 'Always' | 'IfNotPresent') => void;
 		volumes: any[];
 		isEditingVolumes: boolean;
 		savingVolumes: boolean;
@@ -244,6 +250,9 @@
 				{savingImage}
 				{onSaveResources}
 				{onSaveImage}
+				{pullPolicy}
+				{savingPullPolicy}
+				{onSavePullPolicy}
 			/>
 		{:else if activeSection === 'storage'}
 			<VolumesTab

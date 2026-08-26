@@ -128,6 +128,32 @@ When the deployment has a PVC attached, the backend forces \`recreate\` and reje
     },
   );
 
+  server.registerTool(
+    'update_deployment_pull_policy',
+    {
+      description: `Set whether Kubernetes re-pulls the container image every time a pod starts.
+- \`IfNotPresent\` (default): reuse the image layer already cached on the node.
+- \`Always\`: re-pull on every pod start.
+
+This is the fix for "I pushed a new :latest but Orchard is still serving the old build". Pushing to a mutable tag does not notify Orchard, and under IfNotPresent even a restart reuses the cached layer, so nothing changes. With \`Always\`, \`restart_deployment\` genuinely re-pulls the tag, which makes push-then-restart work.
+
+Only worth setting on image-source deployments pinned to a moving tag (\`latest\`, \`main\`, \`stable\`, or no tag at all). GitHub-built deployments get a unique tag per build, so the policy makes no difference there.
+
+Changing this rolls the pods on its own; no separate restart is needed.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        imagePullPolicy: z.enum(['Always', 'IfNotPresent']).describe('The new image pull policy'),
+      },
+    },
+    async ({ deploymentId, imagePullPolicy }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/pull-policy`, {
+        imagePullPolicy,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
   // ── Networking ────────────────────────────────────────────────────
 
   server.registerTool(
