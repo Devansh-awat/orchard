@@ -42,11 +42,26 @@ const DATABASE_IMAGE_REPOS = new Set([
 const DATABASE_DEFAULT_CPU_MILLI = 500;
 const DATABASE_DEFAULT_MEMORY_BYTES = 1024 * MiB;
 
+// A database gets a hard floor, not just a better default. The org-wide
+// `defaultPodMemoryBytes` outranks the image-aware fallback below, so an org
+// that set 128Mi for its app pods was silently handing that to Postgres too —
+// which is not enough to run Postgres *and* its own base backup, whatever
+// shared_buffers says. See db-tuning.ts for the incident this came from.
+const DATABASE_MIN_MEMORY_BYTES = 256 * MiB;
+
+export function isDatabaseImage(image?: string | null): boolean {
+  return Boolean(image && DATABASE_IMAGE_REPOS.has(imageRepo(image)));
+}
+
 export function defaultPodResourcesForImage(
   image?: string | null,
 ): { cpuMilli: number; memoryBytes: number } {
-  if (image && DATABASE_IMAGE_REPOS.has(imageRepo(image))) {
+  if (isDatabaseImage(image)) {
     return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: DATABASE_DEFAULT_MEMORY_BYTES };
   }
   return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: DEFAULT_MEMORY_BYTES };
+}
+
+export function minPodMemoryBytesForImage(image?: string | null): number {
+  return isDatabaseImage(image) ? DATABASE_MIN_MEMORY_BYTES : 0;
 }

@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
+import { deriveDbTuning } from './db-tuning';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -1054,6 +1055,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     imageName?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
     resources?: { cpuMilli: number; memoryBytes: number };
+    // null/undefined = derive from the memory limit. 'gzip' | 'none' = the user's call.
+    backupCompression?: string | null;
     instances?: number;
     placement?: ResolvedPlacement;
     importFrom?: {
@@ -1103,6 +1106,16 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       await this.upsertSecret(coreApi, ns, r2SecretName, 'Opaque', r2SecretData, labels);
     }
 
+    // Derived from the memory limit, but only where the user hasn't set the knob
+    // themselves — `options.parameters` still spreads last and wins outright.
+    const tuning = deriveDbTuning({
+      memoryLimitBytes: options.resources?.memoryBytes,
+      overrides: {
+        sharedBuffers: options.parameters?.shared_buffers,
+        backupCompression: options.backupCompression,
+      },
+    });
+
     const clusterSpec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
       imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
@@ -1121,7 +1134,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       postgresql: {
         parameters: {
           max_connections: '100',
-          shared_buffers: '128MB',
+          shared_buffers: tuning.sharedBuffers,
           ...options.parameters,
         },
         ...(options.sharedPreloadLibraries && options.sharedPreloadLibraries.length > 0
@@ -1178,7 +1191,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     if (options.r2 && r2SecretName) {
-      clusterSpec.backup = this.buildBackupSpec(ns, name, options.r2, r2SecretName);
+      clusterSpec.backup = this.buildBackupSpec(
+        ns, name, options.r2, r2SecretName, tuning.dataCompression,
+      );
     }
 
     // CNPG places its instance pods; feed the resolved placement into
@@ -1708,6 +1723,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
       newClusterName?: string;
       instances?: number;
+      resources?: { cpuMilli: number; memoryBytes: number };
+      backupCompression?: string | null;
     },
   ): Promise<{ host: string; port: number; newClusterName: string }> {
     this.ensureKubeConfig();
@@ -1737,6 +1754,14 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       }, { 'app.kubernetes.io/managed-by': 'orchard' });
     }
 
+    const tuning = deriveDbTuning({
+      memoryLimitBytes: options.resources?.memoryBytes,
+      overrides: {
+        sharedBuffers: options.parameters?.shared_buffers,
+        backupCompression: options.backupCompression,
+      },
+    });
+
     const spec: any = {
       instances: Math.max(1, Math.trunc(options.instances || 1)),
       imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
@@ -1749,7 +1774,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       postgresql: {
         parameters: {
           max_connections: '100',
-          shared_buffers: '128MB',
+          shared_buffers: tuning.sharedBuffers,
           ...options.parameters,
         },
         ...(options.sharedPreloadLibraries && options.sharedPreloadLibraries.length > 0
@@ -1759,8 +1784,21 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       enableSuperuserAccess: true,
     };
 
+    if (options.resources) {
+      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
+      spec.resources = {
+        requests: {
+          cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli)),
+          memory: memStr,
+        },
+        limits: { cpu: cpuMilliToK8s(options.resources.cpuMilli), memory: memStr },
+      };
+    }
+
     if (options.r2 && r2SecretName) {
-      spec.backup = this.buildBackupSpec(namespace, newName, options.r2, r2SecretName);
+      spec.backup = this.buildBackupSpec(
+        namespace, newName, options.r2, r2SecretName, tuning.dataCompression,
+      );
     }
 
     const body = {
@@ -1802,6 +1840,48 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         },
       },
     };
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName, patch,
+      undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
+  // Push the memory-derived tuning onto a live cluster. Called after a memory
+  // change so a database that just got more room actually gets to use it —
+  // previously a user who bumped memory to escape an OOM kept the same
+  // shared_buffers and got none of the benefit they paid for.
+  //
+  // shared_buffers is always written explicitly rather than deleted: the patch
+  // below is a JSON merge patch, so omitting the key leaves the old value in
+  // place. Writing the derived value is what makes "clear the override" behave
+  // like a reset.
+  async applyCnpgDerivedTuning(
+    namespace: string,
+    clusterName: string,
+    tuning: { sharedBuffers: string; dataCompression: 'gzip' | null },
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const patch: any = {
+      spec: {
+        postgresql: { parameters: { shared_buffers: tuning.sharedBuffers } },
+      },
+    };
+
+    // Only touch the backup block when there is one; writing into
+    // spec.backup.barmanObjectStore on a cluster provisioned before its org had
+    // backup storage would leave a half-built object CNPG rejects. `null` is a
+    // merge-patch delete, which is how compression gets turned back off.
+    if (await this.isCnpgBackupConfigured(namespace, clusterName).catch(() => false)) {
+      patch.spec.backup = {
+        barmanObjectStore: {
+          data: tuning.dataCompression ? { compression: tuning.dataCompression } : null,
+        },
+      };
+    }
+
     await customApi.patchNamespacedCustomObject(
       this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName, patch,
       undefined, undefined, undefined,
@@ -1960,6 +2040,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     r2: { endpoint: string; bucket: string },
     r2SecretName: string,
+    dataCompression: 'gzip' | null = 'gzip',
   ): any {
     // Preserve the scheme from the configured endpoint — when r2-proxy is
     // enabled the endpoint is http:// (plaintext, in-cluster); when going
@@ -1975,8 +2056,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
           secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
         },
+        // WAL compression is unconditional: barman gzips one 16MB segment at a
+        // time, which fits in any budget. The base backup streams the whole
+        // PGDATA through gzip inside the postgres container's own cgroup, so on
+        // small instances that's the thing that OOMKills the database.
         wal: { compression: 'gzip' },
-        data: { compression: 'gzip' },
+        ...(dataCompression ? { data: { compression: dataCompression } } : {}),
       },
       retentionPolicy: '30d',
     };

@@ -322,8 +322,9 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
   server.registerTool(
     'get_database_settings',
     {
-      description:
-        'Read the configured PostgreSQL parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).',
+      description: `Read the configured PostgreSQL parameters for a database (max_connections, shared_buffers, work_mem, statement_timeout, synchronous_commit, etc.).
+
+\`parameters\` contains ONLY what the user has explicitly set. A key that is absent is sized automatically from the database's memory limit, so an absent shared_buffers is not "unset", it is managed. \`advisories\` lists settings that were accepted but look dangerous at the current memory limit; check it when diagnosing an OOMKilled database.`,
       annotations: { readOnlyHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),
@@ -339,7 +340,11 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
     'update_database_settings',
     {
       description: `Update PostgreSQL parameters on a database. Some parameters (max_connections, shared_buffers) require a brief database restart to take effect — the API applies them and rolls the pod automatically.
-Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.`,
+Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings first to see current values and supported keys.
+
+The map REPLACES the set of user-set parameters, so omitting a key hands it back to automatic sizing rather than leaving it alone. Send the full map you want.
+
+Values are applied exactly as given and are never clamped, but a dangerous one comes back in \`advisories\`. In particular, do not set shared_buffers anywhere near the memory limit: Postgres reserves it up front, and a base backup then has nowhere to run and OOMKills the database. Leaving shared_buffers out is usually the right answer.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),
@@ -348,10 +353,20 @@ Pass values as strings (e.g. "256MB", "200", "off"). Use get_database_settings f
           .describe(
             'Parameter map, e.g. { "max_connections": "200", "work_mem": "16MB", "log_min_duration_statement": "1000" }',
           ),
+        backupCompression: z
+          .enum(['gzip', 'none'])
+          .nullable()
+          .optional()
+          .describe(
+            'Compression for the base backup. Omit or null to pick it from the memory limit, which is almost always what you want: gzip on a small database can OOMKill it mid-backup.',
+          ),
       },
     },
-    async ({ databaseId, parameters }) => {
-      const result = await client.patch(`/databases/${databaseId}/settings`, { parameters });
+    async ({ databaseId, parameters, backupCompression }) => {
+      const result = await client.patch(`/databases/${databaseId}/settings`, {
+        parameters,
+        ...(backupCompression !== undefined ? { backupCompression } : {}),
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

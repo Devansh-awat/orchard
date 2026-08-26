@@ -104,6 +104,7 @@ export interface ParamMeta {
 	enum?: string[];
 	defaultValue: string;
 	requiresRestart?: boolean;
+	autoSized?: boolean;
 	help: string;
 }
 

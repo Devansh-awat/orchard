@@ -101,9 +101,10 @@
 			key: 'shared_buffers',
 			label: 'Shared Buffers',
 			kind: 'memory' as const,
-			defaultValue: '128MB',
+			defaultValue: '',
 			requiresRestart: true,
-			help: 'Memory for caching shared data. Typically 25% of system RAM. Restart required.'
+			autoSized: true,
+			help: 'Memory reserved for caching shared data, taken from this database\'s memory limit before anything else runs. Restart required.'
 		},
 		{
 			key: 'work_mem',
@@ -210,6 +211,8 @@
 	let settingsLoaded = $state(false);
 	let settingsSaving = $state(false);
 	let settingsDirty = $state(false);
+	let settingsAdvisories = $state<{ key: string; message: string }[]>([]);
+	let settingsLoadedValues = $state<Record<string, string>>({});
 
 	// Terminal
 	let logs = $state('');
@@ -841,6 +844,8 @@
 			if (r.ok) {
 				const data = await r.json();
 				settings = { ...(data.parameters || {}) };
+				settingsLoadedValues = { ...settings };
+				settingsAdvisories = data.advisories || [];
 				settingsDirty = false;
 			}
 			settingsLoaded = true;
@@ -861,7 +866,7 @@
 
 	async function saveSettings() {
 		const hasRestart = PARAM_SCHEMA.filter((p) => p.requiresRestart).some(
-			(p) => settings[p.key] !== undefined && settings[p.key] !== p.defaultValue
+			(p) => (settings[p.key] ?? '') !== (settingsLoadedValues[p.key] ?? '')
 		);
 		if (
 			hasRestart &&
@@ -887,6 +892,8 @@
 			} else {
 				toasts.add({ title: 'Settings saved', color: 'success' });
 				settings = { ...(data.parameters || {}) };
+				settingsLoadedValues = { ...settings };
+				settingsAdvisories = data.advisories || [];
 				settingsDirty = false;
 			}
 		} finally {
@@ -1379,6 +1386,7 @@
 						{settingsLoaded}
 						{settingsSaving}
 						{settingsDirty}
+						{settingsAdvisories}
 						onFetchSettings={() => {
 							settingsLoaded = false;
 							fetchSettings();

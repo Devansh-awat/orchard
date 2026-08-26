@@ -37,6 +37,21 @@ If you rely on backups, take one now and restore it into a new database to prove
 the whole path works. An untested backup is a hypothesis.
 :::
 
+Check `firstRecoverabilityPoint` on the database: if it is empty, no base backup
+has ever completed, whatever the schedule says.
+
+## Where a backup runs
+
+The base backup runs inside the database's own container, sharing its memory
+limit with Postgres. That is why compression is chosen from the memory limit
+rather than always being on: on a small database, compressing the backup can use
+enough memory to get Postgres OOMKilled, which fails the backup, which retries,
+which kills it again.
+
+You can force it either way from the **Settings** tab if you have a reason to.
+Write-ahead log archiving is compressed regardless, since it works one segment at
+a time and fits in any budget.
+
 ## Retention
 
 Backups accumulate until something removes them. Set a retention policy in your

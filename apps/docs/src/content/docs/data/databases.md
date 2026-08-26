@@ -35,6 +35,22 @@ there is a matching read-only endpoint.
 Storage size is set at creation and can grow later; it cannot shrink. CPU and
 memory are set on the **Resources** tab like any other workload.
 
+Postgres tuning follows the memory limit. `shared_buffers` is sized from it
+automatically, and so is whether the base backup is compressed, because both of
+those live inside the database container's memory budget. Change the memory and
+they are recalculated, so raising memory to fix a struggling database actually
+gives it the room you paid for.
+
+You can still set `shared_buffers` yourself on the **Settings** tab. Your value
+is used exactly as written and is never capped. If it looks large enough to
+cause trouble at the current memory limit, the tab says so and leaves it alone.
+Clear the field to hand it back to automatic.
+
+One thing worth knowing: `shared_buffers` is reserved up front, before Postgres
+serves anything. Setting it close to the memory limit leaves nothing for
+connections or for the backup that has to run in the same container, which is a
+reliable way to get the database OOMKilled.
+
 ## The other tabs
 
 - **Backups**: scheduled and on-demand, with restore. See [Backups](/data/backups/).

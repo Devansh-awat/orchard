@@ -16,6 +16,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
+import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -1568,6 +1569,14 @@ export class DatabasesService {
       database.namespace!,
       predictedNewClusterName,
     );
+    // The restore cluster used to be built with no resource block at all, which
+    // left it on the namespace LimitRange default and gave the tuning below
+    // nothing to derive from. Size it like the database it is replacing.
+    const restoreResources = await this.quotasService.resolvePodResources(database.projectId, {
+      cpuRequestMilli: database.cpuRequestMilli ?? null,
+      memoryRequestBytes:
+        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
+    }, 'postgres');
 
     (async () => {
       try {
@@ -1583,6 +1592,8 @@ export class DatabasesService {
             r2: restoreR2.r2,
             newClusterName: predictedNewClusterName,
             instances: database.replicas ?? 1,
+            resources: restoreResources,
+            backupCompression: database.backupCompression,
             imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`,
           },
         );
@@ -1789,15 +1800,41 @@ export class DatabasesService {
       return { parameters: {}, sharedPreloadLibraries: [] };
     }
     // Settings (pg_parameters / shared_preload_libs) are not credentials, no extra redaction needed.
+    const parameters = (database.pgParameters as Record<string, string> | null) || {};
     return {
-      parameters: (database.pgParameters as Record<string, string> | null) || {},
+      parameters,
       sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
+      backupCompression: database.backupCompression,
+      // Recomputed on read, not stored, so a value that only became dangerous
+      // because the memory limit shrank still shows up without anyone re-saving.
+      advisories: await this.tuningAdvisoriesFor(database),
     };
+  }
+
+  private async tuningAdvisoriesFor(database: {
+    projectId: string;
+    cpuRequestMilli: number | null;
+    memoryRequestBytes: bigint | null;
+    pgParameters: unknown;
+    backupCompression: string | null;
+  }) {
+    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
+      cpuRequestMilli: database.cpuRequestMilli ?? null,
+      memoryRequestBytes:
+        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
+    }, 'postgres');
+    return deriveDbTuning({
+      memoryLimitBytes: resolved.memoryBytes,
+      overrides: {
+        sharedBuffers: (database.pgParameters as Record<string, string> | null)?.shared_buffers,
+        backupCompression: database.backupCompression,
+      },
+    }).advisories;
   }
 
   async updateDatabaseSettings(
     databaseId: string,
-    data: { parameters: Record<string, string> },
+    data: { parameters: Record<string, string>; backupCompression?: string | null },
     clerkId: string,
     userData?: any,
   ) {
@@ -1832,16 +1869,53 @@ export class DatabasesService {
       }
     }
 
-    const existingPreload = (database.sharedPreloadLibs as string[] | null) || [];
-    await this.k8sCnpg.updateCnpgParameters(
-      database.namespace, database.clusterName, sanitized, existingPreload,
-    );
-    await this.prisma.database.update({
-      where: { id: database.id },
-      data: { pgParameters: sanitized },
+    let backupCompression = database.backupCompression;
+    if (data.backupCompression !== undefined) {
+      const c = String(data.backupCompression ?? '').trim();
+      if (c && c !== 'gzip' && c !== 'none') {
+        throw new BadRequestException('backupCompression must be "gzip", "none", or null for automatic');
+      }
+      backupCompression = c || null;
+    }
+
+    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
+      cpuRequestMilli: database.cpuRequestMilli ?? null,
+      memoryRequestBytes:
+        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
+    }, 'postgres');
+    const tuning = deriveDbTuning({
+      memoryLimitBytes: resolved.memoryBytes,
+      overrides: { sharedBuffers: sanitized.shared_buffers, backupCompression },
     });
 
-    return { success: true, parameters: sanitized };
+    // The k8s call below is a JSON merge patch, so dropping shared_buffers from
+    // `sanitized` would leave the old value on the cluster forever. Write the
+    // derived value in its place: that is what makes clearing the field a reset
+    // rather than a no-op. The Prisma row still stores only what the user set,
+    // so "is this overridden?" stays answerable.
+    const existingPreload = (database.sharedPreloadLibs as string[] | null) || [];
+    await this.k8sCnpg.updateCnpgParameters(
+      database.namespace,
+      database.clusterName,
+      { ...sanitized, shared_buffers: tuning.sharedBuffers },
+      existingPreload,
+    );
+    if (backupCompression !== database.backupCompression) {
+      await this.k8sCnpg.applyCnpgDerivedTuning(
+        database.namespace, database.clusterName, tuning,
+      ).catch((e: any) => {
+        console.warn(`[DB/tuning] Failed to apply compression on ${database.clusterName}: ${e?.message ?? e}`);
+      });
+    }
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { pgParameters: sanitized, backupCompression },
+    });
+
+    // Advisories, never rejections: the value above was applied exactly as given.
+    return {
+      success: true, parameters: sanitized, backupCompression, advisories: tuning.advisories,
+    };
   }
 
   // ── Public (MetalLB) exposure ──

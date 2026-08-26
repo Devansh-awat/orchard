@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
-	import { Button, Input, Select, Badge, SectionCard, EmptyState } from '$lib/components/ui';
+	import { Button, Input, Select, Badge, SectionCard, EmptyState, Alert } from '$lib/components/ui';
 	import type { DatabaseDetail, ParamMeta } from './types';
 
 	let {
@@ -10,6 +10,7 @@
 		settingsLoaded,
 		settingsSaving,
 		settingsDirty,
+		settingsAdvisories = [],
 		onFetchSettings,
 		onSaveSettings,
 		paramValue,
@@ -21,11 +22,14 @@
 		settingsLoaded: boolean;
 		settingsSaving: boolean;
 		settingsDirty: boolean;
+		settingsAdvisories?: { key: string; message: string }[];
 		onFetchSettings: () => void;
 		onSaveSettings: () => void;
 		paramValue: (key: string) => string;
 		setParam: (key: string, v: string) => void;
 	} = $props();
+
+	const advisoryFor = (key: string) => settingsAdvisories.find((a) => a.key === key);
 </script>
 
 <SectionCard title="PostgreSQL parameters">
@@ -69,8 +73,18 @@
 							{/if}
 						</div>
 						<p class="db-setting-help">
-							{p.help} Default: <code class="db-inline-code">{p.defaultValue}</code>.
+							{p.help}
+							{#if p.autoSized}
+								Leave it empty to size it from the memory limit automatically.
+							{:else}
+								Default: <code class="db-inline-code">{p.defaultValue}</code>.
+							{/if}
 						</p>
+						{#if advisoryFor(p.key)}
+							<div class="db-setting-advisory">
+								<Alert tone="warning">{advisoryFor(p.key)?.message}</Alert>
+							</div>
+						{/if}
 					</div>
 					<div class="db-setting-control">
 						{#if p.kind === 'int'}
@@ -91,7 +105,7 @@
 								class="font-mono text-sm"
 								value={paramValue(p.key)}
 								oninput={(e: Event) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
-								placeholder={p.defaultValue}
+								placeholder={p.autoSized ? 'Automatic' : p.defaultValue}
 							/>
 						{:else if p.kind === 'string' && p.enum}
 							<Select
@@ -112,3 +126,10 @@
 		</div>
 	{/if}
 </SectionCard>
+
+<style>
+	.db-setting-advisory {
+		margin-top: 0.5rem;
+		max-width: 46ch;
+	}
+</style>

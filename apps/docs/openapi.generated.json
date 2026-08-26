@@ -5378,10 +5378,36 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "advisories": {
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "message"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "backupCompression": {
+                      "description": "\"gzip\", \"none\", or null to derive it from the memory limit.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "parameters": {
                       "additionalProperties": {
                         "type": "string"
                       },
+                      "description": "Only parameters the user has explicitly set. A parameter absent here is sized automatically from the memory limit.",
                       "type": "object"
                     },
                     "sharedPreloadLibraries": {
@@ -5432,10 +5458,22 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "backupCompression": {
+                    "description": "null restores automatic selection based on the memory limit.",
+                    "enum": [
+                      "gzip",
+                      "none"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "parameters": {
                     "additionalProperties": {
                       "type": "string"
                     },
+                    "description": "Values are applied as given and never clamped. Omit a key (or send it empty) to hand it back to automatic sizing.",
                     "type": "object"
                   }
                 },
@@ -5453,6 +5491,31 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "advisories": {
+                      "description": "Warnings about the values that were just applied. Never a rejection.",
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "message"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "backupCompression": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "parameters": {
                       "additionalProperties": {
                         "type": "string"
@@ -32573,6 +32636,200 @@
           }
         ],
         "summary": "GET /organizations/:id/sso",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/domains": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /organizations/:id/sso/domains",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/sso/domains",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/domains/{domainId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "domainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /organizations/:id/sso/domains/:domainId",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/sso/domains/{domainId}/verify": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "domainId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/sso/domains/:domainId/verify",
         "tags": [
           "organizations"
         ]

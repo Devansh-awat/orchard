@@ -23,6 +23,7 @@ import { EnvironmentsService } from './environments.service';
 import { DeploymentsService } from './deployments.service';
 import { formatSlug, redactDatabaseForViewer, scrubIngress, stripR2ProxyCreds } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
+import { deriveDbTuning } from '../kubernetes/db-tuning';
 
 @Injectable()
 export class ProjectsService {
@@ -335,6 +336,26 @@ export class ProjectsService {
       database.clusterName,
       resolved,
     );
+
+    // Re-derive everything the user hasn't taken ownership of. Anything present
+    // in pgParameters / backupCompression is theirs and is passed straight
+    // through untouched.
+    const tuning = deriveDbTuning({
+      memoryLimitBytes: resolved.memoryBytes,
+      overrides: {
+        sharedBuffers: (database.pgParameters as Record<string, string> | null)?.shared_buffers,
+        backupCompression: database.backupCompression,
+      },
+    });
+    await this.k8sCnpg.applyCnpgDerivedTuning(
+      database.namespace,
+      database.clusterName,
+      tuning,
+    ).catch((e: any) => {
+      // The resource change already landed; failing to retune is worth a log,
+      // not an error the user has to retry the whole resize for.
+      console.warn(`[DB/tuning] Failed to retune ${database.clusterName}: ${e?.message ?? e}`);
+    });
 
     const updated = await this.prisma.database.update({
       where: { id: databaseId },

@@ -2113,7 +2113,7 @@ export class DatabasesController {
   @Patch(':id/settings')
   async updateSettings(
     @Param('id') id: string,
-    @Body() body: { parameters: Record<string, string> },
+    @Body() body: { parameters: Record<string, string>; backupCompression?: string | null },
     @Request() req,
   ) {
     return this.databases.updateDatabaseSettings(id, body, req.user.sub, {

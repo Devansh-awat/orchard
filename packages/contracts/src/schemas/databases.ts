@@ -3,6 +3,13 @@ import type { RouteAttachment } from '../types';
 
 const passthroughObject = z.object({}).passthrough();
 
+// Advice about a setting that was applied as given. Never a rejection: a manual
+// value is honoured however dangerous it looks, and this is how we say so.
+const tuningAdvisory = z.object({
+  key: z.string(),
+  message: z.string(),
+});
+
 const creatorSchema = z
   .object({
     id: z.string(),
@@ -323,19 +330,45 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'read',
     response: z
       .object({
-        parameters: z.record(z.string()),
+        parameters: z
+          .record(z.string())
+          .describe(
+            'Only parameters the user has explicitly set. A parameter absent here is sized automatically from the memory limit.',
+          ),
         sharedPreloadLibraries: z.array(z.string()),
+        backupCompression: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('"gzip", "none", or null to derive it from the memory limit.'),
+        advisories: z.array(tuningAdvisory).optional(),
       })
       .passthrough(),
   },
   'PATCH /databases/:id/settings': {
     summary: 'Update PostgreSQL parameters on a database',
     scope: 'deploy',
-    request: z.object({ parameters: z.record(z.string()) }),
+    request: z.object({
+      parameters: z
+        .record(z.string())
+        .describe(
+          'Values are applied as given and never clamped. Omit a key (or send it empty) to hand it back to automatic sizing.',
+        ),
+      backupCompression: z
+        .enum(['gzip', 'none'])
+        .nullable()
+        .optional()
+        .describe('null restores automatic selection based on the memory limit.'),
+    }),
     response: z
       .object({
         success: z.boolean(),
         parameters: z.record(z.string()),
+        backupCompression: z.string().nullable().optional(),
+        advisories: z
+          .array(tuningAdvisory)
+          .optional()
+          .describe('Warnings about the values that were just applied. Never a rejection.'),
       })
       .passthrough(),
   },
