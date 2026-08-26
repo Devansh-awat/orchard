@@ -39,12 +39,14 @@
 		organization,
 		isOwner,
 		baseDomain,
-		index = 0
+		index = 0,
+		onOrganizationChanged
 	}: {
 		organization: { id: string; name: string; subdomain?: string } | null;
 		isOwner: boolean;
 		baseDomain: string;
 		index?: number;
+		onOrganizationChanged?: () => void;
 	} = $props();
 
 	let loading = $state(true);
@@ -285,6 +287,7 @@
 			});
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error(data?.message || 'Could not save the subdomain');
+			onOrganizationChanged?.();
 			toasts.add({ title: 'Vanity address updated', color: 'success' });
 		} catch (e) {
 			toasts.add({

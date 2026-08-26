@@ -3,8 +3,15 @@
 	import { apiFetch, toasts, isSuperAdmin } from '$lib/stores';
 	import { SectionCard, Select, Button } from '$lib/components/ui';
 
-	let { deploymentId, nodePoolId = null }: { deploymentId: string; nodePoolId?: string | null } =
-		$props();
+	let {
+		deploymentId,
+		nodePoolId = null,
+		onSaved
+	}: {
+		deploymentId: string;
+		nodePoolId?: string | null;
+		onSaved?: (updated: Record<string, unknown>) => void;
+	} = $props();
 
 	interface PoolOption {
 		id: string;
@@ -15,6 +22,7 @@
 
 	let pools = $state<PoolOption[]>([]);
 	let selected = $state<string>(nodePoolId ?? '');
+	let savedPoolId = $state<string>(nodePoolId ?? '');
 	let saving = $state(false);
 	let loaded = $state(false);
 
@@ -44,6 +52,9 @@
 				const err = await res.json().catch(() => ({}));
 				throw new Error(err.message || 'Failed to update pool');
 			}
+			const updated = await res.json().catch(() => null);
+			savedPoolId = selected;
+			if (updated) onSaved?.(updated);
 			toasts.add({ title: 'Node pool saved. Redeploy to apply.', color: 'success' });
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
@@ -52,7 +63,7 @@
 		}
 	}
 
-	const dirty = $derived((selected || '') !== (nodePoolId || ''));
+	const dirty = $derived((selected || '') !== (savedPoolId || ''));
 
 	onMount(load);
 </script>

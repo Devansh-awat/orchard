@@ -2433,7 +2433,10 @@ export class K8sWorkloadService {
           restartCount: totalRestartCount,
           createdAt: pod.metadata?.creationTimestamp,
           containers,
-          events: events.slice(0, 5),
+          // 5 was enough when nothing rendered these; the Events panel in
+          // ObserveTab shows the real history, and a crash loop generates
+          // several distinct reasons before the interesting one.
+          events: events.slice(0, 20),
         };
       }));
 

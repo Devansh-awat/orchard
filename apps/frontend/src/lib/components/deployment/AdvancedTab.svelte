@@ -20,6 +20,7 @@
 		deployment,
 		// Source
 		onSourceUpdated,
+		onDeploymentUpdated,
 		onRebuild,
 		rebuilding,
 		// Strategy
@@ -66,6 +67,7 @@
 	}: {
 		deployment: any;
 		onSourceUpdated: (updated: any) => void;
+		onDeploymentUpdated?: (updated: any) => void;
 		onRebuild: () => void;
 		rebuilding: boolean;
 		strategyValue: 'rollingUpdate' | 'recreate';
@@ -194,7 +196,11 @@
 	{/if}
 
 	{#if sections.includes('nodepool')}
-		<NodePoolPicker deploymentId={deployment.id} nodePoolId={deployment.nodePoolId} />
+		<NodePoolPicker
+			deploymentId={deployment.id}
+			nodePoolId={deployment.nodePoolId}
+			onSaved={onDeploymentUpdated}
+		/>
 	{/if}
 
 	{#if sections.includes('build')}

@@ -1924,6 +1924,11 @@
 		}
 	}
 
+	function handleDeploymentUpdated(updated: Deployment) {
+		if (deployment) mergeInto(deployment, updated);
+		else deployment = updated;
+	}
+
 	function handleSourceUpdated(updated: Deployment) {
 		if (deployment) mergeInto(deployment, updated);
 		else deployment = updated;
@@ -2917,6 +2922,7 @@
 							activeSection={settingsSection}
 							hrefFor={settingsHref}
 							onSourceUpdated={handleSourceUpdated}
+							onDeploymentUpdated={handleDeploymentUpdated}
 							onRebuild={rebuild}
 							{rebuilding}
 							bind:strategyValue

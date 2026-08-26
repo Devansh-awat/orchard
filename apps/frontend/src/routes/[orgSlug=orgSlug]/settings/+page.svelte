@@ -625,6 +625,7 @@
 				const d = await r.json();
 				throw new Error(d.message || 'Failed to resend invitation');
 			}
+			await fetchOrganization();
 			toasts.add({ title: 'Invitation resent', color: 'success' });
 		} catch (e) {
 			toasts.add({
@@ -1009,7 +1010,12 @@
 					/>
 				{/if}
 				{#if activeTab === 'sso'}
-					<OrgSsoTab {organization} {isOwner} {baseDomain} />
+					<OrgSsoTab
+						{organization}
+						{isOwner}
+						{baseDomain}
+						onOrganizationChanged={fetchOrganization}
+					/>
 				{/if}
 				{#if activeTab === 'scim' && isEnterprise}
 					<OrgScimTab

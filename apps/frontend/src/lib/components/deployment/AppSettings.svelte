@@ -15,6 +15,7 @@
 		activeSection,
 		hrefFor,
 		onSourceUpdated,
+		onDeploymentUpdated,
 		onRebuild,
 		rebuilding,
 		strategyValue = $bindable<'rollingUpdate' | 'recreate'>('rollingUpdate'),
@@ -81,6 +82,7 @@
 		activeSection: string;
 		hrefFor: (id: string) => string;
 		onSourceUpdated: (updated: any) => void;
+		onDeploymentUpdated?: (updated: any) => void;
 		onRebuild: () => void;
 		rebuilding: boolean;
 		strategyValue: 'rollingUpdate' | 'recreate';
@@ -181,6 +183,7 @@
 			<AdvancedTab
 				{deployment}
 				{onSourceUpdated}
+				{onDeploymentUpdated}
 				{onRebuild}
 				{rebuilding}
 				sections={['source', 'build']}
@@ -254,6 +257,7 @@
 			<AdvancedTab
 				{deployment}
 				{onSourceUpdated}
+				{onDeploymentUpdated}
 				{onRebuild}
 				{rebuilding}
 				sections={['health']}
@@ -298,6 +302,7 @@
 			<AdvancedTab
 				{deployment}
 				{onSourceUpdated}
+				{onDeploymentUpdated}
 				{onRebuild}
 				{rebuilding}
 				sections={['strategy', 'autodeploy']}

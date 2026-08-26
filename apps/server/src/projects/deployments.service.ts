@@ -4047,6 +4047,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  // Deliberately derived from CURRENT container state, not from k8s Event
+  // history: Kubernetes keeps warning events for about an hour after the
+  // condition clears, so a pod that briefly failed to schedule would keep the
+  // alert banner lit long after it went ready.
+  //
+  // The event history is not lost, it just belongs somewhere else. Pods carry
+  // their real Warning events (k8s-workload.service.ts#getPodEvents) and the
+  // Events tab in ObserveTab renders them. Banner is now, Events is history.
   synthesizePodWarnings(pods: { name: string; status: string; containers?: any[] }[]) {
     return pods
       .filter((pod) => pod.status === 'crashing')

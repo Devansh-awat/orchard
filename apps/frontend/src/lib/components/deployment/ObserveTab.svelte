@@ -10,7 +10,13 @@
 		demoKilled,
 		DEMO_KILLED_LOGS
 	} from '$lib/utils/observe-demo';
-	import { formatRelativeTime, ansiToHtml, explainExitCode, podLabel } from '$lib/utils/format';
+	import {
+		formatRelativeTime,
+		ansiToHtml,
+		explainExitCode,
+		podLabel,
+		humanizeWarning
+	} from '$lib/utils/format';
 	import { Button, Select, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -46,7 +52,16 @@
 		activeTab?: SubTab;
 	} = $props();
 
-	type SubTab = 'metrics' | 'logs' | 'http' | 'errors' | 'killed';
+	type SubTab = 'metrics' | 'logs' | 'http' | 'errors' | 'killed' | 'events';
+
+	type PodEvent = {
+		type?: string;
+		reason?: string;
+		message?: string;
+		count?: number;
+		firstTimestamp?: string;
+		lastTimestamp?: string;
+	};
 
 	type KilledContainer = {
 		entryId: string;
@@ -391,9 +406,21 @@
 	}
 
 	const visibleTabs = $derived(
-		(['metrics', 'logs', 'http', 'errors', 'killed'] as SubTab[]).filter(
+		(['metrics', 'logs', 'http', 'errors', 'events', 'killed'] as SubTab[]).filter(
 			(t) => t !== 'http' || hasIngress
 		)
+	);
+
+	const podEvents = $derived(
+		((deployment?.pods ?? []) as { name?: string; events?: PodEvent[] }[])
+			.flatMap((pod) =>
+				(pod.events ?? []).map((event) => ({ ...event, pod: pod.name ?? 'unknown' }))
+			)
+			.sort((a, b) => {
+				const at = a.lastTimestamp ? new Date(a.lastTimestamp).getTime() : 0;
+				const bt = b.lastTimestamp ? new Date(b.lastTimestamp).getTime() : 0;
+				return bt - at;
+			})
 	);
 
 	$effect(() => {
@@ -859,6 +886,7 @@
 		logs: 'Logs',
 		http: 'HTTP',
 		errors: 'Errors',
+		events: 'Events',
 		killed: 'Killed'
 	};
 
@@ -985,6 +1013,8 @@
 					bind:value={errorWindow}
 					options={ERROR_WINDOWS.map((w) => ({ value: w.id, label: w.label }))}
 				/>
+			{:else if activeTab === 'events'}
+				<span class="kc-hint">Warnings Kubernetes recorded for this app's pods</span>
 			{:else if activeTab === 'killed'}
 				<span class="kc-hint">Terminated in the last 24h</span>
 				<Button size="sm" variant="secondary" loading={killedLoading} onclick={() => fetchKilled()}
@@ -1414,6 +1444,59 @@
 									{/if}
 								</div>
 							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if activeTab === 'events'}
+			{#if podEvents.length === 0}
+				<div class="observe-empty-state">
+					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+						<PartyPopper class="h-10 w-10" />
+					</div>
+					<p class="observe-empty-title">No warnings from Kubernetes</p>
+					<p class="observe-empty-desc">
+						Scheduling, image pulls, probes and volume mounts are all going through cleanly
+					</p>
+				</div>
+			{:else}
+				<div class="observe-errors-list">
+					{#each podEvents as event, i (`${event.pod}-${event.reason}-${event.firstTimestamp}-${i}`)}
+						{@const human = humanizeWarning(event.message ?? '')}
+						<div
+							class="observe-error-card"
+							{@attach motionStagger({ index: i, from: { y: 6, opacity: 0 } })}
+						>
+							<div class="ev-row">
+								<div class="observe-error-main">
+									{#if human}
+										<div class="eg-headline">{human.title}</div>
+									{/if}
+									<div class="observe-error-titlerow">
+										<span class="kc-reason kc-reason--{human?.severity ?? 'warning'}"
+											>{event.reason ?? 'Warning'}</span
+										>
+										{#if (event.count ?? 1) > 1}
+											<span class="observe-error-fp">{event.count} times</span>
+										{/if}
+										<span class="kc-pod">{podLabel(event.pod)}</span>
+									</div>
+									{#if human?.hint}
+										<p class="ev-hint">{human.hint}</p>
+									{/if}
+									<p class="ev-raw">{event.message}</p>
+									{#if event.lastTimestamp}
+										<div class="observe-error-meta">
+											<Clock class="h-3 w-3" />
+											{formatRelativeTime(new Date(event.lastTimestamp))}
+											<span class="observe-error-meta-sep">&middot;</span>
+											<span title={fullTimestamp(event.lastTimestamp)}
+												>{new Date(event.lastTimestamp).toLocaleTimeString()}</span
+											>
+										</div>
+									{/if}
+								</div>
+							</div>
 						</div>
 					{/each}
 				</div>
@@ -2759,5 +2842,23 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
+	}
+	.ev-row {
+		display: flex;
+		padding: 0.625rem 0.75rem;
+	}
+	.ev-hint {
+		margin-top: 0.25rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+	.ev-raw {
+		margin-top: 0.25rem;
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		word-break: break-word;
 	}
 </style>
