@@ -31,12 +31,26 @@ if [ -t 1 ]; then IS_TTY=true; fi
 
 if [ "$IS_TTY" = true ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
-  C_GREEN=$'\033[38;5;114m'; C_LEAF=$'\033[38;5;150m'
-  C_AMBER=$'\033[38;5;179m'; C_RED=$'\033[38;5;174m'; C_GREY=$'\033[38;5;245m'
+  case "${COLORTERM:-}" in
+    truecolor|24bit)
+      C_BRAND=$'\033[38;2;174;42;58m'
+      C_BRIGHT=$'\033[38;2;214;77;94m'
+      ;;
+    *)
+      C_BRAND=$'\033[38;5;125m'
+      C_BRIGHT=$'\033[38;5;167m'
+      ;;
+  esac
+  C_OK=$'\033[38;5;108m'; C_AMBER=$'\033[38;5;179m'
+  C_FAIL=$'\033[38;5;203m'; C_GREY=$'\033[38;5;245m'
 else
   C_RESET=''; C_DIM=''; C_BOLD=''
-  C_GREEN=''; C_LEAF=''; C_AMBER=''; C_RED=''; C_GREY=''
+  C_BRAND=''; C_BRIGHT=''; C_OK=''; C_AMBER=''; C_FAIL=''; C_GREY=''
 fi
+
+pace() {
+  if [ "$IS_TTY" = true ] && [ "${ORCHARD_NO_PACING:-}" != "1" ]; then sleep "$1"; fi
+}
 
 WIDTH=68
 SPINNER=('...' '.. ' '.  ' ' . ' '  .' ' ..')
@@ -80,39 +94,46 @@ pad_line() {
   local text=$1 plain
   plain=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;]*m//g')
   printf '%s%s│%s %s%*s %s│%s\n' \
-    '  ' "$C_GREEN" "$C_RESET" "$text" $((WIDTH - ${#plain} - 2)) '' "$C_GREEN" "$C_RESET"
+    '  ' "$C_BRAND" "$C_RESET" "$text" $((WIDTH - ${#plain} - 2)) '' "$C_BRAND" "$C_RESET"
 }
 
-box_top() { printf '%s%s╭%s╮%s\n' '  ' "$C_GREEN" "$(rule $WIDTH)" "$C_RESET"; }
-box_bottom() { printf '%s%s╰%s╯%s\n' '  ' "$C_GREEN" "$(rule $WIDTH)" "$C_RESET"; }
+box_top() { printf '%s%s╭%s╮%s\n' '  ' "$C_BRAND" "$(rule $WIDTH)" "$C_RESET"; }
+box_bottom() { printf '%s%s╰%s╯%s\n' '  ' "$C_BRAND" "$(rule $WIDTH)" "$C_RESET"; }
 
 banner() {
   printf '\n'
+  pace 0.15
   box_top
   pad_line ""
-  pad_line "$C_LEAF$C_BOLD  ORCHARD$C_RESET$C_DIM   self-hosted app platform$C_RESET"
+  pace 0.2
+  pad_line "$C_BRIGHT$C_BOLD  ORCHARD$C_RESET$C_DIM   self-hosted app platform$C_RESET"
   pad_line ""
+  pace 0.35
   pad_line "$C_DIM  One box, one command. About 10 minutes on a clean machine.$C_RESET"
   pad_line ""
   box_bottom
   printf '\n'
+  pace 0.5
 }
 
 show_plan() {
   printf '  %sWhat happens next%s\n' "$C_BOLD" "$C_RESET"
+  pace 0.25
   local i=0
   while [ "$i" -lt "$STEP_TOTAL" ]; do
     printf '  %s%2d  %s%s\n' "$C_GREY" $((i + 1)) "${PLAN_TITLES[$i]}" "$C_RESET"
+    pace 0.05
     i=$((i + 1))
   done
   printf '\n'
+  pace 0.6
 }
 
 info() { printf '      %s%s%s\n' "$C_GREY" "$*" "$C_RESET"; }
 note() { printf '      %s\n' "$*"; }
 bold() { printf '  %s%s%s\n' "$C_BOLD" "$*" "$C_RESET"; }
 warn() { printf '   %s!%s  %s%s%s\n' "$C_AMBER" "$C_RESET" "$C_AMBER" "$*" "$C_RESET" >&2; }
-die() { printf '\n   %sx  %s%s\n\n' "$C_RED" "$*" "$C_RESET" >&2; exit 1; }
+die() { printf '\n   %sx  %s%s\n\n' "$C_FAIL" "$*" "$C_RESET" >&2; exit 1; }
 
 step() {
   local title left='' head
@@ -121,11 +142,11 @@ step() {
   STEP_N=$((STEP_N + 1))
 
   if [ "$REMAINING" -gt 45 ]; then left=" ${C_DIM}·${C_RESET} ${C_GREY}~$(fmt_secs "$REMAINING") left${C_RESET}"; fi
-  head="  ${C_GREEN}${C_BOLD}${STEP_N}/${STEP_TOTAL}${C_RESET}  ${C_BOLD}${title}${C_RESET}"
+  head="  ${C_BRAND}${C_BOLD}${STEP_N}/${STEP_TOTAL}${C_RESET}  ${C_BOLD}${title}${C_RESET}"
 
   printf '\n%s\n' "$head"
   printf '  %s%s%s  %s%s elapsed%s%s\n' \
-    "$C_GREEN" "$(rule 4)" "$C_RESET" "$C_GREY" "$(elapsed)" "$C_RESET" "$left"
+    "$C_BRAND" "$(rule 4)" "$C_RESET" "$C_GREY" "$(elapsed)" "$C_RESET" "$left"
 
   REMAINING=$((REMAINING - cost))
   if [ "$REMAINING" -lt 0 ]; then REMAINING=0; fi
@@ -147,13 +168,13 @@ run_step() {
     if [ "$IS_TTY" = true ]; then
       frame=${SPINNER[$((i % ${#SPINNER[@]}))]}
       printf '\r      %s%s%s %s %s%s / ~%s%s\033[K' \
-        "$C_LEAF" "$frame" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$typical" "$C_RESET"
+        "$C_BRIGHT" "$frame" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$typical" "$C_RESET"
       i=$((i + 1))
     elif [ "$secs" -ge $((beat + 30)) ]; then
       beat=$secs
       printf '      .. %s  %s elapsed (typically %s)\n' "$label" "$(fmt_secs "$secs")" "$typical"
     fi
-    sleep 1
+    sleep 0.1
   done
 
   wait "$pid" || rc=$?
@@ -162,7 +183,7 @@ run_step() {
   if [ "$rc" -ne 0 ]; then
     if [ "$IS_TTY" = true ]; then printf '\r\033[K'; fi
     printf '      %sx%s %s %sfailed after %s%s\n\n' \
-      "$C_RED" "$C_RESET" "$label" "$C_RED" "$(fmt_secs "$secs")" "$C_RESET" >&2
+      "$C_FAIL" "$C_RESET" "$label" "$C_FAIL" "$(fmt_secs "$secs")" "$C_RESET" >&2
     sed 's/^/        /' "$log" | tail -25 >&2
     printf '\n' >&2
     rm -f "$log"
@@ -171,7 +192,7 @@ run_step() {
 
   if [ "$IS_TTY" = true ]; then
     printf '\r      %s✓%s %s %s%s%s\033[K\n' \
-      "$C_GREEN" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$C_RESET"
+      "$C_OK" "$C_RESET" "$label" "$C_GREY" "$(fmt_secs "$secs")" "$C_RESET"
   else
     printf '      ok %s (%s)\n' "$label" "$(fmt_secs "$secs")"
   fi
@@ -216,7 +237,8 @@ usage() {
     --registry-host <host>       ORCHARD_REGISTRY_HOST    name the kubelet pulls by
     --state-dir <path>           ORCHARD_STATE_DIR        where values.yaml is written
 
-  Also honoured: NO_COLOR disables all colour.
+  Also honoured: NO_COLOR disables all colour, ORCHARD_NO_PACING=1 removes the
+  brief pauses in the opening screen.
 
   Fully non-interactive example:
 
@@ -949,7 +971,7 @@ summary() {
   printf '\n'
   box_top
   pad_line ""
-  pad_line "$C_LEAF$C_BOLD  Orchard is ready$C_RESET$C_GREY   installed in $(elapsed)$C_RESET"
+  pad_line "$C_BRIGHT$C_BOLD  Orchard is ready$C_RESET$C_GREY   installed in $(elapsed)$C_RESET"
   pad_line ""
   pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN"
   pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN"
@@ -964,7 +986,7 @@ summary() {
   note "Sign up with the first account, then claim the instance. Its setup"
   note "token is printed in the server log on first boot:"
   printf '\n      %skubectl -n orchard logs deploy/server | grep -A2 %s\n' \
-    "$C_LEAF" "'no superadmin'$C_RESET"
+    "$C_BRIGHT" "'no superadmin'$C_RESET"
   printf '\n'
   info "Restart the server to mint a fresh token if it expires."
   printf '\n'

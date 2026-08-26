@@ -138,6 +138,7 @@ sudo ./install.sh --yes \
 | `--yes`, `-y` | `ORCHARD_ASSUME_YES` | `false` |
 | `--help`, `-h` | | |
 | | `NO_COLOR` | unset. Any value disables colour. |
+| | `ORCHARD_NO_PACING` | unset. `1` removes the brief pauses in the opening screen. |
 
 ### Versions and images
 
