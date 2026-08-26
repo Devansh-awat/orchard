@@ -48,13 +48,13 @@ the data stays on your hardware.
 
 | | |
 |---|---|
-| 🚀 **Deploys** | GitHub repos or container images, built on your cluster with streaming logs |
-| 🌐 **Routing** | An HTTPS URL per app, custom domains with automatic certificates, an optional auth wall |
-| 🗄️ **Data** | Managed PostgreSQL with backups, extensions, read replicas and a query console |
-| ⏱️ **Jobs** | Cron schedules and multi-step pipelines, with per-step output and exit codes |
-| 📈 **Visibility** | Live logs by pod and time range, CPU and memory over time, and the logs of containers that already died |
-| 👥 **Teams** | Organizations, projects, roles, SSO, SCIM provisioning, audit logs, quotas |
-| 🤖 **Interfaces** | A web dashboard, a Go CLI, and an MCP server so agents can drive it |
+| **Deploys** | GitHub repos or container images, built on your cluster with streaming logs |
+| **Routing** | An HTTPS URL per app, custom domains with automatic certificates, an optional auth wall |
+| **Data** | Managed PostgreSQL with backups, extensions, read replicas and a query console |
+| **Jobs** | Cron schedules and multi-step pipelines, with per-step output and exit codes |
+| **Visibility** | Live logs by pod and time range, CPU and memory over time, and the logs of containers that already died |
+| **Teams** | Organizations, projects, roles, SSO, SCIM provisioning, audit logs, quotas |
+| **Interfaces** | A web dashboard, a Go CLI, and an MCP server so agents can drive it |
 
 ## Install
 

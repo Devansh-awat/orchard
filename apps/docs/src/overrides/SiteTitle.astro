@@ -1,0 +1,50 @@
+---
+/**
+ * The docs are a section of the product site, not a separate one, so the logo
+ * goes back to the landing page rather than to a docs home that no longer
+ * exists.
+ */
+const site = "https://orchard.my";
+---
+
+<a href={site} class="site-home">
+  <img
+    src="/logo/logocolor.svg"
+    alt="Orchard"
+    width="132"
+    height="32"
+    class="logo-light"
+  />
+  <img
+    src="/logo/logocolordm.svg"
+    alt="Orchard"
+    width="132"
+    height="32"
+    class="logo-dark"
+  />
+</a>
+
+<style>
+  .site-home {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+
+  .site-home img {
+    height: 1.875rem;
+    width: auto;
+  }
+
+  .logo-dark {
+    display: none;
+  }
+
+  :global([data-theme="dark"]) .logo-light {
+    display: none;
+  }
+
+  :global([data-theme="dark"]) .logo-dark {
+    display: block;
+  }
+</style>

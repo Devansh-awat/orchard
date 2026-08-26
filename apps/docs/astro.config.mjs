@@ -5,21 +5,19 @@ import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
 
 export default defineConfig({
   site: "https://docs.orchard.my",
+  // The landing page is the front door; docs open straight into the docs.
+  redirects: { "/": "/start/what-is-orchard/" },
   server: { port: 5174, host: true },
   integrations: [
     starlight({
       title: "Orchard",
       description:
         "Orchard runs on your own Kubernetes cluster and turns a GitHub repo into a running app.",
-      logo: {
-        light: "./src/assets/logocolor.svg",
-        dark: "./src/assets/logocolordm.svg",
-        replacesTitle: true,
-      },
       favicon: "/favicon/favicon.ico",
       customCss: ["./src/styles/orchard.css"],
       components: {
         PageTitle: "./src/overrides/PageTitle.astro",
+        SiteTitle: "./src/overrides/SiteTitle.astro",
       },
       social: [
         {
