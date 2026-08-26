@@ -9,7 +9,14 @@
 
 <script lang="ts">
 	import { motionStagger } from '$lib/utils/motion.svelte';
-	import { Zap, MemoryStick, RotateCcw, CloudOff, DatabaseBackup } from 'lucide-svelte';
+	import {
+		Zap,
+		MemoryStick,
+		RotateCcw,
+		CloudOff,
+		DatabaseBackup,
+		ServerCrash
+	} from 'lucide-svelte';
 	import type { DatabaseDetail } from './types';
 
 	let {
@@ -55,13 +62,65 @@
 			!archivingFailing
 	);
 
+	// CNPG happily reports "Cluster in healthy state" while holding a dangling
+	// PVC and running no pod at all, so none of the conditions above fire and the
+	// page reads as merely quiet. Two production databases sat like that for over
+	// a month. Trust the counts, not the phase string.
+	const noPods = $derived(
+		database.mode === 'cnpg' &&
+			database.liveStatus?.exists === true &&
+			!database.liveStatus?.ready &&
+			(database.liveStatus?.readyReplicas ?? 0) === 0 &&
+			!isRestarting &&
+			database.status !== 'stopped' &&
+			database.status !== 'provisioning' &&
+			database.status !== 'restoring'
+	);
+	const stuckPvc = $derived(
+		[...(database.liveStatus?.danglingPVC ?? []), ...(database.liveStatus?.unusablePVC ?? [])].join(
+			', '
+		)
+	);
+
 	const hasAlert = $derived(
-		(!isRestarting && (isOOM || isCrashLoop || highRestarts)) || archivingFailing || noBackups
+		(!isRestarting && (isOOM || isCrashLoop || highRestarts || noPods)) ||
+			archivingFailing ||
+			noBackups
 	);
 </script>
 
 {#if hasAlert}
 	<div class="dba-container">
+		{#if noPods}
+			<div
+				class="dba-alert dba-alert--crash"
+				{@attach motionStagger({ index: 0, from: { y: -8, opacity: 0 } })}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap dba-icon--crash">
+						<ServerCrash size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<div class="dba-title-row">
+							<span class="dba-title">No instance running</span>
+						</div>
+						<span class="dba-desc">
+							{#if stuckPvc}
+								This database has no running pod. Its storage volume ({stuckPvc}) is not attached to
+								anything, so Kubernetes will not start it back up on its own. An administrator needs
+								to look at the cluster.
+							{:else}
+								This database has no running pod, so nothing can connect to it.
+							{/if}
+						</span>
+					</div>
+					{#if onViewLogs}
+						<button class="dba-action" onclick={onViewLogs}> View logs </button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
 		{#if isOOM}
 			<div
 				class="dba-alert dba-alert--oom"

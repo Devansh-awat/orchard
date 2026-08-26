@@ -99,6 +99,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/databases/:id/extensions', auth: 'authenticated' },
   { method: 'POST', path: '/databases/:id/extensions', auth: 'authenticated' },
   { method: 'DELETE', path: '/databases/:id/extensions/:name', auth: 'authenticated' },
+  { method: 'GET', path: '/databases/:id/killed-containers', auth: 'authenticated' },
+  { method: 'GET', path: '/databases/:id/killed-containers/:entryId/logs', auth: 'authenticated' },
   { method: 'GET', path: '/databases/:id/live', auth: 'authenticated' },
   { method: 'GET', path: '/databases/:id/metrics', auth: 'authenticated' },
   { method: 'PATCH', path: '/databases/:id/name', auth: 'authenticated' },

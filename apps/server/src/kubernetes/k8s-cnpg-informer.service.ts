@@ -5,6 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PodLogCaptureService } from './pod-log-capture.service';
+import { computePodStatus } from '../mirror/pod-status';
 
 const CNPG_SELECTOR = 'cnpg.io/cluster';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -12,6 +14,10 @@ const NEGATIVE_TTL_MS = 60 * 1000;
 const EMIT_COALESCE_MS = 250;
 const ARCHIVING_SWEEP_MS = 2 * 60 * 1000;
 const FRESH_TRANSITION_MS = 10 * 60 * 1000;
+// Same debounce the deployment informer uses. A restarting Postgres flickers
+// through crashing on its way back up, and announcing that is noise.
+const CRASH_CONFIRM_MS = 30 * 1000;
+const CRASH_NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;
 
 interface Ctx {
   databaseId: string;
@@ -23,6 +29,13 @@ interface PendingEmit {
   ctx: Ctx;
   payload: unknown;
   timer: ReturnType<typeof setTimeout>;
+}
+
+interface CrashTrack {
+  crashing: boolean;
+  notifiedCrash: boolean;
+  lastNotifiedAt: number;
+  confirmTimer?: ReturnType<typeof setTimeout>;
 }
 
 @Injectable()
@@ -47,12 +60,15 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
 
   private archivingTimer?: ReturnType<typeof setInterval>;
 
+  private readonly crashTracks = new Map<string, CrashTrack>();
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly leader: LeaderElectionService,
     private readonly notifications: NotificationsService,
+    private readonly logCapture: PodLogCaptureService,
   ) {}
 
   async onModuleInit() {
@@ -95,6 +111,8 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     if (this.restartTimer) clearTimeout(this.restartTimer);
     for (const p of this.pending.values()) clearTimeout(p.timer);
     this.pending.clear();
+    for (const t of this.crashTracks.values()) if (t.confirmTimer) clearTimeout(t.confirmTimer);
+    this.crashTracks.clear();
     try {
       await this.informer?.stop();
     } catch {}
@@ -130,7 +148,153 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     const ctx = await this.resolveCtx(ns, clusterName);
     if (!ctx) return;
 
+    await this.syncPod(type, ctx.databaseId, pod);
+    void this.trackCrashState(type, ctx);
+
+    // Postgres prints the reason it died into its own stdout, and the pod is
+    // gone by the time anyone opens the page. Capture it on the way past.
+    if (type !== 'delete') {
+      void this.logCapture.capture(ctx.databaseId, ns, pod, 'database');
+    }
+
     this.scheduleEmit(ctx, this.buildPayload(type, pod));
+  }
+
+  private async syncPod(type: 'add' | 'update' | 'delete', databaseId: string, pod: k8s.V1Pod) {
+    const name = pod.metadata?.name;
+    if (!name) return;
+
+    try {
+      if (type === 'delete') {
+        await this.prisma.databasePod.deleteMany({ where: { databaseId, name } });
+        return;
+      }
+
+      const containerStatuses = pod.status?.containerStatuses ?? [];
+      const term = latestTermination(containerStatuses);
+      const data = {
+        podIp: pod.status?.podIP ?? null,
+        nodeName: pod.spec?.nodeName ?? null,
+        status: computePodStatus(pod),
+        restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
+        ready:
+          pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null,
+        lastTerminationReason: term?.reason ?? null,
+        lastExitCode: term?.exitCode ?? null,
+        lastTerminatedAt: term?.finishedAt ?? null,
+      };
+
+      await this.prisma.databasePod.upsert({
+        where: { databaseId_name: { databaseId, name } },
+        create: { databaseId, name, ...data },
+        update: data,
+      });
+    } catch (err) {
+      this.logger.warn(`syncPod(${databaseId}/${name}) failed: ${(err as Error)?.message ?? err}`);
+    }
+  }
+
+  private async trackCrashState(type: 'add' | 'update' | 'delete', ctx: Ctx) {
+    try {
+      const pods = await this.prisma.databasePod.findMany({
+        where: { databaseId: ctx.databaseId },
+        select: { status: true },
+      });
+      const crashing = pods.some((p) => p.status === 'crashing');
+      const track = this.crashTracks.get(ctx.databaseId);
+
+      if (!track) {
+        // On the first observation of an existing pod we adopt its state
+        // silently. Otherwise every process restart would announce every
+        // already-crashing database all over again.
+        if (type === 'add') {
+          this.crashTracks.set(ctx.databaseId, {
+            crashing,
+            notifiedCrash: false,
+            lastNotifiedAt: 0,
+          });
+          return;
+        }
+        this.crashTracks.set(ctx.databaseId, {
+          crashing: false,
+          notifiedCrash: false,
+          lastNotifiedAt: 0,
+        });
+        if (crashing) this.scheduleCrashConfirm(ctx);
+        return;
+      }
+
+      if (crashing && !track.crashing) {
+        this.scheduleCrashConfirm(ctx);
+        return;
+      }
+
+      if (!crashing && track.crashing) {
+        if (track.confirmTimer) {
+          clearTimeout(track.confirmTimer);
+          track.confirmTimer = undefined;
+        }
+        track.crashing = false;
+        if (track.notifiedCrash) {
+          track.notifiedCrash = false;
+          this.notifications
+            .notifyDbState(ctx.databaseId, 'recovered')
+            .catch((err) =>
+              this.logger.warn(
+                `db recovery notification failed for ${ctx.databaseId}: ${err?.message ?? err}`,
+              ),
+            );
+        }
+      }
+
+      if (pods.length === 0) {
+        const remaining = this.crashTracks.get(ctx.databaseId);
+        if (remaining?.confirmTimer) clearTimeout(remaining.confirmTimer);
+        this.crashTracks.delete(ctx.databaseId);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `trackCrashState(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`,
+      );
+    }
+  }
+
+  private scheduleCrashConfirm(ctx: Ctx) {
+    const track = this.crashTracks.get(ctx.databaseId);
+    if (!track) return;
+    track.crashing = true;
+    if (track.confirmTimer) return;
+    track.confirmTimer = setTimeout(() => {
+      track.confirmTimer = undefined;
+      void this.confirmCrash(ctx);
+    }, CRASH_CONFIRM_MS);
+    track.confirmTimer.unref?.();
+  }
+
+  private async confirmCrash(ctx: Ctx) {
+    if (this.stopped || !this.leader.isLeader()) return;
+    const track = this.crashTracks.get(ctx.databaseId);
+    if (!track || !track.crashing || track.notifiedCrash) return;
+    try {
+      const crashingPod = await this.prisma.databasePod.findFirst({
+        where: { databaseId: ctx.databaseId, status: 'crashing' },
+        select: { lastTerminationReason: true, lastExitCode: true },
+      });
+      if (!crashingPod) {
+        track.crashing = false;
+        return;
+      }
+      const now = Date.now();
+      if (now - track.lastNotifiedAt < CRASH_NOTIFY_COOLDOWN_MS) return;
+      track.notifiedCrash = true;
+      track.lastNotifiedAt = now;
+      const detail = crashingPod.lastTerminationReason
+        ? `${crashingPod.lastTerminationReason}${crashingPod.lastExitCode != null ? ` (exit code ${crashingPod.lastExitCode})` : ''}`
+        : undefined;
+      await this.notifications.notifyDbState(ctx.databaseId, 'crashing', detail);
+    } catch (err) {
+      this.logger.warn(`confirmCrash(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`);
+    }
   }
 
   private scheduleEmit(ctx: Ctx, payload: unknown) {

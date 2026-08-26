@@ -4,6 +4,8 @@ import Redis from 'ioredis';
 import { K8sWorkloadService } from './k8s-workload.service';
 
 const TTL_MS = 24 * 60 * 60 * 1000;
+
+export type CaptureScope = 'deployment' | 'database';
 const INDEX_MAX = 50;
 const TAIL_LINES = 500;
 
@@ -45,19 +47,28 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
     } catch {}
   }
 
-  private idxKey(deploymentId: string) {
-    return `orchard:killed:idx:${deploymentId}`;
+  // Scope segment rather than trusting uuid uniqueness across two tables. Both
+  // ids are uuids so a collision is not a real risk, but a shared key space
+  // would mean a database id could read a deployment's captured logs if the
+  // authorization layer above ever slipped.
+  private idxKey(scope: CaptureScope, id: string) {
+    return `orchard:killed:idx:${scope}:${id}`;
   }
 
-  private entryKey(deploymentId: string, entryId: string) {
-    return `orchard:killed:entry:${deploymentId}:${entryId}`;
+  private entryKey(scope: CaptureScope, id: string, entryId: string) {
+    return `orchard:killed:entry:${scope}:${id}:${entryId}`;
   }
 
-  private seenKey(deploymentId: string, entryId: string) {
-    return `orchard:killed:seen:${deploymentId}:${entryId}`;
+  private seenKey(scope: CaptureScope, id: string, entryId: string) {
+    return `orchard:killed:seen:${scope}:${id}:${entryId}`;
   }
 
-  async capture(deploymentId: string, namespace: string, pod: k8s.V1Pod) {
+  async capture(
+    ownerId: string,
+    namespace: string,
+    pod: k8s.V1Pod,
+    scope: CaptureScope = 'deployment',
+  ) {
     if (!this.redis) return;
     const podName = pod.metadata?.name;
     if (!podName) return;
@@ -74,7 +85,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
 
       try {
         const claimed = await this.redis.set(
-          this.seenKey(deploymentId, entryId),
+          this.seenKey(scope, ownerId, entryId),
           '1',
           'PX',
           TTL_MS,
@@ -111,25 +122,25 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
         };
 
         await this.redis.set(
-          this.entryKey(deploymentId, entryId),
+          this.entryKey(scope, ownerId, entryId),
           JSON.stringify(entry),
           'PX',
           TTL_MS,
         );
-        await this.redis.lpush(this.idxKey(deploymentId), entryId);
-        await this.redis.ltrim(this.idxKey(deploymentId), 0, INDEX_MAX - 1);
-        await this.redis.pexpire(this.idxKey(deploymentId), TTL_MS);
+        await this.redis.lpush(this.idxKey(scope, ownerId), entryId);
+        await this.redis.ltrim(this.idxKey(scope, ownerId), 0, INDEX_MAX - 1);
+        await this.redis.pexpire(this.idxKey(scope, ownerId), TTL_MS);
       } catch (e) {
         this.logger.warn(`capture failed for ${podName}/${cs.name}: ${(e as Error).message}`);
       }
     }
   }
 
-  async list(deploymentId: string): Promise<KilledContainerMeta[]> {
+  async list(ownerId: string, scope: CaptureScope = 'deployment'): Promise<KilledContainerMeta[]> {
     if (!this.redis) return [];
-    const ids = await this.redis.lrange(this.idxKey(deploymentId), 0, INDEX_MAX - 1);
+    const ids = await this.redis.lrange(this.idxKey(scope, ownerId), 0, INDEX_MAX - 1);
     if (ids.length === 0) return [];
-    const keys = ids.map((id) => this.entryKey(deploymentId, id));
+    const keys = ids.map((id) => this.entryKey(scope, ownerId, id));
     const rows = await this.redis.mget(keys);
     const out: KilledContainerMeta[] = [];
     for (const row of rows) {
@@ -150,9 +161,13 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
     return out;
   }
 
-  async getLogs(deploymentId: string, entryId: string): Promise<KilledEntry | null> {
+  async getLogs(
+    ownerId: string,
+    entryId: string,
+    scope: CaptureScope = 'deployment',
+  ): Promise<KilledEntry | null> {
     if (!this.redis) return null;
-    const row = await this.redis.get(this.entryKey(deploymentId, entryId));
+    const row = await this.redis.get(this.entryKey(scope, ownerId, entryId));
     if (!row) return null;
     try {
       return JSON.parse(row) as KilledEntry;

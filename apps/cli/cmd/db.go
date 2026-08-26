@@ -35,6 +35,7 @@ func dbCmd() *cobra.Command {
 		dbConnectionCmd(),
 		dbMetricsCmd(),
 		dbLogsCmd(),
+		dbKilledCmd(),
 		dbPsqlCmd(),
 		dbBackupCmd(),
 		dbBackupScheduleCmd(),
@@ -860,4 +861,81 @@ func dbLastPoint(raw map[string]any, key string) (y float64, n int, ok bool) {
 	}
 	y, ok = last["y"].(float64)
 	return y, len(pts), ok
+}
+
+func dbKilledCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "killed",
+		Short: "Inspect logs captured from killed database containers",
+		Long: `Postgres containers are replaced quickly after a crash, so by the time you
+look the pod that died is gone and its logs with it. Orchard captures the last
+lines on the way past and keeps them for 24 hours.`,
+	}
+	c.AddCommand(dbKilledListCmd(), dbKilledLogsCmd())
+	return c
+}
+
+func dbKilledListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list <id>",
+		Aliases: []string{"ls"},
+		Short:   "List killed-container log captures for a database",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var raw any
+			path := "/databases/" + url.PathEscape(args[0]) + "/killed-containers"
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			rows := [][]string{}
+			for _, e := range asList(raw) {
+				rows = append(rows, []string{
+					pick(e, "entryId"),
+					pick(e, "pod"),
+					pick(e, "container"),
+					pick(e, "reason"),
+					pick(e, "exitCode"),
+					pick(e, "finishedAt", "capturedAt"),
+				})
+			}
+			output.Table([]string{"entry", "pod", "container", "reason", "exit", "finished"}, rows)
+			return nil
+		},
+	}
+}
+
+func dbKilledLogsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "logs <id> <entryId>",
+		Short: "Print the captured logs of a killed database container",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var raw map[string]any
+			path := "/databases/" + url.PathEscape(args[0]) + "/killed-containers/" +
+				url.PathEscape(args[1]) + "/logs"
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			logs := str(raw["logs"])
+			fmt.Print(logs)
+			if logs != "" && !strings.HasSuffix(logs, "\n") {
+				fmt.Println()
+			}
+			return nil
+		},
+	}
 }

@@ -4243,6 +4243,94 @@
         ]
       }
     },
+    "/databases/{id}/killed-containers": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/killed-containers",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/killed-containers/{entryId}/logs": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/killed-containers/:entryId/logs",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/live": {
       "get": {
         "description": "Auth: authenticated",

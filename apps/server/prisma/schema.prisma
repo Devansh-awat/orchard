@@ -881,6 +881,50 @@ model DeploymentCrashState {
   @@map("deployment_crash_states")
 }
 
+// The database-side twin of `pods`. Kept as its own table rather than making
+// Pod.deploymentId nullable: same shape, no migration on a hot table, and no
+// rows that belong to neither thing.
+//
+// Before this existed the CNPG informer persisted nothing, so database health
+// had to be recomputed with a live Kubernetes call on every single API request,
+// and a database that OOMed while nobody had the page open left no trace.
+model DatabasePod {
+  id                    String    @id @default(uuid()) @db.Uuid
+  databaseId            String    @map("database_id") @db.Uuid
+  name                  String    @db.VarChar(255)
+  podIp                 String?   @map("pod_ip") @db.VarChar(45)
+  nodeName              String?   @map("node_name") @db.VarChar(255)
+  status                String    @default("pending") @db.VarChar(50)
+  restartCount          Int       @default(0) @map("restart_count")
+  ready                 Boolean?  @map("ready")
+  lastTerminationReason String?   @map("last_termination_reason") @db.VarChar(100)
+  lastExitCode          Int?      @map("last_exit_code")
+  lastTerminatedAt      DateTime? @map("last_terminated_at") @db.Timestamp(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@unique([databaseId, name])
+  @@index([databaseId], map: "idx_database_pods_database")
+  @@index([status], map: "idx_database_pods_status")
+  @@map("database_pods")
+}
+
+// Mirrors DeploymentCrashState for managed databases, so a crash that starts and
+// resolves while no replica was watching still settles correctly.
+model DatabaseCrashState {
+  databaseId    String    @id @map("database_id") @db.Uuid
+  crashingSince DateTime? @map("crashing_since") @db.Timestamp(6)
+  healthySince  DateTime? @map("healthy_since") @db.Timestamp(6)
+  notifiedAt    DateTime? @map("notified_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@map("database_crash_states")
+}
+
 model K8sObject {
   uid             String   @id @db.VarChar(64)
   apiVersion      String   @map("api_version") @db.VarChar(100)
@@ -1186,6 +1230,8 @@ model Database {
   templateInstance TemplateInstance? @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
   nodePool         NodePool?         @relation(fields: [nodePoolId], references: [id], onDelete: SetNull)
   backups          DatabaseBackup[]
+  pods             DatabasePod[]
+  crashState       DatabaseCrashState?
 
   @@unique([environmentId, name])
   @@unique([dbName])

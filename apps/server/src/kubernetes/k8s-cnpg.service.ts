@@ -1281,7 +1281,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     await ignore404(coreApi.deleteNamespacedSecret(`${name}-import-source`, ns));
   }
 
-  async getCnpgClusterStatus(namespace: string, clusterName: string, dbName?: string): Promise<any> {
+  async getCnpgClusterStatus(
+    namespace: string,
+    clusterName: string,
+    dbName?: string,
+    // Pod facts from the mirrored `database_pods` rows. When supplied we skip
+    // listing pods against the apiserver: the CNPG informer already wrote these
+    // and they are pushed over SSE, so the request path does not need to ask.
+    mirroredPods?: {
+      status: string;
+      restartCount: number;
+      ready: boolean | null;
+      lastTerminationReason: string | null;
+      lastExitCode: number | null;
+      lastTerminatedAt: Date | null;
+      updatedAt: Date;
+    }[] | null,
+  ): Promise<any> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -1307,6 +1323,30 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       let currentWaitingReason: string | undefined;
       let currentRunningSinceMs: number | undefined;
       let currentReady = false;
+      if (mirroredPods && mirroredPods.length > 0) {
+        for (const p of mirroredPods) {
+          restartCount += p.restartCount ?? 0;
+          if (p.lastTerminationReason) {
+            const at = p.lastTerminatedAt ? p.lastTerminatedAt.toISOString() : undefined;
+            if (!lastTerminationAt || (at && at > lastTerminationAt)) {
+              lastTerminationReason = p.lastTerminationReason;
+              lastTerminationExitCode = p.lastExitCode ?? undefined;
+              lastTerminationAt = at;
+            }
+          }
+          if (p.status === 'crashing') currentWaitingReason = 'CrashLoopBackOff';
+          if (p.ready) {
+            currentReady = true;
+            // The mirror stores no container start time, so approximate "how
+            // long has it been clean" with the row's last write. The informer
+            // writes on every pod transition, so this moves when the pod does.
+            const t = p.updatedAt.getTime();
+            if (currentRunningSinceMs === undefined || t > currentRunningSinceMs) {
+              currentRunningSinceMs = t;
+            }
+          }
+        }
+      } else {
       try {
         const { body: podList } = await coreApi.listNamespacedPod(
           namespace, undefined, undefined, undefined, undefined,
@@ -1339,6 +1379,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           if (container.ready) currentReady = true;
         }
       } catch { /* ignore — pod listing is best-effort */ }
+      }
 
       // Synthesize a `message` so the existing frontend liveStatus.message path
       // surfaces OOMKilled / CrashLoopBackOff even when the container is currently running.
@@ -1422,6 +1463,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
           : null,
         firstRecoverabilityPoint: cluster.status?.firstRecoverabilityPoint || null,
         lastSuccessfulBackup: cluster.status?.lastSuccessfulBackup || null,
+        // CNPG can report "Cluster in healthy state" while holding a dangling
+        // PVC and running no pod at all, which is how a database sat dead for a
+        // month looking fine. These name the actual reason.
+        danglingPVC: cluster.status?.danglingPVC || [],
+        unusablePVC: cluster.status?.unusablePVC || [],
         restartCount,
         message,
         lastTerminationReason,

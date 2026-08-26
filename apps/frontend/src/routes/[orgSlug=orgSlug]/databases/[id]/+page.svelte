@@ -220,6 +220,23 @@
 	let tailLines = $state(200);
 	let logsRef = $state<HTMLPreElement | null>(null);
 	let activeConsoleTab = $state<string>('logs');
+	let logsPodName = $state<string>('');
+	let logsPrevious = $state(false);
+	let killedList = $state<
+		{
+			entryId: string;
+			pod: string;
+			container: string;
+			reason: string;
+			exitCode: number | null;
+			finishedAt: string | null;
+		}[]
+	>([]);
+	let killedLoading = $state(false);
+	let killedFetched = $state(false);
+	let killedLogs = $state<Record<string, string>>({});
+	let killedLogsLoading = $state<string | null>(null);
+	let expandedKilled = $state<string | null>(null);
 	let terminalTabs = $state<TerminalTabType[]>([]);
 	let terminalCounter = 0;
 	let consoleExpanded = $state(false);
@@ -451,6 +468,9 @@
 	$effect(() => {
 		if (activeTab === 'terminal' && activeConsoleTab === 'logs' && database?.pods?.[0]?.name) {
 			fetchLogs();
+		}
+		if (activeTab === 'terminal' && activeConsoleTab === 'killed' && !killedFetched) {
+			fetchKilled();
 		}
 	});
 
@@ -904,24 +924,65 @@
 	// Terminal / logs
 	async function fetchLogs() {
 		if (!database?.namespace) return;
-		const pod = database.pods?.[0];
-		if (!pod?.name) return;
+		const podName = logsPodName || database.pods?.[0]?.name;
+		if (!podName) return;
 		if (!logs) logsLoading = true;
 		try {
-			const r = await apiFetch(
-				`/apiv1/pods/${pod.name}/logs?namespace=${database.namespace}&container=postgres&tailLines=${tailLines}`
-			);
+			const params = new URLSearchParams({
+				namespace: database.namespace,
+				container: 'postgres',
+				tailLines: String(tailLines)
+			});
+			if (logsPrevious) params.set('previous', 'true');
+			const r = await apiFetch(`/apiv1/pods/${podName}/logs?${params}`);
 			if (r.ok) {
 				const data = await r.json();
 				logs = data.logs || '';
 				requestAnimationFrame(() => {
 					if (logsRef) logsRef.scrollTop = logsRef.scrollHeight;
 				});
+			} else {
+				const data = await r.json().catch(() => null);
+				logs = logsPrevious
+					? data?.message ||
+						'No previous container to read. This pod has not restarted since it was created.'
+					: '';
 			}
 		} catch {
 			/* ignore */
 		} finally {
 			logsLoading = false;
+		}
+	}
+
+	async function fetchKilled() {
+		killedLoading = true;
+		try {
+			const r = await apiFetch(`/apiv1/databases/${dbId}/killed-containers`);
+			killedList = r.ok ? await r.json() : [];
+		} catch {
+			killedList = [];
+		} finally {
+			killedLoading = false;
+			killedFetched = true;
+		}
+	}
+
+	async function toggleKilled(entryId: string) {
+		if (expandedKilled === entryId) {
+			expandedKilled = null;
+			return;
+		}
+		expandedKilled = entryId;
+		if (killedLogs[entryId] !== undefined) return;
+		killedLogsLoading = entryId;
+		try {
+			const r = await apiFetch(`/apiv1/databases/${dbId}/killed-containers/${entryId}/logs`);
+			killedLogs = { ...killedLogs, [entryId]: r.ok ? ((await r.json()).logs ?? '') : '' };
+		} catch {
+			killedLogs = { ...killedLogs, [entryId]: '' };
+		} finally {
+			killedLogsLoading = null;
 		}
 	}
 
@@ -1408,7 +1469,16 @@
 						bind:terminalTabs
 						bind:consoleExpanded
 						bind:tailLines
+						bind:logsPodName
+						bind:logsPrevious
+						{killedList}
+						{killedLoading}
+						{killedLogs}
+						{killedLogsLoading}
+						{expandedKilled}
 						onFetchLogs={fetchLogs}
+						onFetchKilled={fetchKilled}
+						onToggleKilled={toggleKilled}
 						onOpenShellTab={openShellTab}
 						onCloseTerminalTab={closeTerminalTab}
 						{podShortName}

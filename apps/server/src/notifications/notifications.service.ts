@@ -7,7 +7,7 @@ import {
   NotificationMessage,
   ResourceScopeType,
 } from './notification-events';
-import { backupKey, dbArchivingKey, deployKey, jobRunKey, podKey } from './dedupe-keys';
+import { backupKey, dbArchivingKey, dbStateKey, deployKey, jobRunKey, podKey } from './dedupe-keys';
 import { NotificationFanoutService } from './notification-fanout.service';
 
 interface EmitInput {
@@ -222,6 +222,46 @@ export class NotificationsService {
         body: failing
           ? `WAL archiving for ${db.name} is failing${detail ? `: ${truncate(detail, 300)}` : '.'} Restores are falling behind and disk usage will grow until it recovers.`
           : `WAL archiving for ${db.name} is healthy again.`,
+        url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+        projectId: db.project.id,
+        projectName: db.project.name,
+        targetId: db.id,
+        targetName: db.name,
+      },
+    });
+  }
+
+  async notifyDbState(databaseId: string, state: 'crashing' | 'recovered', detail?: string) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        name: true,
+        createdBy: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } },
+          },
+        },
+      },
+    });
+    if (!db) return;
+    const crashing = state === 'crashing';
+    await this.emit({
+      organizationId: db.project.organizationId,
+      scopeType: 'database',
+      scopeId: db.id,
+      actorUserId: db.createdBy,
+      dedupeKey: dbStateKey(db.id, state),
+      message: {
+        event: crashing ? 'db.crashing' : 'db.recovered',
+        title: crashing ? `Database restarting: ${db.name}` : `Database recovered: ${db.name}`,
+        body: crashing
+          ? `${db.name} keeps restarting${detail ? `: ${truncate(detail, 300)}` : '.'} Until it settles, connections will fail intermittently.`
+          : `${db.name} is running normally again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,

@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **300 commands** are available.
+override the saved context. **303 commands** are available.
 
 ## api
 
@@ -558,6 +558,32 @@ orchard get <id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--watch` | bool | `false` | keep re-rendering as the database changes (TTY only) |
+
+### `orchard db killed`
+
+Inspect logs captured from killed database containers
+
+```bash
+orchard killed
+```
+
+### `orchard db killed list`
+
+List killed-container log captures for a database
+
+```bash
+orchard list <id>
+```
+
+Aliases: `ls`
+
+### `orchard db killed logs`
+
+Print the captured logs of a killed database container
+
+```bash
+orchard logs <id> <entryId>
+```
 
 ### `orchard db list`
 

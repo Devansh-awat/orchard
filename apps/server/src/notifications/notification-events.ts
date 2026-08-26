@@ -7,6 +7,8 @@ export const NOTIFICATION_EVENTS = [
   'backup.failed',
   'db.archiving_failing',
   'db.archiving_recovered',
+  'db.crashing',
+  'db.recovered',
   'job.succeeded',
   'job.failed',
 ] as const;
@@ -37,6 +39,8 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
   'backup.failed': 'data',
   'db.archiving_failing': 'data',
   'db.archiving_recovered': 'data',
+  'db.crashing': 'data',
+  'db.recovered': 'data',
   'job.succeeded': 'jobs',
   'job.failed': 'jobs',
 };
@@ -69,6 +73,8 @@ export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeTy
   'backup.failed': 'database',
   'db.archiving_failing': 'database',
   'db.archiving_recovered': 'database',
+  'db.crashing': 'database',
+  'db.recovered': 'database',
   'job.succeeded': 'job',
   'job.failed': 'job',
 };
@@ -112,6 +118,8 @@ export const EVENT_TONE: Record<NotificationEventName, 'success' | 'failure'> = 
   'backup.failed': 'failure',
   'db.archiving_failing': 'failure',
   'db.archiving_recovered': 'success',
+  'db.crashing': 'failure',
+  'db.recovered': 'success',
   'job.succeeded': 'success',
   'job.failed': 'failure',
 };

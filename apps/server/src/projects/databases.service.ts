@@ -601,7 +601,31 @@ export class DatabasesService {
     if (skipLive) {
       ({ liveStatus, pods } = { liveStatus: undefined, pods: [] });
     } else if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName, database.dbName);
+      // The CNPG informer keeps these rows current and pushes database.changed
+      // over SSE, so they are both cheaper and fresher than asking the
+      // apiserver on every request. Null means the informer has not seen this
+      // cluster yet (brand new, or a cold start), and getCnpgClusterStatus
+      // falls back to a live pod listing.
+      const mirrored = await this.prisma.databasePod
+        .findMany({
+          where: { databaseId: database.id },
+          select: {
+            status: true,
+            restartCount: true,
+            ready: true,
+            lastTerminationReason: true,
+            lastExitCode: true,
+            lastTerminatedAt: true,
+            updatedAt: true,
+          },
+        })
+        .catch(() => []);
+      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(
+        database.namespace,
+        database.clusterName,
+        database.dbName,
+        mirrored.length > 0 ? mirrored : null,
+      );
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
         pods = (podList?.pods || []).filter((p: any) =>

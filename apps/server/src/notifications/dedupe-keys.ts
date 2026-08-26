@@ -35,6 +35,12 @@ export function dbArchivingKey(databaseId: string, state: 'failing' | 'recovered
   return clamp(`dbarch:${databaseId}:${state}:${bucket(300_000)}`);
 }
 
+// Same backstop role as podKey: the CNPG informer only calls on a confirmed
+// transition, so this catches two replicas seeing the same one.
+export function dbStateKey(databaseId: string, state: 'crashing' | 'recovered'): string {
+  return clamp(`dbstate:${databaseId}:${state}:${bucket(60_000)}`);
+}
+
 export function jobRunKey(runId: string, status: 'succeeded' | 'failed'): string {
   return clamp(`job:${runId}:${status}`);
 }

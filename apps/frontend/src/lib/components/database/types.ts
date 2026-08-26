@@ -50,6 +50,8 @@ export interface DatabaseDetail {
 		archiving?: { ok: boolean; message?: string | null; since?: string | null } | null;
 		firstRecoverabilityPoint?: string | null;
 		lastSuccessfulBackup?: string | null;
+		danglingPVC?: string[];
+		unusablePVC?: string[];
 	};
 	project?: {
 		id: string;

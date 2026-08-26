@@ -137,7 +137,9 @@ export const EVENT_GROUPS: {
 			{ value: 'backup.completed', label: 'Backup completed', tone: 'ok' },
 			{ value: 'backup.failed', label: 'Backup failed', tone: 'fail' },
 			{ value: 'db.archiving_failing', label: 'Archiving failing', tone: 'fail' },
-			{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' }
+			{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' },
+			{ value: 'db.crashing', label: 'Database restarting', tone: 'fail' },
+			{ value: 'db.recovered', label: 'Database recovered', tone: 'ok' }
 		]
 	},
 	{
@@ -167,7 +169,14 @@ const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 	org: null,
 	project: null,
 	deployment: ['deploy.succeeded', 'deploy.failed', 'pod.crashing', 'pod.recovered'],
-	database: ['backup.completed', 'backup.failed', 'db.archiving_failing', 'db.archiving_recovered'],
+	database: [
+		'backup.completed',
+		'backup.failed',
+		'db.archiving_failing',
+		'db.archiving_recovered',
+		'db.crashing',
+		'db.recovered'
+	],
 	job: ['job.succeeded', 'job.failed']
 };
 

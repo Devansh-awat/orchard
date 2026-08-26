@@ -1807,7 +1807,35 @@ export class DatabasesController {
     private readonly projectAccess: ProjectAccessService,
     private readonly databases: DatabasesService,
     private readonly metricsService: MetricsService,
+    private readonly logCapture: PodLogCaptureService,
   ) {}
+
+  // The post-mortem safety net app deployments already had. A crashing Postgres
+  // is replaced fast enough that by the time anyone opens the page the pod that
+  // died is gone and its logs with it.
+  @Get(':id/killed-containers')
+  async getDatabaseKilledContainers(@Param('id') id: string, @Request() req) {
+    await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.logCapture.list(id, 'database');
+  }
+
+  @Get(':id/killed-containers/:entryId/logs')
+  async getDatabaseKilledContainerLogs(
+    @Param('id') id: string,
+    @Param('entryId') entryId: string,
+    @Request() req,
+  ) {
+    await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    const entry = await this.logCapture.getLogs(id, entryId, 'database');
+    if (!entry) throw new NotFoundException('Captured logs expired or not found');
+    return entry;
+  }
 
   @Get()
   async listDatabases(@Request() req, @Query('orgId') orgId?: string) {

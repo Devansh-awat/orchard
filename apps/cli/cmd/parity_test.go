@@ -115,8 +115,12 @@ var routeCoverage = map[string]string{
 	"PUT /deployments/:id/volumes":       "deploy volumes set",
 	"PATCH /deployments/:id/strategy":    "deploy strategy set",
 	"PATCH /deployments/:id/pull-policy": "deploy pull-policy set",
-	"PUT /deployments/:id/health-check":  "deploy health-check set",
-	"PUT /deployments/:id/build-config":  "deploy build-root set",
+
+	// databases: post-mortem capture
+	"GET /databases/:id/killed-containers":               "db killed list",
+	"GET /databases/:id/killed-containers/:entryId/logs": "db killed logs",
+	"PUT /deployments/:id/health-check":                  "deploy health-check set",
+	"PUT /deployments/:id/build-config":                  "deploy build-root set",
 
 	// deployments: auto-deploy + webhook tokens
 	"GET /deployments/:id/auto-deploy":                "deploy auto-deploy status",
