@@ -42,7 +42,21 @@ endpoint. Reads sent to `-ro` work; writes do not.
 must use `-rw`.
 
 **Restore produced an empty database.** Confirm a base backup exists. Archived
-write-ahead logs alone cannot restore anything.
+write-ahead logs alone cannot restore anything. `firstRecoverabilityPoint` on the
+database is the quick check: empty means no base backup has ever completed,
+whatever the schedule says.
+
+**Database restarts every few minutes.** Look at the last termination reason. An
+`OOMKilled` on a loop that lines up with the backup window means the backup
+itself is running out of room: the base backup runs inside the database
+container and shares its memory limit. Raise memory, and check that
+`shared_buffers` is not set close to that limit by hand, since it is reserved up
+front and leaves nothing for anything else. Leaving `shared_buffers` empty lets
+Orchard size it.
+
+**Database page shows one replica and no pods.** The instance is not running.
+When the storage volume is listed as dangling, Kubernetes will not recreate the
+pod on its own and an administrator needs to look at the cluster.
 
 ## Domains
 

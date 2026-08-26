@@ -931,6 +931,15 @@ export class DeploymentsController {
     return this.deployments.updateDeploymentStrategy(id, body.strategy, user.id);
   }
 
+  @Get(':id/next-steps')
+  async getDeploymentNextSteps(@Param('id') id: string, @Request() req) {
+    const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.deployments.getDeploymentNextSteps(id, user.id);
+  }
+
   @Patch(':id/pull-policy')
   async updateDeploymentPullPolicy(
     @Param('id') id: string,

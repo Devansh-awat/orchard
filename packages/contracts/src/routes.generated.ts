@@ -151,6 +151,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/deployments/:id/logs', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/metrics', auth: 'authenticated' },
   { method: 'PATCH', path: '/deployments/:id/name', auth: 'authenticated' },
+  { method: 'GET', path: '/deployments/:id/next-steps', auth: 'authenticated' },
   { method: 'PATCH', path: '/deployments/:id/placement', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/pods', auth: 'authenticated' },
   { method: 'GET', path: '/deployments/:id/pods-live', auth: 'authenticated' },

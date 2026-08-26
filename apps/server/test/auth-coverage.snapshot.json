@@ -111,6 +111,7 @@
   "GET /deployments/:id/killed-containers/:entryId/logs": "authenticated",
   "GET /deployments/:id/logs": "authenticated",
   "GET /deployments/:id/metrics": "authenticated",
+  "GET /deployments/:id/next-steps": "authenticated",
   "GET /deployments/:id/pods": "authenticated",
   "GET /deployments/:id/pods-live": "authenticated",
   "GET /deployments/:id/webhook-tokens": "authenticated",

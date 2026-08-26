@@ -21370,6 +21370,73 @@
         ]
       }
     },
+    "/deployments/{id}/next-steps": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "steps": {
+                      "items": {
+                        "properties": {
+                          "applicable": {
+                            "description": "False when the step cannot apply here, e.g. auto-deploy on a non-GitHub app.",
+                            "type": "boolean"
+                          },
+                          "done": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "applicable",
+                          "done"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "steps"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "What is still worth configuring on this deployment",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/placement": {
       "patch": {
         "description": "Auth: authenticated",

@@ -132,6 +132,7 @@
 		DeploymentHeader,
 		BuildProgressModal,
 		DeploymentAlerts,
+		NextSteps,
 		DeploysTab,
 		ObserveTab,
 		AppSettings
@@ -2827,6 +2828,14 @@
 					{@attach motionPanel(() => tabs.value === tab.id)}
 				>
 					{#if tab.id === 'overview'}
+						<NextSteps
+							deploymentId={deployment?.id ?? ''}
+							ready={!!deployment && deployment.buildStatus !== 'building' && !noPodsReady}
+							onGoToTab={(t) => {
+								tabs.value = t as TabId;
+							}}
+							onGoToSettings={gotoSettings}
+						/>
 						<OverviewTab
 							{deployment}
 							{activePods}

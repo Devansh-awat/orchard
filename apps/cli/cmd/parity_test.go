@@ -312,6 +312,10 @@ var routeCoverage = map[string]string{
 // call, with the reason. "no CLI command yet" entries are honest gaps: they
 // stay visible here instead of silently rotting.
 var routeExclusions = map[string]string{
+	// dashboard affordance: returns booleans that drive a dismissible card, and
+	// every underlying setting already has its own CLI command
+	"GET /deployments/:id/next-steps": "UI-only checklist card",
+
 	// browser login ceremonies: driven by redirects and cookies, not tokens
 	"GET /auth/login":        "browser login ceremony",
 	"GET /auth/callback":     "browser login ceremony (OAuth callback)",

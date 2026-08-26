@@ -58,6 +58,25 @@ const matchPattern = (pattern: TrustedImagePattern, image: string): boolean => {
 
 export const imageRepo = (image: string): string => parseRef(image).repo;
 
+// Tags that a registry can move under you. A deployment pinned to one of these
+// will not pick up a new push unless its pull policy is Always, which is the
+// single most common "why is it still serving the old build" report.
+const MUTABLE_TAGS = new Set([
+  'latest', 'main', 'master', 'stable', 'edge', 'dev', 'develop',
+  'nightly', 'prod', 'production', 'release',
+]);
+
+export const isMutableImageTag = (image: string | null | undefined): boolean => {
+  const raw = String(image ?? '').trim();
+  if (!raw) return false;
+  // A digest pins the exact bytes, so nothing can move under it.
+  if (raw.includes('@sha256:')) return false;
+  const { tag } = parseRef(raw);
+  if (MUTABLE_TAGS.has(tag.toLowerCase())) return true;
+  // A floating version like `17` or `1.2` tracks the newest patch under it.
+  return /^v?\d+(\.\d+)?$/.test(tag);
+};
+
 export const isTrustedImage = (image: string): boolean => {
   if (!image) return false;
   const extra = (process.env.TRUSTED_IMAGES_EXTRA || '')

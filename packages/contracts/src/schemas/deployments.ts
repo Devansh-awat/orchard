@@ -557,6 +557,21 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate']) }),
     response: deploymentBase,
   },
+  'GET /deployments/:id/next-steps': {
+    summary: 'What is still worth configuring on this deployment',
+    scope: 'read',
+    response: z.object({
+      steps: z.array(
+        z.object({
+          id: z.string(),
+          applicable: z
+            .boolean()
+            .describe('False when the step cannot apply here, e.g. auto-deploy on a non-GitHub app.'),
+          done: z.boolean(),
+        }),
+      ),
+    }),
+  },
   'PATCH /deployments/:id/pull-policy': {
     summary: 'Change whether Kubernetes re-pulls the image on every pod start',
     scope: 'deploy',

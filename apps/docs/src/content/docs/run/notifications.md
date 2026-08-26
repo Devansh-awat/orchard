@@ -22,6 +22,14 @@ keeps a noisy service out of everyone else's feed.
 A rule decides which events reach a channel: deploy succeeded, deploy failed,
 app crashed, and so on. Scope it to an app or leave it organization-wide.
 
+Databases have their own events. Alongside backups and WAL archiving, **Database
+restarting** and **Database recovered** fire when a managed database starts
+crash-looping and when it settles again. Both are debounced, so a single restart
+during a resize does not page anyone.
+
+This is worth turning on. A database that only breaks at night is otherwise
+invisible until somebody happens to open its page.
+
 ## Deliveries
 
 Every attempt is recorded with its outcome, so a channel that quietly stopped

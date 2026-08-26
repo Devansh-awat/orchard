@@ -4,6 +4,28 @@
  * without dragging in DI.
  */
 
+// Suffixes Orchard hands out automatically at create time. A host under one of
+// these is the generated URL, not a domain anybody chose, which is how we tell
+// "has a URL" from "has a custom domain".
+//
+// Parsed here rather than in ingress.service so deployments.service can use it:
+// ingress.service already forwardRef-imports DeploymentsService, and importing
+// back the other way is the circular dependency that TDZ-crashes boot under swc.
+export const PLATFORM_WILDCARD_DOMAINS = (
+  process.env.PLATFORM_WILDCARD_DOMAINS || '.k.hackclub.dev=wildcard-k-hackclub-dev-tls'
+)
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean)
+  .flatMap((entry) => {
+    const [suffix, secret] = entry.split('=').map((part) => part.trim());
+    return suffix && secret ? [{ suffix, secret }] : [];
+  });
+
+export function isPlatformGeneratedHost(host: string): boolean {
+  return PLATFORM_WILDCARD_DOMAINS.some((w) => host.endsWith(w.suffix));
+}
+
 export function formatSlug(value: string): string {
   if (!value) {
     return '';

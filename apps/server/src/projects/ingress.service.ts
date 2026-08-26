@@ -22,22 +22,16 @@ import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
-import { formatSlug, scrubIngress, truncateK8sName } from './projects.utils';
+import {
+  formatSlug,
+  scrubIngress,
+  truncateK8sName,
+  PLATFORM_WILDCARD_DOMAINS,
+} from './projects.utils';
 
 const TENANT_INGRESS_CLASS = process.env.K8S_INGRESS_CLASS || 'haproxy';
 
 const CERT_CLUSTER_ISSUER = process.env.CERT_CLUSTER_ISSUER || 'letsencrypt-prod';
-
-const PLATFORM_WILDCARD_DOMAINS = (
-  process.env.PLATFORM_WILDCARD_DOMAINS || '.k.hackclub.dev=wildcard-k-hackclub-dev-tls'
-)
-  .split(',')
-  .map((entry) => entry.trim())
-  .filter(Boolean)
-  .flatMap((entry) => {
-    const [suffix, secret] = entry.split('=').map((part) => part.trim());
-    return suffix && secret ? [{ suffix, secret }] : [];
-  });
 
 function wildcardTlsSecretFor(host: string): string | null {
   return PLATFORM_WILDCARD_DOMAINS.find((w) => host.endsWith(w.suffix))?.secret ?? null;

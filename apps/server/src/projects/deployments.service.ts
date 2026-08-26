@@ -16,6 +16,7 @@ import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubern
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
+import { isMutableImageTag } from '../kubernetes/trusted-images';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
@@ -38,7 +39,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
 import { ApplyExecutorService } from '../apply/apply-executor.service';
-import { formatSlug, scrubIngress } from './projects.utils';
+import { formatSlug, scrubIngress, isPlatformGeneratedHost } from './projects.utils';
 import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
 
@@ -4362,6 +4363,80 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { id: deploymentId },
       data: { deployStrategy: strategy },
     });
+  }
+
+  // Booleans only. The copy lives in the frontend so wording changes do not
+  // need an API deploy, and so this stays honest about what it actually knows.
+  //
+  // `applicable` and `done` are deliberately separate: a step that does not
+  // apply is not the same as one already finished, and the UI wants to render
+  // neither.
+  async getDeploymentNextSteps(deploymentId: string, userId?: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        id: true,
+        image: true,
+        projectId: true,
+        githubRepo: true,
+        autoDeployEnabled: true,
+        cpuRequestMilli: true,
+        healthCheckEnabled: true,
+        imagePullPolicy: true,
+        composeStackId: true,
+        project: { select: { organizationId: true } },
+        services: { select: { ports: { select: { id: true } } } },
+        ingresses: { select: { host: true } },
+      },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
+    }
+
+    // A rule or a personal setting at any level above this deployment counts:
+    // an org-wide "tell me when things break" rule already covers it.
+    const scopes: [string, string][] = [
+      ['deployment', deployment.id],
+      ['project', deployment.projectId],
+      ['org', deployment.project.organizationId],
+    ];
+    const [ruleCount, settingCount] = await Promise.all([
+      this.prisma.notificationRule.count({
+        where: { enabled: true, OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) },
+      }),
+      this.prisma.userNotificationSetting.count({
+        where: { OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) },
+      }),
+    ]);
+
+    const hasPublicPort = deployment.services.some((s) => s.ports.length > 0);
+    const hasCustomDomain = deployment.ingresses.some((i) => !isPlatformGeneratedHost(i.host));
+    const tagCanMove = isMutableImageTag(deployment.image);
+    // Compose owns its services' config, so telling someone to change it here
+    // would send them somewhere that rejects the change.
+    const editable = !deployment.composeStackId;
+
+    return {
+      steps: [
+        {
+          id: 'auto-deploy',
+          applicable: editable && !!deployment.githubRepo,
+          done: deployment.autoDeployEnabled,
+        },
+        { id: 'domain', applicable: editable && hasPublicPort, done: hasCustomDomain },
+        { id: 'resources', applicable: editable, done: deployment.cpuRequestMilli != null },
+        { id: 'notifications', applicable: true, done: ruleCount + settingCount > 0 },
+        { id: 'health-check', applicable: editable, done: deployment.healthCheckEnabled },
+        {
+          id: 'pull-policy',
+          applicable: editable && !deployment.githubRepo && tagCanMove,
+          done: deployment.imagePullPolicy === 'Always',
+        },
+        { id: 'cli', applicable: true, done: false },
+      ],
+    };
   }
 
   async updateDeploymentPullPolicy(

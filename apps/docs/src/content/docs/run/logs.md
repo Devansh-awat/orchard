@@ -24,6 +24,14 @@ kills.
 This is what turns "it says CrashLoopBackOff" into "it says
 `Error: Cannot find module 'pg'` on line 3".
 
+Managed databases get the same treatment, under **Terminal → Killed**. A
+Postgres container that gets OOMKilled is replaced fast enough that its logs are
+usually gone before anyone looks, and those logs are exactly where Postgres
+explains itself.
+
+The **Previous** toggle on the logs view is the live equivalent: it reads the
+container that died rather than the one running now.
+
 ## Reading a crash loop
 
 A crash loop is: the container starts, exits, Kubernetes restarts it, repeat. The
@@ -50,3 +58,10 @@ restart, and a command that eats the container's memory will get it killed.
 Cluster events are translated into plain English rather than shown raw, so an
 unschedulable pod says what it is waiting for. The underlying reason is still
 there when you need it.
+
+**Observe → Events** lists the warnings Kubernetes recorded for the app's pods,
+newest first, with how many times each one repeated. This is the history:
+failed scheduling, image pull problems, probe failures, volume mounts. The alert
+banner above the tabs is deliberately different, showing only what is wrong
+*now*, because Kubernetes keeps warning events for about an hour after the
+problem clears and a banner that stale is worse than none.
