@@ -37,12 +37,12 @@ memory are set on the **Resources** tab like any other workload.
 
 ## The other tabs
 
-- **Backups** — scheduled and on-demand, with restore. See [Backups](/data/backups/).
-- **Terminal** — a `psql` session in the browser.
-- **Extensions** — install and remove, see [Extensions](/data/extensions/).
-- **Queries** — run SQL and read the result.
-- **Metrics** — size, connections, and activity over time.
-- **Settings** — rename, resize, delete.
+- **Backups**: scheduled and on-demand, with restore. See [Backups](/data/backups/).
+- **Terminal**: a `psql` session in the browser.
+- **Extensions**: install and remove, see [Extensions](/data/extensions/).
+- **Queries**: run SQL and read the result.
+- **Metrics**: size, connections, and activity over time.
+- **Settings**: rename, resize, delete.
 
 ## Public access
 

@@ -25,7 +25,7 @@ have used, and quotas are enforced against requests.
 
 :::caution
 When changing resources through the API, send every field you want to keep.
-Omitting a value does not mean "leave it alone" — it falls back to the
+Omitting a value does not mean "leave it alone". It falls back to the
 organization default, which may be smaller than what the app had.
 :::
 

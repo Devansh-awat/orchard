@@ -13,10 +13,10 @@ the instance is configured with.
 
 The progress page tracks the build as five steps, each with its own timing:
 
-1. **Scheduling builder** — waiting for a node with capacity
-2. **Building image** — BuildKit doing the work, with streaming logs
-3. **Pushing image** — to the configured registry
-4. **Creating app** — the Kubernetes objects
+1. **Scheduling builder**: waiting for a node with capacity
+2. **Building image**: BuildKit doing the work, with streaming logs
+3. **Pushing image**: to the configured registry
+4. **Creating app**: the Kubernetes objects
 5. **Done**
 
 Build status is tracked from the cluster's own job state rather than inferred

@@ -71,7 +71,7 @@ one-command installer**:
 Builds are the sharper edge. BuildKit needs `privileged: true`, which gVisor
 refuses, so builds use Kata instead: privileged-inside-a-VM is fine, and a
 malicious Dockerfile cannot reach the host kernel. **Without `builderSandbox`,
-image builds run with host-level privileges** — the same posture as
+image builds run with host-level privileges**, the same posture as
 Docker-based platforms, and genuinely fine when whoever wrote the Dockerfile
 already owns the box.
 
