@@ -12,13 +12,13 @@ nothing.
 
 ## What you provide
 
-| Field       | Notes                                                             |
-| ----------- | ----------------------------------------------------------------- |
-| Image       | Any reference the cluster can pull, including a private registry  |
-| Port        | The port the process listens on inside the container              |
-| Replicas    | How many copies                                                   |
-| Environment | Variables the image needs                                         |
-| Resources   | CPU and memory                                                    |
+| Field       | Notes                                                                    |
+| ----------- | ------------------------------------------------------------------------ |
+| Image       | Any reference the cluster can pull, including a private registry         |
+| Port        | The port the process listens on inside the container                     |
+| Replicas    | How many copies                                                          |
+| Environment | Variables the image needs                                                |
+| Resources   | CPU and memory                                                           |
 | Pull policy | Whether the image is fetched again every pod start. Automatic by default |
 
 Generating a URL is optional. Leave it off for workers, queue consumers and

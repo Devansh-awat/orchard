@@ -63,5 +63,5 @@ there when you need it.
 newest first, with how many times each one repeated. This is the history:
 failed scheduling, image pull problems, probe failures, volume mounts. The alert
 banner above the tabs is deliberately different, showing only what is wrong
-*now*, because Kubernetes keeps warning events for about an hour after the
+_now_, because Kubernetes keeps warning events for about an hour after the
 problem clears and a banner that stale is worse than none.

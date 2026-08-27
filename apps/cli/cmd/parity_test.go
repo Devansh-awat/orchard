@@ -470,6 +470,22 @@ var routeExclusions = map[string]string{
 	"PATCH /auth/tokens/:id":                                          "no CLI command yet: token rename",
 	"POST /auth/me/seen-updates":                                      "web UI changelog seen marker",
 	"PUT /deployments/:id/github-repo":                                "no CLI command yet: relink the github repo",
+
+	// first-run installer flow: a browser ceremony against an instance that has
+	// no user, and therefore no token for the CLI to authenticate with
+	"GET /setup/status":              "first-run setup, before any account exists",
+	"GET /setup/github-app/callback": "first-run setup (GitHub App callback redirect)",
+	"POST /setup/claim":              "first-run setup, claims the instance from a browser",
+
+	// form-support reads: the create form asks so it can validate before
+	// submitting. The CLI just submits and lets the server rule on it.
+	"GET /databases/limits": "create-form bounds check; the CLI relies on server-side validation",
+	"GET /engine/health":    "no CLI command yet: dashboard engine health widget",
+
+	"GET /node-pools":                   "no CLI command yet: node pool listing",
+	"PATCH /databases/:id/replicas":     "no CLI command yet: database replica scaling",
+	"PATCH /deployments/:id/placement":  "no CLI command yet: node pool placement",
+	"POST /deployments/:id/retry-apply": "no CLI command yet: retry a failed cluster apply",
 }
 
 func loadAuthSnapshot(t *testing.T) map[string]string {
