@@ -54,3 +54,16 @@ test('empty input is not flagged, so the create form stays quiet until you type'
 	assert.equal(isMutableTag(null), false);
 	assert.equal(isMutableTag(undefined), false);
 });
+
+// The rule the server uses to pick a default pull policy. Mirrored here because
+// the create form has to show the same answer before anything is saved.
+test('the tags that get Always are the ones a push can change under you', () => {
+	assert.equal(isMutableTag('nginx:latest'), true);
+	assert.equal(isMutableTag('nginx'), true);
+	assert.equal(isMutableTag('postgres:17'), true);
+	assert.equal(isMutableTag('ghcr.io/org/app:v1.2.3'), false);
+	assert.equal(
+		isMutableTag('nginx@sha256:0000000000000000000000000000000000000000000000000000000000000000'),
+		false
+	);
+});

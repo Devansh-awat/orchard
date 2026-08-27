@@ -16,7 +16,7 @@ import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubern
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
-import { isMutableImageTag } from '../kubernetes/trusted-images';
+import { resolvePullPolicy } from '../kubernetes/trusted-images';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
@@ -1015,6 +1015,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       totalMemoryUsage,
       status: computedStatus,
       buildStatus: deployment.buildStatus,
+      // `imagePullPolicy` is the override (null = automatic); this is what the
+      // cluster is actually doing. Clients render this and only send the
+      // override back, so nobody has to reimplement the tag rules.
+      effectiveImagePullPolicy: resolvePullPolicy(
+        deployment.imagePullPolicy,
+        deployment.image,
+      ),
     };
     return canEdit ? result : this.scrubDeploymentForViewer(result);
   }
@@ -4413,7 +4420,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const hasPublicPort = deployment.services.some((s) => s.ports.length > 0);
     const hasCustomDomain = deployment.ingresses.some((i) => !isPlatformGeneratedHost(i.host));
-    const tagCanMove = isMutableImageTag(deployment.image);
     // Compose owns its services' config, so telling someone to change it here
     // would send them somewhere that rejects the change.
     const editable = !deployment.composeStackId;
@@ -4429,22 +4435,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         { id: 'resources', applicable: editable, done: deployment.cpuRequestMilli != null },
         { id: 'notifications', applicable: true, done: ruleCount + settingCount > 0 },
         { id: 'health-check', applicable: editable, done: deployment.healthCheckEnabled },
-        {
-          id: 'pull-policy',
-          applicable: editable && !deployment.githubRepo && tagCanMove,
-          done: deployment.imagePullPolicy === 'Always',
-        },
+        // No pull-policy step: a moving tag now defaults to Always, so the only
+        // way to be on IfNotPresent is to have chosen it, and nagging someone
+        // about a deliberate choice is just noise.
         { id: 'cli', applicable: true, done: false },
       ],
     };
   }
 
+  // `null` clears the override and hands the knob back to the tag-derived
+  // default, the same way clearing shared_buffers does on a database.
   async updateDeploymentPullPolicy(
     deploymentId: string,
-    policy: 'Always' | 'IfNotPresent',
+    policy: 'Always' | 'IfNotPresent' | null,
     userId?: string,
   ) {
-    if (policy !== 'Always' && policy !== 'IfNotPresent') {
+    if (policy != null && policy !== 'Always' && policy !== 'IfNotPresent') {
       throw new BadRequestException('Invalid image pull policy');
     }
 
@@ -4463,6 +4469,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // how the image is fetched, not which image runs, so the next build cannot
     // overwrite it. Only push to k8s if the object exists yet; otherwise the
     // stored value is picked up by createDeployment.
+    const effective = resolvePullPolicy(policy, deployment.image);
     const k8sExists = await this.k8sWorkload
       .getKubernetesDeployment(deployment.name, deployment.namespace)
       .then((d) => d !== null)
@@ -4471,7 +4478,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.k8sWorkload.updateDeploymentPullPolicy(
         deployment.name,
         deployment.namespace,
-        policy,
+        effective,
       );
     }
 
@@ -4513,6 +4520,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deployment.namespace,
       trimmed,
     );
+
+    // The pull policy is derived from the tag, so moving from a pinned tag to a
+    // moving one has to re-derive it. Only when the user has not pinned it: an
+    // explicit choice survives an image change.
+    if (deployment.imagePullPolicy == null) {
+      const before = resolvePullPolicy(null, deployment.image);
+      const after = resolvePullPolicy(null, trimmed);
+      if (before !== after) {
+        await this.k8sWorkload
+          .updateDeploymentPullPolicy(deployment.name, deployment.namespace, after)
+          .catch((e: any) => {
+            console.warn(
+              `[Deployments] pull policy re-derive failed for ${deployment.name}: ${e?.message ?? e}`,
+            );
+          });
+      }
+    }
 
     return this.prisma.deployment.findUnique({ where: { id: deploymentId } });
   }
@@ -4781,8 +4805,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // the DB so the UI shows the truth from the moment the deployment exists.
     const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
     const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
-    const initialPullPolicy: 'Always' | 'IfNotPresent' =
-      data.imagePullPolicy === 'Always' ? 'Always' : 'IfNotPresent';
+    // Stored as given: null keeps it automatic and re-derives if the image
+    // later changes; a value here is the caller pinning it.
+    const pullPolicyOverride =
+      data.imagePullPolicy === 'Always' || data.imagePullPolicy === 'IfNotPresent'
+        ? data.imagePullPolicy
+        : null;
     const deploymentResult = await this.k8sWorkload.createDeployment({
       namespace: environment.namespace,
       name,
@@ -4798,7 +4826,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       placementOverride,
       resources: podResources,
       deployStrategy: initialStrategy,
-      imagePullPolicy: initialPullPolicy,
+      imagePullPolicy: resolvePullPolicy(pullPolicyOverride, image),
     });
 
     let createdDeployment;
@@ -4818,7 +4846,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           composeStackId: data.composeStackId ?? null,
           composeServiceName: data.composeServiceName ?? null,
           deployStrategy: initialStrategy,
-          imagePullPolicy: initialPullPolicy,
+          imagePullPolicy: pullPolicyOverride,
           nodePoolId: data.nodePoolId ?? null,
           placementOverride: (placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
@@ -6172,8 +6200,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         });
         const buildStrategy: 'rollingUpdate' | 'recreate' =
           (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
-        const buildPullPolicy: 'Always' | 'IfNotPresent' =
-          (deploymentRow?.imagePullPolicy as 'Always' | 'IfNotPresent') ?? 'IfNotPresent';
+        const buildPullPolicy = resolvePullPolicy(deploymentRow?.imagePullPolicy, image);
         const deployPlacement = deploymentRow
           ? await this.resolvePlacementForProject(deploymentRow.projectId)
           : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };

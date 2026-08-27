@@ -943,7 +943,7 @@ export class DeploymentsController {
   @Patch(':id/pull-policy')
   async updateDeploymentPullPolicy(
     @Param('id') id: string,
-    @Body() body: { imagePullPolicy: 'Always' | 'IfNotPresent' },
+    @Body() body: { imagePullPolicy: 'Always' | 'IfNotPresent' | null },
     @Request() req,
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
@@ -953,7 +953,7 @@ export class DeploymentsController {
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the image pull policy');
     }
-    return this.deployments.updateDeploymentPullPolicy(id, body.imagePullPolicy, user.id);
+    return this.deployments.updateDeploymentPullPolicy(id, body.imagePullPolicy ?? null, user.id);
   }
 
   @Patch(':id/image')

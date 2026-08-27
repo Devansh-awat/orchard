@@ -109,7 +109,7 @@
 	// Form state
 	let name = $state('');
 	let image = $state('');
-	let imagePullPolicy = $state<'Always' | 'IfNotPresent'>('IfNotPresent');
+	let imagePullPolicy = $state<'Always' | 'IfNotPresent' | 'auto'>('auto');
 	let repoUrl = $state('');
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
@@ -858,7 +858,7 @@
 				}
 			} else {
 				body.image = image.trim();
-				body.imagePullPolicy = imagePullPolicy;
+				if (imagePullPolicy !== 'auto') body.imagePullPolicy = imagePullPolicy;
 			}
 
 			const response = await apiFetch(endpoint, {
@@ -1026,25 +1026,30 @@
 							</Field>
 							<Field
 								label="Pull policy"
-								hint={imagePullPolicy === 'Always'
-									? 'Every pod start fetches the image again, so restarting picks up a new push to this tag.'
-									: 'Pods reuse the image already on the node. Best for tags that never move.'}
+								hint={imagePullPolicy === 'auto'
+									? isMutableTag(image)
+										? 'This tag can move, so pods will re-pull it on every start.'
+										: 'Pinned tags reuse the image already on the node. Change the tag and this follows.'
+									: imagePullPolicy === 'Always'
+										? 'Every pod start fetches the image again.'
+										: 'Pods reuse the image already on the node.'}
 							>
 								<SegmentedControl
 									label="Image pull policy"
 									bind:value={imagePullPolicy}
 									options={[
+										{ value: 'auto', label: 'Automatic' },
 										{ value: 'IfNotPresent', label: 'Use cached' },
 										{ value: 'Always', label: 'Always re-pull' }
 									]}
 								/>
 							</Field>
-							{#if isMutableTag(image) && imagePullPolicy !== 'Always'}
+							{#if imagePullPolicy === 'IfNotPresent' && isMutableTag(image)}
 								<div class="nd-warning" style="margin-top: 0.75rem;">
 									<p class="nd-warning-title">This tag can move</p>
 									<p class="nd-warning-desc">
-										Restarting reuses the image already on the node, so pushing over this tag will
-										not show up. Choose Always re-pull if you plan to push over it.
+										Pinning to the cached image means pushing over this tag will not show up on a
+										restart. Automatic handles this for you.
 									</p>
 								</div>
 							{/if}

@@ -6,6 +6,7 @@ import {
   cpuLimitMilliFromResources,
   memoryLimitBytesFromResources,
 } from '../../kubernetes/quantity';
+import { resolvePullPolicy } from '../../kubernetes/trusted-images';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -160,10 +161,15 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
 
     // Guarded rather than adopted blindly: k8s also allows `Never`, which is not
     // in our enum and would fail the write for every other field in this batch.
+    //
+    // Compared against the EFFECTIVE policy, not the stored column. A null
+    // column means "derive from the tag", and the live object legitimately
+    // carries that derived value — adopting it would silently convert every
+    // automatic deployment into a pinned one.
     const pullPolicy = container?.imagePullPolicy;
     if (
       (pullPolicy === 'Always' || pullPolicy === 'IfNotPresent') &&
-      pullPolicy !== row.imagePullPolicy
+      pullPolicy !== resolvePullPolicy(row.imagePullPolicy, (changes.image as string) ?? row.image)
     ) {
       changes.imagePullPolicy = pullPolicy;
       adopted.push(`pullPolicy=${pullPolicy}`);

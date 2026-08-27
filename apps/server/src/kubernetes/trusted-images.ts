@@ -77,6 +77,25 @@ export const isMutableImageTag = (image: string | null | undefined): boolean => 
   return /^v?\d+(\.\d+)?$/.test(tag);
 };
 
+export type ImagePullPolicyValue = 'Always' | 'IfNotPresent';
+
+// What the pull policy should be when nobody has said otherwise. A tag that can
+// move only behaves the way people expect under Always: otherwise the node
+// reuses its cached layer and pushing over the tag silently changes nothing.
+export const defaultPullPolicyForImage = (
+  image: string | null | undefined,
+): ImagePullPolicyValue => (isMutableImageTag(image) ? 'Always' : 'IfNotPresent');
+
+// `override` is the stored column: null means "derive", anything else is the
+// user's explicit choice and wins.
+export const resolvePullPolicy = (
+  override: string | null | undefined,
+  image: string | null | undefined,
+): ImagePullPolicyValue =>
+  override === 'Always' || override === 'IfNotPresent'
+    ? override
+    : defaultPullPolicyForImage(image);
+
 export const isTrustedImage = (image: string): boolean => {
   if (!image) return false;
   const extra = (process.env.TRUSTED_IMAGES_EXTRA || '')

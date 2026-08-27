@@ -53,12 +53,6 @@
 			cta: 'Add a check',
 			settings: 'health'
 		},
-		'pull-policy': {
-			title: 'This image tag can move',
-			body: 'Restarting reuses the image already cached on the node, so pushing over this tag will not show up. Switch to re-pull on every start.',
-			cta: 'Change pull policy',
-			settings: 'resources'
-		},
 		cli: {
 			title: 'Do all of this from the terminal',
 			body: 'Deploy the directory you are standing in, tail logs, and scale without opening a browser.',

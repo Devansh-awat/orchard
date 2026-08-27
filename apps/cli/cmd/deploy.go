@@ -186,7 +186,7 @@ func deployRenderKV(raw map[string]any) {
 		{"replicas", pick(raw, "replicas")},
 		{"namespace", pick(raw, "namespace")},
 		{"strategy", pick(raw, "deployStrategy")},
-		{"pull policy", pick(raw, "imagePullPolicy")},
+		{"pull policy", pick(raw, "effectiveImagePullPolicy", "imagePullPolicy")},
 	}
 	for _, opt := range [][2]string{
 		{"build type", pick(raw, "buildType")},
@@ -348,7 +348,7 @@ func deployCreateCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&name, "name", "", "deployment name (required)")
 	c.Flags().StringVar(&image, "image", "", "Docker image reference (e.g. nginx:latest)")
-	c.Flags().StringVar(&pullPolicy, "pull-policy", "", "re-pull the image on every pod start: always|ifnotpresent (--image only)")
+	c.Flags().StringVar(&pullPolicy, "pull-policy", "", "pin the pull policy instead of deriving it from the tag: always|ifnotpresent (--image only)")
 	c.Flags().StringVar(&github, "github", "", "GitHub source as owner/repo[#branch]")
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")

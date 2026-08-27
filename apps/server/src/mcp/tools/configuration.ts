@@ -131,19 +131,25 @@ When the deployment has a PVC attached, the backend forces \`recreate\` and reje
   server.registerTool(
     'update_deployment_pull_policy',
     {
-      description: `Set whether Kubernetes re-pulls the container image every time a pod starts.
-- \`IfNotPresent\` (default): reuse the image layer already cached on the node.
-- \`Always\`: re-pull on every pod start.
+      description: `Override whether Kubernetes re-pulls the container image every time a pod starts.
 
-This is the fix for "I pushed a new :latest but Orchard is still serving the old build". Pushing to a mutable tag does not notify Orchard, and under IfNotPresent even a restart reuses the cached layer, so nothing changes. With \`Always\`, \`restart_deployment\` genuinely re-pulls the tag, which makes push-then-restart work.
+You usually do not need this. By default the policy is derived from the tag: a tag that can move (\`latest\`, \`main\`, \`stable\`, a floating major like \`17\`, or no tag at all) gets \`Always\`, and a pinned tag or digest gets \`IfNotPresent\`. Change the image and it re-derives.
 
-Only worth setting on image-source deployments pinned to a moving tag (\`latest\`, \`main\`, \`stable\`, or no tag at all). GitHub-built deployments get a unique tag per build, so the policy makes no difference there.
+Set it only to override that:
+- \`Always\`: re-pull on every pod start, so push-then-\`restart_deployment\` picks up a new build.
+- \`IfNotPresent\`: reuse the layer cached on the node. On a moving tag this means a restart will NOT show a new push.
+- \`null\`: clear the override and go back to deriving it from the tag.
+
+An explicit value here survives an image change, which is the point: it is your call, not a guess.
 
 Changing this rolls the pods on its own; no separate restart is needed.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        imagePullPolicy: z.enum(['Always', 'IfNotPresent']).describe('The new image pull policy'),
+        imagePullPolicy: z
+          .enum(['Always', 'IfNotPresent'])
+          .nullable()
+          .describe('The pull policy to pin, or null to go back to automatic'),
       },
     },
     async ({ deploymentId, imagePullPolicy }) => {

@@ -187,7 +187,8 @@
 		totalCpuUsage?: number | null;
 		totalMemoryUsage?: number | null;
 		deployStrategy?: 'rollingUpdate' | 'recreate';
-		imagePullPolicy?: 'Always' | 'IfNotPresent';
+		imagePullPolicy?: 'Always' | 'IfNotPresent' | null;
+		effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		project?: {
 			id: string;
@@ -605,10 +606,11 @@
 		}
 	}
 
-	let pullPolicy = $state<'Always' | 'IfNotPresent'>('IfNotPresent');
+	// null means automatic: derived from the image tag by the server.
+	let pullPolicy = $state<'Always' | 'IfNotPresent' | null>(null);
 	let savingPullPolicy = $state(false);
 
-	async function savePullPolicy(next: 'Always' | 'IfNotPresent') {
+	async function savePullPolicy(next: 'Always' | 'IfNotPresent' | null) {
 		if (!deployment || savingPullPolicy || next === pullPolicy) return;
 		savingPullPolicy = true;
 		const previous = pullPolicy;
@@ -624,11 +626,18 @@
 				throw new Error(data?.message || 'Failed to update pull policy');
 			}
 			toasts.add({
-				title: next === 'Always' ? 'Now re-pulling on every start' : 'Using the cached image',
+				title:
+					next === null
+						? 'Back to automatic'
+						: next === 'Always'
+							? 'Now re-pulling on every start'
+							: 'Using the cached image',
 				description:
-					next === 'Always'
-						? 'Restart the app to pick up a new push to this tag.'
-						: 'Restarting reuses the image already on the node.',
+					next === null
+						? 'Orchard picks the policy from the image tag again.'
+						: next === 'Always'
+							? 'Restart the app to pick up a new push to this tag.'
+							: 'Restarting reuses the image already on the node.',
 				color: 'success'
 			});
 			await fetchDeployment();
@@ -1323,7 +1332,7 @@
 			}
 
 			if (!savingPullPolicy) {
-				pullPolicy = (data.imagePullPolicy as 'Always' | 'IfNotPresent') ?? 'IfNotPresent';
+				pullPolicy = (data.imagePullPolicy as 'Always' | 'IfNotPresent' | null) ?? null;
 			}
 
 			// Org quota defaults are fetched lazily when the resources tab is opened.
@@ -3031,6 +3040,7 @@
 							onSaveResources={saveResources}
 							onSaveImage={saveImage}
 							{pullPolicy}
+							effectivePullPolicy={deployment?.effectiveImagePullPolicy ?? 'IfNotPresent'}
 							{savingPullPolicy}
 							onSavePullPolicy={savePullPolicy}
 							bind:volumes

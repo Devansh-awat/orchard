@@ -40,7 +40,7 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           .enum(['Always', 'IfNotPresent'])
           .optional()
           .describe(
-            'Defaults to IfNotPresent. Set Always when the tag can move (latest, main, stable, or no tag), so restarting the deployment re-pulls it instead of reusing the node\'s cached layer.',
+            'Leave unset: the policy is derived from the tag, so a moving tag like latest already gets Always. Only pass this to override that.',
           ),
       },
     },
@@ -262,7 +262,7 @@ Pass null for either field to clear it and fall back to the project / org defaul
     'restart_deployment',
     {
       description: `Restart a deployment (rolling restart of all pods).
-Whether this re-pulls the image depends on the deployment's pull policy: under the default IfNotPresent the node reuses its cached layer, so restarting will NOT pick up a new push to a mutable tag like :latest. Set \`update_deployment_pull_policy\` to Always first if that is what you are trying to do.`,
+Whether this re-pulls the image depends on the deployment's pull policy. That policy is derived from the tag by default, so an app on a moving tag like :latest re-pulls and push-then-restart works. If someone pinned the policy to IfNotPresent, the node reuses its cached layer and a restart will not pick up a new push.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID to restart'),

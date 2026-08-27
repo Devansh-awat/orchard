@@ -17,25 +17,26 @@ import (
 // Deployment list struct for the detail screen: image history, services,
 // volumes, and config all come embedded in the one response.
 type DepDetail struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	Namespace         string   `json:"namespace"`
-	Image             string   `json:"image"`
-	Replicas          int      `json:"replicas"`
-	AvailableReplicas int      `json:"availableReplicas"`
-	Status            string   `json:"status"`
-	BuildStatus       string   `json:"buildStatus"`
-	BuildStep         string   `json:"buildStep"`
-	BuildType         string   `json:"buildType"`
-	DockerfilePath    string   `json:"dockerfilePath"`
-	GithubRepo        string   `json:"githubRepo"`
-	GithubBranch      string   `json:"githubBranch"`
-	DeployStrategy    string   `json:"deployStrategy"`
-	ImagePullPolicy   string   `json:"imagePullPolicy"`
-	TotalCPUUsage     flexNum  `json:"totalCpuUsage"`
-	TotalMemoryUsage  flexNum  `json:"totalMemoryUsage"`
-	CPURequestMilli   *flexNum `json:"cpuRequestMilli"`
-	MemoryRequestB    *flexNum `json:"memoryRequestBytes"`
+	ID                       string   `json:"id"`
+	Name                     string   `json:"name"`
+	Namespace                string   `json:"namespace"`
+	Image                    string   `json:"image"`
+	Replicas                 int      `json:"replicas"`
+	AvailableReplicas        int      `json:"availableReplicas"`
+	Status                   string   `json:"status"`
+	BuildStatus              string   `json:"buildStatus"`
+	BuildStep                string   `json:"buildStep"`
+	BuildType                string   `json:"buildType"`
+	DockerfilePath           string   `json:"dockerfilePath"`
+	GithubRepo               string   `json:"githubRepo"`
+	GithubBranch             string   `json:"githubBranch"`
+	DeployStrategy           string   `json:"deployStrategy"`
+	ImagePullPolicy          string   `json:"imagePullPolicy"`
+	EffectiveImagePullPolicy string   `json:"effectiveImagePullPolicy"`
+	TotalCPUUsage            flexNum  `json:"totalCpuUsage"`
+	TotalMemoryUsage         flexNum  `json:"totalMemoryUsage"`
+	CPURequestMilli          *flexNum `json:"cpuRequestMilli"`
+	MemoryRequestB           *flexNum `json:"memoryRequestBytes"`
 
 	BuildFromRoot        bool `json:"buildFromRoot"`
 	BuildWithDepot       bool `json:"buildWithDepot"`

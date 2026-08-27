@@ -819,7 +819,7 @@ orchard create
 | `--name` | string |  | deployment name (required) |
 | `--output-dir` | string |  | directory of built static files; serves the app as a static site |
 | `--port` | int | `0` | port the container listens on (server default 80 / EXPOSE autodetect) |
-| `--pull-policy` | string |  | re-pull the image on every pod start: always\|ifnotpresent (--image only) |
+| `--pull-policy` | string |  | pin the pull policy instead of deriving it from the tag: always\|ifnotpresent (--image only) |
 | `--railpack` | bool | `false` | build with railpack instead of a Dockerfile |
 | `--replicas` | int | `0` | number of replicas (server default 1) |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
@@ -1038,7 +1038,7 @@ orchard pull-policy
 
 ### `orchard deploy pull-policy set`
 
-Set the image pull policy
+Override the image pull policy
 
 ```bash
 orchard set <id>
@@ -1046,7 +1046,7 @@ orchard set <id>
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--policy` | string |  | pull policy: always\|ifnotpresent (required) |
+| `--policy` | string |  | pull policy: auto\|always\|ifnotpresent (required) |
 
 ### `orchard deploy rebuild`
 

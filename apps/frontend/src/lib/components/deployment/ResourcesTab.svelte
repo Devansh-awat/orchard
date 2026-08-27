@@ -18,7 +18,8 @@
 		imageInput = $bindable<string>(),
 		imageDirty,
 		savingImage,
-		pullPolicy = 'IfNotPresent',
+		pullPolicy = null,
+		effectivePullPolicy = 'IfNotPresent',
 		savingPullPolicy = false,
 		onSaveResources,
 		onSaveImage,
@@ -37,14 +38,16 @@
 		imageInput: string;
 		imageDirty: boolean;
 		savingImage: boolean;
-		pullPolicy?: 'Always' | 'IfNotPresent';
+		pullPolicy?: 'Always' | 'IfNotPresent' | null;
+		effectivePullPolicy?: 'Always' | 'IfNotPresent';
 		savingPullPolicy?: boolean;
 		onSaveResources: () => void;
 		onSaveImage: () => void;
-		onSavePullPolicy?: (next: 'Always' | 'IfNotPresent') => void;
+		onSavePullPolicy?: (next: 'Always' | 'IfNotPresent' | null) => void;
 	} = $props();
 
 	const tagCanMove = $derived(isMutableTag(deployment?.image));
+	const isAuto = $derived(pullPolicy == null);
 </script>
 
 <div class="rt-stack">
@@ -89,27 +92,35 @@
 					<span class="rt-pull-title">Pull policy</span>
 					<SegmentedControl
 						label="Image pull policy"
-						value={pullPolicy}
+						value={pullPolicy ?? 'auto'}
 						options={[
+							{ value: 'auto', label: 'Automatic' },
 							{ value: 'IfNotPresent', label: 'Use cached' },
 							{ value: 'Always', label: 'Always re-pull' }
 						]}
-						onchange={(next: string) => onSavePullPolicy?.(next as 'Always' | 'IfNotPresent')}
+						onchange={(next: string) =>
+							onSavePullPolicy?.(next === 'auto' ? null : (next as 'Always' | 'IfNotPresent'))}
 					/>
 				</div>
-				{#if tagCanMove && pullPolicy !== 'Always'}
+				{#if !isAuto && tagCanMove && pullPolicy === 'IfNotPresent'}
 					<div class="rt-pull-note">
 						<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 						<span>
-							This tag can move. Restarting reuses the image already on the node, so a new push to
-							the same tag will not show up. Switch to Always re-pull if you push over this tag.
+							This tag can move, and you have pinned this to the cached image. Restarting will not
+							pick up a new push to the same tag. Switch back to Automatic to undo this.
 						</span>
 					</div>
+				{:else if isAuto}
+					<p class="rt-pull-help">
+						{effectivePullPolicy === 'Always'
+							? 'This tag can move, so every pod start fetches it again and restarting picks up a new push.'
+							: 'This tag is pinned, so pods reuse the image already on the node. Change the tag and this adjusts on its own.'}
+					</p>
 				{:else}
 					<p class="rt-pull-help">
 						{pullPolicy === 'Always'
 							? 'Every pod start fetches the image again, so restarting picks up a new push to this tag.'
-							: 'Pods reuse the image already on the node. Best for tags that never move.'}
+							: 'Pods reuse the image already on the node.'}
 					</p>
 				{/if}
 			</div>

@@ -6202,6 +6202,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -6323,11 +6331,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -7266,6 +7278,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -7387,11 +7407,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -8300,6 +8324,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -8421,11 +8453,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -9292,6 +9328,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -9413,11 +9457,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -10322,6 +10370,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -10443,11 +10499,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -11331,6 +11391,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -11452,11 +11520,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -12521,6 +12593,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environment": {
                       "properties": {
                         "id": {
@@ -12792,11 +12872,15 @@
                       "type": "array"
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -13739,6 +13823,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -13860,11 +13952,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -14740,6 +14836,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -14861,11 +14965,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -15790,6 +15898,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environment": {
                       "properties": {
                         "id": {
@@ -16061,11 +16177,15 @@
                       "type": "array"
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -17178,6 +17298,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -17299,11 +17427,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -18382,6 +18514,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environment": {
                       "properties": {
                         "id": {
@@ -18653,11 +18793,15 @@
                       "type": "array"
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -19549,6 +19693,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -19629,11 +19781,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "installCommand": {
                       "type": [
@@ -20164,6 +20320,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -20285,11 +20449,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -21948,12 +22116,15 @@
               "schema": {
                 "properties": {
                   "imagePullPolicy": {
-                    "description": "Always re-pulls on every pod start, which is what makes Restart pick up a moved tag like :latest. IfNotPresent reuses the layer already cached on the node.",
+                    "description": "Pin the policy, or null to go back to deriving it from the image tag. A pinned value survives an image change.",
                     "enum": [
                       "Always",
                       "IfNotPresent"
                     ],
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -22073,6 +22244,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -22153,11 +22332,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "installCommand": {
                       "type": [
@@ -22271,7 +22454,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Change whether Kubernetes re-pulls the image on every pod start",
+        "summary": "Pin or clear the image pull policy override",
         "tags": [
           "deployments"
         ]
@@ -22409,6 +22592,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -22530,11 +22721,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -23416,6 +23611,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -23496,11 +23699,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "installCommand": {
                       "type": [
@@ -23879,6 +24086,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -24000,11 +24215,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -24960,6 +25179,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -25040,11 +25267,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "installCommand": {
                       "type": [
@@ -25339,6 +25570,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -25460,11 +25699,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -28482,6 +28725,14 @@
                             "null"
                           ]
                         },
+                        "effectiveImagePullPolicy": {
+                          "description": "What the cluster is actually doing, after deriving. Render this.",
+                          "enum": [
+                            "Always",
+                            "IfNotPresent"
+                          ],
+                          "type": "string"
+                        },
                         "environmentId": {
                           "type": [
                             "string",
@@ -28562,11 +28813,15 @@
                           ]
                         },
                         "imagePullPolicy": {
+                          "description": "The override. null means it is derived from the image tag.",
                           "enum": [
                             "Always",
                             "IfNotPresent"
                           ],
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "installCommand": {
                           "type": [
@@ -35998,6 +36253,14 @@
                           "null"
                         ]
                       },
+                      "effectiveImagePullPolicy": {
+                        "description": "What the cluster is actually doing, after deriving. Render this.",
+                        "enum": [
+                          "Always",
+                          "IfNotPresent"
+                        ],
+                        "type": "string"
+                      },
                       "environmentId": {
                         "type": [
                           "string",
@@ -36119,11 +36382,15 @@
                         ]
                       },
                       "imagePullPolicy": {
+                        "description": "The override. null means it is derived from the image tag.",
                         "enum": [
                           "Always",
                           "IfNotPresent"
                         ],
-                        "type": "string"
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "ingresses": {
                         "items": {
@@ -36912,12 +37179,15 @@
                     "type": "string"
                   },
                   "imagePullPolicy": {
-                    "description": "Defaults to IfNotPresent. Use Always when the image tag can move.",
+                    "description": "Omit to derive it from the tag, which already gives a moving tag like :latest the Always behaviour. Pass a value only to pin it.",
                     "enum": [
                       "Always",
                       "IfNotPresent"
                     ],
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "memoryRequestBytes": {
                     "type": [
@@ -37115,6 +37385,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -37236,11 +37514,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {
@@ -38287,6 +38569,14 @@
                         "null"
                       ]
                     },
+                    "effectiveImagePullPolicy": {
+                      "description": "What the cluster is actually doing, after deriving. Render this.",
+                      "enum": [
+                        "Always",
+                        "IfNotPresent"
+                      ],
+                      "type": "string"
+                    },
                     "environmentId": {
                       "type": [
                         "string",
@@ -38408,11 +38698,15 @@
                       ]
                     },
                     "imagePullPolicy": {
+                      "description": "The override. null means it is derived from the image tag.",
                       "enum": [
                         "Always",
                         "IfNotPresent"
                       ],
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "ingresses": {
                       "items": {

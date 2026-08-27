@@ -436,25 +436,27 @@ func deployPullPolicySetCmd() *cobra.Command {
 	var policy string
 	c := &cobra.Command{
 		Use:   "set <id>",
-		Short: "Set the image pull policy",
-		Long: `Set the image pull policy for a deployment.
+		Short: "Override the image pull policy",
+		Long: `Override the image pull policy for a deployment.
 
-With ifnotpresent (the default) the node reuses the image layer it already has,
-so pushing a new :latest and restarting changes nothing. With always, a restart
-re-pulls the tag.
+By default the policy follows the image tag: a tag that can move (latest, main,
+a floating major) re-pulls on every pod start, a pinned tag or digest does not.
+Change the image and it re-derives.
 
-Only relevant for deployments pinned to a moving tag. Apps built from GitHub get
-a unique tag per build.`,
+Use --policy always or --policy ifnotpresent to pin it, and --policy auto to go
+back to following the tag. A pinned value survives an image change.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var normalized string
+			var normalized any
 			switch strings.ToLower(policy) {
+			case "auto", "automatic":
+				normalized = nil
 			case "always":
 				normalized = "Always"
 			case "ifnotpresent":
 				normalized = "IfNotPresent"
 			default:
-				return fmt.Errorf("--policy must be always or ifnotpresent, got %q", policy)
+				return fmt.Errorf("--policy must be auto, always or ifnotpresent, got %q", policy)
 			}
 			cl, _, err := client()
 			if err != nil {
@@ -464,11 +466,15 @@ a unique tag per build.`,
 			if err := cl.Send(cmd.Context(), http.MethodPatch, deployPath(args[0], "pull-policy"), body, nil); err != nil {
 				return err
 			}
-			output.Successf("set pull policy of %s to %s", args[0], normalized)
+			if normalized == nil {
+				output.Successf("pull policy of %s now follows the image tag", args[0])
+			} else {
+				output.Successf("pinned pull policy of %s to %s", args[0], normalized)
+			}
 			return nil
 		},
 	}
-	c.Flags().StringVar(&policy, "policy", "", "pull policy: always|ifnotpresent (required)")
+	c.Flags().StringVar(&policy, "policy", "", "pull policy: auto|always|ifnotpresent (required)")
 	_ = c.MarkFlagRequired("policy")
 	return c
 }
