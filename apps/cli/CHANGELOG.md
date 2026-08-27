@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/LeafdTK/leaf/compare/cli/v0.10.0...cli/v0.11.0) (2026-08-27)
+
+
+### Features
+
+* database health is informer-driven with crash alerts and post-mortem logs ([06fc147](https://github.com/LeafdTK/leaf/commit/06fc147d20cf8a0a203ca3dbf11e8c665690bac7))
+* next steps checklist on the app overview ([b6566b8](https://github.com/LeafdTK/leaf/commit/b6566b8addff2a5b66285216b59788be28bc54c0))
+* per-app image pull policy so restart can re-pull a moving tag ([3253561](https://github.com/LeafdTK/leaf/commit/3253561ac68c450d345a38656f23ea4da55fd1e1))
+* pull policy follows the image tag unless you pin it ([e5fb253](https://github.com/LeafdTK/leaf/commit/e5fb2532139cf419cf63075060b4872e768537c9))
+
+
+### Bug Fixes
+
+* format docs and close the cli route parity gaps ([b495832](https://github.com/LeafdTK/leaf/commit/b495832ae8fd57254fc9a0e732730199c5c01285))
+
 ## [0.10.0](https://github.com/LeafdTK/leaf/compare/cli/v0.9.0...cli/v0.10.0) (2026-08-25)
 
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.16.0](https://github.com/LeafdTK/leaf/compare/server/v2.15.0...server/v2.16.0) (2026-08-27)
+
+
+### Features
+
+* database health is informer-driven with crash alerts and post-mortem logs ([06fc147](https://github.com/LeafdTK/leaf/commit/06fc147d20cf8a0a203ca3dbf11e8c665690bac7))
+* next steps checklist on the app overview ([b6566b8](https://github.com/LeafdTK/leaf/commit/b6566b8addff2a5b66285216b59788be28bc54c0))
+* per-app image pull policy so restart can re-pull a moving tag ([3253561](https://github.com/LeafdTK/leaf/commit/3253561ac68c450d345a38656f23ea4da55fd1e1))
+* pull policy follows the image tag unless you pin it ([e5fb253](https://github.com/LeafdTK/leaf/commit/e5fb2532139cf419cf63075060b4872e768537c9))
+* surface kubernetes pod events and fix stale ui after saves ([5a2a9da](https://github.com/LeafdTK/leaf/commit/5a2a9da9bff50f80fd6cb029dd6e6d0706677a7d))
+
+
+### Bug Fixes
+
+* size shared_buffers and backup compression from the memory limit ([95d1c77](https://github.com/LeafdTK/leaf/commit/95d1c77041e3d400720bbf1986ef4c661762bd75))
+
 ## [2.15.0](https://github.com/LeafdTK/leaf/compare/server/v2.14.1...server/v2.15.0) (2026-08-25)
 
 
