@@ -3,10 +3,10 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fly, fade } from '$lib/utils/transitions';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
-	import Speedometer from '$lib/components/Speedometer.svelte';
-	import DonutChart from '$lib/components/DonutChart.svelte';
+	import { BudgetMeter, UsageBreakdown } from '$lib/components/usage';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
 	import {
 		Loader2,
@@ -19,7 +19,7 @@
 		X,
 		Sprout
 	} from 'lucide-svelte';
-	import { TabBar } from '$lib/components/ui';
+	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
 	import { greenhouseFlag, sandboxEnabled } from '$lib/flags';
 	import { SandboxUsageTab } from '$lib/components/sandbox';
 
@@ -137,15 +137,15 @@
 
 	const availableTabs = $derived.by<Array<{ id: Tab; label: string; icon: any }>>(() => {
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
-			{ id: 'overview', label: 'Overview', icon: Activity },
-			{ id: 'me', label: 'My usage', icon: Gauge }
+			{ id: 'me', label: 'Yours', icon: Gauge }
 		];
 		if (sandboxEnabled() && $greenhouseFlag) {
 			tabs.push({ id: 'sandbox', label: 'Sandboxes', icon: Sprout });
 		}
 		if (isAdmin) {
+			tabs.splice(1, 0, { id: 'overview', label: 'Organization', icon: Activity });
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
-			tabs.push({ id: 'provisioning', label: 'Provisioning', icon: BarChart3 });
+			tabs.push({ id: 'provisioning', label: 'Right-sizing', icon: BarChart3 });
 		}
 		return tabs;
 	});
@@ -407,25 +407,6 @@
 		return `${Math.round(u * 100)}%`;
 	}
 
-	function projectBreakdown(u: MyUsage) {
-		const map = new Map<
-			string,
-			{ projectId: string; projectName: string; cpuMilli: number; memoryBytes: number }
-		>();
-		for (const item of u.usage.breakdown) {
-			const cur = map.get(item.projectId) || {
-				projectId: item.projectId,
-				projectName: item.projectName,
-				cpuMilli: 0,
-				memoryBytes: 0
-			};
-			cur.cpuMilli += item.cpuMilli;
-			cur.memoryBytes += item.memoryBytes;
-			map.set(item.projectId, cur);
-		}
-		return Array.from(map.values()).sort((a, b) => b.cpuMilli - a.cpuMilli);
-	}
-
 	const topWasters = $derived.by(() => {
 		const byCpu = [...provisioning]
 			.filter((r) => r.actualCpuMilliP95 !== null && r.requestedCpuMilli > 0)
@@ -472,17 +453,16 @@
 </script>
 
 <div class="usage-page">
-	<header class="usage-header">
-		<div class="usage-header-icon">
-			<Activity class="h-5 w-5" />
-		</div>
-		<div class="usage-header-text">
-			<h1 class="usage-title">Usage</h1>
-			<p class="usage-subtitle">
-				Resource allowance, consumption, and right-sizing across this organization.
-			</p>
-		</div>
-	</header>
+	<PageHeader title="Usage">
+		{#snippet icon()}<Activity class="h-5 w-5" />{/snippet}
+		{#snippet meta()}
+			<span class="usage-subtitle">
+				{isAdmin
+					? 'What this organization is using, and how much room is left.'
+					: 'What you are using, and how much room you have left.'}
+			</span>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<div class="usage-loading">
@@ -490,8 +470,10 @@
 		</div>
 	{:else}
 		<!-- Tab bar -->
-		<div class="usage-tabs-row">
-			<TabBar tabs={availableTabs} bind:value={() => activeTab, (v) => setTab(v as Tab)} />
+		<div class="usage-tabs-row" class:usage-tabs-row--bare={availableTabs.length < 2}>
+			{#if availableTabs.length > 1}
+				<TabBar tabs={availableTabs} bind:value={() => activeTab, (v) => setTab(v as Tab)} />
+			{/if}
 			{#if activeTab === 'provisioning'}
 				<div class="usage-range">
 					{#each RANGES as r (r.value)}
@@ -514,242 +496,181 @@
 			>
 				<!-- ───────── OVERVIEW ───────── -->
 				{#if activeTab === 'overview' && orgQuota}
-					<div class="card">
-						<div class="card-head">
-							<h2 class="card-title">Organization capacity</h2>
+					<SectionCard title="Capacity">
+						<div class="budget-grid">
+							<BudgetMeter
+								label="CPU"
+								used={orgQuota.usage.cpuMilli}
+								limit={orgQuota.org.cpuLimitMilli}
+								available={null}
+								format={formatCpuMilli}
+								index={0}
+							/>
+							<BudgetMeter
+								label="Memory"
+								used={orgQuota.usage.memoryBytes}
+								limit={orgQuota.org.memoryLimitBytes}
+								available={null}
+								format={formatMemoryBytes}
+								index={1}
+							/>
+							<BudgetMeter
+								label="Pods"
+								used={orgQuota.usage.pods}
+								limit={orgQuota.org.maxPods}
+								available={null}
+								format={formatPods}
+								index={2}
+							/>
+							<BudgetMeter
+								label="Services"
+								used={orgQuota.usage.services}
+								limit={orgQuota.org.maxServices}
+								available={null}
+								format={formatPods}
+								index={3}
+							/>
 						</div>
-						<div class="card-body">
-							<div class="speedo-grid">
-								<Speedometer
-									label="CPU"
-									value={orgQuota.usage.cpuMilli}
-									max={orgQuota.org.cpuLimitMilli}
-									formatValue={formatCpuMilli}
-									size="md"
-								/>
-								<Speedometer
-									label="Memory"
-									value={orgQuota.usage.memoryBytes}
-									max={orgQuota.org.memoryLimitBytes}
-									formatValue={formatMemoryBytes}
-									size="md"
-								/>
-								<Speedometer
-									label="Pods"
-									value={orgQuota.usage.pods}
-									max={orgQuota.org.maxPods}
-									formatValue={formatPods}
-									size="md"
-								/>
-								<Speedometer
-									label="Services"
-									value={orgQuota.usage.services}
-									max={orgQuota.org.maxServices}
-									formatValue={formatPods}
-									size="md"
-								/>
-							</div>
-						</div>
-					</div>
+					</SectionCard>
 
-					{#if projects.length > 0}
-						<div class="card">
-							<div class="card-head">
-								<h2 class="card-title">CPU by project</h2>
-							</div>
-							<div class="card-body">
-								<DonutChart
-									slices={projects
-										.filter((p) => p.usage.cpuMilli > 0)
-										.map((p) => ({ label: p.name, value: p.usage.cpuMilli }))}
-									size={180}
-									thickness={24}
-									centerLabel={formatCpuMilli(orgQuota.usage.cpuMilli)}
-									centerCaption="total"
-									formatValue={formatCpuMilli}
-								/>
-							</div>
-						</div>
-					{/if}
-
-					{#if projects.length > 0}
-						<div class="card">
-							<div class="card-head">
-								<h2 class="card-title">By project</h2>
-								<span class="card-count">{projects.length}</span>
-							</div>
-							<div class="table-wrap">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>Project</th>
-											<th>CPU</th>
-											<th>Memory</th>
-											<th>Pods</th>
-										</tr>
-									</thead>
-									<tbody>
-										{#each projects as p (p.id)}
-											<tr>
-												<td>
-													<a href={`/${orgSlug}/projects/${p.slug}`} class="link-cell">{p.name}</a>
-													<div class="cell-sub mono">{p.namespace}</div>
-												</td>
-												<td>
-													{formatCpuMilli(p.usage.cpuMilli)}
-													{#if p.cpuLimitMilli}<span class="cell-sub">
+					{#if projects.length === 0}
+						<SectionCard title="By project">
+							<EmptyState
+								title="No projects yet"
+								description="Once this organization has projects, their share of the cap shows up here."
+							/>
+						</SectionCard>
+					{:else}
+						{@const topCpu = Math.max(...projects.map((x) => x.usage.cpuMilli), 1)}
+						<SectionCard
+							title="By project"
+							description="Ranked by reserved CPU. A project with its own cap shows it alongside."
+						>
+							<ul class="proj-list">
+								{#each [...projects].sort((a, b) => b.usage.cpuMilli - a.usage.cpuMilli) as p, i (p.id)}
+									<li {@attach motionStagger({ index: i, from: { y: 4, opacity: 0 } })}>
+										<a class="proj-row" href={`/${orgSlug}/projects/${p.slug}`}>
+											<span class="proj-bar" style="--share: {p.usage.cpuMilli / topCpu}"></span>
+											<span class="proj-main">
+												<span class="proj-name">{p.name}</span>
+												<span class="proj-ns">{p.namespace}</span>
+											</span>
+											<span class="proj-nums">
+												<span class="proj-primary">
+													{formatCpuMilli(p.usage.cpuMilli)}{#if p.cpuLimitMilli}<span
+															class="proj-cap"
+														>
 															/ {formatCpuMilli(p.cpuLimitMilli)}</span
 														>{/if}
-												</td>
-												<td>
-													{formatMemoryBytes(p.usage.memoryBytes)}
-													{#if p.memoryLimitBytes}<span class="cell-sub">
-															/ {formatMemoryBytes(p.memoryLimitBytes)}</span
-														>{/if}
-												</td>
-												<td>
-													{p.usage.pods}
-													{#if p.maxPods}<span class="cell-sub"> / {p.maxPods}</span>{/if}
-												</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-							</div>
-						</div>
+												</span>
+												<span class="proj-secondary">
+													{formatMemoryBytes(p.usage.memoryBytes)} &middot; {p.usage.pods}
+													{p.usage.pods === 1 ? 'pod' : 'pods'}
+												</span>
+											</span>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						</SectionCard>
 					{/if}
-
-					<!-- ───────── MY USAGE ───────── -->
+				{:else if activeTab === 'overview'}
+					<SectionCard title="Organization">
+						<EmptyState
+							title="Could not load organization usage"
+							description="This needs organization admin access. If you are an admin, reload the page."
+						/>
+					</SectionCard>
 				{:else if activeTab === 'me' && myUsage}
 					{@const userCpuCap = myUsage.allowance.cpuMilli}
 					{@const userMemCap = myUsage.allowance.memoryBytes}
-					{@const effectiveCpu = myUsage.effectiveLimit?.cpuMilli ?? null}
-					{@const effectiveMem = myUsage.effectiveLimit?.memoryBytes ?? null}
 					{@const cpuCap = userCpuCap ?? myUsage.orgCap.cpuLimitMilli}
 					{@const memCap = userMemCap ?? myUsage.orgCap.memoryLimitBytes}
-					{@const myProjects = projectBreakdown(myUsage)}
+					{@const effectiveCpu = myUsage.effectiveLimit?.cpuMilli ?? null}
+					{@const effectiveMem = myUsage.effectiveLimit?.memoryBytes ?? null}
+					{@const cpuTight =
+						cpuCap !== null && cpuCap > 0 && myUsage.usage.cpuMilli / cpuCap >= 0.8}
+					{@const memTight =
+						memCap !== null && memCap > 0 && myUsage.usage.memoryBytes / memCap >= 0.8}
 
-					<div class="card">
-						<div class="card-head">
-							<h2 class="card-title">Your allowance</h2>
+					<SectionCard title="Your budget">
+						<div class="budget-grid">
+							<BudgetMeter
+								label="CPU"
+								used={myUsage.usage.cpuMilli}
+								limit={cpuCap}
+								available={effectiveCpu}
+								format={formatCpuMilli}
+								index={0}
+							/>
+							<BudgetMeter
+								label="Memory"
+								used={myUsage.usage.memoryBytes}
+								limit={memCap}
+								available={effectiveMem}
+								format={formatMemoryBytes}
+								index={1}
+							/>
 						</div>
-						<div class="card-body">
-							<div class="speedo-grid speedo-grid-2">
-								<Speedometer
-									label="CPU allowance"
-									value={myUsage.usage.cpuMilli}
-									max={cpuCap}
-									formatValue={formatCpuMilli}
-									size="lg"
-									caption={userCpuCap === null && myUsage.orgCap.cpuLimitMilli !== null
-										? `Unlimited, org cap ${formatCpuMilli(myUsage.orgCap.cpuLimitMilli)}`
-										: effectiveCpu !== null
-											? `${formatCpuMilli(effectiveCpu)} available to assign`
-											: null}
-								/>
-								<Speedometer
-									label="Memory allowance"
-									value={myUsage.usage.memoryBytes}
-									max={memCap}
-									formatValue={formatMemoryBytes}
-									size="lg"
-									caption={userMemCap === null && myUsage.orgCap.memoryLimitBytes !== null
-										? `Unlimited, org cap ${formatMemoryBytes(myUsage.orgCap.memoryLimitBytes)}`
-										: effectiveMem !== null
-											? `${formatMemoryBytes(effectiveMem)} available to assign`
-											: null}
-								/>
+
+						{#if cpuTight || memTight}
+							<div class="budget-note">
+								<Alert tone="warning" title="You are close to your limit">
+									New apps and scale-ups are checked against this budget, so a deploy can be refused
+									once it runs out. Free room up by lowering CPU or memory on something below, or
+									ask an organization admin to raise your allowance.
+								</Alert>
 							</div>
-						</div>
-					</div>
+						{/if}
+					</SectionCard>
 
 					{#if myUsage.usage.breakdown.length === 0}
-						<div class="empty-card">You don't own any projects with deployments yet.</div>
+						<SectionCard title="Where it is going">
+							<EmptyState
+								title="Nothing is using your budget yet"
+								description="Apps and databases you own show up here with what they reserve, ranked by size."
+							>
+								<Button variant="primary" href="/{orgSlug}/new">Deploy something</Button>
+							</EmptyState>
+						</SectionCard>
 					{:else}
-						<div class="card">
-							<div class="card-head">
-								<h2 class="card-title">Where it's going</h2>
-								<span class="card-count">{myProjects.length}</span>
-							</div>
-							<div class="card-body">
-								<DonutChart
-									slices={myProjects.map((p) => ({ label: p.projectName, value: p.cpuMilli }))}
-									size={200}
-									thickness={26}
-									centerLabel={formatCpuMilli(myUsage.usage.cpuMilli)}
-									centerCaption="CPU total"
-									formatValue={formatCpuMilli}
-								/>
-							</div>
-						</div>
-
-						<div class="card">
-							<div class="card-head">
-								<h2 class="card-title">By workload</h2>
-								<span class="card-count">{myUsage.usage.breakdown.length}</span>
-							</div>
-							<div class="table-wrap">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>Workload</th>
-											<th>Project</th>
-											<th>Kind</th>
-											<th>Replicas</th>
-											<th>CPU</th>
-											<th>Memory</th>
-										</tr>
-									</thead>
-									<tbody>
-										{#each myUsage.usage.breakdown as item (`${item.kind}:${item.id}`)}
-											<tr>
-												<td class="strong">{item.name}</td>
-												<td>{item.projectName}</td>
-												<td><span class="pill pill-muted">{item.kind}</span></td>
-												<td>{item.replicas}</td>
-												<td>{formatCpuMilli(item.cpuMilli)}</td>
-												<td>{formatMemoryBytes(item.memoryBytes)}</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-							</div>
-						</div>
+						<SectionCard
+							title="Where it is going"
+							description="Ranked by what each workload reserves, not what it happens to be using right now."
+						>
+							<UsageBreakdown items={myUsage.usage.breakdown} {orgSlug} />
+						</SectionCard>
 					{/if}
-
-					<!-- ───────── MEMBERS ───────── -->
 				{:else if activeTab === 'sandbox'}
 					<SandboxUsageTab />
 				{:else if activeTab === 'members' && isAdmin && membersData}
-					<div class="card">
-						<div class="card-head">
-							<div>
-								<h2 class="card-title">Allowance committed</h2>
-							</div>
+					<SectionCard
+						title="Allowance committed"
+						description="What member allowances add up to, against the organization cap. Over 100% is allowed: it is a bet that members will not all use their full allowance at once."
+					>
+						<div class="budget-grid">
+							<BudgetMeter
+								label="CPU committed"
+								used={membersData.commitment.cpuMilli}
+								limit={membersData.org.cpuLimitMilli}
+								available={null}
+								format={formatCpuMilli}
+								index={0}
+							/>
+							<BudgetMeter
+								label="Memory committed"
+								used={membersData.commitment.memoryBytes}
+								limit={membersData.org.memoryLimitBytes}
+								available={null}
+								format={formatMemoryBytes}
+								index={1}
+							/>
 						</div>
-						<div class="card-body">
-							<div class="speedo-grid speedo-grid-2">
-								<Speedometer
-									label="CPU committed"
-									value={membersData.commitment.cpuMilli}
-									max={membersData.org.cpuLimitMilli}
-									formatValue={formatCpuMilli}
-									size="md"
-								/>
-								<Speedometer
-									label="Memory committed"
-									value={membersData.commitment.memoryBytes}
-									max={membersData.org.memoryLimitBytes}
-									formatValue={formatMemoryBytes}
-									size="md"
-								/>
-							</div>
-							<p class="hint-text">
-								Unlimited members don't contribute to these totals, but their actual usage still
-								counts against the org cap.
-							</p>
-						</div>
-					</div>
+						<p class="hint-text">
+							Unlimited members do not add to these totals, but their real usage still counts
+							against the organization cap.
+						</p>
+					</SectionCard>
 
 					<div class="card">
 						<div class="card-head">
@@ -1061,41 +982,23 @@
 					<!-- ───────── PROVISIONING ───────── -->
 				{:else if activeTab === 'provisioning' && isAdmin}
 					<div class="prov-overview">
-						<div class="card prov-donut-card">
-							<div class="card-head">
-								<h2 class="card-title">Workload health</h2>
-							</div>
-							<div class="card-body">
-								<DonutChart
-									slices={[
-										{
-											label: 'OK',
-											value: provisioningSummary.counts.ok,
-											color: 'var(--success-text)'
-										},
-										{
-											label: 'Over-provisioned',
-											value: provisioningSummary.counts.over,
-											color: 'var(--warning-text)'
-										},
-										{
-											label: 'Under-provisioned',
-											value: provisioningSummary.counts.under,
-											color: 'var(--error-text-color)'
-										},
-										{
-											label: 'No data',
-											value: provisioningSummary.counts.unknown,
-											color: 'var(--surface-muted)'
-										}
-									]}
-									size={170}
-									thickness={22}
-									centerLabel={String(provisioning.length)}
-									centerCaption="workloads"
-								/>
-							</div>
-						</div>
+						<SectionCard title="Workload health" class="prov-donut-card">
+							<ul class="health-list">
+								{#each [{ id: 'ok', label: 'Right-sized', n: provisioningSummary.counts.ok, tone: 'success' }, { id: 'over', label: 'Over-provisioned', n: provisioningSummary.counts.over, tone: 'warning' }, { id: 'under', label: 'Under-provisioned', n: provisioningSummary.counts.under, tone: 'error' }, { id: 'unknown', label: 'No data yet', n: provisioningSummary.counts.unknown, tone: 'neutral' }] as bucket (bucket.id)}
+									<li class="health-row">
+										<span class="health-dot health-dot--{bucket.tone}"></span>
+										<span class="health-label">{bucket.label}</span>
+										<span class="health-count">{bucket.n}</span>
+										<span
+											class="health-bar health-bar--{bucket.tone}"
+											style="--share: {provisioning.length > 0
+												? bucket.n / provisioning.length
+												: 0}"
+										></span>
+									</li>
+								{/each}
+							</ul>
+						</SectionCard>
 						<div class="card prov-headroom-card">
 							<div class="card-head">
 								<h2 class="card-title">Reclaimable headroom</h2>
@@ -1312,6 +1215,181 @@
 		padding: 4rem 0;
 	}
 
+	.proj-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.proj-row {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem 0.625rem;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		color: inherit;
+		text-decoration: none;
+	}
+	.proj-row:hover {
+		background-color: var(--bg-hover);
+	}
+	.proj-bar {
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: calc(var(--share) * 100%);
+		background-color: var(--accent-subtle);
+		border-radius: var(--radius-md);
+		pointer-events: none;
+	}
+	.proj-main {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 0.0625rem;
+		min-width: 0;
+		flex: 1;
+	}
+	.proj-name {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-default);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.proj-ns {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.proj-nums {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.0625rem;
+		flex-shrink: 0;
+	}
+	.proj-primary {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-default);
+		font-variant-numeric: tabular-nums;
+	}
+	.proj-cap {
+		font-weight: 400;
+		color: var(--text-faint);
+	}
+	.proj-secondary {
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.health-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.health-row {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-areas: 'dot label count' 'bar bar bar';
+		align-items: center;
+		gap: 0.375rem 0.5rem;
+	}
+	.health-dot {
+		grid-area: dot;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+	}
+	.health-label {
+		grid-area: label;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+	.health-count {
+		grid-area: count;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-default);
+		font-variant-numeric: tabular-nums;
+	}
+	.health-bar {
+		grid-area: bar;
+		height: 0.25rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--bg-sunken);
+		position: relative;
+		overflow: hidden;
+	}
+	.health-bar::after {
+		content: '';
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: calc(var(--share) * 100%);
+		border-radius: var(--radius-pill);
+		background-color: currentColor;
+	}
+	.health-dot--success,
+	.health-bar--success {
+		color: var(--status-success);
+		background-color: var(--status-success);
+	}
+	.health-bar--success {
+		background-color: var(--bg-sunken);
+	}
+	.health-dot--warning,
+	.health-bar--warning {
+		color: var(--status-warning);
+		background-color: var(--status-warning);
+	}
+	.health-bar--warning {
+		background-color: var(--bg-sunken);
+	}
+	.health-dot--error,
+	.health-bar--error {
+		color: var(--status-error);
+		background-color: var(--status-error);
+	}
+	.health-bar--error {
+		background-color: var(--bg-sunken);
+	}
+	.health-dot--neutral,
+	.health-bar--neutral {
+		color: var(--status-neutral);
+		background-color: var(--status-neutral);
+	}
+	.health-bar--neutral {
+		background-color: var(--bg-sunken);
+	}
+	.budget-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+		gap: 1.5rem 2rem;
+	}
+	.budget-note {
+		margin-top: 1.25rem;
+	}
+	.usage-tabs-row--bare {
+		margin-bottom: 0;
+	}
 	.usage-tabs-row {
 		display: flex;
 		align-items: center;
