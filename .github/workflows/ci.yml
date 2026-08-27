@@ -210,6 +210,11 @@ jobs:
       # value is passed through untouched rather than clamped.
       - name: Database tuning derivation tests
         run: pnpm --filter server test:db-tuning
+      # The informer mirror is only correct if its reconcile pass actually runs.
+      # Leadership is acquired asynchronously, so a subscriber has to be called
+      # whether it registered before or after the lease landed.
+      - name: Leader acquisition callback tests
+        run: pnpm --filter server test:leader
       # The build watch loop is paced by the informer. Pins that an already-seen
       # terminal observation can never collapse the poll interval to zero, which
       # is what let a deleted job spin thousands of API calls into a 15s window.

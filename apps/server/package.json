@@ -20,6 +20,7 @@
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:cpu-requests": "tsx --test test/cpu-requests.test.ts",
     "test:db-tuning": "tsx --test test/db-tuning.test.ts",
+    "test:leader": "tsx --test test/leader-acquired.test.ts",
     "test:env-removal": "tsx --test test/env-removal.test.ts",
     "test:build-args": "tsx --test test/build-arg-injection.test.ts",
     "test:build-pacing": "tsx --test test/build-poll-pacing.test.ts",

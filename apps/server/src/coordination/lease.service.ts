@@ -76,6 +76,17 @@ export class LeaseService implements OnApplicationShutdown {
     return this.electors.get(name)?.isHolder() ?? false;
   }
 
+  // Registration order across modules is not guaranteed, so a caller may
+  // subscribe before the lease exists. Register it here rather than making
+  // every caller worry about who booted first.
+  onAcquired(name: string, listener: () => void): void {
+    const elector = this.electors.get(name) ?? this.register(name);
+    elector.on('acquired', listener);
+    // Already leader by the time this ran: fire once so the subscriber is not
+    // stuck waiting for an edge that has already passed.
+    if (elector.isHolder()) setImmediate(listener);
+  }
+
   async onApplicationShutdown(): Promise<void> {
     await Promise.all([...this.electors.values()].map((elector) => elector.stop()));
   }

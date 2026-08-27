@@ -54,6 +54,8 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
 
   private readonly crashTracks = new Map<string, CrashTrack>();
 
+  private reconciling = false;
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
@@ -86,7 +88,71 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       );
       this.scheduleRestart();
     });
+
+    // The informer's initial LIST fires an 'add' for every existing pod, but it
+    // lands before this replica has won the lease, so onPodEvent drops all of
+    // it. Without this the mirror is built purely from live events, and a pod
+    // that never changes again is never written at all — a Tailscale sidecar
+    // sat Running for six days while its deployment read "pending", because the
+    // only 'add' it ever produced arrived during that window.
+    this.leader.onAcquired(() => {
+      void this.reconcileAll();
+    });
+
     await this.start();
+  }
+
+  // Full pass over every orchard-managed pod, run when leadership lands. Also
+  // repairs drift from a dropped watch or an event that failed mid-write, so it
+  // is worth doing even once the race above is closed.
+  private async reconcileAll(): Promise<void> {
+    const kc = this.kubernetes.kc;
+    if (this.stopped || !kc) return;
+    // Leadership can flap, and a subscriber that registers after acquisition
+    // gets an immediate call on top of the event, so this can be entered twice.
+    // The upserts are idempotent but the prune is not safe to interleave.
+    if (this.reconciling) return;
+    this.reconciling = true;
+    try {
+      const coreApi = kc.makeApiClient(k8s.CoreV1Api);
+      const { body } = await coreApi.listPodForAllNamespaces(
+        undefined, undefined, undefined, ORCHARD_SELECTOR,
+      );
+      const pods = body.items ?? [];
+      const seen = new Map<string, Set<string>>();
+      let synced = 0;
+
+      for (const pod of pods) {
+        const ns = pod.metadata?.namespace;
+        const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
+        const podName = pod.metadata?.name;
+        if (!ns || !depName || !podName) continue;
+        const ctx = await this.resolveCtx(ns, depName);
+        if (!ctx) continue;
+        await this.syncPod('update', ctx.deploymentId, pod);
+        const bucket = seen.get(ctx.deploymentId);
+        if (bucket) bucket.add(podName);
+        else seen.set(ctx.deploymentId, new Set([podName]));
+        synced += 1;
+      }
+
+      // Rows for pods that no longer exist. Scoped to deployments we just saw,
+      // so a deployment scaled to zero keeps its (correctly empty) state rather
+      // than being touched by a pass that never observed it.
+      let pruned = 0;
+      for (const [deploymentId, names] of seen) {
+        const { count } = await this.prisma.pod.deleteMany({
+          where: { deploymentId, name: { notIn: [...names] } },
+        });
+        pruned += count;
+      }
+
+      this.logger.log(`pod reconcile on leadership: ${synced} synced, ${pruned} pruned`);
+    } catch (err) {
+      this.logger.warn(`pod reconcile failed: ${(err as Error)?.message ?? err}`);
+    } finally {
+      this.reconciling = false;
+    }
   }
 
   async onModuleDestroy() {

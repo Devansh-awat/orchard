@@ -62,6 +62,8 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
 
   private readonly crashTracks = new Map<string, CrashTrack>();
 
+  private reconciling = false;
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
@@ -94,6 +96,15 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       );
       this.scheduleRestart();
     });
+
+    // Same race as the deployment pod informer: the initial LIST lands before
+    // this replica holds the lease, so onPodEvent drops it. Without a pass on
+    // acquisition a database whose pod never changes would never get a row, and
+    // liveStatus would fall back to a live API call forever.
+    this.leader.onAcquired(() => {
+      void this.reconcileAll();
+    });
+
     await this.start();
 
     this.archivingTimer = setInterval(() => {
@@ -158,6 +169,53 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.scheduleEmit(ctx, this.buildPayload(type, pod));
+  }
+
+  private async reconcileAll(): Promise<void> {
+    const kc = this.kubernetes.kc;
+    if (this.stopped || !kc) return;
+    // Leadership can flap, and a subscriber that registers after acquisition
+    // gets an immediate call on top of the event, so this can be entered twice.
+    // The upserts are idempotent but the prune is not safe to interleave.
+    if (this.reconciling) return;
+    this.reconciling = true;
+    try {
+      const coreApi = kc.makeApiClient(k8s.CoreV1Api);
+      const { body } = await coreApi.listPodForAllNamespaces(
+        undefined, undefined, undefined, CNPG_SELECTOR,
+      );
+      const pods = body.items ?? [];
+      const seen = new Map<string, Set<string>>();
+      let synced = 0;
+
+      for (const pod of pods) {
+        const ns = pod.metadata?.namespace;
+        const clusterName = pod.metadata?.labels?.['cnpg.io/cluster'];
+        const podName = pod.metadata?.name;
+        if (!ns || !clusterName || !podName) continue;
+        const ctx = await this.resolveCtx(ns, clusterName);
+        if (!ctx) continue;
+        await this.syncPod('update', ctx.databaseId, pod);
+        const bucket = seen.get(ctx.databaseId);
+        if (bucket) bucket.add(podName);
+        else seen.set(ctx.databaseId, new Set([podName]));
+        synced += 1;
+      }
+
+      let pruned = 0;
+      for (const [databaseId, names] of seen) {
+        const { count } = await this.prisma.databasePod.deleteMany({
+          where: { databaseId, name: { notIn: [...names] } },
+        });
+        pruned += count;
+      }
+
+      this.logger.log(`cnpg pod reconcile on leadership: ${synced} synced, ${pruned} pruned`);
+    } catch (err) {
+      this.logger.warn(`cnpg pod reconcile failed: ${(err as Error)?.message ?? err}`);
+    } finally {
+      this.reconciling = false;
+    }
   }
 
   private async syncPod(type: 'add' | 'update' | 'delete', databaseId: string, pod: k8s.V1Pod) {
