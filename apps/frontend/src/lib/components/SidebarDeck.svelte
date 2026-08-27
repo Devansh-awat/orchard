@@ -23,12 +23,14 @@
 		Settings,
 		LogOut,
 		KeyRound,
+		SquareTerminal,
 		Sun
 	} from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg } from '$lib/components/ui';
 	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import CliModal from './CliModal.svelte';
 	import {
 		springRotate,
 		springCollapse,
@@ -161,6 +163,7 @@
 	let visible = $state(true);
 	let isMobile = $state(false);
 	let railed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
+	let cliOpen = $state(false);
 
 	$effect(() => {
 		const path = $page.url.pathname;
@@ -598,6 +601,17 @@
 							<Settings size={14} />
 							Settings
 						</a>
+						<button
+							type="button"
+							class="deck-menu-item"
+							onclick={() => {
+								close();
+								cliOpen = true;
+							}}
+						>
+							<SquareTerminal size={14} />
+							Command line
+						</button>
 						<a class="deck-menu-item" href="/user/settings?tab=tokens" onclick={close}>
 							<KeyRound size={14} />
 							API tokens
@@ -634,6 +648,8 @@
 		</div>
 	</div>
 </aside>
+
+<CliModal bind:open={cliOpen} />
 
 <style>
 	.deck-host {
