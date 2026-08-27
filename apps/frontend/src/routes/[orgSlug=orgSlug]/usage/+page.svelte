@@ -6,7 +6,7 @@
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
-	import { BudgetMeter, UsageBreakdown } from '$lib/components/usage';
+	import { BudgetMeter, UsageBreakdown, DataGrid } from '$lib/components/usage';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
 	import {
 		Loader2,
@@ -771,213 +771,204 @@
 						</div>
 					</div>
 
-					<div class="card">
-						<div class="card-head">
-							<h2 class="card-title">Members</h2>
+					<SectionCard title="Members">
+						{#snippet actions()}
 							<span class="card-count">{membersData.members.length}</span>
-						</div>
-						<div class="table-wrap">
-							<table class="data-table">
-								<thead>
-									<tr>
-										<th>Member</th>
-										<th>Role</th>
-										<th>CPU</th>
-										<th>Memory</th>
-										<th></th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each membersData.members as m (m.user.id)}
-										<tr class="align-top">
-											<td>
-												<div class="strong">{memberName(m)}</div>
-												<div class="cell-sub">{m.user.email}</div>
-											</td>
-											<td><span class="pill pill-muted capitalize">{m.role}</span></td>
-											<td>
-												<div class="strong">
-													{formatCpuMilli(m.usage.cpuMilli)}
-													<span class="cell-sub"
-														>/ {allowanceLabel(
-															m.allowance.source.cpu,
-															m.allowance.cpuMilli,
-															formatCpuMilli
-														)}</span
-													>
-												</div>
-												{#if m.allowance.cpuMilli !== null}
-													<div class="bar-track bar-track-sm bar-row-w">
-														<div
-															class="bar-fill"
-															style="width: {pct(m.usage.cpuMilli, m.allowance.cpuMilli)}%;"
-														></div>
-													</div>
-												{/if}
-											</td>
-											<td>
-												<div class="strong">
-													{formatMemoryBytes(m.usage.memoryBytes)}
-													<span class="cell-sub"
-														>/ {allowanceLabel(
-															m.allowance.source.memory,
-															m.allowance.memoryBytes,
-															formatMemoryBytes
-														)}</span
-													>
-												</div>
-												{#if m.allowance.memoryBytes !== null}
-													<div class="bar-track bar-track-sm bar-row-w">
-														<div
-															class="bar-fill"
-															style="width: {pct(m.usage.memoryBytes, m.allowance.memoryBytes)}%;"
-														></div>
-													</div>
-												{/if}
-											</td>
-											<td class="ta-right">
-												{#if editingMemberId === m.user.id}
-													<button
-														class="btn-icon-sm"
-														onclick={() => (editingMemberId = null)}
-														disabled={savingMember}
-														aria-label="Cancel"
-													>
-														<X class="h-4 w-4" />
-													</button>
-												{:else}
-													<button
-														class="btn-icon-sm"
-														onclick={() => startEditMember(m)}
-														aria-label="Edit allowance"
-													>
-														<Pencil class="h-4 w-4" />
-													</button>
-												{/if}
-											</td>
-										</tr>
-										{#if editingMemberId === m.user.id}
-											<tr class="edit-row">
-												<td colspan="5">
-													<div class="form-grid">
-														<label class="field">
-															<span class="field-label">CPU (millicores)</span>
-															<div class="field-row">
-																<input
-																	type="number"
-																	min="0"
-																	class="input field-input"
-																	bind:value={memCpuInput}
-																	oninput={() => {
-																		if (memCpuInput) {
-																			memCpuUnlim = false;
-																			memCpuUseDefault = false;
-																		}
-																	}}
-																	placeholder={memCpuUnlim
-																		? 'Unlimited'
-																		: memCpuUseDefault
-																			? 'Inherits default'
-																			: 'e.g. 500'}
-																/>
-																<label class="toggle">
-																	<input
-																		type="checkbox"
-																		bind:checked={memCpuUnlim}
-																		onchange={() => {
-																			if (memCpuUnlim) {
-																				memCpuUseDefault = false;
-																				memCpuInput = '';
-																			}
-																		}}
-																	/> Unlimited
-																</label>
-																<label class="toggle">
-																	<input
-																		type="checkbox"
-																		bind:checked={memCpuUseDefault}
-																		onchange={() => {
-																			if (memCpuUseDefault) {
-																				memCpuUnlim = false;
-																				memCpuInput = '';
-																			}
-																		}}
-																	/> Use default
-																</label>
-															</div>
-														</label>
-														<label class="field">
-															<span class="field-label">Memory (MiB)</span>
-															<div class="field-row">
-																<input
-																	type="number"
-																	min="0"
-																	class="input field-input"
-																	bind:value={memMemInput}
-																	oninput={() => {
-																		if (memMemInput) {
-																			memMemUnlim = false;
-																			memMemUseDefault = false;
-																		}
-																	}}
-																	placeholder={memMemUnlim
-																		? 'Unlimited'
-																		: memMemUseDefault
-																			? 'Inherits default'
-																			: 'e.g. 1024'}
-																/>
-																<label class="toggle">
-																	<input
-																		type="checkbox"
-																		bind:checked={memMemUnlim}
-																		onchange={() => {
-																			if (memMemUnlim) {
-																				memMemUseDefault = false;
-																				memMemInput = '';
-																			}
-																		}}
-																	/> Unlimited
-																</label>
-																<label class="toggle">
-																	<input
-																		type="checkbox"
-																		bind:checked={memMemUseDefault}
-																		onchange={() => {
-																			if (memMemUseDefault) {
-																				memMemUnlim = false;
-																				memMemInput = '';
-																			}
-																		}}
-																	/> Use default
-																</label>
-															</div>
-														</label>
-													</div>
-													<div class="form-actions">
-														<button
-															class="btn btn-secondary"
-															onclick={() => (editingMemberId = null)}
-															disabled={savingMember}>Cancel</button
-														>
-														<button
-															class="btn btn-primary"
-															onclick={saveMember}
-															disabled={savingMember}
-														>
-															{#if savingMember}<Loader2
-																	class="h-3.5 w-3.5 animate-spin"
-																/>{:else}<Check class="h-3.5 w-3.5" />{/if}
-															Save
-														</button>
-													</div>
-												</td>
-											</tr>
-										{/if}
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
+						{/snippet}
+						<DataGrid
+							rows={membersData.members}
+							rowKey={(m) => m.user.id}
+							search={(m) => `${memberName(m)} ${m.user.email} ${m.role}`}
+							searchPlaceholder="Filter members"
+							initialSort={{ id: 'cpu', dir: 'desc' }}
+							emptyTitle="No members yet"
+							expanded={(m) => editingMemberId === m.user.id}
+							columns={[
+								{ id: 'member', label: 'Member', sort: (m) => memberName(m) },
+								{ id: 'role', label: 'Role', width: '6rem', sort: (m) => m.role },
+								{ id: 'cpu', label: 'CPU', sort: (m) => m.usage.cpuMilli },
+								{ id: 'mem', label: 'Memory', sort: (m) => m.usage.memoryBytes },
+								{ id: 'edit', label: '', width: '2.5rem', align: 'end' }
+							]}
+						>
+							{#snippet row(m)}
+								<span class="grid-cell">
+									<span class="strong">{memberName(m)}</span>
+									<span class="cell-sub">{m.user.email}</span>
+								</span>
+								<span class="pill pill-muted capitalize">{m.role}</span>
+								<span class="grid-cell">
+									<span class="strong">
+										{formatCpuMilli(m.usage.cpuMilli)}
+										<span class="cell-sub">
+											/ {allowanceLabel(
+												m.allowance.source.cpu,
+												m.allowance.cpuMilli,
+												formatCpuMilli
+											)}</span
+										>
+									</span>
+									{#if m.allowance.cpuMilli !== null}
+										<span class="bar-track bar-track-sm bar-row-w">
+											<span
+												class="bar-fill"
+												style="width: {pct(m.usage.cpuMilli, m.allowance.cpuMilli)}%;"
+											></span>
+										</span>
+									{/if}
+								</span>
+								<span class="grid-cell">
+									<span class="strong">
+										{formatMemoryBytes(m.usage.memoryBytes)}
+										<span class="cell-sub">
+											/ {allowanceLabel(
+												m.allowance.source.memory,
+												m.allowance.memoryBytes,
+												formatMemoryBytes
+											)}</span
+										>
+									</span>
+									{#if m.allowance.memoryBytes !== null}
+										<span class="bar-track bar-track-sm bar-row-w">
+											<span
+												class="bar-fill"
+												style="width: {pct(m.usage.memoryBytes, m.allowance.memoryBytes)}%;"
+											></span>
+										</span>
+									{/if}
+								</span>
+								<span class="ta-right">
+									{#if editingMemberId === m.user.id}
+										<button
+											class="btn-icon-sm"
+											onclick={() => (editingMemberId = null)}
+											disabled={savingMember}
+											aria-label="Cancel"
+										>
+											<X class="h-4 w-4" />
+										</button>
+									{:else}
+										<button
+											class="btn-icon-sm"
+											onclick={() => startEditMember(m)}
+											aria-label="Edit allowance"
+										>
+											<Pencil class="h-4 w-4" />
+										</button>
+									{/if}
+								</span>
+							{/snippet}
+							{#snippet detail()}
+								<div class="form-grid">
+									<label class="field">
+										<span class="field-label">CPU (millicores)</span>
+										<div class="field-row">
+											<input
+												type="number"
+												min="0"
+												class="input field-input"
+												bind:value={memCpuInput}
+												oninput={() => {
+													if (memCpuInput) {
+														memCpuUnlim = false;
+														memCpuUseDefault = false;
+													}
+												}}
+												placeholder={memCpuUnlim
+													? 'Unlimited'
+													: memCpuUseDefault
+														? 'Inherits default'
+														: 'e.g. 500'}
+											/>
+											<label class="toggle">
+												<input
+													type="checkbox"
+													bind:checked={memCpuUnlim}
+													onchange={() => {
+														if (memCpuUnlim) {
+															memCpuUseDefault = false;
+															memCpuInput = '';
+														}
+													}}
+												/> Unlimited
+											</label>
+											<label class="toggle">
+												<input
+													type="checkbox"
+													bind:checked={memCpuUseDefault}
+													onchange={() => {
+														if (memCpuUseDefault) {
+															memCpuUnlim = false;
+															memCpuInput = '';
+														}
+													}}
+												/> Use default
+											</label>
+										</div>
+									</label>
+									<label class="field">
+										<span class="field-label">Memory (MiB)</span>
+										<div class="field-row">
+											<input
+												type="number"
+												min="0"
+												class="input field-input"
+												bind:value={memMemInput}
+												oninput={() => {
+													if (memMemInput) {
+														memMemUnlim = false;
+														memMemUseDefault = false;
+													}
+												}}
+												placeholder={memMemUnlim
+													? 'Unlimited'
+													: memMemUseDefault
+														? 'Inherits default'
+														: 'e.g. 1024'}
+											/>
+											<label class="toggle">
+												<input
+													type="checkbox"
+													bind:checked={memMemUnlim}
+													onchange={() => {
+														if (memMemUnlim) {
+															memMemUseDefault = false;
+															memMemInput = '';
+														}
+													}}
+												/> Unlimited
+											</label>
+											<label class="toggle">
+												<input
+													type="checkbox"
+													bind:checked={memMemUseDefault}
+													onchange={() => {
+														if (memMemUseDefault) {
+															memMemUnlim = false;
+															memMemInput = '';
+														}
+													}}
+												/> Use default
+											</label>
+										</div>
+									</label>
+								</div>
+								<div class="form-actions">
+									<button
+										class="btn btn-secondary"
+										onclick={() => (editingMemberId = null)}
+										disabled={savingMember}>Cancel</button
+									>
+									<button class="btn btn-primary" onclick={saveMember} disabled={savingMember}>
+										{#if savingMember}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Check
+												class="h-3.5 w-3.5"
+											/>{/if}
+										Save
+									</button>
+								</div>
+							{/snippet}
+						</DataGrid>
+					</SectionCard>
 
 					<!-- ───────── PROVISIONING ───────── -->
 				{:else if activeTab === 'provisioning' && isAdmin}
@@ -1023,7 +1014,12 @@
 					</div>
 
 					{#if provisioning.length === 0}
-						<div class="empty-card">No workloads to analyze in this range.</div>
+						<SectionCard title="All workloads">
+							<EmptyState
+								title="Nothing to size yet"
+								description="Once workloads have run for a while in this range, their actual usage shows up here next to what they reserve."
+							/>
+						</SectionCard>
 					{:else}
 						{#if topWasters.byCpu.length > 0 || topWasters.byMem.length > 0}
 							<div class="top-wasters-grid">
@@ -1070,98 +1066,93 @@
 							</div>
 						{/if}
 
-						<div class="card">
-							<div class="card-head">
-								<h2 class="card-title">All workloads</h2>
+						<SectionCard title="All workloads">
+							{#snippet actions()}
 								<span class="card-count">{provisioning.length}</span>
-							</div>
-							<div class="table-wrap">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>Workload</th>
-											<th>CPU (actual / requested)</th>
-											<th>Memory (actual / requested)</th>
-											<th>Verdict</th>
-										</tr>
-									</thead>
-									<tbody>
-										{#each provisioning as r (`${r.kind}:${r.id}`)}
-											<tr>
-												<td>
-													<div class="strong">{r.name}</div>
-													<div class="cell-sub">{r.projectName} · {r.kind}</div>
-												</td>
-												<td>
-													<div class="util-cell">
-														<div class="util-bar-track">
-															<div
-																class="util-bar-fill"
-																style="width: {r.cpuUtilization === null
-																	? 0
-																	: Math.min(
-																			100,
-																			r.cpuUtilization * 100
-																		)}%; background-color: {verdictColor(r.verdict)};"
-															></div>
-														</div>
-														<div class="util-text">
-															<span class="util-actual">
-																{r.actualCpuMilliP95 === null
-																	? 'n/a'
-																	: formatCpuMilli(r.actualCpuMilliP95)}
-															</span>
-															<span class="util-sep">/</span>
-															<span class="util-requested"
-																>{formatCpuMilli(r.requestedCpuMilli)}</span
-															>
-															<span class="util-pct">{utilPctStr(r.cpuUtilization)}</span>
-														</div>
-													</div>
-												</td>
-												<td>
-													<div class="util-cell">
-														<div class="util-bar-track">
-															<div
-																class="util-bar-fill"
-																style="width: {r.memoryUtilization === null
-																	? 0
-																	: Math.min(
-																			100,
-																			r.memoryUtilization * 100
-																		)}%; background-color: {verdictColor(r.verdict)};"
-															></div>
-														</div>
-														<div class="util-text">
-															<span class="util-actual">
-																{r.actualMemoryBytesP95 === null
-																	? 'n/a'
-																	: formatMemoryBytes(r.actualMemoryBytesP95)}
-															</span>
-															<span class="util-sep">/</span>
-															<span class="util-requested"
-																>{formatMemoryBytes(r.requestedMemoryBytes)}</span
-															>
-															<span class="util-pct">{utilPctStr(r.memoryUtilization)}</span>
-														</div>
-													</div>
-												</td>
-												<td>
-													<span
-														class="pill"
-														style="color: {verdictColor(r.verdict)}; background-color: {verdictBg(
-															r.verdict
-														)};"
-													>
-														{verdictLabel(r.verdict)}
-													</span>
-												</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-							</div>
-						</div>
+							{/snippet}
+							<DataGrid
+								rows={provisioning}
+								rowKey={(r) => `${r.kind}:${r.id}`}
+								search={(r) => `${r.name} ${r.projectName} ${r.kind} ${r.verdict}`}
+								searchPlaceholder="Filter workloads"
+								initialSort={{ id: 'cpu', dir: 'asc' }}
+								emptyTitle="No workloads to size"
+								columns={[
+									{ id: 'name', label: 'Workload', sort: (r) => r.name },
+									{
+										id: 'cpu',
+										label: 'CPU actual / requested',
+										sort: (r) => r.cpuUtilization ?? -1
+									},
+									{
+										id: 'mem',
+										label: 'Memory actual / requested',
+										sort: (r) => r.memoryUtilization ?? -1
+									},
+									{ id: 'verdict', label: 'Verdict', width: '9rem', sort: (r) => r.verdict }
+								]}
+							>
+								{#snippet row(r)}
+									<span class="grid-cell">
+										<span class="strong">{r.name}</span>
+										<span class="cell-sub">{r.projectName} &middot; {r.kind}</span>
+									</span>
+									<span class="util-cell">
+										<span class="util-bar-track">
+											<span
+												class="util-bar-fill"
+												style="width: {r.cpuUtilization === null
+													? 0
+													: Math.min(
+															100,
+															r.cpuUtilization * 100
+														)}%; background-color: {verdictColor(r.verdict)};"
+											></span>
+										</span>
+										<span class="util-text">
+											<span class="util-actual">
+												{r.actualCpuMilliP95 === null ? 'n/a' : formatCpuMilli(r.actualCpuMilliP95)}
+											</span>
+											<span class="util-sep">/</span>
+											<span class="util-requested">{formatCpuMilli(r.requestedCpuMilli)}</span>
+											<span class="util-pct">{utilPctStr(r.cpuUtilization)}</span>
+										</span>
+									</span>
+									<span class="util-cell">
+										<span class="util-bar-track">
+											<span
+												class="util-bar-fill"
+												style="width: {r.memoryUtilization === null
+													? 0
+													: Math.min(
+															100,
+															r.memoryUtilization * 100
+														)}%; background-color: {verdictColor(r.verdict)};"
+											></span>
+										</span>
+										<span class="util-text">
+											<span class="util-actual">
+												{r.actualMemoryBytesP95 === null
+													? 'n/a'
+													: formatMemoryBytes(r.actualMemoryBytesP95)}
+											</span>
+											<span class="util-sep">/</span>
+											<span class="util-requested">{formatMemoryBytes(r.requestedMemoryBytes)}</span
+											>
+											<span class="util-pct">{utilPctStr(r.memoryUtilization)}</span>
+										</span>
+									</span>
+									<span
+										class="pill"
+										style="color: {verdictColor(r.verdict)}; background-color: {verdictBg(
+											r.verdict
+										)};"
+									>
+										{verdictLabel(r.verdict)}
+									</span>
+								{/snippet}
+							</DataGrid>
+						</SectionCard>
 					{/if}
 				{/if}
 			</div>
@@ -1379,6 +1370,18 @@
 	.health-bar--neutral {
 		background-color: var(--bg-sunken);
 	}
+	.grid-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.0625rem;
+		min-width: 0;
+	}
+	.grid-cell .strong,
+	.grid-cell .cell-sub {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.budget-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
@@ -1549,41 +1552,6 @@
 	}
 
 	/* Tables */
-	.table-wrap {
-		overflow-x: auto;
-	}
-	.data-table {
-		width: 100%;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		border-collapse: collapse;
-	}
-	.data-table thead tr {
-		background-color: color-mix(in srgb, var(--surface-border) 25%, var(--surface-bg));
-	}
-	.data-table thead th {
-		text-align: left;
-		padding: 0.75rem 1.25rem;
-		font-weight: 600;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--surface-muted);
-	}
-	.data-table tbody td {
-		padding: 0.75rem 1.25rem;
-		border-top: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
-		vertical-align: middle;
-	}
-	.data-table tr.edit-row td {
-		background-color: color-mix(in srgb, var(--surface-border) 18%, var(--surface-bg));
-		padding: 1rem 1.25rem;
-	}
-	.data-table tr.align-top td {
-		vertical-align: top;
-	}
 	.cell-sub {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
@@ -1843,17 +1811,6 @@
 		font-weight: 600;
 	}
 
-	.speedo-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-		gap: 1rem 0.5rem;
-		justify-items: center;
-	}
-	.speedo-grid-2 {
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 1.5rem 1rem;
-	}
-
 	.prov-overview {
 		display: grid;
 		grid-template-columns: 2fr 1fr;
@@ -1882,16 +1839,5 @@
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.02em;
-	}
-
-	.empty-card {
-		border: 1px dashed var(--surface-border);
-		border-radius: var(--radius-lg);
-		padding: 2.5rem 1rem;
-		text-align: center;
-		color: var(--surface-muted);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		background-color: color-mix(in srgb, var(--surface-bg) 60%, transparent);
 	}
 </style>

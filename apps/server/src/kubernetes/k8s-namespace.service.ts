@@ -1,8 +1,8 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { clusterPods, clusterServiceCounts } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
-import { parseCpu, parseMemory } from './quantity';
 
 export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
   { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
@@ -154,41 +154,28 @@ export class K8sNamespaceService {
   async getOrgUsage(namespaces: string[]): Promise<{ cpuMilli: number; memoryBytes: number; pods: number; services: number }> {
     this.ensureKubeConfig();
     if (!this.kc || namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
-    const api = this.kc.makeApiClient(k8s.CoreV1Api);
     const nsSet = new Set(namespaces);
+    const [allPods, svcCounts] = await Promise.all([
+      clusterPods(this.kc),
+      clusterServiceCounts(this.kc),
+    ]);
+
     let cpuMilli = 0;
     let memoryBytes = 0;
     let pods = 0;
-    let services = 0;
-    try {
-      const podRes = await api.listPodForAllNamespaces();
-      for (const pod of podRes.body.items) {
-        const ns = pod.metadata?.namespace;
-        if (!ns || !nsSet.has(ns)) continue;
-        const phase = pod.status?.phase;
-        if (phase === 'Succeeded' || phase === 'Failed') continue;
-        pods += 1;
-        for (const c of pod.spec?.containers || []) {
-          // Quota bills what the workload is allowed to consume, not what it
-          // reserves — CPU requests are a fraction of the limit (see
-          // cpuRequestFromLimitMilli), so summing requests would under-bill.
-          const req = c.resources?.requests || {};
-          const lim = c.resources?.limits || {};
-          const cpu = lim.cpu ?? req.cpu;
-          const memory = lim.memory ?? req.memory;
-          if (cpu) cpuMilli += parseCpu(String(cpu));
-          if (memory) memoryBytes += parseMemory(String(memory));
-        }
-      }
-      const svcRes = await api.listServiceForAllNamespaces();
-      for (const s of svcRes.body.items) {
-        const ns = s.metadata?.namespace;
-        if (ns && nsSet.has(ns)) services += 1;
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('[K8s] getOrgUsage failed:', message);
+    for (const pod of allPods) {
+      if (!nsSet.has(pod.namespace)) continue;
+      pods += 1;
+      // Quota bills what the workload is allowed to consume, not what it
+      // reserves — CPU requests are a fraction of the limit (see
+      // cpuRequestFromLimitMilli), so summing requests would under-bill.
+      cpuMilli += pod.cpuLimitMilli;
+      memoryBytes += pod.memoryLimitBytes;
     }
+
+    let services = 0;
+    for (const ns of nsSet) services += svcCounts.get(ns) ?? 0;
+
     return { cpuMilli, memoryBytes, pods, services };
   }
 

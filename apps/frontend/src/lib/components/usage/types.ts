@@ -7,3 +7,11 @@ export interface BreakdownItem {
 	cpuMilli: number;
 	memoryBytes: number;
 }
+
+export interface GridColumn<Row> {
+	id: string;
+	label: string;
+	width?: string;
+	align?: 'start' | 'end';
+	sort?: (row: Row) => string | number;
+}

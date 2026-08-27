@@ -4,6 +4,8 @@ import type { PageLoad } from './$types';
 
 export const ssr = false;
 
+const json = (path: string) => apiFetch(path).then((r) => (r.ok ? r.json() : null));
+
 export const load: PageLoad = ({ params, depends, url }) => {
 	const orgSlug = params.orgSlug;
 	const range = url.searchParams.get('range') ?? '24h';
@@ -16,54 +18,46 @@ export const load: PageLoad = ({ params, depends, url }) => {
 			if (orgRes.status === 404) throw error(404, 'Organization not found');
 			throw error(orgRes.status, 'Failed to load organization');
 		}
-		const orgData = await orgRes.json();
-		const orgId: string = orgData.id;
+		const orgId: string = (await orgRes.json()).id;
 
-		const meRes = await apiFetch(`/apiv1/organizations/${orgId}/members/me`);
-		if (!meRes.ok) throw error(meRes.status, 'Failed to load membership');
-		const me = await meRes.json();
+		// Membership and personal usage both need nothing but orgId, so they go
+		// together. Only the admin fan-out has to wait to learn the role, and
+		// firing those speculatively would just buy four 403s for a member.
+		const [me, myUsage] = await Promise.all([
+			apiFetch(`/apiv1/organizations/${orgId}/members/me`).then((r) => {
+				if (!r.ok) throw error(r.status, 'Failed to load membership');
+				return r.json();
+			}),
+			apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
+				if (!r.ok) throw new Error('Failed to load personal usage');
+				return r.json();
+			})
+		]);
+
 		const role: 'owner' | 'admin' | 'member' | 'guest' = me.role;
 		const isAdmin = role === 'owner' || role === 'admin';
 
-		const myUsageReq = apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
-			if (!r.ok) throw new Error('Failed to load personal usage');
-			return r.json();
-		});
-		const orgQuotaReq = apiFetch(`/apiv1/organizations/${orgId}/quota`).then(async (r) => {
-			if (!r.ok) return null;
-			return r.json();
-		});
+		if (!isAdmin) {
+			return {
+				orgId,
+				role,
+				isAdmin,
+				myUsage,
+				orgQuota: null,
+				projectsData: null,
+				membersData: null,
+				provisioning: null
+			};
+		}
 
-		const adminTasks = isAdmin
-			? Promise.all([
-					apiFetch(`/apiv1/organizations/${orgId}/quota/projects`).then((r) =>
-						r.ok ? r.json() : null
-					),
-					apiFetch(`/apiv1/organizations/${orgId}/quota/members`).then((r) =>
-						r.ok ? r.json() : null
-					),
-					apiFetch(
-						`/apiv1/organizations/${orgId}/metrics/provisioning?range=${encodeURIComponent(range)}`
-					).then((r) => (r.ok ? r.json() : null))
-				]).then(([p, m, prov]) => ({
-					projectsData: p,
-					membersData: m,
-					provisioning: prov
-				}))
-			: Promise.resolve({ projectsData: null, membersData: null, provisioning: null });
+		const [orgQuota, projectsData, membersData, provisioning] = await Promise.all([
+			json(`/apiv1/organizations/${orgId}/quota`),
+			json(`/apiv1/organizations/${orgId}/quota/projects`),
+			json(`/apiv1/organizations/${orgId}/quota/members`),
+			json(`/apiv1/organizations/${orgId}/metrics/provisioning?range=${encodeURIComponent(range)}`)
+		]);
 
-		const [myUsage, orgQuota, admin] = await Promise.all([myUsageReq, orgQuotaReq, adminTasks]);
-
-		return {
-			orgId,
-			role,
-			isAdmin,
-			myUsage,
-			orgQuota,
-			projectsData: admin.projectsData,
-			membersData: admin.membersData,
-			provisioning: admin.provisioning
-		};
+		return { orgId, role, isAdmin, myUsage, orgQuota, projectsData, membersData, provisioning };
 	})();
 
 	return { orgSlug, range, usagePromise: usage };

@@ -1,7 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { clusterPods } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseCpu, parseMemory } from './quantity';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -400,60 +400,8 @@ export class KubernetesService {
     }[]
   > {
     this.ensureKubeConfig();
-    if (!this.kc) return [];
-    try {
-      const api = this.kc.makeApiClient(k8s.CoreV1Api);
-      const res = await api.listPodForAllNamespaces();
-      const out: {
-        nodeName: string | null;
-        namespace: string;
-        podName: string;
-        cpuRequestMilli: number;
-        memoryRequestBytes: number;
-        cpuLimitMilli: number;
-        memoryLimitBytes: number;
-        labels: Record<string, string>;
-      }[] = [];
-      for (const pod of res.body.items) {
-        const phase = pod.status?.phase;
-        if (phase === 'Succeeded' || phase === 'Failed') continue;
-        const containers = pod.spec?.containers || [];
-        let cpuMilli = 0;
-        let memBytes = 0;
-        let cpuLimitMilli = 0;
-        let memLimitBytes = 0;
-        for (const c of containers) {
-          // Requests are what the scheduler packs by; limits are what quota
-          // bills. CPU requests are a fraction of the limit, so the two now
-          // diverge — callers pick whichever question they're asking.
-          const req = c.resources?.requests || {};
-          const lim = c.resources?.limits || {};
-          if (req.cpu) cpuMilli += parseCpu(String(req.cpu));
-          if (req.memory) memBytes += parseMemory(String(req.memory));
-          const cpuLim = lim.cpu ?? req.cpu;
-          const memLim = lim.memory ?? req.memory;
-          if (cpuLim) cpuLimitMilli += parseCpu(String(cpuLim));
-          if (memLim) memLimitBytes += parseMemory(String(memLim));
-        }
-        out.push({
-          nodeName: pod.spec?.nodeName || null,
-          namespace: pod.metadata?.namespace || '',
-          podName: pod.metadata?.name || '',
-          cpuRequestMilli: cpuMilli,
-          memoryRequestBytes: memBytes,
-          cpuLimitMilli,
-          memoryLimitBytes: memLimitBytes,
-          labels: pod.metadata?.labels || {},
-        });
-      }
-      return out;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('[K8s] getClusterPodUsage failed:', message);
-      return [];
-    }
+    return clusterPods(this.kc);
   }
-
 
   async deletePVC(namespace: string, name: string) {
     this.ensureKubeConfig();
