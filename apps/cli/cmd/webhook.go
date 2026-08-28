@@ -3,9 +3,9 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/config"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/config"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

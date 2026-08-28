@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LeafdTK/leaf/cli/internal/buildctx"
-	"github.com/LeafdTK/leaf/cli/internal/config"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/buildctx"
+	"github.com/hackclub/orchard/cli/internal/config"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

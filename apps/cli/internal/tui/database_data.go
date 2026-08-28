@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

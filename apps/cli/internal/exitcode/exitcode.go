@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 // Stable exit codes, documented in `orchard help exit-codes` and AGENTS.md.

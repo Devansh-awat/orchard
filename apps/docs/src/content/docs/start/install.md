@@ -15,7 +15,7 @@ There are two paths, and picking the wrong one causes most install problems.
 ## A bare Linux box
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leafdtk/leaf/main/install/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hackclub/orchard/main/install/install.sh | sudo bash
 ```
 
 It installs k3s, Traefik, CloudNativePG, cert-manager, a `zot` registry for the
@@ -112,7 +112,7 @@ Orchard deploys via the Helm chart. The chart installs Orchard's own components
 and **no cluster operators**: you bring the platform layer below it.
 
 ```bash
-helm install orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard --create-namespace \
   -f my-values.yaml
 ```

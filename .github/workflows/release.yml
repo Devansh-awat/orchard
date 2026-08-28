@@ -15,7 +15,7 @@ jobs:
   # Repository-gated so forks never attempt releases, image pushes, or
   # notifications that need org secrets.
   release-please:
-    if: github.repository == 'LeafdTK/leaf'
+    if: github.repository == 'hackclub/orchard'
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp.outputs.releases_created }}
@@ -175,7 +175,7 @@ jobs:
 
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           helm package infra/charts/orchard -d dist
-          helm push "$(ls dist/*.tgz)" oci://ghcr.io/leafdtk/leaf/charts
+          helm push "$(ls dist/*.tgz)" oci://ghcr.io/hackclub/orchard/charts
 
   deploy-marker:
     needs: [release-please, publish-chart]

@@ -10,10 +10,10 @@
 
 <br>
 
-[![Release](https://github.com/LeafdTK/leaf/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/LeafdTK/leaf/actions/workflows/release.yml)
+[![Release](https://github.com/hackclub/orchard/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/hackclub/orchard/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-c93a4f?labelColor=1a0f11)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-docs.orchard.my-c93a4f?labelColor=1a0f11)](https://docs.orchard.my)
-[![Helm chart](https://img.shields.io/badge/helm-ghcr.io%2Fleafdtk%2Fleaf-c93a4f?labelColor=1a0f11)](https://github.com/LeafdTK/leaf/pkgs/container/leaf%2Fcharts%2Forchard)
+[![Helm chart](https://img.shields.io/badge/helm-ghcr.io%2Fhackclub%2Forchard-c93a4f?labelColor=1a0f11)](https://github.com/hackclub/orchard/pkgs/container/orchard%2Fcharts%2Forchard)
 
 **[Docs](https://docs.orchard.my)** ·
 [Install](https://docs.orchard.my/start/install/) ·
@@ -61,7 +61,7 @@ the data stays on your hardware.
 Got a bare Linux box with nothing on it?
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leafdtk/leaf/main/install/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hackclub/orchard/main/install/install.sh | sudo bash
 ```
 
 It brings its own k3s, Traefik, CloudNativePG, cert-manager and registry. One
@@ -71,7 +71,7 @@ Already running Kubernetes? Use the Helm chart instead, because the installer
 would try to install k3s underneath you:
 
 ```bash
-helm install orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard --create-namespace -f my-values.yaml
 ```
 

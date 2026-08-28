@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 
-	"github.com/LeafdTK/leaf/cli/internal/output"
-	"github.com/LeafdTK/leaf/cli/internal/tui"
+	"github.com/hackclub/orchard/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/tui"
 	"github.com/spf13/cobra"
 )
 

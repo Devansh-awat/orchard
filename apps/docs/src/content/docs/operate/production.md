@@ -124,7 +124,7 @@ For real availability, use the Helm chart on a multi-node cluster and let
 ## 12. Pin your version
 
 ```bash
-helm upgrade orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --version <pinned> -n orchard -f my-values.yaml
 ```
 

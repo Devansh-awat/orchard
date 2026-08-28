@@ -22,14 +22,14 @@
 				class="mt-9 flex flex-wrap items-center justify-center gap-3"
 			>
 				<a
-					href="https://github.com/LeafdTK/leaf"
+					href="https://github.com/hackclub/orchard"
 					{@attach hover()}
 					class="btn btn-lg btn-onpanel"
 				>
 					Run it on your cluster
 				</a>
 				<a
-					href="https://github.com/LeafdTK/leaf"
+					href="https://github.com/hackclub/orchard"
 					class="btn btn-lg text-primary-50 outline-1 -outline-offset-1 outline-white/25 hover:bg-white/8"
 				>
 					Read the source

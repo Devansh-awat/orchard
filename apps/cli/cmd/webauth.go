@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/config"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/config"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 // webLogin runs the browser/loopback login: it opens the Orchard web app, which

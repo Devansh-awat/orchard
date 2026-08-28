@@ -146,13 +146,13 @@ SSH identities and agent credentials are user-level resources managed from user 
 ## CLI walkthrough
 
 ```console
-$ orchard sandbox create leafy --repo https://github.com/leafdtk/leaf --wait
+$ orchard sandbox create leafy --repo https://github.com/hackclub/orchard --wait
 $ orchard sandbox list
-NAME    STATUS    REPO             CREATED        LAST ACTIVE
-leafy   running   leafdtk/leaf     2 minutes ago  just now
+NAME    STATUS    REPO              CREATED        LAST ACTIVE
+leafy   running   hackclub/orchard  2 minutes ago  just now
 1 of 1 sandboxes used
 $ orchard sandbox ssh leafy
-dev@sbx-…:~$ cd leaf && claude
+dev@sbx-…:~$ cd orchard && claude
 ```
 
 `create` auto-loads `~/.ssh/id_ed25519.pub` (then `id_rsa.pub`) when no

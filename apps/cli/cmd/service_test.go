@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/output"
 )
 
 func runServiceCmd(t *testing.T, srv *httptest.Server, args ...string) error {

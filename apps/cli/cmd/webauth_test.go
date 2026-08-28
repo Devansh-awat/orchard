@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LeafdTK/leaf/cli/internal/config"
+	"github.com/hackclub/orchard/cli/internal/config"
 )
 
 // drives webLogin by capturing the printed callback URL and simulating the

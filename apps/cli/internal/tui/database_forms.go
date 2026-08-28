@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

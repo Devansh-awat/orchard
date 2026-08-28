@@ -22,7 +22,7 @@ That values file is the source of truth for the instance. Edit it, run
 ## Chart-based instances
 
 ```bash
-helm upgrade orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard -f my-values.yaml
 ```
 

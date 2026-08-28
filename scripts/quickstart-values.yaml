@@ -1,5 +1,5 @@
 image:
-  repository: leafdtk/leaf
+  repository: hackclub/orchard
 
 datadog:
   enabled: false

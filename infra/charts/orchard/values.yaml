@@ -6,7 +6,7 @@ createNamespace: true
 
 image:
   registry: ghcr.io
-  repository: leafdtk/leaf
+  repository: hackclub/orchard
   # tags default to .Chart.AppVersion; override per-component to pin a sha
   pullPolicy: IfNotPresent
   pullSecrets: []

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/output"
-	"github.com/LeafdTK/leaf/cli/internal/sshproxy"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/sshproxy"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

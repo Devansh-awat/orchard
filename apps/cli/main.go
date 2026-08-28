@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/LeafdTK/leaf/cli/cmd"
+	"github.com/hackclub/orchard/cli/cmd"
 )
 
 func main() {

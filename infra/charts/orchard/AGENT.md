@@ -1,6 +1,6 @@
 # Orchard Helm Chart — Agent Install Guide
 
-Chart published to: `oci://ghcr.io/leafdtk/leaf/charts/orchard:0.1.0`
+Chart published to: `oci://ghcr.io/hackclub/orchard/charts/orchard:0.1.0`
 
 This chart installs the Orchard app stack into a Kubernetes cluster:
 frontend + server + Traefik IngressRoute, a CloudNativePG `Cluster`,
@@ -19,7 +19,7 @@ It does **not** install operators or CRDs. The cluster must already have:
 
 ```bash
 helm install orchard \
-  oci://ghcr.io/leafdtk/leaf/charts/orchard \
+  oci://ghcr.io/hackclub/orchard/charts/orchard \
   --version 0.1.0 \
   --namespace orchard \
   --create-namespace \
@@ -29,7 +29,7 @@ helm install orchard \
 Inspect what will be applied first:
 
 ```bash
-helm template orchard oci://ghcr.io/leafdtk/leaf/charts/orchard --version 0.1.0 -f my-values.yaml | less
+helm template orchard oci://ghcr.io/hackclub/orchard/charts/orchard --version 0.1.0 -f my-values.yaml | less
 ```
 
 ---
@@ -105,7 +105,7 @@ Every key the chart honors, with defaults from `values.yaml`.
 | Key | Default | Description |
 |---|---|---|
 | `image.registry` | `ghcr.io` | Container registry host. |
-| `image.repository` | `leafdtk/leaf` | Repository prefix. Final ref = `{registry}/{repository}/{component}:{tag}`. Matches where CI publishes images; override if pulling from your own registry. |
+| `image.repository` | `hackclub/orchard` | Repository prefix. Final ref = `{registry}/{repository}/{component}:{tag}`. Matches where CI publishes images; override if pulling from your own registry. |
 | `image.pullPolicy` | `IfNotPresent` | Applied to all app containers. |
 | `image.pullSecrets` | `[]` | List of `imagePullSecrets` names. Required if images are private. |
 
@@ -249,7 +249,7 @@ Exposes the secret-name knobs that the server reads at runtime (`PUBLIC_DB_TLS_*
 namespace: orchard
 
 image:
-  repository: leafdtk/leaf
+  repository: hackclub/orchard
   pullSecrets: [ghcr-pull]
 
 frontend:
@@ -322,7 +322,7 @@ server:
 
 ## 6. Image pulls
 
-Images live under `ghcr.io/leafdtk/leaf/{frontend,server,mcp}` and are
+Images live under `ghcr.io/hackclub/orchard/{frontend,server,mcp}` and are
 public by default. If made private, create a pull secret and reference it:
 
 ```yaml
@@ -335,7 +335,7 @@ image:
 ## 7. Upgrades
 
 ```bash
-helm upgrade orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --version <new-version> -n orchard -f my-values.yaml
 ```
 

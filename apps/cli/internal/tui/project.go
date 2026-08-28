@@ -3,7 +3,7 @@ package tui
 import (
 	"fmt"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

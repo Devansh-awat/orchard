@@ -42,8 +42,8 @@ jobs:
             VERSION=${{ inputs.version }}
             BUILDKIT_INLINE_CACHE=1
           tags: |
-            ghcr.io/leafdtk/leaf/${{ inputs.service }}:${{ inputs.version }}
-            ghcr.io/leafdtk/leaf/${{ inputs.service }}:latest
-            ghcr.io/leafdtk/leaf/${{ inputs.service }}:sha-${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/leafdtk/leaf/${{ inputs.service }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/leafdtk/leaf/${{ inputs.service }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
+            ghcr.io/hackclub/orchard/${{ inputs.service }}:${{ inputs.version }}
+            ghcr.io/hackclub/orchard/${{ inputs.service }}:latest
+            ghcr.io/hackclub/orchard/${{ inputs.service }}:sha-${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd

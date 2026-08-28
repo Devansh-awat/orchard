@@ -15,8 +15,8 @@
 			title: 'Self-host',
 			links: [
 				{ href: '#self-host', label: 'Run your own' },
-				{ href: 'https://github.com/LeafdTK/leaf', label: 'Source' },
-				{ href: 'https://github.com/LeafdTK/leaf/blob/main/LICENSE', label: 'License' }
+				{ href: 'https://github.com/hackclub/orchard', label: 'Source' },
+				{ href: 'https://github.com/hackclub/orchard/blob/main/LICENSE', label: 'License' }
 			]
 		},
 		{

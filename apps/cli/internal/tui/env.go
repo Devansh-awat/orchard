@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

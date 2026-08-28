@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/exitcode"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/exitcode"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

@@ -44,7 +44,7 @@
 
 			<a
 				{@attach reveal({ index: 5 })}
-				href="https://github.com/LeafdTK/leaf"
+				href="https://github.com/hackclub/orchard"
 				class="btn btn-lg btn-outline mt-10"
 			>
 				Follow along on GitHub

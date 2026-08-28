@@ -32,7 +32,7 @@ From source:
 ```sh
 go build -o orchard .
 # or install onto PATH
-go install github.com/LeafdTK/leaf/cli@latest
+go install github.com/hackclub/orchard/cli@latest
 ```
 
 ## Auth

@@ -3,7 +3,7 @@
 For a single Linux box with nothing on it yet:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leafdtk/leaf/main/install/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hackclub/orchard/main/install/install.sh | sudo bash
 ```
 
 This is the amateur-friendly path. It creates its own k3s cluster and installs
@@ -144,12 +144,12 @@ sudo ./install.sh --yes \
 
 | Flag | Environment variable | Default |
 |---|---|---|
-| `--chart <ref>` | `ORCHARD_CHART` | `oci://ghcr.io/leafdtk/leaf/charts/orchard` |
+| `--chart <ref>` | `ORCHARD_CHART` | `oci://ghcr.io/hackclub/orchard/charts/orchard` |
 | `--chart-version <semver>` | `ORCHARD_VERSION` | latest |
 | `--image-tag <tag>` | `ORCHARD_IMAGE_TAG` | `latest` |
 | `--image-pull-policy <policy>` | `ORCHARD_IMAGE_PULL_POLICY` | `Always` |
 | `--image-registry <host>` | `ORCHARD_IMAGE_REGISTRY` | `ghcr.io` |
-| `--image-repository <path>` | `ORCHARD_IMAGE_REPOSITORY` | `leafdtk/leaf` |
+| `--image-repository <path>` | `ORCHARD_IMAGE_REPOSITORY` | `hackclub/orchard` |
 
 The image tag is pinned rather than inherited from the chart's `appVersion`,
 because the server and the frontend are versioned independently and one

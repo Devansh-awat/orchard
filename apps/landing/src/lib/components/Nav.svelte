@@ -33,13 +33,13 @@
 
 		<div class="flex flex-1 items-center justify-end gap-3">
 			<a
-				href="https://github.com/LeafdTK/leaf"
+				href="https://github.com/hackclub/orchard"
 				class="text-[0.9375rem] font-medium text-ink-700 transition-colors hover:text-ink-900 max-sm:hidden"
 			>
 				GitHub
 			</a>
 			<ThemeToggle />
-			<a href="https://github.com/LeafdTK/leaf" class="btn btn-md btn-outline max-lg:hidden">Get Orchard</a>
+			<a href="https://github.com/hackclub/orchard" class="btn btn-md btn-outline max-lg:hidden">Get Orchard</a>
 			<button
 				type="button"
 				onclick={() => (open = !open)}
@@ -76,13 +76,13 @@
 					</li>
 				{/each}
 				<li>
-					<a href="https://github.com/LeafdTK/leaf" class="block py-2.5 font-medium text-ink-700">
+					<a href="https://github.com/hackclub/orchard" class="block py-2.5 font-medium text-ink-700">
 						GitHub
 					</a>
 				</li>
 				<li class="pt-3 pb-1">
 					<a
-						href="https://github.com/LeafdTK/leaf"
+						href="https://github.com/hackclub/orchard"
 						class="btn btn-md btn-outline w-full justify-center"
 					>
 						Get Orchard

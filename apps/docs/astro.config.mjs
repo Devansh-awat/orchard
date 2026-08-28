@@ -23,11 +23,11 @@ export default defineConfig({
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/LeafdTK/leaf",
+          href: "https://github.com/hackclub/orchard",
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/LeafdTK/leaf/edit/main/apps/docs/",
+        baseUrl: "https://github.com/hackclub/orchard/edit/main/apps/docs/",
       },
       plugins: [
         starlightOpenAPI([

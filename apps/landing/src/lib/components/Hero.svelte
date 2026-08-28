@@ -37,7 +37,7 @@
         class="mt-9 flex flex-wrap items-center gap-3"
       >
         <a
-          href="https://github.com/LeafdTK/leaf"
+          href="https://github.com/hackclub/orchard"
           {@attach hover()}
           class="btn btn-lg btn-primary"
         >

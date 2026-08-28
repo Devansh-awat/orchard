@@ -53,7 +53,7 @@ You need domains you control:
 ## Install
 
 ```bash
-helm install orchard oci://ghcr.io/leafdtk/leaf/charts/orchard \
+helm install orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
   --namespace orchard --create-namespace \
   -f my-values.yaml
 ```

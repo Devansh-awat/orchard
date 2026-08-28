@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ORCHARD_VERSION=${ORCHARD_VERSION:-}
-CHART_REF=${ORCHARD_CHART:-oci://ghcr.io/leafdtk/leaf/charts/orchard}
+CHART_REF=${ORCHARD_CHART:-oci://ghcr.io/hackclub/orchard/charts/orchard}
 IMAGE_REGISTRY=${ORCHARD_IMAGE_REGISTRY:-ghcr.io}
-IMAGE_REPOSITORY=${ORCHARD_IMAGE_REPOSITORY:-leafdtk/leaf}
+IMAGE_REPOSITORY=${ORCHARD_IMAGE_REPOSITORY:-hackclub/orchard}
 STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
 

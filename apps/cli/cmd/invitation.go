@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/LeafdTK/leaf/cli/internal/api"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

@@ -9,7 +9,7 @@ import (
 
 // DefaultAPIURL can be overridden at build time:
 //
-//	go build -ldflags "-X github.com/LeafdTK/leaf/cli/internal/config.DefaultAPIURL=https://your-orchard.example.com"
+//	go build -ldflags "-X github.com/hackclub/orchard/cli/internal/config.DefaultAPIURL=https://your-orchard.example.com"
 var DefaultAPIURL = "https://orchard.infra.hackclub.com"
 
 type Config struct {

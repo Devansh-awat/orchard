@@ -3,8 +3,8 @@ package cmd
 import (
 	"strconv"
 
-	"github.com/LeafdTK/leaf/cli/internal/exitcode"
-	"github.com/LeafdTK/leaf/cli/internal/output"
+	"github.com/hackclub/orchard/cli/internal/exitcode"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

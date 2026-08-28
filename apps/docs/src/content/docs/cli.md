@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/insta
 Or from source, if you have Go:
 
 ```bash
-go install github.com/LeafdTK/leaf/cli@latest
+go install github.com/hackclub/orchard/cli@latest
 ```
 
 ## Sign in
