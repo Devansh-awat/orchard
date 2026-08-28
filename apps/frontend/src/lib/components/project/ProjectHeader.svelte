@@ -1,21 +1,27 @@
 <script lang="ts">
-	import { Palette, Trash2, Loader2 } from 'lucide-svelte';
+	import { Palette, Trash2, Loader2, Crown } from 'lucide-svelte';
 	import type { Project } from './types';
 
 	let {
 		project,
 		canEdit = false,
 		canDelete = false,
+		canTransferOwnership = false,
+		transferPending = false,
 		deleting = false,
 		onCustomize,
-		onDelete
+		onDelete,
+		onTransferOwnership
 	}: {
 		project: Project;
 		canEdit?: boolean;
 		canDelete?: boolean;
+		canTransferOwnership?: boolean;
+		transferPending?: boolean;
 		deleting?: boolean;
 		onCustomize?: () => void;
 		onDelete?: () => void;
+		onTransferOwnership?: () => void;
 	} = $props();
 </script>
 
@@ -48,6 +54,17 @@
 					title="Customize"
 				>
 					<Palette class="h-4 w-4" />
+				</button>
+			{/if}
+			{#if canTransferOwnership}
+				<button
+					onclick={onTransferOwnership}
+					disabled={transferPending}
+					class="pj-icon-btn pj-icon-btn--danger"
+					aria-label="Transfer ownership"
+					title={transferPending ? 'Transfer already requested' : 'Transfer ownership'}
+				>
+					<Crown class="h-4 w-4" />
 				</button>
 			{/if}
 			{#if canDelete}

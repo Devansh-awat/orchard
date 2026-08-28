@@ -690,6 +690,10 @@ export class ProjectsService {
       backgroundImage,
       members: safeMembers,
       deployments: deploymentsWithComputedStatus,
+      pendingTransfer: await this.getPendingProjectTransfer(project.id, {
+        canEdit: access.canEdit,
+        userId: user.id,
+      }),
       currentUserRole: {
         orgRole: access.orgRole,
         projectRole: access.projectRoleName,
@@ -698,6 +702,7 @@ export class ProjectsService {
         canEdit: access.canEdit,
         canManageMembers: access.canManageMembers,
         canDelete: access.canDelete,
+        canTransferOwnership: this.authz.canTransferProjectOwnership(access, project.ownerId, user.id),
       },
     };
   }
@@ -1101,6 +1106,360 @@ export class ProjectsService {
     return updated;
   }
 
+  private static readonly TRANSFER_REQUEST_TTL_DAYS = 7;
+
+  private static readonly TRANSFER_REQUEST_SHAPE = {
+    id: true,
+    status: true,
+    createdAt: true,
+    expiresAt: true,
+    project: { select: { id: true, name: true, slug: true, organization: { select: { id: true, name: true, slug: true } } } },
+    from: { select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true } },
+    to: { select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true } },
+  } as const;
+
+  /**
+   * The live transfer offer for a project, if any. Folded into the project
+   * payload so both sides of the handshake see the same banner: the sender
+   * gets a "waiting on them" state, the recipient gets accept/decline.
+   *
+   * Pass `viewer` whenever this goes into a response. Viewers already have
+   * member emails nulled by scrubMembersForViewer, and the two parties to a
+   * transfer are members — without the same treatment here, the banner would
+   * hand a read-only member the emails the members list just withheld. The
+   * recipient is the exception: the offer is addressed to them.
+   */
+  async getPendingProjectTransfer(projectId: string, viewer?: { canEdit: boolean; userId: string }) {
+    const transfer = await this.prisma.projectTransferRequest.findFirst({
+      where: { projectId, status: 'pending', expiresAt: { gt: new Date() } },
+      select: ProjectsService.TRANSFER_REQUEST_SHAPE,
+    });
+    if (!transfer || !viewer) return transfer;
+    if (viewer.canEdit || transfer.to.id === viewer.userId) return transfer;
+    return {
+      ...transfer,
+      from: { ...transfer.from, email: null },
+      to: { ...transfer.to, email: null },
+    };
+  }
+
+  /**
+   * Validate a candidate new owner. Project membership is the invariant the
+   * rest of the flow leans on: it proves they are in the org (so they have an
+   * allowance to be billed against) and that they can reach the project they
+   * would become accountable for.
+   */
+  private async resolveTransferRecipient(
+    projectId: string,
+    target: { userId?: string; email?: string },
+    notAMemberMessage = 'The new owner must be a member of this project — add them first, then request the transfer'
+  ) {
+    const targetUserId = target.userId?.trim();
+    const targetEmail = target.email?.toLowerCase().trim();
+    if (!targetUserId && !targetEmail) {
+      throw new BadRequestException('A userId or email for the new owner is required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: targetUserId ? { id: targetUserId } : { email: targetEmail! },
+      select: { id: true, email: true, username: true },
+    });
+    if (!user) throw new NotFoundException('The new owner does not have an Orchard account');
+
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId, userId: user.id },
+      select: { id: true, roleId: true, role: { select: { name: true } } },
+    });
+    if (!membership) throw new BadRequestException(notAMemberMessage);
+
+    return { user, membership };
+  }
+
+  /**
+   * Open a transfer request. `Project.ownerId` is what every deployment and
+   * database under the project is billed against, so handing it over spends
+   * somebody else's allowance — which is exactly why this only opens an offer.
+   * Nothing moves until the recipient accepts.
+   */
+  async requestProjectOwnershipTransfer(
+    projectId: string,
+    target: { userId?: string; email?: string },
+    requestedByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const actor = await this.usersService.findOrCreateByClerkId(requestedByClerkId, userData);
+    if (!actor) throw new NotFoundException('User requesting the transfer not found');
+
+    await this.authz.requireProjectOwnershipTransfer(projectId, actor.id);
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true, organizationId: true, ownerId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const { user: recipient } = await this.resolveTransferRecipient(projectId, target);
+    if (recipient.id === project.ownerId) {
+      throw new BadRequestException('That user already owns this project');
+    }
+
+    const open = await this.getPendingProjectTransfer(projectId);
+    if (open) {
+      throw new ConflictException(
+        `This project already has a pending transfer to ${open.to.email}. Cancel it before opening another.`
+      );
+    }
+
+    // Fail fast so the sender learns about a quota wall now rather than
+    // leaving the recipient to hit it on accept. The authoritative check runs
+    // again at accept time, since usage moves in between.
+    await this.quotasService.enforceMemberAllowanceForProjectTransfer(
+      project.organizationId,
+      recipient.id,
+      projectId
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + ProjectsService.TRANSFER_REQUEST_TTL_DAYS);
+
+    // Stale rows keep the partial unique index from doing its job (it matches
+    // on status alone and can't see expiry), so the sweep of any expired
+    // request and the insert go together.
+    const created = await this.prisma
+      .$transaction(async (tx) => {
+        await tx.projectTransferRequest.updateMany({
+          where: { projectId, status: 'pending', expiresAt: { lte: new Date() } },
+          data: { status: 'canceled', respondedAt: new Date() },
+        });
+        return tx.projectTransferRequest.create({
+          data: { projectId, fromUserId: actor.id, toUserId: recipient.id, expiresAt },
+          select: ProjectsService.TRANSFER_REQUEST_SHAPE,
+        });
+      })
+      .catch((e) => {
+        // The check above is not atomic with the insert, so two admins acting
+        // at once both reach here and the index rejects the loser. That's the
+        // intended outcome, but it has to read as a conflict, not a 500.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new ConflictException('This project already has a pending ownership transfer');
+        }
+        throw e;
+      });
+
+    void this.audit.log({
+      action: 'project.ownership.transfer_requested',
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      organizationId: project.organizationId,
+      projectId,
+      targetType: 'user',
+      targetId: recipient.id,
+      targetLabel: recipient.email,
+      metadata: { requestId: created.id, expiresAt: expiresAt.toISOString() },
+    });
+
+    return created;
+  }
+
+  async cancelProjectOwnershipTransfer(
+    projectId: string,
+    canceledByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const actor = await this.usersService.findOrCreateByClerkId(canceledByClerkId, userData);
+    if (!actor) throw new NotFoundException('User canceling the transfer not found');
+
+    await this.authz.requireProjectOwnershipTransfer(projectId, actor.id);
+
+    const open = await this.getPendingProjectTransfer(projectId);
+    if (!open) throw new NotFoundException('This project has no pending ownership transfer');
+
+    await this.prisma.projectTransferRequest.update({
+      where: { id: open.id },
+      data: { status: 'canceled', respondedAt: new Date() },
+    });
+
+    void this.audit.log({
+      action: 'project.ownership.transfer_canceled',
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      organizationId: open.project.organization.id,
+      projectId,
+      targetType: 'user',
+      targetId: open.to.id,
+      targetLabel: open.to.email,
+      metadata: { requestId: open.id },
+    });
+
+    return { success: true };
+  }
+
+  /** Every live offer addressed to the caller, across every org they're in. */
+  async listIncomingProjectTransfers(
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.prisma.projectTransferRequest.findMany({
+      where: { toUserId: user.id, status: 'pending', expiresAt: { gt: new Date() } },
+      select: ProjectsService.TRANSFER_REQUEST_SHAPE,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Only the addressee can act on a request, and only on their own — the
+   * permission gate here is recipient identity, not project role. Everything
+   * checked at request time is re-checked, because a week can pass in between:
+   * the recipient can have been removed from the project, and their allowance
+   * can have filled up with other work.
+   */
+  private async loadTransferForRecipient(requestId: string, userId: string) {
+    const request = await this.prisma.projectTransferRequest.findUnique({
+      where: { id: requestId },
+      select: { ...ProjectsService.TRANSFER_REQUEST_SHAPE, toUserId: true, fromUserId: true },
+    });
+    // Same 404 for "not yours" as for "doesn't exist" — a request id must not
+    // be an oracle for the existence of somebody else's project transfer.
+    if (!request || request.toUserId !== userId) {
+      throw new NotFoundException('Ownership transfer request not found');
+    }
+    if (request.status !== 'pending') {
+      throw new BadRequestException(`This transfer request was already ${request.status}`);
+    }
+    if (request.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('This transfer request has expired');
+    }
+    return request;
+  }
+
+  async acceptProjectTransfer(
+    requestId: string,
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const request = await this.loadTransferForRecipient(requestId, user.id);
+    const projectId = request.project.id;
+
+    // The request side authorizes through requireProjectOwnershipTransfer,
+    // which picks up API-token project-scoping and tenant confinement on the
+    // way. Answering a request is authorized by recipient identity alone, so
+    // without this the accept path would be the one place a project-scoped
+    // token or an off-tenant session could still move ownership.
+    await this.authz.requireProjectView(projectId, user.id);
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, organizationId: true, ownerId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    if (project.ownerId === user.id) {
+      throw new BadRequestException('You already own this project');
+    }
+
+    const { membership } = await this.resolveTransferRecipient(
+      projectId,
+      { userId: user.id },
+      'You are no longer a member of this project, so ownership cannot be transferred to you'
+    );
+
+    await this.quotasService.enforceMemberAllowanceForProjectTransfer(
+      project.organizationId,
+      user.id,
+      projectId
+    );
+
+    const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
+    if (!adminRole) throw new BadRequestException('The admin role is missing from this instance');
+    // Whoever carries the bill needs to be able to administer what is running
+    // it up, so accepting also lifts the new owner to project admin. The old
+    // owner keeps whatever role they already had.
+    const promoted = membership.roleId !== adminRole.id;
+
+    const previousOwner = project.ownerId
+      ? await this.prisma.user.findUnique({
+          where: { id: project.ownerId },
+          select: { id: true, email: true, username: true },
+        })
+      : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.project.update({ where: { id: projectId }, data: { ownerId: user.id } });
+      if (promoted) {
+        await tx.projectMember.update({ where: { id: membership.id }, data: { roleId: adminRole.id } });
+      }
+      await tx.projectTransferRequest.update({
+        where: { id: request.id },
+        data: { status: 'accepted', respondedAt: new Date() },
+      });
+    });
+
+    if (promoted) {
+      await this.sessions.revokeUserSessions(user.id).catch(() => {});
+    }
+
+    void this.audit.log({
+      action: 'project.ownership.transferred',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email,
+      metadata: {
+        requestId: request.id,
+        owner: [previousOwner?.email ?? null, user.email],
+        requestedBy: request.from.email,
+      },
+    });
+
+    return {
+      success: true,
+      projectId,
+      previousOwner: previousOwner
+        ? { id: previousOwner.id, username: previousOwner.username, email: previousOwner.email }
+        : null,
+      owner: { id: user.id, username: user.username, email: user.email },
+      promotedToAdmin: promoted,
+    };
+  }
+
+  async declineProjectTransfer(
+    requestId: string,
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const request = await this.loadTransferForRecipient(requestId, user.id);
+
+    await this.prisma.projectTransferRequest.update({
+      where: { id: request.id },
+      data: { status: 'declined', respondedAt: new Date() },
+    });
+
+    void this.audit.log({
+      action: 'project.ownership.transfer_declined',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: request.project.organization.id,
+      projectId: request.project.id,
+      targetType: 'user',
+      targetId: request.from.id,
+      targetLabel: request.from.email,
+      metadata: { requestId: request.id },
+    });
+
+    return { success: true };
+  }
+
   async getProjectBySlug(organizationId: string, slug: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -1414,6 +1773,10 @@ export class ProjectsService {
       pendingInvitations,
       deployments: deploymentsWithComputedStatus,
       databases: safeDatabases,
+      pendingTransfer: await this.getPendingProjectTransfer(project.id, {
+        canEdit: access.canEdit,
+        userId: user.id,
+      }),
       currentUserRole: {
         orgRole: access.orgRole,
         projectRole: access.projectRoleName,
@@ -1422,6 +1785,7 @@ export class ProjectsService {
         canEdit: access.canEdit,
         canManageMembers: access.canManageMembers,
         canDelete: access.canDelete,
+        canTransferOwnership: this.authz.canTransferProjectOwnership(access, project.ownerId, user.id),
       },
     };
   }

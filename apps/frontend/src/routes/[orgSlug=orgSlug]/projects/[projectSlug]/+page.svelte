@@ -4,7 +4,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
 	import { springPop, motionEnabled, transition } from '$lib/utils/motion.svelte';
-	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
+	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor, user } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
 	import { SpatialMenu } from 'melt/builders';
@@ -21,7 +21,9 @@
 		ResourcesTab,
 		ComposeTab,
 		MembersTab,
-		CustomizeModal
+		CustomizeModal,
+		TransferOwnershipModal,
+		TransferBanner
 	} from '$lib/components/project';
 	import { SharedVarsEditor } from '$lib/components/environment';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
@@ -64,6 +66,7 @@
 	const canEdit = $derived(project?.currentUserRole?.canEdit ?? false);
 	const canManageMembers = $derived(project?.currentUserRole?.canManageMembers ?? false);
 	const canDelete = $derived(project?.currentUserRole?.canDelete ?? false);
+	const canTransferOwnership = $derived(project?.currentUserRole?.canTransferOwnership ?? false);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 	let databases = $state<DatabaseSummary[]>([]);
 	let loading = $state(true);
@@ -82,6 +85,13 @@
 	let showCustomize = $state(false);
 	let removingMemberId = $state<string | null>(null);
 	let updatingMemberId = $state<string | null>(null);
+	let showTransferModal = $state(false);
+	let requestingTransfer = $state(false);
+	let respondingToTransfer = $state<'accept' | 'decline' | 'cancel' | null>(null);
+	const pendingTransfer = $derived(project?.pendingTransfer ?? null);
+	const viewerIsTransferRecipient = $derived(
+		!!pendingTransfer && !!$user?.id && pendingTransfer.to.id === $user.id
+	);
 	let openRoleMenuId = $state<string | null>(null);
 	let activeTab = $state<'resources' | 'compose' | 'members'>('resources');
 	let memberSearch = $state('');
@@ -370,6 +380,95 @@
 			});
 		} finally {
 			removingMemberId = null;
+		}
+	}
+
+	async function requestTransfer(userId: string) {
+		if (!project) return;
+		requestingTransfer = true;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/transfer-request`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ userId })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to request the transfer');
+			}
+			showTransferModal = false;
+			toasts.add({
+				title: 'Transfer requested',
+				description: 'Ownership moves once they accept',
+				color: 'success'
+			});
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to request the transfer',
+				color: 'error'
+			});
+		} finally {
+			requestingTransfer = false;
+		}
+	}
+
+	async function cancelTransfer() {
+		if (!project) return;
+		respondingToTransfer = 'cancel';
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/transfer-request`, {
+				method: 'DELETE'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to cancel the transfer');
+			}
+			toasts.add({ title: 'Transfer canceled', color: 'success' });
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to cancel the transfer',
+				color: 'error'
+			});
+		} finally {
+			respondingToTransfer = null;
+		}
+	}
+
+	async function respondToTransfer(action: 'accept' | 'decline') {
+		const transfer = project?.pendingTransfer;
+		if (!transfer) return;
+		respondingToTransfer = action;
+		try {
+			const response = await apiFetch(`/apiv1/project-transfers/${transfer.id}/${action}`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || `Failed to ${action} the transfer`);
+			}
+			if (action === 'accept') {
+				const result = await response.json().catch(() => ({}));
+				toasts.add({
+					title: 'You now own this project',
+					description: result.promotedToAdmin ? 'Your project role was raised to admin' : undefined,
+					color: 'success'
+				});
+			} else {
+				toasts.add({ title: 'Transfer declined', color: 'success' });
+			}
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : `Failed to ${action} the transfer`,
+				color: 'error'
+			});
+		} finally {
+			respondingToTransfer = null;
 		}
 	}
 
@@ -679,19 +778,39 @@
 					{activeTab}
 					{canEdit}
 					{canDelete}
+					{canTransferOwnership}
+					transferPending={!!pendingTransfer}
 					{deleting}
 					bind:heroImgReady
 					onCustomize={() => (showCustomize = true)}
 					onDelete={() => (showDeleteModal = true)}
+					onTransferOwnership={() => (showTransferModal = true)}
 				/>
 			{:else}
 				<ProjectHeader
 					{project}
 					{canEdit}
 					{canDelete}
+					{canTransferOwnership}
+					transferPending={!!pendingTransfer}
 					{deleting}
 					onCustomize={() => (showCustomize = true)}
 					onDelete={() => (showDeleteModal = true)}
+					onTransferOwnership={() => (showTransferModal = true)}
+				/>
+			{/if}
+
+			{#if pendingTransfer && $user}
+				<TransferBanner
+					transfer={pendingTransfer}
+					isRecipient={viewerIsTransferRecipient}
+					canCancel={canTransferOwnership}
+					accepting={respondingToTransfer === 'accept'}
+					declining={respondingToTransfer === 'decline'}
+					canceling={respondingToTransfer === 'cancel'}
+					onaccept={() => respondToTransfer('accept')}
+					ondecline={() => respondToTransfer('decline')}
+					oncancel={cancelTransfer}
 				/>
 			{/if}
 
@@ -764,6 +883,8 @@
 						{pendingInvitations}
 						{canManageMembers}
 						{canEdit}
+						{canTransferOwnership}
+						ownerId={project.ownerId ?? null}
 						bind:memberSearch
 						{filteredOrgMembers}
 						{addingMember}
@@ -798,6 +919,15 @@
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}
+	/>
+
+	<TransferOwnershipModal
+		bind:open={showTransferModal}
+		projectName={project.name}
+		{projectMembers}
+		ownerId={project.ownerId ?? null}
+		submitting={requestingTransfer}
+		onrequest={requestTransfer}
 	/>
 
 	<CustomizeModal

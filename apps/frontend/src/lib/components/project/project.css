@@ -960,6 +960,23 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	border: 1px solid var(--surface-border);
 	vertical-align: middle;
 }
+.owner-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.15rem;
+	margin-left: 0.4rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: var(--radius-pill);
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	color: var(--accent);
+	border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+	vertical-align: middle;
+}
 .pj-member-email {
 	font-size: var(--text-micro);
 	line-height: var(--lh-micro);

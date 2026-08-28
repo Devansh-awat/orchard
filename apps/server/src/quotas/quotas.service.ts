@@ -635,6 +635,57 @@ export class QuotasService {
     }
   }
 
+  // Everything a single project currently requests, with the same
+  // replica arithmetic getMemberUsage applies to an owner's whole portfolio.
+  async getProjectRequestedResources(projectId: string): Promise<{ cpuMilli: number; memoryBytes: number }> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        deployments: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } },
+        databases: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } },
+      },
+    });
+    if (!project) return { cpuMilli: 0, memoryBytes: 0 };
+    let cpu = 0;
+    let mem = 0;
+    for (const row of [...project.deployments, ...project.databases]) {
+      const instances = Math.max(1, row.replicas ?? 1);
+      cpu += (row.cpuRequestMilli ?? 0) * instances;
+      mem += (row.memoryRequestBytes ? Number(row.memoryRequestBytes) : 0) * instances;
+    }
+    return { cpuMilli: cpu, memoryBytes: mem };
+  }
+
+  // Throws if handing `projectId` to `newOwnerId` would push them past their
+  // allowance. Ownership is what getMemberUsage sums over, so a transfer moves
+  // the project's entire request from one member's budget onto another's in
+  // one step — far bigger than any single deploy, and never checked anywhere
+  // else. Caller must reject a no-op transfer first: if `newOwnerId` already
+  // owns the project, getMemberUsage already counts it and this double-counts.
+  async enforceMemberAllowanceForProjectTransfer(
+    organizationId: string,
+    newOwnerId: string,
+    projectId: string,
+  ) {
+    const allowance = await this.resolveMemberAllowance(organizationId, newOwnerId);
+    if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
+    const requested = await this.getProjectRequestedResources(projectId);
+    const usage = await this.getMemberUsage(organizationId, newOwnerId);
+    if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {
+      throw new ForbiddenException(
+        `Transfer would exceed the new owner's CPU allowance: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`,
+      );
+    }
+    if (
+      allowance.memoryBytes !== null &&
+      usage.memoryBytes + requested.memoryBytes > allowance.memoryBytes
+    ) {
+      throw new ForbiddenException(
+        `Transfer would exceed the new owner's memory allowance: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`,
+      );
+    }
+  }
+
   // Sum of all members' effective allowance — used to validate that admins don't oversell the org.
   // `Unlimited` members contribute 0 to the sum (they don't reserve a share).
   // Pass overrides to compute as if a specific member or default were changed.

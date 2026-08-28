@@ -422,6 +422,34 @@ export class AuthorizationService {
     return access;
   }
 
+  /**
+   * Ownership transfer is deliberately narrower than member management.
+   * `Project.ownerId` is what every deployment and database in the project is
+   * billed against, so handing it over spends somebody else's allowance — a
+   * project admin who doesn't own the project must not be able to do that to
+   * the person who does. Org admins/owners keep the escape hatch they need to
+   * reassign projects when a member leaves.
+   */
+  canTransferProjectOwnership(access: ProjectAccess, ownerId: string | null, userId: string): boolean {
+    if (access.source === 'superadmin') return true;
+    if (access.orgRole === 'owner' || access.orgRole === 'admin') return true;
+    return !!ownerId && ownerId === userId;
+  }
+
+  async requireProjectOwnershipTransfer(projectId: string, userId: string): Promise<ProjectAccess> {
+    const access = await this.requireProjectView(projectId, userId);
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    if (!this.canTransferProjectOwnership(access, project?.ownerId ?? null, userId)) {
+      throw new ForbiddenException(
+        'Only the project owner or an organization admin can transfer ownership of this project',
+      );
+    }
+    return access;
+  }
+
   async requireProjectDelete(projectId: string, userId: string): Promise<ProjectAccess> {
     const access = await this.requireProjectView(projectId, userId);
     if (!access.canDelete) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Users, Loader2, Trash2, ChevronDown, Check, Mail, UserPlus } from 'lucide-svelte';
+	import { Users, Loader2, Trash2, ChevronDown, Check, Mail, UserPlus, Crown } from 'lucide-svelte';
 	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
@@ -11,6 +11,7 @@
 		pendingInvitations = [],
 		canManageMembers = false,
 		canEdit = false,
+		ownerId = null,
 		memberSearch = $bindable(''),
 		filteredOrgMembers,
 		addingMember = false,
@@ -28,6 +29,7 @@
 		pendingInvitations?: PendingInvitation[];
 		canManageMembers?: boolean;
 		canEdit?: boolean;
+		ownerId?: string | null;
 		memberSearch?: string;
 		filteredOrgMembers: OrgMember[];
 		addingMember?: boolean;
@@ -247,6 +249,15 @@
 							<span class="pj-member-name">
 								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user
 											.lastName}{/if}{:else}{m.user.email}{/if}
+								{#if m.user.id === ownerId}
+									<span
+										class="owner-pill"
+										title="Everything running in this project is billed against the owner's resource allowance"
+									>
+										<Crown size={9} />
+										Owner
+									</span>
+								{/if}
 								{#if m.orgRole === 'guest'}
 									<span
 										class="guest-pill"

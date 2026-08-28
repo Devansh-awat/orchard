@@ -32,8 +32,172 @@ func projectCmd() *cobra.Command {
 		projectBackgroundCmd(),
 		projectMemberCmd(),
 		projectInvitationCmd(),
+		projectTransferCmd(),
 	)
 	return c
+}
+
+func projectTransferCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "transfer",
+		Short: "Transfer ownership of a project to another member",
+		Long: "Ownership decides whose resource allowance a project's apps and databases are " +
+			"billed against, so it moves in two steps: the current owner (or an org admin) " +
+			"opens a request, and the recipient accepts it. The new owner must already be a " +
+			"member of the project and becomes a project admin on accept.",
+	}
+	c.AddCommand(
+		projectTransferRequestCmd(),
+		projectTransferCancelCmd(),
+		projectTransferListCmd(),
+		projectTransferAcceptCmd(),
+		projectTransferDeclineCmd(),
+	)
+	return c
+}
+
+func transferTarget(arg string) map[string]any {
+	if strings.Contains(arg, "@") {
+		return map[string]any{"email": arg}
+	}
+	return map[string]any{"userId": arg}
+}
+
+func projectTransferRequestCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "request <email|userId>",
+		Short: "Ask another project member to take ownership of the scoped project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, cfg, err := client()
+			if err != nil {
+				return err
+			}
+			projectID, err := requireProject(cmd.Context(), cl, cfg)
+			if err != nil {
+				return err
+			}
+			var raw map[string]any
+			path := "/projects/" + url.PathEscape(projectID) + "/transfer-request"
+			if err := cl.Send(cmd.Context(), http.MethodPost, path, transferTarget(args[0]), &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			output.Successf("transfer requested — waiting for %s to accept", args[0])
+			return nil
+		},
+	}
+}
+
+func projectTransferCancelCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "cancel",
+		Short: "Withdraw the scoped project's pending ownership transfer",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, cfg, err := client()
+			if err != nil {
+				return err
+			}
+			projectID, err := requireProject(cmd.Context(), cl, cfg)
+			if err != nil {
+				return err
+			}
+			path := "/projects/" + url.PathEscape(projectID) + "/transfer-request"
+			if err := cl.Send(cmd.Context(), http.MethodDelete, path, nil, nil); err != nil {
+				return err
+			}
+			output.Successf("ownership transfer canceled")
+			return nil
+		},
+	}
+}
+
+func projectTransferListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List ownership transfers waiting on you",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var raw []map[string]any
+			if err := cl.GetJSON(cmd.Context(), "/project-transfers", &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			rows := [][]string{}
+			for _, r := range raw {
+				project, _ := r["project"].(map[string]any)
+				from, _ := r["from"].(map[string]any)
+				rows = append(rows, []string{
+					str(r["id"]),
+					str(project["name"]),
+					str(from["email"]),
+					str(r["expiresAt"]),
+				})
+			}
+			output.Table([]string{"request id", "project", "from", "expires"}, rows)
+			return nil
+		},
+	}
+}
+
+func projectTransferAcceptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "accept <requestId>",
+		Short: "Accept ownership of a project offered to you",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			if err := output.Confirm("everything in this project will be billed against your resource allowance. accept?", yesFlag); err != nil {
+				return err
+			}
+			var raw map[string]any
+			path := "/project-transfers/" + url.PathEscape(args[0]) + "/accept"
+			if err := cl.Send(cmd.Context(), http.MethodPost, path, nil, &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			output.Successf("you now own this project")
+			if promoted, _ := raw["promotedToAdmin"].(bool); promoted {
+				output.Successf("your project role was raised to admin")
+			}
+			return nil
+		},
+	}
+}
+
+func projectTransferDeclineCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "decline <requestId>",
+		Short: "Decline ownership of a project offered to you",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			path := "/project-transfers/" + url.PathEscape(args[0]) + "/decline"
+			if err := cl.Send(cmd.Context(), http.MethodPost, path, nil, nil); err != nil {
+				return err
+			}
+			output.Successf("transfer declined")
+			return nil
+		},
+	}
 }
 
 func projectListCmd() *cobra.Command {

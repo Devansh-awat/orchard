@@ -40,6 +40,36 @@ export interface ProjectMember {
 	};
 }
 
+export interface TransferParty {
+	id: string;
+	email: string | null;
+	username?: string | null;
+	firstName?: string | null;
+	lastName?: string | null;
+	imageUrl?: string | null;
+}
+
+export interface PendingTransfer {
+	id: string;
+	status: string;
+	createdAt: string;
+	expiresAt: string;
+	project: {
+		id: string;
+		name: string;
+		slug: string;
+		organization: { id: string; name: string; slug: string };
+	};
+	from: TransferParty;
+	to: TransferParty;
+}
+
+export function transferPartyName(p: TransferParty) {
+	const name = [p.firstName, p.lastName].filter(Boolean).join(' ');
+	// email is nulled for read-only members, so it can't be the last resort
+	return name || p.username || p.email || 'A project member';
+}
+
 export interface Project {
 	id: string;
 	name: string;
@@ -50,9 +80,11 @@ export interface Project {
 	icon?: string | null;
 	backgroundImage?: string | null;
 	owner?: { username: string | null } | null;
+	ownerId?: string | null;
 	deployments?: Deployment[];
 	members?: ProjectMember[];
 	pendingInvitations?: PendingInvitation[];
+	pendingTransfer?: PendingTransfer | null;
 	organization?: {
 		id: string;
 		name: string;
@@ -66,6 +98,7 @@ export interface Project {
 		canEdit: boolean;
 		canManageMembers?: boolean;
 		canDelete?: boolean;
+		canTransferOwnership?: boolean;
 	};
 }
 

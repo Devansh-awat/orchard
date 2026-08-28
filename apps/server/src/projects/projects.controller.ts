@@ -481,6 +481,37 @@ export class ProjectsController {
     );
   }
 
+  @Post(':id/transfer-request')
+  async requestProjectOwnershipTransfer(
+    @Param('id') id: string,
+    @Body() body: { userId?: string; email?: string },
+    @Request() req
+  ) {
+    return this.projectsService.requestProjectOwnershipTransfer(
+      id,
+      { userId: body.userId, email: body.email },
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Delete(':id/transfer-request')
+  async cancelProjectOwnershipTransfer(@Param('id') id: string, @Request() req) {
+    return this.projectsService.cancelProjectOwnershipTransfer(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Post(':id/databases')
 
   async createDatabase(

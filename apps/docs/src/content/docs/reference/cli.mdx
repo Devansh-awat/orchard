@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **303 commands** are available.
+override the saved context. **309 commands** are available.
 
 ## api
 
@@ -2508,6 +2508,56 @@ Pull live cluster state for the project's namespace into Orchard
 
 ```bash
 orchard sync <project>
+```
+
+### `orchard project transfer`
+
+Transfer ownership of a project to another member
+
+```bash
+orchard transfer
+```
+
+### `orchard project transfer accept`
+
+Accept ownership of a project offered to you
+
+```bash
+orchard accept <requestId>
+```
+
+### `orchard project transfer cancel`
+
+Withdraw the scoped project's pending ownership transfer
+
+```bash
+orchard cancel
+```
+
+### `orchard project transfer decline`
+
+Decline ownership of a project offered to you
+
+```bash
+orchard decline <requestId>
+```
+
+### `orchard project transfer list`
+
+List ownership transfers waiting on you
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+### `orchard project transfer request`
+
+Ask another project member to take ownership of the scoped project
+
+```bash
+orchard request <email|userId>
 ```
 
 ### `orchard project update`

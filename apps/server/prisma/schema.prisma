@@ -42,6 +42,8 @@ model User {
   projectInvitations         ProjectInvitation[]      @relation("ProjectInvitedBy")
   receivedProjectInvitations ProjectInvitation[]      @relation("ProjectInvitedUser")
   addedProjectMembers        ProjectMember[]          @relation("ProjectMemberAdder")
+  sentProjectTransfers       ProjectTransferRequest[] @relation("ProjectTransferFrom")
+  receivedProjectTransfers   ProjectTransferRequest[] @relation("ProjectTransferTo")
   createdDeployments         Deployment[]             @relation("DeploymentCreator")
   createdOrganizations       Organization[]           @relation("OrganizationCreator")
   organizationMembers        OrganizationMember[]
@@ -442,6 +444,7 @@ model Project {
   owner             User?                    @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members           ProjectMember[]
   invitations       ProjectInvitation[]
+  transferRequests  ProjectTransferRequest[]
   orgInvitations    OrganizationInvitation[]
   deployments       Deployment[]
   ingresses         Ingress[]
@@ -520,6 +523,38 @@ model ProjectMember {
   @@index([projectId], map: "idx_project_members_project")
   @@index([userId], map: "idx_project_members_user")
   @@map("project_members")
+}
+
+// Ownership moves in two steps: the current owner (or an org admin) opens a
+// request, and the recipient accepts it. Ownership decides whose resource
+// allowance the project's pods are billed against, so it is never something
+// that can be pushed onto someone without their consent.
+model ProjectTransferRequest {
+  id          String                @id @default(uuid()) @db.Uuid
+  projectId   String                @map("project_id") @db.Uuid
+  fromUserId  String                @map("from_user_id") @db.Uuid
+  toUserId    String                @map("to_user_id") @db.Uuid
+  status      ProjectTransferStatus @default(pending)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(6)
+  expiresAt   DateTime              @map("expires_at") @db.Timestamp(6)
+  respondedAt DateTime?             @map("responded_at") @db.Timestamp(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  from    User    @relation("ProjectTransferFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to      User    @relation("ProjectTransferTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_project_transfers_project")
+  @@index([toUserId, status], map: "idx_project_transfers_recipient")
+  @@map("project_transfer_requests")
+}
+
+enum ProjectTransferStatus {
+  pending
+  accepted
+  declined
+  canceled
+
+  @@map("project_transfer_status")
 }
 
 model ProjectInvitation {

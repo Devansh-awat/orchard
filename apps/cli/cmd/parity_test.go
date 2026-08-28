@@ -72,6 +72,11 @@ var routeCoverage = map[string]string{
 	"POST /projects/:id/members":                     "project member add",
 	"DELETE /projects/:id/members/:memberId":         "project member remove",
 	"PATCH /projects/:id/members/:memberId":          "project member set-role",
+	"POST /projects/:id/transfer-request":            "project transfer request",
+	"DELETE /projects/:id/transfer-request":          "project transfer cancel",
+	"GET /project-transfers":                         "project transfer list",
+	"POST /project-transfers/:id/accept":             "project transfer accept",
+	"POST /project-transfers/:id/decline":            "project transfer decline",
 	"DELETE /projects/:id/invitations/:invitationId": "project invitation revoke",
 
 	// environments + shared vars

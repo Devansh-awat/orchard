@@ -5,6 +5,8 @@ export { default as ResourcesTab } from './ResourcesTab.svelte';
 export { default as ComposeTab } from './ComposeTab.svelte';
 export { default as MembersTab } from './MembersTab.svelte';
 export { default as CustomizeModal } from './CustomizeModal.svelte';
+export { default as TransferOwnershipModal } from './TransferOwnershipModal.svelte';
+export { default as TransferBanner } from './TransferBanner.svelte';
 export type {
 	Project,
 	Deployment,
@@ -14,6 +16,8 @@ export type {
 	DatabaseSummary,
 	ComposeStackSummary,
 	OrgMember,
-	PendingInvitation
+	PendingInvitation,
+	PendingTransfer,
+	TransferParty
 } from './types';
-export { ROLE_OPTIONS } from './types';
+export { ROLE_OPTIONS, transferPartyName } from './types';
