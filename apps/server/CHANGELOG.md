@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.17.0](https://github.com/LeafdTK/leaf/compare/server/v2.16.0...server/v2.17.0) (2026-08-28)
+
+
+### Features
+
+* transfer project ownership by request and accept ([36bf9a7](https://github.com/LeafdTK/leaf/commit/36bf9a761fd7ae0e4df84e29fe6e11ac09a70e37))
+
+
+### Bug Fixes
+
+* reconcile the pod mirror when a replica becomes leader ([5d17a64](https://github.com/LeafdTK/leaf/commit/5d17a6498084e1183c20aab2046fee77fb9669ff))
+* share one cluster snapshot instead of four full pod lists ([3e3bdc8](https://github.com/LeafdTK/leaf/commit/3e3bdc8d7fda779e897d2bea7e80f4eac21aa6e1))
+
 ## [2.16.0](https://github.com/LeafdTK/leaf/compare/server/v2.15.0...server/v2.16.0) (2026-08-27)
 
 

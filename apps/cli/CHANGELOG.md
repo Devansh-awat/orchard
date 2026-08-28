@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/LeafdTK/leaf/compare/cli/v0.11.0...cli/v0.12.0) (2026-08-28)
+
+
+### Features
+
+* transfer project ownership by request and accept ([36bf9a7](https://github.com/LeafdTK/leaf/commit/36bf9a761fd7ae0e4df84e29fe6e11ac09a70e37))
+
 ## [0.11.0](https://github.com/LeafdTK/leaf/compare/cli/v0.10.0...cli/v0.11.0) (2026-08-27)
 
 

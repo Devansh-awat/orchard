@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.16.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.15.0...frontend/v1.16.0) (2026-08-28)
+
+
+### Features
+
+* rebuild the usage page around what you have left to spend ([e8c040d](https://github.com/LeafdTK/leaf/commit/e8c040d4b6573104bea14ccfb34a517690cf78b1))
+* transfer project ownership by request and accept ([36bf9a7](https://github.com/LeafdTK/leaf/commit/36bf9a761fd7ae0e4df84e29fe6e11ac09a70e37))
+
+
+### Bug Fixes
+
+* drop the deleted project from the overview cache before leaving the page ([7b46f64](https://github.com/LeafdTK/leaf/commit/7b46f6408011e9aa16293e53384e2126271cdcb1))
+* move the command line entry into the sidebar menu that renders ([2defda8](https://github.com/LeafdTK/leaf/commit/2defda8d5110241e60fe28bd9740ad345de4b7bc))
+* share one cluster snapshot instead of four full pod lists ([3e3bdc8](https://github.com/LeafdTK/leaf/commit/3e3bdc8d7fda779e897d2bea7e80f4eac21aa6e1))
+
 ## [1.15.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.14.0...frontend/v1.15.0) (2026-08-27)
 
 
