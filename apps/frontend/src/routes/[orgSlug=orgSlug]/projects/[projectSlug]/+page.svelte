@@ -242,9 +242,10 @@
 	// --- Actions ---
 	async function deleteProject() {
 		if (!project) return;
+		const deletedId = project.id;
 		deleting = true;
 		try {
-			const response = await apiFetch(`/apiv1/projects/${project.id}`, { method: 'DELETE' });
+			const response = await apiFetch(`/apiv1/projects/${deletedId}`, { method: 'DELETE' });
 			if (!response.ok) {
 				let errorMessage = 'Failed to delete project';
 				try {
@@ -263,6 +264,15 @@
 				description: `${project.name} has been deleted`,
 				color: 'success'
 			});
+			queryClient.setQueryData(
+				['overview', orgSlug],
+				(prev: { projects?: { id: string }[] } | undefined) =>
+					prev
+						? { ...prev, projects: (prev.projects ?? []).filter((p) => p.id !== deletedId) }
+						: prev
+			);
+			queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
+			queryClient.invalidateQueries({ queryKey: ['builds', orgSlug] });
 			goto(`/${orgSlug}`);
 		} catch (e) {
 			toasts.add({
