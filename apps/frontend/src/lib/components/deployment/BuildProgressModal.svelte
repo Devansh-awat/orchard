@@ -11,7 +11,6 @@
 	import { motionPopover } from '$lib/utils/motion.svelte';
 	import { Button, Modal } from '$lib/components/ui';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
-	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
 	import BuildQueue from './BuildQueue.svelte';
 
 	let {
@@ -198,7 +197,7 @@
 		title="Elapsed time"
 	>
 		<Clock size={14} class="h-3.5 w-3.5" />
-		<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} class="font-mono" />
+		<span class="font-mono">{formatBuildElapsed(buildElapsed)}</span>
 	</div>
 
 	<DeploymentProgress
@@ -272,7 +271,7 @@
 						style="color: var(--surface-muted);"
 					>
 						<Clock size={12} class="h-3 w-3" />
-						<AnimatedNumber value={cardElapsed} format={formatBuildElapsed} />
+						<span>{formatBuildElapsed(cardElapsed)}</span>
 					</div>
 					<button
 						type="button"

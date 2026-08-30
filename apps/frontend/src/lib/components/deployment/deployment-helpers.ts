@@ -16,7 +16,7 @@ export function getNewestPod<T extends { status?: string; startTime?: string }>(
 }
 
 export function formatBuildElapsed(seconds: number): string {
-	const total = Math.round(seconds);
+	const total = Math.floor(seconds);
 	const m = Math.floor(total / 60);
 	const s = total % 60;
 	if (m > 0) return `${m}m ${s}s`;

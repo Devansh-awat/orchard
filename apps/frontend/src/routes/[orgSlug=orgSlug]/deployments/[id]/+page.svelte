@@ -88,7 +88,6 @@
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import CircleAlertIcon from '$lib/components/icons/CircleAlertIcon.svelte';
 	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
-	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
 	import BuildSteps from '$lib/components/BuildSteps.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
@@ -954,8 +953,8 @@
 		buildElapsedInterval = setInterval(() => {
 			const serverStart = buildModalTimestamps?.__start;
 			const startMs = serverStart && serverStart > 0 ? serverStart : buildStartTime;
-			buildElapsed = Math.floor((Date.now() - startMs) / 1000);
-		}, 1000);
+			buildElapsed = Math.max(0, (Date.now() - startMs) / 1000);
+		}, 100);
 
 		// Build status, step, logs, and warnings all flow through SSE
 		// (`build.changed` → fetchDeployment → syncBuildModalFromDeployment).
@@ -2631,7 +2630,7 @@
 	}
 </script>
 
-<div class="deployment-page dep-shell p-6 max-w-[100rem] mx-auto">
+<div class="deployment-page dep-shell p-6 max-w-400 mx-auto">
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
 			<Breadcrumb

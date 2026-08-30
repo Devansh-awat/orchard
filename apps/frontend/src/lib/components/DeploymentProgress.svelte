@@ -4,7 +4,6 @@
 	import { backOut } from 'svelte/easing';
 	import BuildSteps from './BuildSteps.svelte';
 	import { Alert } from '$lib/components/ui';
-	import AnimatedNumber from './AnimatedNumber.svelte';
 
 	interface Props {
 		status: string;
@@ -97,11 +96,12 @@
 	let previousLogsLength = $state(0);
 	let currentTime = $state(Date.now());
 
-	// Update current time every second to update elapsed time display
 	$effect(() => {
+		if (buildStatus !== 'building') return;
+		currentTime = Date.now();
 		const interval = setInterval(() => {
 			currentTime = Date.now();
-		}, 1000);
+		}, 100);
 		return () => clearInterval(interval);
 	});
 
@@ -189,7 +189,7 @@
 		const startTime = Math.min(...timestamps.map(([, v]) => v));
 		const endTime = buildStepTimestamps['complete'];
 		if (!endTime) return null;
-		return Math.max(0, Math.floor((endTime - startTime) / 1000));
+		return Math.max(0, (endTime - startTime) / 1000);
 	}
 
 	const totalDurationSeconds = $derived(getTotalBuildSeconds());
@@ -208,10 +208,7 @@
 					Deployment failed
 				{:else if buildStatus === 'succeeded'}
 					{#if totalDurationSeconds !== null}
-						Deployment completed in <AnimatedNumber
-							value={totalDurationSeconds}
-							format={formatDuration}
-						/>
+						Deployment completed in {formatDuration(totalDurationSeconds)}
 					{:else}
 						Deployment succeeded
 					{/if}
@@ -265,23 +262,19 @@
 								? getStepTimestamp(steps[nextStepIndex].id)
 								: getStepTimestamp('complete')}
 						{#if nextStepStartTime}
-							{@const duration = Math.max(0, Math.floor((nextStepStartTime - startTime) / 1000))}
-							<AnimatedNumber
-								value={duration}
-								format={formatDuration}
-								class="step-duration text-xs font-mono muted-text shrink-0"
-							/>
+							{@const duration = Math.max(0, (nextStepStartTime - startTime) / 1000)}
+							<span class="step-duration text-xs font-mono muted-text shrink-0">
+								{formatDuration(duration)}
+							</span>
 						{/if}
 					{/if}
 				{:else if stepStatus === 'current' && buildStep === step.id}
 					{@const startTime = getStepTimestamp(step.id)}
 					{#if startTime}
-						{@const elapsed = Math.max(0, Math.floor((currentTime - startTime) / 1000))}
-						<AnimatedNumber
-							value={elapsed}
-							format={formatDuration}
-							class="step-duration text-xs font-mono text-primary-600 shrink-0"
-						/>
+						{@const elapsed = Math.max(0, (currentTime - startTime) / 1000)}
+						<span class="step-duration text-xs font-mono text-primary-600 shrink-0">
+							{formatDuration(elapsed)}
+						</span>
 					{/if}
 				{/if}
 			</div>
