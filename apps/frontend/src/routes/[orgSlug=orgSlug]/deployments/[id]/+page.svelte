@@ -170,6 +170,7 @@
 		buildStepTimestamps?: Record<string, number> | null;
 		autoDeployEnabled?: boolean;
 		autoDeployBranch?: string;
+		autoDeployPaths?: string[];
 		healthCheckEnabled?: boolean;
 		healthCheckPath?: string;
 		healthCheckPort?: number;
@@ -498,8 +499,11 @@
 	let autoDeployStatus = $state<AutoDeployStatus | null>(null);
 	let autoDeployLoading = $state(false);
 	let autoDeployBranch = $state('');
+	let autoDeployPaths = $state('');
+	let autoDeployPathsLoaded = false;
 	let enablingAutoDeploy = $state(false);
 	let disablingAutoDeploy = $state(false);
+	let savingAutoDeployPaths = $state(false);
 	let githubDeployments = $state<GitHubDeploymentRecord[]>([]);
 	let githubAppInstallUrl = $state<string | null>(null);
 	let loadingAppInstallUrl = $state(false);
@@ -1988,6 +1992,8 @@
 		if (deployment) mergeInto(deployment, updated);
 		else deployment = updated;
 		autoDeployBranch = '';
+		autoDeployPaths = '';
+		autoDeployPathsLoaded = false;
 		loadAutoDeployStatus();
 	}
 
@@ -2052,6 +2058,10 @@
 				if (!autoDeployBranch) {
 					autoDeployBranch = autoDeployStatus?.branch || deployment.githubBranch || '';
 				}
+				if (!autoDeployPathsLoaded) {
+					autoDeployPaths = (autoDeployStatus?.paths ?? []).join('\n');
+					autoDeployPathsLoaded = true;
+				}
 
 				// If app is not installed, get the install URL
 				if (!autoDeployStatus?.appInstalled && !githubAppInstallUrl) {
@@ -2095,6 +2105,58 @@
 		}
 	}
 
+	function parseWatchPaths(value: string): string[] {
+		return value
+			.split('\n')
+			.map((line) => line.trim())
+			.filter(Boolean);
+	}
+
+	async function saveAutoDeployPaths() {
+		if (!deployment || !autoDeployStatus?.branch) return;
+
+		savingAutoDeployPaths = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/auto-deploy/enable`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					branch: autoDeployStatus.branch,
+					paths: parseWatchPaths(autoDeployPaths)
+				})
+			});
+
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to save watch paths');
+			}
+
+			const result = await response.json();
+			if (deployment) mergeInto(deployment, result);
+			else deployment = result;
+
+			autoDeployPaths = (result.autoDeployPaths ?? []).join('\n');
+
+			toasts.add({
+				title: 'Watch paths saved',
+				description: result.autoDeployPaths?.length
+					? 'Only pushes changing these paths will build'
+					: 'Every push to the branch will build',
+				color: 'success'
+			});
+
+			await loadAutoDeployStatus();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to save watch paths',
+				color: 'error'
+			});
+		} finally {
+			savingAutoDeployPaths = false;
+		}
+	}
+
 	async function enableAutoDeploy() {
 		if (!deployment || !autoDeployBranch) return;
 
@@ -2103,7 +2165,10 @@
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/auto-deploy/enable`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ branch: autoDeployBranch })
+				body: JSON.stringify({
+					branch: autoDeployBranch,
+					paths: parseWatchPaths(autoDeployPaths)
+				})
 			});
 
 			if (!response.ok) {
@@ -2347,6 +2412,8 @@
 		buildLogs = '';
 		accumulatedBuildLogs = null;
 		autoDeployFetched = false;
+		autoDeployPathsLoaded = false;
+		autoDeployPaths = '';
 		projectIngressesFetched = false;
 
 		if ($tailscaleEnabled) tailscale.checkStatus();
@@ -3003,6 +3070,9 @@
 							{autoDeployStatus}
 							{autoDeployLoading}
 							bind:autoDeployBranch
+							bind:autoDeployPaths
+							{savingAutoDeployPaths}
+							onSaveAutoDeployPaths={saveAutoDeployPaths}
 							{enablingAutoDeploy}
 							{disablingAutoDeploy}
 							{githubDeployments}

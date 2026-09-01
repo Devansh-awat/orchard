@@ -75,6 +75,20 @@ func pick(m map[string]any, keys ...string) string {
 	return ""
 }
 
+func joinStrings(v any) string {
+	items, ok := v.([]any)
+	if !ok {
+		return ""
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
 func asList(v any) []map[string]any {
 	out := []map[string]any{}
 	switch t := v.(type) {

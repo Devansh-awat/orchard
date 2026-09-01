@@ -185,6 +185,7 @@ export interface Deployment {
 export interface AutoDeployStatus {
 	enabled: boolean;
 	branch: string;
+	paths?: string[];
 	appInstalled: boolean;
 }
 

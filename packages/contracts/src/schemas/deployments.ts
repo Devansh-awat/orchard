@@ -273,6 +273,7 @@ const deploymentBase = z
     tailscaleHostname: z.string().nullable().optional(),
     autoDeployEnabled: z.boolean().optional(),
     autoDeployBranch: z.string().nullable().optional(),
+    autoDeployPaths: z.array(z.string()).optional(),
     // BigInt column, serializes as a string
     githubInstallationId: bigIntString.nullable().optional(),
     healthCheckEnabled: z.boolean().optional(),
@@ -874,6 +875,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .object({
         enabled: z.boolean(),
         branch: z.string().nullable(),
+        paths: z.array(z.string()),
         appInstalled: z.boolean(),
       })
       .passthrough(),
@@ -881,7 +883,15 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /deployments/:id/auto-deploy/enable': {
     summary: 'Enable auto-deploy for a branch',
     scope: 'deploy',
-    request: z.object({ branch: z.string() }),
+    request: z.object({
+      branch: z.string(),
+      paths: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Glob patterns a push must touch to trigger a build. Empty deploys on every push. Prefix a pattern with ! to exclude. Omit to leave unchanged.',
+        ),
+    }),
     response: deploymentWithRelations,
   },
   'POST /deployments/:id/auto-deploy/disable': {

@@ -8,6 +8,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
+import { changedFilesFromPush, pushMatchesWatchPaths } from './watch-paths';
 
 /** Only allow same-origin, non-protocol-relative return paths. */
 function isSafeRedirect(redirect?: string): redirect is string {
@@ -594,11 +595,29 @@ export class GitHubController {
         };
       }
 
-      console.log(`[GitHub App] Triggering auto-deploy for ${deployments.length} deployment(s)`);
+      const changedFiles = changedFilesFromPush(body);
+      const watched = deployments.filter((deployment) =>
+        pushMatchesWatchPaths(deployment.autoDeployPaths, changedFiles),
+      );
+      const skippedByPaths = deployments.length - watched.length;
+      if (skippedByPaths > 0) {
+        console.log(`[GitHub App] ${skippedByPaths} deployment(s) skipped, no watched paths changed`);
+      }
+
+      if (watched.length === 0) {
+        return {
+          received: true,
+          action: 'ignored',
+          reason: `no watched paths changed for ${repoFullName}:${pushedBranch}`,
+          skipped: skippedByPaths,
+        };
+      }
+
+      console.log(`[GitHub App] Triggering auto-deploy for ${watched.length} deployment(s)`);
 
       // Trigger rebuilds for all matching deployments
       const results = await Promise.allSettled(
-        deployments.map(async (deployment) => {
+        watched.map(async (deployment) => {
           console.log(`[GitHub App] Auto-deploying ${deployment.name} from commit ${commitSha?.substring(0, 7)}`);
           await this.deployments.triggerAutoDeploy(
             deployment.id,
@@ -623,6 +642,7 @@ export class GitHubController {
           total: deployments.length,
           triggered: successful,
           failed,
+          skipped: skippedByPaths,
         },
       };
     }

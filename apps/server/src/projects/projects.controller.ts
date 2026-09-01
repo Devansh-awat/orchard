@@ -1741,7 +1741,7 @@ export class DeploymentsController {
 
   async enableAutoDeploy(
     @Param('id') id: string,
-    @Body() body: { branch: string },
+    @Body() body: { branch: string; paths?: string[] },
     @Request() req
   ) {
     return this.deployments.enableAutoDeploy(
@@ -1754,7 +1754,8 @@ export class DeploymentsController {
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         imageUrl: req.user.imageUrl,
-      }
+      },
+      body.paths
     );
   }
 

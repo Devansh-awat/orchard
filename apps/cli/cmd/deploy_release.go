@@ -225,9 +225,14 @@ func deployAutoDeployStatusCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
+			paths := joinStrings(raw["paths"])
+			if paths == "" {
+				paths = "every push"
+			}
 			output.KV([][2]string{
 				{"enabled", pick(raw, "enabled", "autoDeployEnabled")},
 				{"branch", pick(raw, "branch", "autoDeployBranch")},
+				{"watch paths", paths},
 				{"repo", pick(raw, "githubRepo", "repo")},
 				{"app installed", pick(raw, "appInstalled")},
 			})
@@ -238,6 +243,7 @@ func deployAutoDeployStatusCmd() *cobra.Command {
 
 func deployAutoDeployEnableCmd() *cobra.Command {
 	var branch string
+	var paths []string
 	c := &cobra.Command{
 		Use:   "enable <id>",
 		Short: "Rebuild automatically on pushes to a branch",
@@ -248,14 +254,25 @@ func deployAutoDeployEnableCmd() *cobra.Command {
 				return err
 			}
 			body := map[string]any{"branch": branch}
+			if cmd.Flags().Changed("path") {
+				if paths == nil {
+					paths = []string{}
+				}
+				body["paths"] = paths
+			}
 			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "auto-deploy", "enable"), body, nil); err != nil {
 				return err
+			}
+			if len(paths) > 0 {
+				output.Successf("enabled auto-deploy on %s from branch %s, watching %s", args[0], branch, strings.Join(paths, ", "))
+				return nil
 			}
 			output.Successf("enabled auto-deploy on %s from branch %s", args[0], branch)
 			return nil
 		},
 	}
 	c.Flags().StringVar(&branch, "branch", "", "branch to auto-deploy from (required)")
+	c.Flags().StringArrayVar(&paths, "path", nil, "only build when a push changes this glob (repeatable, prefix ! to ignore, pass --path=\"\" to clear)")
 	_ = c.MarkFlagRequired("branch")
 	return c
 }

@@ -48,6 +48,36 @@ Webhook tokens let an external system trigger a deploy without GitHub, which is
 useful for a CI pipeline that wants to build elsewhere and then ask Orchard to
 roll out.
 
+### Watch paths
+
+By default every push to the branch builds. In a monorepo that means the API
+rebuilds when someone edits the marketing site. Watch paths narrow it: the app
+only builds when the push changes a file matching one of them.
+
+```
+apps/api/**
+packages/shared/**
+package.json
+!**/*.md
+```
+
+- One glob per line, matched against every file changed by the push.
+- `**` crosses directories, `*` stays inside one segment, and `{a,b}` is an
+  alternation, so `apps/**/*.{ts,tsx}` works.
+- A bare directory such as `apps/api` covers everything under it.
+- A line starting with `!` excludes, and an exclude always beats an include. A
+  list of only excludes watches everything else.
+- Leave the list empty to build on every push.
+
+Set them under Settings, Deploy behavior, or from the CLI:
+
+```bash
+orchard deploy auto-deploy enable <id> --branch main --path 'apps/api/**' --path '!**/*.md'
+```
+
+Pass `--path ""` to clear the list. When Orchard cannot tell what a push
+changed, which happens on very large pushes, it builds rather than skipping.
+
 ## Build arguments
 
 Values injected as build arguments land **above** the user's own `ENV` lines in

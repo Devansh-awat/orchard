@@ -33,6 +33,9 @@
 		autoDeployStatus,
 		autoDeployLoading,
 		autoDeployBranch = $bindable(''),
+		autoDeployPaths = $bindable(''),
+		savingAutoDeployPaths,
+		onSaveAutoDeployPaths,
 		enablingAutoDeploy,
 		disablingAutoDeploy,
 		githubDeployments,
@@ -103,6 +106,9 @@
 		autoDeployStatus: AutoDeployStatus | null;
 		autoDeployLoading: boolean;
 		autoDeployBranch: string;
+		autoDeployPaths: string;
+		savingAutoDeployPaths: boolean;
+		onSaveAutoDeployPaths: () => void;
 		enablingAutoDeploy: boolean;
 		disablingAutoDeploy: boolean;
 		githubDeployments: GitHubDeploymentRecord[];
@@ -206,6 +212,9 @@
 				{autoDeployStatus}
 				{autoDeployLoading}
 				bind:autoDeployBranch
+				bind:autoDeployPaths
+				{savingAutoDeployPaths}
+				{onSaveAutoDeployPaths}
 				{enablingAutoDeploy}
 				{disablingAutoDeploy}
 				{githubDeployments}
@@ -283,6 +292,9 @@
 				{autoDeployStatus}
 				{autoDeployLoading}
 				bind:autoDeployBranch
+				bind:autoDeployPaths
+				{savingAutoDeployPaths}
+				{onSaveAutoDeployPaths}
 				{enablingAutoDeploy}
 				{disablingAutoDeploy}
 				{githubDeployments}
@@ -328,6 +340,9 @@
 				{autoDeployStatus}
 				{autoDeployLoading}
 				bind:autoDeployBranch
+				bind:autoDeployPaths
+				{savingAutoDeployPaths}
+				{onSaveAutoDeployPaths}
 				{enablingAutoDeploy}
 				{disablingAutoDeploy}
 				{githubDeployments}

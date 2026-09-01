@@ -21,6 +21,11 @@ import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
+import {
+  normalizeWatchPaths,
+  MAX_WATCH_PATHS,
+  MAX_WATCH_PATH_LENGTH,
+} from '../github/watch-paths';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
@@ -3220,7 +3225,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    paths?: string[]
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -3265,6 +3271,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const previousBranch = deployment.autoDeployBranch;
     const previouslyEnabled = deployment.autoDeployEnabled;
+    const previousPaths = deployment.autoDeployPaths;
+
+    let watchPaths: string[] | undefined;
+    if (paths !== undefined) {
+      watchPaths = normalizeWatchPaths(paths);
+      if (watchPaths.length > MAX_WATCH_PATHS) {
+        throw new BadRequestException(`At most ${MAX_WATCH_PATHS} watch paths are allowed`);
+      }
+      const tooLong = watchPaths.find((path) => path.length > MAX_WATCH_PATH_LENGTH);
+      if (tooLong) {
+        throw new BadRequestException(
+          `Watch path is longer than ${MAX_WATCH_PATH_LENGTH} characters: ${tooLong.slice(0, 60)}...`
+        );
+      }
+    }
 
     // Update the deployment with auto-deploy settings. Also pin the
     // installation id so subsequent webhook deliveries are bound to this
@@ -3276,6 +3297,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployEnabled: true,
         autoDeployBranch: branch,
         githubInstallationId: installation.installationId,
+        ...(watchPaths !== undefined ? { autoDeployPaths: watchPaths } : {}),
       },
       include: {
         project: {
@@ -3312,6 +3334,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         repo: deployment.githubRepo,
         branch: [previousBranch ?? null, branch],
         wasEnabled: previouslyEnabled,
+        ...(watchPaths !== undefined ? { paths: [previousPaths, watchPaths] } : {}),
       },
     });
 
@@ -3693,6 +3716,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       select: {
         autoDeployEnabled: true,
         autoDeployBranch: true,
+        autoDeployPaths: true,
         githubRepo: true,
         githubBranch: true,
       },
@@ -3719,6 +3743,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return {
       enabled: deployment.autoDeployEnabled,
       branch: deployment.autoDeployBranch || deployment.githubBranch,
+      paths: deployment.autoDeployPaths ?? [],
       appInstalled,
     };
   }

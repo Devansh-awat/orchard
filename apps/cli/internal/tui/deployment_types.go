@@ -42,8 +42,9 @@ type DepDetail struct {
 	BuildWithDepot       bool `json:"buildWithDepot"`
 	PersistentBuildCache bool `json:"persistentBuildCache"`
 
-	AutoDeployEnabled bool   `json:"autoDeployEnabled"`
-	AutoDeployBranch  string `json:"autoDeployBranch"`
+	AutoDeployEnabled bool     `json:"autoDeployEnabled"`
+	AutoDeployBranch  string   `json:"autoDeployBranch"`
+	AutoDeployPaths   []string `json:"autoDeployPaths"`
 
 	HealthCheckEnabled      bool    `json:"healthCheckEnabled"`
 	HealthCheckType         string  `json:"healthCheckType"`

@@ -196,6 +196,7 @@ func deployRenderKV(raw map[string]any) {
 		{"build from root", pick(raw, "buildFromRoot")},
 		{"auto-deploy", pick(raw, "autoDeployEnabled")},
 		{"auto-deploy branch", pick(raw, "autoDeployBranch")},
+		{"auto-deploy paths", joinStrings(raw["autoDeployPaths"])},
 		{"cpu (milli)", pick(raw, "cpuRequestMilli")},
 		{"memory (bytes)", pick(raw, "memoryRequestBytes")},
 		{"health check", pick(raw, "healthCheckEnabled")},

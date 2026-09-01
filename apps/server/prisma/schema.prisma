@@ -654,8 +654,9 @@ model Deployment {
   tailscaleExposedBy String? @map("tailscale_exposed_by") @db.Uuid
 
   // Auto-deploy configuration
-  autoDeployEnabled    Boolean @default(false) @map("auto_deploy_enabled")
-  autoDeployBranch     String? @map("auto_deploy_branch") @db.VarChar(255)
+  autoDeployEnabled    Boolean  @default(false) @map("auto_deploy_enabled")
+  autoDeployBranch     String?  @map("auto_deploy_branch") @db.VarChar(255)
+  autoDeployPaths      String[] @default([]) @map("auto_deploy_paths")
   // GitHub App installation that owns this deployment's repo. Webhooks must
   // be matched against this id to prevent another installation impersonating
   // a repo by full_name.

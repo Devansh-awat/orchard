@@ -124,6 +124,9 @@ func (s *deploymentScreen) viewDeploys(height int, strip string) string {
 	if d.AutoDeployEnabled && d.AutoDeployBranch != "" {
 		auto += stMuted.Render(" · branch " + d.AutoDeployBranch)
 	}
+	if d.AutoDeployEnabled && len(d.AutoDeployPaths) > 0 {
+		auto += stMuted.Render(" · paths " + strings.Join(d.AutoDeployPaths, " "))
+	}
 	histTitle := strip + stMuted.Render("   ") + auto
 
 	var tok strings.Builder

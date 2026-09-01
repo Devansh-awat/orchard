@@ -344,10 +344,19 @@ Whether this re-pulls the image depends on the deployment's pull policy. That po
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         branch: z.string().describe('The branch to auto-deploy from (e.g. main)'),
+        paths: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Watch paths: glob patterns a push must touch to trigger a build (e.g. ["apps/web/**", "!**/*.md"]). Empty array deploys on every push. Omit to leave the current paths unchanged.',
+          ),
       },
     },
-    async ({ deploymentId, branch }) => {
-      const result = await client.post(`/deployments/${deploymentId}/auto-deploy/enable`, { branch });
+    async ({ deploymentId, branch, paths }) => {
+      const result = await client.post(`/deployments/${deploymentId}/auto-deploy/enable`, {
+        branch,
+        ...(paths !== undefined ? { paths } : {}),
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

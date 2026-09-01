@@ -757,6 +757,7 @@ orchard enable <id>
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--branch` | string |  | branch to auto-deploy from (required) |
+| `--path` | stringArray | `[]` | only build when a push changes this glob (repeatable, prefix ! to ignore, pass --path="" to clear) |
 
 ### `orchard deploy auto-deploy status`
 

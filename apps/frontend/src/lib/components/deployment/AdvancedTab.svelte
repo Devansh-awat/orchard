@@ -39,6 +39,9 @@
 		autoDeployStatus,
 		autoDeployLoading,
 		autoDeployBranch = $bindable(),
+		autoDeployPaths = $bindable(),
+		savingAutoDeployPaths,
+		onSaveAutoDeployPaths,
 		enablingAutoDeploy,
 		disablingAutoDeploy,
 		githubDeployments,
@@ -83,6 +86,9 @@
 		autoDeployStatus: AutoDeployStatus | null;
 		autoDeployLoading: boolean;
 		autoDeployBranch: string;
+		autoDeployPaths: string;
+		savingAutoDeployPaths: boolean;
+		onSaveAutoDeployPaths: () => void;
 		enablingAutoDeploy: boolean;
 		disablingAutoDeploy: boolean;
 		githubDeployments: GitHubDeploymentRecord[];
@@ -108,6 +114,18 @@
 		onSaveHealthCheck: () => void;
 		sections?: string[];
 	} = $props();
+
+	function watchPathLines(value: string) {
+		return value
+			.split('\n')
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.join('\n');
+	}
+
+	const savedWatchPaths = $derived(watchPathLines((autoDeployStatus?.paths ?? []).join('\n')));
+
+	const watchPathsDirty = $derived(watchPathLines(autoDeployPaths ?? '') !== savedWatchPaths);
 
 	const HC_METHODS = [
 		{ id: 'http', label: 'Web endpoint', desc: 'Ping a URL path', icon: Wifi },
@@ -322,13 +340,39 @@
 						<Loader2 class="h-4 w-4 animate-spin" style="color: var(--surface-muted);" />
 					</div>
 				{:else if autoDeployStatus?.enabled}
-					<p class="text-sm" style="color: var(--surface-muted);">
-						Pushes to <code
-							class="font-mono rounded px-1.5 py-0.5 text-xs"
-							style="background-color: var(--control-bg); color: var(--center-channel-color);"
+					<p class="text-sm text-muted">
+						Pushes to <code class="font-mono rounded px-1.5 py-0.5 text-xs bg-raised text-fg"
 							>{autoDeployStatus.branch}</code
-						> trigger a new deployment automatically.
+						>
+						{savedWatchPaths.length > 0
+							? 'that change a watched path trigger a new deployment.'
+							: 'trigger a new deployment automatically.'}
 					</p>
+					<div class="mt-3">
+						<p class="text-xs mb-1.5 font-medium text-muted">Watch paths</p>
+						<textarea
+							class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
+							rows="3"
+							placeholder="apps/web/**&#10;packages/ui/**&#10;!**/*.md"
+							bind:value={autoDeployPaths}
+						></textarea>
+						<div class="mt-1.5 flex items-end justify-between gap-3">
+							<p class="text-xs text-muted">
+								One glob per line. A push only builds when it changes a file matching one of them,
+								and a line starting with <code class="font-mono">!</code> ignores matches. Leave it empty
+								to build on every push.
+							</p>
+							<Button
+								size="sm"
+								disabled={!watchPathsDirty || savingAutoDeployPaths}
+								onclick={onSaveAutoDeployPaths}
+								class="shrink-0"
+							>
+								{#if savingAutoDeployPaths}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+								<span>Save</span>
+							</Button>
+						</div>
+					</div>
 					{#if !autoDeployStatus?.appInstalled}
 						<div
 							class="mt-3 flex items-center justify-between gap-3 rounded-xl p-4"
@@ -399,6 +443,19 @@
 							{#if enablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 							<span>Enable</span>
 						</button>
+					</div>
+					<div class="mt-3">
+						<p class="text-xs mb-1.5 font-medium text-muted">Watch paths (optional)</p>
+						<textarea
+							class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
+							rows="2"
+							placeholder="apps/web/**&#10;!**/*.md"
+							bind:value={autoDeployPaths}
+						></textarea>
+						<p class="text-xs mt-1 text-muted">
+							One glob per line. Only pushes changing a matching file will build. Leave it empty to
+							build on every push.
+						</p>
 					</div>
 				{/if}
 
