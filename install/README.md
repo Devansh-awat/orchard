@@ -3,7 +3,7 @@
 For a single Linux box with nothing on it yet:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hackclub/orchard/main/install/install.sh | sudo bash
+curl -fsSL https://assets.orchard.my/install.sh | sudo bash
 ```
 
 This is the amateur-friendly path. It creates its own k3s cluster and installs

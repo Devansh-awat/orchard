@@ -15,7 +15,7 @@ There are two paths, and picking the wrong one causes most install problems.
 ## A bare Linux box
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hackclub/orchard/main/install/install.sh | sudo bash
+curl -fsSL https://assets.orchard.my/install.sh | sudo bash
 ```
 
 It installs k3s, Traefik, CloudNativePG, cert-manager, a `zot` registry for the
