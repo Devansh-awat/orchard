@@ -7,6 +7,8 @@ import { RateLimitService } from './rate-limit.service';
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_VERIFICATION_ATTEMPTS = 5;
+const OTP_MODULUS = 10 ** OTP_LENGTH;
+const OTP_UNBIASED_CEILING = Math.floor(2 ** 32 / OTP_MODULUS) * OTP_MODULUS;
 
 @Injectable()
 export class OtpService {
@@ -18,15 +20,18 @@ export class OtpService {
 
   /**
    * Generate a cryptographically secure 6-digit OTP code.
-   * Uses crypto.randomBytes for security instead of Math.random.
+   *
+   * Rejection sampling rather than a bare modulo: 2^32 is not a multiple of
+   * 10^6, so `random % 10^6` would make the first 967296 codes very slightly
+   * likelier than the rest. Draws landing in the short final bucket are
+   * discarded instead, which costs about one retry in every 4400 codes.
    */
   private generateOtpCode(): string {
-    // Generate random bytes and convert to a number
-    const randomBuffer = randomBytes(4);
-    const randomNumber = randomBuffer.readUInt32BE(0);
-    // Modulo to get a 6-digit number, then pad with zeros
-    const code = (randomNumber % 1000000).toString().padStart(OTP_LENGTH, '0');
-    return code;
+    let drawn: number;
+    do {
+      drawn = randomBytes(4).readUInt32BE(0);
+    } while (drawn >= OTP_UNBIASED_CEILING);
+    return (drawn % OTP_MODULUS).toString().padStart(OTP_LENGTH, '0');
   }
 
   /**
