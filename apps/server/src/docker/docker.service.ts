@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { parseRepoUrl, withGitHubCredentials } from './repo-url';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { resolveEnvVars } from '../env/env-resolver';
@@ -276,18 +277,13 @@ export class DockerService {
     if (!isSafeGitRef(branch)) {
       throw new Error(`Invalid branch name: ${branch}`);
     }
+    const parsedRepo = parseRepoUrl(repoUrl);
+    if (!parsedRepo) {
+      throw new Error('Repository URL must be a plain https:// URL');
+    }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchard-build-'));
 
-    let cloneUrl = repoUrl;
-    if (accessToken && repoUrl.includes('github.com')) {
-      // GitHub App installation tokens start with 'ghs_' and need x-access-token format
-      // User OAuth tokens can use the simpler format
-      if (accessToken.startsWith('ghs_')) {
-        cloneUrl = repoUrl.replace('https://github.com/', `https://x-access-token:${accessToken}@github.com/`);
-      } else {
-        cloneUrl = repoUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
-      }
-    }
+    const cloneUrl = withGitHubCredentials(parsedRepo, accessToken);
 
     const startTime = Date.now();
     await this.setBuildStep(deploymentId, 'cloning');

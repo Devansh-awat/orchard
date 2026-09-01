@@ -13,6 +13,7 @@ import {
   railpackConfigOverride,
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
+import { parseRepoUrl, withGitHubCredentials } from './repo-url';
 import { injectBuildArgsScript } from './build-args';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import { BuildJobInformerService } from './build-job-informer.service';
@@ -1202,17 +1203,11 @@ exit $EXIT_CODE
     const builderLabel = buildWithDepot ? 'Super Builds' : 'BuildKit';
     this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`).catch(() => {});
 
-    // Build the git clone URL with optional access token
-    let cloneUrl = repoUrl;
-    if (accessToken && repoUrl.includes('github.com')) {
-      // GitHub App installation tokens start with 'ghs_' and need x-access-token format
-      // User OAuth tokens can use the simpler format
-      if (accessToken.startsWith('ghs_')) {
-        cloneUrl = repoUrl.replace('https://github.com/', `https://x-access-token:${accessToken}@github.com/`);
-      } else {
-        cloneUrl = repoUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
-      }
+    const parsedRepo = localContextUrl ? null : parseRepoUrl(repoUrl);
+    if (!localContextUrl && !parsedRepo) {
+      throw new BadRequestException('Repository URL must be a plain https:// URL');
     }
+    const cloneUrl = parsedRepo ? withGitHubCredentials(parsedRepo, accessToken) : repoUrl;
 
     // Compute secrets hash for Railpack layer invalidation
     const secretsHash = this.computeSecretsHash(envVars);
@@ -1282,7 +1277,6 @@ ls -la /workspace
         args: [
           `set -e
 echo "=== Cloning repository ==="
-CLONE_URL="${cloneUrl}"
 MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/://x-access-token:***@}"
 MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/://***@}"
 MASKED_URL="\${MASKED_URL//:\\/\\/ghp_*@/://***@}"
@@ -1319,6 +1313,7 @@ echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo
 ls -la /workspace
 `,
         ],
+        env: [{ name: 'CLONE_URL', value: cloneUrl }],
         volumeMounts: [
           {
             name: 'workspace',
