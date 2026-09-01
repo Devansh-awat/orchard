@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/hackclub/orchard/compare/cli/v0.12.0...cli/v0.13.0) (2026-09-01)
+
+
+### Features
+
+* watch paths for github auto-deploy ([06b1e44](https://github.com/hackclub/orchard/commit/06b1e4426655bb2c40ea32c7a2a6b33641f2b862))
+
+
+### Bug Fixes
+
+* match express 5 splat routes in the cli parity map ([024b94b](https://github.com/hackclub/orchard/commit/024b94b034f6994fd8f96f2c415c586f738e9581))
+
 ## [0.12.0](https://github.com/LeafdTK/leaf/compare/cli/v0.11.0...cli/v0.12.0) (2026-08-28)
 
 

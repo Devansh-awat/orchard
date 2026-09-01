@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.18.0](https://github.com/hackclub/orchard/compare/server/v2.17.1...server/v2.18.0) (2026-09-01)
+
+
+### Features
+
+* watch paths for github auto-deploy ([06b1e44](https://github.com/hackclub/orchard/commit/06b1e4426655bb2c40ea32c7a2a6b33641f2b862))
+
+
+### Bug Fixes
+
+* validate repo urls before they reach the build pipeline ([b17de6b](https://github.com/hackclub/orchard/commit/b17de6b1dc0fc22c1a9d3ccd4c0caf43ea46b521))
+
 ## [2.17.1](https://github.com/hackclub/orchard/compare/server/v2.17.0...server/v2.17.1) (2026-09-01)
 
 

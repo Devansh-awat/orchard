@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.0](https://github.com/hackclub/orchard/compare/frontend/v1.16.1...frontend/v1.17.0) (2026-09-01)
+
+
+### Features
+
+* watch paths for github auto-deploy ([06b1e44](https://github.com/hackclub/orchard/commit/06b1e4426655bb2c40ea32c7a2a6b33641f2b862))
+
+
+### Bug Fixes
+
+* sanitize agent markdown before rendering it ([c7ff93d](https://github.com/hackclub/orchard/commit/c7ff93dfbcebf3fc4522c4871bbb01bd07d2bf2b))
+
 ## [1.16.1](https://github.com/hackclub/orchard/compare/frontend/v1.16.0...frontend/v1.16.1) (2026-09-01)
 
 
