@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { Loader2 } from 'lucide-svelte';
 	import { Unplug } from '@jis3r/icons';
-	import { springHover } from '$lib/utils/motion.svelte';
+	import { springHover, iconAnimation } from '$lib/utils/motion.svelte';
 
 	let {
 		name,
@@ -37,7 +37,7 @@
 		{@attach springHover({ lift: -1 })}
 	>
 		{#if disconnecting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<span class="ic-icon-wrap"
-				><Unplug size={14} animate={btnHovered} /></span
+				><Unplug size={14} animate={iconAnimation(btnHovered)} /></span
 			>{/if}
 		Disconnect
 	</button>

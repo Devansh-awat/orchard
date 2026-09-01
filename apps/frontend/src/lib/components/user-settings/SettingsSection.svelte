@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, iconAnimation } from '$lib/utils/motion.svelte';
 
 	let {
 		title,
@@ -22,6 +22,8 @@
 		index?: number;
 	} = $props();
 
+	// Only ever drives the icon's `animate` prop, so it resolves through the
+	// motion tier rather than reporting raw hover.
 	let headerHovered = $state(false);
 </script>
 
@@ -34,7 +36,7 @@
 	>
 		{#if icon}
 			<div class="ss-icon ss-icon--{iconColor}">
-				{@render icon(headerHovered)}
+				{@render icon(iconAnimation(headerHovered))}
 			</div>
 		{/if}
 		<div class="ss-title-group">

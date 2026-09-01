@@ -183,10 +183,19 @@ import { springHover, motionStagger, springPop, springCollapse, springRotate, sp
 These icons have built-in hover animations. To trigger animation from a parent element instead of the icon itself:
 
 1. Track hover state on the parent: `onmouseenter={() => (hovered = true)}`
-2. Pass to icon: `<Unplug size={14} animate={hovered} />`
+2. Pass to icon through the tier gate: `<Unplug size={14} animate={iconAnimation(hovered)} />`
 3. Wrap icon in `pointer-events: none` span to prevent its internal handlers from fighting
 
-For snippet-based components, pass hover as a snippet parameter:
+The animations are plain CSS inside the package and their end state is a static transform, so
+the tier rules in `tokens.css` only shorten the transition — the icon still snaps into its
+animated pose. Icon flourishes are decoration, so they must never enter that state below `full`:
+every `animate` prop goes through `iconAnimation()`, and `tokens.css` takes the wrappers out of
+hit testing below `full` so the icon's own `mouseenter` cannot fire either. Any code that
+synthesises `mouseenter` on an icon to forward parent hover must check `decorativeMotion()`.
+
+For snippet-based components, pass hover as a snippet parameter. `SettingsSection` and
+`IconButton` already run their flag through `iconAnimation()` before handing it over, so the
+snippet passes it straight to the icon:
 ```svelte
 <!-- Component declares: icon?: Snippet<[boolean]> -->
 {#snippet icon(hovered)}<KeyRound size={18} animate={hovered} />{/snippet}

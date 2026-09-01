@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { ChevronRight } from '@jis3r/icons';
-	import { springHover } from '$lib/utils/motion.svelte';
+	import { springHover, iconAnimation } from '$lib/utils/motion.svelte';
 
 	let {
 		label,
@@ -37,7 +37,7 @@
 		{/if}
 	</div>
 	<div class="cp-arrow">
-		<ChevronRight size={16} animate={hovered} />
+		<ChevronRight size={16} animate={iconAnimation(hovered)} />
 	</div>
 </button>
 

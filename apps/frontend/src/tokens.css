@@ -237,6 +237,17 @@ html.motion-off *::after {
 	transition-delay: 0ms !important;
 }
 
+/* movingicons wrappers (`<div role="img" aria-label>`) animate off their own
+   mouseenter, and the animated pose is a static transform — killing the
+   transition above only makes the icon snap into it instead of easing. Below
+   `full` the icon must never enter that state at all, so drop it out of hit
+   testing: the hover still lands on the button around it, which is what the
+   colour change reads from. Prop-driven `animate` is gated in JS by
+   `iconAnimation()`. */
+html.motion-reduce [role='img'][aria-label] {
+	pointer-events: none;
+}
+
 /* Progress indicators keep running at every tier: a frozen spinner reads as a
    hung app, which is worse than the motion it saves. */
 html.motion-reduce .animate-spin,

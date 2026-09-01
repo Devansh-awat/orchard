@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Fingerprint } from 'lucide-svelte';
 	import { KeyRound, Pencil, Trash2, Check, X, Plus } from '@jis3r/icons';
+	import { iconAnimation } from '$lib/utils/motion.svelte';
 	import { Alert, Button, EmptyState, Skeleton } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IconButton from './IconButton.svelte';
@@ -157,7 +158,7 @@
 					onmouseenter={() => (addBtnHovered = true)}
 					onmouseleave={() => (addBtnHovered = false)}
 				>
-					<Plus size={14} animate={addBtnHovered} />
+					<Plus size={14} animate={iconAnimation(addBtnHovered)} />
 					Add passkey
 				</button>
 			</EmptyState>
@@ -190,7 +191,7 @@
 				onmouseenter={() => (addBtnHovered = true)}
 				onmouseleave={() => (addBtnHovered = false)}
 			>
-				<Plus size={14} animate={addBtnHovered} />
+				<Plus size={14} animate={iconAnimation(addBtnHovered)} />
 				Add passkey
 			</button>
 		{/if}

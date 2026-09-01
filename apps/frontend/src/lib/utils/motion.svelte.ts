@@ -99,6 +99,17 @@ export const decorativeMotion = () => effectiveAnimationLevel() === 'full';
 export const functionalMotion = () => effectiveAnimationLevel() !== 'off';
 
 /**
+ * Gate for a movingicons `animate` prop.
+ *
+ * Those icons animate with plain CSS inside the package, and their end state is
+ * a static transform rather than a keyframe — so the tier rules in tokens.css
+ * only shorten the transition, they don't stop the icon from snapping to its
+ * animated pose. Icon hover flourishes are pure decoration, so the fix is to
+ * never enter the animate state below `full`: wrap the hover flag in this.
+ */
+export const iconAnimation = (on: boolean) => on && decorativeMotion();
+
+/**
  * Resolves a named spring against the current tier. Every animation in the app
  * goes through this so a tier change is one edit, not fifty.
  */
@@ -484,7 +495,7 @@ export function springHover(
 		const target = el as HTMLElement;
 		let pressed = false;
 		const enter = () => {
-			if (opts.forwardIconHover) {
+			if (opts.forwardIconHover && decorativeMotion()) {
 				target.querySelectorAll('[role="img"]').forEach((icon) => {
 					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
 				});

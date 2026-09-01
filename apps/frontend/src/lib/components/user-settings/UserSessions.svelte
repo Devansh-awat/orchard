@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
 	import { ShieldCheck, MonitorCheck, SmartphoneNfc, LogOut } from '@jis3r/icons';
+	import { iconAnimation } from '$lib/utils/motion.svelte';
 	import { Alert, Badge, EmptyState, Skeleton } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IconButton from './IconButton.svelte';
@@ -149,7 +150,7 @@
 				onmouseenter={() => (revokeAllHovered = true)}
 				onmouseleave={() => (revokeAllHovered = false)}
 			>
-				<LogOut size={14} animate={revokeAllHovered} />
+				<LogOut size={14} animate={iconAnimation(revokeAllHovered)} />
 				Sign out all other devices
 			</button>
 		{/if}

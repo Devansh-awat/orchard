@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { springHover } from '$lib/utils/motion.svelte';
+	import { springHover, iconAnimation } from '$lib/utils/motion.svelte';
 
 	let {
 		variant = 'default',
@@ -16,6 +16,7 @@
 		children: Snippet<[boolean]>;
 	} = $props();
 
+	// Only ever feeds an icon's `animate` prop, so it resolves through the tier.
 	let hovered = $state(false);
 </script>
 
@@ -29,7 +30,7 @@
 	onmouseleave={() => (hovered = false)}
 	{@attach springHover({ lift: -1 })}
 >
-	{@render children(hovered)}
+	{@render children(iconAnimation(hovered))}
 </button>
 
 <style>

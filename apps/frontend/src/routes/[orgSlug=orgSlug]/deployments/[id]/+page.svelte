@@ -98,7 +98,8 @@
 		motionPopover,
 		motionBackdrop,
 		pressSpringDelegate,
-		functionalMotion
+		functionalMotion,
+		decorativeMotion
 	} from '$lib/utils/motion.svelte';
 	import {
 		portal,
@@ -309,9 +310,10 @@
 	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
 	// the animation to fire when the user hovers the parent button, not just the
 	// 14×14 icon target — so drive the icon's `animate` prop from button-level hover.
+	// Decorative, so it stays put below the `full` tier.
 	let tabIconAnim = $state<Record<string, boolean>>({});
 	function triggerTabIconAnim(id: string) {
-		if (tabIconAnim[id]) return;
+		if (tabIconAnim[id] || !decorativeMotion()) return;
 		tabIconAnim[id] = true;
 		setTimeout(() => {
 			tabIconAnim[id] = false;
@@ -319,7 +321,7 @@
 	}
 	let actionAnim = $state<Record<string, boolean>>({});
 	function triggerActionAnim(id: string) {
-		if (actionAnim[id]) return;
+		if (actionAnim[id] || !decorativeMotion()) return;
 		actionAnim[id] = true;
 		setTimeout(() => {
 			actionAnim[id] = false;
@@ -2413,7 +2415,7 @@
 			) as HTMLElement | null;
 			if (btn === lastHoverButton) return;
 			lastHoverButton = btn;
-			if (!btn) return;
+			if (!btn || !decorativeMotion()) return;
 			// @jis3r icons render as <div role="img" aria-label="..."> with inner svg.
 			btn.querySelectorAll<HTMLElement>('[role="img"][aria-label]').forEach((iconWrap) => {
 				iconWrap.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));

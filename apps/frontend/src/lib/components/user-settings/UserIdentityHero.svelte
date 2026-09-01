@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, Camera, X, Pencil } from 'lucide-svelte';
 	import { Eye, EyeOff } from '@jis3r/icons';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, iconAnimation } from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
 	import { Button, Input } from '$lib/components/ui';
 	import { avatarUrl, avatarFilter } from '$lib/avatar';
@@ -60,6 +60,7 @@
 	} = $props();
 
 	let revealHovered = $state(false);
+	const revealAnim = $derived(iconAnimation(revealHovered));
 
 	const displayName = $derived(
 		[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
@@ -169,9 +170,9 @@
 									onmouseenter={() => (revealHovered = true)}
 									onmouseleave={() => (revealHovered = false)}
 								>
-									{#if emailRevealed}<EyeOff size={13} animate={revealHovered} />{:else}<Eye
+									{#if emailRevealed}<EyeOff size={13} animate={revealAnim} />{:else}<Eye
 											size={13}
-											animate={revealHovered}
+											animate={revealAnim}
 										/>{/if}
 								</button>
 							</span>
