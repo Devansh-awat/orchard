@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/hackclub/orchard/compare/frontend/v1.16.0...frontend/v1.16.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* dont fire icon animations below the full motion tier ([#2](https://github.com/hackclub/orchard/issues/2)) ([0adb5d6](https://github.com/hackclub/orchard/commit/0adb5d600d377c97756a4e0009720b462306feac))
+
 ## [1.16.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.15.0...frontend/v1.16.0) (2026-08-28)
 
 
