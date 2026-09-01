@@ -81,6 +81,8 @@ export interface DeploymentBuildConfig {
   outputDirectory?: string | null;
 }
 
+const MAX_ROOT_DIRECTORY_LENGTH = 1024;
+
 /**
  * A repo-relative directory that is safe to interpolate into a shell command
  * and to join onto /workspace. Rejects absolute paths, traversal, and anything
@@ -89,6 +91,7 @@ export interface DeploymentBuildConfig {
  */
 export function normalizeRootDirectory(raw?: string | null): string | null {
   if (!raw) return null;
+  if (typeof raw !== 'string' || raw.length > MAX_ROOT_DIRECTORY_LENGTH) return null;
   const trimmed = raw.trim().replace(/^\.\//, '').replace(/\/+$/, '');
   if (!trimmed || trimmed === '.') return null;
   if (trimmed.startsWith('/')) return null;

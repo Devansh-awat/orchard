@@ -119,7 +119,7 @@ export class SandboxWorkspaceService {
     repo: string | undefined,
   ): string {
     if (repo) {
-      if (!REPO_RE.test(repo) || repo.includes('..')) {
+      if (typeof repo !== 'string' || !REPO_RE.test(repo) || repo.includes('..')) {
         throw new BadRequestException('Invalid repo name');
       }
       return `/persist/home/${repo}`;
@@ -150,7 +150,7 @@ export class SandboxWorkspaceService {
   }
 
   private validateFile(file: string): string {
-    if (!FILE_RE.test(file) || file.includes('..')) {
+    if (typeof file !== 'string' || !FILE_RE.test(file) || file.includes('..')) {
       throw new BadRequestException('Invalid file path');
     }
     return file;
@@ -619,7 +619,7 @@ export class SandboxWorkspaceService {
   ): Promise<{ diff: string; truncated: boolean }> {
     let script: string;
     if (file) {
-      if (!FILE_RE.test(file) || file.includes('..')) {
+      if (typeof file !== 'string' || !FILE_RE.test(file) || file.includes('..')) {
         throw new BadRequestException('Invalid file path');
       }
       script = [

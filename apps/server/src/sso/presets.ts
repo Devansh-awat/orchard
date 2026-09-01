@@ -185,16 +185,30 @@ export function findPreset(id: string | null | undefined): ProviderPreset | null
   return PROVIDER_PRESETS.find((p) => p.id === id) ?? null;
 }
 
+const MAX_ISSUER_INPUT_LENGTH = 2048;
+
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end -= 1;
+  return value.slice(0, end);
+}
+
+function boundedInput(value: string | null | undefined): string {
+  const s = typeof value === 'string' ? value.trim() : '';
+  return s.length > MAX_ISSUER_INPUT_LENGTH ? '' : s;
+}
+
 /** Fill a preset's issuer template from the tenant/domain the admin typed. */
 export function resolveIssuerUrl(
   preset: ProviderPreset | null,
   input: { issuerUrl?: string | null; tenant?: string | null; domain?: string | null },
 ): string | null {
-  if (input.issuerUrl) return input.issuerUrl.trim().replace(/\/+$/, '') || null;
+  const issuerUrl = boundedInput(input.issuerUrl);
+  if (issuerUrl) return stripTrailingSlashes(issuerUrl) || null;
   if (!preset) return null;
   if (preset.issuerTemplate) {
-    const tenant = (input.tenant ?? '').trim();
-    const domain = (input.domain ?? '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const tenant = boundedInput(input.tenant);
+    const domain = stripTrailingSlashes(boundedInput(input.domain).replace(/^https?:\/\//, ''));
     if (preset.issuerTemplate.includes('{tenant}') && !tenant) return null;
     if (preset.issuerTemplate.includes('{domain}') && !domain) return null;
     return preset.issuerTemplate.replace('{tenant}', tenant).replace('{domain}', domain);
