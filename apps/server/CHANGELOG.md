@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1](https://github.com/hackclub/orchard/compare/server/v2.17.0...server/v2.17.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* bump sharp to 0.35.4 for patched libheif and libvips ([81969b8](https://github.com/hackclub/orchard/commit/81969b82cecf39c12b9554da6c633967f14a3952))
+
 ## [2.17.0](https://github.com/LeafdTK/leaf/compare/server/v2.16.0...server/v2.17.0) (2026-08-28)
 
 
