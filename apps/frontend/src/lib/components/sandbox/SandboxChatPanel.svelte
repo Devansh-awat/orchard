@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { marked } from 'marked';
+	import DOMPurify from 'dompurify';
+	import { browser } from '$app/environment';
 	import {
 		ArrowDown,
 		Bot,
@@ -640,7 +642,19 @@
 
 	function renderMd(text: string): string {
 		const trimmed = text.trim();
-		return trimmed ? (marked.parse(trimmed, { async: false }) as string) : '';
+		if (!trimmed) return '';
+		const html = marked.parse(trimmed, { async: false }) as string;
+		if (!browser) return escapeHtml(trimmed);
+		return DOMPurify.sanitize(html);
+	}
+
+	function escapeHtml(value: string): string {
+		return value
+			.replaceAll('&', '&amp;')
+			.replaceAll('<', '&lt;')
+			.replaceAll('>', '&gt;')
+			.replaceAll('"', '&quot;')
+			.replaceAll("'", '&#39;');
 	}
 
 	function appendText(text: string) {
