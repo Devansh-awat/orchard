@@ -205,7 +205,7 @@ var routeCoverage = map[string]string{
 	"PATCH /sandboxes/:id/conversations/:cid":       "sandbox conversations --rename",
 	"DELETE /sandboxes/:id/conversations/:cid":      "sandbox conversations --delete",
 	"GET /sandboxes/:id/conversations/:cid/history": "sandbox conversations --history",
-	"ALL /sandboxes/:id/opencode/*":                 "sandbox chat (opencode workspace proxy, web UI)",
+	"ALL /sandboxes/:id/opencode/{*splat}":          "sandbox chat (opencode workspace proxy, web UI)",
 	"POST /sandboxes/:id/git/commit":                "sandbox git commit (web workspace)",
 	"POST /sandboxes/:id/git/push":                  "sandbox git push (web workspace)",
 	"POST /sandboxes/:id/git/pr":                    "sandbox git pr (web workspace)",
@@ -392,7 +392,7 @@ var routeExclusions = map[string]string{
 	"GET /scim/v2/Schemas/:id":                               "SCIM protocol endpoint for IdPs",
 	"GET /scim/v2/ServiceProviderConfig":                     "SCIM protocol endpoint for IdPs",
 	"ALL /scim/v2/Me":                                        "SCIM protocol endpoint for IdPs",
-	"ALL /scim/v2/*":                                         "SCIM protocol endpoint for IdPs",
+	"ALL /scim/v2/{*splat}":                                  "SCIM protocol endpoint for IdPs",
 
 	// github plumbing
 	"GET /github/callback":     "GitHub OAuth callback, browser only",
