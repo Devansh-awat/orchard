@@ -552,10 +552,10 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
   await app.init();
 
   try {
-    const router = (app.getHttpAdapter().getInstance() as any)._router;
+    const router = (app.getHttpAdapter().getInstance() as any).router;
     const paths: string[] = router.stack.filter((l: any) => l.route).map((l: any) => l.route.path);
 
-    const catchAll = paths.indexOf('/apiv1/scim/v2/*');
+    const catchAll = paths.indexOf('/apiv1/scim/v2/{*splat}');
     assert.ok(catchAll >= 0, 'the catch-all must be registered');
     assert.equal(catchAll, paths.length - 1, 'the catch-all must be registered last');
     assert.ok(paths.indexOf('/apiv1/scim/v2/Me') < catchAll);

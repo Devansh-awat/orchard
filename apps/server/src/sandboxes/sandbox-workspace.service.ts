@@ -52,10 +52,11 @@ export class SandboxWorkspaceService {
       res.status(400).json({ message: 'Sandbox is not running' });
       return;
     }
-    const suffix = (req.params as Record<string, string>)['0'] || '';
-    const query = req.originalUrl.includes('?')
-      ? req.originalUrl.slice(req.originalUrl.indexOf('?'))
-      : '';
+    const marker = '/opencode/';
+    const tail = req.originalUrl.slice(req.originalUrl.indexOf(marker) + marker.length);
+    const queryAt = tail.indexOf('?');
+    const suffix = queryAt === -1 ? tail : tail.slice(0, queryAt);
+    const query = queryAt === -1 ? '' : tail.slice(queryAt);
     const hasBody = !['GET', 'HEAD'].includes(req.method) && req.body !== undefined;
     const payload = hasBody ? JSON.stringify(req.body) : null;
     if (process.env.SANDBOX_TUNNEL_MODE === 'portforward') {

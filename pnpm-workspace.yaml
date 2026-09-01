@@ -18,3 +18,39 @@ allowBuilds:
   protobufjs: true
   sharp: false
   unrs-resolver: true
+overrides:
+  '@grpc/grpc-js': ^1.14.4
+  '@hono/node-server': ^1.19.17
+  '@xmldom/xmldom': ^0.8.15
+  ajv@8: ^8.20.0
+  brace-expansion@1: ^1.1.18
+  brace-expansion@2: ^2.1.4
+  brace-expansion@5: ^5.0.9
+  cookie@0.6: ^0.7.2
+  deepmerge-ts: ^8.0.2
+  defu: ^6.1.7
+  diff@4: ^4.0.4
+  dompurify: ^3.4.14
+  effect: ^3.22.1
+  fast-uri@3: ^3.1.6
+  glob@10: ^10.5.0
+  hono: ^4.13.5
+  js-cookie: ^3.0.8
+  jsonpath-plus: ^10.4.0
+  lodash: ^4.18.1
+  minimatch@3: ^3.1.5
+  minimatch@9: ^9.0.9
+  nanoid@3: ^3.3.18
+  picomatch@2: ^2.3.2
+  picomatch@4: ^4.0.7
+  piscina@4: ^4.9.4
+  postcss: ^8.5.26
+  protobufjs@7: ^7.6.6
+  form-data@2: ^2.5.6
+  form-data@4: ^4.0.6
+  request>qs: ^6.16.0
+  request>tough-cookie: ^4.1.4
+  rollup: ^4.63.1
+  tar: ^7.5.22
+  uuid@13: ^13.0.2
+  ws: ^8.21.3

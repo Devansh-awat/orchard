@@ -1,6 +1,6 @@
 {
-  "ALL /sandboxes/:id/opencode/*": "authenticated",
-  "ALL /scim/v2/*": "public",
+  "ALL /sandboxes/:id/opencode/{*splat}": "authenticated",
+  "ALL /scim/v2/{*splat}": "public",
   "ALL /scim/v2/Me": "public",
   "DELETE /": "superadmin",
   "DELETE /admin/node-pools/:id": "superadmin",

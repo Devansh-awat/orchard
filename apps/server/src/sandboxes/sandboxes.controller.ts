@@ -384,7 +384,7 @@ export class SandboxesController {
     );
   }
 
-  @All(':id/opencode/*')
+  @All(':id/opencode/{*splat}')
   @RequireScope('exec')
   async opencodeProxy(
     @Req() req: any,

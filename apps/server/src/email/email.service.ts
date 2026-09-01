@@ -99,10 +99,10 @@ export class EmailService {
       .replaceAll("'", '&#39;');
   }
 
-  private renderTemplate(
+  private async renderTemplate(
     templateName: string,
     variables: Record<string, string>,
-  ): string {
+  ): Promise<string> {
     const templatePath = path.join(this.templatesDir, `${templateName}.mjml`);
     let mjmlContent = fs.readFileSync(templatePath, 'utf-8');
 
@@ -113,7 +113,7 @@ export class EmailService {
       mjmlContent = mjmlContent.replaceAll(`{{${key}}}`, this.escapeHtml(value));
     }
 
-    const { html, errors } = mjml2html(mjmlContent);
+    const { html, errors } = await mjml2html(mjmlContent);
     if (errors.length > 0) {
       console.warn(`MJML warnings for ${templateName}:`, errors);
     }
@@ -126,7 +126,7 @@ export class EmailService {
       return false;
     }
 
-    const html = this.renderTemplate('notification', {
+    const html = await this.renderTemplate('notification', {
       title: data.title,
       body: data.body,
       contextLine: data.contextLine,
@@ -160,7 +160,7 @@ export class EmailService {
       return false;
     }
 
-    const html = this.renderTemplate('organization-invite', {
+    const html = await this.renderTemplate('organization-invite', {
       recipientEmail: data.recipientEmail,
       recipientName: data.recipientName,
       organizationName: data.organizationName,
@@ -198,7 +198,7 @@ export class EmailService {
       return false;
     }
 
-    const html = this.renderTemplate('project-invite', {
+    const html = await this.renderTemplate('project-invite', {
       recipientEmail: data.recipientEmail,
       recipientName: data.recipientName,
       organizationName: data.organizationName,
@@ -237,7 +237,7 @@ export class EmailService {
       return false;
     }
 
-    const html = this.renderTemplate('workspace-invite', {
+    const html = await this.renderTemplate('workspace-invite', {
       recipientEmail: data.recipientEmail,
       recipientName: data.recipientName,
       workspaceName: data.workspaceName,
@@ -273,7 +273,7 @@ export class EmailService {
       return false;
     }
 
-    const html = this.renderTemplate('otp', {
+    const html = await this.renderTemplate('otp', {
       recipientEmail: data.recipientEmail,
       otpCode: data.otpCode,
       expiryMinutes: String(data.expiryMinutes),

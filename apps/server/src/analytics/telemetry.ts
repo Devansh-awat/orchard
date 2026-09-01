@@ -29,12 +29,12 @@ export function startTelemetry(): void {
       'service.namespace': 'orchard',
       'deployment.environment': process.env.NODE_ENV || 'development',
     }),
-    logRecordProcessor: new BatchLogRecordProcessor(
-      new OTLPLogExporter({
+    logRecordProcessor: new BatchLogRecordProcessor({
+      exporter: new OTLPLogExporter({
         url: endpoint,
         headers: { Authorization: `Bearer ${key}` },
       }),
-    ),
+    }),
   });
 
   sdk.start();

@@ -166,7 +166,7 @@ export class ScimController {
   // Anything else under /scim/v2 would otherwise fall through to the global
   // handler and answer with a non-SCIM body. Declared last so it only catches
   // what nothing above matched.
-  @All('*')
+  @All('{*splat}')
   notFound(@Req() req: Request): never {
     throw ScimError(404, null, `No SCIM endpoint at ${req.path}`);
   }
