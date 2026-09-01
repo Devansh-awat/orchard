@@ -2,6 +2,7 @@
   "name": "orchard",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev": "pnpm --parallel --stream --filter frontend --filter server --filter gateway dev",
     "dev:server": "pnpm --filter server dev",
