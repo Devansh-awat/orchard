@@ -296,6 +296,9 @@ r2Proxy:
   image:
     name: r2-proxy
     tag: "latest"
+    # Falls back to the global image.repository. Set this to keep r2-proxy on a
+    # registry path the other components have already moved off.
+    repository: ""
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "1", memory: "256Mi" }
