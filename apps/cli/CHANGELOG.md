@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/hackclub/orchard/compare/cli/v0.13.0...cli/v0.13.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* pin the go toolchain floor so the stdlib patches land ([b1d2b0e](https://github.com/hackclub/orchard/commit/b1d2b0e8e125a959b9b21ca5a8d87cef989a539e))
+
 ## [0.13.0](https://github.com/hackclub/orchard/compare/cli/v0.12.0...cli/v0.13.0) (2026-09-01)
 
 
