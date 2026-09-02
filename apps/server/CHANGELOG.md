@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.18.2](https://github.com/hackclub/orchard/compare/server/v2.18.1...server/v2.18.2) (2026-09-02)
+
+
+### Bug Fixes
+
+* **server:** stop dropping auto-deploys and mark superseded pushes ([92aba4c](https://github.com/hackclub/orchard/commit/92aba4c7800356161169275fd231204b1bfaa4f7))
+* **server:** unwedge auto-deploy when the build job is already gone ([8286b7e](https://github.com/hackclub/orchard/commit/8286b7e4ecea498b1b558749b570066b3521f13a))
+
 ## [2.18.1](https://github.com/hackclub/orchard/compare/server/v2.18.0...server/v2.18.1) (2026-09-01)
 
 

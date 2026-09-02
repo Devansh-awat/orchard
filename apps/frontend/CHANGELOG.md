@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.1](https://github.com/hackclub/orchard/compare/frontend/v1.17.0...frontend/v1.17.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **frontend:** show queued and superseded deploys in the deploys list ([428ea73](https://github.com/hackclub/orchard/commit/428ea7319c1df73a2e62f2254a5aaf33821624bd))
+
 ## [1.17.0](https://github.com/hackclub/orchard/compare/frontend/v1.16.1...frontend/v1.17.0) (2026-09-01)
 
 
