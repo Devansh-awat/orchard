@@ -219,6 +219,8 @@ jobs:
       # deploying. Pins the glob semantics and the fail-open cases.
       - name: Auto-deploy watch path tests
         run: pnpm --filter server test:watch-paths
+      - name: Auto-deploy branch match tests
+        run: pnpm --filter server test:auto-deploy-match
 
   e2e:
     needs: changes

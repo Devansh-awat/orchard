@@ -83,6 +83,9 @@ test('a list of only negations includes everything else', () => {
 test('no patterns always deploys', () => {
   assert.equal(pushMatchesWatchPaths([], ['docs/intro.md']), true);
   assert.equal(pushMatchesWatchPaths(['   '], ['docs/intro.md']), true);
+  assert.equal(pushMatchesWatchPaths(null as unknown as string[], ['docs/intro.md']), true);
+  assert.equal(pushMatchesWatchPaths(undefined as unknown as string[], ['docs/intro.md']), true);
+  assert.equal(pushMatchesWatchPaths([], null), true);
 });
 
 test('unknown changed files fail open', () => {

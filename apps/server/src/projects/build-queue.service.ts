@@ -67,17 +67,34 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     branch?: string | null;
     triggeredById?: string | null;
   }): Promise<{ startNow: boolean; runId: string }> {
-    return this.prisma.$transaction(async (tx) => {
+    const { startNow, runId, superseded, deployment } = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
+
+      const stale = await tx.buildRun.findMany({
+        where: { deploymentId: opts.deploymentId, status: 'scheduled' },
+        select: { commitSha: true },
+      });
 
       await tx.buildRun.updateMany({
         where: { deploymentId: opts.deploymentId, status: 'scheduled' },
-        data: { status: 'skipped', detail: 'Superseded by a newer build', finishedAt: new Date() },
+        data: {
+          status: 'skipped',
+          detail: opts.commitSha
+            ? `Superseded by ${opts.commitSha.substring(0, 7)}`
+            : 'Superseded by a newer build',
+          finishedAt: new Date(),
+        },
       });
 
       const dep = await tx.deployment.findUnique({
         where: { id: opts.deploymentId },
-        select: { buildStatus: true },
+        select: {
+          buildStatus: true,
+          name: true,
+          githubRepo: true,
+          githubInstallationId: true,
+          project: { select: { organization: { select: { slug: true } } } },
+        },
       });
       const buildingForDep = await tx.buildRun.count({
         where: { deploymentId: opts.deploymentId, status: 'building' },
@@ -105,8 +122,64 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           heartbeatAt: startNow ? now : null,
         },
       });
-      return { startNow, runId: run.id };
+      return { startNow, runId: run.id, superseded: stale, deployment: dep };
     }, this.txOpts);
+
+    if (superseded.length > 0) {
+      void this.announceSuperseded(superseded, deployment, opts).catch((e) =>
+        this.logger.warn(`superseded announce failed: ${e?.message ?? e}`),
+      );
+    }
+
+    return { startNow, runId };
+  }
+
+  private async announceSuperseded(
+    superseded: { commitSha: string | null }[],
+    deployment: {
+      name: string;
+      githubRepo: string | null;
+      githubInstallationId: bigint | null;
+      project: { organization: { slug: string } | null } | null;
+    } | null,
+    opts: { deploymentId: string; commitSha?: string | null },
+  ): Promise<void> {
+    if (!deployment?.githubRepo || !deployment.githubInstallationId) return;
+    const github = this.moduleRef.get(GitHubService, { strict: false });
+    const repoInfo = github.parseRepoUrl(deployment.githubRepo);
+    if (!repoInfo) return;
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const orgSlug = deployment.project?.organization?.slug;
+    const detailsUrl = orgSlug
+      ? `${frontendUrl}/${orgSlug}/deployments/${opts.deploymentId}`
+      : `${frontendUrl}/deployments/${opts.deploymentId}`;
+    const newer = opts.commitSha ? `\`${opts.commitSha.substring(0, 7)}\`` : 'a newer build';
+
+    const announced = new Set<string>();
+    for (const run of superseded) {
+      const sha = run.commitSha;
+      if (!sha || sha === opts.commitSha || announced.has(sha)) continue;
+      announced.add(sha);
+      await github
+        .createCheckRun(deployment.githubInstallationId, repoInfo.owner, repoInfo.repo, {
+          name: 'Orchard Deployment',
+          headSha: sha,
+          status: 'completed',
+          conclusion: 'skipped',
+          detailsUrl,
+          externalId: opts.deploymentId,
+          output: {
+            title: 'Rolled into a newer build',
+            summary: `\`${deployment.name}\` was still waiting for a build slot when ${newer} took over. That build deploys this commit's code too.`,
+          },
+        })
+        .catch((e: any) =>
+          this.logger.warn(
+            `superseded check run for ${sha.substring(0, 7)} failed: ${e?.message ?? e}`,
+          ),
+        );
+    }
   }
 
   // Stamp the GitHub artifacts (check run, installation, repo) onto the run

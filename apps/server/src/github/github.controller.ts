@@ -9,6 +9,7 @@ import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
 import { changedFilesFromPush, pushMatchesWatchPaths } from './watch-paths';
+import { autoDeployMatchesBranch } from './auto-deploy-match';
 
 /** Only allow same-origin, non-protocol-relative return paths. */
 function isSafeRedirect(redirect?: string): redirect is string {
@@ -550,12 +551,11 @@ export class GitHubController {
       // Match by canonical https URL AND owning installation. Legacy rows
       // with githubInstallationId === null are intentionally excluded — they
       // must be re-linked via enableAutoDeploy before they will fire.
-      const deployments = await this.prisma.deployment.findMany({
+      const candidates = await this.prisma.deployment.findMany({
         where: {
           githubRepo: { in: repoUrls },
           githubInstallationId: installationIdBig,
           autoDeployEnabled: true,
-          autoDeployBranch: pushedBranch,
         },
         include: {
           project: {
@@ -566,26 +566,9 @@ export class GitHubController {
         },
       });
 
-      if (deployments.length === 0) {
-        // Also check for deployments where autoDeployBranch is null but githubBranch matches
-        const fallbackDeployments = await this.prisma.deployment.findMany({
-          where: {
-            githubRepo: { in: repoUrls },
-            githubInstallationId: installationIdBig,
-            autoDeployEnabled: true,
-            autoDeployBranch: null,
-            githubBranch: pushedBranch,
-          },
-          include: {
-            project: {
-              include: {
-                organization: true,
-              },
-            },
-          },
-        });
-        deployments.push(...fallbackDeployments);
-      }
+      const deployments = candidates.filter((deployment) =>
+        autoDeployMatchesBranch(deployment, pushedBranch),
+      );
 
       if (deployments.length === 0) {
         return {
@@ -632,6 +615,15 @@ export class GitHubController {
 
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
+
+      results.forEach((result, index) => {
+        if (result.status !== 'rejected') return;
+        const name = watched[index]?.name ?? watched[index]?.id;
+        const reason = (result.reason as Error)?.message ?? result.reason;
+        console.error(
+          `[GitHub App] Auto-deploy of ${name} for ${repoFullName}@${commitSha?.substring(0, 7)} was dropped: ${reason}`,
+        );
+      });
 
       return {
         received: true,
