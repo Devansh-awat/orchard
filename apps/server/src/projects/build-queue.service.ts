@@ -67,7 +67,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     branch?: string | null;
     triggeredById?: string | null;
   }): Promise<{ startNow: boolean; runId: string }> {
-    const { startNow, runId, superseded, deployment } = await this.prisma.$transaction(async (tx) => {
+    const enqueued = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
 
       const stale = await tx.buildRun.findMany({
@@ -125,13 +125,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       return { startNow, runId: run.id, superseded: stale, deployment: dep };
     }, this.txOpts);
 
-    if (superseded.length > 0) {
-      void this.announceSuperseded(superseded, deployment, opts).catch((e) =>
+    if (enqueued.superseded.length > 0) {
+      void this.announceSuperseded(enqueued.superseded, enqueued.deployment, opts).catch((e) =>
         this.logger.warn(`superseded announce failed: ${e?.message ?? e}`),
       );
     }
 
-    return { startNow, runId };
+    return { startNow: enqueued.startNow, runId: enqueued.runId };
   }
 
   private async announceSuperseded(
