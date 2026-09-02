@@ -47,6 +47,7 @@ import { ApplyExecutorService } from '../apply/apply-executor.service';
 import { formatSlug, scrubIngress, isPlatformGeneratedHost } from './projects.utils';
 import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
+import { isObservedJobStatus } from './build-recovery';
 
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
@@ -282,6 +283,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.doRecoverStuckBuild(deployment);
     } catch (error) {
       this.logger.error(`[BuildRecovery] Unexpected error recovering ${deployment.id}: ${error.message}`);
+    } finally {
       this.activeRecoveries.delete(deployment.id);
     }
   }
@@ -304,7 +306,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     ) {
       const workerAlive = await this.isWorkerPodAlive(activeRun.workerId);
       if (workerAlive !== false) {
-        this.activeRecoveries.delete(deployment.id);
         return;
       }
       this.logger.log(`[BuildRecovery] Worker pod for ${deployment.id} is gone; adopting immediately`);
@@ -314,14 +315,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (deployment.buildStep === 'deploying' && deployment.image) {
       await this.finishRecoveredBuild(deployment, deployment.image);
-      this.activeRecoveries.delete(deployment.id);
       return;
     }
 
     const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
     if (jobs === null) {
       this.logger.warn(`[BuildRecovery] Could not list build jobs for ${deployment.id}; retrying next scan`);
-      this.activeRecoveries.delete(deployment.id);
       return;
     }
     const jobName = metadata.__jobName as string | undefined;
@@ -333,7 +332,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         foundJob = fromLabel;
       } else {
         const status = await this.dockerService.getBuildJobStatus(jobName);
-        if (status) {
+        if (status && isObservedJobStatus(status.status)) {
           foundJob = { name: jobName, image: null, status: status.status };
         }
       }
@@ -351,12 +350,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (pushed === true) {
           this.logger.log(`[BuildRecovery] Build job for ${deployment.id} is gone but ${expectedImage} exists in the registry; finishing deploy`);
           await this.finishRecoveredBuild(deployment, expectedImage);
-          this.activeRecoveries.delete(deployment.id);
           return;
         }
         if (pushed === null) {
           this.logger.warn(`[BuildRecovery] Could not check registry for ${deployment.id}; retrying next scan`);
-          this.activeRecoveries.delete(deployment.id);
           return;
         }
       }
@@ -366,7 +363,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       } else {
         await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
       }
-      this.activeRecoveries.delete(deployment.id);
       return;
     }
 
@@ -378,15 +374,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.finishRecoveredBuild(deployment, image);
       }
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
-      this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'failed') {
       await this.markBuildFailed(deployment.id, 'Build job failed');
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
-      this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
       await this.buildQueue.adoptRun(deployment.id);
       this.streamAdoptedBuildLogs(deployment.id, foundJob.name);
-      this.activeRecoveries.delete(deployment.id);
     }
   }
 

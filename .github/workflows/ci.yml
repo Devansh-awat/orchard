@@ -221,6 +221,8 @@ jobs:
         run: pnpm --filter server test:watch-paths
       - name: Auto-deploy branch match tests
         run: pnpm --filter server test:auto-deploy-match
+      - name: Build recovery tests
+        run: pnpm --filter server test:build-recovery
 
   e2e:
     needs: changes
