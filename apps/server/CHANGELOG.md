@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.18.1](https://github.com/hackclub/orchard/compare/server/v2.18.0...server/v2.18.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* bound the inputs feeding quadratic path and url trimming ([a91ea49](https://github.com/hackclub/orchard/commit/a91ea49c237addff6307af24e66397aa4068e0bd))
+* draw otp codes without modulo bias ([9bbdb1e](https://github.com/hackclub/orchard/commit/9bbdb1e411113fda8b8471eda553c0f20f25abde))
+
 ## [2.18.0](https://github.com/hackclub/orchard/compare/server/v2.17.1...server/v2.18.0) (2026-09-01)
 
 
