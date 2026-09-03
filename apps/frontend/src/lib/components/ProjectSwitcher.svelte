@@ -39,6 +39,13 @@
 
 	const orgId = $derived($selectedOrganization?.id ?? null);
 
+	// Guests are invited into an org per-project and cannot spawn new projects
+	// (the server rejects it in requireOrgCanCreateProjects). Hide the affordance
+	// so the option isn't offered where it always 403s.
+	const canCreateProject = $derived(
+		!!$selectedOrganization && $selectedOrganization.myRole !== 'guest'
+	);
+
 	// Cached + deduped: every switcher mount across the app shares one fetch
 	// per org, and SSE events for this org (project.changed / membership.changed)
 	// auto-invalidate the key via orgEvents.ts.
@@ -198,48 +205,50 @@
 			style="top: {menuPos.top}px; left: {menuPos.left}px; --ps-menu-trigger-width: {menuPos.minWidth}px;"
 			transition:scale={{ duration: 120, start: 0.96 }}
 		>
-			{#if !creating}
-				<button class="ps-option ps-option-create" onclick={beginCreate}>
-					<Plus size={14} />
-					<span class="ps-option-name">New project</span>
-				</button>
-			{:else}
-				<div class="ps-create">
-					<div class="ps-create-row">
-						<input
-							bind:this={nameInputEl}
-							bind:value={newName}
-							onkeydown={handleCreateKey}
-							placeholder="Project name"
-							class="ps-create-input"
-						/>
-						<button
-							class="ps-create-icon ps-create-confirm"
-							onclick={stagePendingProject}
-							disabled={!newName.trim()}
-							type="button"
-							aria-label="Use this project name"
-							title="Use this name"
-						>
-							<Check size={14} />
-						</button>
-						<button
-							class="ps-create-icon ps-create-cancel-icon"
-							onclick={cancelCreate}
-							type="button"
-							aria-label="Cancel"
-							title="Cancel"
-						>
-							<X size={14} />
-						</button>
+			{#if canCreateProject}
+				{#if !creating}
+					<button class="ps-option ps-option-create" onclick={beginCreate}>
+						<Plus size={14} />
+						<span class="ps-option-name">New project</span>
+					</button>
+				{:else}
+					<div class="ps-create">
+						<div class="ps-create-row">
+							<input
+								bind:this={nameInputEl}
+								bind:value={newName}
+								onkeydown={handleCreateKey}
+								placeholder="Project name"
+								class="ps-create-input"
+							/>
+							<button
+								class="ps-create-icon ps-create-confirm"
+								onclick={stagePendingProject}
+								disabled={!newName.trim()}
+								type="button"
+								aria-label="Use this project name"
+								title="Use this name"
+							>
+								<Check size={14} />
+							</button>
+							<button
+								class="ps-create-icon ps-create-cancel-icon"
+								onclick={cancelCreate}
+								type="button"
+								aria-label="Cancel"
+								title="Cancel"
+							>
+								<X size={14} />
+							</button>
+						</div>
+						{#if createError}
+							<p class="ps-create-error">{createError}</p>
+						{/if}
 					</div>
-					{#if createError}
-						<p class="ps-create-error">{createError}</p>
-					{/if}
-				</div>
-			{/if}
+				{/if}
 
-			<div class="ps-divider"></div>
+				<div class="ps-divider"></div>
+			{/if}
 
 			{#each projects as p (p.id)}
 				<button
