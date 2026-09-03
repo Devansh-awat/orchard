@@ -23,6 +23,7 @@
 		MembersTab,
 		CustomizeModal,
 		TransferOwnershipModal,
+		MoveToOrgModal,
 		TransferBanner
 	} from '$lib/components/project';
 	import { SharedVarsEditor } from '$lib/components/environment';
@@ -67,6 +68,7 @@
 	const canManageMembers = $derived(project?.currentUserRole?.canManageMembers ?? false);
 	const canDelete = $derived(project?.currentUserRole?.canDelete ?? false);
 	const canTransferOwnership = $derived(project?.currentUserRole?.canTransferOwnership ?? false);
+	const canMoveToOrg = $derived(canTransferOwnership || canDelete);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 	let databases = $state<DatabaseSummary[]>([]);
 	let loading = $state(true);
@@ -86,6 +88,7 @@
 	let removingMemberId = $state<string | null>(null);
 	let updatingMemberId = $state<string | null>(null);
 	let showTransferModal = $state(false);
+	let showMoveModal = $state(false);
 	let requestingTransfer = $state(false);
 	let respondingToTransfer = $state<'accept' | 'decline' | 'cancel' | null>(null);
 	const pendingTransfer = $derived(project?.pendingTransfer ?? null);
@@ -779,12 +782,14 @@
 					{canEdit}
 					{canDelete}
 					{canTransferOwnership}
+					{canMoveToOrg}
 					transferPending={!!pendingTransfer}
 					{deleting}
 					bind:heroImgReady
 					onCustomize={() => (showCustomize = true)}
 					onDelete={() => (showDeleteModal = true)}
 					onTransferOwnership={() => (showTransferModal = true)}
+					onMoveToOrg={() => (showMoveModal = true)}
 				/>
 			{:else}
 				<ProjectHeader
@@ -792,11 +797,13 @@
 					{canEdit}
 					{canDelete}
 					{canTransferOwnership}
+					{canMoveToOrg}
 					transferPending={!!pendingTransfer}
 					{deleting}
 					onCustomize={() => (showCustomize = true)}
 					onDelete={() => (showDeleteModal = true)}
 					onTransferOwnership={() => (showTransferModal = true)}
+					onMoveToOrg={() => (showMoveModal = true)}
 				/>
 			{/if}
 
@@ -929,6 +936,14 @@
 		ownerId={project.ownerId ?? null}
 		submitting={requestingTransfer}
 		onrequest={requestTransfer}
+	/>
+
+	<MoveToOrgModal
+		bind:open={showMoveModal}
+		projectId={project.id}
+		projectName={project.name}
+		currentSlug={project.slug}
+		currentOrgId={project.organization?.id ?? ''}
 	/>
 
 	<CustomizeModal

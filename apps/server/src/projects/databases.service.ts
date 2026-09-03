@@ -30,6 +30,15 @@ import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
 
+/** The org fields that locate a managed database's backups in R2. */
+export type OrgR2 = {
+  backupR2Endpoint: string | null;
+  backupR2Bucket: string | null;
+  backupR2Region: string | null;
+  backupR2AccessKey: string | null;
+  backupR2SecretKey: string | null;
+};
+
 export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'error';
 
 export interface ProvisioningStep {
@@ -1051,6 +1060,92 @@ export class DatabasesService {
         `[R2] Failed to purge backup objects for ${database.namespace}/${database.clusterName}: ${e?.message ?? e}`,
       );
     }
+  }
+
+  /**
+   * Re-point every managed database in a project at the destination org's backup
+   * storage after the project moves orgs. New base backups and WAL archiving flow
+   * to the destination; existing backups stay exactly where they were taken, so
+   * their restore records keep resolving and nothing is deleted or lost. When the
+   * destination has no R2 configured, archiving is switched off so the database
+   * stops writing into the old org's bucket — new backups pause until R2 is set
+   * up in the destination. Best-effort; runs in the background after a move.
+   */
+  async repointProjectBackupsToOrg(projectId: string, destOrgId: string): Promise<void> {
+    const destOrg = (await this.prisma.organization.findUnique({
+      where: { id: destOrgId },
+    })) as OrgR2 | null;
+    const databases = await this.prisma.database.findMany({
+      where: { projectId },
+      select: { id: true, mode: true, namespace: true, clusterName: true, r2ProxyAccessKey: true },
+    });
+    for (const db of databases) {
+      if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) continue;
+      try {
+        await this.repointDatabaseBackups(db, destOrg);
+      } catch (e: any) {
+        this.logger.error(
+          `[DB/move] backup re-point failed for ${db.namespace}/${db.clusterName}: ${e?.message ?? e}`,
+        );
+      }
+    }
+  }
+
+  private async repointDatabaseBackups(
+    db: {
+      id: string;
+      namespace: string | null;
+      clusterName: string | null;
+      r2ProxyAccessKey: string | null;
+    },
+    destOrg: OrgR2 | null,
+  ): Promise<void> {
+    if (!db.namespace || !db.clusterName) return;
+    const previousProxyKey = db.r2ProxyAccessKey;
+    const destHasR2 = Boolean(
+      destOrg?.backupR2Endpoint &&
+        destOrg?.backupR2Bucket &&
+        destOrg?.backupR2AccessKey &&
+        destOrg?.backupR2SecretKey,
+    );
+
+    if (!destHasR2) {
+      // Nowhere to archive to in the new org: stop writing into the old org's
+      // bucket. Existing backups stay restorable; new backups pause until the
+      // destination configures R2.
+      if (await this.k8sCnpg.isCnpgBackupConfigured(db.namespace, db.clusterName)) {
+        await this.k8sCnpg.disableCnpgBackup(db.namespace, db.clusterName);
+        this.logger.log(
+          `[DB/move] paused backups for ${db.namespace}/${db.clusterName}: destination org has no R2`,
+        );
+      }
+      if (this.r2Proxy.isEnabled() && previousProxyKey) {
+        await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
+        await this.prisma.database.update({
+          where: { id: db.id },
+          data: { r2ProxyAccessKey: null, r2ProxySecret: null },
+        });
+      }
+      return;
+    }
+
+    const { r2: destR2, r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret } =
+      await this.buildBackupR2Config(destOrg, db.namespace, db.clusterName);
+    if (!destR2) return;
+
+    await this.k8sCnpg.enableCnpgBackup(db.namespace, db.clusterName, destR2);
+    if (destProxyKey) {
+      await this.prisma.database.update({
+        where: { id: db.id },
+        data: { r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret },
+      });
+      if (this.r2Proxy.isEnabled() && previousProxyKey && previousProxyKey !== destProxyKey) {
+        await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
+      }
+    }
+    this.logger.log(
+      `[DB/move] re-pointed backups for ${db.namespace}/${db.clusterName} to ${destR2.bucket}`,
+    );
   }
 
   async deleteDatabase(

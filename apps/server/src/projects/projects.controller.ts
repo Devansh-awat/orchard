@@ -5,6 +5,7 @@ import { ProjectsService } from './projects.service';
 import { ProjectAccessService } from './project-access.service';
 import { DatabasesService } from './databases.service';
 import { DeploymentsService } from './deployments.service';
+import { ProjectOrgTransferService } from './project-org-transfer.service';
 import { IngressService } from './ingress.service';
 import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -27,6 +28,7 @@ export class ProjectsController {
     private readonly storageService: StorageService,
     private readonly githubService: GitHubService,
     private readonly usersService: UsersService,
+    private readonly orgTransfer: ProjectOrgTransferService,
   ) {}
 
   /**
@@ -504,6 +506,42 @@ export class ProjectsController {
   @Delete(':id/transfer-request')
   async cancelProjectOwnershipTransfer(@Param('id') id: string, @Request() req) {
     return this.projectsService.cancelProjectOwnershipTransfer(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  // Preview a project move to another org: slug collision, who loses access,
+  // owner re-assignment, quota headroom, and whether backups can follow.
+  @Get(':id/transfer-org/preview')
+  async previewProjectOrgTransfer(
+    @Param('id') id: string,
+    @Query('destinationOrgId') destinationOrgId: string,
+    @Query('slug') slug: string | undefined,
+    @Request() req,
+  ) {
+    return this.orgTransfer.preview(id, destinationOrgId, slug, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/transfer-org')
+  async transferProjectToOrg(
+    @Param('id') id: string,
+    @Body() body: { destinationOrgId?: string; slug?: string },
+    @Request() req,
+  ) {
+    if (!body?.destinationOrgId) {
+      throw new BadRequestException('destinationOrgId is required');
+    }
+    return this.orgTransfer.transfer(id, body.destinationOrgId, body.slug, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,

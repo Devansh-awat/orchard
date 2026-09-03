@@ -2,7 +2,7 @@
 	import { animate } from 'motion';
 	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { tick } from 'svelte';
-	import { Palette, Trash2, Loader2, Ellipsis, Crown } from 'lucide-svelte';
+	import { Palette, Trash2, Loader2, Ellipsis, Crown, FolderInput } from 'lucide-svelte';
 	import { Menu, MenuItem } from '$lib/components/ui';
 	import type { Project } from './types';
 
@@ -12,24 +12,28 @@
 		canEdit = false,
 		canDelete = false,
 		canTransferOwnership = false,
+		canMoveToOrg = false,
 		transferPending = false,
 		deleting = false,
 		heroImgReady = $bindable(false),
 		onCustomize,
 		onDelete,
-		onTransferOwnership
+		onTransferOwnership,
+		onMoveToOrg
 	}: {
 		project: Project;
 		activeTab: string;
 		canEdit?: boolean;
 		canDelete?: boolean;
 		canTransferOwnership?: boolean;
+		canMoveToOrg?: boolean;
 		transferPending?: boolean;
 		deleting?: boolean;
 		heroImgReady?: boolean;
 		onCustomize?: () => void;
 		onDelete?: () => void;
 		onTransferOwnership?: () => void;
+		onMoveToOrg?: () => void;
 	} = $props();
 
 	let heroEl = $state<HTMLElement | null>(null);
@@ -110,7 +114,7 @@
 			{/if}
 		</div>
 		<div class="pj-header-actions">
-			{#if canEdit || canDelete || canTransferOwnership}
+			{#if canEdit || canDelete || canTransferOwnership || canMoveToOrg}
 				<Menu placement="bottom-end">
 					{#snippet trigger(attrs, open)}
 						<button
@@ -134,6 +138,12 @@
 						<MenuItem danger disabled={transferPending} onclick={() => onTransferOwnership?.()}>
 							<Crown size={14} />
 							{transferPending ? 'Transfer already requested' : 'Transfer ownership'}
+						</MenuItem>
+					{/if}
+					{#if canMoveToOrg}
+						<MenuItem onclick={() => onMoveToOrg?.()}>
+							<FolderInput size={14} />
+							Move to organization
 						</MenuItem>
 					{/if}
 					{#if canDelete}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Palette, Trash2, Loader2, Crown } from 'lucide-svelte';
+	import { Palette, Trash2, Loader2, Crown, FolderInput } from 'lucide-svelte';
 	import type { Project } from './types';
 
 	let {
@@ -7,21 +7,25 @@
 		canEdit = false,
 		canDelete = false,
 		canTransferOwnership = false,
+		canMoveToOrg = false,
 		transferPending = false,
 		deleting = false,
 		onCustomize,
 		onDelete,
-		onTransferOwnership
+		onTransferOwnership,
+		onMoveToOrg
 	}: {
 		project: Project;
 		canEdit?: boolean;
 		canDelete?: boolean;
 		canTransferOwnership?: boolean;
+		canMoveToOrg?: boolean;
 		transferPending?: boolean;
 		deleting?: boolean;
 		onCustomize?: () => void;
 		onDelete?: () => void;
 		onTransferOwnership?: () => void;
+		onMoveToOrg?: () => void;
 	} = $props();
 </script>
 
@@ -65,6 +69,16 @@
 					title={transferPending ? 'Transfer already requested' : 'Transfer ownership'}
 				>
 					<Crown class="h-4 w-4" />
+				</button>
+			{/if}
+			{#if canMoveToOrg}
+				<button
+					onclick={onMoveToOrg}
+					class="pj-icon-btn"
+					aria-label="Move to organization"
+					title="Move to organization"
+				>
+					<FolderInput class="h-4 w-4" />
 				</button>
 			{/if}
 			{#if canDelete}

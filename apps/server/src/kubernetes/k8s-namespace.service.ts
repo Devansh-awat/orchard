@@ -272,6 +272,68 @@ export class K8sNamespaceService {
   }
 
   /**
+   * A namespace name is immutable in Kubernetes, so a project that moves orgs
+   * keeps its original `{old-org-slug}-{project-slug}` name forever. Tag it so a
+   * human `kubectl`-ing around can still tell where it belongs now: labels are
+   * searchable (`kubectl get ns -l orchard.my/current-org=<slug>`), and the
+   * annotation carries the full move history. Best-effort.
+   */
+  async tagNamespaceMoved(
+    namespace: string,
+    move: { fromOrgSlug: string; toOrgSlug: string; movedBy: string },
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const cleanNamespace = String(namespace || '').trim();
+    if (!cleanNamespace) return;
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    let history: unknown[] = [];
+    try {
+      const existing: any = await api.readNamespace(cleanNamespace);
+      const raw = existing?.body?.metadata?.annotations?.['orchard.my/move-history'];
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) history = parsed;
+      }
+    } catch {
+      // Namespace may be absent in a partial/dev environment; the tag is
+      // best-effort and must never block the move itself.
+    }
+    const now = new Date().toISOString();
+    history.push({ from: move.fromOrgSlug, to: move.toOrgSlug, at: now, by: move.movedBy });
+
+    const labelSlug = move.toOrgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '').substring(0, 63) || 'unknown';
+    const patch = {
+      metadata: {
+        labels: {
+          'orchard.my/moved': 'true',
+          'orchard.my/current-org': labelSlug,
+        },
+        annotations: {
+          'orchard.my/moved-from': move.fromOrgSlug,
+          'orchard.my/moved-at': now,
+          'orchard.my/move-history': JSON.stringify(history).substring(0, 250000),
+        },
+      },
+    };
+
+    try {
+      await api.patchNamespace(
+        cleanNamespace,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      );
+    } catch (e: any) {
+      console.error(`[K8s] Failed to tag moved namespace ${cleanNamespace}:`, e?.message ?? e);
+    }
+  }
+
+  /**
    * Create a namespaced Role + RoleBinding that grants the orchard-server
    * ServiceAccount full secrets/configmaps management inside `namespace`.
    * Idempotent — swallows 409 if the bindings already exist. This replaces
