@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.17.2](https://github.com/hackclub/orchard/compare/frontend/v1.17.1...frontend/v1.17.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* create deployments, databases and compose stacks in the selected environment ([166af35](https://github.com/hackclub/orchard/commit/166af35a79104df14617d19819c29727dccca700))
+* **frontend:** hide new project option from org guests ([ee387a9](https://github.com/hackclub/orchard/commit/ee387a9cdac72b25df80ed0e03ffa83d426faae8))
+
 ## [1.17.1](https://github.com/hackclub/orchard/compare/frontend/v1.17.0...frontend/v1.17.1) (2026-09-02)
 
 

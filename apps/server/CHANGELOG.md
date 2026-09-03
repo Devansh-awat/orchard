@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.18.4](https://github.com/hackclub/orchard/compare/server/v2.18.3...server/v2.18.4) (2026-09-03)
+
+
+### Bug Fixes
+
+* create deployments, databases and compose stacks in the selected environment ([166af35](https://github.com/hackclub/orchard/commit/166af35a79104df14617d19819c29727dccca700))
+
 ## [2.18.3](https://github.com/hackclub/orchard/compare/server/v2.18.2...server/v2.18.3) (2026-09-03)
 
 
