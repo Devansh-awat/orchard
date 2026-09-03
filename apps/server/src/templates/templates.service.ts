@@ -315,25 +315,61 @@ export class TemplatesService implements OnModuleInit {
           }
 
           case 'deployment': {
-            const deployData: any = {
-              name: config.name,
-              image: config.image,
-              replicas: config.replicas ? Number(config.replicas) : 1,
-              ports: config.ports,
-              env: config.env,
-              volumes: config.volumes,
-              exposePublic: config.exposePublic ?? false,
-              templateInstanceId: instance.id,
-              cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-              memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
-            };
+            const repoUrl = config.repo || config.githubRepo || config.repoUrl;
+            const buildsFromRepo = Boolean(repoUrl);
 
-            const deployment = await this.deployments.createDeployment(
-              projectId,
-              deployData,
-              clerkId,
-              userData,
-            );
+            let deployment;
+            if (buildsFromRepo) {
+              const buildType = config.buildType === 'railpack' ? 'railpack' : 'dockerfile';
+              deployment = await this.deployments.createDeploymentFromGitHub(
+                projectId,
+                {
+                  name: config.name,
+                  repoUrl,
+                  branch: config.branch,
+                  buildType,
+                  dockerfilePath: buildType === 'dockerfile' ? config.dockerfilePath || 'Dockerfile' : undefined,
+                  rootDirectory: config.rootDirectory,
+                  installCommand: config.installCommand,
+                  buildCommand: config.buildCommand,
+                  startCommand: config.startCommand,
+                  outputDirectory: config.outputDirectory,
+                  replicas: config.replicas ? Number(config.replicas) : 1,
+                  ports: config.ports,
+                  port: config.port ? Number(config.port) : undefined,
+                  env: config.env,
+                  volumes: config.volumes,
+                  exposePublic: config.exposePublic ?? false,
+                  autoDeployEnabled: config.autoDeploy,
+                  autoDeployBranch: config.autoDeployBranch,
+                  templateInstanceId: instance.id,
+                  cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
+                  memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+                },
+                clerkId,
+                userData,
+              );
+            } else {
+              const deployData: any = {
+                name: config.name,
+                image: config.image,
+                replicas: config.replicas ? Number(config.replicas) : 1,
+                ports: config.ports,
+                env: config.env,
+                volumes: config.volumes,
+                exposePublic: config.exposePublic ?? false,
+                templateInstanceId: instance.id,
+                cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
+                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+              };
+
+              deployment = await this.deployments.createDeployment(
+                projectId,
+                deployData,
+                clerkId,
+                userData,
+              );
+            }
 
             const services = await this.prisma.service.findMany({
               where: { deploymentId: deployment.id },

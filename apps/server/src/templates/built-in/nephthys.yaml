@@ -1,0 +1,164 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: nephthys
+  displayName: Nephthys
+  description: Hack Club's Slack support bot. Manages help channels with AI ticket tagging, routing, and resolution tracking. Builds from the GitHub repository and runs migrations automatically.
+  icon: slack
+  version: "1.0.0"
+  category: bot
+  tags: ["slack", "bot", "python", "support", "postgres"]
+
+parameters:
+  - name: appName
+    displayName: App Name
+    description: Name prefix for all resources
+    type: string
+    default: nephthys
+    required: true
+    validation:
+      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      message: Must be lowercase alphanumeric with hyphens, 3-60 chars
+
+  - name: domain
+    displayName: Domain
+    description: Public domain Slack will send events to
+    type: string
+    required: true
+    placeholder: "nephthys.example.com"
+
+  - name: enableTls
+    displayName: Enable HTTPS
+    type: boolean
+    default: true
+
+  - name: slackBotToken
+    displayName: Slack Bot Token
+    type: string
+    required: true
+    placeholder: "xoxb-..."
+
+  - name: slackUserToken
+    displayName: Slack User Token
+    type: string
+    required: true
+    placeholder: "xoxp-..."
+
+  - name: slackSigningSecret
+    displayName: Slack Signing Secret
+    type: string
+    required: true
+
+  - name: slackHeartbeatChannel
+    displayName: Heartbeat Channel ID
+    type: string
+    required: true
+    placeholder: "C..."
+
+  - name: slackTicketChannel
+    displayName: Ticket Channel ID
+    type: string
+    required: true
+    placeholder: "C..."
+
+  - name: slackBtsChannel
+    displayName: Behind-the-scenes Channel ID
+    type: string
+    required: true
+    placeholder: "C..."
+
+  - name: slackHelpChannel
+    displayName: Help Channel ID
+    type: string
+    required: true
+    placeholder: "C..."
+
+  - name: slackMaintainerId
+    displayName: Maintainer User ID
+    type: string
+    required: true
+    placeholder: "U..."
+
+  - name: program
+    displayName: Program
+    description: The program this instance supports
+    type: string
+    default: flavortown
+
+  - name: appTitle
+    displayName: App Title
+    type: string
+    default: helper heidi
+
+  - name: hackClubAiApiKey
+    displayName: Hack Club AI API Key
+    description: Powers automatic ticket category tagging
+    type: string
+    required: true
+    placeholder: "sk-hc-v1-..."
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: "{{ params.appName }}-db"
+
+  - name: app
+    type: deployment
+    config:
+      name: "{{ params.appName }}"
+      repo: https://github.com/hackclub/nephthys
+      branch: main
+      buildType: dockerfile
+      dockerfilePath: Dockerfile
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+      env:
+        - key: ENVIRONMENT
+          value: production
+        - key: PORT
+          value: "3000"
+        - key: DATABASE_URL
+          value: "{{ resources.db.connectionString }}"
+          secret: true
+        - key: SLACK_BOT_TOKEN
+          value: "{{ params.slackBotToken }}"
+          secret: true
+        - key: SLACK_USER_TOKEN
+          value: "{{ params.slackUserToken }}"
+          secret: true
+        - key: SLACK_SIGNING_SECRET
+          value: "{{ params.slackSigningSecret }}"
+          secret: true
+        - key: SLACK_HEARTBEAT_CHANNEL
+          value: "{{ params.slackHeartbeatChannel }}"
+        - key: SLACK_TICKET_CHANNEL
+          value: "{{ params.slackTicketChannel }}"
+        - key: SLACK_BTS_CHANNEL
+          value: "{{ params.slackBtsChannel }}"
+        - key: SLACK_HELP_CHANNEL
+          value: "{{ params.slackHelpChannel }}"
+        - key: SLACK_MAINTAINER_ID
+          value: "{{ params.slackMaintainerId }}"
+        - key: PROGRAM
+          value: "{{ params.program }}"
+        - key: APP_TITLE
+          value: "{{ params.appTitle }}"
+        - key: BASE_URL
+          value: "https://{{ params.domain }}"
+        - key: HACK_CLUB_AI_API_KEY
+          value: "{{ params.hackClubAiApiKey }}"
+          secret: true
+
+  - name: ingress
+    type: ingress
+    config:
+      host: "{{ params.domain }}"
+      tlsEnabled: "{{ params.enableTls }}"
+      routes:
+        - path: /
+          serviceName: "{{ resources.app.serviceName }}"
+          servicePort: 3000

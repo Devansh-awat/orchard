@@ -5057,6 +5057,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       environmentId?: string;
       autoDeployEnabled?: boolean;
       autoDeployBranch?: string;
+      templateInstanceId?: string;
     },
     clerkId: string,
     userData?: {
@@ -5297,6 +5298,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         composeStackId: data.composeStackId ?? null,
         composeServiceName: data.composeServiceName ?? null,
+        templateInstanceId: data.templateInstanceId ?? null,
         // Auto-deploy defaults ON when the GitHub App installation covers the
         // repo (push webhooks can actually fire); without one the toggle
         // would be dead weight, so it stays off unless explicitly requested.

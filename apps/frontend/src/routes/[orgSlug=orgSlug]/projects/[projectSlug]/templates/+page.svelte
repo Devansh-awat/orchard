@@ -10,6 +10,7 @@
 		Database,
 		Globe,
 		Server,
+		Bot,
 		Plus,
 		Trash2
 	} from 'lucide-svelte';
@@ -80,6 +81,9 @@
 				return Database;
 			case 'globe':
 				return Globe;
+			case 'slack':
+			case 'bot':
+				return Bot;
 			default:
 				return LayoutTemplate;
 		}
