@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.18.3](https://github.com/hackclub/orchard/compare/server/v2.18.2...server/v2.18.3) (2026-09-03)
+
+
+### Bug Fixes
+
+* **server:** apply compose deploy.resources limits to child deployments ([9f8577f](https://github.com/hackclub/orchard/commit/9f8577f245f1ec77267c24e51072018e33f8b8e1))
+* **server:** point compose-managed resource errors at the compose file ([f96bf73](https://github.com/hackclub/orchard/commit/f96bf73d7953b804d86122f565f7163d935ce0d7))
+* **server:** stop enqueue shadowing its own startNow ([26ee46a](https://github.com/hackclub/orchard/commit/26ee46a2caf9ade868d64b625defdd541e9b0f97))
+
 ## [2.18.2](https://github.com/hackclub/orchard/compare/server/v2.18.1...server/v2.18.2) (2026-09-02)
 
 
