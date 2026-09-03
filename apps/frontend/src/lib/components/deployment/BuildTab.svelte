@@ -152,7 +152,11 @@
 					<Input bind:value={rootDirectory} placeholder="apps/web" class="font-mono" />
 				</Field>
 				<Field label="Install command">
-					<Input bind:value={installCommand} placeholder="Detected automatically" class="font-mono" />
+					<Input
+						bind:value={installCommand}
+						placeholder="Detected automatically"
+						class="font-mono"
+					/>
 				</Field>
 				<Field label="Build command">
 					<Input bind:value={buildCommand} placeholder="Detected automatically" class="font-mono" />
@@ -161,7 +165,11 @@
 					label="Output directory"
 					hint="Set this to serve the built files as a static site instead of running a server."
 				>
-					<Input bind:value={outputDirectory} placeholder="Detected automatically" class="font-mono" />
+					<Input
+						bind:value={outputDirectory}
+						placeholder="Detected automatically"
+						class="font-mono"
+					/>
 				</Field>
 				<Field label="Start command">
 					<Input

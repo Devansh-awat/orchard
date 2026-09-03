@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.18.0](https://github.com/hackclub/orchard/compare/frontend/v1.17.2...frontend/v1.18.0) (2026-09-03)
+
+
+### Features
+
+* deploy templates from a github repo and add the nephthys template ([6716e15](https://github.com/hackclub/orchard/commit/6716e15cab546aea6ae30d8b8b71f91d4e21c216))
+* move a project to another organization ([e878cc4](https://github.com/hackclub/orchard/commit/e878cc4a065ab03d9d976db7d5373537283a2660))
+* switch a deployment between railpack and dockerfile builds ([c179afb](https://github.com/hackclub/orchard/commit/c179afbaf6a6fd0f26c7ef6f7010a0e61d958266))
+
+
+### Bug Fixes
+
+* stop database detail page blanking on background refetch ([60c5e49](https://github.com/hackclub/orchard/commit/60c5e495161b0b37f85576e854d204046808a52b))
+
 ## [1.17.2](https://github.com/hackclub/orchard/compare/frontend/v1.17.1...frontend/v1.17.2) (2026-09-03)
 
 

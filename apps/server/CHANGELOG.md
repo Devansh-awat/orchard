@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.19.0](https://github.com/hackclub/orchard/compare/server/v2.18.4...server/v2.19.0) (2026-09-03)
+
+
+### Features
+
+* deploy templates from a github repo and add the nephthys template ([6716e15](https://github.com/hackclub/orchard/commit/6716e15cab546aea6ae30d8b8b71f91d4e21c216))
+* move a project to another organization ([e878cc4](https://github.com/hackclub/orchard/commit/e878cc4a065ab03d9d976db7d5373537283a2660))
+* switch a deployment between railpack and dockerfile builds ([c179afb](https://github.com/hackclub/orchard/commit/c179afbaf6a6fd0f26c7ef6f7010a0e61d958266))
+
 ## [2.18.4](https://github.com/hackclub/orchard/compare/server/v2.18.3...server/v2.18.4) (2026-09-03)
 
 

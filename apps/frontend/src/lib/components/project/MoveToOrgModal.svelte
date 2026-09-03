@@ -141,8 +141,8 @@
 <Modal bind:open size="sm" title="Move to organization">
 	{#if step === 'destination'}
 		<p class="mv-lead">
-			Move <strong>{projectName}</strong> to another organization you belong to. Everything running
-			in it comes along.
+			Move <strong>{projectName}</strong> to another organization you belong to. Everything running in
+			it comes along.
 		</p>
 
 		{#if eligibleOrgs.length > 0}
@@ -201,7 +201,10 @@
 		{:else if preview}
 			<div class="mv-summary">
 				{#if preview.membersLosingAccess.length > 0}
-					<Alert tone="warning" title={`${preview.membersLosingAccess.length} member${preview.membersLosingAccess.length === 1 ? '' : 's'} will lose access`}>
+					<Alert
+						tone="warning"
+						title={`${preview.membersLosingAccess.length} member${preview.membersLosingAccess.length === 1 ? '' : 's'} will lose access`}
+					>
 						{preview.membersLosingAccess.map((m) => m.username).join(', ')} will be removed because they
 						are not in {selectedOrg?.name}. {preview.membersKept} will keep access.
 					</Alert>
@@ -223,13 +226,15 @@
 
 				{#if pausing}
 					<Alert tone="error" title="New database backups will stop">
-						{selectedOrg?.name} has no backup storage set up. After the move your database keeps
-						running but takes no new backups until you configure R2 there. Existing backups stay
-						restorable. Set up backup storage first if you can.
+						{selectedOrg?.name} has no backup storage set up. After the move your database keeps running
+						but takes no new backups until you configure R2 there. Existing backups stay restorable. Set
+						up backup storage first if you can.
 					</Alert>
 				{:else if preview.backups.willContinue}
 					<Alert tone="info" title="Backups keep running">
-						The {preview.backups.databaseCount} database{preview.backups.databaseCount === 1 ? '' : 's'}
+						The {preview.backups.databaseCount} database{preview.backups.databaseCount === 1
+							? ''
+							: 's'}
 						start archiving to {selectedOrg?.name}'s storage. Existing backups stay restorable.
 					</Alert>
 				{/if}
