@@ -4018,10 +4018,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return { allowedNodes: placement.allowedNodes, deniedNodes: placement.deniedNodes };
   }
 
-  assertNotComposeManaged(deployment: { composeStackId?: string | null } | null | undefined, action: string) {
+  assertNotComposeManaged(
+    deployment: { composeStackId?: string | null } | null | undefined,
+    action: string,
+    hint?: string,
+  ) {
     if (deployment?.composeStackId) {
       throw new BadRequestException(
-        `This deployment is managed by a Compose file. ${action} via its parent compose stack.`,
+        `This deployment is managed by a Compose file. ${action} via its parent compose stack.${hint ? ` ${hint}` : ''}`,
       );
     }
   }
@@ -4569,7 +4573,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: { project: true },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
-    this.assertNotComposeManaged(deployment, 'Update resources');
+    this.assertNotComposeManaged(
+      deployment,
+      'Update resources',
+      'Set `deploy.resources.limits` on the service in your compose file, then redeploy the stack to apply it.',
+    );
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
