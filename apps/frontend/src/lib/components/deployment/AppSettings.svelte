@@ -239,7 +239,7 @@
 				bind:isEditingHealthCheck
 				{onSaveHealthCheck}
 			/>
-			{#if deployment?.buildType === 'railpack'}
+			{#if !isImageSourceDeployment}
 				<BuildTab {deployment} saving={savingBuildConfig} onSave={onSaveBuildConfig} />
 			{/if}
 		{:else if activeSection === 'resources'}

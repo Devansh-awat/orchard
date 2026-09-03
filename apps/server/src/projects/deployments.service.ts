@@ -1671,6 +1671,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       buildWithDepot?: boolean;
       persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
+      dockerfilePath?: string | null;
       rootDirectory?: string | null;
       framework?: string | null;
       installCommand?: string | null;
@@ -1749,6 +1750,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(buildWithDepot !== undefined && { buildWithDepot }),
         ...(persistentBuildCache !== undefined && { persistentBuildCache }),
         ...(body.buildType !== undefined && { buildType: body.buildType }),
+        // A Railpack build ignores the Dockerfile path, so clear a stale one on
+        // switch; mirror the cross-nulling the create path already does.
+        ...(nextBuildType === 'railpack'
+          ? { dockerfilePath: null }
+          : override('dockerfilePath')),
         ...(rootDirectory !== undefined && { rootDirectory }),
         ...override('framework'),
         ...override('installCommand'),
@@ -1776,6 +1782,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...changed('buildWithDepot', deployment.buildWithDepot, buildWithDepot),
         ...changed('persistentBuildCache', deployment.persistentBuildCache, persistentBuildCache),
         ...changed('buildType', deployment.buildType, body.buildType),
+        ...changed('dockerfilePath', deployment.dockerfilePath, body.dockerfilePath),
         ...changed('rootDirectory', deployment.rootDirectory, rootDirectory),
         ...changed('installCommand', deployment.installCommand, body.installCommand),
         ...changed('buildCommand', deployment.buildCommand, body.buildCommand),
