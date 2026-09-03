@@ -5047,6 +5047,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       memoryRequestBytes?: number | null;
       composeStackId?: string;
       composeServiceName?: string;
+      environmentId?: string;
       autoDeployEnabled?: boolean;
       autoDeployBranch?: string;
     },
@@ -5078,7 +5079,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
-    const environment = await this.environments.resolveEnvironment(project.id, (data as any).environmentId);
+    const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
 
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
       throw new ForbiddenException('hostPath volumes are not permitted');

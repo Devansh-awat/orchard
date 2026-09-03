@@ -526,6 +526,7 @@ export class ProjectsController {
       replicas?: number | null;
       nodePoolId?: string | null;
       placementOverride?: unknown;
+      environmentId?: string;
     },
     @Request() req
   ) {
@@ -699,13 +700,14 @@ export class ProjectsController {
       nodePoolId?: string | null;
       placementOverride?: unknown;
       imagePullPolicy?: 'Always' | 'IfNotPresent';
+      environmentId?: string;
     },
     @Request() req
   ) {
-    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy } = body;
+    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy, environmentId } = body;
     const result = await this.deployments.createDeployment(
       id,
-      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy },
+      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy, environmentId },
       req.user.sub,
       {
         email: req.user.email,
@@ -825,6 +827,7 @@ export class ProjectsController {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
       autoUrl?: boolean;
+      environmentId?: string;
     },
     @Request() req
   ) {

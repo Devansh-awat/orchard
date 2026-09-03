@@ -30,6 +30,7 @@ export class ComposeStacksController {
       branch: string;
       composePath?: string;
       autoDeployEnabled?: boolean;
+      environmentId?: string;
     },
     @Request() req: any,
   ) {

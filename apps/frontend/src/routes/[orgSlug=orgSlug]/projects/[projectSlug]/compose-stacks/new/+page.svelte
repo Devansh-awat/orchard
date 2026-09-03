@@ -12,6 +12,7 @@
 	import { Loader2, FileText, Github, ChevronDown, X } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import { Button, PopoverPanel, Field, Input, Badge } from '$lib/components/ui';
 
 	interface Repository {
@@ -49,6 +50,9 @@
 	let name = $state('');
 	let composePath = $state('docker-compose.yml');
 	let autoDeployEnabled = $state(true);
+	// Environment every child deployment lands in. Seeded from ?env= (the env
+	// the user was viewing); the switcher falls back to the project default.
+	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -195,7 +199,8 @@
 					repoUrl: selectedRepo.clone_url,
 					branch,
 					composePath: composePath.trim() || 'docker-compose.yml',
-					autoDeployEnabled
+					autoDeployEnabled,
+					...(selectedEnvId ? { environmentId: selectedEnvId } : {})
 				})
 			});
 
@@ -255,6 +260,9 @@
 					currentProjectName={project?.name || projectSlug}
 					pathSuffix="/compose-stacks/new"
 				/>
+				{#if project?.id}
+					<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+				{/if}
 				<span class="cs-slash">/</span>
 				<input type="text" bind:value={name} placeholder="my-stack" class="cs-name-input" />
 			</div>

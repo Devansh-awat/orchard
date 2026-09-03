@@ -12,6 +12,7 @@
 	import { Database } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { Button, Field, Input, Select, Slider } from '$lib/components/ui';
 
@@ -26,6 +27,9 @@
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let restoreFromUrl = $state('');
+	// Environment the database is scoped to. Seeded from ?env= (the env the user
+	// was viewing); the switcher falls back to the project default.
+	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 	let replicas = $state(1);
 	let maxReplicas = $state(5);
 
@@ -96,7 +100,8 @@
 					memoryRequestBytes: resourceMemoryBytes,
 					restoreFromUrl: restoreFromUrl.trim() || undefined,
 					pgMajor,
-					replicas
+					replicas,
+					...(selectedEnvId ? { environmentId: selectedEnvId } : {})
 				})
 			});
 
@@ -157,6 +162,9 @@
 					currentProjectName={project?.name || projectSlug}
 					pathSuffix="/databases/new"
 				/>
+				{#if project?.id}
+					<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+				{/if}
 			</div>
 			<p class="nd-subtitle">
 				Create a PostgreSQL database on the shared cluster. Orchard generates a unique user and

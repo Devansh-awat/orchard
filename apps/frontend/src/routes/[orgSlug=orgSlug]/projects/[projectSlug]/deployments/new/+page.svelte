@@ -27,6 +27,7 @@
 	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
@@ -83,6 +84,10 @@
 		$page.url.searchParams.get('source') === 'github' ? ('github' as const) : ('image' as const)
 	);
 	let deploymentSource = $state<'image' | 'github'>('image');
+	// Environment the deployment lands in. Seeded from ?env= (the env the user
+	// was viewing when they opened this form); the switcher falls back to the
+	// project default when absent or invalid.
+	let selectedEnvId = $state($page.url.searchParams.get('env') ?? '');
 	let githubLinked = $state(false);
 	let hasGitHubApp = $state(false);
 	let githubAppInstallUrl = $state<string | null>(null);
@@ -834,6 +839,8 @@
 				memoryRequestBytes: resourceMemoryBytes
 			};
 
+			if (selectedEnvId) body.environmentId = selectedEnvId;
+
 			if (deploymentSource === 'github') {
 				body.repoUrl = repoUrl;
 				body.branch = branch;
@@ -1465,6 +1472,9 @@
 					{pendingProjectName}
 					onPendingProjectChange={(n) => (pendingProjectName = n)}
 				/>
+				{#if project?.id && !pendingProjectName}
+					<EnvironmentSwitcher projectId={project.id} bind:selectedEnvId />
+				{/if}
 				<span class="nd-slash">/</span>
 				<input
 					type="text"

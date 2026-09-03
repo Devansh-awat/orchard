@@ -9,6 +9,7 @@ import * as yaml from 'js-yaml';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
+import { EnvironmentsService } from '../projects/environments.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
@@ -27,6 +28,7 @@ interface CreateFromGithubBody {
   branch: string;
   composePath?: string;
   autoDeployEnabled?: boolean;
+  environmentId?: string;
 }
 
 interface ParsedComposeService {
@@ -65,6 +67,7 @@ export class ComposeStacksService {
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
     private readonly deployments: DeploymentsService,
+    private readonly environments: EnvironmentsService,
     private readonly authz: AuthorizationService,
     private readonly usersService: UsersService,
     private readonly github: GitHubService,
@@ -273,6 +276,11 @@ export class ComposeStacksService {
 
     if (!repoUrl) throw new BadRequestException('Repository URL is required');
 
+    // Pin the stack to a concrete environment now so create + every later
+    // redeploy drop the child deployments into the same namespace. Validates
+    // the id belongs to this project (or resolves the project default).
+    const environment = await this.environments.resolveEnvironment(projectId, body.environmentId);
+
     const existing = await this.prisma.composeStack.findUnique({
       where: { projectId_name: { projectId, name } },
     });
@@ -292,6 +300,7 @@ export class ComposeStacksService {
     const stack = await this.prisma.composeStack.create({
       data: {
         projectId,
+        environmentId: environment.id,
         name,
         composeYaml,
         status: 'deploying',
@@ -380,6 +389,7 @@ export class ComposeStacksService {
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
+            environmentId: stack.environmentId ?? undefined,
             autoDeployEnabled: stack.autoDeployEnabled,
             autoDeployBranch: stack.autoDeployBranch ?? stack.githubBranch ?? undefined,
           },
@@ -406,6 +416,7 @@ export class ComposeStacksService {
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
+            environmentId: stack.environmentId ?? undefined,
           },
           clerkId,
           userData,

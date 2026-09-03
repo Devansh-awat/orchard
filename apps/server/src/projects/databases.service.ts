@@ -25,6 +25,7 @@ import { QuotasService } from '../quotas/quotas.service';
 import { NodesService } from '../nodes/nodes.service';
 import { buildPlacement } from '../kubernetes/kubernetes.service';
 import { ProjectAccessService } from './project-access.service';
+import { EnvironmentsService } from './environments.service';
 import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -54,6 +55,7 @@ export class DatabasesService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly access: ProjectAccessService,
+    private readonly environments: EnvironmentsService,
     @Inject(forwardRef(() => QuotasService))
     private readonly quotasService: QuotasService,
     @Inject(forwardRef(() => NodesService))
@@ -292,6 +294,7 @@ export class DatabasesService {
       replicas?: number | null;
       nodePoolId?: string | null;
       placementOverride?: unknown;
+      environmentId?: string;
     },
     clerkId: string,
     userData?: {
@@ -331,12 +334,9 @@ export class DatabasesService {
     const dbUser = `u_${dbBase}`;
     const dbPassword = this.generatePassword();
 
-    // Resolve the target environment (default = production) so the database is
-    // scoped to it. The database keeps its own (CNPG) namespace.
-    const dbEnv = await this.prisma.environment.findFirst({
-      where: { projectId, isDefault: true },
-      select: { id: true },
-    });
+    // Resolve the target environment (explicit id, or the project default) so
+    // the database is scoped to it. The database keeps its own (CNPG) namespace.
+    const dbEnv = await this.environments.resolveEnvironment(projectId, data.environmentId);
 
     // Check uniqueness in our records (now per environment)
     const existing = await this.prisma.database.findFirst({

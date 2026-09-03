@@ -22,13 +22,18 @@
 	}));
 	const environments = $derived((envQuery.data ?? []) as Environment[]);
 
-	let defaulted = false;
+	// Track which project we last defaulted for so switching projects (the same
+	// component instance is reused on the /new pages) re-defaults instead of
+	// leaving a stale env id from the previous project, which the server would
+	// reject as belonging to another project.
+	let defaultedFor: string | null = null;
 	$effect(() => {
-		if (defaulted || environments.length === 0) return;
+		if (environments.length === 0) return;
+		if (defaultedFor === projectId) return;
 		if (!selectedEnvId || !environments.some((e) => e.id === selectedEnvId)) {
 			selectedEnvId = (environments.find((e) => e.isDefault) ?? environments[0]).id;
 		}
-		defaulted = true;
+		defaultedFor = projectId;
 	});
 
 	const selectedEnv = $derived(environments.find((e) => e.id === selectedEnvId) ?? null);

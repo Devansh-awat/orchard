@@ -908,6 +908,7 @@
 	bind:open={showNewResourceModal}
 	orgSlug={orgSlug ?? ''}
 	projectSlug={projectSlug ?? ''}
+	{selectedEnvId}
 />
 
 {#if project}

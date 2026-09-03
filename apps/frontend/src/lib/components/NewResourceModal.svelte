@@ -18,9 +18,16 @@
 		open: boolean;
 		orgSlug: string;
 		projectSlug: string;
+		/** Environment the resource should be created in (the one the user is viewing). */
+		selectedEnvId?: string;
 	}
 
-	let { open = $bindable(false), orgSlug, projectSlug }: Props = $props();
+	let { open = $bindable(false), orgSlug, projectSlug, selectedEnvId = '' }: Props = $props();
+
+	function withEnv(path: string): string {
+		if (!selectedEnvId) return path;
+		return `${path}${path.includes('?') ? '&' : '?'}env=${encodeURIComponent(selectedEnvId)}`;
+	}
 
 	interface Template {
 		id: string;
@@ -124,16 +131,16 @@
 		open = false;
 		switch (type) {
 			case 'deployment-github':
-				goto(`${basePath}/deployments/new?source=github`);
+				goto(withEnv(`${basePath}/deployments/new?source=github`));
 				break;
 			case 'deployment-image':
-				goto(`${basePath}/deployments/new?source=image`);
+				goto(withEnv(`${basePath}/deployments/new?source=image`));
 				break;
 			case 'database':
-				goto(`${basePath}/databases/new`);
+				goto(withEnv(`${basePath}/databases/new`));
 				break;
 			case 'compose-stack':
-				goto(`${basePath}/compose-stacks/new`);
+				goto(withEnv(`${basePath}/compose-stacks/new`));
 				break;
 		}
 	}
