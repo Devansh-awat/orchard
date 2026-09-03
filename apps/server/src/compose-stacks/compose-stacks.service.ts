@@ -37,7 +37,25 @@ interface ParsedComposeService {
   env: { key: string; value: string }[];
   volumes: { name: string; type: 'pvc' | 'emptyDir'; mountPath: string; storageSize?: string }[];
   replicas: number;
+  cpuRequestMilli?: number | null;
+  memoryRequestBytes?: number | null;
 }
+
+const MEMORY_UNITS: Record<string, number> = {
+  b: 1,
+  k: 1000,
+  kb: 1000,
+  ki: 1024,
+  kib: 1024,
+  m: 1000 ** 2,
+  mb: 1000 ** 2,
+  mi: 1024 ** 2,
+  mib: 1024 ** 2,
+  g: 1000 ** 3,
+  gb: 1000 ** 3,
+  gi: 1024 ** 3,
+  gib: 1024 ** 3,
+};
 
 @Injectable()
 export class ComposeStacksService {
@@ -65,6 +83,43 @@ export class ComposeStacksService {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 200);
+  }
+
+  private parseComposeCpu(value: unknown): number | null {
+    if (value == null) return null;
+    const cpus = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(cpus) || cpus <= 0) return null;
+    return Math.max(1, Math.round(cpus * 1000));
+  }
+
+  private parseComposeMemory(value: unknown): number | null {
+    if (value == null) return null;
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+    }
+    const match = /^\s*([0-9]*\.?[0-9]+)\s*([a-zA-Z]*)\s*$/.exec(String(value));
+    if (!match) return null;
+    const amount = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    const multiplier = unit ? MEMORY_UNITS[unit] : 1;
+    if (!Number.isFinite(amount) || amount <= 0 || !multiplier) return null;
+    return Math.round(amount * multiplier);
+  }
+
+  private parseComposeResources(svc: any): {
+    cpuRequestMilli: number | null;
+    memoryRequestBytes: number | null;
+  } {
+    const limits = svc?.deploy?.resources?.limits ?? {};
+    const reservations = svc?.deploy?.resources?.reservations ?? {};
+    return {
+      // Orchard's cpuRequestMilli/memoryRequestBytes are the pod's ceiling, so
+      // compose `limits` wins; `reservations` only fills in what limits omits.
+      cpuRequestMilli:
+        this.parseComposeCpu(limits.cpus) ?? this.parseComposeCpu(reservations.cpus),
+      memoryRequestBytes:
+        this.parseComposeMemory(limits.memory) ?? this.parseComposeMemory(reservations.memory),
+    };
   }
 
   private parseCompose(composeYaml: string): ParsedComposeService[] {
@@ -147,6 +202,7 @@ export class ComposeStacksService {
         env,
         volumes,
         replicas: typeof svc?.deploy?.replicas === 'number' ? svc.deploy.replicas : 1,
+        ...this.parseComposeResources(svc),
       });
     }
     return out;
@@ -320,6 +376,8 @@ export class ComposeStacksService {
               pvcName: v.name,
               storageSize: v.storageSize,
             })),
+            cpuRequestMilli: svc.cpuRequestMilli ?? null,
+            memoryRequestBytes: svc.memoryRequestBytes ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
             autoDeployEnabled: stack.autoDeployEnabled,
@@ -344,6 +402,8 @@ export class ComposeStacksService {
               pvcName: v.name,
               storageSize: v.storageSize,
             })),
+            cpuRequestMilli: svc.cpuRequestMilli ?? null,
+            memoryRequestBytes: svc.memoryRequestBytes ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
           },
