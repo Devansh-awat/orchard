@@ -477,11 +477,12 @@
 	// --- API functions ---
 	async function fetchDatabase(silent = false) {
 		if (!silent) loading = true;
-		error = null;
+		if (!silent) error = null;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}?fast=1`);
 			if (!response.ok) throw new Error('Failed to fetch database');
 			database = await response.json();
+			error = null;
 			if (database?.backupsEnabled) fetchBackups();
 			if (!resourcesDirty) {
 				resourceCpuMilli = database?.cpuRequestMilli ?? null;
@@ -1170,7 +1171,7 @@
 	onMount(() => {
 		data.databasePromise
 			.then((seed: any) => {
-				if (!database) {
+				if (!database && seed) {
 					database = seed;
 					loading = false;
 					if (database?.backupsEnabled) fetchBackups();
