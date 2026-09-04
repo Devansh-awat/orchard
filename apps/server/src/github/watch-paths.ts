@@ -4,6 +4,10 @@ export const MAX_WATCH_PATH_LENGTH = 500;
 
 const PUSH_COMMIT_PAYLOAD_LIMIT = 2048;
 
+// The compare endpoint reports at most 300 files, so a response sitting on the
+// cap is a truncation rather than an answer.
+const COMPARE_FILE_LIMIT = 300;
+
 const GLOB_CHARS = /[*?[\]{}]/;
 
 const regexCache = new Map<string, RegExp>();
@@ -150,4 +154,50 @@ export function pushMatchesWatchPaths(patterns: string[], files: string[] | null
   if (normalized.length === 0) return true;
   if (!files || files.length === 0) return true;
   return files.some((file) => fileMatchesWatchPaths(file, normalized));
+}
+
+/**
+ * Changed files from a compare response, or null when it cannot be trusted.
+ *
+ * `previous_filename` counts as well: a file renamed out of a watched
+ * directory changed that directory, and the push payload reports the same move
+ * as an add plus a remove, so this keeps the two sources saying the same thing.
+ */
+export function changedFilesFromCompare(body: any): string[] | null {
+  const entries: any[] = Array.isArray(body?.files) ? body.files : [];
+  if (entries.length === 0 || entries.length >= COMPARE_FILE_LIMIT) return null;
+
+  const files = new Set<string>();
+  for (const entry of entries) {
+    for (const key of ['filename', 'previous_filename'] as const) {
+      const value = entry?.[key];
+      if (typeof value !== 'string') continue;
+      const normalized = normalizeWatchPath(value);
+      if (normalized) files.add(normalized);
+    }
+  }
+  return files.size > 0 ? [...files] : null;
+}
+
+/**
+ * Split deployments into the ones this file list says to build and the ones it
+ * says to skip.
+ *
+ * Kept separate rather than filtered in place because the two halves carry
+ * different weight: a file list that matches has proved something, and a file
+ * list that does not has only failed to, which is not the same thing when the
+ * list itself may be incomplete.
+ */
+export function partitionByWatchPaths<T extends { autoDeployPaths: unknown }>(
+  deployments: T[],
+  files: string[] | null,
+): { watched: T[]; unmatched: T[] } {
+  const watched: T[] = [];
+  const unmatched: T[] = [];
+  for (const deployment of deployments) {
+    const paths = Array.isArray(deployment.autoDeployPaths) ? deployment.autoDeployPaths : [];
+    if (pushMatchesWatchPaths(paths as string[], files)) watched.push(deployment);
+    else unmatched.push(deployment);
+  }
+  return { watched, unmatched };
 }

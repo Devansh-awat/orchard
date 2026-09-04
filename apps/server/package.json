@@ -37,7 +37,8 @@
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts",
     "test:protection": "tsx --test test/protection-proxy.test.ts test/protection-auth.test.ts",
-    "test:mirror": "tsx --test test/mirror-engine.test.ts"
+    "test:mirror": "tsx --test test/mirror-engine.test.ts",
+    "test:repo-link": "tsx --test test/github-repo-link.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

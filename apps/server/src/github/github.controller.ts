@@ -8,8 +8,8 @@ import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
-import { changedFilesFromPush, pushMatchesWatchPaths } from './watch-paths';
-import { autoDeployMatchesBranch } from './auto-deploy-match';
+import { changedFilesFromPush, partitionByWatchPaths } from './watch-paths';
+import { autoDeployMatchesBranch, pushCommitSha } from './auto-deploy-match';
 
 /** Only allow same-origin, non-protocol-relative return paths. */
 function isSafeRedirect(redirect?: string): redirect is string {
@@ -511,10 +511,17 @@ export class GitHubController {
     }
 
     if (event === 'repository' && body.installation?.id) {
+      // `changes.repository.name.from` is the only place the old name appears,
+      // and it is what reattaches rows that were linked before we started
+      // recording repository ids.
+      const renamedFrom = body.changes?.repository?.name?.from
+        ? `${body.repository?.owner?.login}/${body.changes.repository.name.from}`
+        : null;
       await this.githubService.applyRepositoryEvent(
         BigInt(body.installation.id),
         body.action,
         body.repository,
+        renamedFrom,
       );
       return { received: true, action: 'processed', event };
     }
@@ -523,7 +530,7 @@ export class GitHubController {
       // Handle push events - trigger auto-deploy for matching deployments
       const repoFullName = body.repository?.full_name;
       const pushedBranch = body.ref?.replace('refs/heads/', '');
-      const commitSha = body.after || body.head_commit?.id;
+      const commitSha = pushCommitSha(body);
       const commitMessage = body.head_commit?.message || 'No commit message';
       const commitAuthorName = body.head_commit?.author?.name as string | undefined;
       const commitAuthorUsername = body.head_commit?.author?.username as string | undefined;
@@ -531,6 +538,15 @@ export class GitHubController {
 
       if (!repoFullName || !pushedBranch) {
         return { received: true, action: 'ignored', reason: 'missing repo or branch info' };
+      }
+
+      // Deleting a branch is delivered as a push to that branch. There is no
+      // commit to build, so this stops short of the match rather than starting
+      // a doomed build against the null sha.
+      if (!commitSha) {
+        const reason = `no commit to deploy on ${repoFullName}:${pushedBranch}`;
+        console.log(`[GitHub App] Push ignored: ${reason}`);
+        return { received: true, action: 'ignored', reason };
       }
 
       if (!senderInstallationId) {
@@ -544,44 +560,48 @@ export class GitHubController {
         .touchRepoPush(BigInt(senderInstallationId), body.repository)
         .catch(() => {});
 
-      const repoUrl = `https://github.com/${repoFullName}`;
-      const installationIdBig = BigInt(senderInstallationId);
-      // Match both with and without .git suffix so legacy rows still trigger
-      const repoUrls = [repoUrl, `${repoUrl}.git`];
-      // Match by canonical https URL AND owning installation. Legacy rows
+      // Matched on the repository id where we have it and the canonical https
+      // URL otherwise, always scoped to the owning installation. Legacy rows
       // with githubInstallationId === null are intentionally excluded — they
       // must be re-linked via enableAutoDeploy before they will fire.
-      const candidates = await this.prisma.deployment.findMany({
-        where: {
-          githubRepo: { in: repoUrls },
-          githubInstallationId: installationIdBig,
-          autoDeployEnabled: true,
-        },
-        include: {
-          project: {
-            include: {
-              organization: true,
-            },
-          },
-        },
-      });
+      const installationIdBig = BigInt(senderInstallationId);
+      const candidates = await this.githubService.findAutoDeployTargets(
+        installationIdBig,
+        body.repository?.id ? BigInt(body.repository.id) : null,
+        repoFullName,
+      );
 
       const deployments = candidates.filter((deployment) =>
         autoDeployMatchesBranch(deployment, pushedBranch),
       );
 
       if (deployments.length === 0) {
-        return {
-          received: true,
-          action: 'ignored',
-          reason: `no auto-deploy deployments for ${repoFullName}:${pushedBranch}`
-        };
+        const reason = `no auto-deploy deployments for ${repoFullName}:${pushedBranch}`;
+        console.log(`[GitHub App] Push ignored: ${reason}`);
+        return { received: true, action: 'ignored', reason };
       }
 
-      const changedFiles = changedFilesFromPush(body);
-      const watched = deployments.filter((deployment) =>
-        pushMatchesWatchPaths(deployment.autoDeployPaths, changedFiles),
-      );
+      // A match in the push payload can be trusted: that file really did
+      // change. A non-match cannot, because GitHub caps the commit array and
+      // promises nothing about the per-commit file lists, so a deployment about
+      // to be skipped gets a second opinion from the compare API first. Only
+      // the about-to-skip path pays for the round trip; a repo where everything
+      // matched, or where nothing filters by path, never calls out at all.
+      const fromPayload = partitionByWatchPaths(deployments, changedFilesFromPush(body));
+      let watched = fromPayload.watched;
+
+      if (fromPayload.unmatched.length > 0) {
+        const comparedFiles = await this.githubService.compareChangedFiles(
+          installationIdBig,
+          repoFullName,
+          body.before,
+          commitSha,
+        );
+        // An unknown answer matches everything, so a compare GitHub could not
+        // give us builds the deployment rather than dropping its push.
+        watched = watched.concat(partitionByWatchPaths(fromPayload.unmatched, comparedFiles).watched);
+      }
+
       const skippedByPaths = deployments.length - watched.length;
       if (skippedByPaths > 0) {
         console.log(`[GitHub App] ${skippedByPaths} deployment(s) skipped, no watched paths changed`);

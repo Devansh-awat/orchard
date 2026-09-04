@@ -609,6 +609,10 @@ model Deployment {
   // IfNotPresent and re-pulling would be pure waste.
   imagePullPolicy      ImagePullPolicy?   @map("image_pull_policy")
   githubRepo           String?            @map("github_repo") @db.VarChar(500)
+  // GitHub's numeric repository id — the only part of a repo that survives a
+  // rename. Auto-deploy matches on this first and on `githubRepo` second, so
+  // renaming a repo on GitHub no longer silently detaches its deployments.
+  githubRepoId         BigInt?            @map("github_repo_id")
   githubBranch         String?            @map("github_branch") @db.VarChar(255)
   dockerfilePath       String?            @map("dockerfile_path") @db.VarChar(500)
   buildFromRoot        Boolean            @default(false) @map("build_from_root")
@@ -717,6 +721,7 @@ model Deployment {
   @@index([projectId], map: "idx_deployments_project")
   @@index([environmentId], map: "idx_deployments_environment")
   @@index([buildStatus, updatedAt(sort: Desc)], map: "idx_deployments_build_status_updated")
+  @@index([githubRepoId], map: "idx_deployments_github_repo_id")
   @@index([nodePoolId], map: "idx_deployments_node_pool")
   @@index([templateInstanceId], map: "idx_deployments_template_instance")
   @@index([composeStackId], map: "idx_deployments_compose_stack")

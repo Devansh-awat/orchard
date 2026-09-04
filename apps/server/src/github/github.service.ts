@@ -1,7 +1,16 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
+import { LeaderElectionService } from '../events/leader-election.service';
+import { canonicalRepoUrl, isNullSha, repoUrlVariants } from './auto-deploy-match';
+import { changedFilesFromCompare } from './watch-paths';
 import { GithubAppConfigService } from './github-app-config.service';
 import { parseDockerfileEnvVars } from './dockerfile-env';
 import {
@@ -37,6 +46,21 @@ export interface RepoConfigDetection {
  *  push shows up on the next visit. */
 const DETECT_CACHE_TTL_MS = 60_000;
 const DETECT_CACHE_MAX = 200;
+
+// How often the leader looks for deployments that still have no repository id.
+// Converges to a no-op after the first pass or two, then costs one indexed
+// query per interval.
+const REPO_LINK_INTERVAL_MS = 10 * 60 * 1000;
+
+// Deployments examined per reconcile pass, and how many of them may cost a
+// GitHub API call. Only repos that were renamed before their id was recorded
+// need the call, so this is a small tail.
+const REPO_LINK_SCAN = 500;
+const REPO_LINK_API_BUDGET = 25;
+
+// A webhook delivery has ten seconds to answer, and this call sits in front of
+// the builds it decides on, so it gets a slice of that rather than all of it.
+const COMPARE_TIMEOUT_MS = 5_000;
 
 export interface GitHubUser {
   id: string;
@@ -119,7 +143,11 @@ interface CachedRepos {
 }
 
 @Injectable()
-export class GitHubService {
+export class GitHubService implements OnModuleInit, OnModuleDestroy {
+  private repoLinkTimer?: ReturnType<typeof setInterval>;
+
+  private reconcilingRepoLinks = false;
+
   private get clientId(): string {
     return this.appConfig.get().clientId;
   }
@@ -140,7 +168,25 @@ export class GitHubService {
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
     private readonly appConfig: GithubAppConfigService,
+    private readonly leader: LeaderElectionService,
   ) {}
+
+  onModuleInit() {
+    // Leadership lands asynchronously, so the interval alone would miss the
+    // first pass on a fresh replica.
+    this.leader.onAcquired(() => {
+      void this.runRepoLinkReconcile();
+    });
+    this.repoLinkTimer = setInterval(() => {
+      void this.runRepoLinkReconcile();
+    }, REPO_LINK_INTERVAL_MS);
+    this.repoLinkTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.repoLinkTimer) clearInterval(this.repoLinkTimer);
+    this.repoLinkTimer = undefined;
+  }
 
   private getCacheKey(accessToken: string, maxPages: number): string {
     return `${accessToken.substring(0, 10)}_${maxPages}`;
@@ -1664,7 +1710,111 @@ export class GitHubService {
     }
   }
 
-  async applyRepositoryEvent(installationId: bigint, action: string, repo: any): Promise<void> {
+  /**
+   * The deployments a push should fire, matched on the repository's numeric id
+   * first and its URL second.
+   *
+   * The id is the only part of a repository that a rename does not change.
+   * Matching on the URL alone meant renaming a repo on GitHub silently
+   * detached every deployment built from it — the webhook arrives under the new
+   * full name, the lookup matches nothing, and the push is ignored without
+   * anything being raised anywhere. Rows are still required to belong to the
+   * sending installation, so a full name alone can never impersonate a repo.
+   */
+  async findAutoDeployTargets(
+    installationId: bigint,
+    repoId: bigint | null,
+    repoFullName: string,
+  ) {
+    const byUrl = { githubRepo: { in: repoUrlVariants(repoFullName) } };
+    const rows = await this.prisma.deployment.findMany({
+      where: {
+        githubInstallationId: installationId,
+        autoDeployEnabled: true,
+        ...(repoId == null ? byUrl : { OR: [byUrl, { githubRepoId: repoId }] }),
+      },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+    if (repoId != null) await this.adoptRepoIdentity(rows, repoId, repoFullName);
+    return rows;
+  }
+
+  /**
+   * Record the id and current URL on rows we just matched. Every push is a
+   * free, authenticated statement of what this repository is now called, so
+   * matching by URL once is enough to never have to again.
+   */
+  private async adoptRepoIdentity(
+    rows: { id: string; githubRepo: string | null; githubRepoId: bigint | null }[],
+    repoId: bigint,
+    repoFullName: string,
+  ): Promise<void> {
+    for (const row of rows) {
+      const url = canonicalRepoUrl(row.githubRepo, repoFullName);
+      const data: { githubRepoId?: bigint; githubRepo?: string } = {};
+      if (row.githubRepoId !== repoId) data.githubRepoId = repoId;
+      if (row.githubRepo !== url) data.githubRepo = url;
+      if (Object.keys(data).length === 0) continue;
+      await this.prisma.deployment
+        .update({ where: { id: row.id }, data })
+        .catch((e) => console.warn(`[GitHub] adopting repo identity for ${row.id} failed:`, e?.message ?? e));
+    }
+  }
+
+  /**
+   * The files a push actually changed, straight from GitHub, or null when it
+   * cannot say.
+   *
+   * The push payload carries file lists of its own and they are almost always
+   * complete, but "almost always" is not something a path filter can be built
+   * on: GitHub caps the commit array at 2048 and documents nothing at all about
+   * the per-commit file lists. A deployment that skips builds based on which
+   * paths changed deserves an answer that is either authoritative or admits it
+   * is not, and null here means the caller deploys rather than guesses.
+   */
+  async compareChangedFiles(
+    installationId: bigint,
+    repoFullName: string,
+    base: string | null | undefined,
+    head: string | null | undefined,
+  ): Promise<string[] | null> {
+    // A branch's first push has no base to compare against.
+    if (isNullSha(base) || isNullSha(head)) return null;
+    try {
+      const token = await this.getOrRefreshInstallationToken(installationId);
+      const response = await fetch(
+        `https://api.github.com/repos/${repoFullName}/compare/${base}...${head}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+          },
+          signal: AbortSignal.timeout(COMPARE_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        console.warn(`[GitHub] compare ${repoFullName} ${base}...${head} returned ${response.status}`);
+        return null;
+      }
+      return changedFilesFromCompare(await response.json());
+    } catch (e: any) {
+      console.warn(`[GitHub] compare ${repoFullName} failed:`, e?.message ?? e);
+      return null;
+    }
+  }
+
+  async applyRepositoryEvent(
+    installationId: bigint,
+    action: string,
+    repo: any,
+    previousFullName?: string | null,
+  ): Promise<void> {
     if (!repo?.id) return;
     const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
     if (!inst) return;
@@ -1682,6 +1832,174 @@ export class GitHubService {
         syncedAt: new Date(),
       },
     });
+    if (repo.full_name) {
+      await this.applyRepoRename(installationId, githubRepoId, repo.full_name, previousFullName);
+    }
+  }
+
+  /**
+   * Follow a rename through to everything that stores the repository URL. Rows
+   * that already carry the id are found by it; rows that predate the id are
+   * found by the name GitHub tells us they used to have.
+   */
+  private async applyRepoRename(
+    installationId: bigint,
+    repoId: bigint,
+    fullName: string,
+    previousFullName?: string | null,
+  ): Promise<void> {
+    const oldUrls = previousFullName ? repoUrlVariants(previousFullName) : [];
+    const rows = await this.prisma.deployment.findMany({
+      where: {
+        githubInstallationId: installationId,
+        OR: [{ githubRepoId: repoId }, ...(oldUrls.length ? [{ githubRepo: { in: oldUrls } }] : [])],
+      },
+      select: { id: true, githubRepo: true, githubRepoId: true },
+    });
+    await this.adoptRepoIdentity(rows, repoId, fullName);
+
+    // Compose stacks only read their file through the URL, which GitHub keeps
+    // redirecting, so this is about the repo the UI shows you rather than
+    // anything that would break. They carry no id column to match on.
+    if (oldUrls.length === 0) return;
+    const stacks = await this.prisma.composeStack.findMany({
+      where: { githubInstallationId: installationId, githubRepo: { in: oldUrls } },
+      select: { id: true, githubRepo: true },
+    });
+    for (const stack of stacks) {
+      await this.prisma.composeStack
+        .update({
+          where: { id: stack.id },
+          data: { githubRepo: canonicalRepoUrl(stack.githubRepo, fullName) },
+        })
+        .catch(() => {});
+    }
+    if (rows.length > 0 || stacks.length > 0) {
+      console.log(
+        `[GitHub] ${previousFullName} -> ${fullName}: relinked ${rows.length} deployment(s), ${stacks.length} compose stack(s)`,
+      );
+    }
+  }
+
+  private async runRepoLinkReconcile(): Promise<void> {
+    if (!this.leader.isLeader() || this.reconcilingRepoLinks) return;
+    this.reconcilingRepoLinks = true;
+    try {
+      const linked = await this.reconcileRepoLinks();
+      if (linked > 0) console.log(`[GitHub] recorded the repository id on ${linked} deployment(s)`);
+    } catch (e: any) {
+      console.warn('[GitHub] repo link reconcile failed:', e?.message ?? e);
+    } finally {
+      this.reconcilingRepoLinks = false;
+    }
+  }
+
+  /**
+   * Give every GitHub-linked deployment its repository id.
+   *
+   * Rows whose stored name is still the repo's real name are resolved from the
+   * installation mirror for free. The ones left over are exactly the rows whose
+   * repository was renamed while nothing was watching, so they are asked about
+   * directly — GET /repos follows a rename and answers with the current name
+   * and the id, which is the only way to reattach a deployment that has already
+   * drifted.
+   */
+  async reconcileRepoLinks(): Promise<number> {
+    const rows = await this.prisma.deployment.findMany({
+      where: {
+        githubRepoId: null,
+        githubInstallationId: { not: null },
+        githubRepo: { not: null },
+      },
+      select: { id: true, githubRepo: true, githubInstallationId: true },
+      take: REPO_LINK_SCAN,
+    });
+    if (rows.length === 0) return 0;
+
+    // Group by installation and repo name: one lookup serves every deployment
+    // built from the same repo.
+    const groups = new Map<
+      string,
+      { installationId: bigint; fullName: string; rows: typeof rows }
+    >();
+    for (const row of rows) {
+      const parsed = this.parseRepoUrl(row.githubRepo!);
+      if (!parsed || !row.githubInstallationId) continue;
+      const fullName = `${parsed.owner}/${parsed.repo}`;
+      const key = `${row.githubInstallationId}/${fullName}`;
+      const group = groups.get(key);
+      if (group) group.rows.push(row);
+      else groups.set(key, { installationId: row.githubInstallationId, fullName, rows: [row] });
+    }
+    if (groups.size === 0) return 0;
+
+    const installs = await this.prisma.gitHubAppInstallation.findMany({
+      where: { installationId: { in: [...new Set([...groups.values()].map((g) => g.installationId))] } },
+      select: { id: true, installationId: true },
+    });
+    const instByInstallationId = new Map(installs.map((i) => [i.installationId.toString(), i.id]));
+    const mirrored = await this.prisma.gitHubRepoMirror.findMany({
+      where: {
+        appInstallationId: { in: installs.map((i) => i.id) },
+        fullName: { in: [...new Set([...groups.values()].map((g) => g.fullName))] },
+      },
+      select: { appInstallationId: true, githubRepoId: true, fullName: true },
+    });
+    const mirrorIndex = new Map(
+      mirrored.map((m) => [`${m.appInstallationId}/${m.fullName}`, m.githubRepoId]),
+    );
+
+    let linked = 0;
+    let apiCalls = 0;
+    for (const group of groups.values()) {
+      const instId = instByInstallationId.get(group.installationId.toString());
+      const fromMirror = instId ? mirrorIndex.get(`${instId}/${group.fullName}`) : undefined;
+      let repoId = fromMirror ?? null;
+      let fullName = group.fullName;
+
+      if (repoId == null) {
+        if (apiCalls >= REPO_LINK_API_BUDGET) continue;
+        apiCalls += 1;
+        const resolved = await this.lookupRepoIdentity(group.installationId, group.fullName);
+        if (!resolved) continue;
+        repoId = resolved.repoId;
+        fullName = resolved.fullName;
+      }
+
+      await this.adoptRepoIdentity(
+        group.rows.map((r) => ({ ...r, githubRepoId: null })),
+        repoId,
+        fullName,
+      );
+      linked += group.rows.length;
+    }
+    return linked;
+  }
+
+  /** Ask GitHub what a stored owner/name is now. Follows renames; null if it is gone. */
+  private async lookupRepoIdentity(
+    installationId: bigint,
+    fullName: string,
+  ): Promise<{ repoId: bigint; fullName: string } | null> {
+    try {
+      const token = await this.getOrRefreshInstallationToken(installationId);
+      const response = await fetch(`https://api.github.com/repos/${fullName}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      });
+      if (!response.ok) return null;
+      const body: any = await response.json();
+      if (!body?.id || !body?.full_name) return null;
+      if (body.full_name !== fullName) {
+        console.log(`[GitHub] ${fullName} is now ${body.full_name}`);
+      }
+      return { repoId: BigInt(body.id), fullName: body.full_name };
+    } catch (e: any) {
+      console.warn(`[GitHub] could not resolve ${fullName}:`, e?.message ?? e);
+      return null;
+    }
   }
 
   async touchRepoPush(installationId: bigint, repo: { id?: number; full_name?: string }): Promise<void> {
