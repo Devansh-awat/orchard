@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { truncateK8sName } from '../projects/projects.utils';
+import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 
 interface DaemonInfo {
   podName: string;
@@ -53,7 +54,10 @@ export class BuildKitPoolService {
         while ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
           p = p.slice(1, -1).trim();
         }
-        this.kc.loadFromFile(p);
+        // KUBECONFIG_PATH also accepts the kubeconfig itself, base64 encoded —
+        // see KubernetesService. Loading it as a path gives ENAMETOOLONG and
+        // silently drops daemon mode back to daemonless on every build.
+        loadKubeConfigFromPathOrBase64(this.kc, p);
       } else {
         this.kc.loadFromDefault();
       }

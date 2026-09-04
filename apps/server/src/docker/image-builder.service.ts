@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
+import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { OrgEventsService } from '../events/org-events.service';
 import { startPhaseSpan, recordPhaseSpan, recordBuildOutcome } from '../analytics/datadog';
 import { truncateK8sName } from '../projects/projects.utils';
@@ -279,21 +280,7 @@ export class ImageBuilderService {
         const decoded = Buffer.from(base64Value, 'base64').toString('utf-8');
         this.kc.loadFromString(decoded);
       } else if (process.env.KUBECONFIG_PATH) {
-        let configPath = process.env.KUBECONFIG_PATH.trim();
-        while ((configPath.startsWith('"') && configPath.endsWith('"')) ||
-               (configPath.startsWith("'") && configPath.endsWith("'"))) {
-          configPath = configPath.slice(1, -1).trim();
-        }
-        if (!configPath.includes('/') && !configPath.includes('\\') && configPath.length > 100) {
-          const decoded = Buffer.from(configPath, 'base64').toString('utf-8');
-          if (decoded.includes('apiVersion:') || decoded.includes('kind: Config')) {
-            this.kc.loadFromString(decoded);
-          } else {
-            this.kc.loadFromFile(configPath);
-          }
-        } else {
-          this.kc.loadFromFile(configPath);
-        }
+        loadKubeConfigFromPathOrBase64(this.kc, process.env.KUBECONFIG_PATH);
       } else {
         this.kc.loadFromDefault();
       }

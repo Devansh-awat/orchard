@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as k8s from '@kubernetes/client-node';
+import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 
 // Runs from the container entrypoint before migrations so a cluster whose
 // policies got mangled can heal itself through the crashloop: the pod
@@ -104,7 +105,7 @@ async function main() {
     if (b64) {
       kc.loadFromString(Buffer.from(b64, 'base64').toString('utf-8'));
     } else if (process.env.KUBECONFIG_PATH || process.env.KUBECONFIG) {
-      kc.loadFromFile((process.env.KUBECONFIG_PATH || process.env.KUBECONFIG)!.trim());
+      loadKubeConfigFromPathOrBase64(kc, (process.env.KUBECONFIG_PATH || process.env.KUBECONFIG)!);
     } else if (fs.existsSync(SA_NAMESPACE_FILE)) {
       kc.loadFromCluster();
     } else {
