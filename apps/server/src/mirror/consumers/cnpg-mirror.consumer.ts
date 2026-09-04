@@ -89,34 +89,33 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     await this.writebackStatus(ctx, { cluster });
   }
 
+  // Failures propagate: the informer holds the cluster object's derived_version
+  // back and replays it, which is the only thing that would ever come back for
+  // a database whose status write was lost.
   private async writebackStatus(ctx: Ctx, input: { cluster?: any; deleted?: boolean }): Promise<void> {
-    try {
-      const db = await this.prisma.database.findUnique({
-        where: { id: ctx.databaseId },
-        select: { status: true },
-      });
-      if (!db) return;
+    const db = await this.prisma.database.findUnique({
+      where: { id: ctx.databaseId },
+      select: { status: true },
+    });
+    if (!db) return;
 
-      let next = db.status;
-      if (input.deleted) {
-        if (db.status !== 'error' && db.status !== 'provisioning' && db.status !== 'deleting') {
-          next = 'error';
-        }
-      } else {
-        const status = input.cluster?.status ?? {};
-        const readyInstances: number = status.readyInstances || 0;
-        const instances: number = status.instances || input.cluster?.spec?.instances || 1;
-        const ready = readyInstances >= instances && readyInstances > 0;
-        if (ready && db.status !== 'ready' && db.status !== 'restoring') {
-          next = 'ready';
-        }
+    let next = db.status;
+    if (input.deleted) {
+      if (db.status !== 'error' && db.status !== 'provisioning' && db.status !== 'deleting') {
+        next = 'error';
       }
+    } else {
+      const status = input.cluster?.status ?? {};
+      const readyInstances: number = status.readyInstances || 0;
+      const instances: number = status.instances || input.cluster?.spec?.instances || 1;
+      const ready = readyInstances >= instances && readyInstances > 0;
+      if (ready && db.status !== 'ready' && db.status !== 'restoring') {
+        next = 'ready';
+      }
+    }
 
-      if (next !== db.status) {
-        await this.prisma.database.update({ where: { id: ctx.databaseId }, data: { status: next } });
-      }
-    } catch (err) {
-      this.logger.warn(`writebackStatus(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`);
+    if (next !== db.status) {
+      await this.prisma.database.update({ where: { id: ctx.databaseId }, data: { status: next } });
     }
   }
 
@@ -199,23 +198,20 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     const cached = this.ctxCache.get(key);
     if (cached && cached.exp > Date.now()) return cached.ctx;
 
-    let ctx: Ctx | null = null;
-    try {
-      const db = await this.prisma.database.findFirst({
-        where: { namespace: ns, clusterName },
-        select: {
-          id: true,
-          projectId: true,
-          project: { select: { organizationId: true } },
-        },
-      });
-      if (db) {
-        ctx = { databaseId: db.id, orgId: db.project.organizationId, projectId: db.projectId };
-      }
-    } catch (err) {
-      this.logger.warn(`resolveCtx(${key}) failed: ${(err as Error)?.message ?? err}`);
-      return null;
-    }
+    // A lookup that throws is left to propagate: `null` means "no such
+    // database", which callers store as an answer, and a database blip must not
+    // be mistaken for one. Nothing is cached on that path either.
+    const db = await this.prisma.database.findFirst({
+      where: { namespace: ns, clusterName },
+      select: {
+        id: true,
+        projectId: true,
+        project: { select: { organizationId: true } },
+      },
+    });
+    const ctx: Ctx | null = db
+      ? { databaseId: db.id, orgId: db.project.organizationId, projectId: db.projectId }
+      : null;
 
     this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
     return ctx;

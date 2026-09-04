@@ -970,6 +970,12 @@ model K8sObject {
   namespace       String   @db.VarChar(100)
   name            String   @db.VarChar(255)
   resourceVersion String   @map("resource_version") @db.VarChar(30)
+  // The resourceVersion whose derived state (the `pods` row, the k8s_workloads
+  // row, a job run, whatever the consumer writes) has actually landed. A row is
+  // only skipped on a relist when this matches `resourceVersion`, so a handler
+  // that failed is retried instead of being hidden behind a manifest that is
+  // already up to date.
+  derivedVersion  String?  @map("derived_version") @db.VarChar(30)
   shard           String   @db.VarChar(40)
   manifest        Json     @db.JsonB
   deploymentId    String?  @map("deployment_id") @db.Uuid

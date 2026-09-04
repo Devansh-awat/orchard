@@ -155,8 +155,19 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async health(): Promise<{ shards: ShardHealth[]; replicas: string[] }> {
-    const rows = await this.prisma.k8sMirrorHeartbeat.findMany();
+  async health(): Promise<{ shards: ShardHealth[]; replicas: string[]; undelivered: number }> {
+    // Objects whose manifest we hold but whose derived state has not landed.
+    // Normally zero, and briefly non-zero while a failure is being retried. A
+    // number that stays up means consumers are failing and the mirror is
+    // telling you so, instead of quietly serving state that stopped moving.
+    const [rows, undelivered] = await Promise.all([
+      this.prisma.k8sMirrorHeartbeat.findMany(),
+      this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT count(*)::bigint AS count
+        FROM "k8s_objects"
+        WHERE "derived_version" IS DISTINCT FROM "resource_version"
+      `,
+    ]);
     const now = Date.now();
     const shards: ShardHealth[] = [];
     const replicas: string[] = [];
@@ -198,7 +209,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
-    return { shards, replicas };
+    return { shards, replicas, undelivered: Number(undelivered[0]?.count ?? 0) };
   }
 
   async resyncShard(name: string): Promise<number> {
@@ -398,14 +409,14 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     if (!namespace) return {};
     const cached = this.nsRefCache.get(namespace);
     if (cached && cached.exp > Date.now()) return cached.refs;
-    let refs: MirrorRefs = {};
-    try {
-      const project = await this.prisma.project.findFirst({
-        where: { namespace },
-        select: { id: true },
-      });
-      if (project) refs = { projectId: project.id };
-    } catch {}
+    // Left to throw. Swallowing the error and caching `{}` told the informer
+    // this namespace belongs to no project — for the next ten minutes, and for
+    // as long afterwards as none of its objects changed.
+    const project = await this.prisma.project.findFirst({
+      where: { namespace },
+      select: { id: true },
+    });
+    const refs: MirrorRefs = project ? { projectId: project.id } : {};
     this.nsRefCache.set(namespace, { refs, exp: Date.now() + NS_REF_TTL_MS });
     return refs;
   }

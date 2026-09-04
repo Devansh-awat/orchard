@@ -44,9 +44,13 @@ export class JobMirrorConsumer {
     try {
       await this.processJob(type === 'add' ? 'update' : type, job);
     } catch (err) {
+      // Logged for context and then rethrown: the informer keeps the object's
+      // derived_version behind its resourceVersion so the next pass retries the
+      // run rather than assuming it was recorded.
       this.logger.warn(
         `processJob(${job.metadata?.namespace}/${job.metadata?.name}) failed: ${(err as Error)?.message ?? err}`,
       );
+      throw err;
     } finally {
       this.processing.delete(uid);
     }

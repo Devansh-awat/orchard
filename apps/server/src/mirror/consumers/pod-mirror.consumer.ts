@@ -60,15 +60,39 @@ export class PodMirrorConsumer implements OnModuleDestroy {
   }
 
   async pruneStalePods(seen: MirrorObjectKey[]): Promise<void> {
-    const liveNames = seen.map((s) => s.name).filter((name): name is string => !!name);
+    // One pod whose owner could not be resolved means this pass does not know
+    // which deployment that pod belongs to, and pruning against a partial
+    // picture would delete a live pod's row. The next pass prunes instead.
+    if (seen.some((s) => s.refs === null)) {
+      this.logger.warn('skipping pod prune: this pass could not resolve every pod');
+      return;
+    }
+    const liveDeploymentIds: string[] = [];
+    const liveNames: string[] = [];
+    for (const key of seen) {
+      const deploymentId = key.refs?.deploymentId;
+      if (!deploymentId || !key.name) continue;
+      liveDeploymentIds.push(deploymentId);
+      liveNames.push(key.name);
+    }
     if (liveNames.length === 0) return;
-    // `= ANY($1)` binds the name set as one array parameter. An `IN (...)` list
+    // Keyed on the (deployment, pod name) pair rather than the name alone: pod
+    // names are only unique within a namespace, so a bare name match keeps a
+    // dead row alive whenever some other deployment happens to run a pod with
+    // the same name, and drops a live one when it doesn't.
+    //
+    // `unnest` binds the pairs as two array parameters. An `IN (...)` list
     // binds one parameter per pod and blows the statement's parameter budget on
     // a large cluster.
     const removed = await this.prisma.$queryRaw<{ deployment_id: string }[]>`
-      DELETE FROM "pods"
-      WHERE NOT ("name" = ANY(${liveNames}::varchar[]))
-      RETURNING "deployment_id"
+      DELETE FROM "pods" AS p
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM unnest(${liveDeploymentIds}::uuid[], ${liveNames}::varchar[])
+          AS live("deployment_id", "name")
+        WHERE live."deployment_id" = p."deployment_id" AND live."name" = p."name"
+      )
+      RETURNING p."deployment_id"
     `;
     if (removed.length === 0) return;
     this.logger.log(`pruned ${removed.length} stale pod rows not present in the cluster`);
@@ -168,58 +192,55 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     const name = pod.metadata?.name;
     if (!name) return false;
 
-    try {
-      const existing = await this.prisma.pod.findUnique({
-        where: { deploymentId_name: { deploymentId, name } },
-        select: { status: true },
-      });
+    // Deliberately not wrapped in a catch. A pod row that failed to write has
+    // to be visible to the informer, which holds the object's derived_version
+    // back and comes round again — swallowing it here is what let a pod that
+    // never changes again sit missing from this table indefinitely.
+    const existing = await this.prisma.pod.findUnique({
+      where: { deploymentId_name: { deploymentId, name } },
+      select: { status: true },
+    });
 
-      if (type === 'delete') {
-        if (!existing) return false;
-        await this.prisma.pod.deleteMany({ where: { deploymentId, name } });
-        await this.recordTransition(deploymentId, name, existing.status, 'deleted', null, null);
-        return true;
-      }
-
-      const containerStatuses = pod.status?.containerStatuses ?? [];
-      const restartCount = containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0);
-      const ready =
-        pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null;
-      const term = latestTermination(containerStatuses);
-      const status = computePodStatus(pod);
-      const data = {
-        podIp: pod.status?.podIP ?? null,
-        nodeName: pod.spec?.nodeName ?? null,
-        status,
-        restartCount,
-        ready,
-        lastTerminationReason: term?.reason ?? null,
-        lastExitCode: term?.exitCode ?? null,
-        lastTerminatedAt: term?.finishedAt ?? null,
-      };
-
-      await this.prisma.pod.upsert({
-        where: { deploymentId_name: { deploymentId, name } },
-        create: { deploymentId, name, ...data },
-        update: data,
-      });
-
-      if (existing && existing.status === status) return false;
-      await this.recordTransition(
-        deploymentId,
-        name,
-        existing?.status ?? null,
-        status,
-        term?.reason ?? null,
-        term?.exitCode ?? null,
-      );
+    if (type === 'delete') {
+      if (!existing) return false;
+      await this.prisma.pod.deleteMany({ where: { deploymentId, name } });
+      await this.recordTransition(deploymentId, name, existing.status, 'deleted', null, null);
       return true;
-    } catch (err) {
-      this.logger.warn(
-        `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`,
-      );
-      return false;
     }
+
+    const containerStatuses = pod.status?.containerStatuses ?? [];
+    const restartCount = containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0);
+    const ready =
+      pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null;
+    const term = latestTermination(containerStatuses);
+    const status = computePodStatus(pod);
+    const data = {
+      podIp: pod.status?.podIP ?? null,
+      nodeName: pod.spec?.nodeName ?? null,
+      status,
+      restartCount,
+      ready,
+      lastTerminationReason: term?.reason ?? null,
+      lastExitCode: term?.exitCode ?? null,
+      lastTerminatedAt: term?.finishedAt ?? null,
+    };
+
+    await this.prisma.pod.upsert({
+      where: { deploymentId_name: { deploymentId, name } },
+      create: { deploymentId, name, ...data },
+      update: data,
+    });
+
+    if (existing && existing.status === status) return false;
+    await this.recordTransition(
+      deploymentId,
+      name,
+      existing?.status ?? null,
+      status,
+      term?.reason ?? null,
+      term?.exitCode ?? null,
+    );
+    return true;
   }
 
   private async recordTransition(
@@ -362,23 +383,20 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     const cached = this.ctxCache.get(key);
     if (cached && cached.exp > Date.now()) return cached.ctx;
 
-    let ctx: Ctx | null = null;
-    try {
-      const dep = await this.prisma.deployment.findFirst({
-        where: { namespace: ns, name: depName },
-        select: {
-          id: true,
-          projectId: true,
-          project: { select: { organizationId: true } },
-        },
-      });
-      if (dep) {
-        ctx = { deploymentId: dep.id, orgId: dep.project.organizationId, projectId: dep.projectId };
-      }
-    } catch (err) {
-      this.logger.warn(`resolveCtx(${key}) failed: ${(err as Error)?.message ?? err}`);
-      return null;
-    }
+    // A lookup that throws is left to propagate: `null` here means "no such
+    // deployment", which callers store as a real answer, and a database blip
+    // must never be mistaken for one. Nothing is cached on that path either.
+    const dep = await this.prisma.deployment.findFirst({
+      where: { namespace: ns, name: depName },
+      select: {
+        id: true,
+        projectId: true,
+        project: { select: { organizationId: true } },
+      },
+    });
+    const ctx: Ctx | null = dep
+      ? { deploymentId: dep.id, orgId: dep.project.organizationId, projectId: dep.projectId }
+      : null;
 
     this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
     return ctx;

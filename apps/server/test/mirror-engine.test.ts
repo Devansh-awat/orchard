@@ -15,6 +15,7 @@ const SLUG = 'test-mirror-org';
 
 let projectId = '';
 let deploymentId = '';
+let otherDeploymentId = '';
 
 interface FakeObject {
   metadata: { uid: string; name: string; namespace: string; resourceVersion: string };
@@ -29,6 +30,10 @@ function obj(uid: string, name: string, rv = '1'): FakeObject {
 let cluster: FakeObject[] = [];
 let seenEvents: { type: string; name: string | undefined }[] = [];
 let listCalls: (string | undefined)[] = [];
+/** How the fake resource resolves its owners: to a deployment, to nothing, or not at all. */
+let refsMode: 'owned' | 'unowned' | 'unresolvable' = 'unowned';
+/** Names whose next handler call throws, standing in for a bad minute in the database. */
+let failHandlerFor = new Set<string>();
 
 function newInformer(): MirrorInformer {
   const config = {
@@ -45,8 +50,14 @@ function newInformer(): MirrorInformer {
         continueToken: next < cluster.length ? String(next) : null,
       };
     },
+    mapRefs: async () => {
+      if (refsMode === 'unresolvable') throw new Error('database said no');
+      return refsMode === 'owned' ? { deploymentId, projectId } : {};
+    },
     onEvent: (type: string, o: any) => {
-      seenEvents.push({ type, name: o?.metadata?.name });
+      const name = o?.metadata?.name;
+      if (failHandlerFor.delete(name)) throw new Error(`handler blew up for ${name}`);
+      seenEvents.push({ type, name });
     },
   };
   const informer = new MirrorInformer(
@@ -78,7 +89,14 @@ function handle(informer: MirrorInformer, phase: string, o: unknown) {
 async function mirrored() {
   return prisma.k8sObject.findMany({
     where: { shard: SHARD },
-    select: { uid: true, name: true, resourceVersion: true },
+    select: {
+      uid: true,
+      name: true,
+      resourceVersion: true,
+      derivedVersion: true,
+      deploymentId: true,
+      syncedAt: true,
+    },
     orderBy: { name: 'asc' },
   });
 }
@@ -100,14 +118,14 @@ function newConsumer(): PodMirrorConsumer {
   );
 }
 
-function podEvent(name: string, crashing: boolean) {
+function podEvent(name: string, crashing: boolean, dep = 'test-mirror-dep') {
   return {
     metadata: {
       uid: `pod-${name}`,
       name,
       namespace: NS,
       resourceVersion: '1',
-      labels: { 'app.kubernetes.io/name': 'test-mirror-dep' },
+      labels: { 'app.kubernetes.io/name': dep },
     },
     spec: { nodeName: 'node-a' },
     status: {
@@ -164,6 +182,10 @@ before(async () => {
     data: { projectId, name: 'test-mirror-dep', namespace: NS },
   });
   deploymentId = deployment.id;
+  const other = await prisma.deployment.create({
+    data: { projectId, name: 'test-mirror-dep-b', namespace: NS },
+  });
+  otherDeploymentId = other.id;
 });
 
 after(async () => {
@@ -174,11 +196,13 @@ after(async () => {
 beforeEach(async () => {
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
   await prisma.deploymentCrashState.deleteMany({ where: { deploymentId } });
-  await prisma.pod.deleteMany({ where: { deploymentId } });
+  await prisma.pod.deleteMany({ where: { deploymentId: { in: [deploymentId, otherDeploymentId] } } });
   cluster = [];
   seenEvents = [];
   listCalls = [];
   notified = [];
+  refsMode = 'unowned';
+  failHandlerFor = new Set();
 });
 
 // --- informer ----------------------------------------------------------------
@@ -207,6 +231,91 @@ test('an unchanged object is not rewritten on relist', async () => {
 
   assert.deepEqual(seenEvents, []);
   assert.equal((await mirrored())[0].resourceVersion, '5');
+});
+
+test('an owner that only resolves later is picked up without the object changing', async () => {
+  // The pod arrives a moment before its deployment row is visible, resolves to
+  // nothing, and then never changes again. Skipping it on resourceVersion alone
+  // is what left a live app reading "pending" until somebody restarted it.
+  refsMode = 'unowned';
+  cluster = [obj('uid-a', 'ing-a', '5')];
+  const informer = newInformer();
+  await listAndSync(informer);
+  assert.equal((await mirrored())[0].deploymentId, null);
+
+  refsMode = 'owned';
+  seenEvents = [];
+  await listAndSync(informer);
+
+  const row = (await mirrored())[0];
+  assert.equal(row.deploymentId, deploymentId, 'the mapping is re-derived, not skipped');
+  assert.equal(row.resourceVersion, '5', 'and the object itself never moved');
+  assert.deepEqual(seenEvents, [{ type: 'update', name: 'ing-a' }]);
+});
+
+test('an owner that cannot be resolved is deferred, never guessed at', async () => {
+  refsMode = 'owned';
+  cluster = [obj('uid-a', 'ing-a', '1')];
+  const informer = newInformer();
+  await listAndSync(informer);
+  assert.equal((await mirrored())[0].deploymentId, deploymentId);
+
+  // The object changes while the lookup is broken. Writing the manifest now
+  // would either blank the mapping or, worse, advance the resourceVersion that
+  // is the only handle the retry has on it.
+  refsMode = 'unresolvable';
+  cluster = [obj('uid-a', 'ing-a', '2')];
+  await listAndSync(informer);
+
+  let row = (await mirrored())[0];
+  assert.equal(row.deploymentId, deploymentId, 'kept the mapping it had');
+  assert.equal(row.resourceVersion, '1', 'left behind so the next pass retries');
+
+  refsMode = 'owned';
+  await listAndSync(informer);
+
+  row = (await mirrored())[0];
+  assert.equal(row.resourceVersion, '2');
+  assert.equal(row.deploymentId, deploymentId);
+});
+
+test('an object whose handler threw is re-derived on the next pass', async () => {
+  cluster = [obj('uid-a', 'ing-a', '5')];
+  failHandlerFor = new Set(['ing-a']);
+  const informer = newInformer();
+
+  await listAndSync(informer);
+  // The manifest landed, but nothing derived from it did, and the row says so.
+  assert.deepEqual(seenEvents, []);
+  const written = (await mirrored())[0];
+  assert.equal(written.derivedVersion, null);
+
+  await listAndSync(informer);
+
+  assert.deepEqual(seenEvents, [{ type: 'update', name: 'ing-a' }]);
+  const repaired = (await mirrored())[0];
+  assert.equal(repaired.derivedVersion, '5');
+  // Only the derivation was missing, so the manifest is left where it is
+  // rather than rewritten to say the same thing.
+  assert.deepEqual(repaired.syncedAt, written.syncedAt);
+});
+
+test('a watch event whose handler threw is re-derived on the next pass', async () => {
+  cluster = [obj('uid-a', 'ing-a', '5')];
+  const informer = newInformer();
+  await listAndSync(informer);
+  seenEvents = [];
+
+  cluster = [obj('uid-a', 'ing-a', '6')];
+  failHandlerFor = new Set(['ing-a']);
+  await handle(informer, 'MODIFIED', obj('uid-a', 'ing-a', '6'));
+  // The row now holds a version nothing has been derived from, and says so.
+  assert.equal((await mirrored())[0].derivedVersion, null);
+
+  await listAndSync(informer);
+
+  assert.deepEqual(seenEvents, [{ type: 'update', name: 'ing-a' }]);
+  assert.equal((await mirrored())[0].derivedVersion, '6');
 });
 
 test('deleting and recreating an object under the same name replaces the row', async () => {
@@ -364,12 +473,86 @@ test('the prune drops pod rows the cluster no longer lists and clears their aler
   assert.equal(await prisma.pod.count({ where: { deploymentId } }), 1);
 
   // The pod is gone from the cluster and the relist never mentions it.
-  await consumer.pruneStalePods([{ namespace: NS, name: 'something-else' }]);
+  await consumer.pruneStalePods([
+    { namespace: NS, name: 'something-else', refs: { deploymentId } },
+  ]);
 
   assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0);
   await ageCrashState(90_000);
   await consumer.sweepCrashStates();
   assert.equal(await prisma.deploymentCrashState.count({ where: { deploymentId } }), 0);
+});
+
+test('the prune keys on the deployment, not just the pod name', async () => {
+  const consumer = newConsumer();
+  await consumer.onEvent('add', podEvent('web-0', false) as never);
+  await consumer.onEvent('add', podEvent('web-0', false, 'test-mirror-dep-b') as never);
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 1);
+  assert.equal(await prisma.pod.count({ where: { deploymentId: otherDeploymentId } }), 1);
+
+  // Only the second deployment still runs a pod called web-0. Matching on the
+  // bare name would keep the first deployment's dead row alive forever.
+  await consumer.pruneStalePods([
+    { namespace: NS, name: 'web-0', refs: { deploymentId: otherDeploymentId } },
+  ]);
+
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0);
+  assert.equal(await prisma.pod.count({ where: { deploymentId: otherDeploymentId } }), 1);
+});
+
+test('a pass that could not resolve every pod prunes nothing', async () => {
+  const consumer = newConsumer();
+  await consumer.onEvent('add', podEvent('web-0', false) as never);
+
+  // A pod of unknown ownership means the live set is incomplete, and deleting
+  // against an incomplete set takes live pods with it.
+  await consumer.pruneStalePods([
+    { namespace: NS, name: 'someone-elses-pod', refs: null },
+    { namespace: NS, name: 'still-running', refs: { deploymentId: otherDeploymentId } },
+  ]);
+
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 1);
+});
+
+test('a pod row lost to a failed sync is restored while the pod sits still', async () => {
+  // The whole reported bug, end to end: the pod goes ready, the write of its
+  // row fails, and the pod never emits another event for the rest of its life.
+  const consumer = newConsumer();
+  const pods: any[] = [podEvent('web-0', false)];
+  let breakNext = true;
+  const informer = new MirrorInformer(
+    {} as never,
+    prisma as never,
+    SHARD,
+    {
+      kind: 'Pod',
+      apiVersion: 'v1',
+      watchPath: '/api/v1/pods',
+      list: async () => ({ items: pods, resourceVersion: '9000', continueToken: null }),
+      mapRefs: (o: any) => consumer.mapRefs(o),
+      onEvent: async (type: any, o: any) => {
+        if (breakNext) {
+          breakNext = false;
+          throw new Error('pod row write failed');
+        }
+        await consumer.onEvent(type, o);
+      },
+      onListComplete: (seen: any) => consumer.pruneStalePods(seen),
+    } as never,
+    { onListed: () => {}, onWatchEvent: () => {}, onHealthChange: () => {} },
+  );
+  (informer as unknown as { stopped: boolean }).stopped = false;
+
+  await listAndSync(informer);
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0, 'the write did fail');
+
+  await listAndSync(informer);
+
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 1);
+  const row = await prisma.pod.findFirst({ where: { deploymentId } });
+  assert.equal(row?.name, 'web-0');
+  assert.equal(row?.status, computePodStatus(pods[0] as never));
+  await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
 });
 
 // --- pod status derivation ---------------------------------------------------

@@ -26,6 +26,10 @@ export interface MirrorListPage {
 export interface MirrorObjectKey {
   namespace: string;
   name: string;
+  // What this pass resolved the object's owners to, or null when resolution
+  // failed. A pruner that sees a null knows its picture of the cluster is
+  // incomplete and must not delete anything on the strength of it.
+  refs: MirrorRefs | null;
 }
 
 export interface MirrorResourceConfig {
@@ -34,7 +38,14 @@ export interface MirrorResourceConfig {
   watchPath: string;
   labelSelector?: string;
   list(kc: k8s.KubeConfig, opts: MirrorListOptions): Promise<MirrorListPage>;
+  // Resolve the Orchard rows an object belongs to. Returning `{}` means "it
+  // belongs to nothing", which is a real answer and gets stored. Throwing means
+  // "could not tell", which is not: the informer then leaves the row alone and
+  // retries, rather than recording a mapping it does not actually have.
   mapRefs?(obj: any): Promise<MirrorRefs>;
+  // Apply the object to whatever Orchard state derives from it. Must throw on
+  // failure. A handler that swallows its own errors tells the informer the
+  // version was applied when it was not, and nothing will ever come back for it.
   onEvent?(type: MirrorEventType, obj: any): void | Promise<void>;
   onListComplete?(seen: MirrorObjectKey[]): Promise<void>;
 }
@@ -50,7 +61,7 @@ export interface MirrorInformerHooks {
 // array of full manifests.
 const LIST_PAGE_SIZE = 500;
 
-// Rows written per INSERT ... ON CONFLICT. 13 params per row keeps a chunk well
+// Rows written per INSERT ... ON CONFLICT. 14 params per row keeps a chunk well
 // under Postgres' 65535 bind-parameter ceiling.
 const WRITE_CHUNK = 100;
 
@@ -59,6 +70,13 @@ const WRITE_CHUNK = 100;
 // so a mass rollout can't open hundreds of concurrent transactions.
 const EVENT_CONCURRENCY = 12;
 
+// How long after a deferred write or a failed handler to run a repair list.
+// Short enough that a blip is invisible to anyone watching the UI, spaced out
+// enough that a database having a bad minute is not answered with a full list
+// every thirty seconds.
+const REPAIR_DELAY_MS = 30_000;
+const REPAIR_MIN_SPACING_MS = 60_000;
+
 interface ObjectRow {
   uid: string;
   apiVersion: string;
@@ -66,8 +84,25 @@ interface ObjectRow {
   namespace: string;
   name: string;
   resourceVersion: string;
+  derivedVersion: string | null;
   shard: string;
   manifest: unknown;
+  deploymentId: string | null;
+  projectId: string | null;
+  databaseId: string | null;
+  jobId: string | null;
+}
+
+// An object on its way into the mirror, carrying the refs already resolved for
+// it so nothing has to resolve them twice.
+interface PendingWrite {
+  obj: any;
+  refs: MirrorRefs;
+}
+
+interface StoredRow {
+  resourceVersion: string;
+  derivedVersion: string | null;
   deploymentId: string | null;
   projectId: string | null;
   databaseId: string | null;
@@ -124,6 +159,15 @@ export class MirrorInformer {
 
   private restartTimer?: ReturnType<typeof setTimeout>;
 
+  private repairTimer?: ReturnType<typeof setTimeout>;
+
+  private lastRepairAt = 0;
+
+  // Serializes list passes. The resync timer, a watch reconnect and a repair
+  // can all ask for one at the same time, and two of them interleaving would
+  // let one pass's stale sweep race the other's writes.
+  private syncChain: Promise<unknown> = Promise.resolve();
+
   // One promise chain per object natural key. Events for the same object stay
   // strictly ordered (a DELETE must not overtake the ADD of a same-named
   // replacement), events for different objects run concurrently.
@@ -163,6 +207,8 @@ export class MirrorInformer {
     this.stopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = undefined;
+    if (this.repairTimer) clearTimeout(this.repairTimer);
+    this.repairTimer = undefined;
     try {
       this.req?.abort();
     } catch {}
@@ -228,21 +274,39 @@ export class MirrorInformer {
     }
   }
 
-  private async listAndSync(
+  private listAndSync(
     countRepairs: boolean,
   ): Promise<{ resourceVersion: string; repairs: number }> {
+    return this.serialize(() => this.runListAndSync(countRepairs));
+  }
+
+  private async runListAndSync(
+    countRepairs: boolean,
+  ): Promise<{ resourceVersion: string; repairs: number }> {
+    if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
+
     const existingRows = await this.prisma.k8sObject.findMany({
       where: { shard: this.shard, kind: this.config.kind },
-      select: { uid: true, resourceVersion: true },
+      select: {
+        uid: true,
+        resourceVersion: true,
+        derivedVersion: true,
+        deploymentId: true,
+        projectId: true,
+        databaseId: true,
+        jobId: true,
+      },
     });
-    const existingRv = new Map(existingRows.map((r) => [r.uid, r.resourceVersion]));
+    const existing = new Map(existingRows.map((r) => [r.uid, r]));
 
     const seenUids: string[] = [];
     const seenKeys: MirrorObjectKey[] = [];
     let repairs = 0;
+    let deferred = 0;
     let resourceVersion = '';
     let continueToken: string | undefined;
-    let pending: any[] = [];
+    let pending: PendingWrite[] = [];
+    let underived: PendingWrite[] = [];
 
     do {
       const page = await this.config.list(this.kc, {
@@ -259,10 +323,40 @@ export class MirrorInformer {
         const uid = obj.metadata?.uid;
         if (!uid) continue;
         seenUids.push(uid);
-        seenKeys.push({ namespace: obj.metadata.namespace ?? '', name: obj.metadata.name });
-        if (existingRv.get(uid) === String(obj.metadata.resourceVersion ?? '')) continue;
+
+        // Refs are re-derived every pass, not only when the manifest moved. A
+        // pod whose deployment row landed a moment after the pod did would
+        // otherwise keep the empty mapping it was born with for as long as it
+        // stays untouched, and a pod that goes ready and then sits there stays
+        // untouched for good.
+        const resolved = await this.resolveRefs(obj);
+        seenKeys.push({
+          namespace: obj.metadata.namespace ?? '',
+          name: obj.metadata.name,
+          refs: resolved.ok ? resolved.refs : null,
+        });
+        if (!resolved.ok) {
+          // Leave the row untouched. Its stored resourceVersion stays behind
+          // the cluster's, which is exactly what gets it retried below.
+          deferred += 1;
+          continue;
+        }
+
+        const state = this.classify(existing.get(uid), obj, resolved.refs);
+        if (state === 'current') continue;
+
         if (countRepairs) repairs += 1;
-        pending.push(obj);
+        if (state === 'underived') {
+          // The manifest we hold is already the right one, so there is nothing
+          // to rewrite — only the state derived from it is missing.
+          underived.push({ obj, refs: resolved.refs });
+          if (underived.length >= WRITE_CHUNK) {
+            await this.derive('update', underived);
+            underived = [];
+          }
+          continue;
+        }
+        pending.push({ obj, refs: resolved.refs });
         if (pending.length >= WRITE_CHUNK) {
           await this.flush(pending);
           pending = [];
@@ -271,6 +365,7 @@ export class MirrorInformer {
     } while (continueToken);
 
     if (pending.length > 0) await this.flush(pending);
+    if (underived.length > 0) await this.derive('update', underived);
 
     repairs += await this.sweepStale(seenUids, countRepairs);
 
@@ -280,7 +375,81 @@ export class MirrorInformer {
       });
     }
 
+    if (deferred > 0) {
+      this.logger.warn(`${deferred} object(s) deferred with unresolved refs`);
+      this.scheduleRepair();
+    }
+
     return { resourceVersion, repairs };
+  }
+
+  /**
+   * What a listed object needs from this pass.
+   *
+   *   current    the manifest matches, its refs still resolve to what is
+   *              stored, and the consumer has applied that exact version
+   *   underived  we hold the right manifest but nothing derived from it, so
+   *              the consumer runs again and no manifest is rewritten
+   *   stale      the manifest or the mapping moved and the row is rewritten
+   *
+   * `current` is deliberately the strictest of the three. Skipping on the
+   * resourceVersion alone means a single failed write becomes permanent — the
+   * object is passed over from then on precisely because it never changes
+   * again, which is how a running pod ends up reading "pending" for six days.
+   */
+  private classify(
+    prior: StoredRow | undefined,
+    obj: any,
+    refs: MirrorRefs,
+  ): 'current' | 'underived' | 'stale' {
+    if (!prior) return 'stale';
+    const rv = String(obj.metadata.resourceVersion ?? '');
+    if (prior.resourceVersion !== rv) return 'stale';
+    const sameRefs =
+      (prior.deploymentId ?? null) === (refs.deploymentId ?? null) &&
+      (prior.projectId ?? null) === (refs.projectId ?? null) &&
+      (prior.databaseId ?? null) === (refs.databaseId ?? null) &&
+      (prior.jobId ?? null) === (refs.jobId ?? null);
+    if (!sameRefs) return 'stale';
+    return prior.derivedVersion === rv ? 'current' : 'underived';
+  }
+
+  private async resolveRefs(obj: any): Promise<{ ok: boolean; refs: MirrorRefs }> {
+    if (!this.config.mapRefs) return { ok: true, refs: {} };
+    try {
+      return { ok: true, refs: await this.config.mapRefs(obj) };
+    } catch (err) {
+      this.logger.warn(`mapRefs failed for ${obj?.metadata?.name}: ${errorText(err)}`);
+      return { ok: false, refs: {} };
+    }
+  }
+
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.syncChain.then(fn, fn);
+    this.syncChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  /**
+   * Queue a repair list after something failed to land. The periodic resync
+   * would get there eventually; this shortens "eventually" from ten minutes to
+   * thirty seconds without letting a persistently sick dependency turn into a
+   * list every thirty seconds forever.
+   */
+  private scheduleRepair(): void {
+    if (this.stopped || this.repairTimer) return;
+    const delay = Math.max(REPAIR_DELAY_MS, this.lastRepairAt + REPAIR_MIN_SPACING_MS - Date.now());
+    this.repairTimer = setTimeout(() => {
+      this.repairTimer = undefined;
+      this.lastRepairAt = Date.now();
+      void this.resync().then((repaired) => {
+        if (repaired > 0) this.logger.log(`repair pass rewrote ${repaired} object(s)`);
+      });
+    }, delay);
+    this.repairTimer.unref?.();
   }
 
   // Delete everything this shard holds for this kind that the cluster no longer
@@ -301,35 +470,77 @@ export class MirrorInformer {
           await this.config.onEvent('delete', row.manifest);
         } catch (err) {
           this.logger.warn(`delete handler failed for ${row.uid}: ${errorText(err)}`);
+          this.scheduleRepair();
         }
       }
     }
     return countRepairs ? stale.length : 0;
   }
 
-  private async flush(objs: any[]): Promise<void> {
+  private async flush(entries: PendingWrite[]): Promise<void> {
     try {
-      await this.writeObjects(objs);
+      await this.writeRows(entries.map((e) => this.toRow(e.obj, e.refs)));
     } catch (err) {
-      // A failed chunk leaves those rows stale until the next resync rather
-      // than aborting the whole list — the seen set is still complete, so the
-      // stale sweep downstream stays correct.
-      this.logger.warn(`batch write of ${objs.length} objects failed: ${errorText(err)}`);
+      // A failed chunk leaves those rows behind rather than aborting the whole
+      // list — the seen set is still complete, so the stale sweep downstream
+      // stays correct, and the rows keep their old resourceVersion so the next
+      // pass comes back for them.
+      this.logger.warn(`batch write of ${entries.length} objects failed: ${errorText(err)}`);
+      this.scheduleRepair();
+      return;
     }
-    if (!this.config.onEvent) return;
-    await Promise.all(
-      objs.map((obj) =>
+    await this.derive('update', entries);
+  }
+
+  /**
+   * Hand the objects to the consumer, then record the version it applied.
+   *
+   * The mark is the whole point. `resource_version` alone says "we hold this
+   * manifest"; `derived_version` says "everything Orchard derives from this
+   * manifest has been written". Only a row where both match the cluster may be
+   * skipped, so a handler that throws — or a process that dies between the
+   * write and the handler — is retried on the next pass instead of hiding
+   * behind a resourceVersion that already looks up to date.
+   */
+  private async derive(type: MirrorEventType, entries: PendingWrite[]): Promise<void> {
+    if (!this.config.onEvent || entries.length === 0) return;
+    const applied = await Promise.all(
+      entries.map((entry) =>
         this.sem.run(async () => {
           try {
-            await this.config.onEvent!('update', obj);
+            await this.config.onEvent!(type, entry.obj);
+            return entry;
           } catch (err) {
             this.logger.warn(
-              `event handler failed for ${obj?.metadata?.name}: ${errorText(err)}`,
+              `event handler failed for ${entry.obj?.metadata?.name}: ${errorText(err)}`,
             );
+            return null;
           }
         }),
       ),
     );
+    const ok = applied.filter((entry): entry is PendingWrite => entry !== null);
+    if (ok.length < entries.length) this.scheduleRepair();
+    await this.markDerived(ok);
+  }
+
+  private async markDerived(entries: PendingWrite[]): Promise<void> {
+    if (entries.length === 0) return;
+    const uids = entries.map((e) => String(e.obj.metadata.uid));
+    const versions = entries.map((e) => String(e.obj.metadata.resourceVersion ?? ''));
+    try {
+      // Matching on resource_version too, so a newer manifest that landed while
+      // the handler ran is not credited with a derivation it never got.
+      await this.prisma.$executeRaw`
+        UPDATE "k8s_objects" AS o
+        SET "derived_version" = v."rv"
+        FROM unnest(${uids}::varchar[], ${versions}::varchar[]) AS v("uid", "rv")
+        WHERE o."uid" = v."uid" AND o."resource_version" = v."rv"
+      `;
+    } catch (err) {
+      this.logger.warn(`marking ${entries.length} object(s) derived failed: ${errorText(err)}`);
+      this.scheduleRepair();
+    }
   }
 
   private async startWatch(resourceVersion: string): Promise<void> {
@@ -385,7 +596,10 @@ export class MirrorInformer {
     const next = prev
       .then(() => this.sem.run(fn))
       .catch((err) => {
+        // The watch has already moved past this event, so nothing else will
+        // bring it back — a repair list is the only thing that will.
         this.logger.warn(`event handling failed for ${key}: ${errorText(err)}`);
+        this.scheduleRepair();
       })
       .then(() => {
         if (this.chains.get(key) === next) this.chains.delete(key);
@@ -401,10 +615,21 @@ export class MirrorInformer {
       if (this.config.onEvent) await this.config.onEvent('delete', obj);
       return;
     }
-    await this.writeObjects([obj]);
-    if (this.config.onEvent) {
-      await this.config.onEvent(phase === 'ADDED' ? 'add' : 'update', obj);
+
+    const resolved = await this.resolveRefs(obj);
+    if (!resolved.ok) {
+      // Writing a row whose refs we could not resolve is worse than writing
+      // nothing: it would either erase a mapping that was correct or advance
+      // the resourceVersion that is the retry's only handle on the object.
+      this.scheduleRepair();
+      return;
     }
+
+    // Write first, derive second: consumers emit the SSE that sends clients
+    // straight back to read the mirror, so the row has to be there before they
+    // are told to look.
+    await this.writeRows([this.toRow(obj, resolved.refs)]);
+    await this.derive(phase === 'ADDED' ? 'add' : 'update', [{ obj, refs: resolved.refs }]);
   }
 
   private onDone(err: unknown): void {
@@ -454,22 +679,18 @@ export class MirrorInformer {
     return obj;
   }
 
-  private async toRow(obj: any): Promise<ObjectRow> {
-    let refs: MirrorRefs = {};
-    if (this.config.mapRefs) {
-      try {
-        refs = await this.config.mapRefs(obj);
-      } catch (err) {
-        this.logger.warn(`mapRefs failed for ${obj?.metadata?.name}: ${errorText(err)}`);
-      }
-    }
+  private toRow(obj: any, refs: MirrorRefs): ObjectRow {
+    const resourceVersion = String(obj.metadata.resourceVersion ?? '');
     return {
       uid: obj.metadata.uid,
       apiVersion: this.config.apiVersion,
       kind: this.config.kind,
       namespace: obj.metadata.namespace ?? '',
       name: obj.metadata.name,
-      resourceVersion: String(obj.metadata.resourceVersion ?? ''),
+      resourceVersion,
+      // Nothing derives from this kind, so holding the manifest is all there is
+      // to do and the row is born fully applied.
+      derivedVersion: this.config.onEvent ? null : resourceVersion,
       shard: this.shard,
       manifest: obj,
       deploymentId: refs.deploymentId ?? null,
@@ -479,14 +700,14 @@ export class MirrorInformer {
     };
   }
 
-  private async writeObjects(objs: any[]): Promise<void> {
-    if (objs.length === 0) return;
+  private async writeRows(all: ObjectRow[]): Promise<void> {
+    if (all.length === 0) return;
     // A LIST never repeats a uid, but dedupe anyway: two rows with the same uid
     // in one statement makes ON CONFLICT fail with "cannot affect row a second
     // time".
-    const byUid = new Map<string, any>();
-    for (const obj of objs) byUid.set(obj.metadata.uid, obj);
-    const rows = await Promise.all([...byUid.values()].map((obj) => this.toRow(obj)));
+    const byUid = new Map<string, ObjectRow>();
+    for (const row of all) byUid.set(row.uid, row);
+    const rows = [...byUid.values()];
 
     try {
       for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
@@ -515,7 +736,8 @@ export class MirrorInformer {
       rows.map(
         (r) => Prisma.sql`(
           ${r.uid}::varchar, ${r.apiVersion}::varchar, ${r.kind}::varchar, ${r.namespace}::varchar,
-          ${r.name}::varchar, ${r.resourceVersion}::varchar, ${r.shard}::varchar,
+          ${r.name}::varchar, ${r.resourceVersion}::varchar, ${r.derivedVersion}::varchar,
+          ${r.shard}::varchar,
           ${JSON.stringify(r.manifest)}::jsonb, ${r.deploymentId}::uuid, ${r.projectId}::uuid,
           ${r.databaseId}::uuid, ${r.jobId}::uuid, (NOW() AT TIME ZONE 'UTC')
         )`,
@@ -534,7 +756,8 @@ export class MirrorInformer {
       `,
       this.prisma.$executeRaw`
         INSERT INTO "k8s_objects" (
-          "uid", "api_version", "kind", "namespace", "name", "resource_version", "shard",
+          "uid", "api_version", "kind", "namespace", "name", "resource_version",
+          "derived_version", "shard",
           "manifest", "deployment_id", "project_id", "database_id", "job_id", "synced_at"
         )
         VALUES ${values}
@@ -544,6 +767,7 @@ export class MirrorInformer {
           "namespace" = EXCLUDED."namespace",
           "name" = EXCLUDED."name",
           "resource_version" = EXCLUDED."resource_version",
+          "derived_version" = EXCLUDED."derived_version",
           "shard" = EXCLUDED."shard",
           "manifest" = EXCLUDED."manifest",
           "deployment_id" = EXCLUDED."deployment_id",

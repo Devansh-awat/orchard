@@ -54,48 +54,46 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     const ctx = await this.resolveCtx(dep);
     if (!ctx) return;
 
-    try {
-      if (type === 'delete') {
-        await this.prisma.k8sWorkload.deleteMany({ where: { deploymentId: ctx.deploymentId } });
-        this.scheduleEmit(ctx, { workload: null, deleted: true });
-        return;
-      }
+    // Failures are left to propagate. The informer holds this object's
+    // derived_version back when they do and re-derives it on the next pass;
+    // catching here would report the replica counts as written when they were
+    // not, and the row would sit wrong until the deployment happened to change.
+    if (type === 'delete') {
+      await this.prisma.k8sWorkload.deleteMany({ where: { deploymentId: ctx.deploymentId } });
+      this.scheduleEmit(ctx, { workload: null, deleted: true });
+      return;
+    }
 
-      const specReplicas = dep.spec?.replicas ?? null;
-      const data = {
-        specReplicas,
-        readyReplicas: dep.status?.readyReplicas ?? 0,
-        availableReplicas: dep.status?.availableReplicas ?? 0,
-        updatedReplicas: dep.status?.updatedReplicas ?? 0,
-        observedImage: dep.spec?.template?.spec?.containers?.[0]?.image ?? null,
-        conditions: (dep.status?.conditions ?? []) as object[],
-      };
+    const specReplicas = dep.spec?.replicas ?? null;
+    const data = {
+      specReplicas,
+      readyReplicas: dep.status?.readyReplicas ?? 0,
+      availableReplicas: dep.status?.availableReplicas ?? 0,
+      updatedReplicas: dep.status?.updatedReplicas ?? 0,
+      observedImage: dep.spec?.template?.spec?.containers?.[0]?.image ?? null,
+      conditions: (dep.status?.conditions ?? []) as object[],
+    };
 
-      const existing = await this.prisma.k8sWorkload.findUnique({
-        where: { deploymentId: ctx.deploymentId },
-      });
-      await this.prisma.k8sWorkload.upsert({
-        where: { deploymentId: ctx.deploymentId },
-        create: { deploymentId: ctx.deploymentId, ...data },
-        update: data,
-      });
+    const existing = await this.prisma.k8sWorkload.findUnique({
+      where: { deploymentId: ctx.deploymentId },
+    });
+    await this.prisma.k8sWorkload.upsert({
+      where: { deploymentId: ctx.deploymentId },
+      create: { deploymentId: ctx.deploymentId, ...data },
+      update: data,
+    });
 
-      await this.adoptWorkloadSpec(ctx.deploymentId, dep);
+    await this.adoptWorkloadSpec(ctx.deploymentId, dep);
 
-      const changed =
-        !existing ||
-        existing.specReplicas !== data.specReplicas ||
-        existing.readyReplicas !== data.readyReplicas ||
-        existing.availableReplicas !== data.availableReplicas ||
-        existing.updatedReplicas !== data.updatedReplicas ||
-        existing.observedImage !== data.observedImage;
-      if (changed) {
-        this.scheduleEmit(ctx, { workload: data });
-      }
-    } catch (err) {
-      this.logger.warn(
-        `workload sync(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`,
-      );
+    const changed =
+      !existing ||
+      existing.specReplicas !== data.specReplicas ||
+      existing.readyReplicas !== data.readyReplicas ||
+      existing.availableReplicas !== data.availableReplicas ||
+      existing.updatedReplicas !== data.updatedReplicas ||
+      existing.observedImage !== data.observedImage;
+    if (changed) {
+      this.scheduleEmit(ctx, { workload: data });
     }
   }
 
@@ -227,23 +225,20 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     const cached = this.ctxCache.get(key);
     if (cached && cached.exp > Date.now()) return cached.ctx;
 
-    let ctx: Ctx | null = null;
-    try {
-      const row = await this.prisma.deployment.findFirst({
-        where: { namespace: ns, name },
-        select: {
-          id: true,
-          projectId: true,
-          project: { select: { organizationId: true } },
-        },
-      });
-      if (row) {
-        ctx = { deploymentId: row.id, orgId: row.project.organizationId, projectId: row.projectId };
-      }
-    } catch (err) {
-      this.logger.warn(`resolveCtx(${key}) failed: ${(err as Error)?.message ?? err}`);
-      return null;
-    }
+    // A lookup that throws is left to propagate: `null` means "no such
+    // deployment", which callers store as an answer, and a database blip must
+    // not be mistaken for one. Nothing is cached on that path either.
+    const row = await this.prisma.deployment.findFirst({
+      where: { namespace: ns, name },
+      select: {
+        id: true,
+        projectId: true,
+        project: { select: { organizationId: true } },
+      },
+    });
+    const ctx: Ctx | null = row
+      ? { deploymentId: row.id, orgId: row.project.organizationId, projectId: row.projectId }
+      : null;
 
     this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
     return ctx;
