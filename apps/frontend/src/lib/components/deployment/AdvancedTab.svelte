@@ -236,8 +236,8 @@
 				</Button>
 			{/snippet}
 			<p class="strategy-card-desc">
-				How many pods Kubernetes must keep ready while it drains the node underneath them, during
-				a cluster upgrade or a maintenance move. Set it to 0 to let the app go all the way down.
+				How many pods Kubernetes must keep ready while it drains the node underneath them, during a
+				cluster upgrade or a maintenance move. Set it to 0 to let the app go all the way down.
 			</p>
 			<div class="hc-field mt-3">
 				<label class="hc-label" for="pdb-min-available">Keep ready during a drain</label>
@@ -256,8 +256,7 @@
 			{#if Number(pdbMinAvailable) <= 0}
 				<div class="strategy-note mt-3">
 					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
-					<span
-						>No budget is set, so a node drain may take every pod of this app down at once.</span
+					<span>No budget is set, so a node drain may take every pod of this app down at once.</span
 					>
 				</div>
 			{:else if !pdbActive}
@@ -266,8 +265,8 @@
 					<span
 						>This app runs {replicaCount}
 						{replicaCount === 1 ? 'replica' : 'replicas'}, so the budget is kept as a setting but
-						not enforced: one that covers every pod you have would block node drains forever
-						instead of moving the app. It starts applying above {pdbMinAvailable} replicas.</span
+						not enforced: one that covers every pod you have would block node drains forever instead
+						of moving the app. It starts applying above {pdbMinAvailable} replicas.</span
 					>
 				</div>
 			{/if}

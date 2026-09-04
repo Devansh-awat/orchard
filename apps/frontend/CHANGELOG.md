@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.20.0](https://github.com/hackclub/orchard/compare/frontend/v1.19.0...frontend/v1.20.0) (2026-09-04)
+
+
+### Features
+
+* per-app pod disruption budget in deploy behavior ([e145faa](https://github.com/hackclub/orchard/commit/e145faaa7816b61c2a48a0184fd4d95788921778))
+
+
+### Bug Fixes
+
+* use the ui button in the disruption budget card ([fa54760](https://github.com/hackclub/orchard/commit/fa54760ac40a585da5376cc86597d091ce07d96d))
+
 ## [1.19.0](https://github.com/hackclub/orchard/compare/frontend/v1.18.0...frontend/v1.19.0) (2026-09-04)
 
 

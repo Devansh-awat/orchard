@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.22.0](https://github.com/hackclub/orchard/compare/server/v2.21.1...server/v2.22.0) (2026-09-04)
+
+
+### Features
+
+* per-app pod disruption budget in deploy behavior ([e145faa](https://github.com/hackclub/orchard/commit/e145faaa7816b61c2a48a0184fd4d95788921778))
+
+
+### Bug Fixes
+
+* give super builds a git binary ([ad7ba80](https://github.com/hackclub/orchard/commit/ad7ba807bda1de5de2099274762fab18f2dcabd9))
+
 ## [2.21.1](https://github.com/hackclub/orchard/compare/server/v2.21.0...server/v2.21.1) (2026-09-04)
 
 
