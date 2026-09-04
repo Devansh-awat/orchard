@@ -13,6 +13,11 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     1,
     parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15,
   );
+
+  private readonly maxConcurrentDepot = Math.max(
+    1,
+    parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '10', 10) || 10,
+  );
   private readonly LOCK_KEY = 528491;
   private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';
   private readonly txOpts = { maxWait: 10_000, timeout: 20_000 };
@@ -90,6 +95,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         where: { id: opts.deploymentId },
         select: {
           buildStatus: true,
+          buildWithDepot: true,
           name: true,
           githubRepo: true,
           githubInstallationId: true,
@@ -99,11 +105,14 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const buildingForDep = await tx.buildRun.count({
         where: { deploymentId: opts.deploymentId, status: 'building' },
       });
-      const buildingGlobal = await tx.buildRun.count({ where: { status: 'building' } });
+      const usesDepot = dep?.buildWithDepot === true;
+      const buildingInPool = await tx.buildRun.count({
+        where: { status: 'building', deployment: { buildWithDepot: usesDepot } },
+      });
       const startNow =
         buildingForDep === 0 &&
         dep?.buildStatus !== 'building' &&
-        buildingGlobal < this.maxConcurrent;
+        buildingInPool < (usesDepot ? this.maxConcurrentDepot : this.maxConcurrent);
 
       const now = new Date();
       const run = await tx.buildRun.create({
@@ -283,7 +292,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async drain() {
-    for (let i = 0; i < this.maxConcurrent + 4; i++) {
+    for (let i = 0; i < this.maxConcurrent + this.maxConcurrentDepot + 4; i++) {
       const run = await this.claimOne().catch((e) => {
         this.logger.warn(`claim failed: ${e?.message ?? e}`);
         return null;
@@ -301,13 +310,28 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         SELECT pg_try_advisory_xact_lock(${this.LOCK_KEY}) AS locked
       `;
       if (!locked) return null;
-      const buildingGlobal = await tx.buildRun.count({ where: { status: 'building' } });
-      if (buildingGlobal >= this.maxConcurrent) return null;
+      const buildingLocal = await tx.buildRun.count({
+        where: { status: 'building', deployment: { buildWithDepot: false } },
+      });
+      const buildingDepot = await tx.buildRun.count({
+        where: { status: 'building', deployment: { buildWithDepot: true } },
+      });
+      const localOpen = buildingLocal < this.maxConcurrent;
+      const depotOpen = buildingDepot < this.maxConcurrentDepot;
+      if (!localOpen && !depotOpen) return null;
 
       const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT br.id
         FROM build_runs br
         WHERE br.status = 'scheduled'
+          AND EXISTS (
+            SELECT 1 FROM deployments d0
+            WHERE d0.id = br.deployment_id
+              AND (
+                (${localOpen}::boolean AND d0.build_with_depot = false)
+                OR (${depotOpen}::boolean AND d0.build_with_depot = true)
+              )
+          )
           AND NOT EXISTS (
             SELECT 1 FROM build_runs b2
             WHERE b2.deployment_id = br.deployment_id AND b2.status = 'building'

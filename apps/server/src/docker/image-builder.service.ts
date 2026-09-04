@@ -1549,6 +1549,7 @@ fi
     // disableSharedCache fallback swaps in an emptyDir with nothing to evict,
     // and daemon mode keeps its cache in the daemon pod.
     const sharedCacheVolume = !daemonIp
+      && !buildWithDepot
       && this.localCacheEnabled
       && !!this.localCachePvc
       && !options.disableSharedCache;
@@ -1885,17 +1886,17 @@ exit $rc`,
               },
               // Daemon-client mode doesn't need buildkit-config, buildkit-state,
               // or buildkit-cache — the daemon pod has its own.
-              ...(!daemonIp ? [{
+              ...(!daemonIp && !buildWithDepot ? [{
                 name: 'buildkit-config',
                 configMap: {
                   name: 'buildkit-config',
                 },
               }] : []),
-              ...(this.sidecarPushEnabled ? [{
+              ...(this.sidecarPushEnabled && !buildWithDepot ? [{
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
-              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs) ? [{
+              ...(!daemonIp && !buildWithDepot && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs) ? [{
                 name: 'buildkit-state',
                 ...(this.scratchBlock
                   ? {
@@ -1914,7 +1915,7 @@ exit $rc`,
                     ? { emptyDir: { sizeLimit: this.scratchSize } }
                     : { emptyDir: { medium: 'Memory', sizeLimit: this.scratchSize } }),
               }] : []),
-              ...(!daemonIp && this.localCacheEnabled ? [{
+              ...(!daemonIp && !buildWithDepot && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
                 ...(this.localCachePvc && !options.disableSharedCache
                   ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
