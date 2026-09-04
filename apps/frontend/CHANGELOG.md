@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/hackclub/orchard/compare/frontend/v1.20.0...frontend/v1.20.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* derive platform domains from config instead of hardcoding them ([ad585dd](https://github.com/hackclub/orchard/commit/ad585dd681bd5d796a88bc72e9f8f397e44ef803))
+
 ## [1.20.0](https://github.com/hackclub/orchard/compare/frontend/v1.19.0...frontend/v1.20.0) (2026-09-04)
 
 

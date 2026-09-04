@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.23.0](https://github.com/hackclub/orchard/compare/server/v2.22.1...server/v2.23.0) (2026-09-04)
+
+
+### Features
+
+* basic auth on an ingress without cilium ([ea36adf](https://github.com/hackclub/orchard/commit/ea36adff30dbc83caa372c895c8d87fd0c8ab830))
+
+
+### Bug Fixes
+
+* derive platform domains from config instead of hardcoding them ([ad585dd](https://github.com/hackclub/orchard/commit/ad585dd681bd5d796a88bc72e9f8f397e44ef803))
+* derive sandbox state from an instance-scoped mirror shard ([9d9c071](https://github.com/hackclub/orchard/commit/9d9c0713b0b97322354941cc7d4942c79063209d))
+* load a base64 kubeconfig everywhere kubeconfig_path is read ([0928bb3](https://github.com/hackclub/orchard/commit/0928bb350f3bd7d06cb1299b276353ac26051c4f))
+* look up sandbox pods through the mirror everywhere ([6402d22](https://github.com/hackclub/orchard/commit/6402d22794e79d5c6e638f85f10f320c42dfec4d))
+* recreate a sandbox whose cluster resource vanished ([7a8f82f](https://github.com/hackclub/orchard/commit/7a8f82fd588c181ac6421fe318abc9a458680e25))
+* seed project roles in a migration so self-hosted installs have them ([252b98f](https://github.com/hackclub/orchard/commit/252b98f190dc3294fd1dff2e626b65aba9a096ec))
+
 ## [2.22.1](https://github.com/hackclub/orchard/compare/server/v2.22.0...server/v2.22.1) (2026-09-04)
 
 
