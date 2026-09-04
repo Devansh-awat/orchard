@@ -80,6 +80,9 @@ const BUILDKIT_PUSH_PHASE_RE =
 
 const BUILDKIT_STEP_RE = /(?:^|\n)#\d+\s/;
 
+/** Main container of a super build Job; BuildKit jobs use `buildkit`. */
+const DEPOT_CONTAINER = 'depot-build';
+
 @Injectable()
 export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
@@ -399,6 +402,13 @@ export class ImageBuilderService {
     }
 
     return sanitized;
+  }
+
+  // BuildKit jobs run a `buildkit` container; super builds run `depot-build`
+  // instead. Reading logs from a container the pod doesn't have throws, which
+  // is why super builds used to stream nothing at all.
+  private mainContainerName(containerStatuses?: k8s.V1ContainerStatus[]): string {
+    return containerStatuses?.some((cs) => cs.name === DEPOT_CONTAINER) ? DEPOT_CONTAINER : 'buildkit';
   }
 
   private async appendLog(deploymentId: string | undefined, message: string, level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO') {
@@ -915,6 +925,7 @@ export DOCKER_CONFIG=/tmp/.docker
 echo "=== Building with Super Builds ==="
 echo 0 > /tmp/build_rc
 { depot build \\
+  --progress plain \\
   --platform linux/amd64 \\
   -f "${dockerfileFlag}" \\
   -t "${depotImageName}" \\
@@ -923,7 +934,7 @@ echo 0 > /tmp/build_rc
   ${checkArgLine} \\
   ${gitShaArgLine} \\
   ${buildArgLines} \\
-  "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
+  "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -u -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
 BUILD_RC=$(cat /tmp/build_rc)
 if [ "$BUILD_RC" -ne 0 ]; then
   echo "=== Super Build failed (exit code $BUILD_RC) ==="
@@ -934,7 +945,7 @@ echo "=== Super Build completed ==="
 `;
 
     return {
-      name: 'depot-build',
+      name: DEPOT_CONTAINER,
       image: 'buildpack-deps:bookworm-curl',
       command: ['/bin/sh', '-c'],
       args: [depotScript],
@@ -2216,7 +2227,8 @@ exit $rc`,
       const clone = windowOf(pod.status?.initContainerStatuses?.find((c) => c.name === 'git-clone'));
       if (clone) recordPhaseSpan('build.clone', clone.start, clone.end, tags);
 
-      const image = windowOf(pod.status?.containerStatuses?.find((c) => c.name === 'buildkit'));
+      const mainName = this.mainContainerName(pod.status?.containerStatuses);
+      const image = windowOf(pod.status?.containerStatuses?.find((c) => c.name === mainName));
       if (image) recordPhaseSpan('build.image', image.start, image.end, tags);
 
       // The pusher sidecar starts with the pod and idles until buildkit hands
@@ -2493,7 +2505,7 @@ exit $rc`,
               const logResponse = await coreApi.readNamespacedPodLog(
                 podName,
                 this.builderNamespace,
-                'buildkit',
+                this.mainContainerName(containerStatuses),
                 undefined,
                 undefined,
                 undefined,
