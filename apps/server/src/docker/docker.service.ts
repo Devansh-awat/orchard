@@ -626,7 +626,7 @@ export class DockerService {
     buildFromRoot?: boolean,
     _buildType?: string,
   ): Promise<void> {
-    const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
+    const fullImageName = `${this.harborRegistryPull}/${this.harborProject}/${imageName}`;
 
     const envVars = await this.loadBuildEnv(deploymentId);
 

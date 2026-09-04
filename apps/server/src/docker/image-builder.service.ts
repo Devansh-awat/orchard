@@ -852,6 +852,11 @@ ${registryConfigs}
       dockerfileFlag = dockerfilePath.substring(dockerfilePath.lastIndexOf('/') + 1);
     }
 
+    const depotRegistry = this.harborRegistryPull;
+    const depotImageName = fullImageName.startsWith(`${this.harborRegistryPush}/`)
+      ? `${depotRegistry}/${fullImageName.slice(this.harborRegistryPush.length + 1)}`
+      : fullImageName;
+
     // Build the depot build command parts safely.
     //
     // The values reach the script through the environment rather than the
@@ -903,7 +908,7 @@ echo 0 > /tmp/build_rc
 { depot build \\
   --platform linux/amd64 \\
   -f "${dockerfileFlag}" \\
-  -t "${fullImageName}" \\
+  -t "${depotImageName}" \\
   --push \\
   ${targetFlag} \\
   ${checkArgLine} \\
@@ -928,7 +933,7 @@ echo "=== Super Build completed ==="
       env: [
         { name: 'DEPOT_TOKEN', value: this.depotToken || '' },
         ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
-        { name: 'REGISTRY_HOST', value: this.harborRegistryPush },
+        { name: 'REGISTRY_HOST', value: depotRegistry },
         { name: 'REGISTRY_USER', value: process.env.HARBOR_USERNAME || 'admin' },
         { name: 'REGISTRY_PASS', value: process.env.HARBOR_PASSWORD || '' },
         ...depotBuildArgs.map(({ envName, value }) => ({
