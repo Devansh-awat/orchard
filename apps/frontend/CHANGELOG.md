@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/hackclub/orchard/compare/frontend/v1.18.0...frontend/v1.19.0) (2026-09-04)
+
+
+### Features
+
+* warn when auto-deploy is enabled but not connected ([e4453d3](https://github.com/hackclub/orchard/commit/e4453d3f279dc5b29ca562ea0eeff5d95a91422a))
+
 ## [1.18.0](https://github.com/hackclub/orchard/compare/frontend/v1.17.2...frontend/v1.18.0) (2026-09-03)
 
 

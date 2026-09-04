@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.20.0](https://github.com/hackclub/orchard/compare/server/v2.19.0...server/v2.20.0) (2026-09-04)
+
+
+### Features
+
+* warn when auto-deploy is enabled but not connected ([e4453d3](https://github.com/hackclub/orchard/commit/e4453d3f279dc5b29ca562ea0eeff5d95a91422a))
+
+
+### Bug Fixes
+
+* keep the cluster mirror converging when a derived write fails ([184c8ef](https://github.com/hackclub/orchard/commit/184c8ef2e31770967629f62c258c321df279507a))
+* stop auto-deploy silently dropping pushes ([a999853](https://github.com/hackclub/orchard/commit/a999853e8d3ffdd4f1b39cb533151827006b8dae))
+
 ## [2.19.0](https://github.com/hackclub/orchard/compare/server/v2.18.4...server/v2.19.0) (2026-09-03)
 
 

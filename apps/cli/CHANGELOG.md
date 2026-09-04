@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/hackclub/orchard/compare/cli/v0.13.1...cli/v0.14.0) (2026-09-04)
+
+
+### Features
+
+* warn when auto-deploy is enabled but not connected ([e4453d3](https://github.com/hackclub/orchard/commit/e4453d3f279dc5b29ca562ea0eeff5d95a91422a))
+
 ## [0.13.1](https://github.com/hackclub/orchard/compare/cli/v0.13.0...cli/v0.13.1) (2026-09-02)
 
 
