@@ -138,9 +138,9 @@
 		AppSettings
 	} from '$lib/components/deployment';
 
-	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
-	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME || 'ingress.lfdl.ink';
-	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
+	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
+	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
+	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN ?? '';
 
 	interface Deployment {
 		id: string;
@@ -1734,6 +1734,7 @@
 	];
 
 	function generateRandomDomainForNew() {
+		if (!APP_DOMAIN) return;
 		const adjective = SLUG_ADJECTIVES[Math.floor(Math.random() * SLUG_ADJECTIVES.length)];
 		const noun = SLUG_NOUNS[Math.floor(Math.random() * SLUG_NOUNS.length)];
 		const number = Math.floor(Math.random() * 90) + 10;

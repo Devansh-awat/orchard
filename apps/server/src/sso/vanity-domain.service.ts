@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
+import { optionalDomain } from '../env/platform-domains';
 
 const RESERVED_SUBDOMAINS = new Set([
   'www', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
@@ -35,7 +36,7 @@ export class VanityDomainService {
     private readonly prisma: PrismaService,
     private readonly k8sNetwork: K8sNetworkService,
   ) {
-    this.baseDomain = process.env.BASE_DOMAIN || 'orchard.my';
+    this.baseDomain = optionalDomain(process.env.BASE_DOMAIN);
     this.platformNamespace = process.env.PLATFORM_NAMESPACE || 'default';
     this.platformServiceName = process.env.PLATFORM_SERVICE_NAME || 'leaf-frontend';
     this.platformServicePort = parseInt(process.env.PLATFORM_SERVICE_PORT || '3000', 10);
@@ -45,6 +46,11 @@ export class VanityDomainService {
     const normalized = subdomain?.toLowerCase().trim() || null;
 
     if (normalized) {
+      if (!this.baseDomain) {
+        throw new BadRequestException(
+          'This instance has no vanity domain configured (BASE_DOMAIN), so org subdomains are unavailable.',
+        );
+      }
       if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
         throw new BadRequestException(
           'Subdomain must be 3-50 characters, alphanumeric and hyphens only, cannot start or end with a hyphen',

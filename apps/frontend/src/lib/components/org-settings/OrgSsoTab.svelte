@@ -599,7 +599,7 @@
 			</div>
 		</div>
 
-		{#if isOwner}
+		{#if isOwner && baseDomain}
 			<div class="sso-block">
 				<h3 class="sso-block-title"><Globe size={13} /> Vanity address</h3>
 				<Field

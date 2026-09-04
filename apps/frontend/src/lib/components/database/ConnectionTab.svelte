@@ -37,6 +37,8 @@
 	const maskedUri = $derived(
 		`postgresql://${database.dbUser}:••••••••@${database.host}:${database.port}/${database.dbName}`
 	);
+	const maskPassword = (uri: string | null | undefined) =>
+		(uri ?? '').replace(/^([a-z+]+:\/\/[^:/@]+):.*@/i, '$1:••••••••@');
 	const visibleUri = $derived(showConnectionString ? database.connectionString : maskedUri);
 	const snippet = $derived.by(() => {
 		const uri = visibleUri;
@@ -301,7 +303,7 @@
 						<code class="db-connstr-code"
 							>{showPublicConnectionString
 								? database.publicConnectionString
-								: `postgresql://${database.dbUser}:••••••••@${database.publicHostname || database.publicIp}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`}</code
+								: maskPassword(database.publicConnectionString)}</code
 						>
 						<div class="flex gap-1 shrink-0">
 							<Button

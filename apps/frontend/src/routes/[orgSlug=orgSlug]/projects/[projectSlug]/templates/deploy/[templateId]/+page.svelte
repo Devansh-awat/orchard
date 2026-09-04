@@ -59,7 +59,7 @@
 	const templateId = $derived($page.params.templateId ?? '');
 	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
 
-	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
+	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
 
 	function isDomainParam(param: ParameterDef): boolean {
 		if (param.type !== 'string') return false;
@@ -74,7 +74,7 @@
 	});
 
 	const suggestedDomain = $derived(
-		appNameValue
+		appNameValue && APP_DOMAIN
 			? `${appNameValue
 					.toLowerCase()
 					.replace(/[^a-z0-9-]+/g, '-')

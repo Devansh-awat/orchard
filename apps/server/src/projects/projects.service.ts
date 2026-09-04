@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -210,14 +210,19 @@ export class ProjectsService {
       namespace = this.buildNamespace([organization.slug, slug]);
     }
 
+    const adminRole = await this.prisma.role.findFirst({ where: { name: 'admin' } });
+
+    if (!adminRole) {
+      throw new InternalServerErrorException(
+        'The "admin" project role is missing; the database has not been fully migrated',
+      );
+    }
+
     const namespaceResult = await this.k8sNamespace.createNamespace(namespace);
 
     if (!namespaceResult.created) {
       throw new BadRequestException('Kubernetes namespace already exists');
     }
-
-    // Create project and add creator as owner
-    const adminRole = await this.prisma.role.findFirst({ where: { name: 'admin' } });
 
     const project = await this.prisma.project.create({
       data: {
@@ -231,13 +236,13 @@ export class ProjectsService {
         namespace,
         createdBy: user.id,
         ownerId: user.id,
-        members: adminRole ? {
+        members: {
           create: {
             userId: user.id,
             roleId: adminRole.id,
             addedBy: user.id,
           },
-        } : undefined,
+        },
       },
       include: {
         organization: true,

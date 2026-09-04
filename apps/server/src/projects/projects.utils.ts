@@ -4,23 +4,42 @@
  * without dragging in DI.
  */
 
+export function wildcardSecretNameFor(suffix: string): string {
+  return `wildcard-${suffix.replace(/^\./, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-tls`;
+}
+
 // Suffixes Orchard hands out automatically at create time. A host under one of
 // these is the generated URL, not a domain anybody chose, which is how we tell
-// "has a URL" from "has a custom domain".
+// "has a URL" from "has a custom domain". Explicit PLATFORM_WILDCARD_DOMAINS
+// wins; otherwise a single entry is derived from APP_DOMAIN. There is no
+// literal fallback: an unconfigured instance must not mint URLs under a domain
+// it doesn't own.
 //
 // Parsed here rather than in ingress.service so deployments.service can use it:
 // ingress.service already forwardRef-imports DeploymentsService, and importing
 // back the other way is the circular dependency that TDZ-crashes boot under swc.
-export const PLATFORM_WILDCARD_DOMAINS = (
-  process.env.PLATFORM_WILDCARD_DOMAINS || '.k.hackclub.dev=wildcard-k-hackclub-dev-tls'
-)
-  .split(',')
-  .map((entry) => entry.trim())
-  .filter(Boolean)
-  .flatMap((entry) => {
-    const [suffix, secret] = entry.split('=').map((part) => part.trim());
-    return suffix && secret ? [{ suffix, secret }] : [];
-  });
+function parseWildcardDomains(): { suffix: string; secret: string }[] {
+  const explicit = (process.env.PLATFORM_WILDCARD_DOMAINS || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .flatMap((entry) => {
+      const [suffix, secret] = entry.split('=').map((part) => part.trim());
+      if (!suffix) return [];
+      const normalized = suffix.startsWith('.') ? suffix : `.${suffix}`;
+      return [{ suffix: normalized, secret: secret || wildcardSecretNameFor(normalized) }];
+    });
+
+  if (explicit.length) return explicit;
+
+  const appDomain = (process.env.APP_DOMAIN || '').trim().replace(/^\.+|\.+$/g, '');
+  if (!appDomain) return [];
+
+  const suffix = `.${appDomain}`;
+  return [{ suffix, secret: wildcardSecretNameFor(suffix) }];
+}
+
+export const PLATFORM_WILDCARD_DOMAINS = parseWildcardDomains();
 
 export function isPlatformGeneratedHost(host: string): boolean {
   return PLATFORM_WILDCARD_DOMAINS.some((w) => host.endsWith(w.suffix));

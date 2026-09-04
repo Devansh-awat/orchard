@@ -7,9 +7,9 @@
 	import { env } from '$env/dynamic/public';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
 
-	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
-	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME || 'ingress.lfdl.ink';
-	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
+	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
+	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME ?? '';
+	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN ?? '';
 
 	let {
 		deployment,
@@ -135,7 +135,7 @@
 	let protectionBypassPaths = $state('');
 	let copiedBypass = $state(false);
 
-	let domainMode = $state<'orchard' | 'custom'>('orchard');
+	let domainMode = $state<'orchard' | 'custom'>(APP_DOMAIN ? 'orchard' : 'custom');
 	let dnsCheckState = $state<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
 	let copiedCname = $state(false);
 
@@ -249,10 +249,12 @@
 					label="Domain type"
 					value={domainMode}
 					onchange={(next) => setDomainMode(next as 'orchard' | 'custom')}
-					options={[
-						{ value: 'orchard', label: `Free ${APP_DOMAIN} subdomain` },
-						{ value: 'custom', label: 'Your own domain' }
-					]}
+					options={APP_DOMAIN
+						? [
+								{ value: 'orchard', label: `Free ${APP_DOMAIN} subdomain` },
+								{ value: 'custom', label: 'Your own domain' }
+							]
+						: [{ value: 'custom', label: 'Your own domain' }]}
 				/>
 
 				{#if domainMode === 'orchard'}
@@ -290,29 +292,35 @@
 					/>
 
 					<div class="dns-panel">
-						<p class="dns-panel-title">Add this record wherever you manage DNS</p>
-						<dl class="dns-record">
-							<dt>Type</dt>
-							<dd><code>CNAME</code></dd>
-							<dt>Name</dt>
-							<dd><code>{newDomainNormalizedHost ? dnsRecordName : '@'}</code></dd>
-							<dt>Value</dt>
-							<dd>
-								<button
-									type="button"
-									class="dns-copy"
-									onclick={copyCnameTarget}
-									title="Copy to clipboard"
-								>
-									<code>{INGRESS_CNAME}</code>
-									{#if copiedCname}
-										<Check size={12} class="h-3 w-3 dns-copy-ok" />
-									{:else}
-										<Copy size={12} class="h-3 w-3 dns-copy-icon" />
-									{/if}
-								</button>
-							</dd>
-						</dl>
+						<p class="dns-panel-title">
+							{INGRESS_CNAME
+								? 'Add this record wherever you manage DNS'
+								: 'Point this domain at your ingress, then add it here'}
+						</p>
+						{#if INGRESS_CNAME}
+							<dl class="dns-record">
+								<dt>Type</dt>
+								<dd><code>CNAME</code></dd>
+								<dt>Name</dt>
+								<dd><code>{newDomainNormalizedHost ? dnsRecordName : '@'}</code></dd>
+								<dt>Value</dt>
+								<dd>
+									<button
+										type="button"
+										class="dns-copy"
+										onclick={copyCnameTarget}
+										title="Copy to clipboard"
+									>
+										<code>{INGRESS_CNAME}</code>
+										{#if copiedCname}
+											<Check size={12} class="h-3 w-3 dns-copy-ok" />
+										{:else}
+											<Copy size={12} class="h-3 w-3 dns-copy-icon" />
+										{/if}
+									</button>
+								</dd>
+							</dl>
+						{/if}
 						{#if newDomainNormalizedHost && dnsRecordName === '@'}
 							<p class="dns-note">
 								Root domains need a DNS provider that supports CNAME flattening, like Cloudflare.
@@ -823,7 +831,7 @@
 									<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]"
 										>{port.protocol}</span
 									>
-									{#if port.publicEnabled && port.publicPort}
+									{#if port.publicEnabled && port.publicPort && PUBLIC_DEPLOYMENT_DOMAIN}
 										{@const pubEndpoint = `${PUBLIC_DEPLOYMENT_DOMAIN}:${port.publicPort}`}
 										<button
 											type="button"

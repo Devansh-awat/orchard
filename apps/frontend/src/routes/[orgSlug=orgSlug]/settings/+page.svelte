@@ -206,7 +206,7 @@
 			}
 		].filter((g) => g.items.length > 0)
 	);
-	const baseDomain = env.PUBLIC_BASE_DOMAIN || 'orchard.my';
+	const baseDomain = env.PUBLIC_BASE_DOMAIN ?? '';
 	const backupConfigured = $derived(
 		Boolean(backupEndpoint && backupBucket && backupSecretConfigured)
 	);

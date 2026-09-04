@@ -683,12 +683,16 @@ export class DatabasesService {
     let publicHostname: string | null = null;
     let publicConnectionString: string | null = null;
     if (database.publicEnabled && database.publicIp && database.publicPort && database.mode === 'cnpg' && database.clusterName && database.namespace) {
-      publicHostname = this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName);
-      publicConnectionString = `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`;
-      // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
-      try {
-        await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
-      } catch { /* ignore */ }
+      publicHostname = this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName) || null;
+      publicConnectionString = publicHostname
+        ? `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
+        : `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}?sslmode=require`;
+      if (publicHostname) {
+        // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
+        try {
+          await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
+        } catch { /* ignore */ }
+      }
     }
 
     // All three exist for any CNPG cluster; on a single-instance one -ro simply
@@ -2109,11 +2113,13 @@ export class DatabasesService {
     // so Postgres serves the Let's Encrypt cert instead of its self-signed default.
     const hostname = this.k8sCnpg.publicTlsHostname(database.namespace, database.clusterName);
     const legacyHostname = this.k8sCnpg.legacyPublicTlsHostname(database.clusterName);
-    try {
-      await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
-      await this.k8sCnpg.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname, legacyHostname]);
-    } catch (e: any) {
-      console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
+    if (hostname) {
+      try {
+        await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
+        await this.k8sCnpg.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname, legacyHostname].filter(Boolean));
+      } catch (e: any) {
+        console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
+      }
     }
 
     await this.prisma.database.update({
