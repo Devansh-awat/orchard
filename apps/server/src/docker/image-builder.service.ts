@@ -15,6 +15,7 @@ import {
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withGitHubCredentials } from './repo-url';
 import { injectBuildArgsScript } from './build-args';
+import { isSandboxStartFault } from './build-faults';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
@@ -55,6 +56,9 @@ interface BuildJobOptions {
   // unchanged layers are instant cache hits (like Depot).
   persistentBuildCache?: boolean;
   disableSharedCache?: boolean;
+  // Set only by buildAndPush's own retry after a Kata sandbox start fault, so
+  // an unlucky pod gets a second attempt and a broken node still fails fast.
+  sandboxRetried?: boolean;
 }
 
 export interface BuildJobStatus {
@@ -3101,6 +3105,19 @@ exit $rc`,
 
       return fullImagePath;
     } catch (error) {
+      // The build pod's Kata sandbox can fail to hand a container to the
+      // hypervisor for reasons that have nothing to do with the repo being
+      // built. Nothing ran, so there is nothing to report to the user beyond
+      // a second attempt.
+      if (!options.sandboxRetried && isSandboxStartFault(error?.message ?? '')) {
+        console.warn(`[ImageBuilder] Sandbox start fault for ${imageName}:${tag}, retrying: ${error.message}`);
+        await this.appendLog(
+          deploymentId,
+          'The build sandbox failed to start. Retrying the build.',
+        ).catch(() => {});
+        return this.buildAndPush({ ...options, sandboxRetried: true });
+      }
+
       if (!options.disableSharedCache && this.localCacheEnabled && this.localCachePvc) {
         let logTail = '';
         if (deploymentId) {

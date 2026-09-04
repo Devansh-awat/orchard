@@ -214,6 +214,11 @@ jobs:
       # is what let a deleted job spin thousands of API calls into a 15s window.
       - name: Build poll pacing tests
         run: pnpm --filter server test:build-pacing
+      # Sandbox start faults get one silent re-run, so the classifier decides
+      # whether a user waits through a second build for nothing. Pins that a
+      # real build error is never mistaken for a Kata start race.
+      - name: Sandbox start fault tests
+        run: pnpm --filter server test:build-faults
       # Auto-deploy watch paths decide whether a push builds at all, so a
       # matching bug either rebuilds everything in a monorepo or silently stops
       # deploying. Pins the glob semantics and the fail-open cases.
