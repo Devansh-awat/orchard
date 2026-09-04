@@ -1,10 +1,20 @@
 import * as k8s from '@kubernetes/client-node';
 import { LABEL_JOB_ID } from '../jobs/jobs-orchestrator.service';
+import {
+  CRD_API_VERSION,
+  CRD_GROUP,
+  CRD_KIND,
+  CRD_PLURAL,
+  CRD_VERSION,
+  INSTANCE_LABEL,
+  SANDBOX_SHARD,
+} from '../sandboxes/sandbox-cr';
 import { MirrorListOptions, MirrorListPage, MirrorRefs, MirrorResourceConfig } from './mirror-informer';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
+import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
@@ -21,6 +31,12 @@ export interface MirrorShardDeps {
   cnpg: CnpgMirrorConsumer;
   jobs: JobMirrorConsumer;
   workloads: WorkloadMirrorConsumer;
+  sandboxes: SandboxMirrorConsumer;
+  // Null when this install runs no sandboxes, or could not work out which
+  // sandboxes are its own. The shard is then not built at all: there is no
+  // useful half-scoped version of a watch whose whole job is to see exactly
+  // this install's resources and nothing else.
+  sandboxScope: { namespace: string; instanceId: string } | null;
   namespaceRefs: (namespace: string) => Promise<MirrorRefs>;
 }
 
@@ -62,7 +78,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
       ),
     );
 
-  return [
+  const shards: MirrorShardDef[] = [
     {
       name: 'pods',
       lease: 'orchard-mirror-pods',
@@ -274,4 +290,67 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
       ],
     },
   ];
+
+  if (deps.sandboxScope) {
+    const { namespace, instanceId } = deps.sandboxScope;
+    // Everything in this shard is selected by the instance label, so a second
+    // Orchard server sharing the namespace is invisible to it rather than
+    // merely ignored by it. That is what makes the orphan sweep at the end of a
+    // list pass safe to act on.
+    const ownSelector = `${INSTANCE_LABEL}=${instanceId}`;
+    shards.push({
+      name: SANDBOX_SHARD,
+      lease: 'orchard-mirror-sandboxes',
+      resources: [
+        {
+          kind: CRD_KIND,
+          apiVersion: CRD_API_VERSION,
+          watchPath: `/apis/${CRD_GROUP}/${CRD_VERSION}/namespaces/${namespace}/${CRD_PLURAL}`,
+          labelSelector: ownSelector,
+          list: async (kc, opts) =>
+            toListResult(
+              (await kc
+                .makeApiClient(k8s.CustomObjectsApi)
+                .listNamespacedCustomObject(
+                  CRD_GROUP,
+                  CRD_VERSION,
+                  namespace,
+                  CRD_PLURAL,
+                  undefined,
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  ownSelector,
+                  opts.limit,
+                )) as K8sListBody,
+            ),
+          onEvent: (type, obj) => deps.sandboxes.onEvent(type, obj),
+          onListComplete: (seen) => deps.sandboxes.sweepOrphans(seen),
+        },
+        {
+          // Held for lookups, not for derived state: exec, the SSH tunnel and
+          // the git panel each need the running pod's name and IP, and they
+          // used to pay a LIST to the apiserver for it on every request.
+          kind: 'Pod',
+          apiVersion: 'v1',
+          watchPath: `/api/v1/namespaces/${namespace}/pods`,
+          labelSelector: ownSelector,
+          list: async (kc, opts) =>
+            toListResult(
+              await core(kc).listNamespacedPod(
+                namespace,
+                undefined,
+                undefined,
+                opts.continueToken,
+                undefined,
+                ownSelector,
+                opts.limit,
+              ),
+            ),
+        },
+      ],
+    });
+  }
+
+  return shards;
 }

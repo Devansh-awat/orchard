@@ -4,12 +4,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
+import { SandboxK8sService } from '../sandboxes/sandbox-k8s.service';
+import { sandboxFeatureEnabled } from '../sandboxes/sandbox-enabled.guard';
 import { MirrorInformer, MirrorRefs } from './mirror-informer';
 import { MirrorShardDef, buildMirrorShards } from './mirror-shards';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
+import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -75,6 +78,8 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly cnpgConsumer: CnpgMirrorConsumer,
     private readonly jobConsumer: JobMirrorConsumer,
     private readonly workloadConsumer: WorkloadMirrorConsumer,
+    private readonly sandboxConsumer: SandboxMirrorConsumer,
+    private readonly sandboxK8s: SandboxK8sService,
   ) {}
 
   async onModuleInit() {
@@ -93,6 +98,8 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       cnpg: this.cnpgConsumer,
       jobs: this.jobConsumer,
       workloads: this.workloadConsumer,
+      sandboxes: this.sandboxConsumer,
+      sandboxScope: await this.resolveSandboxScope(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns),
     });
 
@@ -403,6 +410,23 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         where: { shard: { startsWith: PRESENCE_PREFIX }, updatedAt: { lt: presenceCutoff } },
       })
       .catch(() => {});
+  }
+
+  // Which sandboxes are this install's. Left null on failure rather than
+  // guessed at: a shard that watched the wrong set would be worse than no shard
+  // at all, and everything that reads the sandbox mirror already refuses to act
+  // on a shard that is not reporting.
+  private async resolveSandboxScope(): Promise<{ namespace: string; instanceId: string } | null> {
+    if (!sandboxFeatureEnabled()) return null;
+    try {
+      return {
+        namespace: this.sandboxK8s.namespace,
+        instanceId: await this.sandboxK8s.instanceId(),
+      };
+    } catch (e: any) {
+      this.logger.warn(`sandbox mirror shard disabled: ${e?.message}`);
+      return null;
+    }
   }
 
   private async resolveNamespaceRefs(namespace: string): Promise<MirrorRefs> {

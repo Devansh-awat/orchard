@@ -47,6 +47,32 @@ sandbox states the API exposes. All CR interaction lives in one server file
 (`sandbox-k8s.service.ts`) so a fallback to direct pod management is a
 one-file change if the beta API churns.
 
+### State comes from the mirror
+
+Sandbox resources are watched, not polled. The `sandboxes` mirror shard
+(`mirror-shards.ts`) runs an informer over the Sandbox CRs and their pods,
+writes the manifests into `k8s_objects`, and `SandboxMirrorConsumer` derives
+the `sandboxes` row from each event: ready means running, `Suspended` means
+stopped, a delete means the box is gone. Reads follow the same route — the
+status of a sandbox, and the pod behind exec, the SSH tunnel and the git
+panel, are indexed lookups in Postgres rather than a round trip to the
+apiserver per request, with a direct LIST as the fallback when the mirror
+holds nothing. The only clock left is the reaper, for the three things that
+genuinely need one: a transition that never completes, idle suspension, and
+max lifetime.
+
+Every sandbox resource this install creates is labelled
+`orchard.my/instance=<id>`, where the id is generated once and stored in
+`instance_settings`. The shard's informer selects on that label, so a second
+Orchard server pointed at the same cluster — a laptop, another install —
+does not merely ignore this install's sandboxes, it never lists them. That
+matters because of what runs at the end of a list pass: resources with no
+sandbox row are deleted as orphans, and a server whose database has never
+heard of them is not evidence that they are garbage. Two guards, and both
+are needed. Anything else that concludes something from a resource being
+missing (the stuck-transition check) first asks whether the shard is
+actually reporting; absence in a mirror that is not running means nothing.
+
 There is no ingress. Sandboxes are reachable only through the server, which
 tunnels SSH over an authenticated websocket:
 

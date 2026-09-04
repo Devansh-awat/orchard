@@ -13,6 +13,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxK8sService, SandboxSpecInput, k8sErrorMessage } from './sandbox-k8s.service';
+import { sandboxStatusFromCr } from './sandbox-cr';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -136,19 +137,6 @@ export class SandboxesService {
     throw new NotFoundException('Sandbox not found');
   }
 
-  // The pod mounts bootstrap.sh, agent tokens and the opencode config from its
-  // Secret, so a sandbox created before a platform change keeps booting the old
-  // script forever. Rewrite the Secret on every start to pick those up.
-  private async refreshSecret(row: SandboxWithIdentity): Promise<void> {
-    try {
-      const spec = specOf(row);
-      await this.k8s.ensureAuthSecret(spec, await this.secretFor(row));
-      await this.k8s.refreshSpec(spec);
-    } catch (e: any) {
-      this.logger.warn(`secret refresh failed for sandbox ${row.id}: ${e?.message}`);
-    }
-  }
-
   private async secretFor(row: SandboxWithIdentity) {
     const identity = row.sshIdentityId
       ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
@@ -160,14 +148,38 @@ export class SandboxesService {
     );
   }
 
-  // The custom resource can go missing while the row survives: a cluster
-  // rebuild, a namespace wipe, an operator that pruned it. Patching a resource
-  // that is not there just throws a raw 404 at whoever pressed start, so make
-  // the sandbox again instead. Its home volume died with the resource, so this
-  // comes back empty and re-clones the repo.
-  private async recreate(row: SandboxWithIdentity): Promise<void> {
-    this.logger.warn(`sandbox ${row.id} lost its cluster resource; recreating`);
-    await this.k8s.createSandbox(specOf(row), await this.secretFor(row));
+  /**
+   * Bring the cluster to "this sandbox is running", whatever it currently
+   * holds, and report whether that meant building it again.
+   *
+   * Written as create-then-resume rather than look-then-decide on purpose. The
+   * resource can go missing while the row survives — a cluster rebuild, a
+   * namespace wipe, an over-eager sweep — and a start that assumes it is there
+   * throws a raw 404 at whoever pressed the button. Asking first only moves the
+   * race: the answer can be stale by the time it is acted on. Creating and
+   * treating "already exists" as the other branch cannot be wrong either way.
+   *
+   * A rebuilt sandbox comes back empty. Its home volume went with the resource.
+   */
+  private async ensureRunning(row: SandboxWithIdentity): Promise<boolean> {
+    const spec = specOf(row);
+    const created = await this.k8s.createSandbox(spec, await this.secretFor(row));
+    if (created) {
+      this.logger.warn(`sandbox ${row.id} had no cluster resource; rebuilt it`);
+      return true;
+    }
+    // The pod mounts bootstrap.sh, agent tokens and the opencode config from
+    // its Secret, and keeps whatever pod template it was born with, so a
+    // sandbox from before a platform change never sees either. createSandbox
+    // has already rewritten the Secret; re-render the template to match. Best
+    // effort: a stale template is not a reason to refuse to start the box.
+    try {
+      await this.k8s.refreshSpec(spec);
+    } catch (e: any) {
+      this.logger.warn(`spec refresh failed for sandbox ${row.id}: ${e?.message}`);
+    }
+    await this.k8s.resume(row.podName);
+    return false;
   }
 
   // Org admins can see and stop a member's sandbox, but never reach inside it:
@@ -507,16 +519,18 @@ export class SandboxesService {
     const row = await this.getOwned(id, userId);
     if (row.status === 'running' || row.status === 'starting') return toSandboxDto(row);
     if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    const cr = await this.k8s.getCrStatus(row.podName);
-    if (cr.exists) {
-      await this.refreshSecret(row);
-      await this.k8s.resume(row.podName);
-    } else {
-      await this.recreate(row);
-    }
+    const rebuilt = await this.ensureRunning(row);
+    // A start against a sandbox the cluster never actually stopped changes
+    // nothing about the resource, so no watch event is coming and nothing would
+    // move the row off "starting". Settle it here when the box is already up.
+    const settled = sandboxStatusFromCr(await this.k8s.getCrStatus(row.podName));
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status: 'starting', statusMessage: null, lastActiveAt: new Date() },
+      data: {
+        status: settled === 'running' ? 'running' : 'starting',
+        statusMessage: null,
+        lastActiveAt: new Date(),
+      },
       include: { sshIdentity: { select: { id: true, name: true } } },
     });
     this.audit
@@ -527,7 +541,7 @@ export class SandboxesService {
         targetType: 'sandbox',
         targetId: row.id,
         targetLabel: row.name,
-        metadata: { recreated: !cr.exists },
+        metadata: { rebuilt },
       })
       .catch(() => {});
     return toSandboxDto(updated);
@@ -537,13 +551,14 @@ export class SandboxesService {
     const row = await this.getOwned(id, userId);
     if (row.status === 'stopped' || row.status === 'stopping') return toSandboxDto(row);
     if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    // Nothing to suspend if the resource is already gone, and the row would sit
-    // in stopping until the reaper called it an error. It is stopped.
-    const cr = await this.k8s.getCrStatus(row.podName);
-    if (cr.exists) await this.k8s.suspend(row.podName);
+    // Same shape as start: a resource that is already gone, or already
+    // suspended, produces no event, and the row would sit in stopping waiting
+    // for one that cannot arrive.
+    const existed = await this.k8s.suspend(row.podName);
+    const settled = sandboxStatusFromCr(await this.k8s.getCrStatus(row.podName));
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status: cr.exists ? 'stopping' : 'stopped' },
+      data: { status: !existed || settled === 'stopped' ? 'stopped' : 'stopping' },
       include: { sshIdentity: { select: { id: true, name: true } } },
     });
     this.audit

@@ -3,15 +3,28 @@ import * as k8s from '@kubernetes/client-node';
 import { randomUUID } from 'crypto';
 import { PassThrough } from 'stream';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SANDBOX_BOOTSTRAP_SCRIPT } from './sandbox-bootstrap';
+import {
+  CRD_API_VERSION,
+  CRD_GROUP,
+  CRD_KIND,
+  CRD_PLURAL,
+  CRD_VERSION,
+  INSTANCE_LABEL,
+  INSTANCE_SETTING_KEY,
+  MANAGED_BY,
+  SANDBOX_CR_ABSENT,
+  SANDBOX_ID_LABEL,
+  SANDBOX_SHARD,
+  SandboxCrStatus,
+  readSandboxCr,
+} from './sandbox-cr';
 
-const CRD_GROUP = 'agents.x-k8s.io';
-const CRD_VERSION = 'v1beta1';
-const CRD_PLURAL = 'sandboxes';
-const MANAGED_BY = 'orchard-sandbox';
-const INSTANCE_LABEL = 'orchard.my/instance';
-const INSTANCE_SETTING_KEY = 'sandbox_instance_id';
+// How long a mirror heartbeat may go unwritten before its shard's picture of
+// the cluster stops counting as current.
+const MIRROR_FRESH_MS = 60_000;
 
 export interface SandboxSpecInput {
   id: string;
@@ -34,19 +47,6 @@ export interface SandboxSecretInput {
   mcpToken?: string | null;
 }
 
-export interface SandboxCrSummary {
-  name: string;
-  instance: string | null;
-}
-
-export interface SandboxCrStatus {
-  exists: boolean;
-  operatingMode: 'Running' | 'Suspended' | null;
-  ready: boolean;
-  message: string | null;
-  podIp: string | null;
-}
-
 export function k8sErrorMessage(e: any): string {
   const body = e?.body ?? e?.response?.body;
   if (typeof body === 'string') {
@@ -67,6 +67,12 @@ export function sandboxWorkdir(repoUrl: string | null): string {
   return base ? `/persist/home/${base}` : '/persist/home';
 }
 
+// A pod that is on its way out still reports Running for as long as it takes
+// to stop, and exec'ing into one is a request that dies mid-flight.
+function isPodLive(pod: any): boolean {
+  return pod?.status?.phase === 'Running' && !pod?.metadata?.deletionTimestamp;
+}
+
 export function sandboxHomeMode(): 'block' | 'filesystem' {
   const mode = process.env.SANDBOX_HOME_MODE || 'auto';
   if (mode === 'block' || mode === 'filesystem') return mode;
@@ -81,6 +87,7 @@ export class SandboxK8sService {
 
   constructor(
     private readonly kubernetes: KubernetesService,
+    private readonly prisma: PrismaService,
     private readonly settings: InstanceSettingsService,
   ) {}
 
@@ -308,7 +315,7 @@ export class SandboxK8sService {
     return {
       'app.kubernetes.io/name': 'sandbox',
       'app.kubernetes.io/managed-by': MANAGED_BY,
-      'orchard.my/sandbox-id': spec.id,
+      [SANDBOX_ID_LABEL]: spec.id,
       'orchard.my/user-id': spec.userId,
       [INSTANCE_LABEL]: instanceId,
     };
@@ -430,7 +437,10 @@ export class SandboxK8sService {
     };
   }
 
-  async createSandbox(spec: SandboxSpecInput, secret: SandboxSecretInput): Promise<void> {
+  // Reports whether it made the resource. A 409 is not an error here: the
+  // sandbox is meant to exist and it does, which leaves the caller to resume it
+  // rather than to patch something it never confirmed was there.
+  async createSandbox(spec: SandboxSpecInput, secret: SandboxSecretInput): Promise<boolean> {
     await this.ensureNamespace();
     await this.ensureAuthSecret(spec, secret);
     const instanceId = await this.instanceId();
@@ -438,18 +448,29 @@ export class SandboxK8sService {
       await this.custom().createNamespacedCustomObject(
         CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, this.buildCr(spec, instanceId),
       );
+      return true;
     } catch (e: any) {
       if (e.response?.statusCode !== 409) throw e;
+      return false;
     }
   }
 
-  private async patchOperatingMode(podName: string, mode: 'Running' | 'Suspended'): Promise<void> {
-    await this.custom().patchNamespacedCustomObject(
-      CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, podName,
-      { spec: { operatingMode: mode } },
-      undefined, undefined, undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
-    );
+  private async patchOperatingMode(
+    podName: string,
+    mode: 'Running' | 'Suspended',
+  ): Promise<boolean> {
+    try {
+      await this.custom().patchNamespacedCustomObject(
+        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, podName,
+        { spec: { operatingMode: mode } },
+        undefined, undefined, undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      );
+      return true;
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+      return false;
+    }
   }
 
   // A sandbox created before a platform change keeps the pod template it was
@@ -469,12 +490,15 @@ export class SandboxK8sService {
     );
   }
 
-  async suspend(podName: string): Promise<void> {
-    await this.patchOperatingMode(podName, 'Suspended');
+  // Both report whether the resource was there to patch. Nothing downstream has
+  // to look the sandbox up first to find that out, which is the only way to ask
+  // the question without racing the answer.
+  suspend(podName: string): Promise<boolean> {
+    return this.patchOperatingMode(podName, 'Suspended');
   }
 
-  async resume(podName: string): Promise<void> {
-    await this.patchOperatingMode(podName, 'Running');
+  resume(podName: string): Promise<boolean> {
+    return this.patchOperatingMode(podName, 'Running');
   }
 
   async deleteSandbox(spec: Pick<SandboxSpecInput, 'id' | 'podName'>): Promise<void> {
@@ -494,7 +518,7 @@ export class SandboxK8sService {
     }
     const pvcs = await core.listNamespacedPersistentVolumeClaim(
       this.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${spec.id}`,
+      `${SANDBOX_ID_LABEL}=${spec.id}`,
     );
     const claims = pvcs.body.items.length
       ? pvcs.body.items
@@ -511,54 +535,99 @@ export class SandboxK8sService {
     }
   }
 
+  // The mirror is off on this replica, so every read has to go to the cluster.
+  private get mirrorDisabled(): boolean {
+    return process.env.MIRROR_DISABLED === 'true';
+  }
+
+  /**
+   * Read from the mirror, not the apiserver. The informer holds every sandbox
+   * resource this install owns and keeps it current from a watch, so asking
+   * Postgres costs one indexed lookup where asking the cluster costs a round
+   * trip per caller.
+   *
+   * `exists: false` from the mirror means "no such row", which only means "no
+   * such resource" while the shard is actually reporting — see
+   * canTrustCrAbsence(). Nothing destructive may run on it otherwise.
+   */
   async getCrStatus(podName: string): Promise<SandboxCrStatus> {
+    if (this.mirrorDisabled) return this.readCrFromCluster(podName);
+    const row = await this.prisma.k8sObject.findUnique({
+      where: {
+        kind_namespace_name_apiVersion: {
+          kind: CRD_KIND,
+          namespace: this.namespace,
+          name: podName,
+          apiVersion: CRD_API_VERSION,
+        },
+      },
+      select: { manifest: true },
+    });
+    return row ? readSandboxCr(row.manifest) : SANDBOX_CR_ABSENT;
+  }
+
+  private async readCrFromCluster(podName: string): Promise<SandboxCrStatus> {
     try {
       const res: any = await this.custom().getNamespacedCustomObject(
         CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, podName,
       );
-      const cr = res.body;
-      const conditions: Array<{ type?: string; status?: string; message?: string }> =
-        cr.status?.conditions || [];
-      const ready = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
-      const failing = conditions.find((c) => c.status === 'False' && c.message);
-      return {
-        exists: true,
-        operatingMode: cr.spec?.operatingMode === 'Suspended' ? 'Suspended' : 'Running',
-        ready,
-        message: failing?.message || null,
-        podIp: Array.isArray(cr.status?.podIPs) && cr.status.podIPs.length
-          ? String(cr.status.podIPs[0])
-          : null,
-      };
+      return readSandboxCr(res.body);
     } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        return { exists: false, operatingMode: null, ready: false, message: null, podIp: null };
-      }
+      if (e.response?.statusCode === 404) return SANDBOX_CR_ABSENT;
       throw e;
     }
   }
 
-  async listCrs(): Promise<SandboxCrSummary[]> {
-    const res: any = await this.custom().listNamespacedCustomObject(
-      CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL,
-    );
-    return (res.body.items || [])
-      .filter((i: any) => i.metadata?.name)
-      .map((i: any) => ({
-        name: String(i.metadata.name),
-        instance: i.metadata.labels?.[INSTANCE_LABEL] ?? null,
-      }));
+  // Whether a missing resource is a fact or just a gap in what we can see. A
+  // direct read is its own evidence; a mirror read is only evidence while some
+  // replica holds the shard, is heartbeating, has listed, and says its watch is
+  // up. Every conclusion drawn from absence hangs on this.
+  async canTrustCrAbsence(): Promise<boolean> {
+    if (this.mirrorDisabled) return true;
+    const row = await this.prisma.k8sMirrorHeartbeat.findUnique({
+      where: { shard: SANDBOX_SHARD },
+      select: { holder: true, healthy: true, lastListAt: true, updatedAt: true },
+    });
+    if (!row?.holder || !row.healthy || !row.lastListAt) return false;
+    return Date.now() - row.updatedAt.getTime() < MIRROR_FRESH_MS;
   }
 
   async resolvePodIp(sandboxId: string, podName: string): Promise<string | null> {
     const status = await this.getCrStatus(podName);
     if (status.podIp) return status.podIp;
+    const pod = await this.runningPod(sandboxId);
+    return pod?.ip ?? null;
+  }
+
+  // The running pod for a sandbox, from the mirror when it has one and from the
+  // apiserver when it does not. Exec, the SSH tunnel and the git panel all ask
+  // for this on every request; a mirror hit spares the cluster a LIST each
+  // time, and the fallback keeps the box reachable on an install whose mirror
+  // is off or has not listed yet.
+  private async runningPod(sandboxId: string): Promise<{ name: string; ip: string | null } | null> {
+    const rows = this.mirrorDisabled
+      ? []
+      : await this.prisma.k8sObject.findMany({
+        where: {
+          kind: 'Pod',
+          namespace: this.namespace,
+          shard: SANDBOX_SHARD,
+          manifest: { path: ['metadata', 'labels', SANDBOX_ID_LABEL], equals: sandboxId },
+        },
+        select: { manifest: true },
+      });
+    for (const row of rows) {
+      const pod = row.manifest as any;
+      if (!isPodLive(pod)) continue;
+      return { name: String(pod.metadata.name), ip: pod.status.podIP ?? null };
+    }
     const pods = await this.core().listNamespacedPod(
       this.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandboxId}`,
+      `${SANDBOX_ID_LABEL}=${sandboxId}`,
     );
-    const running = pods.body.items.find((p) => p.status?.phase === 'Running');
-    return running?.status?.podIP || null;
+    const live = pods.body.items.find(isPodLive);
+    if (!live?.metadata?.name) return null;
+    return { name: live.metadata.name, ip: live.status?.podIP ?? null };
   }
 
   async execCapture(
@@ -566,12 +635,8 @@ export class SandboxK8sService {
     command: string[],
     timeoutMs = 15000,
   ): Promise<{ stdout: string; ok: boolean }> {
-    const pods = await this.core().listNamespacedPod(
-      this.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandboxId}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) throw new Error('sandbox pod is not running');
+    const pod = await this.runningPod(sandboxId);
+    if (!pod) throw new Error('sandbox pod is not running');
     const exec = new k8s.Exec(this.kc);
     const stdout = new PassThrough();
     let output = '';
@@ -582,7 +647,7 @@ export class SandboxK8sService {
       new Promise<{ stdout: string; ok: boolean }>((resolve, reject) => {
         exec.exec(
           this.namespace,
-          pod.metadata!.name!,
+          pod.name,
           'sandbox',
           command,
           stdout,
@@ -599,12 +664,8 @@ export class SandboxK8sService {
   }
 
   async isAgentBusy(sandboxId: string): Promise<boolean> {
-    const pods = await this.core().listNamespacedPod(
-      this.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandboxId}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) return false;
+    const pod = await this.runningPod(sandboxId);
+    if (!pod) return false;
     try {
       const exec = new k8s.Exec(this.kc);
       const stdout = new PassThrough();
@@ -616,7 +677,7 @@ export class SandboxK8sService {
         new Promise<boolean>((resolve, reject) => {
           exec.exec(
             this.namespace,
-            pod.metadata!.name!,
+            pod.name,
             'sandbox',
             [
               '/bin/sh',

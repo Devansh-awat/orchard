@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { SandboxCrSummary, SandboxK8sService } from './sandbox-k8s.service';
+import { SandboxK8sService } from './sandbox-k8s.service';
+import { sandboxStatusFromCr } from './sandbox-cr';
 
 const STUCK_TRANSITION_MS = 10 * 60 * 1000;
 
@@ -29,7 +30,8 @@ export class SandboxReaperService {
 
   async tick(): Promise<void> {
     try {
-      await this.syncStatuses();
+      await this.syncWithoutMirror();
+      await this.failStuckTransitions();
       await this.reapIdle();
       await this.enforceMaxLifetime();
     } catch (e: any) {
@@ -37,72 +39,78 @@ export class SandboxReaperService {
     }
   }
 
-  private async syncStatuses(): Promise<void> {
+  /**
+   * The poll the mirror replaced, kept for installs running with
+   * MIRROR_DISABLED=true. getCrStatus reads straight from the cluster there, so
+   * this is the same derivation the informer consumer applies, on a timer
+   * instead of on an event.
+   */
+  private async syncWithoutMirror(): Promise<void> {
+    if (process.env.MIRROR_DISABLED !== 'true') return;
     const rows = await this.prisma.sandbox.findMany({
       where: { status: { in: ['creating', 'starting', 'running', 'stopping'] } },
     });
-    const crs = await this.k8s.listCrs();
-    const crNames = new Set(crs.map((cr) => cr.name));
     for (const row of rows) {
       try {
-        if (!crNames.has(row.podName)) {
-          if (row.status === 'creating') continue;
-          await this.prisma.sandbox.update({
-            where: { id: row.id },
-            data: { status: 'error', statusMessage: 'Sandbox resource disappeared from the cluster' },
-          });
-          continue;
-        }
         const cr = await this.k8s.getCrStatus(row.podName);
-        if (cr.operatingMode === 'Suspended') {
-          await this.prisma.sandbox.update({
-            where: { id: row.id },
-            data: { status: 'stopped', statusMessage: null },
-          });
-        } else if (cr.ready) {
-          if (row.status === 'running') continue;
-          await this.prisma.sandbox.update({
-            where: { id: row.id },
-            data: { status: 'running', statusMessage: null },
-          });
-        } else if (
-          (row.status === 'creating' || row.status === 'starting') &&
-          Date.now() - row.updatedAt.getTime() > STUCK_TRANSITION_MS
-        ) {
+        if (!cr.exists) {
+          if (row.status === 'creating') continue;
           await this.prisma.sandbox.update({
             where: { id: row.id },
             data: {
               status: 'error',
-              statusMessage: cr.message || 'Sandbox did not become ready in time',
+              statusMessage: 'Sandbox resource disappeared from the cluster',
             },
           });
+          continue;
         }
+        const status = sandboxStatusFromCr(cr);
+        if (!status || status === row.status) continue;
+        await this.prisma.sandbox.update({
+          where: { id: row.id },
+          data: { status, statusMessage: null },
+        });
       } catch (e: any) {
         this.logger.warn(`status sync failed for sandbox ${row.id}: ${e?.message}`);
       }
     }
-    await this.deleteOrphans(crs);
   }
 
-  // Only ever sweeps resources this install created. A sandbox belonging to
-  // another Orchard server on the same cluster is missing from our database by
-  // definition, and deleting it takes its home volume with it.
-  private async deleteOrphans(crs: SandboxCrSummary[]): Promise<void> {
-    const instance = await this.k8s.instanceId();
-    const ours = crs.filter((cr) => cr.instance === instance).map((cr) => cr.name);
-    if (!ours.length) return;
-    const known = await this.prisma.sandbox.findMany({
-      where: { podName: { in: ours } },
-      select: { podName: true },
+  /**
+   * Sandbox status is derived from the mirror as the resource moves, so the
+   * only thing still needing a clock is a transition that produces no further
+   * events: a sandbox whose resource was never created, or was created and
+   * never went ready, has nothing left to report.
+   *
+   * Gated on a healthy shard. A mirror that is not running is not evidence that
+   * a sandbox failed to start, and reading it as such is how an install with
+   * its informers down marks every running box broken.
+   */
+  private async failStuckTransitions(): Promise<void> {
+    const cutoff = new Date(Date.now() - STUCK_TRANSITION_MS);
+    const rows = await this.prisma.sandbox.findMany({
+      where: { status: { in: ['creating', 'starting'] }, updatedAt: { lt: cutoff } },
     });
-    const knownNames = new Set(known.map((r) => r.podName));
-    for (const name of ours) {
-      if (knownNames.has(name)) continue;
-      this.logger.warn(`deleting orphan sandbox resource ${name}`);
-      const idMatch = name.match(/^sbx-(.+)$/);
-      await this.k8s
-        .deleteSandbox({ id: idMatch ? idMatch[1] : name, podName: name })
-        .catch((e: any) => this.logger.warn(`orphan delete failed for ${name}: ${e?.message}`));
+    if (rows.length === 0) return;
+    if (!(await this.k8s.canTrustCrAbsence())) {
+      this.logger.warn(`${rows.length} sandbox(es) mid-transition but the mirror is not current`);
+      return;
+    }
+    for (const row of rows) {
+      try {
+        const cr = await this.k8s.getCrStatus(row.podName);
+        await this.prisma.sandbox.update({
+          where: { id: row.id },
+          data: {
+            status: 'error',
+            statusMessage: cr.exists
+              ? cr.message || 'Sandbox did not become ready in time'
+              : 'Sandbox resource never appeared in the cluster',
+          },
+        });
+      } catch (e: any) {
+        this.logger.warn(`stuck check failed for sandbox ${row.id}: ${e?.message}`);
+      }
     }
   }
 
@@ -122,10 +130,10 @@ export class SandboxReaperService {
           });
           continue;
         }
-        await this.k8s.suspend(row.podName);
+        const existed = await this.k8s.suspend(row.podName);
         await this.prisma.sandbox.update({
           where: { id: row.id },
-          data: { status: 'stopping' },
+          data: { status: existed ? 'stopping' : 'stopped' },
         });
         this.audit
           .log({
@@ -152,10 +160,13 @@ export class SandboxReaperService {
     });
     for (const row of expired) {
       try {
-        await this.k8s.suspend(row.podName);
+        const existed = await this.k8s.suspend(row.podName);
         await this.prisma.sandbox.update({
           where: { id: row.id },
-          data: { status: 'stopping', statusMessage: 'Stopped after reaching max lifetime' },
+          data: {
+            status: existed ? 'stopping' : 'stopped',
+            statusMessage: 'Stopped after reaching max lifetime',
+          },
         });
       } catch (e: any) {
         this.logger.warn(`lifetime stop failed for sandbox ${row.id}: ${e?.message}`);
