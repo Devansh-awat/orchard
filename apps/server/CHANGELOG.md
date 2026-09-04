@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.21.1](https://github.com/hackclub/orchard/compare/server/v2.21.0...server/v2.21.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* retry builds that die on a kata sandbox start fault ([c1c7dc9](https://github.com/hackclub/orchard/commit/c1c7dc9a3e03aba33751efb994e5b870be0070b4))
+* stream super build logs ([e80353e](https://github.com/hackclub/orchard/commit/e80353ecac1c9ece8fa91b7b56f316cbcbf9c629))
+
 ## [2.21.0](https://github.com/hackclub/orchard/compare/server/v2.20.0...server/v2.21.0) (2026-09-04)
 
 
