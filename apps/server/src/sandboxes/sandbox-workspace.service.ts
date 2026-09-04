@@ -489,13 +489,8 @@ export class SandboxWorkspaceService {
       res.status(502).json({ message: 'Kubernetes is not configured' });
       return;
     }
-    const core = this.kubernetes.kc.makeApiClient(k8s.CoreV1Api);
-    const pods = await core.listNamespacedPod(
-      this.k8s.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandbox.id}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) {
+    const pod = await this.k8s.runningPod(sandbox.id);
+    if (!pod) {
       res.status(502).json({ message: 'Sandbox pod is not running' });
       return;
     }
@@ -549,7 +544,7 @@ export class SandboxWorkspaceService {
     try {
       execWs = await exec.exec(
         this.k8s.namespace,
-        pod.metadata.name,
+        pod.name,
         'sandbox',
         ['su', '-l', 'dev', '-c', curl],
         stdout,

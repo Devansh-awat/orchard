@@ -159,13 +159,9 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
       if (kind === 'terminal') {
-        handleShellSession(
-          ws, kubernetes, sandboxK8s.namespace, sandboxId, prisma, recheckAuth,
-        );
+        handleShellSession(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
       } else if (tunnelMode === 'portforward') {
-        handlePortForwardTunnel(
-          ws, kubernetes, sandboxK8s.namespace, sandboxId, prisma, recheckAuth,
-        );
+        handlePortForwardTunnel(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
       } else {
         handleDirectTunnel(ws, podIp!, sandboxId, prisma, recheckAuth);
       }
@@ -206,7 +202,7 @@ function attachLifecycle(
 function handleShellSession(
   ws: WebSocket,
   kubernetes: KubernetesService,
-  namespace: string,
+  sandboxK8s: SandboxK8sService,
   sandboxId: string,
   prisma: PrismaService,
   recheckAuth: () => Promise<boolean>,
@@ -216,13 +212,8 @@ function handleShellSession(
       ws.close(1011, 'kubernetes unavailable');
       return;
     }
-    const core = kubernetes.kc.makeApiClient(k8s.CoreV1Api);
-    const pods = await core.listNamespacedPod(
-      namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandboxId}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) {
+    const pod = await sandboxK8s.runningPod(sandboxId);
+    if (!pod) {
       ws.close(1011, 'sandbox pod not found');
       return;
     }
@@ -256,8 +247,8 @@ function handleShellSession(
     try {
       const exec = new k8s.Exec(kubernetes.kc);
       await exec.exec(
-        namespace,
-        pod.metadata.name,
+        sandboxK8s.namespace,
+        pod.name,
         'sandbox',
         [
           '/bin/sh',
@@ -342,7 +333,7 @@ function handleDirectTunnel(
 function handlePortForwardTunnel(
   ws: WebSocket,
   kubernetes: KubernetesService,
-  namespace: string,
+  sandboxK8s: SandboxK8sService,
   sandboxId: string,
   prisma: PrismaService,
   recheckAuth: () => Promise<boolean>,
@@ -352,13 +343,8 @@ function handlePortForwardTunnel(
       ws.close(1011, 'kubernetes unavailable');
       return;
     }
-    const core = kubernetes.kc.makeApiClient(k8s.CoreV1Api);
-    const pods = await core.listNamespacedPod(
-      namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandboxId}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) {
+    const pod = await sandboxK8s.runningPod(sandboxId);
+    if (!pod) {
       ws.close(1011, 'sandbox pod not found');
       return;
     }
@@ -389,7 +375,7 @@ function handlePortForwardTunnel(
     ws.on('close', () => input.end());
 
     try {
-      await forward.portForward(namespace, pod.metadata.name, [22], output, null, input);
+      await forward.portForward(sandboxK8s.namespace, pod.name, [22], output, null, input);
     } catch (err: any) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.close(1011, String(err?.message || 'port forward failed').slice(0, 120));

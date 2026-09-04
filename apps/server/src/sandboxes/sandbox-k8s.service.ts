@@ -600,11 +600,11 @@ export class SandboxK8sService {
   }
 
   // The running pod for a sandbox, from the mirror when it has one and from the
-  // apiserver when it does not. Exec, the SSH tunnel and the git panel all ask
-  // for this on every request; a mirror hit spares the cluster a LIST each
-  // time, and the fallback keeps the box reachable on an install whose mirror
-  // is off or has not listed yet.
-  private async runningPod(sandboxId: string): Promise<{ name: string; ip: string | null } | null> {
+  // apiserver when it does not. Chat, exec, the terminal, the SSH tunnel and
+  // the opencode proxy all ask for this on every request or connection; a
+  // mirror hit spares the cluster a LIST each time, and the fallback keeps the
+  // box reachable on an install whose mirror is off or has not listed yet.
+  async runningPod(sandboxId: string): Promise<{ name: string; ip: string | null } | null> {
     const rows = this.mirrorDisabled
       ? []
       : await this.prisma.k8sObject.findMany({

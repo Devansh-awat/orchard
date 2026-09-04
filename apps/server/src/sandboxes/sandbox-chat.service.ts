@@ -57,13 +57,8 @@ export class SandboxChatService {
         'No Claude credentials configured; add a token in user settings first',
       );
     }
-    const core = this.kubernetes.kc.makeApiClient(k8s.CoreV1Api);
-    const pods = await core.listNamespacedPod(
-      this.sandboxK8s.namespace, undefined, undefined, undefined, undefined,
-      `orchard.my/sandbox-id=${sandbox.id}`,
-    );
-    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
-    if (!pod?.metadata?.name) {
+    const pod = await this.sandboxK8s.runningPod(sandbox.id);
+    if (!pod) {
       throw new BadRequestException('Sandbox pod is not running');
     }
 
@@ -194,7 +189,7 @@ export class SandboxChatService {
     try {
       execWs = await exec.exec(
         this.sandboxK8s.namespace,
-        pod.metadata.name,
+        pod.name,
         'sandbox',
         command,
         stdout,

@@ -33,7 +33,7 @@ export const SANDBOX_CR_ABSENT: SandboxCrStatus = {
 };
 
 export function readSandboxCr(cr: any): SandboxCrStatus {
-  const conditions: Array<{ type?: string; status?: string; message?: string }> =
+  const conditions: { type?: string; status?: string; message?: string }[] =
     cr?.status?.conditions ?? [];
   const failing = conditions.find((c) => c.status === 'False' && c.message);
   return {
