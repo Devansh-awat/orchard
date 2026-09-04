@@ -946,7 +946,7 @@ echo "=== Super Build completed ==="
 
     return {
       name: DEPOT_CONTAINER,
-      image: 'buildpack-deps:bookworm-curl',
+      image: 'buildpack-deps:bookworm-scm',
       command: ['/bin/sh', '-c'],
       args: [depotScript],
       workingDir: '/workspace',
