@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.21.0](https://github.com/hackclub/orchard/compare/server/v2.20.0...server/v2.21.0) (2026-09-04)
+
+
+### Features
+
+* run super builds under gvisor instead of kata ([a57d630](https://github.com/hackclub/orchard/commit/a57d6309def5f4b2fa9e403aa65698f4cfdabe5c))
+
+
+### Bug Fixes
+
+* push super builds to the public registry, not the cluster-internal one ([648bb89](https://github.com/hackclub/orchard/commit/648bb896a6469d19716790e342093e447ba333c4))
+* stop super builds consuming local builder capacity ([c3547ad](https://github.com/hackclub/orchard/commit/c3547adb6107d7883f6e992564110e045daf7678))
+
 ## [2.20.0](https://github.com/hackclub/orchard/compare/server/v2.19.0...server/v2.20.0) (2026-09-04)
 
 
