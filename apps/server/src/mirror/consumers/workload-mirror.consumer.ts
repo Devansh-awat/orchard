@@ -7,7 +7,8 @@ import {
   memoryLimitBytesFromResources,
 } from '../../kubernetes/quantity';
 import { resolvePullPolicy } from '../../kubernetes/trusted-images';
-import { readMinAvailable } from '../../kubernetes/disruption-budget';
+import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disruption-budget';
+import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -39,6 +40,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
+    private readonly applyQueue: ApplyQueueService,
   ) {}
 
   onModuleDestroy() {
@@ -91,6 +93,26 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       data: { pdbMinAvailable: observed },
     });
     this.logger.log(`adopted external disruption budget for ${ctx.deploymentId}: minAvailable=${observed}`);
+
+    // A budget edited by hand can ask for more pods than the app runs, which
+    // leaves zero allowed disruptions and stalls any drain that touches it.
+    // The value is kept as the user's intent; the object itself is queued for
+    // removal until the replica count can satisfy it again.
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: ctx.deploymentId },
+      select: { replicas: true },
+    });
+    if (deployment && !disruptionBudgetActive(observed, deployment.replicas)) {
+      await this.queueBudgetReconcile(ctx.deploymentId);
+    }
+  }
+
+  private async queueBudgetReconcile(deploymentId: string): Promise<void> {
+    await this.applyQueue.enqueue({
+      dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
+      opType: 'deployment.disruptionBudget',
+      deploymentId,
+    });
   }
 
   async onEvent(type: MirrorEventType, dep: k8s.V1Deployment): Promise<void> {
@@ -222,6 +244,14 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       data: changes,
     });
     this.logger.log(`adopted external spec for ${deploymentId}: ${adopted.join(', ')}`);
+
+    // Whether a disruption budget may exist at all is a function of the
+    // replica count, so a `kubectl scale` past it has to be answered. Without
+    // this, scaling 3 -> 2 under a minAvailable of 2 leaves a budget behind
+    // that allows no disruptions and blocks every drain on those pods.
+    if (changes.replicas != null) {
+      await this.queueBudgetReconcile(deploymentId);
+    }
   }
 
   private scheduleEmit(ctx: Ctx, payload: unknown) {
