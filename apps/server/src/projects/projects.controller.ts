@@ -689,7 +689,8 @@ export class ProjectsController {
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
     @Body() body: {
-      mode: 'none' | 'password' | 'orchard';
+      mode: 'none' | 'basic' | 'password' | 'orchard';
+      username?: string;
       password?: string;
       bypassPaths?: string[];
     },
@@ -702,6 +703,7 @@ export class ProjectsController {
       body.mode,
       body.password,
       body.bypassPaths,
+      body.username,
     );
   }
 

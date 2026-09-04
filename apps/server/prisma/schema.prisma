@@ -1121,6 +1121,7 @@ model Ingress {
   annotations            Json?                 @db.Json
   statusAddress          String?               @map("status_address") @db.VarChar(255)
   protectionMode         IngressProtectionMode @default(none) @map("protection_mode")
+  protectionUsername     String?               @map("protection_username") @db.VarChar(255)
   protectionPasswordHash String?               @map("protection_password_hash") @db.VarChar(255)
   protectionBypassSecret String?               @map("protection_bypass_secret") @db.VarChar(128)
   protectionBypassPaths  String[]              @default([]) @map("protection_bypass_paths")
@@ -1170,6 +1171,7 @@ model ServicePort {
 
 enum IngressProtectionMode {
   none
+  basic
   password
   orchard
 

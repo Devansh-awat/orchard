@@ -31,24 +31,92 @@ chart with dev values.
 
 ## ServiceAccount permissions
 
-The chart creates the `orchard-server` ServiceAccount plus the ClusterRole its
-mirror informers need (cluster-wide read/watch on pods, deployments, jobs,
-cronjobs, services, ingresses, PVCs and CNPG clusters) and a namespaced Role
-for the leader-election Leases. Per-tenant write access is bootstrapped by the
-server itself when it creates a namespace.
+The chart creates the `orchard-server` ServiceAccount, the ClusterRole the
+control plane needs, and a namespaced Role for the leader-election Leases.
+
+Because tenant namespaces are created at runtime, the write grants can't be
+namespaced Roles and are cluster-scoped: namespaces, pods (plus `exec` for the
+web terminal), Deployments, Services, Ingresses, PVCs, NetworkPolicies, Jobs,
+CronJobs, EndpointSlices, CNPG Clusters, and read/patch on nodes for the node
+informer. Secrets and configmaps are deliberately *not* granted cluster-wide —
+the server holds `escalate`/`bind` so it can bootstrap a narrow per-namespace
+secrets Role when it creates a tenant namespace, without ever holding
+cluster-wide secrets access itself.
+
+None of this applies if you point the server at an external kubeconfig with
+`KUBECONFIG_PATH` or `KUBECONFIG_BASE64`. It then acts as whatever identity
+that file carries and ignores the ServiceAccount entirely, so the ClusterRole
+above stops being the boundary. Prefer the in-cluster ServiceAccount unless the
+control plane genuinely runs outside the cluster it manages.
+
+If Cilium is your CNI, set `cilium.enabled: true` to add the
+CiliumNetworkPolicy / CiliumEnvoyConfig grants that back per-tenant policy and
+basic-auth-protected ingresses. Basic auth works without it too; see
+[Protecting an ingress](#protecting-an-ingress) for how the enforcement point
+is chosen.
+
+> **Upgrading from a chart older than this change:** the ClusterRole was
+> renamed from `<release>-image-builder-manager` to `<release>-server` and the
+> ServiceAccount moved out from under `builders.enabled`.
+>
+> The new ClusterRole is a strict superset of the old one, and the
+> ServiceAccount name is unchanged, so `helm upgrade` needs no special handling
+> and there is no window where the server has fewer permissions than before.
+> Helm won't garbage-collect the old objects though, so clean them up **after**
+> the upgrade succeeds — not before, or you'll revoke permissions from the
+> running pods:
+>
+> ```bash
+> kubectl delete clusterrole,clusterrolebinding <release>-image-builder-manager --ignore-not-found
+> ```
+>
+> If you previously worked around the missing permissions by binding
+> `cluster-admin` to the ServiceAccount, drop that too, once you've confirmed
+> the new role works:
+>
+> ```bash
+> kubectl delete clusterrolebinding orchard-server-admin --ignore-not-found
+> ```
 
 ## DNS
 
 You need domains you control:
 
-- **App domain** (`APP_DOMAIN`, e.g. `apps.example.com`): wildcard DNS
-  `*.apps.example.com` pointing at your Gateway's LoadBalancer IP, plus a
-  wildcard certificate (DNS-01).
+- **App domain** (`gateway.http.appDomain`, e.g. `apps.example.com`): wildcard
+  DNS `*.apps.example.com` pointing at your Gateway's LoadBalancer IP, plus a
+  wildcard certificate (DNS-01). This is the single source of truth: the chart
+  derives the server's `APP_DOMAIN`, the frontend's `PUBLIC_APP_DOMAIN`, and
+  `PLATFORM_WILDCARD_DOMAINS` (which generated app URLs like
+  `main-forge-16294e.apps.example.com` are built from) from it. Override any of
+  them individually via `server.env` / `frontend.env` /
+  `tenant.wildcardDomains` if you need them to differ.
 - **Ingress CNAME target** (`INGRESS_CNAME`): the hostname users point their
-  custom domains at.
+  custom domains at. Unset disables DNS validation for custom domains.
 - **Platform domain**: where the Orchard UI itself lives (`ingress.host`).
 - **DB domain** (`PUBLIC_DB_DOMAIN`, optional): wildcard for publicly exposed
-  databases, TLS via `certificates.wildcards.db`.
+  databases. Keep it in sync with `certificates.wildcards.db.domain`.
+- **Public port domain** (`PUBLIC_DEPLOYMENT_DOMAIN`, optional): wildcard for
+  publicly exposed deployment ports.
+- **Vanity domain** (`BASE_DOMAIN`, optional): parent for org subdomains like
+  `acme.example.com`.
+
+These three are independent facts, not variations on the app domain. Each needs
+its own DNS and wildcard certificate, and in practice they diverge: the Hack
+Club cluster serves its UI from one domain, apps from a second, and org vanity
+hosts from a third. So none of them is derived from another — guessing
+`db.<appDomain>` would produce a hostname that doesn't resolve and a cert that
+doesn't exist. Leave one unset and that feature turns off: public databases and
+ports are addressed by `ip:port`, and org vanity subdomains are rejected with an
+explanation rather than creating a broken ingress.
+
+Note that a container `env` entry outranks every `envFrom` source in Kubernetes.
+The chart therefore only injects `APP_DOMAIN` when you haven't set it yourself
+in `server.env` and aren't using `server.envFrom` — otherwise it would silently
+shadow a value you're supplying from a Secret.
+
+The same applies to the app domain itself. With no `appDomain`, Orchard
+generates no URLs and every deployment needs a custom domain — it never falls
+back to a built-in default.
 
 ## Install
 
@@ -85,7 +153,6 @@ server:
     - { name: DOCKER_REGISTRY_PUSH, value: registry.example.com }
     - { name: DOCKER_REGISTRY_PULL, value: registry.example.com }
     - { name: REGISTRY_PROJECT, value: orchard }
-    - { name: APP_DOMAIN, value: apps.example.com }
     - { name: INGRESS_CNAME, value: ingress.example.com }
     - { name: FRONTEND_URL, value: https://orchard.example.com }
     - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } } }
@@ -93,6 +160,48 @@ server:
 ```
 
 Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
+
+## Footprint and scaling
+
+Requests are sized for what the control plane consumes at rest, not for its
+peak, since requests are what the scheduler actually reserves. At defaults with
+one replica each, the control plane requests roughly 1 GiB of memory.
+
+The bundled metrics stack (VictoriaMetrics, vmagent, kube-state-metrics,
+node-exporter) is the single largest idle cost, and VictoriaMetrics sizes its
+cache as a share of its memory *limit*, so it grows to fill whatever it is
+given. On a small cluster:
+
+```yaml
+metrics:
+  enabled: false
+```
+
+turns it off entirely — the deployment metrics graphs and usage pages go empty,
+everything else is unaffected. To keep it but shrink it, lower
+`metrics.victoriametrics.resources.limits.memory` and
+`metrics.victoriametrics.memoryAllowedPercent`. The one-command installer
+enables the stack only on hosts with 8 GB or more; `--metrics true|false`
+overrides that.
+
+The stateless tiers can scale on CPU instead of running a fixed replica count.
+This needs metrics-server (k3s ships it):
+
+```yaml
+server:
+  autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 8 }
+frontend:
+  autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }
+```
+
+Scaling out is faster than scaling in (60s up, 5 min down), so a burst is
+absorbed promptly without dropping capacity during a brief lull. When
+autoscaling is on, the chart omits `replicas` from that Deployment so a
+`helm upgrade` can't stomp on what the autoscaler settled at — which also means
+`replicas` in your values is ignored for that tier.
+
+`server.workers` moves builds and the apply queue onto their own pods and has
+its own autoscaling block; it's the burstiest tier and benefits most.
 
 ## Single sign-on
 
@@ -156,6 +265,99 @@ user-selectable. The `USERSPACE_NODE_SCHEDULING` env var overrides that toggle
 when set (`true` forces it on, `false` forces it off and locks the switch);
 leave it unset to control the feature from the UI. Pool placement applies to app
 deployments, jobs, and CNPG databases.
+
+## Protecting an ingress
+
+Orchard can put an auth wall in front of a tenant host. Three modes, and only
+one of them needs anything from the cluster:
+
+| mode | what a visitor sees | requirements |
+|---|---|---|
+| `basic` | the browser's username/password dialog (HTTP Basic, RFC 7617) | none |
+| `password` | an Orchard-hosted page asking for one shared password | none |
+| `orchard` | "sign in with Orchard", and they must be a member of the project | `protection.orchardLogin: true` |
+
+Set them with `PUT /apiv1/projects/:id/ingresses/:ingressId/protection`, body
+`{ mode, username?, password?, bypassPaths? }`. `username` is only read for
+`basic`. `bypassPaths` (up to 20) exempts webhook and healthcheck routes from
+whichever wall is up.
+
+Basic auth is also reachable as a `basicAuth` block when you create or update
+an ingress, including from a template's `ingress:` config. That form is
+equivalent to setting `mode: basic`, and it works on every cluster.
+
+### How basic auth is enforced
+
+There are two enforcement points and the cluster picks which one:
+
+- **With Cilium**, Orchard writes a `CiliumEnvoyConfig` that puts an Envoy
+  `basic_auth` filter in front of the backing Service. This is the stronger
+  option: the password covers every path into that Service, including traffic
+  that never passed your ingress controller.
+- **Without Cilium**, the same credentials are checked by Orchard's protection
+  proxy. The ingress backend is repointed at a headless Service that resolves
+  to the control plane, which answers `401 WWW-Authenticate: Basic` until the
+  right credentials arrive and proxies through once they do. No CNI features,
+  no ingress-controller annotations, no CRDs.
+
+The server decides by probing for the `cilium.io` API group and its own
+permission to create `ciliumenvoyconfigs`, so nothing needs configuring either
+way. `cilium.enabled: true` grants that permission and skips the probe;
+`CILIUM_ENABLED=true|false` in `server.env` forces the answer.
+
+The two differ in one way worth knowing: the proxy gates the HTTP route, so
+anything already inside the cluster that can reach the pod directly is
+unaffected. If that matters, pair it with a NetworkPolicy.
+
+Passwords are stored bcrypt-hashed either way. The Envoy path additionally
+derives the SHA-1 htpasswd string its filter needs, which is why the username
+is stored alongside.
+
+### "Sign in with Orchard"
+
+`mode: orchard` redirects visitors to the control plane's login page and then
+checks project membership, so it only makes sense when the people you are
+gating already have Orchard accounts, and it needs `FRONTEND_URL` reachable
+from wherever the app is served. The chart ships it off:
+
+```yaml
+protection:
+  orchardLogin: true
+```
+
+The flag gates *choosing* the mode, not enforcing it. Turning it off does not
+drop the wall on hosts that already use it, so an upgrade cannot silently
+publish something that was private.
+
+It also does not affect the generated URL a new deployment gets on the platform
+wildcard domain. That one is member-gated from birth on purpose, and the people
+it gates are project members, who have accounts on this instance by definition.
+So you will still see `protectionMode: orchard` rows with the flag off.
+
+### Gating at your ingress controller instead
+
+Nothing stops you doing it yourself. Create the htpasswd Secret in the
+deployment's namespace and set the annotations your controller expects, e.g.
+for ingress-nginx:
+
+```bash
+htpasswd -nbB alice 's3cr3t' > auth
+kubectl -n <tenant-namespace> create secret generic my-app-basic-auth --from-file=auth
+```
+
+```yaml
+nginx.ingress.kubernetes.io/auth-type: basic
+nginx.ingress.kubernetes.io/auth-secret: my-app-basic-auth
+nginx.ingress.kubernetes.io/auth-realm: "Restricted"
+```
+
+HAProxy uses `haproxy.org/auth-secret`; Traefik wants a `basicAuth` Middleware
+referenced from `traefik.ingress.kubernetes.io/router.middlewares`. Pass these
+through the ingress's `annotations` field. Orchard only forwards annotation
+keys on its allowlist (`ALLOWED_INGRESS_ANNOTATION_KEYS` in
+`apps/server/src/kubernetes/kubernetes.service.ts`), and none of the ones above
+are on it yet, so add the ones you need there first.
+
 
 ## What is not included
 

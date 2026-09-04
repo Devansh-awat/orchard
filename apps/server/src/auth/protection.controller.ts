@@ -26,8 +26,15 @@ export class ProtectionController {
     const originalPath = (req.headers['x-original-url'] || req.headers[':path'] || req.url || '/').toString();
     const cookieHeader = req.headers['cookie']?.toString();
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
+    const authorizationHeader = req.headers['authorization']?.toString();
 
-    const decision = await this.protection.checkProtection(host, originalPath, cookieHeader, bypassHeader);
+    const decision = await this.protection.checkProtection(
+      host,
+      originalPath,
+      cookieHeader,
+      bypassHeader,
+      authorizationHeader,
+    );
 
     if (decision.allow) {
       return res.status(HttpStatus.OK).send('ok');

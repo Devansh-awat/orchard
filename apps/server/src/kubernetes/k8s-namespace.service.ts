@@ -557,6 +557,17 @@ export class K8sNamespaceService {
 
       await networkingApi.createNamespacedNetworkPolicy(cleanNamespace, networkPolicyBody);
 
+      // Without Cilium the plain NetworkPolicy above is the whole story, and
+      // these two CRs would 404 (no CRD) or 403 (no cilium.io rbac) on every
+      // project creation. See docs/self-hosting.md.
+      if (!(await this.kubernetes.isCiliumAvailable())) {
+        return {
+          success: true,
+          namespace: cleanNamespace,
+          created: true,
+        };
+      }
+
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
       const allowCiliumIngress = {

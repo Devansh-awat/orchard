@@ -3052,8 +3052,9 @@ export class K8sWorkloadService {
       );
     } catch (e: any) {
       const code = e.response?.statusCode;
-      if (code === 404) {
-        // Cilium CRD not installed — the vanilla NetworkPolicy rule covers it.
+      if (code === 404 || code === 403) {
+        // Cilium CRD absent, or present with no cilium.io rbac granted
+        // (cilium.enabled=false) — the vanilla NetworkPolicy rule covers it.
       } else if (code !== 409) {
         throw e;
       }

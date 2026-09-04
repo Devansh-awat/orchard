@@ -15,6 +15,7 @@ import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from '
 import { truncateK8sName } from '../projects/projects.utils';
 import { k8sErrorMessage } from './k8s-error';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { optionalDomain } from '../env/platform-domains';
 
 export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
 
@@ -429,23 +430,50 @@ export class K8sNetworkService implements OnModuleInit {
         envoyConfigBody
       );
     } catch (error) {
+      // Never swallowed: the caller treats a returned promise as "the host is
+      // now password protected" and creates the Ingress on the strength of it.
       if (error.response?.statusCode === 409) {
-        try {
-          await customObjectsApi.replaceNamespacedCustomObject(
-            'cilium.io',
-            'v2',
-            cleanNamespace,
-            'ciliumenvoyconfigs',
-            `${cleanName}-auth`,
-            envoyConfigBody
-          );
-        } catch (replaceError) {
-          console.error(`Failed to update basic auth CiliumEnvoyConfig: ${replaceError.message}`);
-        }
+        await customObjectsApi.replaceNamespacedCustomObject(
+          'cilium.io',
+          'v2',
+          cleanNamespace,
+          'ciliumenvoyconfigs',
+          `${cleanName}-auth`,
+          envoyConfigBody
+        );
       } else {
-        console.error(`Failed to create basic auth CiliumEnvoyConfig: ${error.message}`);
+        throw new BadRequestException({
+          error: 'Failed to enable basic auth',
+          message: k8sErrorMessage(error),
+        });
       }
     }
+  }
+
+  /**
+   * Basic auth is enforced by an Envoy filter that only Cilium can install, so
+   * on a cluster without it the request has to fail rather than fall through:
+   * a caller that asked for a password-protected host must never end up with a
+   * public one. See docs/self-hosting.md for the manual alternatives.
+   */
+  private async applyBasicAuth(
+    namespace: string,
+    name: string,
+    secretName: string,
+    username: string,
+    password: string,
+    serviceName: string,
+    servicePort: number,
+  ): Promise<void> {
+    if (!(await this.kubernetes.isCiliumAvailable())) {
+      throw new BadRequestException({
+        error: 'Basic auth is not available on this cluster',
+        message: 'Basic auth is enforced with a CiliumEnvoyConfig, which needs Cilium as the CNI and the cilium.io rbac granted by cilium.enabled=true. Put the host behind your own reverse proxy instead, or see docs/self-hosting.md.',
+      });
+    }
+
+    await this.createBasicAuthSecret(namespace, secretName, username, password);
+    await this.createBasicAuthMiddleware(namespace, name, username, password, serviceName, servicePort);
   }
 
   async deleteBasicAuthMiddleware(namespace: string, name: string): Promise<void> {
@@ -710,6 +738,8 @@ export class K8sNetworkService implements OnModuleInit {
       if (e.response?.statusCode !== 404) this.logger.warn(`Failed to patch NetworkPolicy: ${e.message}`);
     }
 
+    if (!(await this.kubernetes.isCiliumAvailable())) return;
+
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     try {
       const cnp: any = await customApi.getNamespacedCustomObject('cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', 'allow-cilium-ingress');
@@ -807,26 +837,16 @@ export class K8sNetworkService implements OnModuleInit {
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
       const targetService = pathBackends[0];
-      try {
-        await this.createBasicAuthSecret(
-          namespace,
-          basicAuthSecretName,
-          options.basicAuth.username,
-          options.basicAuth.password
-        );
-
-        await this.createBasicAuthMiddleware(
-          namespace,
-          name,
-          options.basicAuth.username,
-          options.basicAuth.password,
-          String(targetService.serviceName).trim(),
-          Number(targetService.servicePort),
-        );
-        annotations['orchard.my/basic-auth'] = 'true';
-      } catch (error) {
-        console.error('[K8s] Failed to create basic auth:', error);
-      }
+      await this.applyBasicAuth(
+        namespace,
+        name,
+        basicAuthSecretName,
+        options.basicAuth.username,
+        options.basicAuth.password,
+        String(targetService.serviceName).trim(),
+        Number(targetService.servicePort),
+      );
+      annotations['orchard.my/basic-auth'] = 'true';
     }
 
     try {
@@ -975,26 +995,16 @@ export class K8sNetworkService implements OnModuleInit {
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
       const targetService = pathBackends[0];
-      try {
-        await this.createBasicAuthSecret(
-          namespace,
-          basicAuthSecretName,
-          options.basicAuth.username,
-          options.basicAuth.password
-        );
-
-        await this.createBasicAuthMiddleware(
-          namespace,
-          name,
-          options.basicAuth.username,
-          options.basicAuth.password,
-          String(targetService.serviceName).trim(),
-          Number(targetService.servicePort),
-        );
-        annotations['orchard.my/basic-auth'] = 'true';
-      } catch (error) {
-        console.error('[K8s] Failed to create basic auth:', error);
-      }
+      await this.applyBasicAuth(
+        namespace,
+        name,
+        basicAuthSecretName,
+        options.basicAuth.username,
+        options.basicAuth.password,
+        String(targetService.serviceName).trim(),
+        Number(targetService.servicePort),
+      );
+      annotations['orchard.my/basic-auth'] = 'true';
     } else if (options.basicAuth?.enabled === false) {
       try {
         const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
@@ -2027,7 +2037,9 @@ export class K8sNetworkService implements OnModuleInit {
 
   // ── Public deployment-port exposure (MetalLB LoadBalancer, TCP/UDP passthrough) ──
 
-  private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = process.env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
+  private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = optionalDomain(
+    process.env.PUBLIC_DEPLOYMENT_DOMAIN,
+  );
 
   publicDeploymentBaseDomain(): string {
     return this.PUBLIC_DEPLOYMENT_BASE_DOMAIN;

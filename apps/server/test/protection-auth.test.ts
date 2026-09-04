@@ -308,3 +308,126 @@ test('a second lookup returning nothing cannot slip past the wall', async () => 
   assert.equal(proxied, false, 'a request must never reach the upstream unauthenticated');
   assert.equal(sent.status, 404);
 });
+
+// Basic auth is the mode that has to work on a cluster with no Cilium, so it
+// is enforced here rather than by an Envoy filter. Everything below is what
+// stops that fallback from being weaker than the thing it replaces.
+
+const BCRYPT_SECRET = 'hunter2';
+// bcrypt hash of 'hunter2', cost 10.
+const BCRYPT_HASH = '$2b$10$2/j12Oe/E9WQ3i5zqw32Y.aIW.HTm6KToczjiz4G3E6qVBflXFza6';
+
+function basicRow(over: Record<string, unknown> = {}) {
+  return protectedRow({
+    protectionMode: 'basic',
+    protectionUsername: 'alice',
+    protectionPasswordHash: BCRYPT_HASH,
+    ...over,
+  });
+}
+
+function basicHeader(user: string, pass: string): string {
+  return `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
+}
+
+test('basic auth challenges an anonymous request instead of redirecting', async () => {
+  const svc = buildService(basicRow());
+  const decision = await svc.checkProtection(HOST, '/secret', undefined, undefined, undefined);
+  assert.equal(decision.allow, false);
+  assert.equal(decision.status, 401, 'must be a challenge, not a 302 to the control plane');
+  assert.match(String(decision.headers?.['www-authenticate']), /^Basic realm=/);
+  assert.equal(decision.headers?.location, undefined, 'basic auth must not bounce to the login page');
+});
+
+test('basic auth accepts the right credentials', async () => {
+  const svc = buildService(basicRow());
+  const decision = await svc.checkProtection(
+    HOST, '/secret', undefined, undefined, basicHeader('alice', BCRYPT_SECRET),
+  );
+  assert.equal(decision.allow, true);
+});
+
+test('basic auth rejects a wrong password, a wrong username, and junk', async () => {
+  const svc = buildService(basicRow());
+  for (const header of [
+    basicHeader('alice', 'wrong'),
+    basicHeader('mallory', BCRYPT_SECRET),
+    'Basic not-base64-at-all!!',
+    'Bearer sometoken',
+    basicHeader('alice', ''),
+  ]) {
+    const decision = await svc.checkProtection(HOST, '/secret', undefined, undefined, header);
+    assert.equal(decision.allow, false, `should have rejected: ${header}`);
+    assert.equal(decision.status, 401);
+  }
+});
+
+test('a password with a colon in it still works', async () => {
+  // Only the first colon separates the pair, so the password may contain more.
+  const hash = '$2b$10$DbTeC24OQkP3Ysp0LFTApOQ4piHinEiPwR5Bc4TbZYbNxa7OgTQBi';
+  const svc = buildService(basicRow({ protectionPasswordHash: hash }));
+  const decision = await svc.checkProtection(
+    HOST, '/secret', undefined, undefined, basicHeader('alice', 'a:b:c'),
+  );
+  assert.equal(decision.allow, true);
+});
+
+test('a basic-auth row that lost its credentials fails closed', async () => {
+  for (const broken of [
+    { protectionUsername: null },
+    { protectionPasswordHash: null },
+  ]) {
+    const svc = buildService(basicRow(broken));
+    const decision = await svc.checkProtection(
+      HOST, '/secret', undefined, undefined, basicHeader('alice', BCRYPT_SECRET),
+    );
+    assert.equal(decision.allow, false, `should fail closed for ${JSON.stringify(broken)}`);
+    assert.equal(decision.status, 401);
+  }
+});
+
+test('a protection cookie does not open a basic-auth host', async () => {
+  // The cookie is issued by the Orchard login flow. Basic auth never mints one,
+  // so accepting it here would let a cookie from another mode leak across.
+  const svc = buildService(basicRow());
+  const cookie = await new SignJWT({ type: 'protection', ingressId: ING })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('user-1')
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(SECRET);
+  const decision = await svc.checkProtection(
+    HOST, '/secret', `_orchard_protection=${cookie}`, undefined, undefined,
+  );
+  assert.equal(decision.allow, false);
+  assert.equal(decision.status, 401);
+});
+
+test('bypass paths and the bypass secret still work under basic auth', async () => {
+  const svc = buildService(basicRow({
+    protectionBypassPaths: ['/webhooks'],
+    protectionBypassSecret: 'sekrit',
+  }));
+  const viaPath = await svc.checkProtection(HOST, '/webhooks/github', undefined, undefined, undefined);
+  assert.equal(viaPath.allow, true);
+  const viaSecret = await svc.checkProtection(HOST, '/secret', undefined, 'sekrit', undefined);
+  assert.equal(viaSecret.allow, true);
+});
+
+test('handleProxyRequest forwards the Authorization header to the check', async () => {
+  const svc = buildService(basicRow());
+  let proxied = false;
+  (svc as any).proxyToUpstream = async () => { proxied = true; };
+  const res: any = { status() { return res; }, send() { return res; }, setHeader() {} };
+
+  await svc.handleProxyRequest(
+    {
+      hostname: HOST,
+      headers: { authorization: basicHeader('alice', BCRYPT_SECRET) },
+      url: '/secret',
+      originalUrl: '/secret',
+    } as any,
+    res,
+  );
+  assert.equal(proxied, true, 'correct credentials on the real request path must reach the upstream');
+});

@@ -19,6 +19,7 @@ interface CachedIngress {
   id: string;
   projectId: string;
   protectionMode: string;
+  protectionUsername: string | null;
   protectionPasswordHash: string | null;
   protectionBypassSecret: string | null;
   protectionBypassPaths: string[];
@@ -71,6 +72,34 @@ export function pathMatchesBypass(requestPath: string, patterns: string[]): bool
   return false;
 }
 
+const BASIC_AUTH_REALM = 'Restricted';
+
+/**
+ * Constant-time string comparison that does not leak length through an early
+ * return. `timingSafeEqual` throws on a length mismatch, so hash both sides
+ * first and compare the digests, which are always the same size.
+ */
+function safeEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash('sha256').update(a).digest();
+  const hb = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+export function parseBasicAuthHeader(header: string | undefined): { username: string; password: string } | null {
+  if (!header) return null;
+  const match = /^Basic\s+(.+)$/i.exec(header.trim());
+  if (!match) return null;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(match[1], 'base64').toString('utf-8');
+  } catch {
+    return null;
+  }
+  const sep = decoded.indexOf(':');
+  if (sep < 0) return null;
+  return { username: decoded.slice(0, sep), password: decoded.slice(sep + 1) };
+}
+
 @Injectable()
 export class ProtectionService {
   private readonly jwtSecret: Uint8Array;
@@ -107,6 +136,7 @@ export class ProtectionService {
         projectId: true,
         namespace: true,
         protectionMode: true,
+        protectionUsername: true,
         protectionPasswordHash: true,
         protectionBypassSecret: true,
         protectionBypassPaths: true,
@@ -136,6 +166,7 @@ export class ProtectionService {
     originalPath: string,
     cookieHeader: string | undefined,
     bypassHeader: string | undefined,
+    authorizationHeader?: string | undefined,
   ): Promise<ProtectionDecision> {
     const ingress = await this.resolveIngressFromHost(host);
     // Fail closed. A host we cannot resolve is not a host we can vouch for,
@@ -155,6 +186,23 @@ export class ProtectionService {
       if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
         return { allow: true };
       }
+    }
+
+    // Basic auth terminates here. There is no login page, no cookie and no
+    // redirect to the control plane: the point of this mode is that it works
+    // for clients that only speak `Authorization: Basic`, on clusters with no
+    // Cilium to run the Envoy filter. See docs/self-hosting.md.
+    if (ingress.protectionMode === 'basic') {
+      if (await this.verifyBasicAuthHeader(ingress, authorizationHeader)) {
+        return { allow: true };
+      }
+      return {
+        allow: false,
+        status: 401,
+        headers: {
+          'www-authenticate': `Basic realm="${BASIC_AUTH_REALM}", charset="UTF-8"`,
+        },
+      };
     }
 
     const tokenMatch = originalPath.match(/[?&]__orchard_token=([^&]+)/);
@@ -235,6 +283,21 @@ export class ProtectionService {
     }
   }
 
+  private async verifyBasicAuthHeader(
+    ingress: Pick<CachedIngress, 'protectionUsername' | 'protectionPasswordHash'>,
+    header: string | undefined,
+  ): Promise<boolean> {
+    // A row that lost its credentials is not an open door.
+    if (!ingress.protectionUsername || !ingress.protectionPasswordHash) return false;
+    const parsed = parseBasicAuthHeader(header);
+    if (!parsed) return false;
+    // bcrypt is the slow half, so check the username first, but without a
+    // short-circuit that would let an attacker probe usernames by timing.
+    const userOk = safeEqual(parsed.username, ingress.protectionUsername);
+    const passOk = await bcrypt.compare(parsed.password, ingress.protectionPasswordHash);
+    return userOk && passOk;
+  }
+
   async verifyPassword(ingressId: string, password: string): Promise<boolean> {
     const ingress = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
@@ -310,7 +373,14 @@ export class ProtectionService {
 
     const cookieHeader = req.headers['cookie']?.toString();
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
-    const decision = await this.checkProtection(host, req.originalUrl || req.url, cookieHeader, bypassHeader);
+    const authorizationHeader = req.headers['authorization']?.toString();
+    const decision = await this.checkProtection(
+      host,
+      req.originalUrl || req.url,
+      cookieHeader,
+      bypassHeader,
+      authorizationHeader,
+    );
 
     if (!decision.allow) {
       if (decision.headers) {
@@ -353,7 +423,16 @@ export class ProtectionService {
       const b = Buffer.from(ingress.protectionBypassSecret);
       allowed = a.length === b.length && crypto.timingSafeEqual(a, b);
     }
-    if (!allowed) {
+    if (!allowed && ingress.protectionMode === 'basic') {
+      // Browsers do not send Authorization on a WebSocket handshake, but they
+      // do replay it for a same-origin upgrade once the page itself was
+      // fetched with credentials, and non-browser clients set it explicitly.
+      allowed = await this.verifyBasicAuthHeader(
+        ingress,
+        req.headers['authorization']?.toString(),
+      );
+    }
+    if (!allowed && ingress.protectionMode !== 'basic') {
       const cookie = this.extractCookie(req.headers.cookie, '_orchard_protection');
       if (cookie) {
         allowed = !!(await this.verifyProtectionJwt(cookie, 'protection', ingress.id));

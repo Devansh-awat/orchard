@@ -327,6 +327,62 @@ export class KubernetesService {
     }
   }
 
+  private ciliumProbe: { at: number; result: boolean } | null = null;
+
+  private static readonly CILIUM_PROBE_TTL_MS = 5 * 60 * 1000;
+
+  /**
+   * Whether Cilium-backed edge features (basic auth via CiliumEnvoyConfig,
+   * per-tenant CiliumNetworkPolicy) can actually be used. CILIUM_ENABLED is a
+   * hard override for operators; otherwise this probes the cluster, so an
+   * install that already runs Cilium keeps working without any new config.
+   *
+   * Both the CRD and the create permission have to be there: on a chart
+   * install with `cilium.enabled: false` the CRDs may exist while the control
+   * plane has no rbac for them, and creating an ingress that silently skipped
+   * its auth filter is worse than refusing to create it.
+   */
+  async isCiliumAvailable(): Promise<boolean> {
+    const override = process.env.CILIUM_ENABLED;
+    if (override === 'true') return true;
+    if (override === 'false') return false;
+    if (!this.kc) return false;
+
+    const cached = this.ciliumProbe;
+    if (cached && Date.now() - cached.at < KubernetesService.CILIUM_PROBE_TTL_MS) {
+      return cached.result;
+    }
+
+    const result = await this.probeCilium();
+    this.ciliumProbe = { at: Date.now(), result };
+    return result;
+  }
+
+  private async probeCilium(): Promise<boolean> {
+    try {
+      const groups = await this.kc!.makeApiClient(k8s.ApisApi).getAPIVersions();
+      const present = (groups.body.groups || []).some((group) => group.name === 'cilium.io');
+      if (!present) return false;
+
+      const review = await this.kc!.makeApiClient(k8s.AuthorizationV1Api)
+        .createSelfSubjectAccessReview({
+          apiVersion: 'authorization.k8s.io/v1',
+          kind: 'SelfSubjectAccessReview',
+          spec: {
+            resourceAttributes: {
+              group: 'cilium.io',
+              resource: 'ciliumenvoyconfigs',
+              verb: 'create',
+            },
+          },
+        });
+      return review.body.status?.allowed === true;
+    } catch (error) {
+      console.warn('[K8s] Cilium capability probe failed:', error.message);
+      return false;
+    }
+  }
+
   // Exposed for sibling services (e.g. R2ProxyService) that need raw kube
   // client access without duplicating the kubeconfig-loading logic above.
   public getCoreV1Api(): k8s.CoreV1Api {

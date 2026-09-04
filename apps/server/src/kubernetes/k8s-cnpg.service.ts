@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
 import { deriveDbTuning } from './db-tuning';
+import { optionalDomain } from '../env/platform-domains';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -40,6 +41,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   async ensureCnpgOperatorIngress(namespace: string): Promise<void> {
     this.ensureKubeConfig();
+    // Nothing to allow when Cilium isn't the CNI: the tenant default-deny is a
+    // plain NetworkPolicy there, and its own operator rule already covers this.
+    if (!(await this.kubernetes.isCiliumAvailable())) return;
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const policy = {
       apiVersion: 'cilium.io/v2',
@@ -2247,7 +2251,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   private readonly PUBLIC_TLS_SOURCE_SECRET = process.env.PUBLIC_DB_TLS_SOURCE_SECRET || 'wildcard-db-orchard-my-tls';
 
-  private readonly PUBLIC_TLS_BASE_DOMAIN = process.env.PUBLIC_DB_DOMAIN || 'db.orchard.my';
+  private readonly PUBLIC_TLS_BASE_DOMAIN = optionalDomain(process.env.PUBLIC_DB_DOMAIN);
 
   private readonly PUBLIC_TLS_LOCAL_SECRET = process.env.PUBLIC_DB_TLS_LOCAL_SECRET || 'wildcard-db-tls';
 
@@ -2262,6 +2266,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   // combinations fall back to a hash suffix to stay inside the 63-char
   // DNS label limit without reintroducing collisions.
   publicTlsHostname(namespace: string, clusterName: string): string {
+    if (!this.PUBLIC_TLS_BASE_DOMAIN) return '';
     const label = `${namespace}-${clusterName}`;
     const safe = label.length <= 63
       ? label
@@ -2272,6 +2277,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   // Hostname format that predates namespace qualification. Kept in the TLS
   // SANs so connection strings issued before the change keep verifying.
   legacyPublicTlsHostname(clusterName: string): string {
+    if (!this.PUBLIC_TLS_BASE_DOMAIN) return '';
     return `${clusterName}.${this.PUBLIC_TLS_BASE_DOMAIN}`;
   }
 
