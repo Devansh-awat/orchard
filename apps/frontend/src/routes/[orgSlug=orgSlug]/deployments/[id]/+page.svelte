@@ -611,9 +611,6 @@
 		}
 	}
 
-	// Pods Kubernetes must keep ready through a node drain. The server stores
-	// this even when the replica count can't satisfy it yet, so the input is
-	// seeded from the row and not from what the cluster is enforcing.
 	let pdbMinAvailable = $state(1);
 	let savingPdb = $state(false);
 

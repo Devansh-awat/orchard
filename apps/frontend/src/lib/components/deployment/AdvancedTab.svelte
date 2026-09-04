@@ -124,8 +124,6 @@
 
 	const replicaCount = $derived(Number(deployment.replicas ?? 1));
 	const pdbDirty = $derived(Number(pdbMinAvailable) !== Number(deployment.pdbMinAvailable ?? 1));
-	// Matches the server: a budget that covers every replica leaves no
-	// disruption allowed at all, so it is never written.
 	const pdbActive = $derived(Number(pdbMinAvailable) > 0 && replicaCount > Number(pdbMinAvailable));
 
 	function watchPathLines(value: string) {
@@ -227,14 +225,15 @@
 
 		<SectionCard title="Disruption budget">
 			{#snippet actions()}
-				<button
-					onclick={onSavePdb}
+				<Button
+					variant="primary"
+					size="sm"
+					loading={savingPdb}
 					disabled={savingPdb || !pdbDirty}
-					class="btn btn-primary btn-sm"
+					onclick={onSavePdb}
 				>
-					{#if savingPdb}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-					<span>Save</span>
-				</button>
+					Save
+				</Button>
 			{/snippet}
 			<p class="strategy-card-desc">
 				How many pods Kubernetes must keep ready while it drains the node underneath them, during
