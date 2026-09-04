@@ -20,6 +20,9 @@
 		rebuilding,
 		strategyValue = $bindable<'rollingUpdate' | 'recreate'>('rollingUpdate'),
 		savingStrategy,
+		pdbMinAvailable = $bindable(1),
+		savingPdb,
+		onSavePdb,
 		hasPvcVolume,
 		onSaveStrategy,
 		buildFromRoot = $bindable(false),
@@ -93,6 +96,9 @@
 		rebuilding: boolean;
 		strategyValue: 'rollingUpdate' | 'recreate';
 		savingStrategy: boolean;
+		pdbMinAvailable: number;
+		savingPdb: boolean;
+		onSavePdb: () => void;
 		hasPvcVolume: boolean;
 		onSaveStrategy: (next: 'rollingUpdate' | 'recreate') => void;
 		buildFromRoot: boolean;
@@ -201,6 +207,9 @@
 				sections={['source', 'build']}
 				bind:strategyValue
 				{savingStrategy}
+				bind:pdbMinAvailable
+				{savingPdb}
+				{onSavePdb}
 				{hasPvcVolume}
 				{onSaveStrategy}
 				bind:buildFromRoot
@@ -281,6 +290,9 @@
 				sections={['health']}
 				bind:strategyValue
 				{savingStrategy}
+				bind:pdbMinAvailable
+				{savingPdb}
+				{onSavePdb}
 				{hasPvcVolume}
 				{onSaveStrategy}
 				bind:buildFromRoot
@@ -329,6 +341,9 @@
 				sections={['strategy', 'autodeploy']}
 				bind:strategyValue
 				{savingStrategy}
+				bind:pdbMinAvailable
+				{savingPdb}
+				{onSavePdb}
 				{hasPvcVolume}
 				{onSaveStrategy}
 				bind:buildFromRoot

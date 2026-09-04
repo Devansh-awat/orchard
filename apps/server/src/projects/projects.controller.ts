@@ -1003,6 +1003,22 @@ export class DeploymentsController {
     return this.deployments.updateDeploymentStrategy(id, body.strategy, user.id);
   }
 
+  @Patch(':id/disruption-budget')
+  async updateDeploymentDisruptionBudget(
+    @Param('id') id: string,
+    @Body() body: { minAvailable: number },
+    @Request() req,
+  ) {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to change the disruption budget');
+    }
+    return this.deployments.updateDeploymentDisruptionBudget(id, body.minAvailable, user.id);
+  }
+
   @Get(':id/next-steps')
   async getDeploymentNextSteps(@Param('id') id: string, @Request() req) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {

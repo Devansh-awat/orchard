@@ -17,6 +17,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
 import { resolvePullPolicy } from '../kubernetes/trusted-images';
+import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
@@ -48,6 +49,11 @@ import { formatSlug, scrubIngress, isPlatformGeneratedHost } from './projects.ut
 import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
 import { isObservedJobStatus } from './build-recovery';
+
+// Ceiling on the disruption budget. Nothing in Orchard scales anywhere near
+// this, and it keeps a fat-fingered value from being stored as a number the
+// replica count can never satisfy.
+const MAX_PDB_MIN_AVAILABLE = 100;
 
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
@@ -133,6 +139,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     this.applyExecutor.registerHandler('deployment.updateEnv', async (item) => {
       await this.applyEnvToCluster(item.deploymentId!);
     });
+    this.applyExecutor.registerHandler('deployment.disruptionBudget', async (item) => {
+      await this.applyDisruptionBudgetToCluster(item.deploymentId!);
+    });
   }
 
   private applyPipelineEnabled(): boolean {
@@ -169,6 +178,54 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       metadata: { name: deployment.name, namespace: deployment.namespace },
       spec: { replicas: deployment.replicas },
     } as never);
+  }
+
+  /**
+   * The budget follows both the setting and the replica count, so this runs
+   * after a scale as well as after an edit. K8sWorkloadService decides whether
+   * that means writing the object or removing it.
+   */
+  private async applyDisruptionBudgetToCluster(deploymentId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true, replicas: true, pdbMinAvailable: true },
+    });
+    if (!deployment) return;
+    const exists = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
+    if (!exists) return;
+    await this.k8sWorkload.applyPodDisruptionBudget({
+      name: deployment.name,
+      namespace: deployment.namespace,
+      minAvailable: deployment.pdbMinAvailable,
+      replicas: deployment.replicas,
+    });
+  }
+
+  /**
+   * Queue the budget reconcile when the apply pipeline owns cluster writes,
+   * otherwise push it straight through. Never fatal to its caller: a scale
+   * that landed is not undone because a budget failed to follow it, and the
+   * queue (or the next apply) retries.
+   */
+  private async syncDisruptionBudget(deploymentId: string): Promise<void> {
+    try {
+      if (this.applyPipelineEnabled()) {
+        await this.applyQueue.enqueue({
+          dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
+          opType: 'deployment.disruptionBudget',
+          deploymentId,
+        });
+        return;
+      }
+      await this.applyDisruptionBudgetToCluster(deploymentId);
+    } catch (error) {
+      this.logger.warn(
+        `[PDB] Failed to sync disruption budget for ${deploymentId}: ${(error as Error)?.message ?? error}`,
+      );
+    }
   }
 
   private async applyEnvToCluster(deploymentId: string): Promise<void> {
@@ -1383,6 +1440,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         deploymentId,
         requestedById: user.id,
       });
+      // Crossing the replica count in either direction flips whether the
+      // budget can exist at all, so it is reconciled on every scale.
+      await this.syncDisruptionBudget(deploymentId);
     } else {
       // Only push to K8s if the deployment exists in the cluster.
       const k8sExistsScale = await this.k8sWorkload.getKubernetesDeployment(
@@ -1401,6 +1461,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         where: { id: deploymentId },
         data: { replicas },
       });
+      await this.syncDisruptionBudget(deploymentId);
     }
 
     void this.audit.log({
@@ -4415,6 +4476,60 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * How many pods Kubernetes must keep ready while it drains a node under
+   * this app. 0 removes the budget entirely.
+   *
+   * The value is stored even when it cannot take effect yet (a 1-replica app
+   * asking for 1 available pod would block every drain, so no object is
+   * written) — the setting is the user's intent, and scaling up later is what
+   * makes it real. `active` in the response says which of the two happened.
+   */
+  async updateDeploymentDisruptionBudget(
+    deploymentId: string,
+    minAvailable: number,
+    userId?: string,
+  ) {
+    const parsed = Number(minAvailable);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_PDB_MIN_AVAILABLE) {
+      throw new BadRequestException(
+        `Minimum available pods must be a whole number between 0 and ${MAX_PDB_MIN_AVAILABLE}`,
+      );
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({ where: { id: deploymentId } });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change the disruption budget');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change the disruption budget');
+    }
+
+    const updated = await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { pdbMinAvailable: parsed },
+    });
+
+    // Deliberately not swallowed here: this is the one path where the user is
+    // waiting on the answer, so a cluster write that failed should say so.
+    if (this.applyPipelineEnabled()) {
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
+        opType: 'deployment.disruptionBudget',
+        deploymentId,
+        requestedById: userId,
+      });
+    } else {
+      await this.applyDisruptionBudgetToCluster(deploymentId);
+    }
+
+    return {
+      ...updated,
+      pdbActive: disruptionBudgetActive(parsed, updated.replicas),
+    };
+  }
+
   // Booleans only. The copy lives in the frontend so wording changes do not
   // need an API deploy, and so this stays honest about what it actually knows.
   //
@@ -4711,6 +4826,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       nodePoolId?: string | null;
       placementOverride?: unknown;
       imagePullPolicy?: 'Always' | 'IfNotPresent';
+      pdbMinAvailable?: number;
     },
     clerkId: string,
     userData?: {
@@ -4858,6 +4974,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       data.imagePullPolicy === 'Always' || data.imagePullPolicy === 'IfNotPresent'
         ? data.imagePullPolicy
         : null;
+    // Every app starts out asking for one pod to survive a drain. It only
+    // becomes a real budget once the app runs more than one replica.
+    const initialPdbMinAvailable =
+      data.pdbMinAvailable != null &&
+      Number.isInteger(data.pdbMinAvailable) &&
+      data.pdbMinAvailable >= 0 &&
+      data.pdbMinAvailable <= MAX_PDB_MIN_AVAILABLE
+        ? data.pdbMinAvailable
+        : 1;
     const deploymentResult = await this.k8sWorkload.createDeployment({
       namespace: environment.namespace,
       name,
@@ -4874,6 +4999,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       resources: podResources,
       deployStrategy: initialStrategy,
       imagePullPolicy: resolvePullPolicy(pullPolicyOverride, image),
+      pdbMinAvailable: initialPdbMinAvailable,
     });
 
     let createdDeployment;
@@ -4894,6 +5020,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           composeServiceName: data.composeServiceName ?? null,
           deployStrategy: initialStrategy,
           imagePullPolicy: pullPolicyOverride,
+          pdbMinAvailable: initialPdbMinAvailable,
           nodePoolId: data.nodePoolId ?? null,
           placementOverride: (placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
@@ -6243,6 +6370,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             memoryRequestBytes: true,
             deployStrategy: true,
             imagePullPolicy: true,
+            pdbMinAvailable: true,
             nodePoolId: true,
             placementOverride: true,
             project: { select: { organizationId: true, ownerId: true } },
@@ -6317,6 +6445,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             resources: rebuildResources,
             deployStrategy: buildStrategy,
             imagePullPolicy: buildPullPolicy,
+            pdbMinAvailable: deploymentRow?.pdbMinAvailable ?? 1,
             healthCheck,
           });
         } else {

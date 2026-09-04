@@ -167,6 +167,8 @@ export interface Deployment {
 	totalCpuUsage?: number | null;
 	totalMemoryUsage?: number | null;
 	deployStrategy?: 'rollingUpdate' | 'recreate';
+	// Pods that must stay ready through a node drain. 0 means no budget.
+	pdbMinAvailable?: number;
 	imagePullPolicy?: 'Always' | 'IfNotPresent' | null;
 	effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';
 	warnings?: { podName: string; message: string; timestamp: string }[];

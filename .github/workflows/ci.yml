@@ -219,6 +219,10 @@ jobs:
       # real build error is never mistaken for a Kata start race.
       - name: Sandbox start fault tests
         run: pnpm --filter server test:build-faults
+      # A PodDisruptionBudget that covers every replica blocks node drains
+      # outright, so the rule deciding when one is written is pinned here.
+      - name: Disruption budget tests
+        run: pnpm --filter server test:disruption-budget
       # Auto-deploy watch paths decide whether a push builds at all, so a
       # matching bug either rebuilds everything in a monorepo or silently stops
       # deploying. Pins the glob semantics and the fail-open cases.

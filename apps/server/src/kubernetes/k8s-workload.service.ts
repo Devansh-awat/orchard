@@ -20,6 +20,11 @@ import {
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-patch';
+import {
+  disruptionBudgetActive,
+  disruptionBudgetManifest,
+  normalizeMinAvailable,
+} from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
 
 /**
@@ -949,6 +954,18 @@ export class K8sWorkloadService {
       });
     }
 
+    // Outside the try above on purpose: the app is already running at this
+    // point, and a budget that fails to write is not worth rolling the
+    // deployment back over.
+    await this.applyPodDisruptionBudget({
+      name: cleanName,
+      namespace: cleanNamespace,
+      minAvailable: options.pdbMinAvailable ?? 1,
+      replicas,
+    }).catch((error) => {
+      console.error(`[K8s] Failed to apply PodDisruptionBudget for ${cleanName}:`, error?.message ?? error);
+    });
+
     return {
       success: true,
       deployment: cleanName,
@@ -961,6 +978,64 @@ export class K8sWorkloadService {
       serviceType: requestedServiceType,
       externalIp: externalAddress
     };
+  }
+
+  /**
+   * Reconcile the PodDisruptionBudget that keeps an app up while Kubernetes
+   * drains a node under it. Written through server-side apply under the same
+   * `orchard` field manager the apply queue uses, so a hand-edited budget
+   * converges instead of 409-ing.
+   *
+   * Inactive (see disruptionBudgetActive) means the budget is deleted rather
+   * than written, so this is safe to call on every apply — scaling from 2 to 1
+   * removes the object, scaling back restores it.
+   */
+  async applyPodDisruptionBudget(options: {
+    name: string;
+    namespace: string;
+    minAvailable: number;
+    replicas: number;
+  }): Promise<{ applied: boolean; minAvailable: number }> {
+    this.ensureKubeConfig();
+
+    const cleanName = String(options.name || '').trim();
+    const cleanNamespace = String(options.namespace || '').trim();
+
+    if (!cleanName) {
+      throw new BadRequestException('Deployment name is required');
+    }
+    if (!cleanNamespace) {
+      throw new BadRequestException('Namespace parameter is required');
+    }
+
+    const minAvailable = normalizeMinAvailable(options.minAvailable);
+
+    if (!disruptionBudgetActive(minAvailable, options.replicas)) {
+      try {
+        await this.kc
+          .makeApiClient(k8s.PolicyV1Api)
+          .deleteNamespacedPodDisruptionBudget(cleanName, cleanNamespace);
+      } catch (error) {
+        if (error.response?.statusCode !== 404) throw error;
+      }
+      return { applied: false, minAvailable };
+    }
+
+    const manifest = disruptionBudgetManifest({
+      name: cleanName,
+      namespace: cleanNamespace,
+      minAvailable,
+    });
+    await k8s.KubernetesObjectApi.makeApiClient(this.kc).patch(
+      manifest,
+      undefined,
+      undefined,
+      'orchard',
+      true,
+      { headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML } },
+    );
+
+    return { applied: true, minAvailable };
   }
 
   /**
@@ -1508,6 +1583,13 @@ export class K8sWorkloadService {
 
       // Clean up the per-deployment env Secret so it doesn't orphan.
       await coreApi.deleteNamespacedSecret(`${cleanName}-env`, cleanNamespace).catch(() => {});
+
+      // An orphaned PodDisruptionBudget matches nothing, but it still shows up
+      // as a permanently unsatisfied budget on every drain report.
+      await this.kc
+        .makeApiClient(k8s.PolicyV1Api)
+        .deleteNamespacedPodDisruptionBudget(cleanName, cleanNamespace)
+        .catch(() => {});
 
       return {
         success: true,

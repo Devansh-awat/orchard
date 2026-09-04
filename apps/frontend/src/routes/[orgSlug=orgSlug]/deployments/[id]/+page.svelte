@@ -611,6 +611,47 @@
 		}
 	}
 
+	// Pods Kubernetes must keep ready through a node drain. The server stores
+	// this even when the replica count can't satisfy it yet, so the input is
+	// seeded from the row and not from what the cluster is enforcing.
+	let pdbMinAvailable = $state(1);
+	let savingPdb = $state(false);
+
+	async function savePdb() {
+		if (!deployment || savingPdb) return;
+		const next = Math.trunc(Number(pdbMinAvailable));
+		if (!Number.isInteger(next) || next < 0) {
+			toasts.add({
+				title: 'Invalid disruption budget',
+				description: 'Enter a whole number of pods, or 0 to turn the budget off.',
+				color: 'warning'
+			});
+			return;
+		}
+		savingPdb = true;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/disruption-budget`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ minAvailable: next })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update disruption budget');
+			}
+			toasts.add({ title: 'Disruption budget updated', color: 'success' });
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
+		} finally {
+			savingPdb = false;
+		}
+	}
+
 	// null means automatic: derived from the image tag by the server.
 	let pullPolicy = $state<'Always' | 'IfNotPresent' | null>(null);
 	let savingPullPolicy = $state(false);
@@ -1334,6 +1375,10 @@
 			// Seed deploy strategy from the persisted value.
 			if (!savingStrategy) {
 				strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+			}
+
+			if (!savingPdb) {
+				pdbMinAvailable = data.pdbMinAvailable ?? 1;
 			}
 
 			if (!savingPullPolicy) {
@@ -3059,6 +3104,9 @@
 							{savingStrategy}
 							{hasPvcVolume}
 							onSaveStrategy={saveStrategy}
+							bind:pdbMinAvailable
+							{savingPdb}
+							onSavePdb={savePdb}
 							bind:buildFromRoot
 							bind:buildWithDepot
 							bind:persistentBuildCache

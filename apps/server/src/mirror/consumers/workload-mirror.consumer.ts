@@ -7,6 +7,7 @@ import {
   memoryLimitBytesFromResources,
 } from '../../kubernetes/quantity';
 import { resolvePullPolicy } from '../../kubernetes/trusted-images';
+import { readMinAvailable } from '../../kubernetes/disruption-budget';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -48,6 +49,48 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
   async mapRefs(dep: k8s.V1Deployment): Promise<MirrorRefs> {
     const ctx = await this.resolveCtx(dep);
     return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
+  }
+
+  // A PodDisruptionBudget carries the deployment's name, so it resolves
+  // through the same lookup.
+  async mapPdbRefs(pdb: k8s.V1PodDisruptionBudget): Promise<MirrorRefs> {
+    const ctx = await this.resolveCtx(pdb);
+    return ctx ? { deploymentId: ctx.deploymentId, projectId: ctx.projectId } : {};
+  }
+
+  /**
+   * Kubernetes is truth for the budget too: a `kubectl edit` of minAvailable
+   * lands back in the deployments row.
+   *
+   * A delete is deliberately NOT adopted as 0. Orchard deletes the object
+   * itself whenever the budget cannot be satisfied (scaling to one replica,
+   * say), and treating that as intent would erase the setting the user picked
+   * and never restore it on the way back up.
+   */
+  async onPdbEvent(type: MirrorEventType, pdb: k8s.V1PodDisruptionBudget): Promise<void> {
+    if (type === 'delete') return;
+    const ctx = await this.resolveCtx(pdb);
+    if (!ctx) return;
+
+    const observed = readMinAvailable(pdb.spec);
+    if (observed == null) return;
+
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: ctx.deploymentId },
+      select: { pdbMinAvailable: true },
+    });
+    if (!row || row.pdbMinAvailable === observed) return;
+
+    const pendingApply = await this.prisma.k8sApplyItem.count({
+      where: { deploymentId: ctx.deploymentId, status: { in: ['pending', 'applying'] } },
+    });
+    if (pendingApply > 0) return;
+
+    await this.prisma.deployment.update({
+      where: { id: ctx.deploymentId },
+      data: { pdbMinAvailable: observed },
+    });
+    this.logger.log(`adopted external disruption budget for ${ctx.deploymentId}: minAvailable=${observed}`);
   }
 
   async onEvent(type: MirrorEventType, dep: k8s.V1Deployment): Promise<void> {
@@ -217,9 +260,9 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     });
   }
 
-  private async resolveCtx(dep: k8s.V1Deployment): Promise<Ctx | null> {
-    const ns = dep.metadata?.namespace;
-    const name = dep.metadata?.name;
+  private async resolveCtx(obj: { metadata?: k8s.V1ObjectMeta }): Promise<Ctx | null> {
+    const ns = obj.metadata?.namespace;
+    const name = obj.metadata?.name;
     if (!ns || !name) return null;
     const key = `${ns}/${name}`;
     const cached = this.ctxCache.get(key);

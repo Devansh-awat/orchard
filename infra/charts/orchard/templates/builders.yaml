@@ -273,6 +273,11 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "watch"]
+  # Per-app PodDisruptionBudgets: written by the server, watched by the
+  # workloads mirror shard.
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters", "backups"]
     verbs: ["get", "list", "watch"]

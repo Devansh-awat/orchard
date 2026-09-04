@@ -601,6 +601,12 @@ model Deployment {
   buildStep            String?            @map("build_step") @db.VarChar(50)
   buildType            BuildType          @default(dockerfile) @map("build_type")
   deployStrategy       DeploymentStrategy @default(rollingUpdate) @map("deploy_strategy")
+  // How many pods must stay ready through a voluntary disruption (node drain,
+  // cluster upgrade). 0 means no PodDisruptionBudget at all. The budget is
+  // only written when `replicas` exceeds it: one that asks for every pod the
+  // app has leaves zero allowed disruptions and blocks the drain forever,
+  // which is why the chart's own PDBs are gated on replicas > 1 too.
+  pdbMinAvailable      Int                @default(1) @map("pdb_min_available")
   // null means "derive it from the image tag": Always for a tag that can move
   // (`latest`, `main`, a floating major), IfNotPresent otherwise. A concrete
   // value is the user overriding that and is never recomputed.

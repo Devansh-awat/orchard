@@ -141,6 +141,26 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           mapRefs: (obj) => deps.workloads.mapRefs(obj),
           onEvent: (type, obj) => deps.workloads.onEvent(type, obj),
         },
+        {
+          kind: 'PodDisruptionBudget',
+          apiVersion: 'policy/v1',
+          watchPath: '/apis/policy/v1/poddisruptionbudgets',
+          labelSelector: ORCHARD_SELECTOR,
+          list: async (kc, opts) =>
+            toListResult(
+              await kc
+                .makeApiClient(k8s.PolicyV1Api)
+                .listPodDisruptionBudgetForAllNamespaces(
+                  undefined,
+                  opts.continueToken,
+                  undefined,
+                  ORCHARD_SELECTOR,
+                  opts.limit,
+                ),
+            ),
+          mapRefs: (obj) => deps.workloads.mapPdbRefs(obj),
+          onEvent: (type, obj) => deps.workloads.onPdbEvent(type, obj),
+        },
       ],
     },
     {

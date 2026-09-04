@@ -28,6 +28,10 @@
 		savingStrategy,
 		hasPvcVolume,
 		onSaveStrategy,
+		// Disruption budget
+		pdbMinAvailable = $bindable(),
+		savingPdb,
+		onSavePdb,
 		// Build options
 		buildFromRoot = $bindable(),
 		buildWithDepot = $bindable(),
@@ -77,6 +81,9 @@
 		savingStrategy: boolean;
 		hasPvcVolume: boolean;
 		onSaveStrategy: (next: 'rollingUpdate' | 'recreate') => void;
+		pdbMinAvailable: number;
+		savingPdb: boolean;
+		onSavePdb: () => void;
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
 		persistentBuildCache: boolean;
@@ -114,6 +121,12 @@
 		onSaveHealthCheck: () => void;
 		sections?: string[];
 	} = $props();
+
+	const replicaCount = $derived(Number(deployment.replicas ?? 1));
+	const pdbDirty = $derived(Number(pdbMinAvailable) !== Number(deployment.pdbMinAvailable ?? 1));
+	// Matches the server: a budget that covers every replica leaves no
+	// disruption allowed at all, so it is never written.
+	const pdbActive = $derived(Number(pdbMinAvailable) > 0 && replicaCount > Number(pdbMinAvailable));
 
 	function watchPathLines(value: string) {
 		return value
@@ -207,6 +220,55 @@
 					<span
 						>This app has a PVC volume, so rolling updates are unavailable. Pods can't share a
 						ReadWriteOnce volume during a rolling cutover.</span
+					>
+				</div>
+			{/if}
+		</SectionCard>
+
+		<SectionCard title="Disruption budget">
+			{#snippet actions()}
+				<button
+					onclick={onSavePdb}
+					disabled={savingPdb || !pdbDirty}
+					class="btn btn-primary btn-sm"
+				>
+					{#if savingPdb}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+					<span>Save</span>
+				</button>
+			{/snippet}
+			<p class="strategy-card-desc">
+				How many pods Kubernetes must keep ready while it drains the node underneath them, during
+				a cluster upgrade or a maintenance move. Set it to 0 to let the app go all the way down.
+			</p>
+			<div class="hc-field mt-3">
+				<label class="hc-label" for="pdb-min-available">Keep ready during a drain</label>
+				<div class="hc-num-wrap">
+					<input
+						id="pdb-min-available"
+						type="number"
+						class="hc-num"
+						bind:value={pdbMinAvailable}
+						min="0"
+						max="100"
+					/>
+					<span class="hc-num-suffix">of {replicaCount} {replicaCount === 1 ? 'pod' : 'pods'}</span>
+				</div>
+			</div>
+			{#if Number(pdbMinAvailable) <= 0}
+				<div class="strategy-note mt-3">
+					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+					<span
+						>No budget is set, so a node drain may take every pod of this app down at once.</span
+					>
+				</div>
+			{:else if !pdbActive}
+				<div class="strategy-note mt-3">
+					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+					<span
+						>This app runs {replicaCount}
+						{replicaCount === 1 ? 'replica' : 'replicas'}, so the budget is kept as a setting but
+						not enforced: one that covers every pod you have would block node drains forever
+						instead of moving the app. It starts applying above {pdbMinAvailable} replicas.</span
 					>
 				</div>
 			{/if}
