@@ -235,6 +235,7 @@ func deployAutoDeployStatusCmd() *cobra.Command {
 				{"watch paths", paths},
 				{"repo", pick(raw, "githubRepo", "repo")},
 				{"app installed", pick(raw, "appInstalled")},
+				{"connected", pick(raw, "linked")},
 			})
 			return nil
 		},

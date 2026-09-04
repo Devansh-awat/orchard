@@ -398,6 +398,30 @@
 								<span>Configure</span>
 							</button>
 						</div>
+					{:else if autoDeployStatus?.linked === false}
+						<div
+							class="mt-3 flex items-center justify-between gap-3 rounded-xl p-4"
+							style="background-color: var(--warning-bg); border: 1px solid var(--warning-border);"
+						>
+							<div>
+								<p class="text-sm font-medium" style="color: var(--warning-text);">
+									Auto-deploy is on but not connected
+								</p>
+								<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+									This deployment isn't bound to a GitHub App installation, so pushes never reach
+									it. Nothing builds, and nothing reports an error. Reconnect to bind it; your
+									branch and watch paths are kept.
+								</p>
+							</div>
+							<button
+								onclick={onEnableAutoDeploy}
+								disabled={enablingAutoDeploy || !autoDeployBranch}
+								class="btn btn-primary btn-sm shrink-0"
+							>
+								{#if enablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+								<span>Reconnect</span>
+							</button>
+						</div>
 					{/if}
 				{:else if !autoDeployStatus?.appInstalled}
 					<div

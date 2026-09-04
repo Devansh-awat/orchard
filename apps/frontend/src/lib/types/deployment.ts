@@ -186,7 +186,10 @@ export interface AutoDeployStatus {
 	enabled: boolean;
 	branch: string;
 	paths?: string[];
+	/** The App can see the repo. */
 	appInstalled: boolean;
+	/** This deployment is bound to a live installation, so pushes actually reach it. */
+	linked?: boolean;
 }
 
 export interface GitHubAppInstallation {

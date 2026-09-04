@@ -3719,6 +3719,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployPaths: true,
         githubRepo: true,
         githubBranch: true,
+        githubInstallationId: true,
       },
     });
 
@@ -3740,11 +3741,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Whether a push can actually reach THIS deployment, which is a different
+    // question from whether the App can see the repo. The webhook binds a push
+    // to the installation pinned on the row, so a row with no installation (or
+    // one pointing at an installation that has since been removed or
+    // suspended) is silently inert: the App is installed, the repo is right,
+    // the branch matches, and nothing ever fires.
+    const linked = deployment.githubInstallationId
+      ? (await this.prisma.gitHubAppInstallation.count({
+          where: { installationId: deployment.githubInstallationId, suspendedAt: null },
+        })) > 0
+      : false;
+
     return {
       enabled: deployment.autoDeployEnabled,
       branch: deployment.autoDeployBranch || deployment.githubBranch,
       paths: deployment.autoDeployPaths ?? [],
       appInstalled,
+      linked,
     };
   }
 
