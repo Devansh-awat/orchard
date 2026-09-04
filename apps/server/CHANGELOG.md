@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.1](https://github.com/hackclub/orchard/compare/server/v2.22.0...server/v2.22.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* reconcile the disruption budget when the cluster changes replicas ([cbef67a](https://github.com/hackclub/orchard/commit/cbef67a678125001828445acdd380d95e93495bc))
+
 ## [2.22.0](https://github.com/hackclub/orchard/compare/server/v2.21.1...server/v2.22.0) (2026-09-04)
 
 
