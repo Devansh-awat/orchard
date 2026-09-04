@@ -20,6 +20,7 @@ ORCHARD_ACME_EMAIL=${ORCHARD_ACME_EMAIL:-}
 ORCHARD_INGRESS_MODE=${ORCHARD_INGRESS_MODE:-}
 ORCHARD_TUNNEL_TOKEN=${ORCHARD_TUNNEL_TOKEN:-}
 ORCHARD_UPDATE_POLICY=${ORCHARD_UPDATE_POLICY:-}
+ORCHARD_METRICS=${ORCHARD_METRICS:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
@@ -218,6 +219,8 @@ usage() {
 
   Behaviour
     --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
+    --metrics <true|false>       ORCHARD_METRICS        built-in metrics stack, needs ~1G extra
+                                                        (default: on with 8G+ RAM)
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
     --help, -h                                         show this and exit
 
@@ -265,6 +268,7 @@ parse_args() {
       --email) need_value "$1" "${2:-}"; ORCHARD_ACME_EMAIL=$2; shift 2 ;;
       --tunnel-token) need_value "$1" "${2:-}"; ORCHARD_TUNNEL_TOKEN=$2; shift 2 ;;
       --updates) need_value "$1" "${2:-}"; ORCHARD_UPDATE_POLICY=$2; shift 2 ;;
+      --metrics) need_value "$1" "${2:-}"; ORCHARD_METRICS=$2; shift 2 ;;
       --chart) need_value "$1" "${2:-}"; CHART_REF=$2; shift 2 ;;
       --chart-version) need_value "$1" "${2:-}"; ORCHARD_VERSION=$2; shift 2 ;;
       --image-tag) need_value "$1" "${2:-}"; IMAGE_TAG=$2; shift 2 ;;
@@ -770,7 +774,14 @@ size_workloads() {
   if [ "$REGISTRY_SIZE_GB" -gt 50 ]; then REGISTRY_SIZE_GB=50; fi
   if [ "$REGISTRY_SIZE_GB" -lt 5 ]; then REGISTRY_SIZE_GB=5; fi
 
-  info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G"
+  # The metrics stack (VictoriaMetrics + vmagent + exporters) is the largest
+  # idle cost in the chart. On a small box that budget is better spent on
+  # actually running apps, so default it off and let --metrics force it on.
+  if [ -z "$ORCHARD_METRICS" ]; then
+    if [ "$MEM_MB" -ge 7500 ]; then ORCHARD_METRICS=true; else ORCHARD_METRICS=false; fi
+  fi
+
+  info "concurrent builds: $MAX_BUILDS, build cache: ${BUILD_CACHE_GB}G, registry: ${REGISTRY_SIZE_GB}G, metrics: $ORCHARD_METRICS"
 }
 
 write_values() {
@@ -876,7 +887,7 @@ builders:
     storageClass: local-path
 
 metrics:
-  enabled: true
+  enabled: $ORCHARD_METRICS
   victoriametrics:
     retention: 7d
     storage:

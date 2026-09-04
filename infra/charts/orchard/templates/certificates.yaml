@@ -9,7 +9,7 @@
 {{- with .Values.certificates.wildcards.app }}
 {{- if .enabled }}
 {{- $domain := .domain | default $.Values.gateway.http.appDomain -}}
-{{- $secret := .secretName | default $.Values.gateway.http.appWildcardSecretName -}}
+{{- $secret := .secretName | default (include "orchard.appWildcardSecret" $) -}}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

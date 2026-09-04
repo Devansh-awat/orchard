@@ -26,6 +26,10 @@ datadog:
   # blocking is enabled per-rule from the Datadog UI via Remote Config.
   appsec: true
 
+# Requests are sized for what these pods actually consume at rest, not for
+# their peak — that's what limits and the HPAs below are for. Requests are the
+# number the scheduler reserves, so inflating them wastes real capacity on
+# small clusters.
 frontend:
   enabled: true
   replicas: 2
@@ -35,8 +39,16 @@ frontend:
   service:
     port: 3000
   resources:
-    requests: { cpu: "100m", memory: "256Mi" }
+    requests: { cpu: "50m", memory: "128Mi" }
     limits: { cpu: "1", memory: "1Gi" }
+  # Requires metrics-server. When enabled, `replicas` above is ignored and
+  # omitted from the Deployment so upgrades don't fight the autoscaler.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: null
   env: []
 
 server:
@@ -48,8 +60,14 @@ server:
   service:
     port: 3001
   resources:
-    requests: { cpu: "200m", memory: "512Mi" }
+    requests: { cpu: "100m", memory: "384Mi" }
     limits: { cpu: "2", memory: "2Gi" }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
   # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret)
   env: []
   envFrom: []
@@ -59,8 +77,15 @@ server:
     enabled: false
     replicas: 2
     resources:
-      requests: { cpu: "200m", memory: "512Mi" }
+      requests: { cpu: "100m", memory: "384Mi" }
       limits: { cpu: "2", memory: "2Gi" }
+    # Builds are the burstiest thing Orchard runs, so workers get the widest
+    # range and a lower target: queue latency matters more than pod count.
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 60
 
 # Signup policy for the platform: open | invite_only | closed.
 signupMode: invite_only
@@ -73,7 +98,42 @@ tenant:
   certClusterIssuer: ""
   # Comma-separated domain=tlsSecretName pairs for wildcard certs you manage,
   # e.g. ".apps.example.com=wildcard-apps-example-com-tls"
+  #
+  # Leave empty and the chart derives a single wildcard from
+  # gateway.http.appDomain + gateway.http.appWildcardSecretName, which is what
+  # generated app URLs (main-forge-abc123.<appDomain>) are built from.
   wildcardDomains: ""
+
+# Cilium-specific features: per-tenant CiliumNetworkPolicy and the
+# CiliumEnvoyConfig that enforces basic auth on an ingress. Only enable on
+# clusters running Cilium as the CNI — on k3s/Traefik the CRDs don't exist and
+# the server falls back to plain NetworkPolicy.
+#
+# Enabling grants the cilium.io rbac and sets CILIUM_ENABLED=true. Left off,
+# the server probes the cluster instead of assuming, and picks the enforcement
+# point for basic auth from the answer: the Envoy filter where Cilium is
+# available, Orchard's own protection proxy where it isn't. Basic auth works
+# either way. See "Basic auth on an ingress" in docs/self-hosting.md.
+cilium:
+  enabled: false
+
+# Which protection modes an ingress can be put into.
+#
+# Basic auth and shared-password protection are always available: with Cilium
+# basic auth is an Envoy filter bound to the Service, without it the same
+# credentials are enforced by Orchard's own protection proxy, which needs
+# nothing from the CNI.
+#
+# "Sign in with Orchard" is the odd one out. It bounces visitors of a tenant
+# host to the control plane's login and requires project membership, so it only
+# makes sense when the people you are gating already have Orchard accounts, and
+# it needs FRONTEND_URL to be reachable from wherever the app is served. Off by
+# default for that reason.
+#
+# The flag gates picking the mode, not enforcing it: turning it off later does
+# not drop the wall on hosts that already use it.
+protection:
+  orchardLogin: false
 
 # Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
 # so live updates reach SSE clients on every server replica, and is available
@@ -104,8 +164,14 @@ mcp:
   service:
     port: 3100
   resources:
-    requests: { cpu: "100m", memory: "256Mi" }
+    requests: { cpu: "50m", memory: "128Mi" }
     limits: { cpu: "1", memory: "1Gi" }
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: null
   # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret).
   env: []
   envFrom: []
@@ -208,15 +274,36 @@ builders:
     pods: "10"
 
 # Orchard-metrics stack (VictoriaMetrics single-node + vmagent + exporters).
+# This is the largest idle cost in the chart. It powers the deployment metrics
+# graphs and the usage pages; disable it on small clusters and those views go
+# empty while everything else keeps working.
 metrics:
   enabled: true
   namespace: orchard-metrics
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.106.1
     retention: 30d
+    # VictoriaMetrics sizes its cache as a share of the memory *limit*, so it
+    # grows to fill whatever it's given. Lower the limit to lower idle RSS.
+    memoryAllowedPercent: 60
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "1", memory: "1Gi" }
     storage:
       size: 5Gi
       storageClass: longhorn
+  vmagent:
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  kubeStateMetrics:
+    resources:
+      requests: { cpu: "20m", memory: "64Mi" }
+      limits: { cpu: "200m", memory: "256Mi" }
+  nodeExporter:
+    resources:
+      requests: { cpu: "20m", memory: "32Mi" }
+      limits: { cpu: "200m", memory: "128Mi" }
 
 # Shared L7 Gateway API gateway for app HTTP/HTTPS traffic.
 # Replaces the raw manifest that used to live at k8s/gateway-api/10-http-gateway.yaml.
@@ -237,7 +324,8 @@ gateway:
     # Secret holding the wildcard cert for *.{appDomain}. Either:
     #   - issued by certificates.wildcards.app below (chart-managed), or
     #   - pre-existing in {namespace} (set certificates.wildcards.app.enabled: false).
-    appWildcardSecretName: wildcard-a-lfdl-ink-tls
+    # Empty derives `wildcard-<appDomain with dots as dashes>-tls`.
+    appWildcardSecretName: ""
   # L4 TCP gateway for managed-database traffic. Listeners are appended at
   # runtime by the server (KubernetesService.ensureDbGatewayListener); the
   # placeholder listener below only exists so the Gateway has a non-empty

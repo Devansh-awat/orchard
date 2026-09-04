@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "orchard.labels" (dict "root" . "name" "frontend") | nindent 4 }}
 spec:
+  {{- if not .Values.frontend.autoscaling.enabled }}
   replicas: {{ .Values.frontend.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: frontend
@@ -35,6 +37,9 @@ spec:
             {{- end }}
             {{- if .Values.sandbox.enabled }}
             - { name: PUBLIC_SANDBOX_ENABLED, value: "true" }
+            {{- end }}
+            {{- with (include "orchard.appDomain" .) }}
+            - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
             {{- with .Values.frontend.env }}
             {{- toYaml . | nindent 12 }}

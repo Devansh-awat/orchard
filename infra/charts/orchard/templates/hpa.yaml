@@ -1,0 +1,95 @@
+{{- /*
+Horizontal autoscaling for the stateless tiers. Requires metrics-server in the
+cluster (k3s ships it by default).
+
+Scaling out is deliberately quicker than scaling in: a 60s stabilisation window
+on the way up so a traffic spike is absorbed promptly, and 5 minutes on the way
+down so a brief lull doesn't drop capacity a burst is about to need. Replica
+counts are omitted from the Deployments these target, so a helm upgrade cannot
+stomp on whatever the HPA has settled at.
+*/}}
+{{- range $svc := list "server" "frontend" "mcp" }}
+{{- $cfg := index $.Values $svc }}
+{{- if and $cfg.enabled $cfg.autoscaling $cfg.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $svc }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" $svc) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $svc }}
+  minReplicas: {{ $cfg.autoscaling.minReplicas }}
+  maxReplicas: {{ $cfg.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cfg.autoscaling.targetCPUUtilizationPercentage }}
+    {{- with $cfg.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ . }}
+    {{- end }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}
+{{- end }}
+{{- if and .Values.server.enabled .Values.server.workers.enabled .Values.server.workers.autoscaling .Values.server.workers.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: server-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: server-worker
+  minReplicas: {{ .Values.server.workers.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.server.workers.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.server.workers.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}

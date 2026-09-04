@@ -10,6 +10,41 @@
 {{ printf "%s/%s/%s:%s" $root.Values.image.registry $resolvedRepo $name $resolvedTag }}
 {{- end -}}
 
+{{/*
+Wildcard suffix=tlsSecret pairs the server builds generated app URLs from.
+Explicit tenant.wildcardDomains wins; otherwise derive a single entry from the
+app domain the gateway already terminates TLS for, so operators configure the
+domain once instead of keeping four values in sync.
+*/}}
+{{- define "orchard.appWildcardSecret" -}}
+{{- if .Values.gateway.http.appWildcardSecretName -}}
+{{- .Values.gateway.http.appWildcardSecretName -}}
+{{- else if .Values.gateway.http.appDomain -}}
+{{- printf "wildcard-%s-tls" (regexReplaceAll "[^a-zA-Z0-9]+" .Values.gateway.http.appDomain "-") -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "orchard.wildcardDomains" -}}
+{{- if .Values.tenant.wildcardDomains -}}
+{{ .Values.tenant.wildcardDomains }}
+{{- else if .Values.gateway.http.appDomain -}}
+{{ printf ".%s=%s" .Values.gateway.http.appDomain (include "orchard.appWildcardSecret" .) }}
+{{- end -}}
+{{- end -}}
+
+{{/* The app domain the server generates hostnames under. */}}
+{{- define "orchard.appDomain" -}}
+{{- .Values.gateway.http.appDomain | default "" -}}
+{{- end -}}
+
+{{/* True when server.env already defines `key`, so the chart shouldn't. */}}
+{{- define "orchard.serverEnvHas" -}}
+{{- $key := .key -}}
+{{- range .root.Values.server.env -}}
+{{- if eq .name $key }}found{{ end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "orchard.labels" -}}
 app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
@@ -60,6 +95,16 @@ imagePullSecrets:
             {{- end }}
             {{- if and .Values.builders.enabled .Values.builders.dedicatedNode.enabled }}
             - { name: BUILDER_DEDICATED_NODE, value: "true" }
+            {{- end }}
+            {{- if .Values.protection.orchardLogin }}
+            - { name: PROTECTION_ORCHARD_LOGIN, value: "true" }
+            {{- end }}
+            {{- if .Values.cilium.enabled }}
+            # Only set when the operator opts in. Left unset the server probes
+            # the cluster for the cilium.io group plus create permission on
+            # ciliumenvoyconfigs, so an install that already runs Cilium keeps
+            # its basic-auth and per-tenant policy without touching values.
+            - { name: CILIUM_ENABLED, value: "true" }
             {{- end }}
             {{- if and .Values.builders.enabled .Values.builders.localCache.enabled }}
             - { name: BUILDKIT_LOCAL_CACHE_ENABLED, value: "true" }
@@ -167,8 +212,20 @@ imagePullSecrets:
             {{- if .certClusterIssuer }}
             - { name: CERT_CLUSTER_ISSUER, value: {{ .certClusterIssuer | quote }} }
             {{- end }}
-            {{- if .wildcardDomains }}
-            - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ .wildcardDomains | quote }} }
+            {{- end }}
+            {{- with (include "orchard.wildcardDomains" .) }}
+            - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ . | quote }} }
+            {{- end }}
+            {{- /*
+              APP_DOMAIN is only injected when the operator hasn't supplied it
+              themselves. A container `env` entry outranks every `envFrom`
+              source, so emitting it unconditionally would silently shadow an
+              APP_DOMAIN held in a Secret — which is how the kubeops install
+              provides it.
+            */}}
+            {{- if not (or (include "orchard.serverEnvHas" (dict "root" . "key" "APP_DOMAIN")) .Values.server.envFrom) }}
+            {{- with (include "orchard.appDomain" .) }}
+            - { name: APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
             {{- end }}
             {{- with .Values.server.env }}

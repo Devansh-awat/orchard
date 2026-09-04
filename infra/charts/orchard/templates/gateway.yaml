@@ -30,7 +30,7 @@ spec:
         certificateRefs:
           - kind: Secret
             group: ""
-            name: {{ .Values.gateway.http.appWildcardSecretName }}
+            name: {{ include "orchard.appWildcardSecret" . }}
       allowedRoutes:
         namespaces:
           from: All

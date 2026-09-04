@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 4 }}
 spec:
+  {{- if not .Values.server.workers.autoscaling.enabled }}
   replicas: {{ .Values.server.workers.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: server-worker
@@ -42,7 +44,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.server.workers.resources | nindent 12 }}
-{{- if gt (int .Values.server.workers.replicas) 1 }}
+{{- $workerFloor := ternary (int .Values.server.workers.autoscaling.minReplicas) (int .Values.server.workers.replicas) .Values.server.workers.autoscaling.enabled }}
+{{- if gt $workerFloor 1 }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

@@ -99,6 +99,9 @@ Every key the chart honors, with defaults from `values.yaml`.
 |---|---|---|
 | `namespace` | `orchard` | Namespace the app components install into. |
 | `createNamespace` | `true` | Render a `Namespace` object for `.namespace`. Set `false` if you manage the namespace yourself or pass `--create-namespace` to helm. |
+| `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. |
+| `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
+| `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
 
 ### Image defaults (`image.*`)
 
@@ -114,24 +117,31 @@ Every key the chart honors, with defaults from `values.yaml`.
 | Key | Default | Description |
 |---|---|---|
 | `frontend.enabled` | `true` | Deploy the SvelteKit frontend. |
-| `frontend.replicas` | `1` | Replica count. |
+| `frontend.replicas` | `2` | Replica count. Ignored when `frontend.autoscaling.enabled`. |
 | `frontend.image.name` | `frontend` | Image name suffix. |
 | `frontend.image.tag` | `""` | Tag override; empty falls back to `Chart.AppVersion`. Use `sha-<commit>` to pin. |
 | `frontend.service.port` | `3000` | ClusterIP Service port. |
-| `frontend.resources` | requests `100m/256Mi`, limits `1/1Gi` | Standard k8s resource block. |
-| `frontend.env` | `[]` | Extra env vars (k8s env list). |
+| `frontend.resources` | requests `50m/128Mi`, limits `1/512Mi` | Standard k8s resource block. |
+| `frontend.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment so upgrades don't fight the HPA. |
+| `frontend.autoscaling.minReplicas` / `maxReplicas` | `2` / `6` | Bounds. |
+| `frontend.autoscaling.targetCPUUtilizationPercentage` | `75` | Scale-out target. |
+| `frontend.env` | `[]` | Extra env vars (k8s env list). `PUBLIC_APP_DOMAIN` is injected from `gateway.http.appDomain`. |
 
 ### Server (`server.*`)
 
 | Key | Default | Description |
 |---|---|---|
 | `server.enabled` | `true` | Deploy the NestJS server. |
-| `server.replicas` | `1` | Replica count. |
+| `server.replicas` | `2` | Replica count. Ignored when `server.autoscaling.enabled`. |
 | `server.image.name` | `server` | Image name suffix. |
 | `server.image.tag` | `""` | Tag override; empty → `Chart.AppVersion`. |
 | `server.service.port` | `3001` | ClusterIP Service port. |
-| `server.resources` | requests `200m/512Mi`, limits `2/2Gi` | Resource block. |
-| `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. |
+| `server.resources` | requests `100m/384Mi`, limits `2/2Gi` | Resource block. |
+| `server.autoscaling.enabled` | `false` | HPA on CPU. Needs metrics-server. When on, `replicas` is omitted from the Deployment. |
+| `server.autoscaling.minReplicas` / `maxReplicas` | `2` / `8` | Bounds. |
+| `server.autoscaling.targetCPUUtilizationPercentage` | `70` | Scale-out target. |
+| `server.workers.autoscaling.*` | `false`, `1`–`10`, `60%` | Same for the worker Deployment. Builds are the burstiest tier. |
+| `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. `APP_DOMAIN` and `PLATFORM_WILDCARD_DOMAINS` are derived from `gateway.http.appDomain`; list them here to override. |
 | `server.envFrom` | `[]` | `envFrom` list (configMapRef / secretRef). |
 
 ### Postgres / CloudNativePG (`postgres.*`)
@@ -190,6 +200,13 @@ The chart also creates a ClusterRoleBinding granting the `default` ServiceAccoun
 | `metrics.victoriametrics.retention` | `30d` | `-retentionPeriod` flag. |
 | `metrics.victoriametrics.storage.size` | `5Gi` | StatefulSet PVC size. |
 | `metrics.victoriametrics.storage.storageClass` | `longhorn` | StorageClass for the VM data PVC. |
+| `metrics.victoriametrics.memoryAllowedPercent` | `60` | `-memory.allowedPercent`. VM sizes its cache off the memory *limit*, so it grows to fill whatever it is given — lower this and the limit together to shrink idle RSS. |
+| `metrics.victoriametrics.resources` | requests `100m/256Mi`, limits `1/1Gi` | Resource block. |
+| `metrics.vmagent.resources` | requests `50m/128Mi`, limits `500m/512Mi` | Resource block. |
+| `metrics.kubeStateMetrics.resources` | requests `20m/64Mi`, limits `200m/256Mi` | Resource block. |
+| `metrics.nodeExporter.resources` | requests `20m/32Mi`, limits `200m/128Mi` | Resource block. |
+
+This stack is the largest idle cost in the chart. `metrics.enabled: false` empties the deployment metrics graphs and usage pages and leaves everything else working.
 
 `vmagent`, `kube-state-metrics`, and `node-exporter` versions are pinned inside the chart templates (not exposed). Edit the chart if you need to bump them.
 
@@ -205,7 +222,7 @@ Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used
 | `gateway.http.enabled` | `true` | Render the L7 HTTP/HTTPS Gateway. |
 | `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name — keep in sync. |
 | `gateway.http.appDomain` | `a.lfdl.ink` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. |
-| `gateway.http.appWildcardSecretName` | `wildcard-a-lfdl-ink-tls` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Defaults align with the chart-managed `Certificate`. |
+| `gateway.http.appWildcardSecretName` | `""` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Empty derives `wildcard-<appDomain with dots as dashes>-tls`, which the chart-managed `Certificate`, the Gateway listener and `PLATFORM_WILDCARD_DOMAINS` all agree on. |
 | `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
 | `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |
 | `gateway.referenceGrants.enabled` | `false` | Render `ReferenceGrant`s. Only needed if Routes reference cross-namespace *backend Services* — not required for parentRefs (covered by `allowedRoutes.namespaces.from: All`). |

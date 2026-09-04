@@ -1,4 +1,116 @@
 {{- if .Values.server.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchard-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+---
+# Orchard's control plane is a tenant-workload orchestrator: it creates and
+# reconciles Deployments, Services, Ingresses, PVCs, NetworkPolicies and CNPG
+# Clusters inside namespaces it provisions at runtime. Those namespaces don't
+# exist at install time, so these write grants can't be namespaced Roles and
+# have to be cluster-scoped.
+#
+# Read/write on secrets and configmaps is deliberately NOT granted cluster-wide.
+# Those stay bound per-namespace: the builders namespace and the cert-manager
+# source namespace (both in builders.yaml), the sandbox namespace
+# (sandboxes.yaml), and per-tenant namespaces bootstrapped by the server at
+# namespace-create time.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-server
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+rules:
+  # Tenant namespace lifecycle. `patch` retags namespaces when a project moves
+  # between orgs; `delete` reaps them when a project or environment is deleted.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+  # Web terminal, plus the CNPG and sandbox maintenance shells.
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/portforward", "pods/attach"]
+    verbs: ["get", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Per-app PodDisruptionBudgets: written by the server, watched by the
+  # workloads mirror shard.
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims", "limitranges", "resourcequotas"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["endpoints", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters", "backups", "scheduledbackups"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The node informer mirrors labels/taints/capacity into the `nodes` table;
+  # the nodes admin UI cordons and labels through patch.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+{{- if .Values.cilium.enabled }}
+  # Per-tenant L3/L7 policy and the basic-auth proxy in front of protected
+  # deployments are Cilium CRDs. Only needed when Cilium is the CNI.
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumnetworkpolicies", "ciliumenvoyconfigs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+{{- end }}
+  # The server bootstraps a namespaced secrets/configmaps Role in each tenant
+  # namespace at create time (K8sNamespaceService.bootstrapTenantSecretsRbac)
+  # and a per-deployment Role for Tailscale state secrets.
+  #
+  # RBAC forbids granting permissions you don't already hold unless you have
+  # `escalate`. Rather than hand the control plane cluster-wide secrets write —
+  # the exact thing this split exists to avoid — `escalate`/`bind` let it create
+  # those narrow namespaced Roles and nothing broader.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "escalate", "bind"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-server
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-server
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

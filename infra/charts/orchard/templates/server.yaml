@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
 spec:
+  {{- if not .Values.server.autoscaling.enabled }}
   replicas: {{ .Values.server.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: server

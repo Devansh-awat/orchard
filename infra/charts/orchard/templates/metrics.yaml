@@ -55,7 +55,7 @@ spec:
             - "-search.maxSeries=300000"
             - "-search.maxPointsPerTimeseries=30000"
             - "-search.latencyOffset=15s"
-            - "-memory.allowedPercent=80"
+            - "-memory.allowedPercent={{ .Values.metrics.victoriametrics.memoryAllowedPercent }}"
             - "-loggerLevel=INFO"
           ports:
             - { name: http, containerPort: 8428 }
@@ -70,8 +70,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
           resources:
-            requests: { cpu: "200m", memory: "512Mi" }
-            limits:   { cpu: "1",    memory: "1Gi" }
+            {{- toYaml .Values.metrics.victoriametrics.resources | nindent 12 }}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -238,8 +237,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
           resources:
-            requests: { cpu: "50m",  memory: "128Mi" }
-            limits:   { cpu: "200m", memory: "256Mi" }
+            {{- toYaml .Values.metrics.kubeStateMetrics.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65534
@@ -302,8 +300,7 @@ spec:
             - { name: sys,    mountPath: /host/sys,  readOnly: true }
             - { name: rootfs, mountPath: /host/root, readOnly: true, mountPropagation: HostToContainer }
           resources:
-            requests: { cpu: "50m",  memory: "64Mi" }
-            limits:   { cpu: "200m", memory: "128Mi" }
+            {{- toYaml .Values.metrics.nodeExporter.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65534
@@ -500,8 +497,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
           resources:
-            requests: { cpu: "100m", memory: "256Mi" }
-            limits:   { cpu: "500m", memory: "512Mi" }
+            {{- toYaml .Values.metrics.vmagent.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000

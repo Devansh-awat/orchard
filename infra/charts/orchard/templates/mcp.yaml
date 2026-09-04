@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "orchard.labels" (dict "root" . "name" "mcp") | nindent 4 }}
 spec:
+  {{- if not .Values.mcp.autoscaling.enabled }}
   replicas: {{ .Values.mcp.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: mcp

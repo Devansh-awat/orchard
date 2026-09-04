@@ -3,7 +3,8 @@
        minAvailable on a single replica would block all evictions. */}}
 {{- range $svc := list "server" "frontend" "mcp" }}
 {{- $cfg := index $.Values $svc }}
-{{- if and $cfg.enabled (gt (int $cfg.replicas) 1) }}
+{{- $floor := ternary (int $cfg.autoscaling.minReplicas) (int $cfg.replicas) $cfg.autoscaling.enabled }}
+{{- if and $cfg.enabled (gt $floor 1) }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
