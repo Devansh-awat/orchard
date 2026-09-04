@@ -1,13 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { randomUUID } from 'crypto';
 import { PassThrough } from 'stream';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SANDBOX_BOOTSTRAP_SCRIPT } from './sandbox-bootstrap';
 
 const CRD_GROUP = 'agents.x-k8s.io';
 const CRD_VERSION = 'v1beta1';
 const CRD_PLURAL = 'sandboxes';
 const MANAGED_BY = 'orchard-sandbox';
+const INSTANCE_LABEL = 'orchard.my/instance';
+const INSTANCE_SETTING_KEY = 'sandbox_instance_id';
 
 export interface SandboxSpecInput {
   id: string;
@@ -28,6 +32,11 @@ export interface SandboxSecretInput {
   openaiToken?: string | null;
   setupScript?: string | null;
   mcpToken?: string | null;
+}
+
+export interface SandboxCrSummary {
+  name: string;
+  instance: string | null;
 }
 
 export interface SandboxCrStatus {
@@ -68,7 +77,31 @@ export function sandboxHomeMode(): 'block' | 'filesystem' {
 export class SandboxK8sService {
   private readonly logger = new Logger(SandboxK8sService.name);
 
-  constructor(private readonly kubernetes: KubernetesService) {}
+  private instanceIdCache: string | null = null;
+
+  constructor(
+    private readonly kubernetes: KubernetesService,
+    private readonly settings: InstanceSettingsService,
+  ) {}
+
+  // Every sandbox resource carries the id of the install that made it. Several
+  // Orchard servers (a laptop pointed at the cluster, a second install) can
+  // share one sandbox namespace, and each one only ever sees its own database,
+  // so without this an unknown podName looks like garbage to sweep up when it
+  // is really another server's live sandbox.
+  async instanceId(): Promise<string> {
+    if (this.instanceIdCache) return this.instanceIdCache;
+    const existing = await this.settings.get(INSTANCE_SETTING_KEY);
+    if (existing) {
+      this.instanceIdCache = existing;
+      return existing;
+    }
+    await this.settings.createIfAbsent(INSTANCE_SETTING_KEY, randomUUID());
+    const value = await this.settings.get(INSTANCE_SETTING_KEY);
+    if (!value) throw new Error('could not resolve the sandbox instance id');
+    this.instanceIdCache = value;
+    return value;
+  }
 
   get namespace(): string {
     return process.env.SANDBOX_NAMESPACE || 'orchard-sandboxes';
@@ -216,6 +249,7 @@ export class SandboxK8sService {
 
   async ensureAuthSecret(spec: SandboxSpecInput, input: SandboxSecretInput): Promise<void> {
     const core = this.core();
+    const instanceId = await this.instanceId();
     const name = this.secretName(spec.podName);
     const stringData: Record<string, string> = {
       authorized_keys: `${input.authorizedKeys.join('\n')}\n`,
@@ -253,7 +287,7 @@ export class SandboxK8sService {
       metadata: {
         name,
         namespace: this.namespace,
-        labels: this.labels(spec),
+        labels: this.labels(spec, instanceId),
       },
       type: 'Opaque',
       stringData,
@@ -267,16 +301,20 @@ export class SandboxK8sService {
     }
   }
 
-  private labels(spec: Pick<SandboxSpecInput, 'id' | 'userId'>): Record<string, string> {
+  private labels(
+    spec: Pick<SandboxSpecInput, 'id' | 'userId'>,
+    instanceId: string,
+  ): Record<string, string> {
     return {
       'app.kubernetes.io/name': 'sandbox',
       'app.kubernetes.io/managed-by': MANAGED_BY,
       'orchard.my/sandbox-id': spec.id,
       'orchard.my/user-id': spec.userId,
+      [INSTANCE_LABEL]: instanceId,
     };
   }
 
-  private buildCr(spec: SandboxSpecInput): Record<string, any> {
+  private buildCr(spec: SandboxSpecInput, instanceId: string): Record<string, any> {
     const homeMode = sandboxHomeMode();
     const runtimeClass = process.env.SANDBOX_RUNTIME_CLASS || '';
     const container: Record<string, any> = {
@@ -335,13 +373,13 @@ export class SandboxK8sService {
       metadata: {
         name: spec.podName,
         namespace: this.namespace,
-        labels: this.labels(spec),
+        labels: this.labels(spec, instanceId),
       },
       spec: {
         operatingMode: 'Running',
         service: true,
         podTemplate: {
-          metadata: { labels: this.labels(spec) },
+          metadata: { labels: this.labels(spec, instanceId) },
           spec: {
             ...(runtimeClass ? { runtimeClassName: runtimeClass } : {}),
             restartPolicy: 'Never',
@@ -377,7 +415,7 @@ export class SandboxK8sService {
         },
         volumeClaimTemplates: [
           {
-            metadata: { name: 'home', labels: this.labels(spec) },
+            metadata: { name: 'home', labels: this.labels(spec, instanceId) },
             spec: {
               accessModes: ['ReadWriteOnce'],
               volumeMode: sandboxHomeMode() === 'block' ? 'Block' : 'Filesystem',
@@ -395,9 +433,10 @@ export class SandboxK8sService {
   async createSandbox(spec: SandboxSpecInput, secret: SandboxSecretInput): Promise<void> {
     await this.ensureNamespace();
     await this.ensureAuthSecret(spec, secret);
+    const instanceId = await this.instanceId();
     try {
       await this.custom().createNamespacedCustomObject(
-        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, this.buildCr(spec),
+        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, this.buildCr(spec, instanceId),
       );
     } catch (e: any) {
       if (e.response?.statusCode !== 409) throw e;
@@ -415,12 +454,16 @@ export class SandboxK8sService {
 
   // A sandbox created before a platform change keeps the pod template it was
   // born with, so new secret volume items and env never appear. Re-render the
-  // template from current code before resuming.
+  // template from current code before resuming. The labels go with it so a
+  // sandbox from before instance ids gets adopted by the install that runs it.
   async refreshSpec(spec: SandboxSpecInput): Promise<void> {
-    const desired = this.buildCr(spec);
+    const desired = this.buildCr(spec, await this.instanceId());
     await this.custom().patchNamespacedCustomObject(
       CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, spec.podName,
-      { spec: { podTemplate: desired.spec.podTemplate } },
+      {
+        metadata: { labels: desired.metadata.labels },
+        spec: { podTemplate: desired.spec.podTemplate },
+      },
       undefined, undefined, undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } },
     );
@@ -495,13 +538,16 @@ export class SandboxK8sService {
     }
   }
 
-  async listCrNames(): Promise<string[]> {
+  async listCrs(): Promise<SandboxCrSummary[]> {
     const res: any = await this.custom().listNamespacedCustomObject(
       CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL,
     );
     return (res.body.items || [])
-      .map((i: any) => i.metadata?.name)
-      .filter(Boolean);
+      .filter((i: any) => i.metadata?.name)
+      .map((i: any) => ({
+        name: String(i.metadata.name),
+        instance: i.metadata.labels?.[INSTANCE_LABEL] ?? null,
+      }));
   }
 
   async resolvePodIp(sandboxId: string, podName: string): Promise<string | null> {

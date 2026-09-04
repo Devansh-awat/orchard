@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
-import { SandboxK8sService, k8sErrorMessage } from './sandbox-k8s.service';
+import { SandboxK8sService, SandboxSpecInput, k8sErrorMessage } from './sandbox-k8s.service';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -38,6 +38,20 @@ type SandboxWithIdentity = Sandbox & {
   sshIdentity: { id: string; name: string } | null;
   user?: { id: string; username: string | null; email: string | null } | null;
 };
+
+function specOf(row: SandboxWithIdentity): SandboxSpecInput {
+  return {
+    id: row.id,
+    podName: row.podName,
+    userId: row.userId,
+    repoUrl: row.repoUrl,
+    image: row.image,
+    cpuLimit: row.cpuLimit,
+    memoryLimit: row.memoryLimit,
+    diskSize: row.diskSize,
+    setupScript: row.setupScript,
+  };
+}
 
 export function defaultMaxSandboxes(): number {
   const parsed = Number(process.env.SANDBOX_MAX_PER_USER);
@@ -127,30 +141,33 @@ export class SandboxesService {
   // script forever. Rewrite the Secret on every start to pick those up.
   private async refreshSecret(row: SandboxWithIdentity): Promise<void> {
     try {
-      const identity = row.sshIdentityId
-        ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
-        : null;
-      const secret = await this.buildSecretInput(
-        row.userId,
-        identity ? [identity.publicKey] : [],
-        row.setupScript,
-      );
-      const spec = {
-        id: row.id,
-        podName: row.podName,
-        userId: row.userId,
-        repoUrl: row.repoUrl,
-        image: row.image,
-        cpuLimit: row.cpuLimit,
-        memoryLimit: row.memoryLimit,
-        diskSize: row.diskSize,
-        setupScript: row.setupScript,
-      };
-      await this.k8s.ensureAuthSecret(spec, secret);
+      const spec = specOf(row);
+      await this.k8s.ensureAuthSecret(spec, await this.secretFor(row));
       await this.k8s.refreshSpec(spec);
     } catch (e: any) {
       this.logger.warn(`secret refresh failed for sandbox ${row.id}: ${e?.message}`);
     }
+  }
+
+  private async secretFor(row: SandboxWithIdentity) {
+    const identity = row.sshIdentityId
+      ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
+      : null;
+    return this.buildSecretInput(
+      row.userId,
+      identity ? [identity.publicKey] : [],
+      row.setupScript,
+    );
+  }
+
+  // The custom resource can go missing while the row survives: a cluster
+  // rebuild, a namespace wipe, an operator that pruned it. Patching a resource
+  // that is not there just throws a raw 404 at whoever pressed start, so make
+  // the sandbox again instead. Its home volume died with the resource, so this
+  // comes back empty and re-clones the repo.
+  private async recreate(row: SandboxWithIdentity): Promise<void> {
+    this.logger.warn(`sandbox ${row.id} lost its cluster resource; recreating`);
+    await this.k8s.createSandbox(specOf(row), await this.secretFor(row));
   }
 
   // Org admins can see and stop a member's sandbox, but never reach inside it:
@@ -490,8 +507,13 @@ export class SandboxesService {
     const row = await this.getOwned(id, userId);
     if (row.status === 'running' || row.status === 'starting') return toSandboxDto(row);
     if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    await this.refreshSecret(row);
-    await this.k8s.resume(row.podName);
+    const cr = await this.k8s.getCrStatus(row.podName);
+    if (cr.exists) {
+      await this.refreshSecret(row);
+      await this.k8s.resume(row.podName);
+    } else {
+      await this.recreate(row);
+    }
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
       data: { status: 'starting', statusMessage: null, lastActiveAt: new Date() },
@@ -505,6 +527,7 @@ export class SandboxesService {
         targetType: 'sandbox',
         targetId: row.id,
         targetLabel: row.name,
+        metadata: { recreated: !cr.exists },
       })
       .catch(() => {});
     return toSandboxDto(updated);
@@ -514,10 +537,13 @@ export class SandboxesService {
     const row = await this.getOwned(id, userId);
     if (row.status === 'stopped' || row.status === 'stopping') return toSandboxDto(row);
     if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    await this.k8s.suspend(row.podName);
+    // Nothing to suspend if the resource is already gone, and the row would sit
+    // in stopping until the reaper called it an error. It is stopped.
+    const cr = await this.k8s.getCrStatus(row.podName);
+    if (cr.exists) await this.k8s.suspend(row.podName);
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status: 'stopping' },
+      data: { status: cr.exists ? 'stopping' : 'stopped' },
       include: { sshIdentity: { select: { id: true, name: true } } },
     });
     this.audit

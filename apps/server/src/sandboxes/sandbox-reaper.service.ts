@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { SandboxK8sService } from './sandbox-k8s.service';
+import { SandboxCrSummary, SandboxK8sService } from './sandbox-k8s.service';
 
 const STUCK_TRANSITION_MS = 10 * 60 * 1000;
 
@@ -41,7 +41,8 @@ export class SandboxReaperService {
     const rows = await this.prisma.sandbox.findMany({
       where: { status: { in: ['creating', 'starting', 'running', 'stopping'] } },
     });
-    const crNames = new Set(await this.k8s.listCrNames());
+    const crs = await this.k8s.listCrs();
+    const crNames = new Set(crs.map((cr) => cr.name));
     for (const row of rows) {
       try {
         if (!crNames.has(row.podName)) {
@@ -80,17 +81,22 @@ export class SandboxReaperService {
         this.logger.warn(`status sync failed for sandbox ${row.id}: ${e?.message}`);
       }
     }
-    await this.deleteOrphans(crNames);
+    await this.deleteOrphans(crs);
   }
 
-  private async deleteOrphans(crNames: Set<string>): Promise<void> {
-    if (!crNames.size) return;
+  // Only ever sweeps resources this install created. A sandbox belonging to
+  // another Orchard server on the same cluster is missing from our database by
+  // definition, and deleting it takes its home volume with it.
+  private async deleteOrphans(crs: SandboxCrSummary[]): Promise<void> {
+    const instance = await this.k8s.instanceId();
+    const ours = crs.filter((cr) => cr.instance === instance).map((cr) => cr.name);
+    if (!ours.length) return;
     const known = await this.prisma.sandbox.findMany({
-      where: { podName: { in: [...crNames] } },
+      where: { podName: { in: ours } },
       select: { podName: true },
     });
     const knownNames = new Set(known.map((r) => r.podName));
-    for (const name of crNames) {
+    for (const name of ours) {
       if (knownNames.has(name)) continue;
       this.logger.warn(`deleting orphan sandbox resource ${name}`);
       const idMatch = name.match(/^sbx-(.+)$/);
