@@ -188,6 +188,11 @@ export class ImageBuilderService {
   //     exfiltrating `/root/.docker/config.json`.
   private readonly builderRuntimeClass = (process.env.BUILDER_RUNTIME_CLASS || '').trim() || undefined;
 
+  // Super builds execute on Depot's machines; the in-cluster pod only clones,
+  // tars and uploads, so it never runs repo code and does not need a VM per
+  // build. Falls back to BUILDER_RUNTIME_CLASS when unset.
+  private readonly depotRuntimeClass = (process.env.BUILDER_DEPOT_RUNTIME_CLASS || '').trim() || undefined;
+
   private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
 
   private readonly pusherImage =
@@ -1750,6 +1755,10 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
       },
     } : null;
 
+    const podRuntimeClass = buildWithDepot
+      ? (this.depotRuntimeClass || this.builderRuntimeClass)
+      : this.builderRuntimeClass;
+
     // Final container layout:
     //   - Depot: depot container as main, no buildkit/pusher.
     //   - sidecarPush off (default): buildkit as main, classic behaviour.
@@ -1856,7 +1865,7 @@ exit $rc`,
             // legacy behaviour on first upgrade.
             // Daemon-client mode doesn't need Kata — it's just a gRPC client,
             // the daemon pod itself runs with the runtime class.
-            ...(!daemonIp && this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
+            ...(!daemonIp && podRuntimeClass ? { runtimeClassName: podRuntimeClass } : {}),
             ...(this.dedicatedNodeEnabled ? {
               nodeSelector: { 'orchard-builder': 'true' },
               tolerations: [{

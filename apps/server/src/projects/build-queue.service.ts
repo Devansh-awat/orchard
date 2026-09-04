@@ -14,9 +14,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15,
   );
 
+  // Super builds run on Depot's machines, so they don't compete for the local
+  // builder's memory the way a BuildKit build does. Their pods do still land on
+  // the dedicated builder node, so this stays well under what that node has
+  // left over the BuildKit pool rather than being unbounded.
   private readonly maxConcurrentDepot = Math.max(
     1,
-    parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '10', 10) || 10,
+    parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '4', 10) || 4,
   );
   private readonly LOCK_KEY = 528491;
   private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';

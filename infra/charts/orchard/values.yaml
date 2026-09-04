@@ -364,6 +364,11 @@ builderSandbox:
   enabled: false
   runtimeClassName: kata
   handler: kata
+  # RuntimeClass for super builds (Depot). Those pods clone, tar and upload
+  # the context to Depot's builders and never execute repo code, so a full
+  # VM per build is wasted; gVisor is enough. Requires the RuntimeClass to
+  # exist (tenantSandbox renders it) — set to "" to reuse runtimeClassName.
+  depotRuntimeClassName: gvisor
   sidecarPush: false
   # Image used by the pusher container in sidecarPush mode. Must contain
   # the `skopeo` binary on PATH.

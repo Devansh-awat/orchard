@@ -93,6 +93,9 @@ imagePullSecrets:
             {{- if .Values.builderSandbox.runtimeClassName }}
             - { name: BUILDER_RUNTIME_CLASS, value: {{ .Values.builderSandbox.runtimeClassName | quote }} }
             {{- end }}
+            {{- if .Values.builderSandbox.depotRuntimeClassName }}
+            - { name: BUILDER_DEPOT_RUNTIME_CLASS, value: {{ .Values.builderSandbox.depotRuntimeClassName | quote }} }
+            {{- end }}
             {{- if .Values.builderSandbox.sidecarPush }}
             - { name: BUILDER_SIDECAR_PUSH, value: "true" }
             - { name: BUILDER_PUSHER_IMAGE, value: {{ .Values.builderSandbox.pusherImage | quote }} }
