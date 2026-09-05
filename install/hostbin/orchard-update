@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+#PREAMBLE#
+
+helm upgrade --install orchard "$ORCHARD_CHART" \
+  --namespace "$ORCHARD_NAMESPACE" -f "$ORCHARD_VALUES" --timeout 20m "$@"
+kubectl -n "$ORCHARD_NAMESPACE" rollout status deploy/server --timeout=10m
+kubectl -n "$ORCHARD_NAMESPACE" rollout status deploy/frontend --timeout=5m
+
+# The host commands ship inside the server image, so a release that changes
+# them lands here too rather than waiting for someone to re-run the installer.
+if [ -x /usr/local/bin/orchard-sync-commands ]; then
+  orchard-sync-commands || echo "note: could not refresh the host commands" >&2
+fi

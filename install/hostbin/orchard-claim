@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+#PREAMBLE#
+
+exec kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- node dist/scripts/mint-claim-link.js

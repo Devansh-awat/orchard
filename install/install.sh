@@ -978,169 +978,48 @@ install_orchard() {
 install_updater() {
   step
 
-  cat > /usr/local/bin/orchard-update <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-helm upgrade --install orchard "$CHART_REF" \\
-  --namespace orchard -f "$VALUES_FILE" --timeout 20m "\$@"
-kubectl -n orchard rollout status deploy/server --timeout=10m
-kubectl -n orchard rollout status deploy/frontend --timeout=5m
+  # Runtime paths for the host commands, which ship as static files inside the
+  # server image rather than being generated here with these baked in.
+  cat > "$STATE_DIR/env" <<EOF
+ORCHARD_VALUES=$VALUES_FILE
+ORCHARD_CHART=$CHART_REF
+ORCHARD_NAMESPACE=orchard
 EOF
-  chmod +x /usr/local/bin/orchard-update
+  chmod 600 "$STATE_DIR/env"
 
-  # An instance with no SMTP and no identity provider cannot deliver an OTP,
-  # so the claim link is the way in. It is single-use and the token is only
-  # stored hashed, which is why this mints a fresh one rather than reading it.
-  cat > /usr/local/bin/orchard-claim <<'EOS'
-#!/usr/bin/env bash
-set -euo pipefail
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
-EOS
-  chmod +x /usr/local/bin/orchard-claim
+  # Bootstrap: lift the sync script out of the image by hand, then let it
+  # install the rest. Keeps one copy of each command in the repo instead of a
+  # second set embedded here that drifts out of step with it.
+  local boot
+  boot=$(mktemp)
 
-  # Quoted heredoc so nothing here expands at install time; only the values
-  # path is injected, on the line above it.
-  {
-    echo '#!/usr/bin/env bash'
-    echo "VALUES=$VALUES_FILE"
-    cat <<'EOS'
-set -euo pipefail
-
-usage() {
-  cat <<'USAGE'
-orchard-config - read and change this instance's chart values
-
-  orchard-config get <path>            print one value
-  orchard-config set <path> <value>    change one value
-  orchard-config unset <path>          remove one value
-  orchard-config list                  print the whole values file
-  orchard-config edit                  open it in $EDITOR
-
-Paths are dotted, e.g. signupMode or ingress.tls.issuerRef.name.
-Changes are written but not deployed. Add --apply to run orchard-update
-afterwards, or run it yourself once you have made every edit.
-
-Common ones:
-  signupMode                     open | invite_only | closed
-  tenant.certClusterIssuer       ClusterIssuer for user app certificates
-  ingress.tls.issuerRef.name     ClusterIssuer for the Orchard UI itself
-  metrics.enabled                the built-in metrics stack
-  cilium.enabled                 Cilium-backed policy and basic auth
-  protection.orchardLogin        offer "sign in with Orchard" on tenant hosts
-  server.replicas                control-plane API pods
-USAGE
-}
-
-apply=false
-args=()
-for a in "$@"; do
-  if [ "$a" = --apply ]; then apply=true; else args+=("$a"); fi
-done
-set -- ${args[@]+"${args[@]}"}
-
-[ $# -ge 1 ] || { usage; exit 1; }
-
-case "$1" in
-  get)
-    [ $# -eq 2 ] || { usage; exit 1; }
-    yq ".$2" "$VALUES"
-    ;;
-  list)
-    cat "$VALUES"
-    ;;
-  edit)
-    "${EDITOR:-vi}" "$VALUES"
-    ;;
-  unset)
-    [ $# -eq 2 ] || { usage; exit 1; }
-    yq -i "del(.$2)" "$VALUES"
-    echo "unset $2"
-    ;;
-  set)
-    [ $# -eq 3 ] || { usage; exit 1; }
-    # env() parses the value as YAML, so true/false and numbers keep their own
-    # type while a bare word stays a string. Interpolating it into the
-    # expression instead would make yq try to lex `invite_only` as syntax.
-    ORCHARD_CONFIG_VALUE="$3" yq -i ".$2 = env(ORCHARD_CONFIG_VALUE)" "$VALUES"
-    echo "$2 = $(yq ".$2" "$VALUES")"
-    ;;
-  -h|--help|help)
-    usage
-    exit 0
-    ;;
-  *)
-    usage
-    exit 1
-    ;;
-esac
-
-if [ "$apply" = true ]; then
-  exec orchard-update
-fi
-EOS
-  } > /usr/local/bin/orchard-config
-  chmod +x /usr/local/bin/orchard-config
-
-  # Deliberately not `orchard`: that name belongs to the user-facing CLI which
-  # talks to any instance's API. This one operates *this host* through helm and
-  # kubectl, so it takes the kubectl/kubeadm style suffix. The hyphenated
-  # commands stay as the real entry points; the systemd timer calls one.
-  {
-    echo '#!/usr/bin/env bash'
-    cat <<'EOS'
-set -euo pipefail
-
-usage() {
-  cat <<'USAGE'
-orchardctl - operate this Orchard host
-
-  orchardctl update            upgrade to the latest chart and images
-  orchardctl config ...        read and change chart values
-  orchardctl claim             print a link to claim the instance and sign in
-  orchardctl logs [service]    follow logs (server, frontend, mcp; default server)
-  orchardctl status            show the control-plane pods
-
-update, config and claim need root. Each also exists hyphenated, e.g.
-orchard-update. Not to be confused with the `orchard` CLI, which deploys apps
-to any instance over its API.
-USAGE
-}
-
-cmd=${1:-help}
-[ $# -gt 0 ] && shift
-
-case "$cmd" in
-  update|config|claim)
-    # The values file is 0600 and the claim runs through the cluster, so these
-    # fail deep inside helm or kubectl otherwise.
-    if [ "$(id -u)" -ne 0 ]; then
-      echo "orchardctl $cmd needs root: sudo orchardctl $cmd $*" >&2
-      exit 1
+  if kubectl -n orchard exec deploy/server -- cat /app/hostbin/orchard-sync-commands > "$boot" 2>/dev/null \
+     && [ -s "$boot" ]; then
+    # awk -v cannot carry a multi-line value, so the preamble is printed line
+    # by line here, the same way orchard-sync-commands does it.
+    awk -v pre="$STATE_DIR" '
+      /^#PREAMBLE#$/ {
+        print ": \"${ORCHARD_STATE_DIR:=" pre "}\""
+        print "[ -r \"$ORCHARD_STATE_DIR/env\" ] && . \"$ORCHARD_STATE_DIR/env\""
+        print ": \"${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}\""
+        print ": \"${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}\""
+        print ": \"${ORCHARD_NAMESPACE:=orchard}\""
+        print "export KUBECONFIG=\"${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}\""
+        next
+      }
+      { print }
+    ' "$boot" > "$boot.r"
+    install -m 0755 "$boot.r" /usr/local/bin/orchard-sync-commands
+    rm -f "$boot" "$boot.r"
+    if ORCHARD_STATE_DIR="$STATE_DIR" orchard-sync-commands >/dev/null; then
+      info "host commands installed (orchardctl)"
+    else
+      warn "could not install the host commands; run orchard-sync-commands later"
     fi
-    exec "orchard-$cmd" "$@"
-    ;;
-  logs)
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    exec kubectl -n orchard logs -f "deploy/${1:-server}"
-    ;;
-  status)
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    exec kubectl -n orchard get pods
-    ;;
-  -h|--help|help)
-    usage
-    ;;
-  *)
-    echo "unknown command: $cmd" >&2
-    usage >&2
-    exit 1
-    ;;
-esac
-EOS
-  } > /usr/local/bin/orchardctl
-  chmod +x /usr/local/bin/orchardctl
+  else
+    rm -f "$boot"
+    warn "could not read the host commands from the server pod; skipping"
+  fi
 
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     cat > /etc/systemd/system/orchard-update.service <<'EOF'

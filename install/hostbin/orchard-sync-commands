@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+#PREAMBLE#
+
+# Copies the host commands out of the running server image. Each is validated
+# before it replaces the live one: a truncated download here would leave the
+# operator with no way to upgrade or claim, which is the worst thing this
+# script could do.
+BIN=${ORCHARD_BIN:-/usr/local/bin}
+changed=0
+
+for name in orchardctl orchard-update orchard-config orchard-claim orchard-sync-commands; do
+  tmp=$(mktemp)
+  if ! kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- \
+      cat "/app/hostbin/$name" > "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    continue
+  fi
+  if [ ! -s "$tmp" ] || ! head -1 "$tmp" | grep -q '^#!'; then
+    rm -f "$tmp"
+    echo "skipped $name: not a script" >&2
+    continue
+  fi
+  # The copy in the image still carries the placeholder.
+  awk -v pre="$ORCHARD_STATE_DIR" '
+    /^#PREAMBLE#$/ {
+      print ": \"${ORCHARD_STATE_DIR:=" pre "}\""
+      print "[ -r \"$ORCHARD_STATE_DIR/env\" ] && . \"$ORCHARD_STATE_DIR/env\""
+      print ": \"${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}\""
+      print ": \"${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}\""
+      print ": \"${ORCHARD_NAMESPACE:=orchard}\""
+      print "export KUBECONFIG=\"${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}\""
+      next
+    }
+    { print }
+  ' "$tmp" > "$tmp.rendered"
+  mv "$tmp.rendered" "$tmp"
+
+  if ! bash -n "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    echo "skipped $name: failed syntax check" >&2
+    continue
+  fi
+  if [ -f "$BIN/$name" ] && cmp -s "$tmp" "$BIN/$name"; then
+    rm -f "$tmp"
+    continue
+  fi
+  install -m 0755 "$tmp" "$BIN/$name"
+  rm -f "$tmp"
+  echo "updated $name"
+  changed=$((changed + 1))
+done
+
+[ "$changed" -eq 0 ] && echo "host commands already current"
+exit 0

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+#PREAMBLE#
+
+usage() {
+  cat <<'USAGE'
+orchardctl - operate this Orchard host
+
+  orchardctl update            upgrade to the latest chart and images
+  orchardctl config ...        read and change chart values
+  orchardctl claim             print a link to claim the instance and sign in
+  orchardctl logs [service]    follow logs (server, frontend, mcp; default server)
+  orchardctl status            show the control-plane pods
+  orchardctl sync              refresh these commands from the deployed image
+
+update, config and claim need root. Each also exists hyphenated, e.g.
+orchard-update. Not to be confused with the `orchard` CLI, which deploys apps
+to any instance over its API.
+USAGE
+}
+
+cmd=${1:-help}
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  sync)
+    if [ "$(id -u)" -ne 0 ]; then
+      echo "orchardctl sync needs root: sudo orchardctl sync" >&2
+      exit 1
+    fi
+    exec orchard-sync-commands
+    ;;
+  update|config|claim)
+    # The values file is 0600 and the claim runs through the cluster, so these
+    # fail deep inside helm or kubectl otherwise.
+    if [ "$(id -u)" -ne 0 ]; then
+      echo "orchardctl $cmd needs root: sudo orchardctl $cmd $*" >&2
+      exit 1
+    fi
+    exec "orchard-$cmd" "$@"
+    ;;
+  logs)
+    exec kubectl -n "$ORCHARD_NAMESPACE" logs -f "deploy/${1:-server}"
+    ;;
+  status)
+    exec kubectl -n "$ORCHARD_NAMESPACE" get pods
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

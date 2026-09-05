@@ -289,6 +289,7 @@ through helm and kubectl.
 | `orchardctl claim` | mint a link to claim the instance and sign in | yes |
 | `orchardctl logs [service]` | follow logs, default `server` | no |
 | `orchardctl status` | control-plane pods | no |
+| `orchardctl sync` | refresh these commands from the deployed image | yes |
 
 `update`, `config` and `claim` need root: the values file is mode 0600, so
 without it helm fails with `open /etc/orchard/values.yaml: permission denied`.
@@ -306,20 +307,31 @@ different jobs, which is why the operator one carries the `ctl` suffix:
 | Does | deploy apps, tail builds, manage env and domains | upgrade, edit values, claim, inspect pods |
 | Installed by | you, per workstation | `install.sh`, on the host |
 
-### Picking up new host commands
+### Keeping the host commands current
 
-New `orchardctl` subcommands ship in the installer, not the chart, so
-`orchardctl update` won't add them. Re-run the installer with the same answers:
+They ship inside the server image at `/app/hostbin`, so `orchardctl update`
+copies them out after the rollout and a release that fixes one lands on the
+host with it. No installer re-run, no separate download.
+
+Each candidate is checked before it replaces the live copy: non-empty, starts
+with a shebang, and passes `bash -n`. A truncated read would otherwise leave
+you with no way to upgrade or claim, which is the worst thing this could do, so
+a file that fails any check is skipped and the existing one stays.
+
+To refresh them without a full upgrade:
 
 ```bash
-curl -fsSL https://assets.orchard.my/install.sh | sudo bash
+sudo orchardctl sync
 ```
 
-It skips k3s, helm and the operators if they're already there, and rewrites
-`values.yaml` — carrying over `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY` and
-`SSO_STATE_SECRET` from the existing file rather than minting new ones. Any
-values you changed by hand or with `orchardctl config` are **not** preserved,
-so note them first with `orchardctl config list` and re-apply after.
+Re-running the installer also works and is the only way to change answers you
+gave at install time (domains, ingress mode, update policy). It skips k3s, helm
+and the operators when they're already present, and carries `JWT_SECRET`,
+`SECRETS_ENCRYPTION_KEY` and `SSO_STATE_SECRET` over from the existing values
+file rather than minting new ones — a fresh encryption key would make every
+secret already in the database permanently undecryptable. Values you changed
+with `orchardctl config` are **not** preserved, so note them with
+`orchardctl config list` first.
 
 ### When an upgrade says one is already in progress
 
