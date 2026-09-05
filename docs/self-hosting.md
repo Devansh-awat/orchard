@@ -306,6 +306,21 @@ different jobs, which is why the operator one carries the `ctl` suffix:
 | Does | deploy apps, tail builds, manage env and domains | upgrade, edit values, claim, inspect pods |
 | Installed by | you, per workstation | `install.sh`, on the host |
 
+### Picking up new host commands
+
+New `orchardctl` subcommands ship in the installer, not the chart, so
+`orchardctl update` won't add them. Re-run the installer with the same answers:
+
+```bash
+curl -fsSL https://assets.orchard.my/install.sh | sudo bash
+```
+
+It skips k3s, helm and the operators if they're already there, and rewrites
+`values.yaml` — carrying over `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY` and
+`SSO_STATE_SECRET` from the existing file rather than minting new ones. Any
+values you changed by hand or with `orchardctl config` are **not** preserved,
+so note them first with `orchardctl config list` and re-apply after.
+
 ### When an upgrade says one is already in progress
 
 ```
