@@ -790,9 +790,16 @@ write_values() {
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
 
-  local scheme=http entrypoint=web tls_enabled=false
+  local scheme=http entrypoint=web tls_enabled=false tls_issuer=
   if [ "$USE_TLS" = true ]; then
     scheme=https; entrypoint=websecure; tls_enabled=true
+    # Without this the IngressRoute gets a bare `tls:` block and Traefik
+    # terminates with its self-signed TRAEFIK DEFAULT CERT, which every browser
+    # rejects. The chart issues the real one against the ClusterIssuer above.
+    tls_issuer="
+    issuerRef:
+      name: $CERT_ISSUER
+      kind: ClusterIssuer"
   fi
   if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; fi
 
@@ -852,7 +859,7 @@ ingress:
   host: $ORCHARD_DOMAIN
   entryPoints: [$entrypoint]
   tls:
-    enabled: $tls_enabled
+    enabled: $tls_enabled$tls_issuer
 
 gateway:
   enabled: true

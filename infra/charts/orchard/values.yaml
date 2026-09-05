@@ -211,7 +211,14 @@ ingress:
   entryPoints: [websecure]
   tls:
     enabled: true
-    secretName: "" # if set, used as IngressRoute tls.secretName
+    # The Secret Traefik terminates with. A bare `tls:` block with neither this
+    # nor issuerRef below makes Traefik fall back to its self-signed
+    # TRAEFIK DEFAULT CERT, which is a browser error, not a working install.
+    secretName: ""
+    # Set to have the chart issue that certificate for `host` itself, e.g.
+    # { name: letsencrypt, kind: ClusterIssuer }. Leave empty when the Secret
+    # is created out of band, as the HackClub install does.
+    issuerRef: {} # if set, used as IngressRoute tls.secretName
   # extra middlewares (refs) applied to all routes
   middlewares: []
 

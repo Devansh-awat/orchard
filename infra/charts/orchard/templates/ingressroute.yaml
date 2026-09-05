@@ -30,8 +30,36 @@ spec:
       {{- end }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
-    {{- with .Values.ingress.tls.secretName }}
+    {{- with include "orchard.ingressTlsSecret" . }}
     secretName: {{ . }}
     {{- end }}
   {{- end }}
+{{- end }}
+
+{{- /*
+  A bare `tls:` with no secretName tells Traefik to terminate with its default
+  certificate, which is the self-signed TRAEFIK DEFAULT CERT. Set
+  ingress.tls.issuerRef and the chart issues the control-plane certificate
+  itself rather than expecting secretName to be filled in out of band.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled }}
+{{- $issuer := .Values.ingress.tls.issuerRef | default dict }}
+{{- if $issuer.name }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "orchard.ingressTlsSecret" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "ingress") | nindent 4 }}
+spec:
+  secretName: {{ include "orchard.ingressTlsSecret" . }}
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind | default "ClusterIssuer" }}
+  commonName: {{ .Values.ingress.host | quote }}
+  dnsNames:
+    - {{ .Values.ingress.host | quote }}
+{{- end }}
 {{- end }}

@@ -61,6 +61,21 @@ imagePullSecrets:
 {{- end }}
 {{- end -}}
 
+{{/*
+The Secret the control-plane IngressRoute terminates TLS with. Explicit
+secretName wins; otherwise it is only defaulted when the chart is the one
+issuing the certificate, so an install that fills the Secret in out of band
+still has to name it.
+*/}}
+{{- define "orchard.ingressTlsSecret" -}}
+{{- $tls := .Values.ingress.tls -}}
+{{- if $tls.secretName -}}
+{{- $tls.secretName -}}
+{{- else if (($tls.issuerRef | default dict).name) -}}
+{{- printf "%s-tls" .Release.Name -}}
+{{- end -}}
+{{- end }}
+
 {{- define "orchard.serverEnv" }}
             - { name: NODE_ENV, value: production }
             {{- if .Values.datadog.enabled }}
