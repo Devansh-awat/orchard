@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.25.1](https://github.com/hackclub/orchard/compare/server/v2.25.0...server/v2.25.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* keep the host commands under apps/server so releases ship them ([21296e1](https://github.com/hackclub/orchard/commit/21296e11af2e24ef70938a7ce834fc6297dc2e4f))
+
 ## [2.25.0](https://github.com/hackclub/orchard/compare/server/v2.24.0...server/v2.25.0) (2026-09-05)
 
 
