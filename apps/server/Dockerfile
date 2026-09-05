@@ -79,8 +79,11 @@ RUN pnpm dlx prisma@6.18.0 generate
 
 # Host commands for self-hosted installs. They live in the image so that
 # `orchardctl update` can refresh them from whatever release it just deployed,
-# instead of drifting until someone re-runs the installer.
-COPY install/hostbin /app/hostbin
+# instead of drifting until someone re-runs the installer. Kept under
+# apps/server so a change to them counts as a server change: release-please
+# only cuts releases per package, and images only publish on a release, so
+# anywhere else they would never reach a published image.
+COPY apps/server/hostbin /app/hostbin
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
