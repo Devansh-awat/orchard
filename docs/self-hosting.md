@@ -333,6 +333,34 @@ secret already in the database permanently undecryptable. Values you changed
 with `orchardctl config` are **not** preserved, so note them with
 `orchardctl config list` first.
 
+### When an upgrade says a Certificate can't be imported
+
+```
+Error: UPGRADE FAILED: Unable to continue with update: Certificate "orchard-tls"
+in namespace "orchard" exists and cannot be imported into the current release:
+invalid ownership metadata
+```
+
+The chart now issues the control-plane certificate itself, so an instance where
+one was created by hand before upgrading has an object Helm didn't create and
+won't take over. Hand it to Helm rather than deleting it, so the certificate
+already issued is kept and no new ACME order is placed:
+
+```bash
+kubectl -n orchard label certificate orchard-tls \
+  app.kubernetes.io/managed-by=Helm
+kubectl -n orchard annotate certificate orchard-tls \
+  meta.helm.sh/release-name=orchard \
+  meta.helm.sh/release-namespace=orchard
+```
+
+Then re-run the upgrade. Deleting it works too — cert-manager leaves the Secret
+behind and the chart re-issues — but it spends one of Let's Encrypt's five
+duplicate certificates per week for no reason.
+
+The same applies to any object you created by hand that the chart later
+started managing.
+
 ### When an upgrade says one is already in progress
 
 ```
