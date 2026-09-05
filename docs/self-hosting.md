@@ -178,10 +178,10 @@ The link is printed three ways, whichever suits you:
 
 - in the closing box the installer prints when it finishes
 - in the server log on first boot (`kubectl -n orchard logs deploy/server`)
-- on demand, by running `orchard claim` on the host
+- on demand, by running `sudo orchardctl claim` on the host
 
 ```
-$ orchard claim
+$ sudo orchardctl claim
 
   Open this to claim the instance and sign in (valid for 24 hours):
 
@@ -195,7 +195,7 @@ No confirmation email is sent, and the address is left unverified until email
 actually works, because the token proved you own the host, not the mailbox.
 
 The token is only ever stored hashed, so a lost one cannot be read back.
-`orchard claim` mints a replacement instead. It refuses once a superadmin
+`orchardctl claim` mints a replacement instead. It refuses once a superadmin
 exists, and redeeming it is a single transaction, so it can't be replayed. The
 only thing standing behind it is exec access on the server pod, which is
 already equivalent to owning the instance.
@@ -219,16 +219,16 @@ before you are relying on a single authenticator.
 
 ### Changing settings later
 
-`orchard config` edits the values file the installer wrote and is the intended
-way to change anything the install prompts didn't ask about:
+`orchardctl config` edits the values file the installer wrote and is the
+intended way to change anything the install prompts didn't ask about:
 
 ```bash
-orchard config get signupMode
-orchard config set signupMode invite_only
-orchard config set ingress.tls.issuerRef.name letsencrypt
-orchard config set metrics.enabled false --apply
-orchard config list
-orchard config edit
+sudo orchardctl config get signupMode
+sudo orchardctl config set signupMode invite_only
+sudo orchardctl config set ingress.tls.issuerRef.name letsencrypt
+sudo orchardctl config set metrics.enabled false --apply
+sudo orchardctl config list
+sudo orchardctl config edit
 ```
 
 Paths are dotted and are created if they don't exist, so setting
@@ -237,8 +237,8 @@ whole nesting. Values keep their YAML type: `false` and `2` land as a boolean
 and an integer, a bare word stays a string.
 
 Changes are written but **not deployed**. Pass `--apply` to run
-`orchard update` straight after, or leave it off while you make several edits
-and run `orchard update` once at the end.
+`orchardctl update` straight after, or leave it off while you make several
+edits and run `orchardctl update` once at the end.
 
 The ones worth knowing:
 
@@ -252,15 +252,10 @@ The ones worth knowing:
 | `protection.orchardLogin` | offer "sign in with Orchard" on tenant hosts |
 | `server.replicas` | control-plane API pods |
 
-The installer puts these on the host as `orchard <subcommand>`, with
-hyphenated aliases (`orchard-update`, `orchard-config`, `orchard-claim`) that
-are the real entry points. `orchard logs` and `orchard status` are shortcuts
-for the equivalent `kubectl` calls.
-
-`orchard update` on its own picks up new images and a new chart, but it reads
-the values file as it finds it. It can't add settings that weren't there, which
-is why an instance installed before a value existed needs `orchard config set`
-first.
+`orchardctl update` on its own picks up new images and a new chart, but it
+reads the values file as it finds it. It can't add settings that weren't there,
+which is why an instance installed before a value existed needs
+`orchardctl config set` first.
 
 ### Configuring email later
 
@@ -281,6 +276,54 @@ That is a usable fallback for a lone operator reading their own logs, and a
 reason to keep `signupMode: invite_only` — the chart default. The installer
 sets it too. Switching to `open` on an instance that can send email turns the
 login page into public registration.
+
+## Host commands
+
+The installer puts these on the host. They operate **this machine's** install
+through helm and kubectl.
+
+| Command | Does | Root |
+|---|---|---|
+| `orchardctl update` | `helm upgrade` to the latest chart and images | yes |
+| `orchardctl config <get\|set\|unset\|list\|edit>` | read and change chart values | yes |
+| `orchardctl claim` | mint a link to claim the instance and sign in | yes |
+| `orchardctl logs [service]` | follow logs, default `server` | no |
+| `orchardctl status` | control-plane pods | no |
+
+`update`, `config` and `claim` need root: the values file is mode 0600, so
+without it helm fails with `open /etc/orchard/values.yaml: permission denied`.
+Each also exists hyphenated (`orchard-update`, `orchard-config`,
+`orchard-claim`) — those are the real entry points, and the nightly update
+timer calls `orchard-update` directly.
+
+**`orchardctl` is not the `orchard` CLI.** They're different tools with
+different jobs, which is why the operator one carries the `ctl` suffix:
+
+|  | `orchard` | `orchardctl` |
+|---|---|---|
+| Who | anyone with an account | whoever runs the server |
+| Talks to | any instance's HTTP API | this host's helm release and cluster |
+| Does | deploy apps, tail builds, manage env and domains | upgrade, edit values, claim, inspect pods |
+| Installed by | you, per workstation | `install.sh`, on the host |
+
+### When an upgrade says one is already in progress
+
+```
+Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress
+```
+
+A previous helm operation was interrupted and the release is stuck in a pending
+state. Check it, then roll back to the last good revision:
+
+```bash
+sudo helm -n orchard history orchard
+sudo helm -n orchard rollback orchard <last DEPLOYED revision>
+sudo orchardctl update
+```
+
+If the stuck revision is the very first install there is nothing to roll back
+to, so `sudo helm -n orchard uninstall orchard` and re-run the install. That
+drops the chart's resources but not the Postgres PVC, so data survives.
 
 ## Footprint and scaling
 
