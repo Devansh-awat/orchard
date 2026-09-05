@@ -987,30 +987,14 @@ ORCHARD_NAMESPACE=orchard
 EOF
   chmod 600 "$STATE_DIR/env"
 
-  # Bootstrap: lift the sync script out of the image by hand, then let it
-  # install the rest. Keeps one copy of each command in the repo instead of a
-  # second set embedded here that drifts out of step with it.
+  # The commands run unrendered, so this is a plain copy: pull the sync script
+  # out of the image and let it install the rest.
   local boot
   boot=$(mktemp)
-
   if kubectl -n orchard exec deploy/server -- cat /app/hostbin/orchard-sync-commands > "$boot" 2>/dev/null \
-     && [ -s "$boot" ]; then
-    # awk -v cannot carry a multi-line value, so the preamble is printed line
-    # by line here, the same way orchard-sync-commands does it.
-    awk -v pre="$STATE_DIR" '
-      /^#PREAMBLE#$/ {
-        print ": \"${ORCHARD_STATE_DIR:=" pre "}\""
-        print "[ -r \"$ORCHARD_STATE_DIR/env\" ] && . \"$ORCHARD_STATE_DIR/env\""
-        print ": \"${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}\""
-        print ": \"${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}\""
-        print ": \"${ORCHARD_NAMESPACE:=orchard}\""
-        print "export KUBECONFIG=\"${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}\""
-        next
-      }
-      { print }
-    ' "$boot" > "$boot.r"
-    install -m 0755 "$boot.r" /usr/local/bin/orchard-sync-commands
-    rm -f "$boot" "$boot.r"
+     && [ -s "$boot" ] && bash -n "$boot" 2>/dev/null; then
+    install -m 0755 "$boot" /usr/local/bin/orchard-sync-commands
+    rm -f "$boot"
     if ORCHARD_STATE_DIR="$STATE_DIR" orchard-sync-commands >/dev/null; then
       info "host commands installed (orchardctl)"
     else

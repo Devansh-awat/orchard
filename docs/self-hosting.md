@@ -324,6 +324,19 @@ To refresh them without a full upgrade:
 sudo orchardctl sync
 ```
 
+They run as they sit in the image, with no install-time rendering, so
+bootstrapping on a host that has none of them yet is a plain copy:
+
+```bash
+sudo kubectl -n orchard exec deploy/server -- cat /app/hostbin/orchard-sync-commands \
+  | sudo tee /usr/local/bin/orchard-sync-commands > /dev/null
+sudo chmod +x /usr/local/bin/orchard-sync-commands
+sudo orchard-sync-commands
+```
+
+Paths come from `/etc/orchard/env` when it exists and from built-in defaults
+when it doesn't.
+
 Re-running the installer also works and is the only way to change answers you
 gave at install time (domains, ingress mode, update policy). It skips k3s, helm
 and the operators when they're already present, and carries `JWT_SECRET`,

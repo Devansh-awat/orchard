@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-#PREAMBLE#
+# Defaults that work unrendered, so these can be copied straight out of the
+# image and run. install.sh writes the env file when paths differ.
+: "${ORCHARD_STATE_DIR:=/etc/orchard}"
+if [ -r "$ORCHARD_STATE_DIR/env" ]; then . "$ORCHARD_STATE_DIR/env"; fi
+: "${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}"
+: "${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}"
+: "${ORCHARD_NAMESPACE:=orchard}"
+: "${ORCHARD_BIN:=/usr/local/bin}"
+export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
 # Copies the host commands out of the running server image. Each is validated
 # before it replaces the live one: a truncated download here would leave the
 # operator with no way to upgrade or claim, which is the worst thing this
 # script could do.
-BIN=${ORCHARD_BIN:-/usr/local/bin}
+BIN=$ORCHARD_BIN
 changed=0
 
 for name in orchardctl orchard-update orchard-config orchard-claim orchard-sync-commands; do
@@ -21,21 +29,6 @@ for name in orchardctl orchard-update orchard-config orchard-claim orchard-sync-
     echo "skipped $name: not a script" >&2
     continue
   fi
-  # The copy in the image still carries the placeholder.
-  awk -v pre="$ORCHARD_STATE_DIR" '
-    /^#PREAMBLE#$/ {
-      print ": \"${ORCHARD_STATE_DIR:=" pre "}\""
-      print "[ -r \"$ORCHARD_STATE_DIR/env\" ] && . \"$ORCHARD_STATE_DIR/env\""
-      print ": \"${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}\""
-      print ": \"${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}\""
-      print ": \"${ORCHARD_NAMESPACE:=orchard}\""
-      print "export KUBECONFIG=\"${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}\""
-      next
-    }
-    { print }
-  ' "$tmp" > "$tmp.rendered"
-  mv "$tmp.rendered" "$tmp"
-
   if ! bash -n "$tmp" 2>/dev/null; then
     rm -f "$tmp"
     echo "skipped $name: failed syntax check" >&2

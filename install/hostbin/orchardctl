@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-#PREAMBLE#
+# Defaults that work unrendered, so these can be copied straight out of the
+# image and run. install.sh writes the env file when paths differ.
+: "${ORCHARD_STATE_DIR:=/etc/orchard}"
+if [ -r "$ORCHARD_STATE_DIR/env" ]; then . "$ORCHARD_STATE_DIR/env"; fi
+: "${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}"
+: "${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}"
+: "${ORCHARD_NAMESPACE:=orchard}"
+: "${ORCHARD_BIN:=/usr/local/bin}"
+export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
 usage() {
   cat <<'USAGE'
