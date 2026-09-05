@@ -401,6 +401,7 @@
   "POST /scim/v2/Groups/.search": "public",
   "POST /scim/v2/Users": "public",
   "POST /scim/v2/Users/.search": "public",
+  "POST /setup/bootstrap": "public",
   "POST /setup/claim": "authenticated",
   "POST /setup/github-app/manifest": "superadmin",
   "POST /ssh-identities": "authenticated",

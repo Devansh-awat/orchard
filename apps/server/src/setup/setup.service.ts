@@ -1,16 +1,17 @@
 import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
+import { sanitizeUsername } from '../users/users.service';
+import {
+  SUPERADMIN_CLAIM_KEY,
+  CLAIM_TTL_MS,
+  ClaimRecord,
+  hashClaimToken,
+  claimUrl,
+} from './setup-token';
 
-export const SUPERADMIN_CLAIM_KEY = 'superadmin_claim';
-
-const CLAIM_TTL_MS = 24 * 60 * 60 * 1000;
-
-interface ClaimRecord {
-  hash: string;
-  expiresAt: string;
-}
+export { SUPERADMIN_CLAIM_KEY };
 
 @Injectable()
 export class SetupService implements OnModuleInit {
@@ -46,10 +47,6 @@ export class SetupService implements OnModuleInit {
     }
   }
 
-  private static hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
   private static expired(claim: ClaimRecord): boolean {
     return Date.parse(claim.expiresAt) <= Date.now();
   }
@@ -68,7 +65,7 @@ export class SetupService implements OnModuleInit {
 
     const token = randomBytes(32).toString('base64url');
     const record: ClaimRecord = {
-      hash: SetupService.hashToken(token),
+      hash: hashClaimToken(token),
       expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString(),
     };
 
@@ -78,14 +75,15 @@ export class SetupService implements OnModuleInit {
       return;
     }
 
-    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     this.logger.warn(
       [
         '',
         '  This instance has no superadmin yet.',
-        '  Sign in, then open this URL to claim it (valid for 24 hours):',
+        '  Open this URL to claim it and sign in (valid for 24 hours):',
         '',
-        `    ${base}/setup/claim?token=${token}`,
+        `    ${claimUrl(token)}`,
+        '',
+        '  Lost it? Run `orchard-claim` on the host for a fresh one.',
         '',
       ].join('\n'),
     );
@@ -97,21 +95,25 @@ export class SetupService implements OnModuleInit {
     return { claimable: Boolean(claim) && !SetupService.expired(claim) };
   }
 
-  async claim(userId: string, token: string): Promise<{ ok: true }> {
+  private async assertTokenValid(token: string): Promise<void> {
     const supplied = (token || '').trim();
     if (!supplied) throw new BadRequestException('A claim token is required');
 
     const claim = await this.readClaim();
     if (!claim) throw new BadRequestException('This instance has already been claimed');
     if (SetupService.expired(claim)) {
-      throw new BadRequestException('That claim token has expired. Restart the server to mint a new one.');
+      throw new BadRequestException('That claim token has expired. Run `orchard-claim` to mint a new one.');
     }
 
-    const a = Buffer.from(SetupService.hashToken(supplied), 'hex');
+    const a = Buffer.from(hashClaimToken(supplied), 'hex');
     const b = Buffer.from(claim.hash, 'hex');
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new BadRequestException('That claim token is not valid');
     }
+  }
+
+  async claim(userId: string, token: string): Promise<{ ok: true }> {
+    await this.assertTokenValid(token);
 
     await this.prisma.$transaction(async (tx) => {
       const deleted = await tx.instanceSetting.deleteMany({ where: { key: SUPERADMIN_CLAIM_KEY } });
@@ -121,5 +123,60 @@ export class SetupService implements OnModuleInit {
 
     this.logger.warn(`user ${userId} claimed superadmin on this instance`);
     return { ok: true };
+  }
+
+  /**
+   * Claim without an existing session. An instance with no email transport and
+   * no identity provider cannot deliver an OTP, so requiring a session here is
+   * a deadlock: the operator can't sign in, and can't register the passkey that
+   * would let them sign in next time.
+   *
+   * Possession of the token is the credential, and it is only ever printed to
+   * the server log or handed over by `orchard-claim` on the host itself, so
+   * this grants nothing to anyone who didn't already have the box. The
+   * single-use delete inside the transaction is what stops it being replayed.
+   */
+  async bootstrap(token: string, email: string): Promise<{ id: string; email: string; username: string; firstName: string | null; lastName: string | null }> {
+    // Validated in here rather than by the caller: this is the one path that
+    // grants superadmin without a session, so it must not be possible to reach
+    // the grant by forgetting a check at the controller.
+    await this.assertTokenValid(token);
+
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      throw new BadRequestException('An email address is required to claim this instance');
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = existing ?? (await this.createUser(normalizedEmail));
+
+    await this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.instanceSetting.deleteMany({ where: { key: SUPERADMIN_CLAIM_KEY } });
+      if (deleted.count === 0) throw new BadRequestException('This instance has already been claimed');
+      await tx.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
+    });
+
+    this.logger.warn(`${normalizedEmail} claimed superadmin on this instance`);
+    return user;
+  }
+
+  async verifyClaimToken(token: string): Promise<void> {
+    return this.assertTokenValid(token);
+  }
+
+  private async createUser(normalizedEmail: string) {
+    const base = sanitizeUsername(normalizedEmail.split('@')[0]);
+    let username = base;
+    let counter = 1;
+    while (await this.prisma.user.findUnique({ where: { username } })) {
+      username = `${base}${counter}`;
+      counter += 1;
+    }
+
+    // Not emailVerified: nothing has proven this address, the token proved the
+    // host. Verification happens the first time email actually works.
+    return this.prisma.user.create({
+      data: { email: normalizedEmail, username },
+    });
   }
 }

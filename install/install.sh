@@ -819,7 +819,7 @@ image:
   repository: $IMAGE_REPOSITORY
   pullPolicy: $IMAGE_PULL_POLICY
 
-signupMode: open
+signupMode: invite_only
 datadog:
   enabled: false
 
@@ -954,6 +954,17 @@ kubectl -n orchard rollout status deploy/frontend --timeout=5m
 EOF
   chmod +x /usr/local/bin/orchard-update
 
+  # An instance with no SMTP and no identity provider cannot deliver an OTP,
+  # so the claim link is the way in. It is single-use and the token is only
+  # stored hashed, which is why this mints a fresh one rather than reading it.
+  cat > /usr/local/bin/orchard-claim <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
+EOS
+  chmod +x /usr/local/bin/orchard-claim
+
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     cat > /etc/systemd/system/orchard-update.service <<'EOF'
 [Unit]
@@ -1001,12 +1012,17 @@ summary() {
   box_bottom
 
   printf '\n  %sOne more step%s\n' "$C_BOLD" "$C_RESET"
-  note "Sign up with the first account, then claim the instance. Its setup"
-  note "token is printed in the server log on first boot:"
-  printf '\n      %skubectl -n orchard logs deploy/server | grep -A2 %s\n' \
-    "$C_BRIGHT" "'no superadmin'$C_RESET"
+  note "Open the claim link below to create the first account and sign in."
+  note "There is no email to wait for: the link is the credential."
   printf '\n'
-  info "Restart the server to mint a fresh token if it expires."
+  if claim_link=$(orchard-claim 2>/dev/null | grep -E '^\s+http'); then
+    printf '      %s%s%s\n' "$C_BRIGHT" "$(echo "$claim_link" | tr -d ' ')" "$C_RESET"
+  else
+    printf '      %sorchard-claim%s\n' "$C_BRIGHT" "$C_RESET"
+  fi
+  printf '\n'
+  note "Add a passkey as soon as you are in — with no SMTP configured it is"
+  note "the only way to sign back in. Run 'orchard-claim' for a fresh link."
   printf '\n'
 
   if [ "$INGRESS_MODE" = tunnel ]; then

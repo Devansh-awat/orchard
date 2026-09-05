@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { ShieldCheck, Loader2 } from 'lucide-svelte';
 	import { user, isSignedIn, isSuperAdmin, apiFetch, toasts } from '$lib/stores';
@@ -11,20 +10,16 @@
 
 	let state = $state<State>('checking');
 	let token = $state('');
+	let email = $state('');
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
 
-	onMount(async () => {
-		if (!$isSignedIn) {
-			goto(`/?next=${encodeURIComponent($page.url.pathname + $page.url.search)}`, {
-				replaceState: true
-			});
-			return;
-		}
+	const signedOut = $derived(!$isSignedIn);
 
+	onMount(async () => {
 		token = $page.url.searchParams.get('token') ?? '';
 
-		if ($isSuperAdmin) {
+		if ($isSignedIn && $isSuperAdmin) {
 			state = 'claimed';
 			return;
 		}
@@ -42,13 +37,19 @@
 		event.preventDefault();
 		if (!token.trim() || submitting) return;
 
+		if (signedOut && !email.trim()) return;
+
 		submitting = true;
 		error = null;
 		try {
-			const response = await apiFetch('/apiv1/setup/claim', {
+			const endpoint = signedOut ? '/apiv1/setup/bootstrap' : '/apiv1/setup/claim';
+			const payload = signedOut
+				? { token: token.trim(), email: email.trim() }
+				: { token: token.trim() };
+			const response = await apiFetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token: token.trim() })
+				body: JSON.stringify(payload)
 			});
 
 			if (!response.ok) {
@@ -84,8 +85,13 @@
 					<Alert tone="success" title="This instance is yours">
 						You can manage users, nodes and instance settings from the admin area.
 					</Alert>
+					<Alert tone="warning" title="Add a passkey next">
+						Until an email provider or identity provider is configured, this instance
+						cannot send you a sign-in code. A passkey is how you get back in.
+					</Alert>
 					<div class="claim-actions">
-						<Button variant="primary" href="/admin">Go to admin</Button>
+						<Button variant="primary" href="/user/settings">Add a passkey</Button>
+						<Button href="/admin">Go to admin</Button>
 					</div>
 				{:else if state === 'unavailable'}
 					<Alert tone="info" title="Nothing to claim">
@@ -96,9 +102,24 @@
 					</div>
 				{:else}
 					<form class="claim-form" onsubmit={claim}>
+						{#if signedOut}
+							<Field
+								label="Your email"
+								hint="Becomes the superadmin account. No confirmation email is sent."
+								for="claim-email"
+							>
+								<Input
+									id="claim-email"
+									type="email"
+									bind:value={email}
+									placeholder="you@example.com"
+									autocomplete="email"
+								/>
+							</Field>
+						{/if}
 						<Field
 							label="Setup token"
-							hint="Printed in the server logs on first boot."
+							hint="Printed in the server logs, or run `orchard-claim` on the host."
 							{error}
 							for="claim-token"
 						>
@@ -112,7 +133,12 @@
 							/>
 						</Field>
 						<div class="claim-actions">
-							<Button type="submit" variant="primary" loading={submitting} disabled={!token.trim()}>
+							<Button
+								type="submit"
+								variant="primary"
+								loading={submitting}
+								disabled={!token.trim() || (signedOut && !email.trim())}
+							>
 								<ShieldCheck size={15} />
 								Claim instance
 							</Button>
@@ -154,6 +180,7 @@
 	.claim-actions {
 		display: flex;
 		justify-content: flex-end;
+		gap: 0.5rem;
 		margin-top: 1rem;
 	}
 </style>
