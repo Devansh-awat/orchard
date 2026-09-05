@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.25.0](https://github.com/hackclub/orchard/compare/server/v2.24.0...server/v2.25.0) (2026-09-05)
+
+
+### Features
+
+* ship host commands in the server image so updates carry them ([fbaeb43](https://github.com/hackclub/orchard/commit/fbaeb433b3114f3548105053e0c6ce094edf147f))
+
 ## [2.24.0](https://github.com/hackclub/orchard/compare/server/v2.23.0...server/v2.24.0) (2026-09-05)
 
 
