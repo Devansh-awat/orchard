@@ -217,6 +217,46 @@ If you lose every passkey on an instance with no email transport, there is
 currently no self-service recovery. Configure `SMTP_*` or an identity provider
 before you are relying on a single authenticator.
 
+### Changing settings later
+
+`orchard-config` edits the values file the installer wrote and is the intended
+way to change anything the install prompts didn't ask about:
+
+```bash
+orchard-config get signupMode
+orchard-config set signupMode invite_only
+orchard-config set ingress.tls.issuerRef.name letsencrypt
+orchard-config set metrics.enabled false --apply
+orchard-config list
+orchard-config edit
+```
+
+Paths are dotted and are created if they don't exist, so setting
+`ingress.tls.issuerRef.name` on a file that has no `issuerRef` block writes the
+whole nesting. Values keep their YAML type: `false` and `2` land as a boolean
+and an integer, a bare word stays a string.
+
+Changes are written but **not deployed**. Pass `--apply` to run
+`orchard-update` straight after, or leave it off while you make several edits
+and run `orchard-update` once at the end.
+
+The ones worth knowing:
+
+| Path | What it does |
+|---|---|
+| `signupMode` | `open` / `invite_only` / `closed` |
+| `ingress.tls.issuerRef.name` | ClusterIssuer for the Orchard UI's own certificate |
+| `tenant.certClusterIssuer` | ClusterIssuer for user app certificates |
+| `metrics.enabled` | the built-in VictoriaMetrics stack |
+| `cilium.enabled` | Cilium-backed tenant policy and Envoy basic auth |
+| `protection.orchardLogin` | offer "sign in with Orchard" on tenant hosts |
+| `server.replicas` | control-plane API pods |
+
+`orchard-update` on its own picks up new images and a new chart, but it reads
+the values file as it finds it. It can't add settings that weren't there, which
+is why an instance installed before a value existed needs `orchard-config set`
+first.
+
 ### Configuring email later
 
 Email is optional for a single-operator instance and required the moment you

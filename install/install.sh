@@ -540,6 +540,23 @@ ensure_helm() {
   run_step "downloading helm" 20s helm_download
 }
 
+YQ_VERSION=${YQ_VERSION:-v4.44.3}
+
+yq_download() {
+  curl -fsSL -o /usr/local/bin/yq \
+    "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}"
+  chmod +x /usr/local/bin/yq
+}
+
+# Backs orchard-config. Editing the values file by hand is the alternative, and
+# a stray indent there breaks the next upgrade rather than the edit.
+ensure_yq() {
+  if command -v yq >/dev/null 2>&1; then
+    return
+  fi
+  run_step "downloading yq" 20s yq_download
+}
+
 add_helm_repos() {
   helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
   helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null 2>&1 || true
@@ -965,6 +982,89 @@ kubectl -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js
 EOS
   chmod +x /usr/local/bin/orchard-claim
 
+  # Quoted heredoc so nothing here expands at install time; only the values
+  # path is injected, on the line above it.
+  {
+    echo '#!/usr/bin/env bash'
+    echo "VALUES=$VALUES_FILE"
+    cat <<'EOS'
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+orchard-config - read and change this instance's chart values
+
+  orchard-config get <path>            print one value
+  orchard-config set <path> <value>    change one value
+  orchard-config unset <path>          remove one value
+  orchard-config list                  print the whole values file
+  orchard-config edit                  open it in $EDITOR
+
+Paths are dotted, e.g. signupMode or ingress.tls.issuerRef.name.
+Changes are written but not deployed. Add --apply to run orchard-update
+afterwards, or run it yourself once you have made every edit.
+
+Common ones:
+  signupMode                     open | invite_only | closed
+  tenant.certClusterIssuer       ClusterIssuer for user app certificates
+  ingress.tls.issuerRef.name     ClusterIssuer for the Orchard UI itself
+  metrics.enabled                the built-in metrics stack
+  cilium.enabled                 Cilium-backed policy and basic auth
+  protection.orchardLogin        offer "sign in with Orchard" on tenant hosts
+  server.replicas                control-plane API pods
+USAGE
+}
+
+apply=false
+args=()
+for a in "$@"; do
+  if [ "$a" = --apply ]; then apply=true; else args+=("$a"); fi
+done
+set -- ${args[@]+"${args[@]}"}
+
+[ $# -ge 1 ] || { usage; exit 1; }
+
+case "$1" in
+  get)
+    [ $# -eq 2 ] || { usage; exit 1; }
+    yq ".$2" "$VALUES"
+    ;;
+  list)
+    cat "$VALUES"
+    ;;
+  edit)
+    "${EDITOR:-vi}" "$VALUES"
+    ;;
+  unset)
+    [ $# -eq 2 ] || { usage; exit 1; }
+    yq -i "del(.$2)" "$VALUES"
+    echo "unset $2"
+    ;;
+  set)
+    [ $# -eq 3 ] || { usage; exit 1; }
+    # env() parses the value as YAML, so true/false and numbers keep their own
+    # type while a bare word stays a string. Interpolating it into the
+    # expression instead would make yq try to lex `invite_only` as syntax.
+    ORCHARD_CONFIG_VALUE="$3" yq -i ".$2 = env(ORCHARD_CONFIG_VALUE)" "$VALUES"
+    echo "$2 = $(yq ".$2" "$VALUES")"
+    ;;
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+
+if [ "$apply" = true ]; then
+  exec orchard-update
+fi
+EOS
+  } > /usr/local/bin/orchard-config
+  chmod +x /usr/local/bin/orchard-config
+
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     cat > /etc/systemd/system/orchard-update.service <<'EOF'
 [Unit]
@@ -1051,6 +1151,7 @@ main() {
   size_workloads
   install_k3s
   ensure_helm
+  ensure_yq
   install_operators
   install_registry
   install_tunnel
