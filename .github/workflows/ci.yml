@@ -41,6 +41,9 @@ jobs:
               - '.github/workflows/**'
             server:
               - 'apps/server/**'
+              # COPY'd into the image as /app/hostbin, so a change here has to
+              # rebuild the server or `orchardctl sync` serves stale commands.
+              - 'install/hostbin/**'
               - 'packages/contracts/**'
               - 'scripts/typecheck.mjs'
               - 'pnpm-lock.yaml'
