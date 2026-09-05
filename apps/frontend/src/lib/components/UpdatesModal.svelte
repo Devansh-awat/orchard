@@ -2,7 +2,7 @@
 	import { onMount, type Component } from 'svelte';
 	import { Sparkles, Waves, Activity, BellRing, Gauge, Rocket, ShieldCheck } from 'lucide-svelte';
 	import { page } from '$app/stores';
-	import { isSignedIn, showOnboarding } from '$lib/stores';
+	import { isSignedIn, showOnboarding, user } from '$lib/stores';
 	import { unseenUpdate, markUpdateSeen } from '$lib/stores/updates';
 	import { Modal, Button } from '$lib/components/ui';
 	import AsciiVine from '$lib/components/AsciiVine.svelte';
@@ -33,6 +33,11 @@
 
 	$effect(() => {
 		if (!mounted || !$isSignedIn || $showOnboarding || presented) return;
+		// A new account has an empty seenUpdates, so the newest release note
+		// fires the moment it signs in. "Here is what changed" is noise to
+		// someone who has not used the product yet, and on a fresh instance it
+		// lands on top of the setup they are in the middle of.
+		if ($user?.setupCompleted === false) return;
 		if (quietRoutes.some((route) => $page.url.pathname.startsWith(route))) return;
 		const next = $unseenUpdate;
 		if (!next) return;
