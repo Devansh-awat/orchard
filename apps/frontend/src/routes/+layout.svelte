@@ -40,7 +40,18 @@
 		return skipRoutes.some((route) => pathname.startsWith(route));
 	}
 
-	const publicRoutes = ['/invite', '/oauth/callback', '/sso', '/mcp', '/cli', '/auth/protect'];
+	// /setup/claim is reachable signed out by design: on an instance with no
+	// email transport it is the only way to make the first account, so bouncing
+	// it to the login page is a deadlock. The rest of /setup stays gated.
+	const publicRoutes = [
+		'/invite',
+		'/oauth/callback',
+		'/sso',
+		'/mcp',
+		'/cli',
+		'/auth/protect',
+		'/setup/claim'
+	];
 
 	// /<org>/login is the org's own SSO entry point and is meant to be reached
 	// signed out, so it can't be bounced back to the platform login page.
