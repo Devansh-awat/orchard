@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/hackclub/orchard/compare/frontend/v1.20.1...frontend/v1.21.0) (2026-09-05)
+
+
+### Features
+
+* claim an instance without email and sign in from the claim link ([b260bb6](https://github.com/hackclub/orchard/commit/b260bb6c55aa8fcfb2fecef3134525a2932af871))
+
 ## [1.20.1](https://github.com/hackclub/orchard/compare/frontend/v1.20.0...frontend/v1.20.1) (2026-09-04)
 
 

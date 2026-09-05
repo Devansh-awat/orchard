@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.0](https://github.com/hackclub/orchard/compare/server/v2.23.0...server/v2.24.0) (2026-09-05)
+
+
+### Features
+
+* claim an instance without email and sign in from the claim link ([b260bb6](https://github.com/hackclub/orchard/commit/b260bb6c55aa8fcfb2fecef3134525a2932af871))
+
 ## [2.23.0](https://github.com/hackclub/orchard/compare/server/v2.22.1...server/v2.23.0) (2026-09-04)
 
 

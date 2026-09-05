@@ -86,8 +86,8 @@
 						You can manage users, nodes and instance settings from the admin area.
 					</Alert>
 					<Alert tone="warning" title="Add a passkey next">
-						Until an email provider or identity provider is configured, this instance
-						cannot send you a sign-in code. A passkey is how you get back in.
+						Until an email provider or identity provider is configured, this instance cannot send
+						you a sign-in code. A passkey is how you get back in.
 					</Alert>
 					<div class="claim-actions">
 						<Button variant="primary" href="/user/settings">Add a passkey</Button>
