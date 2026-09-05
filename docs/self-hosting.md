@@ -252,8 +252,14 @@ The ones worth knowing:
 | `protection.orchardLogin` | offer "sign in with Orchard" on tenant hosts |
 | `server.replicas` | control-plane API pods |
 
-`orchardctl update` on its own picks up new images and a new chart, but it
-reads the values file as it finds it. It can't add settings that weren't there,
+`orchardctl update` restarts each deployment whose image tag is a moving one
+(`latest`, which is what the installer writes). Helm alone would not: the tag
+string is unchanged between builds, so the pod template is identical, no new
+ReplicaSet is written and nothing re-pulls — the upgrade reports success while
+the old image keeps running. A deployment pinned to an exact version is left
+alone, since for those the chart's own change is the signal.
+
+It reads the values file as it finds it. It can't add settings that weren't there,
 which is why an instance installed before a value existed needs
 `orchardctl config set` first.
 

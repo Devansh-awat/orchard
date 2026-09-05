@@ -12,8 +12,25 @@ export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
 helm upgrade --install orchard "$ORCHARD_CHART" \
   --namespace "$ORCHARD_NAMESPACE" -f "$ORCHARD_VALUES" --timeout 20m "$@"
-kubectl -n "$ORCHARD_NAMESPACE" rollout status deploy/server --timeout=10m
-kubectl -n "$ORCHARD_NAMESPACE" rollout status deploy/frontend --timeout=5m
+
+# The installer pins the image tag to `latest`, so a new build reuses the same
+# tag string. Helm sees an identical pod template, writes no new ReplicaSet,
+# and nothing re-pulls: `helm upgrade` alone can report success while leaving
+# the old image running. Restart explicitly when the tag is a moving one.
+for deploy in server frontend mcp; do
+  kubectl -n "$ORCHARD_NAMESPACE" get "deploy/$deploy" >/dev/null 2>&1 || continue
+
+  tag=$(yq -r ".${deploy}.image.tag // \"\"" "$ORCHARD_VALUES" 2>/dev/null || echo "")
+  # An unreadable tag is treated as moving: restarting a pinned deployment
+  # costs a rollout, missing an update leaves a fixed bug undeployed.
+  case "$tag" in
+    latest|"" | null)
+      kubectl -n "$ORCHARD_NAMESPACE" rollout restart "deploy/$deploy" >/dev/null
+      ;;
+  esac
+
+  kubectl -n "$ORCHARD_NAMESPACE" rollout status "deploy/$deploy" --timeout=10m
+done
 
 # The host commands ship inside the server image, so a release that changes
 # them lands here too rather than waiting for someone to re-run the installer.
