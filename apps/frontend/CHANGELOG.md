@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1](https://github.com/hackclub/orchard/compare/frontend/v1.21.0...frontend/v1.21.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* let the claim page load when signed out ([1ee2f07](https://github.com/hackclub/orchard/commit/1ee2f07570bc0647343cd30451674b8557a7299b))
+
 ## [1.21.0](https://github.com/hackclub/orchard/compare/frontend/v1.20.1...frontend/v1.21.0) (2026-09-05)
 
 
