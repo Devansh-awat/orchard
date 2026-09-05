@@ -133,6 +133,12 @@ overrides at least:
 ```yaml
 ingress:
   host: orchard.example.com
+  tls:
+    enabled: true
+    # Either name a Secret you create yourself, or set issuerRef and the chart
+    # issues the certificate for `host`. With neither, Traefik terminates using
+    # its self-signed default cert and every browser rejects it.
+    issuerRef: { name: letsencrypt-prod, kind: ClusterIssuer }
 gateway:
   http:
     appDomain: apps.example.com
@@ -140,7 +146,7 @@ tenant:
   storageClass: ""            # empty = cluster default
   ingressClass: nginx
   certClusterIssuer: letsencrypt-prod
-signupMode: open
+signupMode: invite_only
 datadog:
   enabled: false
 builders:
@@ -160,6 +166,76 @@ server:
 ```
 
 Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
+
+## First sign-in
+
+A fresh instance has no accounts and no superadmin, and it very likely has no
+`SMTP_*` env either, so it cannot deliver an OTP. The way in is a **claim
+link**: a single-use token that creates the first account, makes it the
+superadmin, and signs it in, all in one step.
+
+The link is printed three ways, whichever suits you:
+
+- in the closing box the installer prints when it finishes
+- in the server log on first boot (`kubectl -n orchard logs deploy/server`)
+- on demand, by running `orchard-claim` on the host
+
+```
+$ orchard-claim
+
+  Open this to claim the instance and sign in (valid for 24 hours):
+
+    https://orchard.example.com/setup/claim?token=T2SdKq...
+
+  It works once. Add a passkey straight after so you can sign back in.
+```
+
+Opening it asks for the email address the account should use and nothing else.
+No confirmation email is sent, and the address is left unverified until email
+actually works, because the token proved you own the host, not the mailbox.
+
+The token is only ever stored hashed, so a lost one cannot be read back.
+`orchard-claim` mints a replacement instead. It refuses once a superadmin
+exists, and redeeming it is a single transaction, so it can't be replayed. The
+only thing standing behind it is exec access on the server pod, which is
+already equivalent to owning the instance.
+
+### Add a passkey immediately
+
+**With no SMTP and no identity provider, a passkey is your only way back in.**
+The claim link is one-time, so once you close that tab a session cookie is all
+you have. Go to Settings and register one before doing anything else.
+
+Passkeys need no external service, and passkey sign-in needs no email address:
+Orchard uses discoverable credentials, so the login page can identify you from
+the authenticator alone. They also require a **secure context**, so the
+instance must be serving a real certificate first — a browser refuses WebAuthn
+behind a self-signed cert. `WEBAUTHN_RP_ID` defaults to the hostname in
+`FRONTEND_URL`, so there is normally nothing to configure.
+
+If you lose every passkey on an instance with no email transport, there is
+currently no self-service recovery. Configure `SMTP_*` or an identity provider
+before you are relying on a single authenticator.
+
+### Configuring email later
+
+Email is optional for a single-operator instance and required the moment you
+want to invite anyone, since invites and OTPs are both delivered over it. Set
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` in
+`server.env` and re-run the upgrade.
+
+Until then, OTP requests still generate a code and write it to the server log
+rather than sending it:
+
+```
+[EmailService] SMTP_HOST not set — email sending is disabled
+[DEV] OTP code for you@example.com: 481920
+```
+
+That is a usable fallback for a lone operator reading their own logs, and a
+reason to keep `signupMode: invite_only` — the chart default. The installer
+sets it too. Switching to `open` on an instance that can send email turns the
+login page into public registration.
 
 ## Footprint and scaling
 
