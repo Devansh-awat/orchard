@@ -178,10 +178,10 @@ The link is printed three ways, whichever suits you:
 
 - in the closing box the installer prints when it finishes
 - in the server log on first boot (`kubectl -n orchard logs deploy/server`)
-- on demand, by running `orchard-claim` on the host
+- on demand, by running `orchard claim` on the host
 
 ```
-$ orchard-claim
+$ orchard claim
 
   Open this to claim the instance and sign in (valid for 24 hours):
 
@@ -195,7 +195,7 @@ No confirmation email is sent, and the address is left unverified until email
 actually works, because the token proved you own the host, not the mailbox.
 
 The token is only ever stored hashed, so a lost one cannot be read back.
-`orchard-claim` mints a replacement instead. It refuses once a superadmin
+`orchard claim` mints a replacement instead. It refuses once a superadmin
 exists, and redeeming it is a single transaction, so it can't be replayed. The
 only thing standing behind it is exec access on the server pod, which is
 already equivalent to owning the instance.
@@ -219,16 +219,16 @@ before you are relying on a single authenticator.
 
 ### Changing settings later
 
-`orchard-config` edits the values file the installer wrote and is the intended
+`orchard config` edits the values file the installer wrote and is the intended
 way to change anything the install prompts didn't ask about:
 
 ```bash
-orchard-config get signupMode
-orchard-config set signupMode invite_only
-orchard-config set ingress.tls.issuerRef.name letsencrypt
-orchard-config set metrics.enabled false --apply
-orchard-config list
-orchard-config edit
+orchard config get signupMode
+orchard config set signupMode invite_only
+orchard config set ingress.tls.issuerRef.name letsencrypt
+orchard config set metrics.enabled false --apply
+orchard config list
+orchard config edit
 ```
 
 Paths are dotted and are created if they don't exist, so setting
@@ -237,8 +237,8 @@ whole nesting. Values keep their YAML type: `false` and `2` land as a boolean
 and an integer, a bare word stays a string.
 
 Changes are written but **not deployed**. Pass `--apply` to run
-`orchard-update` straight after, or leave it off while you make several edits
-and run `orchard-update` once at the end.
+`orchard update` straight after, or leave it off while you make several edits
+and run `orchard update` once at the end.
 
 The ones worth knowing:
 
@@ -252,9 +252,14 @@ The ones worth knowing:
 | `protection.orchardLogin` | offer "sign in with Orchard" on tenant hosts |
 | `server.replicas` | control-plane API pods |
 
-`orchard-update` on its own picks up new images and a new chart, but it reads
+The installer puts these on the host as `orchard <subcommand>`, with
+hyphenated aliases (`orchard-update`, `orchard-config`, `orchard-claim`) that
+are the real entry points. `orchard logs` and `orchard status` are shortcuts
+for the equivalent `kubectl` calls.
+
+`orchard update` on its own picks up new images and a new chart, but it reads
 the values file as it finds it. It can't add settings that weren't there, which
-is why an instance installed before a value existed needs `orchard-config set`
+is why an instance installed before a value existed needs `orchard config set`
 first.
 
 ### Configuring email later

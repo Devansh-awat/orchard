@@ -1065,6 +1065,55 @@ EOS
   } > /usr/local/bin/orchard-config
   chmod +x /usr/local/bin/orchard-config
 
+  # `orchard update` is what people type. The hyphenated commands stay as the
+  # real entry points, since the systemd timer and older docs reference them.
+  {
+    echo '#!/usr/bin/env bash'
+    cat <<'EOS'
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+orchard - manage this Orchard instance
+
+  orchard update            upgrade to the latest chart and images
+  orchard config ...        read and change chart values
+  orchard claim             print a link to claim the instance and sign in
+  orchard logs [service]    follow logs (server, frontend, mcp; default server)
+  orchard status            show the control-plane pods
+
+Each also exists hyphenated, e.g. orchard-update.
+USAGE
+}
+
+cmd=${1:-help}
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  update|config|claim)
+    exec "orchard-$cmd" "$@"
+    ;;
+  logs)
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    exec kubectl -n orchard logs -f "deploy/${1:-server}"
+    ;;
+  status)
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    exec kubectl -n orchard get pods
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+EOS
+  } > /usr/local/bin/orchard
+  chmod +x /usr/local/bin/orchard
+
   if [ "$ORCHARD_UPDATE_POLICY" = automatic ]; then
     cat > /etc/systemd/system/orchard-update.service <<'EOF'
 [Unit]
@@ -1087,7 +1136,7 @@ EOF
     systemctl enable --now orchard-update.timer >/dev/null
     info "nightly updates enabled (systemctl disable orchard-update.timer to stop)"
   else
-    info "run 'orchard-update' to upgrade"
+    info "run 'orchard update' to upgrade"
   fi
 }
 
@@ -1105,9 +1154,10 @@ summary() {
   pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN"
   pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN"
   pad_line ""
+  pad_line "  ${C_GREY}Upgrade${C_RESET}    orchard update"
+  pad_line "  ${C_GREY}Settings${C_RESET}   orchard config set <path> <value> --apply"
+  pad_line "  ${C_GREY}Logs${C_RESET}       orchard logs"
   pad_line "  ${C_GREY}Config${C_RESET}     $VALUES_FILE"
-  pad_line "  ${C_GREY}Upgrade${C_RESET}    orchard-update"
-  pad_line "  ${C_GREY}Logs${C_RESET}       kubectl -n orchard logs -f deploy/server"
   pad_line ""
   box_bottom
 
@@ -1118,11 +1168,11 @@ summary() {
   if claim_link=$(orchard-claim 2>/dev/null | grep -E '^\s+http'); then
     printf '      %s%s%s\n' "$C_BRIGHT" "$(echo "$claim_link" | tr -d ' ')" "$C_RESET"
   else
-    printf '      %sorchard-claim%s\n' "$C_BRIGHT" "$C_RESET"
+    printf '      %sorchard claim%s\n' "$C_BRIGHT" "$C_RESET"
   fi
   printf '\n'
   note "Add a passkey as soon as you are in — with no SMTP configured it is"
-  note "the only way to sign back in. Run 'orchard-claim' for a fresh link."
+  note "the only way to sign back in. Run 'orchard claim' for a fresh link."
   printf '\n'
 
   if [ "$INGRESS_MODE" = tunnel ]; then
