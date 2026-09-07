@@ -40,6 +40,18 @@ export interface ChecklistItem {
   href?: string;
 }
 
+// The name an untouched organization carries, derived from the email domain.
+// Shared so the setup step can tell "still the default" from "renamed".
+function orgLabelFor(email: string): string {
+  const domain = email.split('@')[1] || '';
+  return domain.split('.')[0] || email.split('@')[0] || 'orchard';
+}
+
+export function defaultOrgName(email: string): string {
+  const label = orgLabelFor(email);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function envSet(...names: string[]): boolean {
   return names.every((name) => !!(process.env[name] || '').trim());
 }
@@ -137,13 +149,17 @@ export class SetupService implements OnModuleInit {
     });
     if (!user) throw new BadRequestException('Unknown user');
 
-    const [passkeys, orgs, deployments] = await Promise.all([
+    const [passkeys, named, deployments] = await Promise.all([
       this.prisma.passkey.count({ where: { userId } }),
-      this.prisma.organizationMember.count({ where: { userId } }),
+      this.prisma.organization.findMany({
+        where: { members: { some: { userId } } },
+        select: { name: true },
+      }),
       this.prisma.deployment.count({
         where: { project: { organization: { members: { some: { userId } } } } },
       }),
     ]);
+    const orgs = named.length;
 
     const skipped = new Set(user.setupSkipped ?? []);
     const steps: SetupStep[] = [
@@ -151,9 +167,17 @@ export class SetupService implements OnModuleInit {
       // ends with no passkey registered locks the operator out of their own
       // instance and there is no self-service way back in.
       { id: 'passkey', done: passkeys > 0, skipped: false, required: true },
-      // The org already exists (created at claim time), so this step is only
-      // about naming it. Skipping keeps the derived default.
-      { id: 'organization', done: orgs > 0, skipped: skipped.has('organization'), required: false },
+      // Not `orgs > 0`: the org is created at claim time, so that is true from
+      // the first moment and the step would never render. What is outstanding
+      // is that it still carries the name derived from the email domain, and
+      // the point of showing this step at all is that orgs are a concept
+      // people should meet rather than have quietly appear around them.
+      {
+        id: 'organization',
+        done: orgs > 0 && !named.some((org) => org.name === defaultOrgName(user.email ?? '')),
+        skipped: skipped.has('organization'),
+        required: false,
+      },
       { id: 'deploy', done: deployments > 0, skipped: skipped.has('deploy'), required: false },
     ];
 
@@ -331,9 +355,8 @@ export class SetupService implements OnModuleInit {
       const existing = await this.prisma.organizationMember.count({ where: { userId } });
       if (existing > 0) return;
 
-      const domain = email.split('@')[1] || '';
-      const label = domain.split('.')[0] || email.split('@')[0] || 'orchard';
-      const name = label.charAt(0).toUpperCase() + label.slice(1);
+      const label = orgLabelFor(email);
+      const name = defaultOrgName(email);
 
       let slug = formatSlug(label) || 'orchard';
       for (let attempt = 1; attempt < 50; attempt += 1) {
