@@ -83,15 +83,11 @@
 			>
 				{#if state === 'claimed'}
 					<Alert tone="success" title="This instance is yours">
-						You can manage users, nodes and instance settings from the admin area.
-					</Alert>
-					<Alert tone="warning" title="Add a passkey next">
-						Until an email provider or identity provider is configured, this instance cannot send
-						you a sign-in code. A passkey is how you get back in.
+						An organization has been created for you. A few more steps and you will have
+						something running on it.
 					</Alert>
 					<div class="claim-actions">
-						<Button variant="primary" href="/user/settings">Add a passkey</Button>
-						<Button href="/admin">Go to admin</Button>
+						<Button variant="primary" href="/setup">Set up your instance</Button>
 					</div>
 				{:else if state === 'unavailable'}
 					<Alert tone="info" title="Nothing to claim">
