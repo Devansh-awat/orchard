@@ -172,7 +172,7 @@ Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
 A fresh instance has no accounts and no superadmin, and it very likely has no
 `SMTP_*` env either, so it cannot deliver an OTP. The way in is a **claim
 link**: a single-use token that creates the first account, makes it the
-superadmin, and signs it in, all in one step.
+superadmin, creates its organization, and signs it in, all in one step.
 
 The link is printed three ways, whichever suits you:
 
@@ -199,6 +199,28 @@ The token is only ever stored hashed, so a lost one cannot be read back.
 exists, and redeeming it is a single transaction, so it can't be replayed. The
 only thing standing behind it is exec access on the server pod, which is
 already equivalent to owning the instance.
+
+### The setup flow
+
+Claiming drops you into a three step gate, which blocks until the instance is
+in a state where it actually works:
+
+1. **A passkey.** Not skippable. With no email transport, a session that ends
+   with no passkey registered locks you out of your own instance and there is no
+   self-service way back in.
+2. **Your organization.** Already created for you, named after your email
+   domain, because everything else in Orchard hangs off one and there is no
+   self-serve way to make one. This step only renames it, so skipping is safe.
+3. **Your first deployment.** Shows every source Orchard can deploy from and
+   completes inline for a container image or a public GitHub repo. Skippable.
+
+The rule the gate is built on: **no skip may leave Orchard unusable**. Anything
+whose absence would break the instance is either unskippable, or done for you
+and demoted to customisation. It is enforced server-side, not just in the UI.
+
+Steps are resumable, and `done` is always derived from the thing the step
+produces rather than a stored flag, so deleting your last passkey reopens that
+step instead of leaving a stale tick behind.
 
 ### Add a passkey immediately
 
@@ -503,6 +525,100 @@ user-selectable. The `USERSPACE_NODE_SCHEDULING` env var overrides that toggle
 when set (`true` forces it on, `false` forces it off and locks the switch);
 leave it unset to control the feature from the UI. Pool placement applies to app
 deployments, jobs, and CNPG databases.
+
+## TLS for app URLs
+
+Every app gets a URL under your app domain, and each one needs a certificate.
+There are two ways to get them, and the default needs no setup.
+
+### Per host, the default
+
+With no wildcard configured, each host gets its own certificate issued over
+HTTP-01 against `tenant.certClusterIssuer`. Nothing to configure, no DNS
+credentials, and the certificate lands directly in the namespace that uses it.
+
+The ceiling is Let's Encrypt's issuance limits:
+
+| Limit | Value |
+|---|---|
+| Certificates per registered domain | 50 per 7 days, refilling 1 per 202 minutes |
+| Duplicate certificates (identical name set) | 5 per 7 days, no overrides |
+| New orders per account | 300 per 3 hours |
+| Failed validations | 5 per identifier per hour |
+
+Two things to know about that first row. It refills continuously rather than
+resetting weekly, so the sustained rate is roughly 7 new URLs a day with a burst
+of 50. And "registered domain" means eTLD+1: `apps.example.com`,
+`orchard.example.com` and every generated app URL share **one** budget across
+all of `example.com`. Overrides are available from Let's Encrypt on request.
+
+Past roughly 50 new URLs a week, switch to a wildcard.
+
+### A wildcard, once you outgrow it
+
+One certificate covers every host under the domain, so issuance stops counting
+against anything. It needs DNS-01, because a wildcard cannot be validated over
+HTTP-01.
+
+**1. A DNS-01 issuer.** cert-manager supports these providers natively, with no
+webhook: Cloudflare, Route53, AzureDNS, Google CloudDNS, DigitalOcean, Akamai,
+ACMEDNS and RFC2136. For Cloudflare a token scoped to `Zone:DNS:Edit` on the one
+zone is enough:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: you@example.com
+    privateKeySecretRef:
+      name: letsencrypt-dns01
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+```
+
+If you would rather not hand cert-manager a registrar token, delegate the
+challenge instead: point `_acme-challenge.apps.example.com` at a zone you don't
+mind it writing to and use the `acmeDNS` solver. That is what the Hack Club
+cluster does.
+
+**2. Point the chart at it.**
+
+```yaml
+certificates:
+  enabled: true
+  issuer: { name: letsencrypt-dns01, kind: ClusterIssuer }
+  copyToTenants: true
+tenant:
+  wildcardDomains: ".apps.example.com=wildcard-apps-example-com-tls"
+```
+
+**3. Understand `copyToTenants`.** A wildcard is issued once, into
+`certificates.namespace`, but every tenant Ingress references the Secret by name
+in **its own** namespace. Something has to copy it there or those hosts serve
+nothing. Orchard does that itself on a five minute reconcile, which is why no
+extra component is needed.
+
+Leave `copyToTenants: false` if you already run a secret replicator such as
+[reflector](https://github.com/emberstack/kubernetes-reflector) or kubed. Two
+controllers replacing the same Secret each strip the other's metadata and
+rewrite in a loop.
+
+### When a certificate does not issue
+
+Orchard reads `Certificate` status back and shows it per domain, so a failure
+says what went wrong rather than only appearing as a browser warning. The common
+causes are DNS not yet pointing at the cluster, port 80 unreachable for the
+HTTP-01 challenge, a CAA record excluding Let's Encrypt, and the rate limits
+above. A rate-limit failure is called out separately because its fix is a
+wildcard rather than anything about that host.
 
 ## Protecting an ingress
 
