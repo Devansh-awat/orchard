@@ -119,6 +119,16 @@ test('an account with no org gets one when its setup state is read', async () =>
   assert.equal(created, 1);
 });
 
+// Skipping the org step is only safe because an org exists. If creation failed,
+// completing anyway would strand the account with nothing it can create.
+test('setup cannot complete without an organization', async () => {
+  const { svc } = serviceWith({ orgs: 0, passkeys: 1 });
+  (svc as any).admin = { createOrganization: async () => { throw new Error('nope'); } };
+  await svc.skipSetupStep('u1', 'organization');
+  const s = await svc.skipSetupStep('u1', 'deploy');
+  assert.equal(s.complete, false);
+});
+
 test('skips are idempotent', async () => {
   const { svc, state } = serviceWith({ orgs: 1 });
   await svc.skipSetupStep('u1', 'deploy');

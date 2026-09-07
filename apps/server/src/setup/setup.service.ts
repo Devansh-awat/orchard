@@ -187,7 +187,13 @@ export class SetupService implements OnModuleInit {
       { id: 'deploy', done: deployments > 0, skipped: skipped.has('deploy'), required: false },
     ];
 
-    return { steps, complete: steps.every((step) => step.done || step.skipped) };
+    // An org is required, not merely a step: skipping the organization step is
+    // only safe because one already exists. If creation failed, letting setup
+    // complete would leave an account that cannot create anything, which is the
+    // exact outcome the gate exists to prevent. The step's own no-org branch
+    // offers a way into the admin area, so this cannot trap anyone.
+    const settled = steps.every((step) => step.done || step.skipped);
+    return { steps, complete: settled && orgs > 0 };
   }
 
   async skipSetupStep(userId: string, step: string): Promise<SetupState> {
