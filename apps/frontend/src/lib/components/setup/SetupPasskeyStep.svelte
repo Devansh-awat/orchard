@@ -27,7 +27,7 @@
 			await registerPasskey('This device');
 			added = true;
 			toasts.add({ title: 'Passkey added', color: 'success' });
-			setTimeout(() => void onDone(), 700);
+			setTimeout(() => { onDone(); }, 700);
 		} catch (err) {
 			error = passkeyErrorMessage(err);
 		} finally {

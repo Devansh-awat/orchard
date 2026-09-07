@@ -22,6 +22,7 @@
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
 	import { sandboxEnabled } from '$lib/flags';
+	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
 	import { SandboxCredentialsPanel } from '$lib/components/sandbox';
 	import {
 		UserIdentityHero,
@@ -579,25 +580,7 @@
 		}
 		registerLoading = true;
 		try {
-			const optionsResponse = await apiFetch('/apiv1/auth/passkey/register/options', {
-				method: 'POST'
-			});
-			if (!optionsResponse.ok) throw new Error('Could not create passkey challenge');
-			const options = await optionsResponse.json();
-			const { startRegistration } = await import('@simplewebauthn/browser');
-			const credential = await startRegistration({ optionsJSON: options });
-			const verifyResponse = await apiFetch('/apiv1/auth/passkey/register/verify', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					response: credential,
-					friendlyName: newPasskeyName.trim() || undefined
-				})
-			});
-			if (!verifyResponse.ok) {
-				const data = await verifyResponse.json().catch(() => ({}));
-				throw new Error(data?.message || 'Passkey registration failed');
-			}
+			await createPasskey(newPasskeyName);
 			toasts.add({
 				title: 'Passkey added',
 				description: 'You can now sign in with this device.',
@@ -607,13 +590,11 @@
 			showAddPasskey = false;
 			await fetchPasskeys();
 		} catch (err) {
-			const description =
-				err instanceof Error
-					? err.name === 'NotAllowedError'
-						? 'Passkey prompt was cancelled.'
-						: err.message
-					: 'Failed to register passkey.';
-			toasts.add({ title: 'Unable to register passkey', description, color: 'error' });
+			toasts.add({
+				title: 'Unable to register passkey',
+				description: passkeyErrorMessage(err),
+				color: 'error'
+			});
 		} finally {
 			registerLoading = false;
 		}
