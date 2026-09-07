@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.1](https://github.com/hackclub/orchard/compare/server/v2.26.0...server/v2.26.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* show the organization step until the org is actually named ([dd123f5](https://github.com/hackclub/orchard/commit/dd123f58e31797b4fd77c014eab0fb56782be546))
+
 ## [2.26.0](https://github.com/hackclub/orchard/compare/server/v2.25.1...server/v2.26.0) (2026-09-07)
 
 
