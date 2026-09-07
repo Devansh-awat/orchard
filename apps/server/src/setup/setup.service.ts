@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
-import { formatSlug } from '../projects/projects.utils';
+import { GithubAppConfigService } from '../github/github-app-config.service';
+import { formatSlug, PLATFORM_WILDCARD_DOMAINS } from '../projects/projects.utils';
 import {
   SUPERADMIN_CLAIM_KEY,
   CLAIM_TTL_MS,
@@ -30,6 +31,19 @@ export interface SetupState {
   complete: boolean;
 }
 
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  detail: string;
+  done: boolean;
+  severity: 'normal' | 'warning';
+  href?: string;
+}
+
+function envSet(...names: string[]): boolean {
+  return names.every((name) => !!(process.env[name] || '').trim());
+}
+
 @Injectable()
 export class SetupService implements OnModuleInit {
   private readonly logger = new Logger(SetupService.name);
@@ -38,6 +52,7 @@ export class SetupService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly settings: InstanceSettingsService,
     private readonly admin: AdminService,
+    private readonly githubApp: GithubAppConfigService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -161,6 +176,71 @@ export class SetupService implements OnModuleInit {
     await this.prisma.user.update({ where: { id: userId }, data: { setupSkipped: next } });
 
     return this.getSetupState(userId);
+  }
+
+  /**
+   * Instance configuration that is optional but worth doing, for the admin
+   * area. Everything here is derived from live config rather than a stored
+   * checklist, so it cannot disagree with the instance.
+   *
+   * Nothing on this list breaks Orchard when it is missing, which is exactly
+   * why none of it is in the first-run gate.
+   */
+  getChecklist(): ChecklistItem[] {
+    const smtp = envSet('SMTP_HOST');
+    const oidc = envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET')
+      || envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
+
+    return [
+      {
+        id: 'github-app',
+        title: 'Connect a GitHub App',
+        detail: 'Deploy private repos and rebuild automatically when you push.',
+        done: this.githubApp.isConfigured(),
+        severity: 'normal',
+        href: '/setup/github',
+      },
+      {
+        id: 'backups',
+        title: 'Configure database backups',
+        detail:
+          'Managed databases have no backups at all until object storage is configured, so a deleted database cannot be recovered.',
+        done: envSet('R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'),
+        severity: 'warning',
+      },
+      {
+        id: 'smtp',
+        title: 'Set up email',
+        detail:
+          'Needed to email invitations and sign-in codes. Without it, invites still work as copyable links.',
+        done: smtp,
+        severity: 'normal',
+      },
+      {
+        id: 'oidc',
+        title: 'Add an identity provider',
+        detail: 'Let people sign in with your existing SSO instead of a code or passkey.',
+        done: oidc,
+        severity: 'normal',
+        href: '/admin/sso',
+      },
+      {
+        id: 'ingress-cname',
+        title: 'Set the ingress CNAME',
+        detail:
+          'The hostname users point custom domains at. Without it, custom-domain DNS validation is skipped.',
+        done: envSet('INGRESS_CNAME'),
+        severity: 'normal',
+      },
+      {
+        id: 'wildcard-tls',
+        title: 'Use a wildcard certificate',
+        detail:
+          'App URLs get one certificate each today, against a limit of 50 per week per registered domain. A wildcard removes that ceiling.',
+        done: PLATFORM_WILDCARD_DOMAINS.some((w) => !!w.secret),
+        severity: 'normal',
+      },
+    ];
   }
 
   async getStatus(): Promise<{ claimable: boolean }> {

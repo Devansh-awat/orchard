@@ -32,6 +32,11 @@ export class SetupController {
     return this.setup.getSetupState(req.user.sub);
   }
 
+  @Get('checklist')
+  checklist() {
+    return this.setup.getChecklist();
+  }
+
   @Auth()
   @Post('skip')
   skip(@Request() req, @Body() body: { step?: string }) {

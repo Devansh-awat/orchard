@@ -215,6 +215,7 @@
   "GET /scim/v2/ServiceProviderConfig": "public",
   "GET /scim/v2/Users": "public",
   "GET /scim/v2/Users/:id": "public",
+  "GET /setup/checklist": "superadmin",
   "GET /setup/github-app/callback": "public",
   "GET /setup/github-app/status": "superadmin",
   "GET /setup/state": "authenticated",

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { apiFetch } from '$lib/stores';
 	import { Loader2, Users, Building2, Package, Rocket } from 'lucide-svelte';
+	import { SetupChecklist } from '$lib/components/setup';
 
 	interface Stats {
 		userCount: number;
@@ -57,6 +58,10 @@
 {:else if error}
 	<div class="alert alert-error">{error}</div>
 {:else}
+	<div class="admin-checklist">
+		<SetupChecklist />
+	</div>
+
 	<div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
 		{#each statCards as card (card.label)}
 			{@const Tag = card.href ? 'a' : 'div'}
@@ -82,3 +87,9 @@
 		{/each}
 	</div>
 {/if}
+
+<style>
+	.admin-checklist {
+		margin-bottom: 1.25rem;
+	}
+</style>
