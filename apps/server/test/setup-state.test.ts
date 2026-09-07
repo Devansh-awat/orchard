@@ -22,6 +22,8 @@ function serviceWith(counts: {
     skipped: counts.skipped ?? ([] as string[]),
   };
   const svc = Object.create(SetupService.prototype) as any;
+  svc.logger = { warn() {}, error() {} };
+  svc.admin = { createOrganization: async () => ({ id: 'o1' }) };
   svc.prisma = {
     user: {
       findUnique: async () => ({ id: 'u1', email: 'hi@leafd.dev', setupSkipped: state.skipped }),
@@ -30,7 +32,9 @@ function serviceWith(counts: {
     passkey: { count: async () => state.passkeys },
     organization: {
       findMany: async () => Array.from({ length: state.orgs }, () => ({ name: state.orgName })),
+      findUnique: async () => null,
     },
+    organizationMember: { count: async () => state.orgs },
     deployment: { count: async () => state.deployments },
   };
   return { svc: svc as SetupService, state };
@@ -97,6 +101,22 @@ test('done flags follow reality rather than a stored flag', async () => {
   const s = await svc.getSetupState('u1');
   assert.equal(byId(s, 'passkey').done, false);
   assert.equal(byId(s, 'deploy').done, true);
+});
+
+// The invariant has to hold for accounts that predate the auto-creation and for
+// the claim path taken while already signed in, not only at first claim.
+test('an account with no org gets one when its setup state is read', async () => {
+  const { svc, state } = serviceWith({ orgs: 0 });
+  let created = 0;
+  (svc as any).admin = {
+    createOrganization: async () => {
+      created += 1;
+      state.orgs = 1;
+      return { id: 'o1' };
+    }
+  };
+  await svc.getSetupState('u1');
+  assert.equal(created, 1);
 });
 
 test('skips are idempotent', async () => {
