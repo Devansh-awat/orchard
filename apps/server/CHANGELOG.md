@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.26.0](https://github.com/hackclub/orchard/compare/server/v2.25.1...server/v2.26.0) (2026-09-07)
+
+
+### Features
+
+* copy the wildcard certificate into tenant namespaces ([fff7752](https://github.com/hackclub/orchard/commit/fff7752bdef365ae038f5fa391b1055cb1cd8e61))
+* create the first organization at claim time and derive setup state ([14ad42a](https://github.com/hackclub/orchard/commit/14ad42a40c2e1557884e6f7c7168f79e97698bd9))
+* instance setup checklist in the admin area ([a80146e](https://github.com/hackclub/orchard/commit/a80146ee5541e34c0e9ec3e9171c2bc8d76d986d))
+* surface certificate issuance status on ingresses ([23d5f0e](https://github.com/hackclub/orchard/commit/23d5f0e5ec378032fa9f12fb342281a6c99dd4c8))
+
+
+### Bug Fixes
+
+* issue per-host certificates when no wildcard secret is configured ([a3375f9](https://github.com/hackclub/orchard/commit/a3375f921a90d28eaf61f6e8fe1f2b04c812a6e3))
+* re-pull moving image tags on update ([2d36e9a](https://github.com/hackclub/orchard/commit/2d36e9abe04e15800f658f13d74f6a525affa197))
+
 ## [2.25.1](https://github.com/hackclub/orchard/compare/server/v2.25.0...server/v2.25.1) (2026-09-05)
 
 

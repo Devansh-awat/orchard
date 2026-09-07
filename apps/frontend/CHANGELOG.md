@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.22.0](https://github.com/hackclub/orchard/compare/frontend/v1.21.1...frontend/v1.22.0) (2026-09-07)
+
+
+### Features
+
+* blocking first-run setup gate ([c1dca7d](https://github.com/hackclub/orchard/commit/c1dca7db0388b1cfeda69499e9562ed69824d0d7))
+* instance setup checklist in the admin area ([a80146e](https://github.com/hackclub/orchard/commit/a80146ee5541e34c0e9ec3e9171c2bc8d76d986d))
+
+
+### Bug Fixes
+
+* hold release notes until onboarding is done ([1a33f8c](https://github.com/hackclub/orchard/commit/1a33f8c82a6f72c9b293749ec86b996a8d5d5d1b))
+* send a freshly claimed instance into the setup flow ([1cae1b4](https://github.com/hackclub/orchard/commit/1cae1b40c5991979430ebbdd3bbce28293406896))
+
 ## [1.21.1](https://github.com/hackclub/orchard/compare/frontend/v1.21.0...frontend/v1.21.1) (2026-09-05)
 
 
