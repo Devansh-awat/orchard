@@ -149,6 +149,12 @@ export class SetupService implements OnModuleInit {
     });
     if (!user) throw new BadRequestException('Unknown user');
 
+    // Self-healing rather than only at claim time. Whether an account has an
+    // organization is an invariant the rest of Orchard depends on, and it has
+    // to hold for accounts that predate the auto-creation, and for the claim
+    // path taken while already signed in. Idempotent.
+    if (user.email) await this.ensureOrganizationFor(user.id, user.email);
+
     const [passkeys, named, deployments] = await Promise.all([
       this.prisma.passkey.count({ where: { userId } }),
       this.prisma.organization.findMany({
@@ -298,6 +304,12 @@ export class SetupService implements OnModuleInit {
       if (deleted.count === 0) throw new BadRequestException('This instance has already been claimed');
       await tx.user.update({ where: { id: userId }, data: { isSuperAdmin: true } });
     });
+
+    const claimed = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (claimed?.email) await this.ensureOrganizationFor(userId, claimed.email);
 
     this.logger.warn(`user ${userId} claimed superadmin on this instance`);
     return { ok: true };

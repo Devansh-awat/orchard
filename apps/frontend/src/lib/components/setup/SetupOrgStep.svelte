@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Building2, Sparkles } from 'lucide-svelte';
-	import { Button, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
+	import { Alert, Button, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
 	import { apiFetch, organizations, toasts } from '$lib/stores';
 	import { motionStagger, springPop } from '$lib/utils/motion.svelte';
 
@@ -70,15 +70,21 @@
 
 <div class="step" {@attach motionStagger({ index: 0 })}>
 	<SectionCard
-		title="We made you an organization"
-		description="Everything you deploy lives inside one. You have a working org already, so this is only about naming it."
+		title={org ? 'We made you an organization' : 'Your organization'}
+		description={org
+			? 'Everything you deploy lives inside one. You have a working org already, so this is only about naming it.'
+			: 'Everything you deploy lives inside one.'}
 	>
 		{#if loading}
 			<Skeleton class="h-24 w-full" />
 		{:else if !org}
-			<p class="muted">No organization found. You can create one from the admin area later.</p>
+			<Alert tone="warning" title="No organization yet">
+				One should have been created when you claimed this instance. Reload to try again, or
+				create one from the admin area.
+			</Alert>
 			<div class="actions">
-				<Button onclick={onSkip}>Continue</Button>
+				<Button href="/admin/organizations">Open admin</Button>
+				<Button variant="primary" onclick={() => window.location.reload()}>Reload</Button>
 			</div>
 		{:else}
 			<div class="org-card" {@attach springPop(() => !loading)}>
@@ -109,12 +115,6 @@
 	.step {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.muted {
-		margin: 0;
-		color: var(--text-muted);
-		font-size: 0.875rem;
 	}
 
 	.org-card {
