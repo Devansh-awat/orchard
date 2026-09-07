@@ -363,6 +363,15 @@ gateway:
 certificates:
   enabled: true
   namespace: network
+  # Copy the wildcard TLS Secret from `namespace` into every tenant namespace
+  # whose ingresses reference it. A wildcard is issued once but each tenant
+  # Ingress names it locally, so without a copy those hosts serve no
+  # certificate.
+  #
+  # Leave false if a secret replicator (emberstack/reflector, kubed) already
+  # does this: two controllers replacing the same Secret each strip the other's
+  # metadata and rewrite in a loop.
+  copyToTenants: false
   issuer:
     name: letsencrypt-dns01-wildcard
     kind: ClusterIssuer

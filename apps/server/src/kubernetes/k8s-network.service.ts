@@ -12,8 +12,9 @@ import {
   ALLOWED_INGRESS_ANNOTATION_KEYS,
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
-import { truncateK8sName } from '../projects/projects.utils';
+import { truncateK8sName, PLATFORM_WILDCARD_DOMAINS } from '../projects/projects.utils';
 import { k8sErrorMessage } from './k8s-error';
+import { syncTlsSecret } from './tls-secret-sync';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { optionalDomain } from '../env/platform-domains';
 
@@ -53,10 +54,76 @@ export class K8sNetworkService implements OnModuleInit {
   onModuleInit() {
     setTimeout(() => {
       void this.reconcileProtectionProxies();
+      void this.reconcileWildcardSecrets();
     }, 10_000);
     setInterval(() => {
       void this.reconcileProtectionProxies();
     }, 10 * 60 * 1000).unref();
+    // Certificates renew on cert-manager's schedule, not ours, so this is a
+    // convergence loop rather than an event handler: whenever the source Secret
+    // changes, every tenant copy is stale until it runs again. Five minutes
+    // bounds how long a renewed wildcard can be missing from a namespace.
+    setInterval(() => {
+      void this.reconcileWildcardSecrets();
+    }, 5 * 60 * 1000).unref();
+  }
+
+  /**
+   * Copy the app wildcard TLS Secret into every namespace that has an ingress
+   * referencing it.
+   *
+   * A wildcard is issued once into one namespace, but tenant Ingresses name it
+   * locally, so without a copy the host has no certificate. Production solves
+   * this with emberstack/reflector; doing it here means a self-hosted install
+   * needs no extra component. No-op unless a wildcard is actually configured,
+   * which is the default, so nothing runs on a per-host install.
+   */
+  async reconcileWildcardSecrets(): Promise<void> {
+    if (!this.kc) return;
+    if (!this.leaderElection.isLeader()) return;
+
+    const sourceNamespace = (process.env.WILDCARD_TLS_SOURCE_NAMESPACE || '').trim();
+    const wildcards = PLATFORM_WILDCARD_DOMAINS.filter((w) => !!w.secret);
+    if (!sourceNamespace || wildcards.length === 0) return;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    for (const wildcard of wildcards) {
+      const secretName = wildcard.secret as string;
+      let namespaces: string[];
+      try {
+        const rows = await this.prisma.ingress.findMany({
+          where: { tlsSecretName: secretName },
+          select: { namespace: true },
+          distinct: ['namespace'],
+        });
+        namespaces = rows.map((r) => r.namespace).filter(Boolean);
+      } catch (error: any) {
+        this.logger.warn(`Failed to list namespaces for ${secretName}: ${error.message}`);
+        continue;
+      }
+
+      let copied = 0;
+      for (const namespace of namespaces) {
+        if (namespace === sourceNamespace) continue;
+        try {
+          const wrote = await syncTlsSecret(
+            coreApi,
+            { namespace: sourceNamespace, name: secretName },
+            { namespace, name: secretName },
+          );
+          if (wrote) copied += 1;
+        } catch (error: any) {
+          this.logger.warn(
+            `Failed to copy ${secretName} into ${namespace}: ${k8sErrorMessage(error)}`,
+          );
+        }
+      }
+
+      if (copied > 0) {
+        this.logger.log(`Copied wildcard ${secretName} into ${copied} namespace(s)`);
+      }
+    }
   }
 
   async reconcileProtectionProxies(): Promise<void> {

@@ -125,6 +125,16 @@ still has to name it.
             {{- if .Values.protection.orchardLogin }}
             - { name: PROTECTION_ORCHARD_LOGIN, value: "true" }
             {{- end }}
+            {{- if .Values.certificates.copyToTenants }}
+            # Where the wildcard TLS Secret is issued. The server copies it into
+            # every namespace whose ingresses name it, because a wildcard is
+            # issued once but referenced locally by each tenant Ingress.
+            #
+            # Opt-in, and it must stay off wherever something else already does
+            # this: two controllers replacing the same Secret would each undo
+            # the other's metadata and rewrite forever.
+            - { name: WILDCARD_TLS_SOURCE_NAMESPACE, value: {{ .Values.certificates.namespace | quote }} }
+            {{- end }}
             {{- if .Values.cilium.enabled }}
             # Only set when the operator opts in. Left unset the server probes
             # the cluster for the cilium.io group plus create permission on

@@ -7,6 +7,7 @@ import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
 import { deriveDbTuning } from './db-tuning';
 import { optionalDomain } from '../env/platform-domains';
+import { syncTlsSecret } from './tls-secret-sync';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -2288,61 +2289,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
    */
   async syncPublicTlsSecret(targetNamespace: string): Promise<boolean> {
     this.ensureKubeConfig();
-    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-
-    const { body: src } = await coreApi.readNamespacedSecret(
-      this.PUBLIC_TLS_SOURCE_SECRET, this.PUBLIC_TLS_SOURCE_NAMESPACE,
+    return syncTlsSecret(
+      this.kc.makeApiClient(k8s.CoreV1Api),
+      { namespace: this.PUBLIC_TLS_SOURCE_NAMESPACE, name: this.PUBLIC_TLS_SOURCE_SECRET },
+      { namespace: targetNamespace, name: this.PUBLIC_TLS_LOCAL_SECRET },
     );
-    if (!src.data?.['tls.crt'] || !src.data?.['tls.key']) {
-      throw new Error('Source wildcard secret is missing tls.crt / tls.key');
-    }
-
-    // cert-manager stores the leaf + issuing intermediate(s) concatenated in tls.crt and
-    // usually does NOT populate ca.crt for public ACME issuers. CNPG requires a ca.crt
-    // whose chain verifies tls.crt, so we split tls.crt and use the intermediate(s) as ca.crt.
-    let caCrtB64 = src.data['ca.crt'];
-    if (!caCrtB64) {
-      const fullChainPem = Buffer.from(src.data['tls.crt'], 'base64').toString('utf-8');
-      const certs = fullChainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
-      if (certs.length >= 2) {
-        const intermediates = `${certs.slice(1).join('\n')  }\n`;
-        caCrtB64 = Buffer.from(intermediates, 'utf-8').toString('base64');
-      }
-    }
-
-    const targetName = this.PUBLIC_TLS_LOCAL_SECRET;
-    const srcRv = src.metadata?.resourceVersion || '';
-    const body: k8s.V1Secret = {
-      metadata: {
-        name: targetName,
-        namespace: targetNamespace,
-        labels: {
-          'app.kubernetes.io/managed-by': 'orchard',
-          'orchard.my/tls-source-rv': srcRv,
-        },
-      },
-      type: 'kubernetes.io/tls',
-      data: {
-        'tls.crt': src.data['tls.crt'],
-        'tls.key': src.data['tls.key'],
-        ...(caCrtB64 ? { 'ca.crt': caCrtB64 } : {}),
-      },
-    };
-
-    try {
-      const { body: existing } = await coreApi.readNamespacedSecret(targetName, targetNamespace);
-      const existingRv = existing.metadata?.labels?.['orchard.my/tls-source-rv']
-        ?? existing.metadata?.labels?.['orchard.dev/tls-source-rv'];
-      if (existingRv === srcRv) return false;
-      await coreApi.replaceNamespacedSecret(targetName, targetNamespace, body);
-      return true;
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        await coreApi.createNamespacedSecret(targetNamespace, body);
-        return true;
-      }
-      throw e;
-    }
   }
 
   async patchCnpgClusterTls(namespace: string, clusterName: string, _altDnsNames: string[] = []): Promise<void> {
