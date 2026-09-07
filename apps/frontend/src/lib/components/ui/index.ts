@@ -36,6 +36,8 @@ export { default as PageHeader } from './PageHeader.svelte';
 export { default as Table } from './Table.svelte';
 export { default as ToggleRow } from './ToggleRow.svelte';
 export { default as Stepper } from './Stepper.svelte';
+export { default as StepRail } from './StepRail.svelte';
+export type { RailStep } from './steprail';
 export { default as SettingsRail } from './SettingsRail.svelte';
 export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as Slider } from './Slider.svelte';
