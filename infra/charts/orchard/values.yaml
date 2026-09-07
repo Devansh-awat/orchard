@@ -96,12 +96,19 @@ tenant:
   storageClass: ""
   ingressClass: ""
   certClusterIssuer: ""
-  # Comma-separated domain=tlsSecretName pairs for wildcard certs you manage,
-  # e.g. ".apps.example.com=wildcard-apps-example-com-tls"
+  # Comma-separated suffixes that generated app URLs are built under, each
+  # optionally naming a wildcard TLS Secret you manage:
+  #   ".apps.example.com=wildcard-apps-example-com-tls"  reuse that Secret
+  #   ".apps.example.com"                                issue per host
   #
-  # Leave empty and the chart derives a single wildcard from
-  # gateway.http.appDomain + gateway.http.appWildcardSecretName, which is what
-  # generated app URLs (main-forge-abc123.<appDomain>) are built from.
+  # Leave empty and the suffix is derived from gateway.http.appDomain, with a
+  # Secret only when gateway.http.appWildcardSecretName names one. Without a
+  # wildcard, each host gets its own certificate from certClusterIssuer above,
+  # which needs no DNS-01 and no way to copy a Secret between namespaces.
+  #
+  # Per host costs one issuance each, against Let's Encrypt's 50 per registered
+  # domain per week (eTLD+1, so every subdomain shares one budget). Past roughly
+  # 50 URLs a week, set up a wildcard instead — see docs/self-hosting.md.
   wildcardDomains: ""
 
 # Cilium-specific features: per-tenant CiliumNetworkPolicy and the

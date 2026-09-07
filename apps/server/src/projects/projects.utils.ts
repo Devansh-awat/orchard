@@ -15,10 +15,18 @@ export function wildcardSecretNameFor(suffix: string): string {
 // literal fallback: an unconfigured instance must not mint URLs under a domain
 // it doesn't own.
 //
+// `secret` is the wildcard TLS Secret to reuse for hosts under the suffix, and
+// it is null unless the operator named one. Synthesising a name here was a bug:
+// nothing creates that Secret on an install without a DNS-01 issuer and a way
+// to copy it into every tenant namespace, so every generated URL pointed at a
+// Secret that never existed and served no certificate. With null, callers fall
+// through to per-host issuance against CERT_CLUSTER_ISSUER, which works out of
+// the box. See docs/self-hosting.md for the wildcard upgrade path.
+//
 // Parsed here rather than in ingress.service so deployments.service can use it:
 // ingress.service already forwardRef-imports DeploymentsService, and importing
 // back the other way is the circular dependency that TDZ-crashes boot under swc.
-function parseWildcardDomains(): { suffix: string; secret: string }[] {
+function parseWildcardDomains(): { suffix: string; secret: string | null }[] {
   const explicit = (process.env.PLATFORM_WILDCARD_DOMAINS || '')
     .split(',')
     .map((entry) => entry.trim())
@@ -27,7 +35,7 @@ function parseWildcardDomains(): { suffix: string; secret: string }[] {
       const [suffix, secret] = entry.split('=').map((part) => part.trim());
       if (!suffix) return [];
       const normalized = suffix.startsWith('.') ? suffix : `.${suffix}`;
-      return [{ suffix: normalized, secret: secret || wildcardSecretNameFor(normalized) }];
+      return [{ suffix: normalized, secret: secret || null }];
     });
 
   if (explicit.length) return explicit;
@@ -35,8 +43,7 @@ function parseWildcardDomains(): { suffix: string; secret: string }[] {
   const appDomain = (process.env.APP_DOMAIN || '').trim().replace(/^\.+|\.+$/g, '');
   if (!appDomain) return [];
 
-  const suffix = `.${appDomain}`;
-  return [{ suffix, secret: wildcardSecretNameFor(suffix) }];
+  return [{ suffix: `.${appDomain}`, secret: null }];
 }
 
 export const PLATFORM_WILDCARD_DOMAINS = parseWildcardDomains();

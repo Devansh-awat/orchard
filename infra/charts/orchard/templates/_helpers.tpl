@@ -28,7 +28,18 @@ domain once instead of keeping four values in sync.
 {{- if .Values.tenant.wildcardDomains -}}
 {{ .Values.tenant.wildcardDomains }}
 {{- else if .Values.gateway.http.appDomain -}}
-{{ printf ".%s=%s" .Values.gateway.http.appDomain (include "orchard.appWildcardSecret" .) }}
+{{- /*
+  Suffix only, with no `=secret`, unless a wildcard Secret was actually named.
+  Naming a derived one made every generated URL reference a Secret that nothing
+  on a stock install creates, so the host served no certificate. Without it the
+  server issues per-host against tenant.certClusterIssuer, which works with no
+  extra setup.
+*/ -}}
+{{- if .Values.gateway.http.appWildcardSecretName -}}
+{{ printf ".%s=%s" .Values.gateway.http.appDomain .Values.gateway.http.appWildcardSecretName }}
+{{- else -}}
+{{ printf ".%s" .Values.gateway.http.appDomain }}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

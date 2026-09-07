@@ -901,7 +901,11 @@ gateway:
   namespace: network
   gatewayClassName: traefik
   http:
-    enabled: true
+    # The server routes everything through Ingress and never creates an
+    # HTTPRoute, so this listener carries no traffic. Enabled, it also declares
+    # a certificateRef for a wildcard Secret that nothing here creates. Off,
+    # matching production.
+    enabled: false
     appDomain: $ORCHARD_APP_DOMAIN
 
 postgres:

@@ -21,11 +21,14 @@ function resolve(env: Record<string, string>) {
   return JSON.parse(out);
 }
 
-test('derives the wildcard from APP_DOMAIN when PLATFORM_WILDCARD_DOMAINS is unset', () => {
+// The suffix is derived so URLs can be generated; the secret is NOT, because
+// nothing on a stock install creates a wildcard Secret. Naming one here made
+// every generated URL point at a Secret that never existed, so the host served
+// no certificate at all. A null secret sends callers down the per-host issuance
+// path instead, which works out of the box.
+test('derives the wildcard suffix from APP_DOMAIN, with no secret', () => {
   const r = resolve({ APP_DOMAIN: 'apps.example.com' });
-  assert.deepEqual(r.domains, [
-    { suffix: '.apps.example.com', secret: 'wildcard-apps-example-com-tls' },
-  ]);
+  assert.deepEqual(r.domains, [{ suffix: '.apps.example.com', secret: null }]);
   assert.equal(r.generated, true);
 });
 
@@ -46,11 +49,18 @@ test('explicit PLATFORM_WILDCARD_DOMAINS wins over APP_DOMAIN and supports multi
   ]);
 });
 
-test('an entry with no secret derives one, and a missing leading dot is added', () => {
+test('a bare entry keeps a null secret, and a missing leading dot is added', () => {
   const r = resolve({ PLATFORM_WILDCARD_DOMAINS: 'apps.example.com' });
-  assert.deepEqual(r.domains, [
-    { suffix: '.apps.example.com', secret: 'wildcard-apps-example-com-tls' },
-  ]);
+  assert.deepEqual(r.domains, [{ suffix: '.apps.example.com', secret: null }]);
+});
+
+// Hosts under a suffix are still recognised as platform-generated when there is
+// no wildcard secret: that is what tells "has a URL" from "has a custom domain",
+// and it must not depend on how TLS happens to be issued.
+test('host matching is unaffected by the absence of a secret', () => {
+  const r = resolve({ APP_DOMAIN: 'apps.example.com' });
+  assert.equal(r.generated, true);
+  assert.equal(r.hackclub, false);
 });
 
 // The optional public-hostname features must never guess a domain under
