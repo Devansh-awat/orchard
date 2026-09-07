@@ -19,6 +19,21 @@ import { optionalDomain } from '../env/platform-domains';
 
 export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
 
+export interface CertificateStatus {
+  state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown';
+  reason?: string | null;
+  message?: string | null;
+  notAfter?: string | null;
+}
+
+// Let's Encrypt reports the per-registered-domain cap in the order's error
+// text, and it is worth separating from other failures: the fix is a wildcard
+// certificate rather than anything about this particular host.
+function isAcmeRateLimit(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return /too many certificates( already)? issued|rate ?limit/i.test(text);
+}
+
 /**
  * All Kubernetes network/edge resources: Services, Ingress (Cilium),
  * basic-auth (CiliumEnvoyConfig), public exposure (Cilium LB IPAM
@@ -316,6 +331,69 @@ export class K8sNetworkService implements OnModuleInit {
           details: error.response?.body
         });
       }
+    }
+  }
+
+  /**
+   * What cert-manager thinks of the certificate behind an ingress's TLS Secret.
+   *
+   * Nothing used to read this back. The annotation asking for a certificate was
+   * written and never checked, so a host whose issuance failed looked exactly
+   * like one that worked: the Ingress existed, the UI said fine, and the browser
+   * showed a certificate error with no explanation anywhere.
+   *
+   * Never throws. A cluster with no cert-manager, or one where the Secret was
+   * provisioned some other way, reports `unknown` rather than turning a missing
+   * CRD into a failed page load.
+   */
+  async getCertificateStatus(
+    namespace: string,
+    secretName: string | null | undefined,
+  ): Promise<CertificateStatus> {
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanSecret = String(secretName || '').trim();
+    if (!cleanNamespace || !cleanSecret || !this.kc) return { state: 'unknown' };
+
+    try {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const list: any = await customApi.listNamespacedCustomObject(
+        'cert-manager.io', 'v1', cleanNamespace, 'certificates',
+      );
+      // Matched on spec.secretName rather than name: the Certificate is named
+      // independently of the Secret it produces, and the Ingress only knows the
+      // Secret.
+      const cert = (list.body?.items || []).find(
+        (item: any) => item?.spec?.secretName === cleanSecret,
+      );
+      if (!cert) return { state: 'unknown' };
+
+      const conditions: any[] = cert.status?.conditions || [];
+      const ready = conditions.find((c) => c.type === 'Ready');
+      const issuing = conditions.find((c) => c.type === 'Issuing');
+
+      if (ready?.status === 'True') {
+        return { state: 'ready', notAfter: cert.status?.notAfter ?? null };
+      }
+
+      const reason = ready?.reason || issuing?.reason || null;
+      const message = ready?.message || issuing?.message || null;
+
+      if (isAcmeRateLimit(message) || isAcmeRateLimit(reason)) {
+        return { state: 'rateLimited', reason, message };
+      }
+      if (ready?.status === 'False' && reason === 'Failed') {
+        return { state: 'failed', reason, message };
+      }
+      return { state: 'issuing', reason, message };
+    } catch (error: any) {
+      const code = error?.response?.statusCode;
+      // 404 = no cert-manager CRDs, 403 = no rbac for them. Both mean "we
+      // cannot know", not "broken".
+      if (code === 404 || code === 403) return { state: 'unknown' };
+      this.logger.warn(
+        `Failed to read certificate status for ${cleanNamespace}/${cleanSecret}: ${k8sErrorMessage(error)}`,
+      );
+      return { state: 'unknown' };
     }
   }
 

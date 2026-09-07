@@ -1056,7 +1056,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         })
         .filter((i): i is any => !!i);
 
-      deploymentWithInternalUrls.ingresses = [...directEnriched, ...projectExtras];
+      // Whether the certificate behind each host actually issued. Read here
+      // rather than in the UI so a browser certificate error has an explanation
+      // next to the domain that caused it. Best-effort and per-host: a cluster
+      // without cert-manager reports `unknown` and renders nothing.
+      const enrichedIngresses = [...directEnriched, ...projectExtras];
+      await Promise.all(
+        enrichedIngresses.map(async (ing: any) => {
+          if (!ing?.tlsSecretName) return;
+          ing.certificateStatus = await this.k8sNetwork.getCertificateStatus(
+            ing.namespace,
+            ing.tlsSecretName,
+          );
+        }),
+      );
+
+      deploymentWithInternalUrls.ingresses = enrichedIngresses;
     }
 
     const computedStatus = await this.computeDeploymentStatus(deployment, { pods, warnings });

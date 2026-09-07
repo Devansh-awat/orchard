@@ -664,8 +664,16 @@ export class IngressService {
       imageUrl?: string;
     },
   ) {
+    // No app domain configured means no URL can be generated at all. That used
+    // to return null and get logged as a warning nobody sees, so a deployment
+    // came up with no URL and no explanation. Named so callers can say why.
     const wildcard = PLATFORM_WILDCARD_DOMAINS[0];
-    if (!wildcard) return null;
+    if (!wildcard) {
+      this.logger.warn(
+        `No app domain configured (APP_DOMAIN / PLATFORM_WILDCARD_DOMAINS), so ${deploymentId} gets no generated URL`,
+      );
+      return null;
+    }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) return null;

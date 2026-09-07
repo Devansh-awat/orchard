@@ -77,6 +77,14 @@ rules:
   - apiGroups: [""]
     resources: ["serviceaccounts"]
     verbs: ["get", "list", "watch", "create", "delete"]
+  # cert-manager Certificates are read, never written: without this a failed
+  # issuance is indistinguishable from a working one, which is how a host ends
+  # up serving no certificate with nothing in the UI to say so. Granted
+  # unconditionally because it costs nothing on a cluster with no cert-manager,
+  # where the reads simply 404.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get", "list", "watch"]
 {{- if .Values.cilium.enabled }}
   # Per-tenant L3/L7 policy and the basic-auth proxy in front of protected
   # deployments are Cilium CRDs. Only needed when Cilium is the CNI.
