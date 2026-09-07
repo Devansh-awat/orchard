@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/hackclub/orchard/compare/frontend/v1.22.0...frontend/v1.22.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* ensure the organization on every claim path ([0789188](https://github.com/hackclub/orchard/commit/0789188534d409e1a3725fef8a1fb96d9e04d2ca))
+
 ## [1.22.0](https://github.com/hackclub/orchard/compare/frontend/v1.21.1...frontend/v1.22.0) (2026-09-07)
 
 
