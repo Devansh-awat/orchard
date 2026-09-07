@@ -3,6 +3,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { sanitizeUsername } from '../users/users.service';
+import { AdminService } from '../admin/admin.service';
+import { formatSlug } from '../projects/projects.utils';
 import {
   SUPERADMIN_CLAIM_KEY,
   CLAIM_TTL_MS,
@@ -13,6 +15,21 @@ import {
 
 export { SUPERADMIN_CLAIM_KEY };
 
+// Everything except the passkey. See skipSetupStep for why that one is absent.
+const SKIPPABLE_STEPS = new Set(['organization', 'deploy']);
+
+export interface SetupStep {
+  id: 'passkey' | 'organization' | 'deploy';
+  done: boolean;
+  skipped: boolean;
+  required: boolean;
+}
+
+export interface SetupState {
+  steps: SetupStep[];
+  complete: boolean;
+}
+
 @Injectable()
 export class SetupService implements OnModuleInit {
   private readonly logger = new Logger(SetupService.name);
@@ -20,6 +37,7 @@ export class SetupService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: InstanceSettingsService,
+    private readonly admin: AdminService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -89,6 +107,62 @@ export class SetupService implements OnModuleInit {
     );
   }
 
+  /**
+   * First-run setup, described so the UI can render a gate over it.
+   *
+   * `done` is always derived from the thing the step produces, never stored: a
+   * stored flag drifts the moment someone deletes their only passkey or their
+   * org, and the whole point of the gate is that it reflects whether the
+   * instance actually works.
+   */
+  async getSetupState(userId: string): Promise<SetupState> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, setupSkipped: true },
+    });
+    if (!user) throw new BadRequestException('Unknown user');
+
+    const [passkeys, orgs, deployments] = await Promise.all([
+      this.prisma.passkey.count({ where: { userId } }),
+      this.prisma.organizationMember.count({ where: { userId } }),
+      this.prisma.deployment.count({
+        where: { project: { organization: { members: { some: { userId } } } } },
+      }),
+    ]);
+
+    const skipped = new Set(user.setupSkipped ?? []);
+    const steps: SetupStep[] = [
+      // Unskippable: on an instance with no email transport, a session that
+      // ends with no passkey registered locks the operator out of their own
+      // instance and there is no self-service way back in.
+      { id: 'passkey', done: passkeys > 0, skipped: false, required: true },
+      // The org already exists (created at claim time), so this step is only
+      // about naming it. Skipping keeps the derived default.
+      { id: 'organization', done: orgs > 0, skipped: skipped.has('organization'), required: false },
+      { id: 'deploy', done: deployments > 0, skipped: skipped.has('deploy'), required: false },
+    ];
+
+    return { steps, complete: steps.every((step) => step.done || step.skipped) };
+  }
+
+  async skipSetupStep(userId: string, step: string): Promise<SetupState> {
+    if (!SKIPPABLE_STEPS.has(step)) {
+      // Enforced here rather than only in the UI: the rule is that no skip may
+      // leave Orchard unusable, and a rule that only exists in the client is
+      // not a rule.
+      throw new BadRequestException(`The "${step}" step cannot be skipped`);
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { setupSkipped: true },
+    });
+    const next = Array.from(new Set([...(user?.setupSkipped ?? []), step]));
+    await this.prisma.user.update({ where: { id: userId }, data: { setupSkipped: next } });
+
+    return this.getSetupState(userId);
+  }
+
   async getStatus(): Promise<{ claimable: boolean }> {
     if (await this.hasSuperAdmin()) return { claimable: false };
     const claim = await this.readClaim();
@@ -156,8 +230,45 @@ export class SetupService implements OnModuleInit {
       await tx.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
     });
 
+    // Every other thing Orchard can create hangs off an organization, and there
+    // is no self-serve way to make one — the only endpoint is superadmin-only.
+    // Leaving the operator to create it themselves is what produced instances
+    // with no org, and losing your last org resets setupCompleted, so that
+    // state bounces you back into setup forever. Create it here so "has an org"
+    // is an invariant rather than a step someone can skip.
+    await this.ensureOrganizationFor(user.id, normalizedEmail);
+
     this.logger.warn(`${normalizedEmail} claimed superadmin on this instance`);
     return user;
+  }
+
+  /**
+   * The first organization, named after the email domain. Idempotent: a user
+   * who already belongs to one keeps it.
+   */
+  private async ensureOrganizationFor(userId: string, email: string): Promise<void> {
+    try {
+      const existing = await this.prisma.organizationMember.count({ where: { userId } });
+      if (existing > 0) return;
+
+      const domain = email.split('@')[1] || '';
+      const label = domain.split('.')[0] || email.split('@')[0] || 'orchard';
+      const name = label.charAt(0).toUpperCase() + label.slice(1);
+
+      let slug = formatSlug(label) || 'orchard';
+      for (let attempt = 1; attempt < 50; attempt += 1) {
+        if (!(await this.prisma.organization.findUnique({ where: { slug } }))) break;
+        slug = `${formatSlug(label) || 'orchard'}-${attempt}`;
+      }
+
+      await this.admin.createOrganization({ name, slug, primaryOwnerEmail: email }, userId);
+      this.logger.warn(`created organization ${slug} for ${email}`);
+    } catch (e: any) {
+      // A claim that half-succeeds is worse than one with no org: the token is
+      // already spent by this point, so failing here would strand the operator
+      // with no way to retry. The setup flow reports a missing org instead.
+      this.logger.error(`could not create the first organization: ${e?.message || e}`);
+    }
   }
 
   async verifyClaimToken(token: string): Promise<void> {

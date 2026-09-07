@@ -26,6 +26,18 @@ export class SetupController {
     return this.setup.claim(req.user.sub, body?.token ?? '');
   }
 
+  @Auth()
+  @Get('state')
+  state(@Request() req) {
+    return this.setup.getSetupState(req.user.sub);
+  }
+
+  @Auth()
+  @Post('skip')
+  skip(@Request() req, @Body() body: { step?: string }) {
+    return this.setup.skipSetupStep(req.user.sub, String(body?.step ?? ''));
+  }
+
   /**
    * Claim and sign in in one step, for an instance that has no way to deliver
    * an OTP yet. The token comes from the server log or `orchard-claim` on the

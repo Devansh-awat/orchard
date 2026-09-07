@@ -42,7 +42,8 @@
     "test:protection": "tsx --test test/protection-proxy.test.ts test/protection-auth.test.ts",
     "test:mirror": "tsx --test test/mirror-engine.test.ts",
     "test:repo-link": "tsx --test test/github-repo-link.test.ts",
-    "test:certificates": "tsx --test test/certificate-status.test.ts"
+    "test:certificates": "tsx --test test/certificate-status.test.ts",
+    "test:setup-state": "tsx --test test/setup-state.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
