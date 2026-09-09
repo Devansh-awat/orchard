@@ -5,6 +5,7 @@ import { GitHubService, GitHubBranch, GitHubContent } from './github.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { GithubAppConfigService } from './github-app-config.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 import { setGithubOauthStateCookie, clearGithubOauthStateCookie } from '../auth/cookies';
@@ -55,6 +56,7 @@ export class GitHubController {
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
     private readonly deployments: DeploymentsService,
+    private readonly githubAppConfig: GithubAppConfigService,
   ) {}
 
   /**
@@ -109,7 +111,7 @@ export class GitHubController {
     }
 
     const clientId = this.githubService.getOAuthClientId();
-    const redirectUri = process.env.GITHUB_REDIRECT_URI;
+    const redirectUri = this.githubAppConfig.callbackUrl();
 
     // Pass the session token as OAuth state so the callback can identify the
     // user even when the browser drops the cookie (e.g. SameSite restrictions).

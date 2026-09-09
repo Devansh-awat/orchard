@@ -53,7 +53,7 @@ export class GithubAppSetupService {
       url: base,
       hook_attributes: { url: `${base}/apiv1/github/app/webhook`, active: true },
       redirect_url: `${base}/apiv1/setup/github-app/callback`,
-      callback_urls: [`${base}/apiv1/github/callback`],
+      callback_urls: [this.config.callbackUrl()],
       public: false,
       default_permissions: {
         contents: 'read',

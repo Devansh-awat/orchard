@@ -91,6 +91,20 @@ export class GithubAppConfigService implements OnModuleInit {
     };
   }
 
+  /**
+   * The OAuth callback GitHub redirects back to.
+   *
+   * Derived rather than required: the manifest flow registers exactly this URL
+   * as the App's only callback, so reading a separate env var meant an App
+   * created through Orchard's own button sent `redirect_uri=undefined` and
+   * GitHub refused it. GITHUB_REDIRECT_URI still overrides, for instances
+   * behind a proxy whose public origin is not FRONTEND_URL.
+   */
+  callbackUrl(): string {
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    return GithubAppConfigService.env('GITHUB_REDIRECT_URI') ?? `${base}/apiv1/github/callback`;
+  }
+
   isConfigured(): boolean {
     const c = this.get();
     return Boolean(c.appId && c.privateKey);

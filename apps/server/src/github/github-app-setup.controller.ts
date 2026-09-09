@@ -20,6 +20,7 @@ export class GithubAppSetupController {
       appId: c.appId,
       lockedFields: this.config.lockedFields(),
       installUrl: this.setup.installUrl(),
+      callbackUrl: this.config.callbackUrl(),
     };
   }
 
