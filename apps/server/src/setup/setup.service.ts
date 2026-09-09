@@ -256,10 +256,16 @@ export class SetupService implements OnModuleInit {
    * Nothing on this list breaks Orchard when it is missing, which is exactly
    * why none of it is in the first-run gate.
    */
-  getChecklist(): ChecklistItem[] {
+  async getChecklist(): Promise<ChecklistItem[]> {
     const smtp = this.config.isConfigured(EMAIL);
     const oidc = envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET')
       || envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
+
+    const wildcardConfigured = platformWildcardDomains().some((w) => !!w.secret);
+    const cert = wildcardConfigured
+      ? await this.getCertificate()
+      : ({ state: 'unknown', host: null, message: null } as SetupCertificate);
+    const wildcardDetail = this.wildcardStatus(wildcardConfigured, cert);
 
     return [
       {
@@ -308,13 +314,36 @@ export class SetupService implements OnModuleInit {
       {
         id: 'wildcard-tls',
         title: 'Use a wildcard certificate',
-        detail:
-          'App URLs get one certificate each today, against a limit of 50 per week per registered domain. A wildcard removes that ceiling.',
-        done: platformWildcardDomains().some((w) => !!w.secret),
-        severity: 'normal',
+        detail: wildcardDetail,
+        done: wildcardConfigured && cert.state === 'ready',
+        severity: cert.state === 'failed' || cert.state === 'rateLimited' ? 'warning' : 'normal',
         href: '/admin/instance',
       },
     ];
+  }
+
+  /**
+   * A configured wildcard is not a working one. The setup flow tells the
+   * operator the certificate will turn up here once it lands, so the item has
+   * to reflect what cert-manager actually reports rather than only whether a
+   * secret name was typed in.
+   */
+  private wildcardStatus(configured: boolean, cert: SetupCertificate): string {
+    const base =
+      'App URLs get one certificate each today, against a limit of 50 per week per registered domain. A wildcard removes that ceiling.';
+    if (!configured) return base;
+    switch (cert.state) {
+      case 'ready':
+        return 'A wildcard certificate is issued and covering every generated app URL.';
+      case 'issuing':
+        return `Configured, and cert-manager is still issuing it. ${cert.message ?? ''}`.trim();
+      case 'failed':
+        return `Configured, but issuance failed. ${cert.message ?? ''}`.trim();
+      case 'rateLimited':
+        return `Configured, but Let's Encrypt is rate limiting. It will issue on its own once the limit rolls off.`;
+      default:
+        return 'Configured, but no certificate automation is available to issue it.';
+    }
   }
 
   async getStatus(): Promise<{ claimable: boolean }> {
