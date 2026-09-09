@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/hackclub/orchard/compare/frontend/v1.23.0...frontend/v1.24.0) (2026-09-09)
+
+
+### Features
+
+* configure object storage, email, domains and wildcard tls from the admin panel ([a1f4e02](https://github.com/hackclub/orchard/commit/a1f4e023fef2fd988e5197730091b89149fdb44a))
+
 ## [1.23.0](https://github.com/hackclub/orchard/compare/frontend/v1.22.1...frontend/v1.23.0) (2026-09-09)
 
 

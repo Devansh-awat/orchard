@@ -1,6 +1,6 @@
 {
-  "apps/server": "2.27.0",
-  "apps/frontend": "1.23.0",
+  "apps/server": "2.28.0",
+  "apps/frontend": "1.24.0",
   "apps/gateway": "0.2.1",
   "apps/cli": "0.14.0",
   "apps/r2-proxy": "0.2.1"

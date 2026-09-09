@@ -83,8 +83,8 @@
 			>
 				{#if state === 'claimed'}
 					<Alert tone="success" title="This instance is yours">
-						An organization has been created for you. A few more steps and you will have
-						something running on it.
+						An organization has been created for you. A few more steps and you will have something
+						running on it.
 					</Alert>
 					<div class="claim-actions">
 						<Button variant="primary" href="/setup">Set up your instance</Button>

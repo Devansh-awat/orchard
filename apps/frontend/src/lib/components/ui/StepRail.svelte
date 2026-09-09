@@ -11,7 +11,12 @@
 		current: string;
 	} = $props();
 
-	const currentIndex = $derived(Math.max(0, steps.findIndex((s) => s.id === current)));
+	const currentIndex = $derived(
+		Math.max(
+			0,
+			steps.findIndex((s) => s.id === current)
+		)
+	);
 	const settled = $derived(steps.filter((s) => s.done || s.skipped).length);
 	const progress = $derived(steps.length <= 1 ? 1 : settled / steps.length);
 
@@ -30,7 +35,13 @@
 	</div>
 
 	{#each steps as step, i (step.id)}
-		{@const state = step.done ? 'done' : step.skipped ? 'skipped' : i === currentIndex ? 'active' : 'idle'}
+		{@const state = step.done
+			? 'done'
+			: step.skipped
+				? 'skipped'
+				: i === currentIndex
+					? 'active'
+					: 'idle'}
 		<div class="rail-step" role="listitem" data-state={state}>
 			<div class="rail-dot" {@attach springPop(() => step.done)}>
 				{#if step.done}

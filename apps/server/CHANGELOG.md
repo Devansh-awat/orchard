@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.28.0](https://github.com/hackclub/orchard/compare/server/v2.27.0...server/v2.28.0) (2026-09-09)
+
+
+### Features
+
+* configure object storage, email, domains and wildcard tls from the admin panel ([a1f4e02](https://github.com/hackclub/orchard/commit/a1f4e023fef2fd988e5197730091b89149fdb44a))
+
+
+### Bug Fixes
+
+* derive the github oauth callback url instead of requiring an env var ([2631105](https://github.com/hackclub/orchard/commit/26311056b08b498bd0edb245b873a28f6cd3a514))
+* repoint existing ingresses when the wildcard certificate config changes ([546d416](https://github.com/hackclub/orchard/commit/546d416b159468194760c741df7bf2cd0a3daaf8))
+
 ## [2.27.0](https://github.com/hackclub/orchard/compare/server/v2.26.2...server/v2.27.0) (2026-09-09)
 
 
