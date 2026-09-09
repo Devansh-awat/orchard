@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.2](https://github.com/hackclub/orchard/compare/server/v2.28.1...server/v2.28.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* read the certificate namespace from instance config and cache the lookup ([1b432cd](https://github.com/hackclub/orchard/commit/1b432cdcd0164205d85600dace8c65e557a458bc))
+
 ## [2.28.1](https://github.com/hackclub/orchard/compare/server/v2.28.0...server/v2.28.1) (2026-09-09)
 
 
