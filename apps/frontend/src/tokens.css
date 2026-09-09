@@ -1,3 +1,9 @@
+@property --setup-band {
+	syntax: '<length>';
+	inherits: true;
+	initial-value: 0px;
+}
+
 :root {
 	--bg-app: var(--center-channel-bg);
 	--bg-surface: var(--surface-bg);
@@ -43,6 +49,18 @@
 	--status-neutral-border: color-mix(in srgb, var(--status-neutral) 20%, var(--border-default));
 	--status-progress-bg: color-mix(in srgb, var(--status-progress) 10%, var(--bg-surface));
 	--status-progress-border: color-mix(in srgb, var(--status-progress) 25%, var(--border-default));
+
+	--setup-field: #f4f1ea;
+	--setup-paper: #fdfbf7;
+	--setup-paper-deep: #f8f2e7;
+	--setup-ink: #2a2320;
+	--setup-ink-soft: #8a7f76;
+	--setup-ink-faint: #b5aba2;
+	--setup-line: rgba(42, 35, 32, 0.13);
+	--setup-crimson: #bf3747;
+	--setup-crimson-deep: #96222f;
+	--setup-glow-warm: rgba(250, 178, 96, 0.62);
+	--setup-glow-rose: rgba(233, 120, 140, 0.62);
 
 	--hue-gray: #6b7280;
 	--hue-slate: #64748b;

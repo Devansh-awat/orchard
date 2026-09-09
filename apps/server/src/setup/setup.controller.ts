@@ -38,6 +38,12 @@ export class SetupController {
   }
 
   @Auth()
+  @Get('certificate')
+  certificate() {
+    return this.setup.getCertificate();
+  }
+
+  @Auth()
   @Post('skip')
   skip(@Request() req, @Body() body: { step?: string }) {
     return this.setup.skipSetupStep(req.user.sub, String(body?.step ?? ''));

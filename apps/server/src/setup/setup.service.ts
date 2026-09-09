@@ -1,6 +1,13 @@
-import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
@@ -17,10 +24,10 @@ import {
 export { SUPERADMIN_CLAIM_KEY };
 
 // Everything except the passkey. See skipSetupStep for why that one is absent.
-const SKIPPABLE_STEPS = new Set(['organization', 'deploy']);
+const SKIPPABLE_STEPS = new Set(['organization']);
 
 export interface SetupStep {
-  id: 'passkey' | 'organization' | 'deploy';
+  id: 'passkey' | 'organization';
   done: boolean;
   skipped: boolean;
   required: boolean;
@@ -29,6 +36,12 @@ export interface SetupStep {
 export interface SetupState {
   steps: SetupStep[];
   complete: boolean;
+}
+
+export interface SetupCertificate {
+  state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured';
+  host: string | null;
+  message: string | null;
 }
 
 export interface ChecklistItem {
@@ -65,6 +78,7 @@ export class SetupService implements OnModuleInit {
     private readonly settings: InstanceSettingsService,
     private readonly admin: AdminService,
     private readonly githubApp: GithubAppConfigService,
+    @Optional() private readonly network?: K8sNetworkService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -155,14 +169,11 @@ export class SetupService implements OnModuleInit {
     // path taken while already signed in. Idempotent.
     if (user.email) await this.ensureOrganizationFor(user.id, user.email);
 
-    const [passkeys, named, deployments] = await Promise.all([
+    const [passkeys, named] = await Promise.all([
       this.prisma.passkey.count({ where: { userId } }),
       this.prisma.organization.findMany({
         where: { members: { some: { userId } } },
         select: { name: true },
-      }),
-      this.prisma.deployment.count({
-        where: { project: { organization: { members: { some: { userId } } } } },
       }),
     ]);
     const orgs = named.length;
@@ -184,7 +195,6 @@ export class SetupService implements OnModuleInit {
         skipped: skipped.has('organization'),
         required: false,
       },
-      { id: 'deploy', done: deployments > 0, skipped: skipped.has('deploy'), required: false },
     ];
 
     // An org is required, not merely a step: skipping the organization step is
@@ -194,6 +204,27 @@ export class SetupService implements OnModuleInit {
     // offers a way into the admin area, so this cannot trap anyone.
     const settled = steps.every((step) => step.done || step.skipped);
     return { steps, complete: settled && orgs > 0 };
+  }
+
+  /**
+   * The wildcard certificate for this instance, straight off cert-manager.
+   *
+   * Nobody can act on this from the setup flow, so it is deliberately not a
+   * SetupStep and never gates `complete`. It is reported so the last screen can
+   * say what is actually happening instead of spinning: `unconfigured` (no app
+   * domain) and `unknown` (no cert-manager, or no RBAC to read it) are both
+   * ordinary outcomes on a self-hosted box, not failures.
+   */
+  async getCertificate(): Promise<SetupCertificate> {
+    const wildcard = PLATFORM_WILDCARD_DOMAINS[0];
+    const host = wildcard ? `*${wildcard.suffix}` : null;
+    if (!wildcard?.secret) return { state: 'unconfigured', host, message: null };
+
+    const namespace = (process.env.WILDCARD_TLS_SOURCE_NAMESPACE || '').trim();
+    if (!namespace || !this.network) return { state: 'unknown', host, message: null };
+
+    const status = await this.network.getCertificateStatus(namespace, wildcard.secret);
+    return { state: status.state, host, message: status.message ?? null };
   }
 
   async skipSetupStep(userId: string, step: string): Promise<SetupState> {

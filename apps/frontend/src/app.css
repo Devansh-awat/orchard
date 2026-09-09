@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import './lib/components/setup/setup-step.css';
 
 @font-face {
 	font-family: 'Plus Jakarta Sans';

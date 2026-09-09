@@ -1,62 +1,81 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Loader2 } from 'lucide-svelte';
+	import { animate } from 'motion';
 	import { user, apiFetch, toasts } from '$lib/stores';
-	import { StepRail } from '$lib/components/ui';
-	import type { RailStep } from '$lib/components/ui/steprail';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { transition, motionEnabled } from '$lib/utils/motion.svelte';
+	import SetupScene from './SetupScene.svelte';
+	import SetupCard from './SetupCard.svelte';
 	import SetupPasskeyStep from './SetupPasskeyStep.svelte';
 	import SetupOrgStep from './SetupOrgStep.svelte';
-	import SetupDeployStep from './SetupDeployStep.svelte';
+	import SetupCertificateStep from './SetupCertificateStep.svelte';
+	import SetupDoneStep from './SetupDoneStep.svelte';
 
 	type ServerStep = { id: string; done: boolean; skipped: boolean; required: boolean };
+	type Phase = 'passkey' | 'organization' | 'certificate' | 'done';
 
-	const LABELS: Record<string, string> = {
-		passkey: 'Your key',
-		organization: 'Your org',
-		deploy: 'Your first app'
-	};
+	const ORDER: Phase[] = ['passkey', 'organization', 'certificate', 'done'];
+	const BAND = [0.2, 0.38, 0.6, 1];
 
-	let loading = $state(true);
 	let steps = $state<ServerStep[]>([]);
-	let current = $state('passkey');
+	let phase = $state<Phase>('passkey');
+	let ready = $state(false);
 	let finishing = $state(false);
+	let stage = $state<HTMLElement | null>(null);
+	let scene = $state<ReturnType<typeof SetupScene> | null>(null);
+	let card = $state<ReturnType<typeof SetupCard> | null>(null);
 
-	const rail = $derived<RailStep[]>(
-		steps.map((s) => ({ id: s.id, label: LABELS[s.id] ?? s.id, done: s.done, skipped: s.skipped }))
-	);
+	const index = $derived(ORDER.indexOf(phase));
+	const dots = $derived(ORDER.length - 1);
 
-	function firstUnsettled(list: ServerStep[]): string | null {
-		return list.find((s) => !s.done && !s.skipped)?.id ?? null;
+	function firstUnsettled(list: ServerStep[]): Phase | null {
+		const next = list.find((s) => !s.done && !s.skipped)?.id;
+		return next === 'passkey' || next === 'organization' ? next : null;
 	}
 
 	async function load() {
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
-			if (!response.ok) throw new Error('Could not load setup state');
+			if (!response.ok) throw new Error('unavailable');
 			const data = await response.json();
 			steps = data.steps ?? [];
-			current = firstUnsettled(steps) ?? steps[steps.length - 1]?.id ?? 'passkey';
-			if (data.complete) await finish();
+			phase = firstUnsettled(steps) ?? 'certificate';
 		} catch {
-			await finish();
-		} finally {
-			loading = false;
+			phase = 'passkey';
 		}
 	}
 
-	async function refresh() {
-		const response = await apiFetch('/apiv1/setup/state');
-		if (!response.ok) return;
-		const data = await response.json();
-		steps = data.steps ?? [];
-		const next = firstUnsettled(steps);
-		if (!next) {
-			await finish();
-			return;
+	async function move(next: Phase) {
+		if (next === phase) return;
+		const from = stage?.firstElementChild;
+		if (from && motionEnabled()) {
+			await animate(
+				from,
+				{ opacity: [1, 0], y: [0, -12], filter: ['blur(0px)', 'blur(6px)'] },
+				{ ...transition('smooth', { exit: true }) }
+			).finished;
 		}
-		current = next;
+		phase = next;
+		await tick();
+		card?.grow();
+		scene?.raiseBand(BAND[ORDER.indexOf(next)]);
+		const to = stage?.firstElementChild;
+		if (to && motionEnabled()) {
+			animate(
+				to,
+				{ opacity: [0, 1], y: [14, 0], filter: ['blur(8px)', 'blur(0px)'] },
+				transition('smooth')
+			);
+		}
+	}
+
+	async function advance() {
+		const response = await apiFetch('/apiv1/setup/state');
+		if (response.ok) {
+			const data = await response.json();
+			steps = data.steps ?? steps;
+		}
+		await move(firstUnsettled(steps) ?? 'certificate');
 	}
 
 	async function skip(step: string) {
@@ -72,12 +91,7 @@
 		}
 		const data = await response.json();
 		steps = data.steps ?? steps;
-		const next = firstUnsettled(steps);
-		if (!next) {
-			await finish();
-			return;
-		}
-		current = next;
+		await move(firstUnsettled(steps) ?? 'certificate');
 	}
 
 	async function finish() {
@@ -103,55 +117,33 @@
 	onMount(load);
 </script>
 
-{#if loading}
-	<div class="setup-loading" data-motion="progress">
-		<Loader2 size={20} class="animate-spin" />
-	</div>
-{:else}
-	<div class="setup-shell">
-		<div class="setup-inner" {@attach motionStagger({ index: 0 })}>
-			<StepRail steps={rail} {current} />
+<SetupScene bind:this={scene} onSettled={() => (ready = true)} />
 
-			<div class="setup-stage">
-				{#if current === 'passkey'}
-					<SetupPasskeyStep onDone={refresh} />
-				{:else if current === 'organization'}
-					<SetupOrgStep onDone={refresh} onSkip={() => skip('organization')} />
-				{:else if current === 'deploy'}
-					<SetupDeployStep onDone={refresh} onSkip={() => skip('deploy')} />
-				{/if}
-			</div>
-		</div>
-	</div>
-{/if}
+<div class="setup-stage" bind:this={stage} class:ready>
+	{#if ready}
+		<SetupCard bind:this={card} total={dots} {index}>
+			{#if phase === 'passkey'}
+				<SetupPasskeyStep onDone={advance} />
+			{:else if phase === 'organization'}
+				<SetupOrgStep onDone={advance} onSkip={() => skip('organization')} />
+			{:else if phase === 'certificate'}
+				<SetupCertificateStep onDone={() => move('done')} />
+			{:else}
+				<SetupDoneStep onDone={finish} />
+			{/if}
+		</SetupCard>
+	{/if}
+</div>
 
 <style>
-	.setup-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 100dvh;
-		color: var(--text-muted);
-	}
-
-	.setup-shell {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 100dvh;
-		padding: 2.5rem 1rem;
-	}
-
-	.setup-inner {
-		width: 100%;
-		max-width: 34rem;
-		display: flex;
-		flex-direction: column;
-		gap: 2.25rem;
-	}
-
 	.setup-stage {
+		position: fixed;
+		inset: 0;
+		z-index: 4;
 		display: flex;
-		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+		padding: clamp(4.4rem, 14vh, 8rem) 1.5rem clamp(2.5rem, 6vh, 3.4rem);
+		overflow-y: auto;
 	}
 </style>

@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Building2, Sparkles } from 'lucide-svelte';
-	import { Alert, Button, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
+	import { animate } from 'motion';
 	import { apiFetch, organizations, toasts } from '$lib/stores';
-	import { motionStagger, springPop } from '$lib/utils/motion.svelte';
+	import { transition } from '$lib/utils/motion.svelte';
 
 	let {
 		onDone,
@@ -13,9 +12,9 @@
 	type Org = { id: string; name: string; slug: string };
 
 	let org = $state<Org | null>(null);
-	let loading = $state(true);
 	let name = $state('');
 	let saving = $state(false);
+	let slugEl = $state<HTMLElement | null>(null);
 
 	const slug = $derived(
 		(name || '')
@@ -23,21 +22,23 @@
 			.replace(/[^a-z0-9]+/g, '-')
 			.replace(/^-+/, '')
 			.replace(/-+$/, '')
-			.slice(0, 60)
+			.slice(0, 60) ||
+			(org?.slug ?? 'your-org')
 	);
 	const dirty = $derived(!!org && name.trim().length > 0 && name.trim() !== org.name);
+	const host = $derived(typeof window === 'undefined' ? '' : window.location.host);
+
+	$effect(() => {
+		void slug;
+		if (slugEl) animate(slugEl, { scale: [0.9, 1] }, transition('bouncy'));
+	});
 
 	onMount(async () => {
-		try {
-			const response = await apiFetch('/apiv1/organizations/user');
-			if (response.ok) {
-				const list = await response.json();
-				org = Array.isArray(list) ? (list[0] ?? null) : null;
-				name = org?.name ?? '';
-			}
-		} finally {
-			loading = false;
-		}
+		const response = await apiFetch('/apiv1/organizations/user');
+		if (!response.ok) return;
+		const list = await response.json();
+		org = Array.isArray(list) ? (list[0] ?? null) : null;
+		name = org?.name ?? '';
 	});
 
 	async function save() {
@@ -55,7 +56,6 @@
 			}
 			const refreshed = await apiFetch('/apiv1/organizations/user');
 			if (refreshed.ok) organizations.set(await refreshed.json());
-			toasts.add({ title: 'Organization renamed', color: 'success' });
 			await onDone();
 		} catch (e) {
 			toasts.add({
@@ -68,111 +68,44 @@
 	}
 </script>
 
-<div class="step" {@attach motionStagger({ index: 0 })}>
-	<SectionCard
-		title={org ? 'We made you an organization' : 'Your organization'}
-		description={org
-			? 'Everything you deploy lives inside one. You have a working org already, so this is only about naming it.'
-			: 'Everything you deploy lives inside one.'}
-	>
-		{#if loading}
-			<Skeleton class="h-24 w-full" />
-		{:else if !org}
-			<Alert tone="warning" title="No organization yet">
-				One should have been created when you claimed this instance. Reload to try again, or
-				create one from the admin area.
-			</Alert>
-			<div class="actions">
-				<Button href="/admin/organizations">Open admin</Button>
-				<Button variant="primary" onclick={() => window.location.reload()}>Reload</Button>
-			</div>
-		{:else}
-			<div class="org-card" {@attach springPop(() => !loading)}>
-				<div class="org-avatar"><Building2 size={18} /></div>
-				<div class="org-body">
-					<p class="org-name">{name.trim() || org.name}</p>
-					<p class="org-url">
-						<span class="org-url-host">this instance</span><span class="org-url-slash">/</span
-						><span class="org-url-slug">{slug || org.slug}</span>
-					</p>
-				</div>
-				<Sparkles size={15} class="org-spark" />
-			</div>
+<section class="setup-step">
+	<h2>Name your organization</h2>
+	<p>We made one already. Rename it, or keep what is there.</p>
 
-			<Field label="Name it something you recognise" for="org-name">
-				<Input id="org-name" bind:value={name} placeholder={org.name} autocomplete="organization" />
-			</Field>
+	<div class="setup-body">
+		<input bind:value={name} placeholder={org?.name ?? ''} aria-label="Organization name" />
+		<p class="setup-slug">
+			<span class="scheme">https://</span>{host}/<b bind:this={slugEl}>{slug}</b>
+		</p>
+	</div>
 
-			<div class="actions">
-				<Button onclick={onSkip}>Keep {org.name}</Button>
-				<Button variant="primary" loading={saving} disabled={!dirty} onclick={save}>Save</Button>
-			</div>
-		{/if}
-	</SectionCard>
-</div>
+	<div class="setup-acts">
+		<button class="setup-pill" disabled={!dirty || saving} onclick={save}>
+			{saving ? 'Saving' : 'Save'}
+		</button>
+		<button class="setup-ghost" onclick={onSkip}>Keep it</button>
+	</div>
+</section>
 
 <style>
-	.step {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.org-card {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.875rem 1rem;
-		margin-bottom: 1.25rem;
-		border: 1px solid var(--border-default);
-		border-radius: 0.75rem;
-		background: var(--bg-raised);
-	}
-
-	.org-avatar {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 0.625rem;
-		background: var(--accent-subtle);
-		color: var(--accent);
-		flex-shrink: 0;
-	}
-
-	.org-body {
-		min-width: 0;
-		flex: 1;
-	}
-
-	.org-name {
-		margin: 0;
-		font-weight: 600;
-		color: var(--text-fg);
+	.setup-slug {
+		max-width: none;
+		margin-top: 0.65rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--setup-ink-soft);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.org-url {
-		margin: 0.125rem 0 0;
-		font-size: 0.75rem;
-		font-family: ui-monospace, monospace;
-		color: var(--text-faint);
+	.setup-slug .scheme {
+		color: var(--setup-ink-faint);
 	}
 
-	.org-url-slash {
-		opacity: 0.5;
-	}
-
-	.org-url-slug {
-		color: var(--accent);
-	}
-
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1.25rem;
+	.setup-slug b {
+		display: inline-block;
+		color: var(--setup-crimson);
+		font-weight: 400;
 	}
 </style>
