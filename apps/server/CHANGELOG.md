@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.1](https://github.com/hackclub/orchard/compare/server/v2.28.0...server/v2.28.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* show whether the wildcard certificate actually issued, not just that it is configured ([1704e6b](https://github.com/hackclub/orchard/commit/1704e6b1e92d35c0bf7612054c0122333a2d897b))
+
 ## [2.28.0](https://github.com/hackclub/orchard/compare/server/v2.27.0...server/v2.28.0) (2026-09-09)
 
 
