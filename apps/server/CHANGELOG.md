@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.27.0](https://github.com/hackclub/orchard/compare/server/v2.26.2...server/v2.27.0) (2026-09-09)
+
+
+### Features
+
+* rebuild the first-run setup flow ([b0d3930](https://github.com/hackclub/orchard/commit/b0d3930c7937845cdde9d74b602baa86d31d9260))
+
+
+### Bug Fixes
+
+* require an organization before setup can complete ([6d17c37](https://github.com/hackclub/orchard/commit/6d17c37f424a3c60f27b835eb1437eee42f93df5))
+
 ## [2.26.2](https://github.com/hackclub/orchard/compare/server/v2.26.1...server/v2.26.2) (2026-09-07)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.23.0](https://github.com/hackclub/orchard/compare/frontend/v1.22.1...frontend/v1.23.0) (2026-09-09)
+
+
+### Features
+
+* make the admin panel usable on self-hosted instances ([ba8ec59](https://github.com/hackclub/orchard/commit/ba8ec591e2a7ac041d71df946d7aed0ab4892cc4))
+* rebuild the first-run setup flow ([b0d3930](https://github.com/hackclub/orchard/commit/b0d3930c7937845cdde9d74b602baa86d31d9260))
+
 ## [1.22.1](https://github.com/hackclub/orchard/compare/frontend/v1.22.0...frontend/v1.22.1) (2026-09-07)
 
 
