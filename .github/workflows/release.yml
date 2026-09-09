@@ -18,25 +18,49 @@ jobs:
     if: github.repository == 'hackclub/orchard'
     runs-on: ubuntu-latest
     outputs:
-      any: ${{ steps.rp.outputs.releases_created }}
-      frontend: ${{ steps.rp.outputs['apps/frontend--release_created'] }}
-      frontend_v: ${{ steps.rp.outputs['apps/frontend--version'] }}
-      server: ${{ steps.rp.outputs['apps/server--release_created'] }}
-      server_v: ${{ steps.rp.outputs['apps/server--version'] }}
-      r2_proxy: ${{ steps.rp.outputs['apps/r2-proxy--release_created'] }}
-      r2_proxy_v: ${{ steps.rp.outputs['apps/r2-proxy--version'] }}
-      gateway: ${{ steps.rp.outputs['apps/gateway--release_created'] }}
-      gateway_v: ${{ steps.rp.outputs['apps/gateway--version'] }}
-      cli: ${{ steps.rp.outputs['apps/cli--release_created'] }}
-      cli_v: ${{ steps.rp.outputs['apps/cli--version'] }}
+      any: ${{ steps.rp1.outputs.releases_created || steps.rp2.outputs.releases_created || steps.rp3.outputs.releases_created }}
+      frontend: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] }}
+      frontend_v: ${{ steps.rp1.outputs['apps/frontend--version'] || steps.rp2.outputs['apps/frontend--version'] || steps.rp3.outputs['apps/frontend--version'] }}
+      server: ${{ steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] }}
+      server_v: ${{ steps.rp1.outputs['apps/server--version'] || steps.rp2.outputs['apps/server--version'] || steps.rp3.outputs['apps/server--version'] }}
+      r2_proxy: ${{ steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] }}
+      r2_proxy_v: ${{ steps.rp1.outputs['apps/r2-proxy--version'] || steps.rp2.outputs['apps/r2-proxy--version'] || steps.rp3.outputs['apps/r2-proxy--version'] }}
+      gateway: ${{ steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] }}
+      gateway_v: ${{ steps.rp1.outputs['apps/gateway--version'] || steps.rp2.outputs['apps/gateway--version'] || steps.rp3.outputs['apps/gateway--version'] }}
+      cli: ${{ steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] }}
+      cli_v: ${{ steps.rp1.outputs['apps/cli--version'] || steps.rp2.outputs['apps/cli--version'] || steps.rp3.outputs['apps/cli--version'] }}
     steps:
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
           app-id: 1090304
           private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+      # release-please's merge-commit walk intermittently trips GitHub's GraphQL,
+      # which answers "Something went wrong while executing your query" at a
+      # random point (first page, or eighty commits deep). It is a known
+      # upstream flake and a plain re-run clears it, so the job retries rather
+      # than waiting for a human to press the button. The last attempt is not
+      # continue-on-error, so a genuine failure still fails the job.
       - uses: googleapis/release-please-action@v4
-        id: rp
+        id: rp1
+        continue-on-error: true
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - if: steps.rp1.outcome == 'failure'
+        run: sleep 20
+      - uses: googleapis/release-please-action@v4
+        id: rp2
+        if: steps.rp1.outcome == 'failure'
+        continue-on-error: true
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - if: steps.rp1.outcome == 'failure' && steps.rp2.outcome == 'failure'
+        run: sleep 45
+      - uses: googleapis/release-please-action@v4
+        id: rp3
+        if: steps.rp1.outcome == 'failure' && steps.rp2.outcome == 'failure'
         with:
           token: ${{ steps.app-token.outputs.token }}
 
