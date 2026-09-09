@@ -110,6 +110,7 @@ export default defineConfig({
           items: [
             { label: "Architecture", slug: "operate/architecture" },
             { label: "Configuration", slug: "operate/configuration" },
+            { label: "Finishing setup", slug: "operate/finishing-setup" },
             { label: "Nodes and pools", slug: "operate/nodes" },
             { label: "Upgrades", slug: "operate/upgrades" },
             { label: "Going to production", slug: "operate/production" },
