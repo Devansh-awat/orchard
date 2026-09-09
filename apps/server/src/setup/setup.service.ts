@@ -9,7 +9,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
-import { STORAGE, EMAIL, INGRESS } from '../instance-config/instance-config.sections';
+import { STORAGE, EMAIL, INGRESS, WILDCARD } from '../instance-config/instance-config.sections';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
@@ -39,6 +39,12 @@ export interface SetupState {
   steps: SetupStep[];
   complete: boolean;
 }
+
+// The checklist is read on every superadmin page load for the sidebar badge,
+// and it now reports live certificate state, so an uncached read would put a
+// Kubernetes API call behind a UI badge. Short enough that the setup flow's
+// own polling still sees the certificate land promptly.
+const CERT_TTL_MS = 10_000;
 
 export interface SetupCertificate {
   state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured';
@@ -74,6 +80,8 @@ function envSet(...names: string[]): boolean {
 @Injectable()
 export class SetupService implements OnModuleInit {
   private readonly logger = new Logger(SetupService.name);
+
+  private certCache: { key: string; at: number; value: SetupCertificate } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -223,11 +231,22 @@ export class SetupService implements OnModuleInit {
     const host = wildcard ? `*${wildcard.suffix}` : null;
     if (!wildcard?.secret) return { state: 'unconfigured', host, message: null };
 
-    const namespace = (process.env.WILDCARD_TLS_SOURCE_NAMESPACE || '').trim();
+    const namespace = this.config.value(WILDCARD, 'sourceNamespace')?.trim();
     if (!namespace || !this.network) return { state: 'unknown', host, message: null };
 
+    const cached = this.certCache;
+    if (cached && cached.key === `${namespace}/${wildcard.secret}` && cached.at > Date.now() - CERT_TTL_MS) {
+      return cached.value;
+    }
+
     const status = await this.network.getCertificateStatus(namespace, wildcard.secret);
-    return { state: status.state, host, message: status.message ?? null };
+    const value: SetupCertificate = {
+      state: status.state,
+      message: status.message ?? null,
+      host,
+    };
+    this.certCache = { key: `${namespace}/${wildcard.secret}`, at: Date.now(), value };
+    return value;
   }
 
   async skipSetupStep(userId: string, step: string): Promise<SetupState> {
