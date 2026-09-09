@@ -26,8 +26,22 @@ export function wildcardSecretNameFor(suffix: string): string {
 // Parsed here rather than in ingress.service so deployments.service can use it:
 // ingress.service already forwardRef-imports DeploymentsService, and importing
 // back the other way is the circular dependency that TDZ-crashes boot under swc.
+// Set by InstanceConfigService when stored config loads or changes. A plain
+// module variable rather than an injected service on purpose: this file is
+// deliberately dependency-free (see above), and importing the config service
+// here would reintroduce the circular import that TDZ-crashes boot under swc.
+let storedWildcards: string | null = null;
+let storedAppDomain: string | null = null;
+let cache: { suffix: string; secret: string | null }[] | null = null;
+
+export function setWildcardOverride(domains: string | null, appDomain: string | null): void {
+  storedWildcards = domains;
+  storedAppDomain = appDomain;
+  cache = null;
+}
+
 function parseWildcardDomains(): { suffix: string; secret: string | null }[] {
-  const explicit = (process.env.PLATFORM_WILDCARD_DOMAINS || '')
+  const explicit = (process.env.PLATFORM_WILDCARD_DOMAINS || storedWildcards || '')
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -40,16 +54,21 @@ function parseWildcardDomains(): { suffix: string; secret: string | null }[] {
 
   if (explicit.length) return explicit;
 
-  const appDomain = (process.env.APP_DOMAIN || '').trim().replace(/^\.+|\.+$/g, '');
+  const appDomain = (process.env.APP_DOMAIN || storedAppDomain || '')
+    .trim()
+    .replace(/^\.+|\.+$/g, '');
   if (!appDomain) return [];
 
   return [{ suffix: `.${appDomain}`, secret: null }];
 }
 
-export const PLATFORM_WILDCARD_DOMAINS = parseWildcardDomains();
+export function platformWildcardDomains(): { suffix: string; secret: string | null }[] {
+  if (!cache) cache = parseWildcardDomains();
+  return cache;
+}
 
 export function isPlatformGeneratedHost(host: string): boolean {
-  return PLATFORM_WILDCARD_DOMAINS.some((w) => host.endsWith(w.suffix));
+  return platformWildcardDomains().some((w) => host.endsWith(w.suffix));
 }
 
 export function formatSlug(value: string): string {

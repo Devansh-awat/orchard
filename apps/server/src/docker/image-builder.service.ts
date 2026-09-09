@@ -20,6 +20,7 @@ import { isSandboxStartFault } from './build-faults';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
+import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -116,18 +117,23 @@ export class ImageBuilderService {
   // For Cloudflare R2, the endpoint format is: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
   private readonly s3CacheEnabled = process.env.BUILDKIT_S3_CACHE_ENABLED === 'true';
 
-  private readonly r2AccountId = process.env.R2_ACCOUNT_ID;
-
-  private readonly s3Endpoint = process.env.BUILDKIT_S3_ENDPOINT ||
-    (this.r2AccountId ? `https://${this.r2AccountId}.r2.cloudflarestorage.com` : process.env.R2_ENDPOINT);
+  private get s3Endpoint(): string | undefined {
+    return process.env.BUILDKIT_S3_ENDPOINT || objectStorage().endpoint || undefined;
+  }
 
   private readonly s3Region = process.env.BUILDKIT_S3_REGION || 'auto';
 
-  private readonly s3Bucket = process.env.BUILDKIT_S3_BUCKET || process.env.R2_BUCKET_NAME || 'buildkit-cache';
+  private get s3Bucket(): string {
+    return process.env.BUILDKIT_S3_BUCKET || objectStorage().bucketName || 'buildkit-cache';
+  }
 
-  private readonly s3AccessKeyId = process.env.BUILDKIT_S3_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
+  private get s3AccessKeyId(): string | undefined {
+    return process.env.BUILDKIT_S3_ACCESS_KEY_ID || objectStorage().accessKeyId || undefined;
+  }
 
-  private readonly s3SecretAccessKey = process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
+  private get s3SecretAccessKey(): string | undefined {
+    return process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || objectStorage().secretAccessKey || undefined;
+  }
 
   private readonly s3CachePrefix = process.env.BUILDKIT_S3_CACHE_PREFIX || 'buildkit-cache/';
 

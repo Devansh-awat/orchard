@@ -12,7 +12,7 @@ import {
   ALLOWED_INGRESS_ANNOTATION_KEYS,
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
-import { truncateK8sName, PLATFORM_WILDCARD_DOMAINS } from '../projects/projects.utils';
+import { truncateK8sName, platformWildcardDomains } from '../projects/projects.utils';
 import { k8sErrorMessage } from './k8s-error';
 import { syncTlsSecret } from './tls-secret-sync';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -83,7 +83,7 @@ export class K8sNetworkService implements OnModuleInit {
     if (!this.leaderElection.isLeader()) return;
 
     const sourceNamespace = (process.env.WILDCARD_TLS_SOURCE_NAMESPACE || '').trim();
-    const wildcards = PLATFORM_WILDCARD_DOMAINS.filter((w) => !!w.secret);
+    const wildcards = platformWildcardDomains().filter((w) => !!w.secret);
     if (!sourceNamespace || wildcards.length === 0) return;
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);

@@ -8,11 +8,13 @@ import {
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { STORAGE, EMAIL, INGRESS } from '../instance-config/instance-config.sections';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
 import { GithubAppConfigService } from '../github/github-app-config.service';
-import { formatSlug, PLATFORM_WILDCARD_DOMAINS } from '../projects/projects.utils';
+import { formatSlug, platformWildcardDomains } from '../projects/projects.utils';
 import {
   SUPERADMIN_CLAIM_KEY,
   CLAIM_TTL_MS,
@@ -78,6 +80,7 @@ export class SetupService implements OnModuleInit {
     private readonly settings: InstanceSettingsService,
     private readonly admin: AdminService,
     private readonly githubApp: GithubAppConfigService,
+    private readonly config: InstanceConfigService,
     @Optional() private readonly network?: K8sNetworkService,
   ) {}
 
@@ -216,7 +219,7 @@ export class SetupService implements OnModuleInit {
    * ordinary outcomes on a self-hosted box, not failures.
    */
   async getCertificate(): Promise<SetupCertificate> {
-    const wildcard = PLATFORM_WILDCARD_DOMAINS[0];
+    const wildcard = platformWildcardDomains()[0];
     const host = wildcard ? `*${wildcard.suffix}` : null;
     if (!wildcard?.secret) return { state: 'unconfigured', host, message: null };
 
@@ -254,7 +257,7 @@ export class SetupService implements OnModuleInit {
    * why none of it is in the first-run gate.
    */
   getChecklist(): ChecklistItem[] {
-    const smtp = envSet('SMTP_HOST');
+    const smtp = this.config.isConfigured(EMAIL);
     const oidc = envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET')
       || envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
 
@@ -272,8 +275,9 @@ export class SetupService implements OnModuleInit {
         title: 'Configure database backups',
         detail:
           'Managed databases have no backups at all until object storage is configured, so a deleted database cannot be recovered.',
-        done: envSet('R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'),
+        done: this.config.isConfigured(STORAGE),
         severity: 'warning',
+        href: '/admin/instance',
       },
       {
         id: 'smtp',
@@ -282,6 +286,7 @@ export class SetupService implements OnModuleInit {
           'Needed to email invitations and sign-in codes. Without it, invites still work as copyable links.',
         done: smtp,
         severity: 'normal',
+        href: '/admin/instance',
       },
       {
         id: 'oidc',
@@ -296,16 +301,18 @@ export class SetupService implements OnModuleInit {
         title: 'Set the ingress CNAME',
         detail:
           'The hostname users point custom domains at. Without it, custom-domain DNS validation is skipped.',
-        done: envSet('INGRESS_CNAME'),
+        done: this.config.isConfigured(INGRESS),
         severity: 'normal',
+        href: '/admin/instance',
       },
       {
         id: 'wildcard-tls',
         title: 'Use a wildcard certificate',
         detail:
           'App URLs get one certificate each today, against a limit of 50 per week per registered domain. A wildcard removes that ceiling.',
-        done: PLATFORM_WILDCARD_DOMAINS.some((w) => !!w.secret),
+        done: platformWildcardDomains().some((w) => !!w.secret),
         severity: 'normal',
+        href: '/admin/instance',
       },
     ];
   }

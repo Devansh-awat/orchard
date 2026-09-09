@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../organizations/storage.service';
+import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
 
 export const THREAD_STATUSES = [
   'open',
@@ -27,7 +28,7 @@ const MAX_IMAGES = 4;
 // would let a crafted create/delete cycle feed arbitrary same-bucket URLs
 // into storage.deleteFile, deleting other users' objects (e.g. avatars).
 function forumImageBase(): string {
-  const publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${process.env.R2_ACCOUNT_ID}.r2.dev`;
+  const publicUrl = objectStorage().publicUrl ?? '';
   return `${publicUrl}/forum/`;
 }
 

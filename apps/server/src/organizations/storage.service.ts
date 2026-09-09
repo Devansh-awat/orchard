@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
 
 @Injectable()
 export class StorageService {
@@ -9,34 +10,32 @@ export class StorageService {
 
   private bucketName: string | null = null;
 
-  private initialized = false;
+  private initializedAt = -1;
 
   private initialize() {
-    if (this.initialized) {
+    const generation = objectStorageGeneration();
+    if (this.initializedAt === generation) {
       return;
     }
 
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucket = process.env.R2_BUCKET_NAME;
+    const { accessKeyId, secretAccessKey, bucketName, endpoint } = objectStorage();
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
-      throw new Error('R2 configuration is missing. Please set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME');
+    if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
+      throw new Error('Object storage is not configured. Set it under Instance admin, or with the R2_* environment variables.');
     }
 
-    this.bucketName = bucket;
+    this.bucketName = bucketName;
 
     this.s3Client = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: {
         accessKeyId,
         secretAccessKey,
       },
     });
 
-    this.initialized = true;
+    this.initializedAt = generation;
   }
 
   async uploadFile(file: Express.Multer.File, folder = 'organizations'): Promise<string> {
@@ -59,8 +58,7 @@ export class StorageService {
 
     await this.s3Client.send(command);
 
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${accountId}.r2.dev`;
+    const publicUrl = objectStorage().publicUrl ?? '';
     
     return `${publicUrl}/${fileName}`;
   }
@@ -72,8 +70,7 @@ export class StorageService {
       throw new Error('R2 storage is not configured');
     }
 
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${accountId}.r2.dev`;
+    const publicUrl = objectStorage().publicUrl ?? '';
     
     if (!url.startsWith(publicUrl)) {
       return;
@@ -95,17 +92,16 @@ export class StorageService {
       return false;
     }
     return Boolean(
-      process.env.R2_BUILD_CONTEXT_BUCKET &&
-        process.env.R2_ACCOUNT_ID &&
-        process.env.R2_ACCESS_KEY_ID &&
-        process.env.R2_SECRET_ACCESS_KEY,
+      objectStorage().buildContextBucket &&
+        objectStorage().accessKeyId &&
+        objectStorage().secretAccessKey,
     );
   }
 
   private contextBucket(): string {
-    const bucket = process.env.R2_BUILD_CONTEXT_BUCKET;
+    const bucket = objectStorage().buildContextBucket;
     if (!bucket) {
-      throw new Error('R2_BUILD_CONTEXT_BUCKET is not configured');
+      throw new Error('No build context bucket is configured (R2_BUILD_CONTEXT_BUCKET)');
     }
     this.initializeContextClient();
     return bucket;
@@ -113,15 +109,13 @@ export class StorageService {
 
   private initializeContextClient() {
     if (this.s3Client) return;
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    if (!accountId || !accessKeyId || !secretAccessKey) {
-      throw new Error('R2 credentials are not configured');
+    const { accessKeyId, secretAccessKey, endpoint } = objectStorage();
+    if (!accessKeyId || !secretAccessKey || !endpoint) {
+      throw new Error('Object storage credentials are not configured');
     }
     this.s3Client = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: { accessKeyId, secretAccessKey },
     });
   }

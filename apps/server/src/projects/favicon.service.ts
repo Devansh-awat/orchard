@@ -5,6 +5,7 @@ import * as dns from 'dns';
 import * as net from 'net';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
 
 // Suffixes that resolve only on internal networks. We never make HTTP
 // requests to these — even if the domain regex passes.
@@ -148,25 +149,27 @@ export class FaviconService {
     private readonly leaderElection: LeaderElectionService,
   ) {}
 
+  private s3InitAt = -1;
+
   private initS3() {
-    if (this.s3Client) return;
+    const generation = objectStorageGeneration();
+    if (this.s3Client && this.s3InitAt === generation) return;
+    this.s3InitAt = generation;
 
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucket = process.env.R2_BUCKET_NAME;
+    const { accessKeyId, secretAccessKey, bucketName, endpoint, publicUrl } = objectStorage();
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
-      this.logger.warn('R2 not configured — favicon caching disabled');
+    if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
+      this.logger.warn('object storage not configured — favicon caching disabled');
+      this.s3Client = null;
       return;
     }
 
-    this.bucketName = bucket;
-    this.publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${accountId}.r2.dev`;
+    this.bucketName = bucketName;
+    this.publicUrl = publicUrl ?? '';
 
     this.s3Client = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: { accessKeyId, secretAccessKey },
     });
   }

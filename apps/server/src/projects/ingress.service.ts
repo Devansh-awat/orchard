@@ -26,8 +26,10 @@ import {
   formatSlug,
   scrubIngress,
   truncateK8sName,
-  PLATFORM_WILDCARD_DOMAINS,
+  platformWildcardDomains,
 } from './projects.utils';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { INGRESS } from '../instance-config/instance-config.sections';
 
 const TENANT_INGRESS_CLASS = process.env.K8S_INGRESS_CLASS || 'haproxy';
 
@@ -47,11 +49,11 @@ type BasicAuthPlan =
   | { via: 'proxy'; username: string; passwordHash: string };
 
 function wildcardTlsSecretFor(host: string): string | null {
-  return PLATFORM_WILDCARD_DOMAINS.find((w) => host.endsWith(w.suffix))?.secret ?? null;
+  return platformWildcardDomains().find((w) => host.endsWith(w.suffix))?.secret ?? null;
 }
 
 function isWildcardTlsSecret(name: string | null): boolean {
-  return !!name && PLATFORM_WILDCARD_DOMAINS.some((w) => w.secret === name);
+  return !!name && platformWildcardDomains().some((w) => w.secret === name);
 }
 
 @Injectable()
@@ -71,6 +73,7 @@ export class IngressService {
     @Inject(forwardRef(() => ProjectsService))
     private readonly projects: ProjectsService,
     private readonly faviconService: FaviconService,
+    private readonly instanceConfig: InstanceConfigService,
   ) {}
 
   /**
@@ -90,7 +93,7 @@ export class IngressService {
   }
 
   async validateIngressDns(domain: string): Promise<{ valid: boolean; message: string }> {
-    const expectedCname = process.env.INGRESS_CNAME || '';
+    const expectedCname = this.instanceConfig.value(INGRESS, 'cname') || '';
     const appDomain = process.env.APP_DOMAIN || '';
     const domainToCheck = domain.trim().toLowerCase();
 
@@ -667,7 +670,7 @@ export class IngressService {
     // No app domain configured means no URL can be generated at all. That used
     // to return null and get logged as a warning nobody sees, so a deployment
     // came up with no URL and no explanation. Named so callers can say why.
-    const wildcard = PLATFORM_WILDCARD_DOMAINS[0];
+    const wildcard = platformWildcardDomains()[0];
     if (!wildcard) {
       this.logger.warn(
         `No app domain configured (APP_DOMAIN / PLATFORM_WILDCARD_DOMAINS), so ${deploymentId} gets no generated URL`,

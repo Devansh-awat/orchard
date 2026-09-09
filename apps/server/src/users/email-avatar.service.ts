@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service';
+import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
 
 /**
  * Imports a user's profile picture from an email-keyed avatar service
@@ -83,17 +84,23 @@ export class EmailAvatarService {
       .filter((p): p is Provider => Boolean(p));
   }
 
+  private s3InitAt = -1;
+
   private initS3() {
-    if (this.s3Client) return;
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    this.bucketName = process.env.R2_BUCKET_NAME;
-    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName) return;
-    this.publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${accountId}.r2.dev`;
+    const generation = objectStorageGeneration();
+    if (this.s3Client && this.s3InitAt === generation) return;
+    this.s3InitAt = generation;
+
+    const { accessKeyId, secretAccessKey, bucketName, endpoint, publicUrl } = objectStorage();
+    this.bucketName = bucketName ?? undefined;
+    if (!accessKeyId || !secretAccessKey || !this.bucketName || !endpoint) {
+      this.s3Client = null;
+      return;
+    }
+    this.publicUrl = publicUrl ?? '';
     this.s3Client = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: { accessKeyId, secretAccessKey },
     });
   }

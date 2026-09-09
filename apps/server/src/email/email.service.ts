@@ -1,3 +1,5 @@
+import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { EMAIL } from '../instance-config/instance-config.sections';
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
@@ -51,39 +53,57 @@ export interface NotificationEmailData {
 
 @Injectable()
 export class EmailService {
-  private transporter: Transporter | null = null;
+  private mailer: Transporter | null = null;
 
-  private readonly fromEmail: string;
-
-  private readonly fromName: string;
+  private syncedAt = -1;
 
   private readonly frontendUrl: string;
 
   private readonly templatesDir: string;
 
-  constructor() {
-    this.fromEmail = process.env.SMTP_FROM || 'noreply@example.com';
-    this.fromName = process.env.SMTP_FROM_NAME || 'Orchard';
+  constructor(private readonly config: InstanceConfigService) {
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     this.templatesDir = path.join(__dirname, 'templates');
+  }
 
-    console.log(`[EmailService] Initializing with from="${this.fromName}" <${this.fromEmail}>`);
-    console.log(`[EmailService] SMTP_HOST=${process.env.SMTP_HOST || '(not set)'}, SMTP_PORT=${process.env.SMTP_PORT || '(not set)'}, SMTP_USER=${process.env.SMTP_USER ? '***set***' : '(not set)'}, SMTP_PASS=${process.env.SMTP_PASS ? '***set***' : '(not set)'}`);
+  /**
+   * The transport is rebuilt whenever instance config changes, so saving SMTP
+   * settings in the admin UI takes effect without a restart. Built lazily
+   * rather than in the constructor for the same reason: at construction time
+   * the stored config has not been read yet.
+   */
+  private sync(): void {
+    const generation = this.config.generation;
+    if (this.syncedAt === generation) return;
+    this.syncedAt = generation;
 
-    if (process.env.SMTP_HOST) {
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      });
-      console.log('[EmailService] SMTP transporter created successfully');
-    } else {
-      console.warn('[EmailService] SMTP_HOST not set — email sending is disabled');
+    const host = this.config.value(EMAIL, 'host');
+    if (!host) {
+      this.mailer = null;
+      return;
     }
+    this.mailer = nodemailer.createTransport({
+      host,
+      port: parseInt(this.config.value(EMAIL, 'port') || '587', 10),
+      secure: this.config.value(EMAIL, 'secure') === 'true',
+      auth: {
+        user: this.config.value(EMAIL, 'user') ?? undefined,
+        pass: this.config.value(EMAIL, 'pass') ?? undefined,
+      },
+    });
+  }
+
+  private get transporter(): Transporter | null {
+    this.sync();
+    return this.mailer;
+  }
+
+  private get fromEmail(): string {
+    return this.config.value(EMAIL, 'from') || 'noreply@example.com';
+  }
+
+  private get fromName(): string {
+    return this.config.value(EMAIL, 'fromName') || 'Orchard';
   }
 
   isConfigured(): boolean {
