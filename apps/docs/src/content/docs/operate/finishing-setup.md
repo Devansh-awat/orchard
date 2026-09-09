@@ -11,10 +11,18 @@ A fresh instance works the moment you claim it. The checklist on
 None of it blocks deploying. Each item turns something on, and the one marked
 with a warning triangle is the one you should not leave alone.
 
+Most of it is editable at **Instance admin → Configuration**, and takes effect
+immediately without a restart.
+
 Every item follows the same rule: **an environment variable always wins over a
-value stored in the database.** Where a setting can be edited in the admin UI,
-setting the matching variable locks the field so nobody can change it from the
-browser. That is what you want for anything an operator must control absolutely.
+value stored in the database.** Setting the matching variable locks that field
+so nobody can change it from the browser, which is what you want for anything an
+operator must control absolutely. A field set that way is shown greyed out and
+labelled `Set by the environment`.
+
+Secrets are encrypted at rest and never sent back to the browser. An existing
+secret shows as `Unchanged`, and leaving it blank keeps what is already stored,
+so changing a bucket name does not mean retyping a key.
 
 ## Connect a GitHub App
 
@@ -72,9 +80,11 @@ because there is no base to replay onto.
 The checklist counts this item done once `R2_ACCESS_KEY_ID`,
 `R2_SECRET_ACCESS_KEY` and `R2_BUCKET_NAME` are all set.
 
-Any S3-compatible store works. After setting these, restart the server and
-confirm a fresh backup appears under a database's Backups tab before you trust
-it. A backup you have never seen complete is not a backup.
+Any S3-compatible store works. `R2_ENDPOINT` and `R2_PUBLIC_URL` are derived
+from the account ID when left blank.
+
+After setting these, confirm a fresh backup appears under a database's Backups
+tab before you trust it. A backup you have never seen complete is not a backup.
 
 ## Set up email
 
