@@ -2,6 +2,12 @@ export { user, isSignedIn, isLoaded, isSuperAdmin, type User } from './auth';
 export { apiBase, apiFetch, initApiBase } from './api';
 export { toasts, type Toast } from './toast';
 export {
+	instanceChecklist,
+	instanceChecklistOutstanding,
+	instanceChecklistWarnings,
+	type InstanceChecklistItem
+} from './instance-checklist';
+export {
 	organizations,
 	selectedOrganization,
 	organizationsLoading,

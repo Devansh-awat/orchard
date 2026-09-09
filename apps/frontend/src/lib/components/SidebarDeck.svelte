@@ -21,6 +21,7 @@
 		Activity,
 		Sprout,
 		Settings,
+		Shield,
 		LogOut,
 		KeyRound,
 		SquareTerminal,
@@ -41,6 +42,10 @@
 	import { animate } from 'motion';
 	import {
 		user,
+		isSuperAdmin,
+		instanceChecklist,
+		instanceChecklistOutstanding,
+		instanceChecklistWarnings,
 		organizations,
 		selectedOrganization,
 		pinnedItems,
@@ -298,6 +303,10 @@
 			: $user?.name || $user?.username || 'You'
 	);
 	const invitationCount = $derived($pendingInvitations.length);
+
+	$effect(() => {
+		if ($isSuperAdmin) instanceChecklist.load();
+	});
 </script>
 
 {#snippet orgAvatar(org: Organization | null, size: 'md' | 'sm')}
@@ -556,6 +565,9 @@
 								<span class="deck-user-badge">{invitationCount}</span>
 							{/if}
 						{/if}
+						{#if $instanceChecklistWarnings.length > 0}
+							<span class="deck-user-flag" title="This instance still needs setting up"></span>
+						{/if}
 					</button>
 				{/snippet}
 				{#snippet children({ close })}
@@ -595,6 +607,15 @@
 								<Mail size={14} />
 								Invitations
 								<span class="deck-user-badge">{invitationCount}</span>
+							</a>
+						{/if}
+						{#if $isSuperAdmin}
+							<a class="deck-menu-item" href="/admin" onclick={close}>
+								<Shield size={14} />
+								Instance admin
+								{#if $instanceChecklistOutstanding.length > 0}
+									<span class="deck-user-badge">{$instanceChecklistOutstanding.length}</span>
+								{/if}
 							</a>
 						{/if}
 						<a class="deck-menu-item" href="/user/settings" onclick={close}>
@@ -1101,6 +1122,21 @@
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 	}
+	.deck-user-flag {
+		position: absolute;
+		top: 0.3rem;
+		right: 0.3rem;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--status-warning);
+		box-shadow: 0 0 0 2px var(--bg-app);
+	}
+
+	.deck-split-id {
+		position: relative;
+	}
+
 	.deck-user-badge {
 		font-size: var(--text-micro);
 		font-weight: 600;

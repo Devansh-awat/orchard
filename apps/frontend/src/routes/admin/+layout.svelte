@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { isSuperAdmin, isLoaded } from '$lib/stores';
 	import {
-		Shield,
+		isSuperAdmin,
+		isLoaded,
+		instanceChecklist,
+		instanceChecklistOutstanding
+	} from '$lib/stores';
+	import { motionStagger } from '$lib/utils/motion.svelte';
+	import {
 		Users,
 		Building2,
 		LayoutDashboard,
@@ -17,67 +22,195 @@
 	let { children } = $props();
 
 	$effect(() => {
-		if ($isLoaded && !$isSuperAdmin) {
-			goto('/');
-		}
+		if ($isLoaded && !$isSuperAdmin) goto('/');
 	});
 
-	const tabs = [
-		{ href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-		{ href: '/admin/users', label: 'Users', icon: Users, exact: false },
-		{ href: '/admin/organizations', label: 'Organizations', icon: Building2, exact: false },
-		{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
-		{ href: '/admin/sso', label: 'SSO', icon: KeyRound, exact: false },
-		{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false },
-		{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false },
-		{ href: '/admin/audit-logs', label: 'Audit Log', icon: ScrollText, exact: false }
+	$effect(() => {
+		if ($isSuperAdmin) instanceChecklist.load();
+	});
+
+	const groups = [
+		{
+			label: 'Instance',
+			items: [
+				{ href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
+				{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
+				{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false }
+			]
+		},
+		{
+			label: 'People',
+			items: [
+				{ href: '/admin/users', label: 'Users', icon: Users, exact: false },
+				{ href: '/admin/organizations', label: 'Organizations', icon: Building2, exact: false },
+				{ href: '/admin/sso', label: 'Sign in', icon: KeyRound, exact: false }
+			]
+		},
+		{
+			label: 'Maintenance',
+			items: [
+				{ href: '/admin/audit-logs', label: 'Audit log', icon: ScrollText, exact: false },
+				{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false }
+			]
+		}
 	];
 
 	function isActive(href: string, exact: boolean) {
 		if (exact) return $page.url.pathname === href;
-		return $page.url.pathname === href || $page.url.pathname.startsWith(href + '/');
+		return $page.url.pathname === href || $page.url.pathname.startsWith(`${href}/`);
 	}
 </script>
 
 {#if $isSuperAdmin}
-	<div class="p-6">
-		<div class="mb-6">
-			<div class="flex items-center gap-3 mb-4">
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-xl"
-					style="background-color: var(--primary-100); color: var(--primary-700);"
-				>
-					<Shield class="h-5 w-5" />
-				</div>
-				<div>
-					<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-						Admin Panel
-					</h1>
-					<p class="text-sm" style="color: var(--surface-muted);">
-						Manage all users, organizations, and system resources
-					</p>
-				</div>
+	<div class="admin">
+		<aside class="admin-nav">
+			<div class="admin-brand">
+				<p class="admin-brand-title">Instance</p>
+				<p class="admin-brand-sub">Settings that apply to everyone here</p>
 			</div>
 
-			<nav
-				class="flex gap-1 rounded-2xl border p-1"
-				style="border-color: var(--surface-border); background-color: var(--control-bg);"
-			>
-				{#each tabs as tab (tab.href)}
-					<a
-						href={tab.href}
-						class="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition"
-						style={isActive(tab.href, tab.exact)
-							? 'background-color: var(--center-channel-bg); color: var(--center-channel-color); box-shadow: var(--elev-1);'
-							: 'color: var(--surface-muted);'}
-					>
-						<svelte:component this={tab.icon} class="h-4 w-4" />
-						{tab.label}
-					</a>
-				{/each}
-			</nav>
-		</div>
+			{#each groups as group, g (group.label)}
+				<div class="admin-group" {@attach motionStagger({ index: g })}>
+					<p class="admin-group-label">{group.label}</p>
+					{#each group.items as item (item.href)}
+						{@const Icon = item.icon}
+						<a
+							href={item.href}
+							class="admin-link"
+							class:admin-link--active={isActive(item.href, item.exact)}
+							aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
+						>
+							<Icon size={15} />
+							<span>{item.label}</span>
+							{#if item.href === '/admin' && $instanceChecklistOutstanding.length > 0}
+								<span class="admin-count">{$instanceChecklistOutstanding.length}</span>
+							{/if}
+						</a>
+					{/each}
+				</div>
+			{/each}
+		</aside>
 
-		{@render children()}
+		<main class="admin-body">
+			{@render children()}
+		</main>
 	</div>
 {/if}
+
+<style>
+	.admin {
+		display: grid;
+		grid-template-columns: 14rem minmax(0, 1fr);
+		gap: 2rem;
+		align-items: start;
+		padding: 1.75rem;
+		max-width: 78rem;
+	}
+
+	.admin-nav {
+		position: sticky;
+		top: 1.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+
+	.admin-brand-title {
+		font-size: var(--text-title-3);
+		font-weight: 650;
+		color: var(--text-fg);
+	}
+
+	.admin-brand-sub {
+		margin-top: 0.15rem;
+		font-size: var(--text-caption);
+		line-height: 1.45;
+		color: var(--text-faint);
+	}
+
+	.admin-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.admin-group-label {
+		padding: 0 0.6rem;
+		margin-bottom: 0.35rem;
+		font-size: var(--text-micro);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.admin-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.45rem 0.6rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		font-weight: 500;
+		color: var(--text-muted);
+		transition:
+			background-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.admin-link:hover {
+		background-color: var(--bg-hover);
+		color: var(--text-fg);
+	}
+
+	.admin-link--active {
+		background-color: var(--accent-subtle);
+		color: var(--accent);
+	}
+
+	.admin-count {
+		margin-left: auto;
+		font-size: var(--text-micro);
+		font-weight: 600;
+		line-height: 1;
+		padding: 0.2rem 0.4rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--status-warning);
+		color: var(--bg-surface);
+	}
+
+	.admin-body {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		min-width: 0;
+	}
+
+	@media (max-width: 60rem) {
+		.admin {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 1.25rem;
+			padding: 1rem;
+		}
+
+		.admin-nav {
+			position: static;
+			flex-direction: row;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+		}
+
+		.admin-brand {
+			flex-basis: 100%;
+		}
+
+		.admin-group {
+			flex-direction: row;
+			flex-wrap: wrap;
+		}
+
+		.admin-group-label {
+			display: none;
+		}
+	}
+</style>
