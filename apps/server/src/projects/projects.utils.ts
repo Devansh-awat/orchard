@@ -183,3 +183,37 @@ export function toQuartzCron(expr: string): string {
   if (parts.length === 5) return `0 ${parts.join(' ')}`;
   return expr.trim();
 }
+
+/**
+ * Whether an existing ingress should move to a different TLS secret after a
+ * wildcard configuration change, and what it should move to.
+ *
+ * Returns null to leave it alone. Extracted from the reconcile loop so the
+ * decision is testable without a cluster: the interesting cases are an ingress
+ * holding its own certificate when a wildcard now covers it, and one holding a
+ * wildcard secret that no longer exists.
+ */
+export const OWN_CERT_PREFIX = 'leaf-cert-';
+
+export function desiredWildcardTls(
+  host: string,
+  currentSecret: string | null,
+  newIssuer: string,
+): { secretName: string | null; clusterIssuer: string | null } | null {
+  if (!currentSecret) return null;
+
+  const wildcards = platformWildcardDomains();
+  const desired = wildcards.find((w) => host.endsWith(w.suffix))?.secret ?? null;
+
+  if (desired === currentSecret) return null;
+
+  // Once a wildcard is removed from config there is nothing left to compare
+  // against, so a stale wildcard secret is told apart from a per-host one by
+  // its name. Per-host secrets are always minted as OWN_CERT_PREFIX + uuid.
+  const holdsOwnCert = currentSecret.startsWith(OWN_CERT_PREFIX);
+  if (!desired && holdsOwnCert) return null;
+
+  return desired
+    ? { secretName: desired, clusterIssuer: null }
+    : { secretName: null, clusterIssuer: newIssuer };
+}

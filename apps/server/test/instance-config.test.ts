@@ -149,3 +149,54 @@ test('wildcard domains parse from stored config when no variable is set', async 
     ]);
   });
 });
+
+test('an ingress holding its own certificate moves onto a newly added wildcard', async () => {
+  const { service } = build();
+  await withEnv({ PLATFORM_WILDCARD_DOMAINS: undefined, APP_DOMAIN: undefined }, async () => {
+    await service.save(WILDCARD, { domains: 'apps.example.com=wildcard-tls' });
+    const { desiredWildcardTls } = await import('../src/projects/projects.utils');
+    assert.deepEqual(
+      desiredWildcardTls('app.apps.example.com', 'leaf-cert-abc', 'letsencrypt-prod'),
+      { secretName: 'wildcard-tls', clusterIssuer: null },
+    );
+  });
+});
+
+test('an ingress already on the wildcard is left alone', async () => {
+  const { service } = build();
+  await withEnv({ PLATFORM_WILDCARD_DOMAINS: undefined, APP_DOMAIN: undefined }, async () => {
+    await service.save(WILDCARD, { domains: 'apps.example.com=wildcard-tls' });
+    const { desiredWildcardTls } = await import('../src/projects/projects.utils');
+    assert.equal(
+      desiredWildcardTls('app.apps.example.com', 'wildcard-tls', 'letsencrypt-prod'),
+      null,
+    );
+  });
+});
+
+test('a custom domain keeps its own certificate when a wildcard exists elsewhere', async () => {
+  const { service } = build();
+  await withEnv({ PLATFORM_WILDCARD_DOMAINS: undefined, APP_DOMAIN: undefined }, async () => {
+    await service.save(WILDCARD, { domains: 'apps.example.com=wildcard-tls' });
+    const { desiredWildcardTls } = await import('../src/projects/projects.utils');
+    assert.equal(desiredWildcardTls('www.customer.com', 'leaf-cert-abc', 'letsencrypt-prod'), null);
+  });
+});
+
+test('removing the wildcard gives its ingresses a certificate of their own again', async () => {
+  const { service } = build();
+  await withEnv({ PLATFORM_WILDCARD_DOMAINS: undefined, APP_DOMAIN: undefined }, async () => {
+    await service.save(WILDCARD, { domains: 'apps.example.com=wildcard-tls' });
+    await service.clear(WILDCARD);
+    const { desiredWildcardTls } = await import('../src/projects/projects.utils');
+    assert.deepEqual(
+      desiredWildcardTls('app.apps.example.com', 'wildcard-tls', 'letsencrypt-prod'),
+      { secretName: null, clusterIssuer: 'letsencrypt-prod' },
+    );
+  });
+});
+
+test('an ingress with TLS switched off is never touched', async () => {
+  const { desiredWildcardTls } = await import('../src/projects/projects.utils');
+  assert.equal(desiredWildcardTls('app.apps.example.com', null, 'letsencrypt-prod'), null);
+});

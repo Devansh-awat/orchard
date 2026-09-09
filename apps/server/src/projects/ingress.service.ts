@@ -4,8 +4,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-  Logger,
-} from '@nestjs/common';
+  Logger, OnModuleInit } from '@nestjs/common';
 import * as dns from 'dns';
 import { promisify } from 'util';
 import { randomUUID, randomBytes, createHash } from 'crypto';
@@ -27,6 +26,8 @@ import {
   scrubIngress,
   truncateK8sName,
   platformWildcardDomains,
+  desiredWildcardTls,
+  OWN_CERT_PREFIX,
 } from './projects.utils';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { INGRESS } from '../instance-config/instance-config.sections';
@@ -57,8 +58,13 @@ function isWildcardTlsSecret(name: string | null): boolean {
 }
 
 @Injectable()
-export class IngressService {
+export class IngressService implements OnModuleInit {
   private readonly logger = new Logger(IngressService.name);
+
+  onModuleInit(): void {
+    this.instanceConfig.onWildcardChange(() => this.reconcileWildcardTls());
+    void this.reconcileWildcardTls();
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -75,6 +81,80 @@ export class IngressService {
     private readonly faviconService: FaviconService,
     private readonly instanceConfig: InstanceConfigService,
   ) {}
+
+  /**
+   * Bring existing ingresses in line with the current wildcard configuration.
+   *
+   * The wildcard secret is chosen when an ingress is created, so an instance
+   * that adds a wildcard afterwards keeps issuing a certificate per app against
+   * the 50-per-week limit until something repoints them, and one that removes a
+   * wildcard leaves ingresses referencing a secret that no longer exists.
+   *
+   * Only the TLS block moves. An ingress already holding a per-host certificate
+   * that is still correct is left alone, so this is safe to run on every boot.
+   */
+  async reconcileWildcardTls(): Promise<{ checked: number; repointed: number }> {
+    const wildcards = platformWildcardDomains();
+    const ingresses = await this.prisma.ingress.findMany({
+      select: {
+        id: true,
+        name: true,
+        namespace: true,
+        host: true,
+        tlsSecretName: true,
+        tlsHosts: true,
+        clusterIssuer: true,
+      },
+    });
+
+    let repointed = 0;
+
+    for (const ingress of ingresses) {
+      if (!ingress.tlsSecretName) continue;
+
+      const decision = desiredWildcardTls(
+        ingress.host,
+        ingress.tlsSecretName,
+        CERT_CLUSTER_ISSUER,
+      );
+      if (!decision) continue;
+
+      const nextSecret = decision.secretName ?? `${OWN_CERT_PREFIX}${randomUUID()}`;
+      const nextIssuer = decision.clusterIssuer;
+      const hosts = ingress.tlsHosts.length ? ingress.tlsHosts : [ingress.host];
+
+      try {
+        await this.k8sNetwork.patchIngressTls(
+          ingress.namespace,
+          ingress.name,
+          { secretName: nextSecret, hosts },
+          nextIssuer,
+        );
+      } catch (e: any) {
+        // A missing Ingress is not a failure worth aborting the sweep for: the
+        // row outlives the object during teardown.
+        if (e?.response?.statusCode !== 404) {
+          this.logger.warn(
+            `could not repoint TLS for ${ingress.namespace}/${ingress.name}: ${e?.message}`,
+          );
+        }
+        continue;
+      }
+
+      await this.prisma.ingress.update({
+        where: { id: ingress.id },
+        data: { tlsSecretName: nextSecret, clusterIssuer: nextIssuer },
+      });
+      repointed += 1;
+    }
+
+    if (repointed) {
+      this.logger.log(
+        `repointed ${repointed} ingress(es) after a wildcard configuration change`,
+      );
+    }
+    return { checked: ingresses.length, repointed };
+  }
 
   /**
    * Fire-and-forget favicon (re)fetch for a freshly created or updated
@@ -299,7 +379,7 @@ export class IngressService {
     const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`;
       if (tlsSecretName.length > 255) {
         throw new BadRequestException('TLS secret name is too long');
       }
@@ -834,7 +914,7 @@ export class IngressService {
     const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
     const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
@@ -1190,7 +1270,7 @@ export class IngressService {
     const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
     const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
@@ -1588,7 +1668,7 @@ export class IngressService {
       if (wildcardSecret) {
         tlsSecretName = wildcardSecret;
       } else if (!tlsSecretName || isWildcardTlsSecret(tlsSecretName)) {
-        tlsSecretName = `leaf-cert-${randomUUID()}`;
+        tlsSecretName = `${OWN_CERT_PREFIX}${randomUUID()}`;
       }
     } else {
       tlsSecretName = null;
@@ -1994,7 +2074,7 @@ export class IngressService {
       if (wildcardSecret) {
         tlsSecretName = wildcardSecret;
       } else if (!tlsSecretName || isWildcardTlsSecret(tlsSecretName)) {
-        tlsSecretName = `leaf-cert-${randomUUID()}`;
+        tlsSecretName = `${OWN_CERT_PREFIX}${randomUUID()}`;
         if (tlsSecretName.length > 255) {
           throw new BadRequestException('TLS secret name is too long');
         }

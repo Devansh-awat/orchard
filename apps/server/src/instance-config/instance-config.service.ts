@@ -36,6 +36,8 @@ export class InstanceConfigService implements OnModuleInit {
 
   private version = 0;
 
+  private wildcardHandlers: (() => Promise<unknown>)[] = [];
+
   constructor(
     private readonly settings: InstanceSettingsService,
     private readonly crypto: SecretCryptoService,
@@ -43,6 +45,26 @@ export class InstanceConfigService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.reload();
+  }
+
+  /**
+   * Existing ingresses chose their TLS secret when they were created, so a
+   * wildcard added or removed later leaves them stale. IngressService registers
+   * itself here rather than being injected: it pulls in most of the app, and a
+   * constructor edge from this service would be a circular import.
+   */
+  onWildcardChange(handler: () => Promise<unknown>): void {
+    this.wildcardHandlers.push(handler);
+  }
+
+  private async reconcileWildcards(): Promise<void> {
+    for (const handler of this.wildcardHandlers) {
+      try {
+        await handler();
+      } catch (e: any) {
+        this.logger.warn(`wildcard reconcile failed: ${e?.message}`);
+      }
+    }
   }
 
   get generation(): number {
@@ -163,10 +185,12 @@ export class InstanceConfigService implements OnModuleInit {
 
     await this.settings.set(section.key, JSON.stringify(payload));
     await this.reload();
+    if (section.id === WILDCARD.id) await this.reconcileWildcards();
   }
 
   async clear(section: ConfigSection): Promise<void> {
     await this.settings.delete(section.key);
     await this.reload();
+    if (section.id === WILDCARD.id) await this.reconcileWildcards();
   }
 }

@@ -1278,6 +1278,44 @@ export class K8sNetworkService implements OnModuleInit {
     );
   }
 
+  /**
+   * Repoint an existing Ingress at a different TLS secret.
+   *
+   * A merge patch of only the TLS block and the issuer annotation, rather than
+   * a full re-apply, so a reconcile cannot disturb paths, backends or the
+   * protection-proxy wiring that live on the same object.
+   */
+  async patchIngressTls(
+    namespace: string,
+    ingressName: string,
+    tls: { secretName: string; hosts: string[] } | null,
+    clusterIssuer: string | null,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+
+    const body = {
+      metadata: {
+        annotations: { 'cert-manager.io/cluster-issuer': clusterIssuer ?? null },
+      },
+      spec: {
+        tls: tls ? [{ secretName: tls.secretName, hosts: tls.hosts }] : [],
+      },
+    };
+
+    await networkingApi.patchNamespacedIngress(
+      ingressName,
+      namespace,
+      body,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
   async readIngress(namespace: string, name: string) {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
