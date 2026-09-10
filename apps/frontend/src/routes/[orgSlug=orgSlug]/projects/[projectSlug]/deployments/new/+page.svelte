@@ -78,6 +78,7 @@
 	let error = $state<string | null>(null);
 	let formError = $state<string | null>(null);
 	let pendingProjectName = $state<string | null>(null);
+	let seededPendingProject = false;
 
 	// Deployment source — read from ?source= query param, default to 'image'
 	const initialSource = $derived(
@@ -919,7 +920,17 @@
 		wsSlug;
 		if (orgSlug && projectSlug) {
 			fetchProjectData();
+			return;
 		}
+		// Reached without a project: the org has none yet, so the name travels in
+		// the query and the project is created at submit alongside the deployment.
+		// Nothing to fetch, and loading starts true, so clear it or the form never
+		// renders.
+		if (!seededPendingProject) {
+			seededPendingProject = true;
+			pendingProjectName = $page.url.searchParams.get('project');
+		}
+		loading = false;
 	});
 
 	let selectedAccount = $state<string | null>(null);
@@ -985,11 +996,13 @@
 				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
 			</div>
 		</div>
-	{:else if project}
+	{:else if project || pendingProjectName}
 		<Breadcrumb
 			crumbs={[
 				{ label: 'Home', href: `/${orgSlug}` },
-				{ label: project?.name || projectSlug || '', href: basePath },
+				...(project || projectSlug
+					? [{ label: project?.name || projectSlug, href: basePath }]
+					: []),
 				{ label: 'New app' }
 			]}
 		/>

@@ -176,6 +176,20 @@
 		navigating = true;
 
 		try {
+			// Deploying is the one flow that can name a project without creating it:
+			// the form materializes it at submit, next to the deployment. Picking a
+			// card is not a commitment, so an org with no projects yet gets the
+			// name carried in the query rather than an empty project it never asked
+			// for. Databases and templates still need one up front.
+			const deploying = type === 'deployment-github' || type === 'deployment-image';
+			if (deploying && projects.length === 0 && !preselectedProjectSlug) {
+				const source = type === 'deployment-github' ? 'github' : 'image';
+				goto(
+					`/${orgSlug}/deployments/new?source=${source}&project=${encodeURIComponent(defaultProjectName())}`
+				);
+				return;
+			}
+
 			const projSlug = await resolveProjectSlug();
 			const base = `/${orgSlug}/projects/${projSlug}`;
 			switch (type) {
