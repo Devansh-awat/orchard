@@ -1318,15 +1318,22 @@ echo "Repository: $MASKED_URL"
 echo "Branch: ${branch}"
 
 # Enable git-lfs (best-effort) so LFS-tracked files are materialized instead of
-# left as pointer stubs. alpine/git doesn't bundle it; install registers the
-# global smudge filter so the clone below pulls LFS content during checkout.
+# left as pointer stubs. alpine/git doesn't bundle it.
+LFS_READY=0
 if apk add --no-cache git-lfs >/dev/null 2>&1 && git lfs install --skip-repo >/dev/null 2>&1; then
+  LFS_READY=1
   echo "git-lfs: enabled"
 else
   echo "git-lfs: unavailable, continuing without it"
 fi
 
-CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$CLONE_URL" /workspace 2>&1) || {
+# GIT_LFS_SKIP_SMUDGE, not a plain clone: 'git lfs install' registers a global
+# smudge filter, and once it is registered an LFS object that cannot be fetched
+# (no LFS quota left, endpoint unreachable, the token lacks LFS scope) fails the
+# checkout outright with "smudge filter lfs failed". That turned enabling LFS
+# into a way to break builds that would otherwise have succeeded with pointer
+# files. Content is pulled after the clone instead, where failing is survivable.
+CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$CLONE_URL" /workspace 2>&1) || {
   SANITIZED_OUTPUT=$(echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
   echo "$SANITIZED_OUTPUT"
   if echo "$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
@@ -1342,6 +1349,14 @@ CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --
 echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
+
+if [ "$LFS_READY" = "1" ] && [ -n "$(git -C /workspace lfs ls-files 2>/dev/null)" ]; then
+  if GIT_TERMINAL_PROMPT=0 git -C /workspace lfs pull >/dev/null 2>&1; then
+    echo "git-lfs: LFS content fetched"
+  else
+    echo "git-lfs: could not fetch LFS content, those files stay as pointers"
+  fi
+fi
 echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)"
 ls -la /workspace
 `,
