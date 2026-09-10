@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/hackclub/orchard/compare/frontend/v1.24.0...frontend/v1.24.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* stop creating an empty project just for opening the deploy form ([f2e03f1](https://github.com/hackclub/orchard/commit/f2e03f1fafb658c87f6a13cf80eff57451195ec6))
+
 ## [1.24.0](https://github.com/hackclub/orchard/compare/frontend/v1.23.0...frontend/v1.24.0) (2026-09-09)
 
 

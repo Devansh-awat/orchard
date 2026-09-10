@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.3](https://github.com/hackclub/orchard/compare/server/v2.28.2...server/v2.28.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* back build scratch with disk when there is no vm isolation ([1768f3a](https://github.com/hackclub/orchard/commit/1768f3a53c6885892fb8daa5ef990318d23d3dac))
+
 ## [2.28.2](https://github.com/hackclub/orchard/compare/server/v2.28.1...server/v2.28.2) (2026-09-09)
 
 
