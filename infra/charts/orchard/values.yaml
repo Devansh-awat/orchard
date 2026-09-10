@@ -497,7 +497,14 @@ builderSandbox:
   # speed inside the guest. Counts against the container's memory limit.
   tmpfsWorkspace: false
   scratch:
-    mode: tmpfs
+    # Where BuildKit's snapshotter scratch lives. Leave empty to follow the
+    # isolation setting: tmpfs under a VM runtime class (where it avoids
+    # virtio-fs), plain node disk without one.
+    #
+    # tmpfs is charged to the build pod's memory cgroup, so `size` becomes a
+    # RAM reservation and caps how many builds fit on a node. Only worth it
+    # when runtimeClassName is set. Override with tmpfs, disk or block.
+    mode: ""
     size: 40Gi
     storageClass: longhorn-ssd
   memoryLimit: ""

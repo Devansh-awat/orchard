@@ -176,3 +176,22 @@ export function railpackOverrideEnv(config: DeploymentBuildConfig): Record<strin
 
   return env;
 }
+
+/**
+ * Which scratch backing a build should use when the operator has not chosen.
+ *
+ * tmpfs exists to dodge virtio-fs, which is only in the path when the build
+ * runs inside a VM. Without an isolation runtime the pod is plain runc on the
+ * node, so RAM-backed scratch buys nothing and costs a lot: it is charged to
+ * the pod's memory cgroup, so a 40Gi scratch against a 32Gi memory limit caps
+ * how many builds fit on a node by RAM rather than by disk. Self-hosted
+ * instances run without isolation by default and were paying that for free.
+ */
+export function resolveScratchMode(
+  override: string | undefined,
+  runtimeClass: string | undefined,
+): 'tmpfs' | 'disk' | 'block' {
+  const chosen = (override || '').trim();
+  if (chosen === 'tmpfs' || chosen === 'disk' || chosen === 'block') return chosen;
+  return runtimeClass ? 'tmpfs' : 'disk';
+}

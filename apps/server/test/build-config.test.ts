@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  resolveScratchMode,
   railpackOverrideEnv,
   railpackConfigOverride,
   normalizeRootDirectory,
@@ -201,4 +202,25 @@ test('a start command alone does not invent empty build steps', () => {
     railpackConfigOverride({ RAILPACK_START_CMD: 'node build' }),
     { deploy: { startCommand: 'node build' } },
   );
+});
+
+test('without an isolation runtime, scratch is disk-backed so builds are not capped by node RAM', () => {
+  assert.equal(resolveScratchMode(undefined, undefined), 'disk');
+  assert.equal(resolveScratchMode('', undefined), 'disk');
+});
+
+test('under a VM runtime, scratch stays on tmpfs to keep off virtio-fs', () => {
+  assert.equal(resolveScratchMode(undefined, 'kata'), 'tmpfs');
+});
+
+test('an explicit mode always wins over the isolation default', () => {
+  assert.equal(resolveScratchMode('tmpfs', undefined), 'tmpfs');
+  assert.equal(resolveScratchMode('disk', 'kata'), 'disk');
+  assert.equal(resolveScratchMode('block', 'kata'), 'block');
+  assert.equal(resolveScratchMode(' block ', undefined), 'block');
+});
+
+test('an unrecognised mode falls back to the isolation default rather than breaking the build', () => {
+  assert.equal(resolveScratchMode('nonsense', 'kata'), 'tmpfs');
+  assert.equal(resolveScratchMode('nonsense', undefined), 'disk');
 });

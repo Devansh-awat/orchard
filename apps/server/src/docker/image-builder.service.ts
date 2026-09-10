@@ -12,6 +12,7 @@ import {
   ORCHARD_RAILPACK_CONFIG,
   parseRailpackInfo,
   railpackConfigOverride,
+  resolveScratchMode,
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withGitHubCredentials } from './repo-url';
@@ -214,7 +215,21 @@ export class ImageBuilderService {
 
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
-  private readonly scratchMode = (process.env.BUILDER_SCRATCH_MODE || 'tmpfs').trim();
+  // Scratch defaults to whatever the isolation setting implies.
+  //
+  // tmpfs exists to dodge virtio-fs, which is only in the path when the build
+  // runs inside a kata VM. Without a runtime class the pod is plain runc on the
+  // node, so RAM-backed scratch buys nothing and costs a lot: it is charged to
+  // the pod's memory cgroup, so a 40Gi scratch against a 32Gi memory limit caps
+  // how many builds fit on a node by RAM rather than by disk. Self-hosted
+  // instances run without isolation by default and were paying that for free.
+  //
+  // BUILDER_SCRATCH_MODE still wins when set, so an operator (and prod, which
+  // pins tmpfs explicitly) keeps whatever they chose.
+  private readonly scratchMode = resolveScratchMode(
+    process.env.BUILDER_SCRATCH_MODE,
+    this.builderRuntimeClass,
+  );
 
   private readonly scratchBlock = this.scratchMode === 'block';
 
