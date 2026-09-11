@@ -2265,6 +2265,30 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       .sort((a, b) => a.accountLogin.localeCompare(b.accountLogin));
   }
 
+  /**
+   * Why auto-deploy cannot be turned on, in words that name the fix.
+   *
+   * An installation covering the account is not enough: an App added with
+   * "only select repositories" has to have this one selected, and a repo
+   * created after the install is not selected retroactively. That is the case
+   * that reads as a working setup and never delivers a webhook.
+   */
+  autoDeployUnavailableMessage(owner: string, repo: string): string {
+    let where = 'Install it';
+    try {
+      where = `Install it at ${this.getAppInstallationUrl()}`;
+    } catch {
+      where = 'Install it from the GitHub App settings';
+    }
+    return (
+      `The GitHub App is not installed on ${owner}/${repo}, so pushes cannot reach Orchard `
+      + 'and auto-deploy cannot be enabled. '
+      + `${where}, and if it is installed with "only select repositories", add ${repo} to the `
+      + 'selection: a repository created after the install is not added to it automatically. '
+      + 'Manual builds and rebuilds work without this.'
+    );
+  }
+
   // Get GitHub App installation URL
   getAppInstallationUrl(): string {
     const appSlug = this.appConfig.get().slug;

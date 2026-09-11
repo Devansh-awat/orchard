@@ -37,7 +37,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
-import { BuildQueueService } from './build-queue.service';
+import { BuildQueueService, QueueSnapshot } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
@@ -2387,20 +2387,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       ? 'recreate'
       : (deployment.deployStrategy as 'rollingUpdate' | 'recreate');
 
-    // Only push to K8s if the deployment exists in the cluster.
-    const k8sExistsVol = await this.k8sWorkload.getKubernetesDeployment(
-      deployment.name, deployment.namespace,
-    ).then((d) => d !== null).catch(() => false);
-
-    if (k8sExistsVol) {
-      await this.k8sWorkload.updateDeploymentVolumes({
-        namespace: deployment.namespace,
-        deploymentName: deployment.name,
-        volumes: volumesList,
-        deployStrategy: effectiveStrategy,
-      });
-    }
-
     const updatedDeployment = await this.prisma.$transaction(async (tx) => {
       // Persist auto-Recreate when PVC was added, so the UI reflects reality.
       if (hasPvcVolume && deployment.deployStrategy !== 'recreate') {
@@ -2455,6 +2441,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         },
       });
     });
+
+    // Pushed to the cluster only after the database has it, so a build that
+    // finishes mid-call renders the new volumes rather than the old ones. If
+    // this throws, the caller hears about it and the next rebuild reconciles
+    // the cluster to what was stored, which is the right way round: losing the
+    // patch is recoverable, losing the record is not.
+    const k8sExistsVol = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name, deployment.namespace,
+    ).then((d) => d !== null).catch(() => false);
+
+    if (k8sExistsVol) {
+      await this.k8sWorkload.updateDeploymentVolumes({
+        namespace: deployment.namespace,
+        deploymentName: deployment.name,
+        volumes: volumesList,
+        deployStrategy: effectiveStrategy,
+      });
+    }
 
     void this.audit.log({
       action: 'deployment.volumes.updated',
@@ -3344,7 +3348,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
     if (!installation) {
       throw new BadRequestException(
-        'The GitHub App is not installed on this repository. Please install the app first.'
+        this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo),
       );
     }
 
@@ -3832,12 +3836,32 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         })) > 0
       : false;
 
+    // Two booleans are a puzzle to anything that is not the UI that knows what
+    // they mean. `deliverable` is the answer to the only question a caller
+    // actually has: will a push to this branch build anything?
+    const deliverable = deployment.autoDeployEnabled && appInstalled && linked;
+    let message: string | null = null;
+    if (deployment.autoDeployEnabled && !appInstalled) {
+      const repoInfo = deployment.githubRepo
+        ? this.githubService.parseRepoUrl(deployment.githubRepo)
+        : null;
+      message = repoInfo
+        ? this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
+        : 'The GitHub App is not installed on this repository, so pushes cannot reach Orchard.';
+    } else if (deployment.autoDeployEnabled && !linked) {
+      message =
+        'This deployment is not bound to a GitHub App installation, so pushes are dropped. '
+        + 'Re-enable auto-deploy to bind it.';
+    }
+
     return {
       enabled: deployment.autoDeployEnabled,
       branch: deployment.autoDeployBranch || deployment.githubBranch,
       paths: deployment.autoDeployPaths ?? [],
       appInstalled,
       linked,
+      deliverable,
+      message,
     };
   }
 
@@ -5328,6 +5352,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // (auto-deploy won't work, but manual builds can clone without auth).
     const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
 
+    // Auto-deploy defaults ON when the installation covers the repo, because
+    // push webhooks can then actually fire. Asking for it without one used to
+    // be honoured anyway, which is the worst of both: the row says enabled,
+    // nothing is bound to an installation, every push is dropped, and the only
+    // symptom is a commit that never queues.
+    if (data.autoDeployEnabled === true && !repoInstallation) {
+      throw new BadRequestException(
+        this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo),
+      );
+    }
+
     // Dockerfile path is only required for dockerfile builds
     if (buildType === 'dockerfile' && !dockerfilePath) {
       throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
@@ -5458,9 +5493,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         composeStackId: data.composeStackId ?? null,
         composeServiceName: data.composeServiceName ?? null,
         templateInstanceId: data.templateInstanceId ?? null,
-        // Auto-deploy defaults ON when the GitHub App installation covers the
-        // repo (push webhooks can actually fire); without one the toggle
-        // would be dead weight, so it stays off unless explicitly requested.
         autoDeployEnabled: data.autoDeployEnabled ?? repoInstallation != null,
         autoDeployBranch: data.autoDeployBranch ?? null,
       },
@@ -6051,6 +6083,63 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * The volumes a deployment should be running with, read now.
+   *
+   * The build path is handed a snapshot of these when the build is queued, and
+   * a build can run for many minutes. Attaching a volume while one is in
+   * flight used to be lost twice over: the deploy step applied the stale
+   * snapshot, and every later rebuild only patched the image, so the
+   * volume-less pod spec survived until something re-applied the volumes by
+   * hand. Anything writing to that mount path in between went to the node's
+   * disk and disappeared with the pod.
+   */
+  private async currentVolumes(deploymentId: string) {
+    const rows = await this.prisma.deploymentVolume.findMany({ where: { deploymentId } });
+    return rows.map((vol) => ({
+      name: vol.name,
+      type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+      mountPath: vol.mountPath,
+      pvcName: vol.pvcName || undefined,
+      storageSize: vol.storageSize || undefined,
+      hostPath: vol.hostPath || undefined,
+      readOnly: vol.readOnly,
+    }));
+  }
+
+  /**
+   * Bring a live Deployment's volumes back in line with the database.
+   *
+   * Only patches when they actually differ: the patch stamps an annotation
+   * that changes the pod template, so calling it unconditionally would add a
+   * rollout to every single rebuild.
+   */
+  private async reconcileVolumes(
+    deploymentId: string,
+    name: string,
+    namespace: string,
+    deployStrategy: 'rollingUpdate' | 'recreate',
+  ): Promise<void> {
+    try {
+      const desired = await this.currentVolumes(deploymentId);
+      const live = await this.k8sWorkload.getDeploymentVolumeSignature(name, namespace);
+      if (live === null) return;
+      if (live === K8sWorkloadService.volumeSignature(desired)) return;
+
+      console.warn(
+        `[Deployment/volumes] ${namespace}/${name} drifted from its configured volumes, re-applying`,
+      );
+      await this.k8sWorkload.updateDeploymentVolumes({
+        namespace,
+        deploymentName: name,
+        volumes: desired,
+        deployStrategy: desired.some((v) => v.type === 'pvc') ? 'recreate' : deployStrategy,
+      });
+    } catch (e: any) {
+      console.error(`[Deployment/volumes] could not reconcile ${namespace}/${name}: ${e?.message}`);
+    }
+  }
+
   async buildAndDeployAsync(
     deploymentId: string,
     data: {
@@ -6445,6 +6534,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
+        // Read now, not from the snapshot taken when the build was queued: a
+        // volume attached mid-build has to reach the pod this build creates.
+        const desiredVolumes = await this.currentVolumes(deploymentId);
+
         if (shouldCreateNew) {
           const healthCheck = await this.loadHealthCheckOptions(deploymentId);
           deploymentResult = await this.k8sWorkload.createDeployment({
@@ -6455,7 +6548,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             ports: data.rawPorts,
             env: data.env,
             serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
-            volumes: data.volumes || [],
+            volumes: desiredVolumes,
             allowedNodes: deployPlacement.allowedNodes,
             deniedNodes: deployPlacement.deniedNodes,
             pool: deployPool,
@@ -6471,6 +6564,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             data.name,
             data.namespace,
             image,
+          );
+          // A rebuild patches the image and nothing else, so it is also the
+          // only chance to notice the running spec has drifted from what was
+          // configured while a build was in flight.
+          await this.reconcileVolumes(
+            deploymentId,
+            data.name,
+            data.namespace,
+            buildStrategy === 'recreate' ? 'recreate' : 'rollingUpdate',
           );
           const existingDeploymentDb = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
@@ -6900,6 +7002,32 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.rebuildDeployment(deploymentId, user.externalAuthId ?? user.id, undefined, runId);
   }
 
+  /**
+   * What a caller is told when a rebuild is accepted but cannot start yet.
+   *
+   * `accepted` is deliberately separate from `started`: the request did
+   * something, it just has not produced a build yet, and an agent polling for a
+   * new build record needs to know which of those it is looking at.
+   */
+  private static queuedBuild(runId: string, queue: QueueSnapshot) {
+    const reason = queue.blockedByOwnBuild
+      ? 'This deployment is already building. The queued build starts when that one finishes.'
+      : `All ${queue.limit} build ${queue.limit === 1 ? 'slot is' : 'slots are'} busy on this instance.`;
+    return {
+      accepted: true,
+      started: false,
+      status: 'queued' as const,
+      runId,
+      waiting: queue.waiting,
+      running: queue.running,
+      slots: queue.limit,
+      pool: queue.pool,
+      message:
+        `${reason} It will start automatically, so do not retry. ` +
+        `Poll this deployment's build status, or list_deployment_errors, rather than calling rebuild again.`,
+    };
+  }
+
   async rebuildDeployment(
     deploymentId: string,
     clerkId: string,
@@ -6952,7 +7080,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
 
     if (!fromQueueRunId) {
-      const { startNow } = await this.buildQueue.enqueue({
+      const { startNow, runId, queue } = await this.buildQueue.enqueue({
         deploymentId,
         triggerType: 'manual',
         branch: deployment.githubBranch,
@@ -6960,7 +7088,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
       if (!startNow) {
         console.log(`[Projects] Queued manual rebuild for ${deploymentId}`);
-        return this.getDeployment(deploymentId, true, user.id);
+        // Returned with the queue state attached. Handing back the unchanged
+        // deployment on its own is why a queued rebuild read as a silent no-op
+        // to every API client: same build record, same timestamps, no error.
+        const queued = await this.getDeployment(deploymentId, true, user.id);
+        return { ...queued, build: DeploymentsService.queuedBuild(runId, queue) };
       }
     }
 
@@ -7081,7 +7213,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
-    return this.addInternalUrlsToDeployment(result);
+    return {
+      ...this.addInternalUrlsToDeployment(result),
+      build: { accepted: true, started: true, status: 'building' as const },
+    };
   }
 
   async getImageHistory(deploymentId: string, clerkId: string) {

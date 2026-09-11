@@ -248,6 +248,18 @@ jobs:
       # so a proxied zone is never badged as broken.
       - name: DNS check tests
         run: pnpm --filter server test:instance-network
+      # Volumes attached while a build was in flight used to be dropped from
+      # the rendered pod spec and stay dropped through every later rebuild,
+      # which silently wrote data to the node's disk. The signature is what
+      # decides whether a rebuild re-applies them.
+      - name: Volume drift tests
+        run: pnpm --filter server test:deployment-drift
+      # A queued rebuild returned the unchanged deployment, so callers could
+      # not tell "waiting for a slot" from "did nothing" and retried forever.
+      - name: Build queue visibility tests
+        run: pnpm --filter server test:build-queue-visibility
+      - name: Auto-deploy precondition tests
+        run: pnpm --filter server test:auto-deploy-precondition
 
   e2e:
     needs: changes

@@ -1381,6 +1381,70 @@ export class K8sWorkloadService {
     }
   }
 
+  /**
+   * The volume set a live Deployment is actually running with.
+   *
+   * Returned as a canonical signature rather than raw objects so a caller can
+   * ask the only question that matters: does the cluster match what the
+   * database says it should be? Null means the Deployment does not exist yet,
+   * which is a different answer from "it exists with no volumes".
+   */
+  async getDeploymentVolumeSignature(
+    deploymentName: string,
+    namespace: string,
+  ): Promise<string | null> {
+    this.ensureKubeConfig();
+
+    const cleanName = String(deploymentName || '').trim();
+    const cleanNamespace = String(namespace || '').trim();
+
+    try {
+      const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+      const existing = await appsApi.readNamespacedDeployment(cleanName, cleanNamespace);
+      const spec = existing.body.spec?.template?.spec;
+      const mounts = spec?.containers?.[0]?.volumeMounts ?? [];
+      const mountByName = new Map(mounts.map((m) => [m.name, m]));
+
+      return (spec?.volumes ?? [])
+        .map((vol) => {
+          const mount = mountByName.get(vol.name);
+          const claim = vol.persistentVolumeClaim?.claimName ?? '';
+          return [
+            vol.name,
+            claim ? `pvc:${claim}` : 'emptyDir',
+            mount?.mountPath ?? '',
+            mount?.readOnly ? 'ro' : 'rw',
+          ].join('|');
+        })
+        .sort()
+        .join(',');
+    } catch (error) {
+      if (error.response?.statusCode === 404) return null;
+      throw error;
+    }
+  }
+
+  /** The same signature, computed from what the database says should be running. */
+  static volumeSignature(
+    volumes: {
+      name: string;
+      type: 'pvc' | 'hostPath' | 'emptyDir';
+      mountPath: string;
+      pvcName?: string | null;
+      readOnly?: boolean;
+    }[],
+  ): string {
+    return (volumes ?? [])
+      .map((vol) => [
+        vol.name,
+        vol.type === 'pvc' ? `pvc:${vol.pvcName?.trim() || vol.name}` : 'emptyDir',
+        vol.mountPath,
+        vol.readOnly ? 'ro' : 'rw',
+      ].join('|'))
+      .sort()
+      .join(',');
+  }
+
   async updateDeploymentVolumes(options: {
     namespace: string;
     deploymentName: string;

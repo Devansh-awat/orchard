@@ -44,6 +44,21 @@ outside its own directory, which is common in monorepos.
 Once linked, pushes to the selected branch trigger a build and deploy. Turn it
 off per app if you would rather deploy manually.
 
+**The App has to be installed on that specific repository.** Enabling
+auto-deploy without it is refused, with a message naming the fix, because a push
+to a repo the App cannot see never reaches Orchard and there is nothing to
+report when it does not.
+
+The case that catches people: an App installed with **only select
+repositories** does not pick up a repository created _after_ the install. The
+account shows the App as installed, the repo looks fine, and no webhook ever
+arrives. Add the repo to the selection in the App's settings.
+
+If auto-deploy looks switched on but pushes build nothing, check the auto-deploy
+status. `enabled` is what you asked for; `deliverable` is what will actually
+happen, and it is only true when the App is installed on the repo **and** this
+app is bound to that installation. When it is false, the status says why.
+
 Webhook tokens let an external system trigger a deploy without GitHub, which is
 useful for a CI pipeline that wants to build elsewhere and then ask Orchard to
 roll out.

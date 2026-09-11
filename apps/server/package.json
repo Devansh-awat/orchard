@@ -47,6 +47,9 @@
     "test:instance-config": "tsx --test test/instance-config.test.ts",
     "test:instance-settings": "tsx --test test/instance-settings.test.ts",
     "test:instance-network": "tsx --test test/instance-network.test.ts",
+    "test:deployment-drift": "tsx --test test/deployment-drift.test.ts",
+    "test:build-queue-visibility": "tsx --test test/build-queue-visibility.test.ts",
+    "test:auto-deploy-precondition": "tsx --test test/auto-deploy-precondition.test.ts",
     "test:build-summary": "tsx --test test/build-summary.test.ts",
     "test:tenant-policy": "tsx --test test/tenant-policy.test.ts"
   },

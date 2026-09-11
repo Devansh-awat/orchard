@@ -35,6 +35,30 @@ How many builds run at once depends on available memory. On the one-command
 installer it is derived from the box: under 8Gi RAM allows one, 8 to 16Gi allows
 two, above that three. Extra builds queue.
 
+A queued build is **accepted, not ignored**. It starts on its own when a slot
+frees up, and the API says so: a rebuild that cannot start yet returns
+
+```json
+{
+  "build": {
+    "accepted": true,
+    "started": false,
+    "status": "queued",
+    "running": 2,
+    "slots": 2,
+    "waiting": 1,
+    "message": "All 2 build slots are busy on this instance. ..."
+  }
+}
+```
+
+Everything else on that response still describes the **previous** build, because
+the new one has not produced anything yet. That is expected. Do not retry: a
+second request supersedes the first rather than moving it up the queue, so a
+retry loop can keep a deployment permanently at the back.
+
+A deployment already building queues the same way, and says that instead.
+
 ## When a build fails
 
 The logs are the answer, and they are kept. Common cases:

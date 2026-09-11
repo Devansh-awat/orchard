@@ -277,7 +277,13 @@ Whether this re-pulls the image depends on the deployment's pull policy. That po
   server.registerTool(
     'rebuild_deployment',
     {
-      description: 'Rebuild a deployment from source (triggers a new build from the GitHub repo)',
+      description: `Rebuild a deployment from source (triggers a new build from the GitHub repo).
+
+Read the \`build\` field on the response before doing anything else:
+- \`{ started: true, status: "building" }\` means a build is running now.
+- \`{ started: false, status: "queued" }\` means it was accepted but every build slot is busy, or this deployment is already building. It starts on its own. **Do not call this again**: a second call supersedes the first and gets you no closer to the front. Poll \`get_deployment\` for the build status instead.
+
+Everything else on the response is the deployment as it stands right now, so when a build is queued the build fields still describe the previous build. That is expected, not a failed call.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID to rebuild'),
@@ -339,7 +345,11 @@ Whether this re-pulls the image depends on the deployment's pull policy. That po
   server.registerTool(
     'enable_auto_deploy',
     {
-      description: 'Enable auto-deploy for a deployment. When enabled, pushes to the configured branch will automatically trigger a rebuild.',
+      description: `Enable auto-deploy for a deployment. When enabled, pushes to the configured branch automatically trigger a rebuild.
+
+**The GitHub App has to be installed on the repository first.** Without it this call fails with a message naming the fix, because pushes never reach Orchard otherwise. Note that an App installed with "only select repositories" does not pick up a repository created after the install: it has to be added to the selection by hand.
+
+Check with \`get_auto_deploy_status\` afterwards. If it reports \`deliverable: false\`, pushes will not build anything no matter what \`enabled\` says.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
@@ -357,6 +367,25 @@ Whether this re-pulls the image depends on the deployment's pull policy. That po
         branch,
         ...(paths !== undefined ? { paths } : {}),
       });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_auto_deploy_status',
+    {
+      description: `Whether pushes to this deployment's branch actually build anything.
+
+\`enabled\` is what the user asked for. \`deliverable\` is what will happen: it is only true when the GitHub App is installed on the repo **and** this deployment is bound to that installation. When it is false, \`message\` says why and what to do.
+
+Use this whenever auto-deploy looks like it is on but pushes are not producing builds. The usual cause is the App not being installed on that specific repository.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+      },
+    },
+    async ({ deploymentId }) => {
+      const result = await client.get(`/deployments/${deploymentId}/auto-deploy`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

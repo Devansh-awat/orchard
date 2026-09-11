@@ -5,6 +5,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from './deployments.service';
 import { GitHubService } from '../github/github.service';
 
+export interface QueueSnapshot {
+  running: number;
+  limit: number;
+  waiting: number;
+  blockedByOwnBuild: boolean;
+  pool: 'depot' | 'cluster';
+}
+
 @Injectable()
 export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BuildQueueService.name);
@@ -66,6 +74,11 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     this.bootTimeout = null;
   }
 
+  /**
+   * Why a build is or is not running right now, in the terms an operator or an
+   * agent needs: how many slots exist, how many are busy, and whether this
+   * deployment is waiting on the pool or on a build of its own.
+   */
   async enqueue(opts: {
     deploymentId: string;
     triggerType: 'auto' | 'manual' | 'initial';
@@ -75,7 +88,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     commitAuthorUsername?: string | null;
     branch?: string | null;
     triggeredById?: string | null;
-  }): Promise<{ startNow: boolean; runId: string }> {
+  }): Promise<{ startNow: boolean; runId: string; queue: QueueSnapshot }> {
     const enqueued = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
 
@@ -113,10 +126,19 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const buildingInPool = await tx.buildRun.count({
         where: { status: 'building', deployment: { buildWithDepot: usesDepot } },
       });
+      const limit = usesDepot ? this.maxConcurrentDepot : this.maxConcurrent;
       const startNow =
         buildingForDep === 0 &&
         dep?.buildStatus !== 'building' &&
-        buildingInPool < (usesDepot ? this.maxConcurrentDepot : this.maxConcurrent);
+        buildingInPool < limit;
+
+      // Counted here rather than after the fact so the caller can say why a
+      // build has not started. Without it a queued rebuild is indistinguishable
+      // from one that silently did nothing, which is what it looked like to
+      // every API client.
+      const waiting = await tx.buildRun.count({
+        where: { status: 'scheduled', deployment: { buildWithDepot: usesDepot } },
+      });
 
       const now = new Date();
       const run = await tx.buildRun.create({
@@ -135,7 +157,14 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           heartbeatAt: startNow ? now : null,
         },
       });
-      return { startNow, runId: run.id, superseded: stale, deployment: dep };
+      const queue: QueueSnapshot = {
+        running: buildingInPool,
+        limit,
+        waiting: startNow ? waiting : waiting + 1,
+        blockedByOwnBuild: buildingForDep > 0 || dep?.buildStatus === 'building',
+        pool: usesDepot ? 'depot' : 'cluster',
+      };
+      return { startNow, runId: run.id, superseded: stale, deployment: dep, queue };
     }, this.txOpts);
 
     if (enqueued.superseded.length > 0) {
@@ -144,7 +173,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    return { startNow: enqueued.startNow, runId: enqueued.runId };
+    return { startNow: enqueued.startNow, runId: enqueued.runId, queue: enqueued.queue };
   }
 
   private async announceSuperseded(
