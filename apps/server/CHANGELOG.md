@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.0](https://github.com/hackclub/orchard/compare/server/v2.28.5...server/v2.29.0) (2026-09-11)
+
+
+### Features
+
+* allow the bundled registry on install and add orchardctl registry ([f809de5](https://github.com/hackclub/orchard/commit/f809de56c67a5f8fafb5292213528ab2e1964b70))
+
 ## [2.28.5](https://github.com/hackclub/orchard/compare/server/v2.28.4...server/v2.28.5) (2026-09-11)
 
 
