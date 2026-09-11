@@ -295,6 +295,17 @@ still has to name it.
             # pinned off rather than left switchable from the admin panel.
             - { name: MCP_ENABLED, value: "false" }
             {{- end }}
+            {{- /*
+              The server needs the MCP's hostname too, not to serve it, but to
+              report on it: the DNS check in the admin panel cannot tell an
+              operator that mcp.example.com does not resolve without knowing it
+              is supposed to.
+            */}}
+            {{- if not (or (include "orchard.serverEnvHas" (dict "root" . "key" "MCP_BASE_URL")) .Values.server.envFrom) }}
+            {{- with (include "orchard.mcpUrl" .) }}
+            - { name: MCP_BASE_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
             {{- with .Values.tenant }}
             {{- if .storageClass }}
             - { name: K8S_STORAGE_CLASS, value: {{ .storageClass | quote }} }

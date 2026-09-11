@@ -36,6 +36,12 @@ deployed apps, and `mcp.<your domain>` for the MCP endpoint AI agents connect
 to. In `public` mode both need a DNS record, and the installer prints them
 before it waits. `--mcp-domain` moves the MCP, `--mcp false` leaves it out.
 
+It then checks the MCP hostname actually resolves, and if it does not, offers to
+re-check, take a different hostname, or leave the MCP off. Under `--yes` it skips
+it and says so. Turning it on later is one command, and shipping an endpoint for
+a name that does not exist is not: the certificate is issued over HTTP-01, so it
+would retry against nothing and stay quietly broken.
+
 amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
 to run on anything else rather than leave you with apps that cannot start.
 

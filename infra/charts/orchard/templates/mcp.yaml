@@ -46,18 +46,24 @@ spec:
               consent, and ORCHARD_API_URL is the API the tools call. Left to
               their defaults they point at localhost, which fails only once a
               client tries to authorise.
+
+              `envFrom` disables all three. A container `env` entry outranks
+              every `envFrom` source, so injecting one here would silently
+              shadow a value held in a Secret rather than defer to it, which is
+              how a chart-managed install supplies these.
             */}}
-            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "MCP_BASE_URL")) }}
+{{- $derive := not .Values.mcp.envFrom }}
+            {{- if and $derive (not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "MCP_BASE_URL"))) }}
             {{- with (include "orchard.mcpUrl" .) }}
             - { name: MCP_BASE_URL, value: {{ . | quote }} }
             {{- end }}
             {{- end }}
-            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "FRONTEND_URL")) }}
+            {{- if and $derive (not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "FRONTEND_URL"))) }}
             {{- with (include "orchard.frontendUrl" .) }}
             - { name: FRONTEND_URL, value: {{ . | quote }} }
             {{- end }}
             {{- end }}
-            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "ORCHARD_API_URL")) }}
+            {{- if and $derive (not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "ORCHARD_API_URL"))) }}
             - name: ORCHARD_API_URL
               value: {{ printf "http://server.%s.svc.cluster.local:%v" .Values.namespace .Values.server.service.port | quote }}
             {{- end }}

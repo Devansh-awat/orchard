@@ -14,6 +14,7 @@
 		LayoutDashboard,
 		SlidersHorizontal,
 		Server,
+		Globe,
 		KeyRound,
 		Activity,
 		Gauge,
@@ -36,6 +37,7 @@
 			items: [
 				{ href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
 				{ href: '/admin/instance', label: 'Configuration', icon: SlidersHorizontal, exact: false },
+				{ href: '/admin/networking', label: 'Networking', icon: Globe, exact: false },
 				{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
 				{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false }
 			]

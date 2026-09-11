@@ -465,9 +465,11 @@ collect_domains() {
       printf '  A  %-*s -> %s\n' "$width" "$record" "${PUBLIC_IP:-<this box>}"
     done
     if [ "$ORCHARD_MCP" = true ]; then
-      note "the last one is where AI agents connect. Skip it with --mcp false."
+      note "the last one is where AI agents connect. Skip it with --mcp false,"
+      note "or move it with --mcp-domain. You will be asked about it either way."
     fi
     wait_for_dns "$ORCHARD_DOMAIN"
+    confirm_mcp_dns
   else
     USE_TLS=false
     CERT_ISSUER=""
@@ -485,6 +487,107 @@ collect_domains() {
       printf '  %-*s -> http://traefik.traefik.svc.cluster.local:80\n' "$width" "$host"
     done
   fi
+}
+
+# Not every base image ships getent, and "we could not check" must not be
+# treated as "it is broken" — this answer decides whether the MCP is deployed
+# at all, so a missing tool would silently drop it.
+host_resolves() {
+  local host=$1
+  if command -v getent >/dev/null 2>&1; then
+    if getent ahostsv4 "$host" >/dev/null 2>&1; then return 0; fi
+    return 1
+  fi
+  if command -v dig >/dev/null 2>&1; then
+    if [ -n "$(dig +short A "$host" 2>/dev/null)" ]; then return 0; fi
+    return 1
+  fi
+  if command -v host >/dev/null 2>&1; then
+    if host -t A "$host" >/dev/null 2>&1; then return 0; fi
+    return 1
+  fi
+  return 0
+}
+
+# The MCP is the one hostname that is derived rather than asked for, so it is
+# also the one an operator is most likely to have missed. A hostname that does
+# not resolve is not a visible outage: its certificate is issued over HTTP-01,
+# so cert-manager retries against a name that is not there and the endpoint
+# stays quietly broken. Better to sort it out here, while someone is watching.
+confirm_mcp_dns() {
+  [ "$ORCHARD_MCP" = true ] || return 0
+  [ "$INGRESS_MODE" = public ] || return 0
+  if host_resolves "$ORCHARD_MCP_DOMAIN"; then
+    info "$ORCHARD_MCP_DOMAIN resolves"
+    return 0
+  fi
+
+  echo
+  warn "$ORCHARD_MCP_DOMAIN does not resolve yet."
+  note "That is where AI agents connect over MCP. Its certificate is issued"
+  note "over HTTP-01, so it cannot be obtained until the name points here."
+  echo
+
+  if [ "$ASSUME_YES" = true ]; then
+    warn "leaving the MCP off. Add the record, then run:"
+    note "  sudo orchardctl mcp enable --apply"
+    ORCHARD_MCP=false
+    return 0
+  fi
+
+  # Bounded rather than `while true`: ask reads from /dev/tty and falls back to
+  # the default when that is not available, which behind `curl | bash` with no
+  # terminal would spin here forever. Anyone who wants more attempts has
+  # `orchardctl mcp enable` afterwards.
+  local attempt=0
+  while [ $attempt -lt 6 ]; do
+    attempt=$((attempt + 1))
+    bold "What would you like to do?"
+    echo "  1) I have added the record now, check again"
+    echo "  2) use a different hostname"
+    echo "  3) skip the MCP for now, I will turn it on later"
+    case "$(ask 'Choose' 1)" in
+      1)
+        if host_resolves "$ORCHARD_MCP_DOMAIN"; then
+          info "$ORCHARD_MCP_DOMAIN resolves"
+          return 0
+        fi
+        warn "still nothing. DNS can take a few minutes to propagate."
+        ;;
+      2)
+        local candidate
+        candidate=$(ask "Hostname for the MCP endpoint" "$ORCHARD_MCP_DOMAIN")
+        case "$candidate" in
+          ''|*' '*|*.*) ;;
+          *) warn "that does not look like a hostname"; echo; continue ;;
+        esac
+        if [ -z "$candidate" ]; then
+          warn "that is not a hostname"
+          echo
+          continue
+        fi
+        ORCHARD_MCP_DOMAIN=$candidate
+        if host_resolves "$ORCHARD_MCP_DOMAIN"; then
+          info "$ORCHARD_MCP_DOMAIN resolves"
+          return 0
+        fi
+        warn "$ORCHARD_MCP_DOMAIN does not resolve either."
+        note "Point it at ${PUBLIC_IP:-this box} with an A record."
+        ;;
+      3)
+        warn "leaving the MCP off. Add the record, then run:"
+        note "  sudo orchardctl mcp enable --apply"
+        ORCHARD_MCP=false
+        return 0
+        ;;
+      *) warn "pick 1, 2 or 3" ;;
+    esac
+    echo
+  done
+
+  warn "leaving the MCP off. Add the record, then run:"
+  note "  sudo orchardctl mcp enable --apply"
+  ORCHARD_MCP=false
 }
 
 wait_for_dns() {

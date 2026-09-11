@@ -199,6 +199,56 @@ Unconfigured by default, because an instance with no L4 load balancer, or one
 behind a Cloudflare Tunnel, has no such address. Public ports are unavailable in
 tunnel mode either way, because tunnels carry HTTP only.
 
+## Point DNS at this instance
+
+**Instance admin → Networking** lists every hostname this instance serves, what
+each one currently resolves to, and whether that is where the dashboard lives.
+It is the first place to look when something is unreachable, because the usual
+symptom of a missing record is not an error page. It is a certificate that never
+issues: ACME's HTTP-01 challenge cannot reach a name that does not resolve, so
+cert-manager retries quietly and the host stays broken.
+
+Three kinds of name are checked:
+
+| Name             | Why                                                                     |
+| ---------------- | ----------------------------------------------------------------------- |
+| the dashboard    | Where people sign in. Everything else is compared against it.           |
+| `*.<app domain>` | A wildcard, so every generated app URL resolves without its own record. |
+| the MCP hostname | Where agents connect, if MCP is on.                                     |
+
+The wildcard is checked with a probe label, `orchard-dns-probe.<app domain>`,
+rather than with a deployed app's hostname. A generated app URL always ends in a
+six-character hash, so no deployment can ever be given that name, and resolving
+it proves the wildcard record exists rather than proving one app happens to be
+deployed.
+
+**Resolves to a different address than the dashboard** is reported but never
+counted as unfinished. A proxy or CDN in front of the zone hands out different
+addresses per hostname quite legitimately. Only a name with **no record at all**
+is treated as outstanding.
+
+### Cloudflare Tunnel
+
+A token-managed tunnel keeps its routing table in Cloudflare rather than in the
+cluster, so by default the box cannot see, let alone change, which hostnames
+reach it. Give Orchard an API token and it can:
+
+| Field                   | Purpose                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Needs **Account / Cloudflare Tunnel / Edit**, and **Zone / DNS / Edit** to create records |
+| `CLOUDFLARE_ACCOUNT_ID` | Shown on the right of any Cloudflare dashboard page                                       |
+| `CLOUDFLARE_TUNNEL_ID`  | Zero Trust → Networks → Tunnels, then the tunnel                                          |
+| `CLOUDFLARE_ZONE_ID`    | Optional. Without it the route is added but the DNS record is left to you                 |
+
+The Networking page then shows which of this instance's hostnames are routed
+through the tunnel, and adding a missing one is a button. It writes both halves,
+which is the part people get wrong by hand: an ingress rule with no CNAME is a
+route nothing reaches, and a CNAME with no ingress rule is Cloudflare serving
+its own error page.
+
+The token is encrypted at rest and never sent back to the browser, and as with
+every other field here, setting the environment variable locks it.
+
 ## Turn the MCP endpoint on or off
 
 Orchard ships an MCP server so Claude and other agents can drive the instance
@@ -235,6 +285,10 @@ sudo orchardctl mcp enable --apply
 ```
 
 Point an A record for the hostname at the box first, the same record as the UI.
+The installer asks about this while you are watching: if the MCP hostname does
+not resolve it offers to check again, to use a different hostname, or to leave
+the MCP off for now. It never deploys an endpoint for a name that does not
+exist, because that is the case that fails silently.
 
 ## When cert-manager is not installed
 

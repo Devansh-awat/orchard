@@ -242,6 +242,12 @@ jobs:
         run: pnpm --filter server test:instance-config
       - name: Instance toggle tests
         run: pnpm --filter server test:instance-settings
+      # A hostname with no record is not a visible outage, it is a certificate
+      # that never issues. Pins which names are expected, that the wildcard is
+      # probed rather than assumed, and that "resolves elsewhere" stays advisory
+      # so a proxied zone is never badged as broken.
+      - name: DNS check tests
+        run: pnpm --filter server test:instance-network
 
   e2e:
     needs: changes

@@ -11,6 +11,7 @@ import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { STORAGE, EMAIL, INGRESS, WILDCARD } from '../instance-config/instance-config.sections';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
+import { DnsCheckService, DnsReport } from '../instance-network/dns-check.service';
 import { sanitizeUsername } from '../users/users.service';
 import { AdminService } from '../admin/admin.service';
 import { GithubAppConfigService } from '../github/github-app-config.service';
@@ -89,6 +90,7 @@ export class SetupService implements OnModuleInit {
     private readonly admin: AdminService,
     private readonly githubApp: GithubAppConfigService,
     private readonly config: InstanceConfigService,
+    private readonly dns: DnsCheckService,
     @Optional() private readonly network?: K8sNetworkService,
   ) {}
 
@@ -286,6 +288,18 @@ export class SetupService implements OnModuleInit {
       : ({ state: 'unknown', host: null, message: null } as SetupCertificate);
     const wildcardDetail = this.wildcardStatus(wildcardConfigured, cert);
 
+    // A name that does not resolve is not an outage, it is a certificate that
+    // never issues, which is invisible until somebody tries the URL. Cheap to
+    // surface here, where the operator is already reading a list of what is
+    // unfinished.
+    let dns: DnsReport | null = null;
+    try {
+      dns = await this.dns.report();
+    } catch (e: any) {
+      this.logger.warn(`could not check DNS: ${e?.message}`);
+    }
+    const dnsOutstanding = DnsCheckService.outstanding(dns);
+
     return [
       {
         id: 'github-app',
@@ -331,6 +345,17 @@ export class SetupService implements OnModuleInit {
         href: '/admin/instance',
       },
       {
+        id: 'dns',
+        title: 'Point DNS at this instance',
+        detail: SetupService.dnsDetail(dns, dnsOutstanding.length),
+        // Nothing outstanding counts as done, including nothing to check and a
+        // check that could not run. An item nobody can ever complete is worse
+        // than no item at all.
+        done: dnsOutstanding.length === 0,
+        severity: dnsOutstanding.length > 0 ? 'warning' : 'normal',
+        href: '/admin/networking',
+      },
+      {
         id: 'wildcard-tls',
         title: 'Use a wildcard certificate',
         detail: wildcardDetail,
@@ -339,6 +364,17 @@ export class SetupService implements OnModuleInit {
         href: '/admin/instance',
       },
     ];
+  }
+
+  private static dnsDetail(dns: DnsReport | null, outstanding: number): string {
+    if (!dns || dns.rows.length === 0) {
+      return 'Nothing to check yet: this instance has no domain configured.';
+    }
+    if (outstanding === 0) {
+      return 'Every hostname this instance serves resolves here.';
+    }
+    const names = DnsCheckService.outstanding(dns).map((r) => r.record).join(', ');
+    return `${names} does not point here yet. Certificates cannot issue for a hostname that does not resolve.`;
   }
 
   /**

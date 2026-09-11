@@ -13,6 +13,9 @@
 		secretFields: string[];
 	};
 
+	// A section with no entry here is not rendered. The Cloudflare tunnel is the
+	// deliberate case: its credentials only make sense next to the routes they
+	// manage, so it lives on the Networking page instead.
 	const META: Record<
 		string,
 		{ title: string; description: string; fields: Record<string, string> }
@@ -97,7 +100,8 @@
 	async function load() {
 		const response = await apiFetch('/apiv1/admin/instance-config');
 		if (!response.ok) return;
-		sections = await response.json();
+		const all: Section[] = await response.json();
+		sections = all.filter((s) => s.id in META);
 		seed(sections);
 	}
 

@@ -196,6 +196,12 @@ consent, taken from `server.env` when set), and `ORCHARD_API_URL` (the in-cluste
 server Service). Left to their own defaults these point at localhost, which
 fails only once a client tries to authorise.
 
+**Setting `mcp.envFrom` disables all three.** A container `env` entry outranks
+every `envFrom` source, so injecting one would silently shadow a value held in a
+Secret rather than defer to it. The same rule applies to `MCP_BASE_URL` on the
+server, which is set only so the DNS check in the admin panel knows the MCP's
+hostname, and is skipped entirely when `server.envFrom` is present.
+
 `mcp.ingress.host` also feeds the frontend's `PUBLIC_MCP_URL`, which is the URL
 **Settings → MCP** shows people, and `SANDBOX_MCP_URL` when sandboxes are on. It
 is the single place the MCP's address is configured.

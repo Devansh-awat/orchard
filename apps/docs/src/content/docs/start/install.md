@@ -41,6 +41,26 @@ deployed apps, and `mcp.` for the [MCP endpoint](/mcp/) agents connect to. In
 `public` mode both need a DNS record, and the installer prints them. Move the MCP
 with `--mcp-domain`, or leave it out entirely with `--mcp false`.
 
+Before it deploys anything it checks that the MCP hostname resolves, and if it
+does not, it asks:
+
+```
+!  mcp.example.com does not resolve yet.
+   That is where AI agents connect over MCP. Its certificate is issued
+   over HTTP-01, so it cannot be obtained until the name points here.
+
+What would you like to do?
+  1) I have added the record now, check again
+  2) use a different hostname
+  3) skip the MCP for now, I will turn it on later
+```
+
+Skipping is safe and reversible: add the record whenever you like and run
+`sudo orchardctl mcp enable --apply`. Under `--yes` there is nobody to ask, so it
+skips and says so. It never ships an endpoint for a hostname that does not
+exist, because a certificate that cannot be issued fails quietly rather than
+loudly.
+
 It also asks how traffic reaches the box:
 
 | Mode     | For                                        | TLS                                            |
@@ -100,6 +120,11 @@ builderSandbox: # Kata VMs for build jobs
   enabled: true
   runtimeClassName: kata
 ```
+
+**DNS.** You point the records at the box; the installer only checks them. Once
+it is up, **Instance admin → Networking** shows what resolves where, and if you
+are behind a Cloudflare Tunnel it can add the routes for you. See
+[Point DNS at this instance](/operate/finishing-setup/#point-dns-at-this-instance).
 
 **A default public IP.** Raw TCP and UDP ports and public databases are
 published on an external address, and the installer does not assume this box's

@@ -93,7 +93,27 @@ export const NETWORK = section(
   },
 );
 
-export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD, NETWORK];
+/**
+ * Credentials for the Cloudflare Tunnel this instance sits behind.
+ *
+ * A token-managed tunnel keeps its routing table in Cloudflare, not in the
+ * cluster, so the box cannot see or change which hostnames reach it. With an
+ * API token it can, which turns "add a public hostname in the dashboard, then
+ * come back" into a button.
+ */
+export const TUNNEL = section(
+  'tunnel',
+  'cloudflare_tunnel',
+  [
+    { name: 'apiToken', env: 'CLOUDFLARE_API_TOKEN', secret: true },
+    { name: 'accountId', env: 'CLOUDFLARE_ACCOUNT_ID' },
+    { name: 'tunnelId', env: 'CLOUDFLARE_TUNNEL_ID' },
+    { name: 'zoneId', env: 'CLOUDFLARE_ZONE_ID' },
+  ],
+  ['apiToken', 'accountId', 'tunnelId'],
+);
+
+export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD, NETWORK, TUNNEL];
 
 export const sectionById = (id: string): ConfigSection | undefined =>
   SECTIONS.find((s) => s.id === id);
