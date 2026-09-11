@@ -110,5 +110,13 @@
 </div>
 
 <div {@attach motionStagger({ index: 1 })}>
-	<TunnelCard state={tunnel} {section} bind:draft {saving} {routing} onSave={save} onRoute={route} />
+	<TunnelCard
+		state={tunnel}
+		{section}
+		bind:draft
+		{saving}
+		{routing}
+		onSave={save}
+		onRoute={route}
+	/>
 </div>

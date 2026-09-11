@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/hackclub/orchard/compare/frontend/v1.26.0...frontend/v1.26.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* stop blaming capacity for every failed scheduling event ([97d8347](https://github.com/hackclub/orchard/commit/97d834719d323e7cad829af4e497d702e810f6f6))
+
 ## [1.26.0](https://github.com/hackclub/orchard/compare/frontend/v1.25.0...frontend/v1.26.0) (2026-09-11)
 
 

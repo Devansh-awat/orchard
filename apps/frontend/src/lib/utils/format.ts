@@ -311,7 +311,11 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		};
 	}
 	if (/failedscheduling/i.test(m) || /0\/\d+ nodes are available/i.test(m)) {
-		if (/unbound immediate persistentvolumeclaim|persistentvolumeclaim .* (?:not found|is being deleted)/i.test(m)) {
+		if (
+			/unbound immediate persistentvolumeclaim|persistentvolumeclaim .* (?:not found|is being deleted)/i.test(
+				m
+			)
+		) {
 			return {
 				title: 'Waiting for storage',
 				hint: 'The pod is waiting on a volume that has not been created or bound yet. This usually clears on its own once the volume is ready.',
