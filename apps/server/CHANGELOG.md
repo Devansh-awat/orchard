@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.32.0](https://github.com/hackclub/orchard/compare/server/v2.31.0...server/v2.32.0) (2026-09-11)
+
+
+### Features
+
+* check dns for every hostname and configure cloudflare tunnel routes ([00be104](https://github.com/hackclub/orchard/commit/00be1041de3e9e0910cf44d1812c5f0bb6354865))
+
+
+### Bug Fixes
+
+* **server:** apply mid-build volumes, report queued rebuilds, gate auto-deploy ([10c0154](https://github.com/hackclub/orchard/commit/10c0154ecbb30f304a3159584ed1340ddb911198))
+
 ## [2.31.0](https://github.com/hackclub/orchard/compare/server/v2.30.0...server/v2.31.0) (2026-09-11)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/hackclub/orchard/compare/frontend/v1.25.0...frontend/v1.26.0) (2026-09-11)
+
+
+### Features
+
+* check dns for every hostname and configure cloudflare tunnel routes ([00be104](https://github.com/hackclub/orchard/commit/00be1041de3e9e0910cf44d1812c5f0bb6354865))
+
 ## [1.25.0](https://github.com/hackclub/orchard/compare/frontend/v1.24.1...frontend/v1.25.0) (2026-09-11)
 
 
