@@ -1,48 +1,64 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Defaults that work unrendered, so these can be copied straight out of the
+# Defaults that work unrendered, so this can be copied straight out of the
 # image and run. install.sh writes the env file when paths differ.
 : "${ORCHARD_STATE_DIR:=/etc/orchard}"
 if [ -r "$ORCHARD_STATE_DIR/env" ]; then . "$ORCHARD_STATE_DIR/env"; fi
-: "${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}"
-: "${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}"
 : "${ORCHARD_NAMESPACE:=orchard}"
 : "${ORCHARD_BIN:=/usr/local/bin}"
 export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
-# Copies the host commands out of the running server image. Each is validated
-# before it replaces the live one: a truncated download here would leave the
+# The bootstrap, and the one host command that stays shell.
+#
+# install.sh fetches this file with `kubectl exec ... cat` before anything is
+# installed, and an older host's copy of it is what pulls the first binary
+# down, so it has to be readable as text and runnable with nothing else
+# present. Everything else is orchardctl, which this installs.
+BIN=$ORCHARD_BIN
+TARGET="$BIN/orchardctl"
+ALIASES="orchard-update orchard-config orchard-registry orchard-policies orchard-claim"
+
+case "$(uname -m)" in
+  x86_64|amd64) ARCH=amd64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+
+if ! kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- \
+    cat "/app/hostbin/orchardctl-linux-$ARCH" > "$tmp" 2>/dev/null; then
+  echo "could not read orchardctl-linux-$ARCH from the server image" >&2
+  exit 1
+fi
+
+# Validated before it replaces anything: a truncated download would leave the
 # operator with no way to upgrade or claim, which is the worst thing this
 # script could do.
-BIN=$ORCHARD_BIN
-changed=0
+if [ ! -s "$tmp" ] || [ "$(wc -c < "$tmp")" -lt 1024 ]; then
+  echo "refusing to install a truncated orchardctl" >&2
+  exit 1
+fi
+if [ "$(head -c 4 "$tmp" | od -An -tx1 | tr -d ' \n')" != "7f454c46" ]; then
+  echo "refusing to install orchardctl: not an ELF binary" >&2
+  exit 1
+fi
 
-for name in orchardctl orchard-update orchard-config orchard-registry orchard-policies orchard-claim orchard-sync-commands; do
-  tmp=$(mktemp)
-  if ! kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- \
-      cat "/app/hostbin/$name" > "$tmp" 2>/dev/null; then
-    rm -f "$tmp"
-    continue
-  fi
-  if [ ! -s "$tmp" ] || ! head -1 "$tmp" | grep -q '^#!'; then
-    rm -f "$tmp"
-    echo "skipped $name: not a script" >&2
-    continue
-  fi
-  if ! bash -n "$tmp" 2>/dev/null; then
-    rm -f "$tmp"
-    echo "skipped $name: failed syntax check" >&2
-    continue
-  fi
-  if [ -f "$BIN/$name" ] && cmp -s "$tmp" "$BIN/$name"; then
-    rm -f "$tmp"
-    continue
-  fi
-  install -m 0755 "$tmp" "$BIN/$name"
-  rm -f "$tmp"
-  echo "updated $name"
-  changed=$((changed + 1))
+if [ -f "$TARGET" ] && cmp -s "$tmp" "$TARGET"; then
+  echo "host commands already current"
+else
+  # Written beside the target and renamed, so a failure part-way through leaves
+  # the working copy in place rather than a half-written one.
+  install -m 0755 "$tmp" "$TARGET.new"
+  mv -f "$TARGET.new" "$TARGET"
+  echo "updated orchardctl"
+fi
+
+# The hyphenated names are the same binary; it decides what to do from the name
+# it was called by. Symlinks rather than copies so they cannot drift.
+for name in $ALIASES; do
+  ln -sf "$TARGET" "$BIN/$name"
 done
 
-[ "$changed" -eq 0 ] && echo "host commands already current"
 exit 0

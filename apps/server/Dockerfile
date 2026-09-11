@@ -7,6 +7,18 @@
 # fails to parse `--mount=type=cache`, run with `DOCKER_BUILDKIT=1 docker build ...`
 # or install buildx.
 
+# orchardctl, the host commands. Built here rather than shipped as shell so it
+# can grow: one binary, one command registry, and no yq gymnastics for the
+# values file. Both architectures, because the host picks the one that matches
+# it out of the image.
+FROM golang:1.26-bookworm AS hostctl
+WORKDIR /src
+COPY apps/server/hostctl/go.mod apps/server/hostctl/go.sum ./
+RUN go mod download
+COPY apps/server/hostctl ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-amd64 . \
+ && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o /out/orchardctl-linux-arm64 .
+
 FROM node:22-bookworm-slim AS base
 
 # Disable apt's auto-cleanup so BuildKit cache mounts keep .deb files between builds.
@@ -84,6 +96,7 @@ RUN pnpm dlx prisma@6.18.0 generate
 # only cuts releases per package, and images only publish on a release, so
 # anywhere else they would never reach a published image.
 COPY apps/server/hostbin /app/hostbin
+COPY --from=hostctl /out/orchardctl-linux-amd64 /out/orchardctl-linux-arm64 /app/hostbin/
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

@@ -29,6 +29,13 @@ through the cluster.
 They read `/etc/orchard/env` for paths, falling back to defaults that work
 unrendered, so a command copied straight out of the container still runs.
 
+`orchardctl` is a single binary that ships inside the server image, one build
+per architecture. The hyphenated names are symlinks to it; it decides what to do
+from the name it was called by. `orchard-sync-commands` is the exception and
+stays a shell script, because it is what fetches the binary in the first place:
+`install.sh` reads it out of the image before anything is installed, and it is
+the one thing that can recover a host with no `orchardctl` on it.
+
 ## update
 
 ```bash
@@ -144,15 +151,36 @@ CLI for a deployment's logs.
 sudo orchardctl sync
 ```
 
-Copies the host commands out of the running server image, which is where they
-ship from. That is how you pick up a command added or fixed in a later release
-without re-running the installer.
+Copies `orchardctl` out of the running server image, which is where it ships
+from, picking the build that matches the host's architecture, and re-links the
+hyphenated aliases. That is how you pick up a command added or fixed in a later
+release without re-running the installer.
 
-Each file is validated before it replaces the live one: it must be non-empty,
-start with a shebang, and pass `bash -n`. Anything that fails is skipped with a
-message, and files that are already identical are left alone. A half-downloaded
-`orchard-update` would leave the host with no way to upgrade, which is the worst
-thing this command could do, so it refuses to install one.
+The download is validated before it replaces the live binary: it must be at
+least a kilobyte and start with the ELF magic number. It is written beside the
+target and renamed, so a failure part-way through leaves the working copy in
+place. A half-downloaded `orchardctl` would leave the host with no way to
+upgrade itself, which is the worst thing this command could do.
 
 `update` runs this for you at the end, so you rarely need it directly. Reach for
 it when the docs mention a command your host does not have yet.
+
+## Upgrading from the shell version
+
+Earlier releases shipped these as a set of shell scripts rather than one binary.
+The switch takes two steps on an existing host, because the script doing the
+copying is the one being replaced:
+
+```bash
+sudo orchardctl sync    # picks up the new bootstrap
+sudo orchardctl sync    # installs the binary and links the aliases
+```
+
+The first run installs the new `orchard-sync-commands` and skips `orchardctl`
+itself, because the old script validates what it downloads with `bash -n` and a
+binary is not a shell script. That check is doing its job: it would rather skip
+than install something it cannot verify. The second run is the new bootstrap,
+which knows what a binary is.
+
+`sudo orchardctl update` also runs the bootstrap at the end, so an upgrade
+followed by one `sync` gets there too.

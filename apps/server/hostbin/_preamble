@@ -1,8 +1,0 @@
-: "${ORCHARD_STATE_DIR:=/etc/orchard}"
-# Written by install.sh so these scripts can ship as static files rather than
-# being generated with paths baked in.
-[ -r "$ORCHARD_STATE_DIR/env" ] && . "$ORCHARD_STATE_DIR/env"
-: "${ORCHARD_VALUES:=$ORCHARD_STATE_DIR/values.yaml}"
-: "${ORCHARD_CHART:=oci://ghcr.io/hackclub/orchard/charts/orchard}"
-: "${ORCHARD_NAMESPACE:=orchard}"
-export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
