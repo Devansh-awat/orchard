@@ -311,11 +311,46 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		};
 	}
 	if (/failedscheduling/i.test(m) || /0\/\d+ nodes are available/i.test(m)) {
+		if (/unbound immediate persistentvolumeclaim|persistentvolumeclaim .* (?:not found|is being deleted)/i.test(m)) {
+			return {
+				title: 'Waiting for storage',
+				hint: 'The pod is waiting on a volume that has not been created or bound yet. This usually clears on its own once the volume is ready.',
+				severity: 'warning'
+			};
+		}
+		if (/volume node affinity conflict/i.test(m)) {
+			return {
+				title: 'Volume is on another node',
+				hint: 'The pod can only run on the node holding its volume, and that node cannot take it. Free capacity there, or recreate the volume.',
+				severity: 'error'
+			};
+		}
+		if (/insufficient cpu|insufficient memory/i.test(m)) {
+			return {
+				title: 'No available nodes',
+				hint: 'No node has enough free CPU or memory to run this pod. Try reducing resource requests or wait for capacity.',
+				severity: 'error',
+				action: 'Check resources'
+			};
+		}
+		if (/taint|toleration|node selector|nodeselector|node affinity/i.test(m)) {
+			return {
+				title: 'No node matches the scheduling rules',
+				hint: 'Node selectors or taints are excluding every node. Check the node pool this deployment is pinned to.',
+				severity: 'error'
+			};
+		}
 		return {
-			title: 'No available nodes',
-			hint: 'No node has enough free CPU or memory to run this pod. Try reducing resource requests or wait for capacity.',
-			severity: 'error',
-			action: 'Check resources'
+			title: "Couldn't place the pod on a node",
+			hint: 'Kubernetes will keep retrying. The event text below says which constraint it could not satisfy.',
+			severity: 'error'
+		};
+	}
+	if (/multi-attach error/i.test(m)) {
+		return {
+			title: 'Volume still attached elsewhere',
+			hint: 'The volume can only be mounted by one pod at a time and the previous pod has not released it yet. It usually clears within a minute.',
+			severity: 'warning'
 		};
 	}
 	if (/failedmount|failed to attach volume|unable to attach or mount/i.test(m)) {
