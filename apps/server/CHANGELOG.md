@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.30.0](https://github.com/hackclub/orchard/compare/server/v2.29.0...server/v2.30.0) (2026-09-11)
+
+
+### Features
+
+* rewrite orchardctl as a go binary ([db82650](https://github.com/hackclub/orchard/commit/db8265032ae74fc36dbf453452f622ac5d8b332a))
+
+
+### Bug Fixes
+
+* let the ingress controller reach tenant apps on any cluster ([d83fe8f](https://github.com/hackclub/orchard/commit/d83fe8f2570a0d3223f15458ecf28685e2b68344))
+
 ## [2.29.0](https://github.com/hackclub/orchard/compare/server/v2.28.5...server/v2.29.0) (2026-09-11)
 
 
