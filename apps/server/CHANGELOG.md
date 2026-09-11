@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.5](https://github.com/hackclub/orchard/compare/server/v2.28.4...server/v2.28.5) (2026-09-11)
+
+
+### Bug Fixes
+
+* put the real cause in the build failure headline ([328306c](https://github.com/hackclub/orchard/commit/328306c29ff0cc57acd1ade0c883221f4b225527))
+
 ## [2.28.4](https://github.com/hackclub/orchard/compare/server/v2.28.3...server/v2.28.4) (2026-09-10)
 
 
