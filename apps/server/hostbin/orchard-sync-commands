@@ -17,7 +17,7 @@ export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 BIN=$ORCHARD_BIN
 changed=0
 
-for name in orchardctl orchard-update orchard-config orchard-claim orchard-sync-commands; do
+for name in orchardctl orchard-update orchard-config orchard-registry orchard-claim orchard-sync-commands; do
   tmp=$(mktemp)
   if ! kubectl -n "$ORCHARD_NAMESPACE" exec deploy/server -- \
       cat "/app/hostbin/$name" > "$tmp" 2>/dev/null; then

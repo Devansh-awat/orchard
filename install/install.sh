@@ -927,6 +927,15 @@ builders:
     password: ""
     hosts:
       - zot.orchard.svc.cluster.local
+  # Builds are firewalled off from the rest of the cluster, so the registry they
+  # push to has to be named or the push is refused. This installer runs zot in
+  # the orchard namespace; the chart's defaults describe a different cluster.
+  registryEgress:
+    - namespace: orchard
+      podLabels:
+        app: zot
+      ports:
+        - port: 5000
   localCache:
     enabled: true
     size: ${BUILD_CACHE_GB}Gi

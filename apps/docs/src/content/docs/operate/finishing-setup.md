@@ -214,6 +214,17 @@ specific. Find the labels your registry's pods actually carry with:
 kubectl -n <registry-namespace> get pods --show-labels
 ```
 
+On an installer-built host you do not have to edit the file by hand:
+
+```bash
+sudo orchardctl registry                 # what builds can reach today
+sudo orchardctl registry zot --apply     # the registry install.sh ships
+sudo orchardctl registry allow my-registry --label app=registry --port 5000 --apply
+```
+
+Fresh installs get the bundled registry allowed automatically. The commands are
+for changing it afterwards, or for hosts installed before this existed.
+
 ### Which shape you need
 
 | Where your registry runs | What to add |
