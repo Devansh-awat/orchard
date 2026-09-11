@@ -242,6 +242,29 @@ builders:
   r2:
     accessKeyId: ""
     secretAccessKey: ""
+  # In-cluster destinations the builder is allowed to reach, on top of DNS and
+  # public IPs on 80/443. This is where the image push goes, so a registry that
+  # is not on this list fails the build with "connection refused" once the build
+  # itself has succeeded.
+  #
+  # The defaults describe this project's own cluster. A self-hosted instance
+  # running its registry somewhere else (zot in the release namespace, a
+  # registry in its own namespace, ...) has to add it here. It is deliberately
+  # not defaulted to the release namespace: the whole point of this policy is
+  # that a build running untrusted repo code cannot reach the Orchard API or
+  # database, which live there.
+  #
+  #   registryEgress:
+  #     - namespace: orchard
+  #       podLabels:
+  #         app: zot
+  #       ports:
+  #         - port: 5000
+  registryEgress:
+    - namespace: harbor
+    - namespace: network
+      podLabels:
+        app.kubernetes.io/name: kubernetes-ingress
   # Local on-cluster BuildKit cache backed by a PVC. When enabled, the server
   # configures build jobs to use a `type=local` cache instead of S3/R2.
   # Pin build jobs to a dedicated node labelled `orchard-builder=true`. When

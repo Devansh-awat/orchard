@@ -178,3 +178,73 @@ Orchard does not require it. If the CRDs are absent, or the service account
 cannot read them, the certificate step reports **No certificate automation** and
 setup continues. Terminate TLS wherever you already do, at your load balancer or
 proxy, and ignore the wildcard item.
+
+## Using your own registry
+
+If you are changing which registry Orchard pushes to, or installing Orchard into
+a cluster that already has one, tell the builders where it is. This is a setup
+step, not a troubleshooting one: get it wrong and builds compile fine and then
+fail at the push.
+
+Builders run under a network policy that allows DNS and public IPs on ports 80
+and 443, and nothing else. That is deliberate. A build runs untrusted code out
+of somebody's repository, so it must not be able to reach the Orchard API, the
+database, or another tenant's workloads. The cost of that is that a registry
+inside the cluster, or on a private address, has to be named before a push can
+reach it.
+
+The defaults describe this project's own cluster: Harbor in a `harbor`
+namespace, behind an HAProxy load balancer. Replace them with yours.
+
+```yaml
+builders:
+  registryEgress:
+    - namespace: orchard
+      podLabels:
+        app: zot
+      ports:
+        - port: 5000
+```
+
+`namespace` is required. `podLabels` and `ports` are optional, and leaving them
+out widens the rule to the whole namespace on every port, so prefer being
+specific. Find the labels your registry's pods actually carry with:
+
+```bash
+kubectl -n <registry-namespace> get pods --show-labels
+```
+
+### Which shape you need
+
+| Where your registry runs | What to add |
+| --- | --- |
+| In the cluster, its own namespace | that namespace, plus the port it listens on |
+| In the cluster, next to Orchard | the release namespace, narrowed with `podLabels` |
+| A public registry (ghcr.io, Docker Hub, ECR) | nothing, port 443 to public IPs is already allowed |
+| Outside the cluster on a private or LAN address | see below |
+
+A registry on a private address needs more than a namespace entry. The rule that
+allows public egress deliberately excludes RFC1918 and link-local ranges
+(`10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `100.64/10`), so a registry on
+a LAN IP is dropped even though it is "outside" the cluster. Either give it a
+public hostname on 443, or add an `ipBlock` rule of your own.
+
+### Put it in values, not in kubectl
+
+The NetworkPolicy is managed by the chart. Patching it in place looks like it
+worked and then the next `helm upgrade` silently reverts it, so builds start
+failing again with nothing in the history to explain why.
+
+### If a push is already failing
+
+A build that succeeds and then reports `connection refused` is this rule
+missing. Confirm with:
+
+```bash
+kubectl -n orchard-builders get networkpolicy builder-network-policy -o yaml
+kubectl -n orchard-builders logs job/<build-job-name> -c buildkit | tail -30
+```
+
+A registry whose own logs show no request from the builder, while a `curl` from
+a cluster node succeeds, is the signature. The traffic is dropped before it
+arrives, so the registry has nothing to report.

@@ -218,24 +218,32 @@ spec:
               - 192.168.0.0/16
               - 169.254.0.0/16
               - 100.64.0.0/10
-    # Internal Harbor for the push sidecar. Pod-level policy ⇒ this rule
-    # covers both buildkit and the push sidecar in the same pod.
+    # Where the image push is allowed to go. Pod-level policy ⇒ these rules
+    # cover both buildkit and the push sidecar in the same pod.
+    #
+    # Driven by builders.registryEgress rather than hardcoded, because the
+    # registry is not in the same place on every cluster: this project runs
+    # Harbor in a `harbor` namespace behind an HAProxy LB, a self-hosted
+    # instance may run zot next to the server. A registry missing from this
+    # list fails the build at push with "connection refused".
+{{- range .Values.builders.registryEgress }}
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: harbor
-    # HAProxy ingress controller (network ns). The registry's public hostname
-    # (registry.tier2.infra.hackclub.com) resolves to the HAProxy LB IP, which
-    # Cilium translates to these backend pods — so egress is enforced against
-    # the network-ns identity, not the public ipBlock. Without this the push
-    # sidecar's connection to the LB times out.
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: network
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- with .podLabels }}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: kubernetes-ingress
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+      {{- with .ports }}
+      ports:
+        {{- range . }}
+        - port: {{ .port }}
+          protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+      {{- end }}
+{{- end }}
 ---
 # Builder-namespace Role: full secrets/configmaps management for the builders
 # namespace only. Replaces the cluster-wide secrets grant for this use case.
