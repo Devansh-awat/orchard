@@ -96,6 +96,18 @@ tenant:
   storageClass: ""
   ingressClass: ""
   certClusterIssuer: ""
+  # Namespaces a tenant pod may be reached from, and reach. Every tenant
+  # namespace is default-deny, so the ingress controller has to be on this list
+  # or it cannot reach the app at all.
+  #
+  # The symptom when it is wrong is not an obviously dead site, it is a
+  # certificate that never issues: the ACME HTTP-01 solver runs as a pod in the
+  # tenant namespace, the controller cannot reach it, and Let's Encrypt gets a
+  # 502 instead of the token.
+  #
+  # Empty means network,orchard, which is where this project runs HAProxy. A
+  # k3s cluster running Traefik wants "traefik,orchard".
+  ingressNamespaces: ""
   # Comma-separated suffixes that generated app URLs are built under, each
   # optionally naming a wildcard TLS Secret you manage:
   #   ".apps.example.com=wildcard-apps-example-com-tls"  reuse that Secret

@@ -14,6 +14,7 @@ instance over its API. These only work on the machine Orchard runs on.
 orchardctl update            upgrade to the latest chart and images
 orchardctl config ...        read and change chart values
 orchardctl registry ...      where builds are allowed to push
+orchardctl policies ...      which namespaces may reach tenant apps
 orchardctl claim             print a link to claim the instance and sign in
 orchardctl logs [service]    follow logs (server, frontend, mcp)
 orchardctl status            show the control-plane pods
@@ -21,8 +22,8 @@ orchardctl sync              refresh these commands from the deployed image
 ```
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
-`orchard-config` are the same program. `update`, `config`, `registry`, `claim`
-and `sync` need root, because the values file is `0600` and the rest runs
+`orchard-config` are the same program. `update`, `config`, `registry`,
+`policies`, `claim` and `sync` need root, because the values file is `0600` and the rest runs
 through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
@@ -95,6 +96,23 @@ what to set and why.
 
 `allow` replaces any existing entry for the same namespace rather than adding a
 second one, so it is safe to re-run.
+
+## policies
+
+```bash
+sudo orchardctl policies
+sudo orchardctl policies set traefik,orchard --apply
+sudo orchardctl policies reapply
+```
+
+Controls which namespaces may reach tenant apps. Tenant namespaces are
+default-deny, so the ingress controller has to be named or certificates never
+issue. See
+[Letting the ingress controller reach apps](/operate/finishing-setup/#letting-the-ingress-controller-reach-apps).
+
+`set --apply` upgrades and then re-applies the policy to existing projects.
+`reapply` restarts the server, which rewrites every managed namespace's policy
+on boot.
 
 ## claim
 

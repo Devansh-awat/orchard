@@ -167,6 +167,9 @@ still has to name it.
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- if .Values.tenant.ingressNamespaces }}
+            - { name: TENANT_INGRESS_NAMESPACES, value: {{ .Values.tenant.ingressNamespaces | quote }} }
+            {{- end }}
             {{- if .Values.tenantSandbox.enabled }}
             - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }
             {{- end }}

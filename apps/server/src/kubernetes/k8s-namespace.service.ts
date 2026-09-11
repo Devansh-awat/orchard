@@ -1,8 +1,33 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods, clusterServiceCounts } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
+
+/**
+ * Namespaces a tenant pod may be reached from, and reach.
+ *
+ * The ingress controller is the reason this is configurable rather than a
+ * constant. This project runs HAProxy in `network`, so that was hardcoded; on
+ * k3s Traefik lives in `traefik`, and on a cluster where it lives anywhere else
+ * the tenant policy silently blocks it. The visible symptom is not "the site is
+ * down" but a certificate that never issues: the ACME HTTP-01 solver is a pod
+ * in the tenant namespace, the controller cannot reach it, and Let's Encrypt
+ * gets a 502 instead of the token.
+ */
+export function tenantIngressNamespaces(): string[] {
+  const configured = (process.env.TENANT_INGRESS_NAMESPACES || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return configured.length ? configured : ['network', 'orchard'];
+}
+
+function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
+  return names.map((name) => ({
+    namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': name } },
+  }));
+}
 
 export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
   { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
@@ -20,13 +45,37 @@ export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
  * private delegates below so they stay byte-identical to the originals.
  */
 @Injectable()
-export class K8sNamespaceService {
+export class K8sNamespaceService implements OnModuleInit {
   private readonly logger = new Logger(K8sNamespaceService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
   ) {}
+
+  /**
+   * Tenant policies are written once at namespace creation, so a cluster whose
+   * ingress controller is not where the defaults expect leaves every existing
+   * project unable to serve an ACME challenge. Re-applying on boot means a
+   * configuration fix lands by restarting the server rather than by knowing to
+   * run something.
+   *
+   * Backgrounded and swallowed: this must never hold up or fail startup.
+   */
+  onModuleInit(): void {
+    setTimeout(() => {
+      this.reconcileTenantNetworkPolicies()
+        .then(({ updated, failed }) => {
+          if (updated.length) {
+            this.logger.log(`re-applied the tenant network policy to ${updated.length} namespace(s)`);
+          }
+          if (failed.length) {
+            this.logger.warn(`could not re-apply the tenant network policy to: ${failed.join(', ')}`);
+          }
+        })
+        .catch((e) => this.logger.warn(`tenant network policy reconcile skipped: ${e?.message}`));
+    }, 5000);
+  }
 
   private get kc(): k8s.KubeConfig | null {
     return this.kubernetes.kc;
@@ -415,6 +464,40 @@ export class K8sNamespaceService {
     }
   }
 
+  /**
+   * Re-apply the tenant policy to every namespace Orchard manages.
+   *
+   * The policy is written once, when the namespace is created, so changing
+   * which namespaces the ingress controller lives in fixes new projects and
+   * leaves every existing one broken. Certificates for those keep failing with
+   * no visible cause, because nothing re-runs on its own.
+   */
+  async reconcileTenantNetworkPolicies(): Promise<{ updated: string[]; failed: string[] }> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const updated: string[] = [];
+    const failed: string[] = [];
+
+    const namespaces = await api.listNamespace(
+      undefined, undefined, undefined, undefined,
+      'orchard.my/managed=true',
+    );
+
+    for (const ns of namespaces.body.items) {
+      const name = ns.metadata?.name;
+      if (!name) continue;
+      try {
+        await this.createNetworkPolicy(name);
+        updated.push(name);
+      } catch (e: any) {
+        this.logger.warn(`could not re-apply the network policy for ${name}: ${e?.message}`);
+        failed.push(name);
+      }
+    }
+
+    return { updated, failed };
+  }
+
   async createNetworkPolicy(namespace: string) {
     this.ensureKubeConfig();
 
@@ -440,29 +523,7 @@ export class K8sNamespaceService {
           policyTypes: ['Ingress', 'Egress'],
           ingress: [
             {
-              from: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': cleanNamespace,
-                    },
-                  },
-                },
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': 'network',
-                    },
-                  },
-                },
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': 'orchard',
-                    },
-                  },
-                },
-              ],
+              from: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()]),
             },
           ],
           // Egress is allow-listed. Pods may:
@@ -481,22 +542,7 @@ export class K8sNamespaceService {
           // services, and the cloud metadata IMDS.
           egress: [
             {
-              to: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': cleanNamespace,
-                    },
-                  },
-                },
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      'kubernetes.io/metadata.name': 'network',
-                    },
-                  },
-                },
-              ],
+              to: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()]),
             },
             {
               to: [
@@ -555,7 +601,19 @@ export class K8sNamespaceService {
         },
       };
 
-      await networkingApi.createNamespacedNetworkPolicy(cleanNamespace, networkPolicyBody);
+      // Replace on conflict: a namespace created before a configuration change
+      // already has the old policy, and that is precisely the one that needs
+      // rewriting.
+      try {
+        await networkingApi.createNamespacedNetworkPolicy(cleanNamespace, networkPolicyBody);
+      } catch (e: any) {
+        if (e?.response?.statusCode !== 409) throw e;
+        await networkingApi.replaceNamespacedNetworkPolicy(
+          'default-deny-all',
+          cleanNamespace,
+          networkPolicyBody,
+        );
+      }
 
       // Without Cilium the plain NetworkPolicy above is the whole story, and
       // these two CRs would 404 (no CRD) or 403 (no cilium.io rbac) on every

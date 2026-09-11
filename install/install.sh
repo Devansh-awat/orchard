@@ -885,6 +885,10 @@ server:
     - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }
 
 tenant:
+  # Traefik, not the HAProxy this project runs in `network`. Tenant namespaces
+  # are default-deny, so the ingress controller has to be named or the ACME
+  # HTTP-01 solver is unreachable and certificates never issue.
+  ingressNamespaces: "traefik,orchard"
   storageClass: local-path
   ingressClass: traefik
   certClusterIssuer: "$CERT_ISSUER"

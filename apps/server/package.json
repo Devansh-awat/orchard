@@ -45,7 +45,8 @@
     "test:certificates": "tsx --test test/certificate-status.test.ts",
     "test:setup-state": "tsx --test test/setup-state.test.ts",
     "test:instance-config": "tsx --test test/instance-config.test.ts",
-    "test:build-summary": "tsx --test test/build-summary.test.ts"
+    "test:build-summary": "tsx --test test/build-summary.test.ts",
+    "test:tenant-policy": "tsx --test test/tenant-policy.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

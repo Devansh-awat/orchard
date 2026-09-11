@@ -259,3 +259,61 @@ kubectl -n orchard-builders logs job/<build-job-name> -c buildkit | tail -30
 A registry whose own logs show no request from the builder, while a `curl` from
 a cluster node succeeds, is the signature. The traffic is dropped before it
 arrives, so the registry has nothing to report.
+
+## Letting the ingress controller reach apps
+
+Every tenant namespace is default-deny, so the ingress controller has to be
+named or it cannot reach the apps running there.
+
+This matters when Orchard is installed into a cluster that already has an
+ingress controller, or one whose controller is not where the defaults expect.
+The default is `network,orchard`, which is where this project runs HAProxy. A
+k3s cluster running Traefik wants `traefik,orchard`.
+
+```yaml
+tenant:
+  ingressNamespaces: "traefik,orchard"
+```
+
+On an installer-built host:
+
+```bash
+sudo orchardctl policies                              # what is configured
+sudo orchardctl policies set traefik,orchard --apply
+```
+
+Fresh installs get Traefik's namespace automatically. The command is for
+changing it afterwards, or for hosts installed before this existed.
+
+### The symptom is a certificate, not an outage
+
+Getting this wrong rarely looks like a dead site. It looks like a certificate
+that never issues.
+
+The ACME HTTP-01 solver runs as a pod **inside the tenant namespace**. The
+controller cannot reach it, so Let's Encrypt gets a 502 instead of the
+challenge token, the order stays pending, and the app keeps serving
+cert-manager's temporary self-signed certificate (issued by
+`CN=cert-manager.local`).
+
+Confusingly, the site itself may work. Routes that go through Orchard's
+protection proxy are reached via the `orchard` namespace, which is allowed;
+only the paths the controller connects to directly are blocked.
+
+```bash
+kubectl -n <project-namespace> get networkpolicy default-deny-all -o yaml
+kubectl get challenges -A
+```
+
+A challenge pending with `wrong status code '502', expected '200'` is this.
+
+### Existing projects
+
+Policies are written when a namespace is created, so changing this fixes new
+projects and leaves existing ones broken. The server re-applies the policy to
+every namespace it manages **on boot**, so deploying the change is enough.
+`orchardctl policies set --apply` does both; `orchardctl policies reapply`
+restarts the server on its own if you changed the value some other way.
+
+Do not patch the policy with `kubectl`. It is labelled `orchard.my/managed=true`
+and the server rewrites it.

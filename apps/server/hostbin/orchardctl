@@ -17,12 +17,13 @@ orchardctl - operate this Orchard host
   orchardctl update            upgrade to the latest chart and images
   orchardctl config ...        read and change chart values
   orchardctl registry ...      where builds are allowed to push
+  orchardctl policies ...      which namespaces may reach tenant apps
   orchardctl claim             print a link to claim the instance and sign in
   orchardctl logs [service]    follow logs (server, frontend, mcp; default server)
   orchardctl status            show the control-plane pods
   orchardctl sync              refresh these commands from the deployed image
 
-update, config, registry and claim need root. Each also exists hyphenated, e.g.
+update, config, registry, policies and claim need root. Each also exists hyphenated, e.g.
 orchard-update. Not to be confused with the `orchard` CLI, which deploys apps
 to any instance over its API.
 USAGE
@@ -39,7 +40,7 @@ case "$cmd" in
     fi
     exec orchard-sync-commands
     ;;
-  update|config|claim|registry)
+  update|config|claim|registry|policies)
     # The values file is 0600 and the claim runs through the cluster, so these
     # fail deep inside helm or kubectl otherwise.
     if [ "$(id -u)" -ne 0 ]; then
