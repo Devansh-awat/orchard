@@ -111,6 +111,7 @@ export default defineConfig({
             { label: "Architecture", slug: "operate/architecture" },
             { label: "Configuration", slug: "operate/configuration" },
             { label: "Finishing setup", slug: "operate/finishing-setup" },
+            { label: "Host commands", slug: "operate/host-commands" },
             { label: "Nodes and pools", slug: "operate/nodes" },
             { label: "Upgrades", slug: "operate/upgrades" },
             { label: "Going to production", slug: "operate/production" },
