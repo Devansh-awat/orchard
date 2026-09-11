@@ -32,6 +32,7 @@ import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
@@ -95,6 +96,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly storage: StorageService,
     private readonly applyQueue: ApplyQueueService,
     private readonly applyExecutor: ApplyExecutorService,
+    private readonly instanceConfig: InstanceConfigService,
     @Optional() private readonly buildJobInformer?: BuildJobInformerService,
   ) {}
 
@@ -2886,7 +2888,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 const org = await this.prisma.organization.findUnique({
                   where: { id: service.deployment.project.organizationId },
                 });
-                const ip = (org?.databasePublicIp || '').trim();
+                const ip = (org?.databasePublicIp || '').trim()
+                  || this.instanceConfig.defaultPublicIp();
                 if (ip) {
                   await this.k8sNetwork.exposeDeploymentPortPublic({
                     namespace: service.deployment.namespace,
@@ -3911,9 +3914,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const { user, port, deployment } = await this.access.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
 
     const org = await this.prisma.organization.findUnique({ where: { id: deployment.project.organizationId } });
-    const ip = (org?.databasePublicIp || '').trim();
+    const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {
-      throw new BadRequestException('This organization does not have a public IP configured. Set one in organization settings.');
+      throw new BadRequestException('No public IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.');
     }
 
     if (port.publicEnabled && port.publicPort) {

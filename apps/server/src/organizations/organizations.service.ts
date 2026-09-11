@@ -11,6 +11,7 @@ import { MembershipCacheService } from '../auth/membership-cache.service';
 import { SessionsService } from '../auth/sessions.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -25,6 +26,7 @@ export class OrganizationsService {
     private readonly membershipCache: MembershipCacheService,
     private readonly sessions: SessionsService,
     private readonly tailscale: TailscaleService,
+    private readonly instanceConfig: InstanceConfigService,
   ) {}
 
   // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
@@ -149,6 +151,9 @@ export class OrganizationsService {
       accessKeyLast4: accessKey && accessKey.length >= 4 ? accessKey.slice(-4) : null,
       secretKeyConfigured: Boolean(org.backupR2SecretKey),
       databasePublicIp: org.databasePublicIp,
+      // What this organization falls back to when it sets nothing, so the
+      // field can say what leaving it empty actually means.
+      instanceDefaultPublicIp: this.instanceConfig.defaultPublicIp() || null,
     };
   }
 

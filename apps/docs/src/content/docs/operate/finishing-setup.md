@@ -49,15 +49,15 @@ Orchard derives that URL from `FRONTEND_URL`. If your public origin differs from
 `FRONTEND_URL`, for example because a proxy terminates TLS on a different
 hostname, override it:
 
-| Variable | Purpose |
-| --- | --- |
-| `GITHUB_APP_ID` | numeric App ID |
-| `GITHUB_APP_SLUG` | the App's URL slug |
-| `GITHUB_APP_PRIVATE_KEY` | PEM contents, `\n` for newlines |
-| `GITHUB_APP_WEBHOOK_SECRET` | webhook signing secret |
-| `GITHUB_CLIENT_ID` | OAuth client ID |
-| `GITHUB_CLIENT_SECRET` | OAuth client secret |
-| `GITHUB_REDIRECT_URI` | overrides the derived callback URL |
+| Variable                    | Purpose                            |
+| --------------------------- | ---------------------------------- |
+| `GITHUB_APP_ID`             | numeric App ID                     |
+| `GITHUB_APP_SLUG`           | the App's URL slug                 |
+| `GITHUB_APP_PRIVATE_KEY`    | PEM contents, `\n` for newlines    |
+| `GITHUB_APP_WEBHOOK_SECRET` | webhook signing secret             |
+| `GITHUB_CLIENT_ID`          | OAuth client ID                    |
+| `GITHUB_CLIENT_SECRET`      | OAuth client secret                |
+| `GITHUB_REDIRECT_URI`       | overrides the derived callback URL |
 
 Set any of these and the matching field becomes read-only in the UI.
 
@@ -68,14 +68,14 @@ storage is configured, managed databases have no base backup at all.** Write
 ahead log archiving alone cannot restore a database that has been deleted,
 because there is no base to replay onto.
 
-| Variable | Purpose |
-| --- | --- |
-| `R2_ACCESS_KEY_ID` | S3-compatible access key |
-| `R2_SECRET_ACCESS_KEY` | secret key |
-| `R2_BUCKET_NAME` | bucket backups are written to |
-| `R2_ENDPOINT` | S3 endpoint, for example the R2 or MinIO URL |
-| `R2_ACCOUNT_ID` | Cloudflare account ID, R2 only |
-| `R2_PUBLIC_URL` | public base URL, used for build context and assets |
+| Variable               | Purpose                                            |
+| ---------------------- | -------------------------------------------------- |
+| `R2_ACCESS_KEY_ID`     | S3-compatible access key                           |
+| `R2_SECRET_ACCESS_KEY` | secret key                                         |
+| `R2_BUCKET_NAME`       | bucket backups are written to                      |
+| `R2_ENDPOINT`          | S3 endpoint, for example the R2 or MinIO URL       |
+| `R2_ACCOUNT_ID`        | Cloudflare account ID, R2 only                     |
+| `R2_PUBLIC_URL`        | public base URL, used for build context and assets |
 
 The checklist counts this item done once `R2_ACCESS_KEY_ID`,
 `R2_SECRET_ACCESS_KEY` and `R2_BUCKET_NAME` are all set.
@@ -90,15 +90,15 @@ tab before you trust it. A backup you have never seen complete is not a backup.
 
 Needed for invitation emails and sign-in codes.
 
-| Variable | Purpose |
-| --- | --- |
-| `SMTP_HOST` | mail server hostname |
-| `SMTP_PORT` | usually 587 |
-| `SMTP_USER` | username |
-| `SMTP_PASS` | password |
-| `SMTP_SECURE` | `true` for implicit TLS, port 465 |
-| `SMTP_FROM` | address mail is sent from |
-| `SMTP_FROM_NAME` | display name on outgoing mail |
+| Variable         | Purpose                           |
+| ---------------- | --------------------------------- |
+| `SMTP_HOST`      | mail server hostname              |
+| `SMTP_PORT`      | usually 587                       |
+| `SMTP_USER`      | username                          |
+| `SMTP_PASS`      | password                          |
+| `SMTP_SECURE`    | `true` for implicit TLS, port 465 |
+| `SMTP_FROM`      | address mail is sent from         |
+| `SMTP_FROM_NAME` | display name on outgoing mail     |
 
 The checklist counts this item done as soon as `SMTP_HOST` is set, so set the
 rest at the same time or mail will fail at send rather than at boot.
@@ -114,17 +114,17 @@ Lets people sign in through your existing SSO instead of a passkey or emailed
 code. Configure it at **Instance admin → Sign in**, or pin it with environment
 variables.
 
-| Variable | Purpose |
-| --- | --- |
-| `AUTH_OAUTH_CLIENT_ID` | client ID from your IdP |
-| `AUTH_OAUTH_CLIENT_SECRET` | client secret |
-| `AUTH_OAUTH_REDIRECT_URI` | `https://your-orchard-host/apiv1/auth/oauth/callback` |
-| `AUTH_OAUTH_ISSUER` | issuer URL, for discovery |
+| Variable                   | Purpose                                                          |
+| -------------------------- | ---------------------------------------------------------------- |
+| `AUTH_OAUTH_CLIENT_ID`     | client ID from your IdP                                          |
+| `AUTH_OAUTH_CLIENT_SECRET` | client secret                                                    |
+| `AUTH_OAUTH_REDIRECT_URI`  | `https://your-orchard-host/apiv1/auth/oauth/callback`            |
+| `AUTH_OAUTH_ISSUER`        | issuer URL, for discovery                                        |
 | `AUTH_OAUTH_AUTHORIZE_URL` | set these three instead of an issuer if discovery is unavailable |
-| `AUTH_OAUTH_TOKEN_URL` | |
-| `AUTH_OAUTH_USERINFO_URL` | |
-| `AUTH_OAUTH_SCOPES` | defaults to `openid profile email` |
-| `AUTH_OAUTH_CLAIM_ID` | claim mapping, defaults to `sub` / `email` / `name` |
+| `AUTH_OAUTH_TOKEN_URL`     |                                                                  |
+| `AUTH_OAUTH_USERINFO_URL`  |                                                                  |
+| `AUTH_OAUTH_SCOPES`        | defaults to `openid profile email`                               |
+| `AUTH_OAUTH_CLAIM_ID`      | claim mapping, defaults to `sub` / `email` / `name`              |
 
 Any OIDC provider works: Keycloak, Authentik, Dex, Okta, Google.
 
@@ -135,8 +135,8 @@ down and it is the only way in, you are locked out of your own instance.
 
 The hostname users point their own domains at with a CNAME record.
 
-| Variable | Purpose |
-| --- | --- |
+| Variable        | Purpose                                 |
+| --------------- | --------------------------------------- |
 | `INGRESS_CNAME` | for example `ingress.your-orchard-host` |
 
 Leave it unset and custom domains still work, but Orchard cannot check whether
@@ -153,10 +153,10 @@ and the limit refills slowly.
 A wildcard certificate removes the ceiling: one certificate covers every
 subdomain.
 
-| Variable | Purpose |
-| --- | --- |
-| `PLATFORM_WILDCARD_DOMAINS` | `.apps.example.com=wildcard-tls`, comma separated for several |
-| `WILDCARD_TLS_SOURCE_NAMESPACE` | namespace holding the certificate secret |
+| Variable                        | Purpose                                                       |
+| ------------------------------- | ------------------------------------------------------------- |
+| `PLATFORM_WILDCARD_DOMAINS`     | `.apps.example.com=wildcard-tls`, comma separated for several |
+| `WILDCARD_TLS_SOURCE_NAMESPACE` | namespace holding the certificate secret                      |
 
 The suffix before `=` is the domain, the name after it is the Kubernetes secret
 holding the certificate. Without a secret name Orchard still generates URLs, but
@@ -171,6 +171,70 @@ Tenant namespaces need their own copy of the secret. Either run
 [reflector](https://github.com/emberstack/kubernetes-reflector) and annotate the
 source secret, or let Orchard copy it by setting `certificates.copyToTenants` in
 the chart. Do not do both: two writers on the same secret will fight.
+
+## Set a default public IP
+
+Raw TCP and UDP ports, and publicly reachable databases, are published on an
+external address. Each organization can set its own under
+**Organization settings → Database**, but on an instance with one routable
+address there is only ever one answer, and without a default every organization
+hits _"This organization does not have a public IP configured"_ for an address
+they have no way to look up.
+
+Set it once and every organization inherits it. One that sets its own still
+wins, so this is a floor, not a ceiling.
+
+| Variable             | Purpose                    |
+| -------------------- | -------------------------- |
+| `PUBLIC_EXPOSURE_IP` | for example `203.0.113.10` |
+
+On an installer-based instance the host command is easier, and it writes the
+values file for you:
+
+```bash
+sudo orchardctl public-ip set 203.0.113.10 --apply
+```
+
+Unconfigured by default, because an instance with no L4 load balancer, or one
+behind a Cloudflare Tunnel, has no such address. Public ports are unavailable in
+tunnel mode either way, because tunnels carry HTTP only.
+
+## Turn the MCP endpoint on or off
+
+Orchard ships an MCP server so Claude and other agents can drive the instance
+through the same API the dashboard uses. `install.sh` publishes it at
+`mcp.<your domain>` and wires the rest: the OAuth issuer, the URL the dashboard
+shows people, and the shared credential the MCP authenticates to the API with.
+
+There are two switches, and they are not the same thing.
+
+**The chart's `mcp.enabled`** decides whether an MCP is deployed at all. Off, the
+deployment and its route go away, the server reports the feature as unavailable,
+and the toggle below is pinned off because nothing is serving it.
+
+```bash
+sudo orchardctl mcp disable --apply
+```
+
+**The toggle at Instance admin → Configuration** decides whether the deployed one
+answers. Off, every MCP request is refused and the setup instructions disappear
+from user settings, without redeploying anything. It is on by default, including
+on an instance upgrading from a release that predates it.
+
+| Variable            | Purpose                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `MCP_ENABLED`       | `false` refuses every MCP request and locks the toggle        |
+| `MCP_BASE_URL`      | the public origin, used as the OAuth issuer                   |
+| `MCP_SERVICE_TOKEN` | shared with the MCP process; a mismatch fails every tool call |
+
+An instance installed before MCP was published by default has none of this. One
+command adds it:
+
+```bash
+sudo orchardctl mcp enable --apply
+```
+
+Point an A record for the hostname at the box first, the same record as the UI.
 
 ## When cert-manager is not installed
 
@@ -227,12 +291,12 @@ for changing it afterwards, or for hosts installed before this existed.
 
 ### Which shape you need
 
-| Where your registry runs | What to add |
-| --- | --- |
-| In the cluster, its own namespace | that namespace, plus the port it listens on |
-| In the cluster, next to Orchard | the release namespace, narrowed with `podLabels` |
-| A public registry (ghcr.io, Docker Hub, ECR) | nothing, port 443 to public IPs is already allowed |
-| Outside the cluster on a private or LAN address | see below |
+| Where your registry runs                        | What to add                                        |
+| ----------------------------------------------- | -------------------------------------------------- |
+| In the cluster, its own namespace               | that namespace, plus the port it listens on        |
+| In the cluster, next to Orchard                 | the release namespace, narrowed with `podLabels`   |
+| A public registry (ghcr.io, Docker Hub, ECR)    | nothing, port 443 to public IPs is already allowed |
+| Outside the cluster on a private or LAN address | see below                                          |
 
 A registry on a private address needs more than a namespace entry. The rule that
 allows public egress deliberately excludes RFC1918 and link-local ranges

@@ -7,12 +7,14 @@
 		canEditOrg,
 		publicIp = $bindable(''),
 		publicIpSaving,
+		instanceDefaultPublicIp = null,
 		onSavePublicIp,
 		index = 0
 	}: {
 		canEditOrg: boolean;
 		publicIp: string;
 		publicIpSaving: boolean;
+		instanceDefaultPublicIp?: string | null;
 		onSavePublicIp: () => void;
 		index?: number;
 	} = $props();
@@ -31,12 +33,18 @@
 			will share this IP with unique ports per database.
 		</p>
 
-		<Field label="IPv4 / IPv6 address" for="public-ip">
+		<Field
+			label="IPv4 / IPv6 address"
+			for="public-ip"
+			hint={instanceDefaultPublicIp
+				? `Leave blank to use this instance's default, ${instanceDefaultPublicIp}`
+				: undefined}
+		>
 			<div class="od-input-row">
 				<Input
 					id="public-ip"
 					class="od-ip-input"
-					placeholder="e.g. 203.0.113.10"
+					placeholder={instanceDefaultPublicIp || 'e.g. 203.0.113.10'}
 					bind:value={publicIp}
 				/>
 				<Button variant="primary" onclick={onSavePublicIp} loading={publicIpSaving}>Save</Button>

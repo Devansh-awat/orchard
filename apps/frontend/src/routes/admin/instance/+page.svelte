@@ -3,6 +3,7 @@
 	import { apiFetch, instanceChecklist, toasts } from '$lib/stores';
 	import { Alert, Button, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
+	import McpToggle from '$lib/components/admin/McpToggle.svelte';
 
 	type Section = {
 		id: string;
@@ -59,6 +60,12 @@
 				domains: 'Wildcard domains',
 				sourceNamespace: 'Certificate namespace'
 			}
+		},
+		network: {
+			title: 'Public exposure',
+			description:
+				'The address raw TCP and UDP ports and public databases are published on. Organizations that set their own override it; the rest inherit this instead of being asked for an IP they do not know.',
+			fields: { publicIp: 'Default public IP' }
 		}
 	};
 
@@ -66,7 +73,9 @@
 		domains: 'Suffix and secret name, for example .apps.example.com=wildcard-tls',
 		secure: 'true for port 465, otherwise leave blank',
 		endpoint: 'Derived from the account ID when left blank',
-		publicUrl: 'Derived from the account ID when left blank'
+		publicUrl: 'Derived from the account ID when left blank',
+		publicIp:
+			'The routable address of this box, for example 203.0.113.10. Leave blank to require one per organization.'
 	};
 
 	let sections = $state<Section[]>([]);
@@ -170,6 +179,10 @@
 			</SectionCard>
 		</div>
 	{/each}
+
+	<div {@attach motionStagger({ index: sections.length })}>
+		<McpToggle />
+	</div>
 {/if}
 
 <style>

@@ -1,9 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { setWildcardOverride } from '../projects/projects.utils';
 import { setObjectStorageOverride } from './object-storage';
-import { ConfigSection, SECTIONS, STORAGE, WILDCARD } from './instance-config.sections';
+import {
+  ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD,
+} from './instance-config.sections';
 
 export type ConfigValues = Record<string, string | null>;
 
@@ -128,6 +130,14 @@ export class InstanceConfigService implements OnModuleInit {
     return section.required.every((name) => !!this.value(section, name));
   }
 
+  /**
+   * The instance-wide fallback for public exposure. An organization with its
+   * own address overrides this; one without it inherits rather than refusing.
+   */
+  defaultPublicIp(): string {
+    return (this.value(NETWORK, 'publicIp') || '').trim();
+  }
+
   lockedFields(section: ConfigSection): string[] {
     return section.fields
       .filter((f) => InstanceConfigService.env(f.env) !== null)
@@ -174,6 +184,12 @@ export class InstanceConfigService implements OnModuleInit {
       }
       if (trimmed === '') continue;
       next[field.name] = trimmed;
+    }
+
+    try {
+      section.validate?.(next);
+    } catch (e: any) {
+      throw new BadRequestException(e?.message ?? 'That value is not valid');
     }
 
     const payload: ConfigValues = {};

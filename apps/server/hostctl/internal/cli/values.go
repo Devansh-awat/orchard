@@ -113,6 +113,38 @@ func (v *Values) List(path string) []any {
 	return items
 }
 
+// EnvValue reads one entry out of a chart env list such as server.env, which is
+// a list of {name, value} maps rather than a map keyed by name.
+func (v *Values) EnvValue(path, name string) string {
+	for _, item := range v.List(path) {
+		entry, ok := item.(map[string]any)
+		if !ok || entry["name"] != name {
+			continue
+		}
+		if value, ok := entry["value"].(string); ok {
+			return value
+		}
+		return fmt.Sprintf("%v", entry["value"])
+	}
+	return ""
+}
+
+// SetEnv upserts one entry in a chart env list, leaving every other entry and
+// its order alone. Appending instead would shadow rather than replace: a
+// container env list takes the last definition of a name.
+func (v *Values) SetEnv(path, name, value string) {
+	items := v.List(path)
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if ok && entry["name"] == name {
+			entry["value"] = value
+			v.SetList(path, items)
+			return
+		}
+	}
+	v.SetList(path, append(items, map[string]any{"name": name, "value": value}))
+}
+
 func parseScalar(raw string) any {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "true":

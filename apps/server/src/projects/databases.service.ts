@@ -21,6 +21,7 @@ import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
+import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { NodesService } from '../nodes/nodes.service';
 import { buildPlacement } from '../kubernetes/kubernetes.service';
@@ -71,6 +72,7 @@ export class DatabasesService {
     private readonly nodesService: NodesService,
     private readonly backupSync: BackupSyncService,
     private readonly notifications: NotificationsService,
+    private readonly instanceConfig: InstanceConfigService,
   ) {}
 
   // Resolve a database cluster's placement: org hostname allow/deny + assigned
@@ -2076,9 +2078,9 @@ export class DatabasesService {
     }
 
     const org = await this.prisma.organization.findUnique({ where: { id: database.project.organizationId } });
-    const ip = (org?.databasePublicIp || '').trim();
+    const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {
-      throw new BadRequestException('This organization does not have a public database IP configured. Set one in organization settings.');
+      throw new BadRequestException('No public database IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.');
     }
 
     if (database.publicEnabled && database.publicIp === ip && database.publicPort) {

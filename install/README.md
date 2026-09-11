@@ -20,7 +20,7 @@ Install the Helm chart instead and keep your own platform layer
 | CloudNativePG | Orchard's own database and every database you create |
 | cert-manager | TLS, unless Cloudflare is terminating it for you |
 | zot | Registry for images Orchard builds |
-| Orchard | The Helm chart, with a generated values file |
+| Orchard | The Helm chart, with a generated values file, including the MCP endpoint agents connect to |
 
 Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
 `orchard-update` to apply changes.
@@ -30,6 +30,11 @@ Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
 Two things it cannot work out on its own: your **domain**, and an **email for
 Let's Encrypt**. Everything else is detected: architecture, memory, free disk,
 free ports, whether you are behind NAT.
+
+Two more hostnames are derived rather than asked for: `apps.<your domain>` for
+deployed apps, and `mcp.<your domain>` for the MCP endpoint AI agents connect
+to. In `public` mode both need a DNS record, and the installer prints them
+before it waits. `--mcp-domain` moves the MCP, `--mcp false` leaves it out.
 
 amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
 to run on anything else rather than leave you with apps that cannot start.
@@ -102,6 +107,15 @@ DNS-01 issuer; see [SETUP-wildcards.md](../infra/charts/orchard/SETUP-wildcards.
 **Public TCP/UDP in tunnel mode.** Cloudflare Tunnels carry HTTP only, so
 publicly exposed databases and raw ports are unavailable there.
 
+**A default public IP.** Raw ports and public databases are published on an
+external address, and the installer does not assume this box's is the right one.
+Set it once and every organization inherits it, rather than each being asked for
+an address they have no way to know:
+
+```bash
+sudo orchardctl public-ip set 203.0.113.10 --apply
+```
+
 ## Running it non-interactively
 
 Nothing prompts when every answer is supplied. Each flag has an environment
@@ -127,6 +141,7 @@ sudo ./install.sh --yes \
 | `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted. |
 | `--domain <host>` | `ORCHARD_DOMAIN` | Where the Orchard UI lives. Defaults to an `sslip.io` name in `lan` mode. |
 | `--app-domain <host>` | `ORCHARD_APP_DOMAIN` | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`. |
+| `--mcp-domain <host>` | `ORCHARD_MCP_DOMAIN` | Where agents connect over MCP. Defaults to `mcp.<your domain>`. |
 | `--email <address>` | `ORCHARD_ACME_EMAIL` | Let's Encrypt contact. Required in `public` mode. |
 | `--tunnel-token <token>` | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode. |
 
@@ -135,6 +150,7 @@ sudo ./install.sh --yes \
 | Flag | Environment variable | Default |
 |---|---|---|
 | `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes` |
+| `--mcp <true\|false>` | `ORCHARD_MCP` | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
 | `--yes`, `-y` | `ORCHARD_ASSUME_YES` | `false` |
 | `--help`, `-h` | | |
 | | `NO_COLOR` | unset. Any value disables colour. |

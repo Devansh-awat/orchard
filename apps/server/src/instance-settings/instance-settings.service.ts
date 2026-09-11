@@ -4,6 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
 const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
 
+export const MCP_ENABLED_KEY = 'mcp_enabled';
+const MCP_ENABLED_ENV = 'MCP_ENABLED';
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -61,15 +64,24 @@ export class InstanceSettingsService {
     return null;
   }
 
-  private async resolveBool(key: string, envVar: string): Promise<boolean> {
-    const env = this.envOverride(envVar);
-    if (env !== null) return env;
-    return (await this.getRaw(key)) === 'true';
+  // A toggle with nothing stored takes its fallback, so a feature that ships on
+  // stays on until somebody turns it off rather than needing a row written at
+  // install time that an upgraded instance would never get.
+  private async storedBool(key: string, fallback: boolean): Promise<boolean> {
+    const raw = await this.getRaw(key);
+    if (raw === null) return fallback;
+    return raw === 'true';
   }
 
-  private async toggleState(key: string, envVar: string): Promise<ToggleState> {
+  private async resolveBool(key: string, envVar: string, fallback = false): Promise<boolean> {
+    const env = this.envOverride(envVar);
+    if (env !== null) return env;
+    return this.storedBool(key, fallback);
+  }
+
+  private async toggleState(key: string, envVar: string, fallback = false): Promise<ToggleState> {
     const envOverride = this.envOverride(envVar);
-    const dbValue = (await this.getRaw(key)) === 'true';
+    const dbValue = await this.storedBool(key, fallback);
     return { enabled: envOverride ?? dbValue, dbValue, envOverride };
   }
 
@@ -83,5 +95,17 @@ export class InstanceSettingsService {
 
   setUserspaceScheduling(value: boolean): Promise<void> {
     return this.setBool(USERSPACE_NODE_SCHEDULING_KEY, value);
+  }
+
+  isMcpEnabled(): Promise<boolean> {
+    return this.resolveBool(MCP_ENABLED_KEY, MCP_ENABLED_ENV, true);
+  }
+
+  getMcpState(): Promise<ToggleState> {
+    return this.toggleState(MCP_ENABLED_KEY, MCP_ENABLED_ENV, true);
+  }
+
+  setMcp(value: boolean): Promise<void> {
+    return this.setBool(MCP_ENABLED_KEY, value);
   }
 }

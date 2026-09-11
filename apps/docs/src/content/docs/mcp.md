@@ -11,16 +11,24 @@ generated from the server's own tool registry.
 
 ## Connecting
 
-Point your MCP client at your instance:
+The MCP server answers on its own hostname, a sibling of the dashboard's:
 
 ```
-https://your-orchard/mcp
+https://mcp.your-orchard-domain
 ```
+
+**Settings → MCP** shows the exact URL for the instance you are signed in to,
+along with ready-made configuration for Claude.ai, Claude Code, VS Code and
+Cursor. Copy it from there rather than guessing.
 
 Authorisation goes through OAuth against your Orchard instance. The agent acts
 **as you**: it sees what you can see and can change what you can change. It does
 not get a privileged service account, and it cannot reach another organization's
 resources because you connected an agent.
+
+If that page says the instance has not published an MCP endpoint, it has not been
+turned on. See
+[Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off).
 
 ## What it can do
 
@@ -44,6 +52,12 @@ grants to forget about.
 
 MCP grants hold their own session, so an ordinary role change does not silently
 kill a working agent connection mid-task.
+
+## Turning it off
+
+An instance operator can switch MCP off entirely, at
+**Instance admin → Configuration**. Every MCP request is then refused and the
+setup instructions disappear from user settings. It is on by default.
 
 ## A reasonable workflow
 

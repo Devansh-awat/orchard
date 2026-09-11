@@ -7,6 +7,7 @@ export {
 	instanceChecklistWarnings,
 	type InstanceChecklistItem
 } from './instance-checklist';
+export { instanceFeatures, type InstanceFeatures } from './instance-features';
 export {
 	organizations,
 	selectedOrganization,

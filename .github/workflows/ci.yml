@@ -47,6 +47,9 @@ jobs:
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - '.github/workflows/**'
+            hostctl:
+              - 'apps/server/hostctl/**'
+              - '.github/workflows/**'
             gateway:
               - 'apps/gateway/**'
               - '.github/workflows/**'
@@ -232,6 +235,13 @@ jobs:
         run: pnpm --filter server test:auto-deploy-match
       - name: Build recovery tests
         run: pnpm --filter server test:build-recovery
+      # Runtime configuration with an environment override: which value wins,
+      # which fields lock, and that a toggle shipping on is not read as off on
+      # an instance that has never stored a row for it.
+      - name: Instance configuration tests
+        run: pnpm --filter server test:instance-config
+      - name: Instance toggle tests
+        run: pnpm --filter server test:instance-settings
 
   e2e:
     needs: changes
@@ -288,6 +298,20 @@ jobs:
             [ "$i" = 90 ] && { echo "server never listened on :3001" >&2; exit 1; }
           done
           pnpm --filter server test:rbac
+
+  # orchardctl dispatches on the name it was invoked by, and a mistake there
+  # turns a host command into a help screen rather than an error. Cheap to pin.
+  hostctl:
+    needs: changes
+    if: needs.changes.outputs.hostctl == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/server/hostctl/go.mod
+          cache-dependency-path: apps/server/hostctl/go.sum
+      - run: cd apps/server/hostctl && go vet ./... && go test ./... -count=1
 
   go-cli:
     needs: changes

@@ -16,7 +16,7 @@ export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 # present. Everything else is orchardctl, which this installs.
 BIN=$ORCHARD_BIN
 TARGET="$BIN/orchardctl"
-ALIASES="orchard-update orchard-config orchard-registry orchard-policies orchard-claim"
+ALIASES="orchard-update orchard-config orchard-registry orchard-policies orchard-mcp orchard-public-ip orchard-claim"
 
 case "$(uname -m)" in
   x86_64|amd64) ARCH=amd64 ;;

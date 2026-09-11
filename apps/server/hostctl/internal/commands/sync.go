@@ -16,12 +16,35 @@ import (
 // install.sh reads out of the image before anything is installed, and linking
 // it to this binary would replace the one thing that can recover a host with no
 // orchardctl on it.
+// A change here has to be made in apps/server/hostbin/orchard-sync-commands as
+// well, which links the same names from shell. sync_test pins the two lists
+// together, because the failure is silent: the alias never appears on the host
+// and the command looks like it was never shipped.
 var Aliases = []string{
 	"orchard-update",
 	"orchard-config",
 	"orchard-registry",
 	"orchard-policies",
+	"orchard-mcp",
+	"orchard-public-ip",
 	"orchard-claim",
+}
+
+// All is the registry, in the order it is listed by help. main.go is a
+// one-liner over this so a test can ask what actually ships.
+func All() []*cli.Command {
+	return []*cli.Command{
+		Update(),
+		Config(),
+		Registry(),
+		Policies(),
+		Mcp(),
+		PublicIP(),
+		Claim(),
+		Logs(),
+		Status(),
+		Sync(),
+	}
 }
 
 func Sync() *cli.Command {

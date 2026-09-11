@@ -9,6 +9,7 @@ export interface ConfigSection {
   key: string;
   fields: ConfigField[];
   required: string[];
+  validate?: (values: Record<string, string | null>) => void;
 }
 
 const section = (
@@ -16,7 +17,13 @@ const section = (
   key: string,
   fields: ConfigField[],
   required: string[],
-): ConfigSection => ({ id, key, fields, required });
+  validate?: (values: Record<string, string | null>) => void,
+): ConfigSection => ({ id, key, fields, required, validate });
+
+const IPV4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+const IPV6 = /^[0-9a-fA-F:]+$/;
+
+export const isIpAddress = (value: string): boolean => IPV4.test(value) || IPV6.test(value);
 
 export const STORAGE = section(
   'storage',
@@ -66,7 +73,27 @@ export const WILDCARD = section(
   ['domains'],
 );
 
-export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD];
+/**
+ * The address publicly exposed ports and databases are published on, for
+ * organizations that have not set one of their own. Most instances have
+ * exactly one routable address, and asking every organization to discover and
+ * retype it is how "This organization does not have a public IP configured"
+ * becomes a support question instead of a setting.
+ */
+export const NETWORK = section(
+  'network',
+  'network',
+  [{ name: 'publicIp', env: 'PUBLIC_EXPOSURE_IP' }],
+  ['publicIp'],
+  (values) => {
+    const ip = (values.publicIp || '').trim();
+    if (ip && !isIpAddress(ip)) {
+      throw new Error('publicIp must be a valid IPv4 or IPv6 address');
+    }
+  },
+);
+
+export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD, NETWORK];
 
 export const sectionById = (id: string): ConfigSection | undefined =>
   SECTIONS.find((s) => s.id === id);

@@ -66,9 +66,9 @@ By default a database is reachable only from inside the cluster, which is the
 right default. **Enable** public access assigns a port on the organization's
 shared database IP so you can connect from your laptop or a BI tool.
 
-This needs an L4 load balancer, and a shared database IP configured for the
-organization. It is unavailable in Cloudflare Tunnel mode, because tunnels carry
-HTTP only.
+This needs an L4 load balancer, and a public IP: your organization's own if it
+has set one, otherwise the instance's default. It is unavailable in Cloudflare
+Tunnel mode, because tunnels carry HTTP only.
 
 Turning it on exposes a database to the internet. Use a strong password, and turn
 it off when you are done.

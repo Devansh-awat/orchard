@@ -8,6 +8,7 @@
 		toasts,
 		pendingInvitations,
 		organizations,
+		instanceFeatures,
 		type PendingInvitation
 	} from '$lib/stores';
 	import { ArrowLeft } from 'lucide-svelte';
@@ -144,7 +145,7 @@
 				items: [
 					{ id: 'connections', label: 'GitHub and Tailscale' },
 					{ id: 'tokens', label: 'API tokens' },
-					{ id: 'mcp', label: 'MCP' }
+					...($instanceFeatures.mcp ? [{ id: 'mcp', label: 'MCP' }] : [])
 				]
 			},
 			{
@@ -731,6 +732,7 @@
 		}
 
 		checkGitHubStatus();
+		instanceFeatures.load();
 		if (isFeatureEnabledNow('tailscale-integration')) checkTailscaleStatus();
 		fetchPasskeys();
 		fetchSessions();
@@ -825,7 +827,7 @@
 				<UserApiTokens />
 			{/if}
 
-			{#if activeTab === 'mcp'}
+			{#if activeTab === 'mcp' && $instanceFeatures.mcp}
 				<UserMcp />
 			{/if}
 

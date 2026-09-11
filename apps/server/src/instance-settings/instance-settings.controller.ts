@@ -17,4 +17,15 @@ export class InstanceSettingsController {
     await this.settings.setUserspaceScheduling(Boolean(body?.enabled));
     return this.settings.getUserspaceSchedulingState();
   }
+
+  @Get('mcp')
+  async getMcp() {
+    return this.settings.getMcpState();
+  }
+
+  @Patch('mcp')
+  async setMcp(@Body() body: { enabled?: boolean }) {
+    await this.settings.setMcp(Boolean(body?.enabled));
+    return this.settings.getMcpState();
+  }
 }

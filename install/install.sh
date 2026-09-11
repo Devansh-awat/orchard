@@ -21,6 +21,8 @@ ORCHARD_INGRESS_MODE=${ORCHARD_INGRESS_MODE:-}
 ORCHARD_TUNNEL_TOKEN=${ORCHARD_TUNNEL_TOKEN:-}
 ORCHARD_UPDATE_POLICY=${ORCHARD_UPDATE_POLICY:-}
 ORCHARD_METRICS=${ORCHARD_METRICS:-}
+ORCHARD_MCP=${ORCHARD_MCP:-true}
+ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
@@ -214,6 +216,8 @@ usage() {
     --mode <public|tunnel|lan>   ORCHARD_INGRESS_MODE   how the internet reaches this box
     --domain <host>              ORCHARD_DOMAIN         where the Orchard UI lives
     --app-domain <host>          ORCHARD_APP_DOMAIN     wildcard parent for deployed apps
+    --mcp-domain <host>          ORCHARD_MCP_DOMAIN     where agents connect over MCP
+                                                        (default: mcp.<your domain>)
     --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, public mode
     --tunnel-token <token>       ORCHARD_TUNNEL_TOKEN   Cloudflare Tunnel token, tunnel mode
 
@@ -221,6 +225,8 @@ usage() {
     --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
     --metrics <true|false>       ORCHARD_METRICS        built-in metrics stack, needs ~1G extra
                                                         (default: on with 8G+ RAM)
+    --mcp <true|false>           ORCHARD_MCP            the MCP endpoint agents connect to
+                                                        (default: on)
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
     --help, -h                                         show this and exit
 
@@ -265,6 +271,8 @@ parse_args() {
       --mode) need_value "$1" "${2:-}"; ORCHARD_INGRESS_MODE=$2; shift 2 ;;
       --domain) need_value "$1" "${2:-}"; ORCHARD_DOMAIN=$2; shift 2 ;;
       --app-domain) need_value "$1" "${2:-}"; ORCHARD_APP_DOMAIN=$2; shift 2 ;;
+      --mcp-domain) need_value "$1" "${2:-}"; ORCHARD_MCP_DOMAIN=$2; shift 2 ;;
+      --mcp) need_value "$1" "${2:-}"; ORCHARD_MCP=$2; shift 2 ;;
       --email) need_value "$1" "${2:-}"; ORCHARD_ACME_EMAIL=$2; shift 2 ;;
       --tunnel-token) need_value "$1" "${2:-}"; ORCHARD_TUNNEL_TOKEN=$2; shift 2 ;;
       --updates) need_value "$1" "${2:-}"; ORCHARD_UPDATE_POLICY=$2; shift 2 ;;
@@ -412,13 +420,20 @@ choose_ingress_mode() {
 collect_domains() {
   step
 
+  case "$ORCHARD_MCP" in
+    true|false) ;;
+    *) die "--mcp takes true or false, not: $ORCHARD_MCP" ;;
+  esac
+
   if [ "$INGRESS_MODE" = lan ]; then
     ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-orchard.${PRIMARY_IP//./-}.sslip.io}
     ORCHARD_APP_DOMAIN=${ORCHARD_APP_DOMAIN:-apps.${PRIMARY_IP//./-}.sslip.io}
+    ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.${PRIMARY_IP//./-}.sslip.io}
     USE_TLS=false
     CERT_ISSUER=selfsigned
     info "platform: http://$ORCHARD_DOMAIN"
     info "apps:     *.$ORCHARD_APP_DOMAIN"
+    if [ "$ORCHARD_MCP" = true ]; then info "agents:   http://$ORCHARD_MCP_DOMAIN"; fi
     return
   fi
 
@@ -427,6 +442,9 @@ collect_domains() {
 
   local base=${ORCHARD_DOMAIN#*.}
   [ -n "$ORCHARD_APP_DOMAIN" ] || ORCHARD_APP_DOMAIN=$(ask "Wildcard domain for deployed apps" "apps.$base")
+  # Not asked for: the MCP is on by default and one more prompt to skip past
+  # buys nothing. --mcp-domain moves it, --mcp false removes it.
+  [ -n "$ORCHARD_MCP_DOMAIN" ] || ORCHARD_MCP_DOMAIN="mcp.$base"
 
   USE_TLS=true
   CERT_ISSUER=letsencrypt
@@ -437,8 +455,18 @@ collect_domains() {
 
     echo
     bold "Point these records at ${PUBLIC_IP:-this box} before continuing:"
-    echo "  A  $ORCHARD_DOMAIN       -> ${PUBLIC_IP:-<this box>}"
-    echo "  A  *.$ORCHARD_APP_DOMAIN -> ${PUBLIC_IP:-<this box>}"
+    local records=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
+    if [ "$ORCHARD_MCP" = true ]; then records+=("$ORCHARD_MCP_DOMAIN"); fi
+    local width=0 record
+    for record in "${records[@]}"; do
+      if [ ${#record} -gt "$width" ]; then width=${#record}; fi
+    done
+    for record in "${records[@]}"; do
+      printf '  A  %-*s -> %s\n' "$width" "$record" "${PUBLIC_IP:-<this box>}"
+    done
+    if [ "$ORCHARD_MCP" = true ]; then
+      note "the last one is where AI agents connect. Skip it with --mcp false."
+    fi
     wait_for_dns "$ORCHARD_DOMAIN"
   else
     USE_TLS=false
@@ -447,8 +475,15 @@ collect_domains() {
     [ -n "$ORCHARD_TUNNEL_TOKEN" ] || die "a tunnel token is required for tunnel mode"
     echo
     bold "In the Cloudflare dashboard, route these hostnames to this tunnel:"
-    echo "  $ORCHARD_DOMAIN        -> http://traefik.traefik.svc.cluster.local:80"
-    echo "  *.$ORCHARD_APP_DOMAIN  -> http://traefik.traefik.svc.cluster.local:80"
+    local hosts=("$ORCHARD_DOMAIN" "*.$ORCHARD_APP_DOMAIN")
+    if [ "$ORCHARD_MCP" = true ]; then hosts+=("$ORCHARD_MCP_DOMAIN"); fi
+    local width=0 host
+    for host in "${hosts[@]}"; do
+      if [ ${#host} -gt "$width" ]; then width=${#host}; fi
+    done
+    for host in "${hosts[@]}"; do
+      printf '  %-*s -> http://traefik.traefik.svc.cluster.local:80\n' "$width" "$host"
+    done
   fi
 }
 
@@ -818,7 +853,7 @@ write_values() {
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
 
-  local scheme=http entrypoint=web tls_enabled=false tls_issuer=
+  local scheme=http entrypoint=web tls_enabled=false tls_issuer= mcp_tls_issuer=
   if [ "$USE_TLS" = true ]; then
     scheme=https; entrypoint=websecure; tls_enabled=true
     # Without this the IngressRoute gets a bare `tls:` block and Traefik
@@ -828,6 +863,12 @@ write_values() {
     issuerRef:
       name: $CERT_ISSUER
       kind: ClusterIssuer"
+    # The same trap on the MCP's own route, one level deeper in the values. An
+    # MCP client refuses a self-signed certificate outright.
+    mcp_tls_issuer="
+      issuerRef:
+        name: $CERT_ISSUER
+        kind: ClusterIssuer"
   fi
   if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; fi
 
@@ -841,9 +882,14 @@ write_values() {
   JWT_SECRET=$(reuse_secret JWT_SECRET)
   ENCRYPTION_KEY=$(reuse_secret SECRETS_ENCRYPTION_KEY)
   SSO_KEY=$(reuse_secret SSO_STATE_SECRET)
+  # Shared with the MCP below rather than minted per process: it is what the
+  # API recognises when the MCP acts for a consenting user, so a mismatch shows
+  # up as every tool call failing rather than as anything failing to start.
+  MCP_TOKEN=$(reuse_secret MCP_SERVICE_TOKEN)
   [ -n "$JWT_SECRET" ] || JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
   [ -n "$ENCRYPTION_KEY" ] || ENCRYPTION_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
   [ -n "$SSO_KEY" ] || SSO_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '\n=' | head -c 32)
+  [ -n "$MCP_TOKEN" ] || MCP_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | head -c 43)
 
   cat > "$VALUES_FILE" <<EOF
 # Generated by install/install.sh. Edit and re-run 'orchard-update' to apply.
@@ -874,6 +920,7 @@ server:
     - { name: JWT_SECRET, value: "$JWT_SECRET" }
     - { name: SECRETS_ENCRYPTION_KEY, value: "$ENCRYPTION_KEY" }
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
+    - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN }
     - { name: SESSION_COOKIE_SECURE, value: "$cookie_secure" }
@@ -953,8 +1000,25 @@ metrics:
       size: 5Gi
       storageClass: local-path
 
+# Agents connect here. The chart derives MCP_BASE_URL, the frontend's
+# PUBLIC_MCP_URL and the API it calls from the hostname below, so this is the
+# whole of pointing an MCP client at this instance. Turn it off at install with
+# --mcp false, or later with 'orchardctl mcp disable --apply'.
 mcp:
-  enabled: false
+  enabled: $ORCHARD_MCP
+  # Stated rather than derived from the route: in tunnel mode Traefik answers
+  # plaintext in-cluster while the world connects over https, and an OAuth
+  # issuer that disagrees with the URL the client typed is rejected.
+  url: $scheme://$ORCHARD_MCP_DOMAIN
+  ingress:
+    enabled: true
+    host: $ORCHARD_MCP_DOMAIN
+    entryPoints: [$entrypoint]
+    tls:
+      enabled: $tls_enabled$mcp_tls_issuer
+  env:
+    - { name: JWT_SECRET, value: "$JWT_SECRET" }
+    - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
 
 certificates:
   enabled: false
@@ -990,6 +1054,9 @@ install_orchard() {
   run_step "redis" 30s kubectl -n orchard rollout status deploy/redis --timeout=5m
   run_step "the api" 3m kubectl -n orchard rollout status deploy/server --timeout=10m
   run_step "the web app" 1m kubectl -n orchard rollout status deploy/frontend --timeout=5m
+  if [ "$ORCHARD_MCP" = true ]; then
+    run_step "the agent endpoint" 1m kubectl -n orchard rollout status deploy/mcp --timeout=5m
+  fi
 }
 
 install_updater() {
@@ -1061,6 +1128,9 @@ summary() {
   pad_line ""
   pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN"
   pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN"
+  if [ "$ORCHARD_MCP" = true ]; then
+    pad_line "  ${C_GREY}Agents${C_RESET}     $scheme://$ORCHARD_MCP_DOMAIN"
+  fi
   pad_line ""
   pad_line "  ${C_GREY}Upgrade${C_RESET}    sudo orchardctl update"
   pad_line "  ${C_GREY}Settings${C_RESET}   sudo orchardctl config set <path> <value> --apply"

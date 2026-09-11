@@ -102,6 +102,7 @@
 	let backupEditMode = $state(false);
 	let publicIp = $state('');
 	let publicIpSaving = $state(false);
+	let instanceDefaultPublicIp = $state<string | null>(null);
 
 	let notifLoading = $state(false);
 	let notifChannels = $state<NotificationChannel[]>([]);
@@ -282,6 +283,7 @@
 			backupSecretConfigured = Boolean(d.secretKeyConfigured);
 			backupSecretKey = '';
 			publicIp = d.databasePublicIp || '';
+			instanceDefaultPublicIp = d.instanceDefaultPublicIp || null;
 		} finally {
 			backupLoading = false;
 		}
@@ -958,6 +960,7 @@
 						{canEditOrg}
 						bind:publicIp
 						{publicIpSaving}
+						{instanceDefaultPublicIp}
 						onSavePublicIp={savePublicIp}
 					/>
 				{/if}

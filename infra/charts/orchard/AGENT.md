@@ -102,6 +102,7 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `cilium.enabled` | `false` | Add CiliumNetworkPolicy / CiliumEnvoyConfig grants to the server ClusterRole and set `CILIUM_ENABLED=true`. Only for clusters running Cilium as the CNI. Left off, the server probes for the `cilium.io` group plus create on `ciliumenvoyconfigs`: per-tenant policy falls back to plain NetworkPolicy, and basic auth on an ingress is enforced by the protection proxy instead of an Envoy filter. |
 | `protection.orchardLogin` | `false` | Offer `protectionMode: orchard` ("sign in with Orchard") on tenant ingresses, via `PROTECTION_ORCHARD_LOGIN=true`. Gates selecting the mode, not enforcing it. `basic` and `password` are always available. |
 | `tenant.wildcardDomains` | `""` | `.suffix=tlsSecret` pairs generated app URLs are built from. Empty derives one from `gateway.http.appDomain`. |
+| `tenant.publicIp` | `""` | Fallback external IP publicly exposed ports and databases are published on, via `PUBLIC_EXPOSURE_IP`. An organization that sets its own overrides it. Empty means every organization must configure one before it can expose anything, and setting it here locks the admin-panel field. |
 
 ### Image defaults (`image.*`)
 
@@ -167,9 +168,37 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `ingress.entryPoints` | `[websecure]` | Traefik entryPoints to bind. Use `[web]` for HTTP-only. |
 | `ingress.tls.enabled` | `true` | Emit a `tls:` block on the IngressRoute. |
 | `ingress.tls.secretName` | `""` | Name of an existing TLS secret. Empty uses Traefik's default cert. |
+| `ingress.tls.issuerRef` | `{}` | Name a ClusterIssuer and the chart issues the control-plane certificate itself, into `{release}-tls`. Without this or `secretName`, Traefik terminates with its self-signed default. |
 | `ingress.middlewares` | `[]` | List of `{name, namespace}` refs applied to both routes. |
 
 Routing is fixed: `PathPrefix(/apiv1)` → server, everything else → frontend, both bound to `Host(ingress.host)`.
+
+### MCP (`mcp.*`)
+
+The Model Context Protocol server, a second process out of the same image, on
+its own hostname.
+
+| Key | Default | Description |
+|---|---|---|
+| `mcp.enabled` | `true` | Deploy the MCP. Off, the Deployment and route go away **and** `MCP_ENABLED=false` is set on the server, which pins the runtime toggle in the admin panel off: nothing is serving MCP, so it cannot be switched back on from a browser. |
+| `mcp.replicas` | `1` | Replica count. Ignored when `mcp.autoscaling.enabled`. |
+| `mcp.image.name` | `mcp` | Image name suffix. Built from `apps/server/Dockerfile.mcp`. |
+| `mcp.service.port` | `3100` | ClusterIP Service port. |
+| `mcp.ingress.enabled` | `true` | Create the Traefik `IngressRoute`. |
+| `mcp.ingress.host` | `""` | **The MCP domain**, e.g. `mcp.example.com`. Empty creates no route, and every URL derived from it stays unset. |
+| `mcp.ingress.tls.issuerRef` | `{}` | As `ingress.tls.issuerRef`, into `{release}-mcp-tls`. An MCP client refuses a self-signed certificate outright, so this or `secretName` is not optional in practice. |
+| `mcp.url` | `""` | The origin clients actually reach, when it differs from what the route implies. Behind a tunnel the route terminates plaintext in-cluster while the world connects over https, and an OAuth issuer that disagrees with the URL the client typed is rejected. Empty derives it from the route. |
+| `mcp.env` | `[]` | Extra env vars. **`JWT_SECRET` and `MCP_SERVICE_TOKEN` have to be here and have to match the server's**: the MCP validates the sessions the server issued, and authenticates to the API as a service while passing the consenting user in headers. A mismatch starts cleanly and fails every tool call. |
+
+Derived for you unless `mcp.env` already names them: `MCP_BASE_URL` (the OAuth
+issuer and resource identifier), `FRONTEND_URL` (where a client is sent to
+consent, taken from `server.env` when set), and `ORCHARD_API_URL` (the in-cluster
+server Service). Left to their own defaults these point at localhost, which
+fails only once a client tries to authorise.
+
+`mcp.ingress.host` also feeds the frontend's `PUBLIC_MCP_URL`, which is the URL
+**Settings → MCP** shows people, and `SANDBOX_MCP_URL` when sandboxes are on. It
+is the single place the MCP's address is configured.
 
 ### Builders (`builders.*`)
 
@@ -322,6 +351,7 @@ postgres:  { enabled: false }   # if you bring your own DB; then set server.env.
 builders:  { enabled: false }
 metrics:   { enabled: false }
 ingress:   { enabled: false }
+mcp:       { enabled: false }   # also pins the admin panel's MCP toggle off
 ```
 
 If `postgres.enabled: false`, supply `DATABASE_URL` via `server.env` or

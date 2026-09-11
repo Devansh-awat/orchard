@@ -9,15 +9,6 @@ import (
 )
 
 func main() {
-	registry := cli.NewRegistry(
-		commands.Update(),
-		commands.Config(),
-		commands.Registry(),
-		commands.Policies(),
-		commands.Claim(),
-		commands.Logs(),
-		commands.Status(),
-		commands.Sync(),
-	)
+	registry := cli.NewRegistry(commands.All()...)
 	os.Exit(cli.Main(registry, filepath.Base(os.Args[0]), os.Args[1:]))
 }

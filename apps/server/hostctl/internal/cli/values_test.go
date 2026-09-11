@@ -99,3 +99,38 @@ func TestEmptyFileIsUsable(t *testing.T) {
 		t.Fatalf("expected c, got %#v", got)
 	}
 }
+
+// A container env list takes the last definition of a name, so an upsert that
+// appends rather than replaces leaves the old value in place above it.
+func TestSetEnvReplacesRatherThanAppends(t *testing.T) {
+	v, err := LoadValues(write(t, "server:\n  env:\n    - {name: A, value: one}\n    - {name: B, value: two}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.SetEnv("server.env", "A", "changed")
+	v.SetEnv("server.env", "C", "new")
+
+	if got := v.EnvValue("server.env", "A"); got != "changed" {
+		t.Fatalf("expected changed, got %q", got)
+	}
+	if got := v.EnvValue("server.env", "B"); got != "two" {
+		t.Fatalf("other entries must survive, got %q", got)
+	}
+	if got := len(v.List("server.env")); got != 3 {
+		t.Fatalf("expected 3 entries, got %d", got)
+	}
+}
+
+func TestEnvValueOnMissingPathIsEmpty(t *testing.T) {
+	v, err := LoadValues(write(t, "a: 1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.EnvValue("mcp.env", "JWT_SECRET"); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+	v.SetEnv("mcp.env", "JWT_SECRET", "x")
+	if got := v.EnvValue("mcp.env", "JWT_SECRET"); got != "x" {
+		t.Fatalf("SetEnv should create the list, got %q", got)
+	}
+}

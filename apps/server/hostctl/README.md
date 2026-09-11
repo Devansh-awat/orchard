@@ -22,9 +22,8 @@ host with no `orchardctl` on it.
 
 ## Adding a command
 
-Append to the registry in `main.go`. `internal/cli` derives the help text, the
-root gating and the hyphenated alias from the `Command` struct, so nothing else
-has to be kept in step:
+Append to `commands.All()`. `internal/cli` derives the help text and the root
+gating from the `Command` struct:
 
 ```go
 &cli.Command{
@@ -36,6 +35,13 @@ has to be kept in step:
     Run:     func(c *cli.Context, args []string) error { ... },
 }
 ```
+
+The hyphenated alias is the one thing that is not automatic. Two lists name the
+symlinks, `commands.Aliases` and the `ALIASES` line in
+`apps/server/hostbin/orchard-sync-commands`, because the shell bootstrap is what
+runs on the first sync of an upgrade. A test pins them together and pins both
+against the registry, since the failure is silent: the alias never appears on
+the host and the command looks like it was never shipped.
 
 `Context` carries the resolved paths and the ways a command may reach outside:
 `Run` streams a child process through (so helm keeps its progress output),
@@ -52,6 +58,8 @@ is painful through a yq expression and easy here.
 go test ./...
 ```
 
-The dispatcher and the values layer are covered. Both are places where a
-mistake is silent rather than loud: a bad alias turns a command into a help
-screen, and a bad values write corrupts an operator's configuration.
+The dispatcher, the values layer, and what `mcp enable` writes are covered. All
+three are places where a mistake is silent rather than loud: a bad alias turns a
+command into a help screen, a bad values write corrupts an operator's
+configuration, and an MCP missing its shared credential starts cleanly and then
+fails every tool call.

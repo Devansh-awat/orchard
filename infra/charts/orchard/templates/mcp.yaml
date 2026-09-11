@@ -38,6 +38,29 @@ spec:
                   name: {{ .Values.postgres.name }}-app
                   key: uri
             {{- end }}
+            {{- /*
+              Derived from what the operator already told the chart, and only
+              when they have not set it themselves. Every one of these is
+              load-bearing: MCP_BASE_URL is the issuer and resource identifier
+              in the OAuth metadata, FRONTEND_URL is where a client is sent to
+              consent, and ORCHARD_API_URL is the API the tools call. Left to
+              their defaults they point at localhost, which fails only once a
+              client tries to authorise.
+            */}}
+            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "MCP_BASE_URL")) }}
+            {{- with (include "orchard.mcpUrl" .) }}
+            - { name: MCP_BASE_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "FRONTEND_URL")) }}
+            {{- with (include "orchard.frontendUrl" .) }}
+            - { name: FRONTEND_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- if not (include "orchard.envHas" (dict "env" .Values.mcp.env "key" "ORCHARD_API_URL")) }}
+            - name: ORCHARD_API_URL
+              value: {{ printf "http://server.%s.svc.cluster.local:%v" .Values.namespace .Values.server.service.port | quote }}
+            {{- end }}
             {{- with .Values.mcp.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -97,9 +120,35 @@ spec:
       {{- end }}
   {{- if .Values.mcp.ingress.tls.enabled }}
   tls:
-    {{- with .Values.mcp.ingress.tls.secretName }}
+    {{- with include "orchard.mcpTlsSecret" . }}
     secretName: {{ . }}
     {{- end }}
   {{- end }}
+{{- end }}
+
+{{- /*
+  Same trap as the control-plane route: a bare `tls:` block makes Traefik
+  terminate with its self-signed default certificate, and an MCP client will
+  not talk to that. Name an issuerRef and the chart issues the host's
+  certificate itself.
+*/ -}}
+{{- $mcpIssuer := .Values.mcp.ingress.tls.issuerRef | default dict }}
+{{- if and .Values.mcp.ingress.enabled .Values.mcp.ingress.host .Values.mcp.ingress.tls.enabled $mcpIssuer.name }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "orchard.mcpTlsSecret" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "mcp") | nindent 4 }}
+spec:
+  secretName: {{ include "orchard.mcpTlsSecret" . }}
+  issuerRef:
+    name: {{ $mcpIssuer.name }}
+    kind: {{ $mcpIssuer.kind | default "ClusterIssuer" }}
+  commonName: {{ .Values.mcp.ingress.host | quote }}
+  dnsNames:
+    - {{ .Values.mcp.ingress.host | quote }}
 {{- end }}
 {{- end }}

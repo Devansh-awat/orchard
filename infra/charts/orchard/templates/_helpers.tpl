@@ -56,6 +56,56 @@ domain once instead of keeping four values in sync.
 {{- end -}}
 {{- end -}}
 
+{{/* The same question for any env list: pass `env` and `key`. */}}
+{{- define "orchard.envHas" -}}
+{{- $key := .key -}}
+{{- range .env -}}
+{{- if eq .name $key }}found{{ end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The public origin of the Orchard UI. An explicit server.env FRONTEND_URL wins,
+because it is the one the server itself signs callbacks against, and it is not
+always derivable: behind a tunnel the route terminates plaintext in-cluster
+while the world reaches it over https.
+*/}}
+{{- define "orchard.frontendUrl" -}}
+{{- $set := "" -}}
+{{- range .Values.server.env -}}
+{{- if eq .name "FRONTEND_URL" }}{{ $set = .value }}{{ end -}}
+{{- end -}}
+{{- if $set -}}
+{{- $set -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.host -}}
+{{- printf "%s://%s" (ternary "https" "http" .Values.ingress.tls.enabled) .Values.ingress.host -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Where the MCP answers. Empty unless it is enabled and its route has a host,
+so nothing derives a URL like "https://" from an unset hostname.
+*/}}
+{{- define "orchard.mcpUrl" -}}
+{{- if .Values.mcp.enabled -}}
+{{- if .Values.mcp.url -}}
+{{- .Values.mcp.url -}}
+{{- else if and .Values.mcp.ingress.enabled .Values.mcp.ingress.host -}}
+{{- printf "%s://%s" (ternary "https" "http" .Values.mcp.ingress.tls.enabled) .Values.mcp.ingress.host -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The Secret the MCP IngressRoute terminates with, mirroring the UI's. */}}
+{{- define "orchard.mcpTlsSecret" -}}
+{{- $tls := .Values.mcp.ingress.tls -}}
+{{- if $tls.secretName -}}
+{{- $tls.secretName -}}
+{{- else if (($tls.issuerRef | default dict).name) -}}
+{{- printf "%s-mcp-tls" .Release.Name -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "orchard.labels" -}}
 app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
@@ -199,9 +249,8 @@ still has to name it.
             {{- with .Values.sandbox }}
             {{- if .enabled }}
             - { name: SANDBOX_ENABLED, value: "true" }
-            {{- if $.Values.mcp.enabled }}
-            - name: SANDBOX_MCP_URL
-              value: {{ printf "%s://%s" (ternary "https" "http" $.Values.mcp.ingress.tls.enabled) $.Values.mcp.ingress.host | quote }}
+            {{- with (include "orchard.mcpUrl" $) }}
+            - { name: SANDBOX_MCP_URL, value: {{ . | quote }} }
             {{- end }}
             - { name: SANDBOX_NAMESPACE, value: {{ .namespace | quote }} }
             - { name: SANDBOX_IMAGE, value: {{ .image | quote }} }
@@ -241,6 +290,11 @@ still has to name it.
             {{- if .Values.signupMode }}
             - { name: SIGNUP_MODE, value: {{ .Values.signupMode | quote }} }
             {{- end }}
+            {{- if not .Values.mcp.enabled }}
+            # Nothing is serving MCP on this instance, so the runtime toggle is
+            # pinned off rather than left switchable from the admin panel.
+            - { name: MCP_ENABLED, value: "false" }
+            {{- end }}
             {{- with .Values.tenant }}
             {{- if .storageClass }}
             - { name: K8S_STORAGE_CLASS, value: {{ .storageClass | quote }} }
@@ -250,6 +304,9 @@ still has to name it.
             {{- end }}
             {{- if .certClusterIssuer }}
             - { name: CERT_CLUSTER_ISSUER, value: {{ .certClusterIssuer | quote }} }
+            {{- end }}
+            {{- if .publicIp }}
+            - { name: PUBLIC_EXPOSURE_IP, value: {{ .publicIp | quote }} }
             {{- end }}
             {{- end }}
             {{- with (include "orchard.wildcardDomains" .) }}

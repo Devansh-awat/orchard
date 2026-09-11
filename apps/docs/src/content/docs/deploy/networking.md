@@ -53,6 +53,11 @@ unavailable in Cloudflare Tunnel mode because tunnels carry HTTP only.
 Public TCP and UDP bypass the HTTP layer entirely, so protection does not apply
 to them. Anything published this way needs its own authentication.
 
+Ports are published on an external IP. Your organization can set its own under
+**Organization settings → Database**, and otherwise inherits the instance's
+default. If neither is set, publishing a port fails with a message saying so, and
+an instance admin fixes it once for everybody.
+
 ## Databases
 
 Managed databases are reachable in-cluster by default and are the main consumer

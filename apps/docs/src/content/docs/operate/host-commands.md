@@ -15,6 +15,8 @@ orchardctl update            upgrade to the latest chart and images
 orchardctl config ...        read and change chart values
 orchardctl registry ...      where builds are allowed to push
 orchardctl policies ...      which namespaces may reach tenant apps
+orchardctl mcp ...           the MCP endpoint agents connect to
+orchardctl public-ip ...     default address for publicly exposed ports
 orchardctl claim             print a link to claim the instance and sign in
 orchardctl logs [service]    follow logs (server, frontend, mcp)
 orchardctl status            show the control-plane pods
@@ -23,8 +25,8 @@ orchardctl sync              refresh these commands from the deployed image
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
 `orchard-config` are the same program. `update`, `config`, `registry`,
-`policies`, `claim` and `sync` need root, because the values file is `0600` and the rest runs
-through the cluster.
+`policies`, `mcp`, `public-ip`, `claim` and `sync` need root, because the values
+file is `0600` and the rest runs through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
 unrendered, so a command copied straight out of the container still runs.
@@ -77,14 +79,14 @@ afterwards, or make every edit first and run it yourself once.
 
 Ones worth knowing:
 
-| Path | What it does |
-| --- | --- |
-| `signupMode` | `open`, `invite_only` or `closed` |
-| `tenant.certClusterIssuer` | ClusterIssuer for user app certificates |
+| Path                         | What it does                            |
+| ---------------------------- | --------------------------------------- |
+| `signupMode`                 | `open`, `invite_only` or `closed`       |
+| `tenant.certClusterIssuer`   | ClusterIssuer for user app certificates |
 | `ingress.tls.issuerRef.name` | ClusterIssuer for the Orchard UI itself |
-| `metrics.enabled` | the built-in metrics stack |
-| `cilium.enabled` | Cilium-backed policy and basic auth |
-| `server.replicas` | control-plane API pods |
+| `metrics.enabled`            | the built-in metrics stack              |
+| `cilium.enabled`             | Cilium-backed policy and basic auth     |
+| `server.replicas`            | control-plane API pods                  |
 
 ## registry
 
@@ -120,6 +122,57 @@ issue. See
 `set --apply` upgrades and then re-applies the policy to existing projects.
 `reapply` restarts the server, which rewrites every managed namespace's policy
 on boot.
+
+## mcp
+
+```bash
+sudo orchardctl mcp
+sudo orchardctl mcp enable --apply
+sudo orchardctl mcp enable mcp.example.com --apply
+sudo orchardctl mcp disable --apply
+```
+
+Turns the MCP endpoint on or off and decides which hostname it answers on. A
+fresh install already has one at `mcp.<your domain>`; this is how an instance
+that predates that, or one installed with `--mcp false`, gets it.
+
+`enable` with no hostname reuses the one already in values, and failing that
+derives a sibling of the UI's: `orchard.example.com` becomes `mcp.example.com`.
+Point an A record for it at the box first, the same record as the UI.
+
+It also does the wiring that is easy to miss: it copies `JWT_SECRET` across from
+the server and mints a shared `MCP_SERVICE_TOKEN` if there is not one already.
+The MCP authenticates to the API as a service and passes the consenting user
+along, so without both the process starts happily and every tool call fails at
+authentication.
+
+Everything else follows what the UI's own route already does, including the
+`issuerRef` that makes cert-manager issue a real certificate. Without it Traefik
+answers with its self-signed default and MCP clients refuse to connect.
+
+`disable` removes the deployment on the next upgrade. To stop it answering
+without redeploying anything, use the toggle at
+**Instance admin → Configuration** instead.
+
+## public-ip
+
+```bash
+sudo orchardctl public-ip
+sudo orchardctl public-ip set 203.0.113.10 --apply
+sudo orchardctl public-ip unset --apply
+```
+
+Sets the address that raw TCP and UDP ports and public databases are published
+on, for organizations that have not configured one of their own.
+
+It is a fallback, not an override: an organization that sets its own still wins.
+Unset, every organization is told to "set a public IP in organization settings"
+for an address they have no way to know, which on a single-box install is only
+ever this machine's.
+
+Setting it here also locks the matching field at
+**Instance admin → Configuration**, because it becomes an environment variable
+on the server and the environment always wins.
 
 ## claim
 

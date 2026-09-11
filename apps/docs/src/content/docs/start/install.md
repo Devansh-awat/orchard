@@ -36,6 +36,11 @@ Two things it cannot work out on its own: your **domain**, and an **email for
 Let's Encrypt**. Architecture, memory, free disk, free ports and whether you are
 behind NAT are all detected.
 
+It derives two more hostnames from your domain rather than asking: `apps.` for
+deployed apps, and `mcp.` for the [MCP endpoint](/mcp/) agents connect to. In
+`public` mode both need a DNS record, and the installer prints them. Move the MCP
+with `--mcp-domain`, or leave it out entirely with `--mcp false`.
+
 It also asks how traffic reaches the box:
 
 | Mode     | For                                        | TLS                                            |
@@ -64,7 +69,7 @@ ORCHARD_UPDATE_POLICY=manual \
 Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
 `ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
 `ORCHARD_ZOT_NODE_PORT`, `ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
-`K3S_VERSION`, `GATEWAY_API_VERSION`.
+`ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `K3S_VERSION`, `GATEWAY_API_VERSION`.
 
 ### Sizing
 
@@ -95,6 +100,12 @@ builderSandbox: # Kata VMs for build jobs
   enabled: true
   runtimeClassName: kata
 ```
+
+**A default public IP.** Raw TCP and UDP ports and public databases are
+published on an external address, and the installer does not assume this box's
+is the right one. Set it once with
+`sudo orchardctl public-ip set <ip> --apply` and every organization inherits it;
+see [Set a default public IP](/operate/finishing-setup/#set-a-default-public-ip).
 
 **Multi-node**, **wildcard certificates**, and **public TCP/UDP in tunnel mode**
 are also out of scope for the installer. See the chart for those.

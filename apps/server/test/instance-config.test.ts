@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstanceConfigService } from '../src/instance-config/instance-config.service';
-import { STORAGE, EMAIL, WILDCARD } from '../src/instance-config/instance-config.sections';
+import { STORAGE, EMAIL, NETWORK, WILDCARD } from '../src/instance-config/instance-config.sections';
 import { objectStorage } from '../src/instance-config/object-storage';
 
 class FakeSettings {
@@ -199,4 +199,32 @@ test('removing the wildcard gives its ingresses a certificate of their own again
 test('an ingress with TLS switched off is never touched', async () => {
   const { desiredWildcardTls } = await import('../src/projects/projects.utils');
   assert.equal(desiredWildcardTls('app.apps.example.com', null, 'letsencrypt-prod'), null);
+});
+
+test('the instance public IP falls back to nothing until it is set', async () => {
+  const { service } = build();
+  await withEnv({ PUBLIC_EXPOSURE_IP: undefined }, async () => {
+    assert.equal(service.defaultPublicIp(), '');
+    await service.save(NETWORK, { publicIp: '203.0.113.10' });
+    assert.equal(service.defaultPublicIp(), '203.0.113.10');
+  });
+});
+
+test('the environment locks the instance public IP the same as every other field', async () => {
+  const { service } = build();
+  await withEnv({ PUBLIC_EXPOSURE_IP: '198.51.100.7' }, async () => {
+    await service.save(NETWORK, { publicIp: '203.0.113.10' });
+    assert.equal(service.defaultPublicIp(), '198.51.100.7');
+    assert.deepEqual(service.lockedFields(NETWORK), ['publicIp']);
+  });
+});
+
+// A typo here is published straight into a Service's loadBalancerIP, where the
+// failure is a Service that never gets an address rather than a rejected save.
+test('a public IP that is not an address is refused', async () => {
+  const { service } = build();
+  await withEnv({ PUBLIC_EXPOSURE_IP: undefined }, async () => {
+    await assert.rejects(() => service.save(NETWORK, { publicIp: 'not-an-ip' }));
+    assert.equal(service.defaultPublicIp(), '');
+  });
 });
