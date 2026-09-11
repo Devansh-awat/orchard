@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.4](https://github.com/hackclub/orchard/compare/server/v2.28.3...server/v2.28.4) (2026-09-10)
+
+
+### Bug Fixes
+
+* stop git lfs failures from killing the build clone ([1541c68](https://github.com/hackclub/orchard/commit/1541c68f249eb64cc5296664fc6f1a423a81c386))
+
 ## [2.28.3](https://github.com/hackclub/orchard/compare/server/v2.28.2...server/v2.28.3) (2026-09-10)
 
 
