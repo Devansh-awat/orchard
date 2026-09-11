@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.31.0](https://github.com/hackclub/orchard/compare/server/v2.30.0...server/v2.31.0) (2026-09-11)
+
+
+### Features
+
+* auto-configure the mcp endpoint and an instance-wide public ip ([46c7bbc](https://github.com/hackclub/orchard/commit/46c7bbc9d9a439a664244f514228a3b974700b40))
+
 ## [2.30.0](https://github.com/hackclub/orchard/compare/server/v2.29.0...server/v2.30.0) (2026-09-11)
 
 
