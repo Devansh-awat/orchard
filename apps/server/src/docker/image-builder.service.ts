@@ -18,6 +18,7 @@ import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withGitHubCredentials } from './repo-url';
 import { injectBuildArgsScript } from './build-args';
 import { isSandboxStartFault } from './build-faults';
+import { summarizeBuildFailure } from './build-summary';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
@@ -316,63 +317,6 @@ export class ImageBuilderService {
     if (!this.kc) {
       throw new BadRequestException('Kubernetes API not available');
     }
-  }
-
-  /**
-   * Distill a failed build's log dump into the few lines a user needs. The
-   * full logs already stream into buildLogs; buildError must stay short
-   * because the UI surfaces it as the headline failure reason.
-   */
-  private summarizeBuildFailure(logs?: string | null, pusherLogs?: string | null): string {
-    const parts: string[] = [];
-
-    const lintMatch = (logs ?? '').match(/lint violation found for rules: ([A-Za-z0-9, ]+)/);
-    if (lintMatch) {
-      const rules = lintMatch[1].trim();
-      parts.push(
-        `Dockerfile lint check failed (${rules}). Your Dockerfile sets "# check=error=true", which turns Dockerfile lint warnings into build failures. Remove that line, or change it to "# check=skip=${rules.replace(/,\s*/g, ',')}" to skip these rules.`,
-      );
-    }
-
-    const lines = (logs ?? '').split('\n');
-    const solveError = lines.filter((l) => l.startsWith('error: failed to solve:')).pop();
-    const stepErrors = lines.filter((l) => /^#\d+ ERROR:/.test(l)).slice(-2);
-    parts.push(...stepErrors);
-    if (solveError && !stepErrors.some((e) => solveError.includes(e.replace(/^#\d+ ERROR: /, '')))) {
-      parts.push(solveError);
-    }
-
-    const reasonsMatch = (logs ?? '').match(
-      /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/,
-    );
-    if (reasonsMatch) {
-      parts.push(
-        ...reasonsMatch[1]
-          .split('\n')
-          .filter((l) => l.trim() && !/ - No message$/.test(l)),
-      );
-    }
-
-    const pusherError = (pusherLogs ?? '')
-      .split('\n')
-      .filter((l) => /^(FATA|Error)\b|level=fatal/.test(l))
-      .pop();
-    if (pusherError) parts.push(`Pusher: ${pusherError}`);
-
-    if (parts.length === 0) {
-      const tail = lines.filter((l) => l.trim() && !l.startsWith('time=')).slice(-4);
-      parts.push(...tail);
-    }
-
-    const seen = new Set<string>();
-    const unique = parts.filter((p) => {
-      const key = p.trim();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    return unique.join('\n').slice(0, 800);
   }
 
   private generateJobName(imageName: string): string {
@@ -2795,7 +2739,7 @@ exit $rc`,
           await this.emitBuildPhaseSpans(jobName, deploymentId);
 
           this.jobInformer?.release(jobName);
-          const summary = this.summarizeBuildFailure(status.logs, status.pusherLogs);
+          const summary = summarizeBuildFailure(status.logs, status.pusherLogs);
           recordBuildOutcome({
             outcome: 'failed',
             source: 'watch',
