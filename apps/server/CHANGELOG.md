@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.33.0](https://github.com/hackclub/orchard/compare/server/v2.32.0...server/v2.33.0) (2026-09-13)
+
+
+### Features
+
+* **server:** pull authenticated base images with app credentials ([#42](https://github.com/hackclub/orchard/issues/42)) ([6a20212](https://github.com/hackclub/orchard/commit/6a2021299d7fb217c2d8ffeee7896a660747dc8a))
+
 ## [2.32.0](https://github.com/hackclub/orchard/compare/server/v2.31.0...server/v2.32.0) (2026-09-11)
 
 
