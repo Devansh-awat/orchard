@@ -100,6 +100,10 @@ the generated Dockerfile, so an `ENV` in the repo wins over an injected argument
 of the same name. Injected arguments also propagate into derived stages, so a
 value set for the builder is visible in stages that build `FROM` it.
 
+Registry login for pulling base images is separate. `DHI_USERNAME`, `DHI_TOKEN`,
+and `DOCKER_AUTH_CONFIG` authenticate `FROM` pulls (for example `dhi.io`). They
+are not turned into build arguments and are not present in the running app.
+
 ## What Orchard does not do
 
 It runs exactly what your Dockerfile says. It does not patch your build, swap

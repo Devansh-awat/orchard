@@ -23,6 +23,10 @@
  * The fix for the generated case is not to generate it: see parseEnvVars.
  */
 
+import { PULL_AUTH_ENV_KEYS } from '../docker/registry-pull-auth';
+
+export { isPullAuthEnvKey } from '../docker/registry-pull-auth';
+
 export const RUNTIME_OWNED_ENV_KEYS = new Set([
   'PATH',
   'HOME',
@@ -43,6 +47,7 @@ export const RUNTIME_OWNED_ENV_KEYS = new Set([
  */
 export const BUILDER_RESERVED_ENV_KEYS = new Set([
   ...RUNTIME_OWNED_ENV_KEYS,
+  ...PULL_AUTH_ENV_KEYS,
   'BUILDKITD_FLAGS',
   'DOCKER_CONFIG',
 ]);

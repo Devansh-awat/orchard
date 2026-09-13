@@ -20,6 +20,15 @@ import { injectBuildArgsScript } from './build-args';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
+import {
+  dockerConfigJson,
+  hasRegistryAuths,
+  mergeRegistryAuths,
+  PullAuthError,
+  pullAuthsFromEnv,
+  registryAuth,
+  type RegistryAuths,
+} from './registry-pull-auth';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
 import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
@@ -331,7 +340,7 @@ export class ImageBuilderService {
   private sanitizeLogMessage(message: string): string {
     let sanitized = message;
 
-    sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
+    sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi, '***REDACTED***');
 
     sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
 
@@ -557,59 +566,49 @@ export class ImageBuilderService {
     }
   }
 
-  async ensureBuilderSecrets(): Promise<void> {
-    this.ensureKubeConfig();
+  private harborAuths(): RegistryAuths {
+    const username = process.env.HARBOR_USERNAME || 'admin';
+    const password = process.env.HARBOR_PASSWORD || '';
+    const auth = registryAuth(username, password);
+    return {
+      [this.harborRegistryPush]: auth,
+      [this.harborRegistryPull]: auth,
+    };
+  }
+
+  private async upsertDockerConfigSecret(
+    name: string,
+    auths: RegistryAuths,
+    extraMetadata: k8s.V1ObjectMeta = {},
+  ): Promise<void> {
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-
-    // Create Harbor registry credentials secret
-    const harborUsername = process.env.HARBOR_USERNAME || 'admin';
-    const harborPassword = process.env.HARBOR_PASSWORD || '';
-
-    const dockerConfigJson = {
-      auths: {
-        [this.harborRegistryPush]: {
-          username: harborUsername,
-          password: harborPassword,
-          auth: Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64'),
-        },
-        [this.harborRegistryPull]: {
-          username: harborUsername,
-          password: harborPassword,
-          auth: Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64'),
-        },
+    const body: k8s.V1Secret = {
+      metadata: {
+        name,
+        namespace: this.builderNamespace,
+        ...extraMetadata,
+      },
+      type: 'kubernetes.io/dockerconfigjson',
+      data: {
+        '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson(auths))).toString('base64'),
       },
     };
-
-    const registrySecretName = this.registrySecretName;
     try {
-      await coreApi.readNamespacedSecret(registrySecretName, this.builderNamespace);
-      // Update existing secret
-      await coreApi.replaceNamespacedSecret(registrySecretName, this.builderNamespace, {
-        metadata: {
-          name: registrySecretName,
-          namespace: this.builderNamespace,
-        },
-        type: 'kubernetes.io/dockerconfigjson',
-        data: {
-          '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson)).toString('base64'),
-        },
-      });
+      await coreApi.readNamespacedSecret(name, this.builderNamespace);
+      await coreApi.replaceNamespacedSecret(name, this.builderNamespace, body);
     } catch (error) {
       if (error.statusCode === 404) {
-        await coreApi.createNamespacedSecret(this.builderNamespace, {
-          metadata: {
-            name: registrySecretName,
-            namespace: this.builderNamespace,
-          },
-          type: 'kubernetes.io/dockerconfigjson',
-          data: {
-            '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson)).toString('base64'),
-          },
-        });
+        await coreApi.createNamespacedSecret(this.builderNamespace, body);
       } else {
         throw error;
       }
     }
+  }
+
+  async ensureBuilderSecrets(): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    await this.upsertDockerConfigSecret(this.registrySecretName, this.harborAuths());
 
     // Create S3 cache credentials secret if enabled
     if (this.s3CacheEnabled && this.s3AccessKeyId && this.s3SecretAccessKey) {
@@ -790,8 +789,9 @@ ${registryConfigs}
     buildFromRoot: boolean;
     buildType: string;
     envVars: Record<string, string>;
+    pullAuths?: RegistryAuths;
   }): k8s.V1Container {
-    const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars } = opts;
+    const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars, pullAuths = {} } = opts;
 
     // Keys are interpolated into the depot build shell string below. Reject
     // anything that isn't a POSIX identifier — same rule applied elsewhere
@@ -867,11 +867,8 @@ curl -fsSL https://depot.dev/install-cli.sh | sh
 export PATH="/root/.depot/bin:$PATH"
 command -v depot >/dev/null 2>&1 || { echo "ERROR: Super Build CLI install failed"; exit 1; }
 
-REGISTRY_AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
 mkdir -p /tmp/.docker
-cat > /tmp/.docker/config.json << EOF
-{"auths":{"$REGISTRY_HOST":{"username":"$REGISTRY_USER","password":"$REGISTRY_PASS","auth":"$REGISTRY_AUTH"}}}
-EOF
+printf '%s\n' "$DOCKER_AUTH_JSON" > /tmp/.docker/config.json
 export DOCKER_CONFIG=/tmp/.docker
 
 echo "=== Building with Super Builds ==="
@@ -905,9 +902,10 @@ echo "=== Super Build completed ==="
       env: [
         { name: 'DEPOT_TOKEN', value: this.depotToken || '' },
         ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
-        { name: 'REGISTRY_HOST', value: depotRegistry },
-        { name: 'REGISTRY_USER', value: process.env.HARBOR_USERNAME || 'admin' },
-        { name: 'REGISTRY_PASS', value: process.env.HARBOR_PASSWORD || '' },
+        {
+          name: 'DOCKER_AUTH_JSON',
+          value: JSON.stringify(dockerConfigJson(mergeRegistryAuths(this.harborAuths(), pullAuths))),
+        },
         ...depotBuildArgs.map(({ envName, value }) => ({
           name: envName,
           value,
@@ -1157,7 +1155,17 @@ exit $EXIT_CODE
     // Filter once, here, so every consumer below agrees on the set: the ARG
     // declarations, the build args, the Railpack secrets that read the
     // container's own environment, and the container environment itself.
+    let appPullAuths: RegistryAuths = {};
+    try {
+      appPullAuths = pullAuthsFromEnv(requestedEnvVars);
+    } catch (error) {
+      if (error instanceof PullAuthError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
     const envVars = buildSafeEnv(requestedEnvVars);
+    const hasAppPullAuth = hasRegistryAuths(appPullAuths);
 
     // Sanitize the tenant key for use as a PVC subPath. Anything outside
     // [a-z0-9-] gets squashed; missing key collapses to "_shared" which is
@@ -1174,6 +1182,21 @@ exit $EXIT_CODE
     }
 
     const jobName = this.generateJobName(imageName);
+    const jobDockerConfigSecret = hasAppPullAuth
+      ? `bdc-${jobName.slice(-8)}`
+      : null;
+    if (jobDockerConfigSecret) {
+      await this.upsertDockerConfigSecret(
+        jobDockerConfigSecret,
+        this.sidecarPushEnabled
+          ? appPullAuths
+          : mergeRegistryAuths(this.harborAuths(), appPullAuths),
+        { labels: { 'orchard.my/build-job': jobName } },
+      );
+      this.appendLog(deploymentId, 'Using registry credentials from the app environment to pull base images').catch(() => {});
+    }
+    const buildkitAuthSecret = jobDockerConfigSecret
+      ?? (this.sidecarPushEnabled ? null : this.registrySecretName);
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}:${tag}`;
 
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
@@ -1521,7 +1544,7 @@ fi
     // a lightweight client container that connects to it via gRPC. The
     // daemon keeps its layer cache warm between builds (like Depot).
     let daemonIp: string | null = null;
-    if (persistentBuildCache && !buildWithDepot && this.buildKitPool) {
+    if (persistentBuildCache && !hasAppPullAuth && !buildWithDepot && this.buildKitPool) {
       try {
         const daemon = await this.buildKitPool.getOrCreateDaemon(cacheTenantKey || imageName);
         daemonIp = daemon.podIp;
@@ -1620,9 +1643,9 @@ fi
         args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
         workingDir: '/workspace',
         env: [
-          ...(this.sidecarPushEnabled
-            ? []
-            : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
+          ...(buildkitAuthSecret
+            ? [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]
+            : []),
           { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}` },
           ...builderContainerEnv(envVars),
           // After the user's variables, not before. A build that pulls assets
@@ -1655,11 +1678,11 @@ fi
         ],
         volumeMounts: [
           { name: 'workspace', mountPath: '/workspace' },
-          ...(this.sidecarPushEnabled ? [] : [{
-            name: 'docker-config',
+          ...(buildkitAuthSecret ? [{
+            name: 'buildkit-auth',
             mountPath: '/root/.docker',
             readOnly: true,
-          }]),
+          }] : []),
           { name: 'buildkit-config', mountPath: '/etc/buildkit', readOnly: true },
           ...(this.sidecarPushEnabled ? [{
             name: 'output',
@@ -1749,7 +1772,9 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
     //     exit so the pusher knows when to act.
     let containers: k8s.V1Container[];
     if (buildWithDepot) {
-      containers = [this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars })];
+      containers = [this.createDepotContainer({
+        dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars, pullAuths: appPullAuths,
+      })];
     } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
 
@@ -1875,6 +1900,18 @@ exit $rc`,
                   ],
                 },
               },
+              ...(buildkitAuthSecret ? [{
+                name: 'buildkit-auth',
+                secret: {
+                  secretName: buildkitAuthSecret,
+                  items: [
+                    {
+                      key: '.dockerconfigjson',
+                      path: 'config.json',
+                    },
+                  ],
+                },
+              }] : []),
               // Daemon-client mode doesn't need buildkit-config, buildkit-state,
               // or buildkit-cache — the daemon pod has its own.
               ...(!daemonIp && !buildWithDepot ? [{
@@ -1937,6 +1974,35 @@ exit $rc`,
     try {
       const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
       console.log(`[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`);
+
+      if (jobDockerConfigSecret && jobCreationResult.body.metadata?.uid) {
+        const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+        try {
+          await coreApi.patchNamespacedSecret(
+            jobDockerConfigSecret,
+            this.builderNamespace,
+            {
+              metadata: {
+                ownerReferences: [{
+                  apiVersion: 'batch/v1',
+                  kind: 'Job',
+                  name: jobName,
+                  uid: jobCreationResult.body.metadata.uid,
+                  controller: true,
+                }],
+              },
+            },
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { headers: { 'Content-Type': 'application/merge-patch+json' } },
+          );
+        } catch (error) {
+          console.warn(`[ImageBuilder] Could not attach ownerRef to ${jobDockerConfigSecret}:`, error.message);
+        }
+      }
 
       if (deploymentId) {
         const now = Date.now();

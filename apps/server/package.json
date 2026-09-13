@@ -27,6 +27,7 @@
     "test:build-faults": "tsx --test test/build-faults.test.ts",
     "test:disruption-budget": "tsx --test test/disruption-budget.test.ts",
     "test:dockerfile-env": "tsx --test test/dockerfile-env-scrape.test.ts",
+    "test:registry-pull-auth": "tsx --test test/registry-pull-auth.test.ts",
     "test:github-access": "tsx --test test/github-repo-access.test.ts",
     "test:watch-paths": "tsx --test test/watch-paths.test.ts",
     "test:auto-deploy-match": "tsx --test test/auto-deploy-match.test.ts",

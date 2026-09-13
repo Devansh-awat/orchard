@@ -16,6 +16,13 @@ import {
   RAILPACK_INFO_MARKER,
 } from './build-config';
 import { ImageBuilderService } from './image-builder.service';
+import {
+  hasRegistryAuths,
+  isPullAuthEnvKey,
+  PullAuthError,
+  pullAuthsFromEnv,
+  type RegistryAuths,
+} from './registry-pull-auth';
 
 const execAsync = promisify(exec);
 
@@ -181,6 +188,52 @@ export class DockerService {
         error: error.message,
       });
       return {};
+    }
+  }
+
+  private async loginPullRegistries(
+    envVars: Record<string, string>,
+    deploymentId?: string,
+  ): Promise<void> {
+    let auths: RegistryAuths;
+    try {
+      auths = pullAuthsFromEnv(envVars);
+    } catch (error) {
+      if (error instanceof PullAuthError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    if (!hasRegistryAuths(auths)) return;
+
+    await this.appendLog(deploymentId, 'Using registry credentials from the app environment to pull base images');
+    for (const [host, auth] of Object.entries(auths)) {
+      await new Promise<void>((resolve, reject) => {
+        const loginProcess = spawn(
+          'docker',
+          ['login', host, '-u', auth.username, '--password-stdin'],
+          {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+              ...process.env,
+              DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+              PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            },
+          },
+        );
+        const stderrChunks: Buffer[] = [];
+        loginProcess.stderr?.on('data', (chunk) => stderrChunks.push(chunk));
+        loginProcess.on('error', reject);
+        loginProcess.on('close', (code, signal) => {
+          if (code === 0) resolve();
+          else reject(new Error(Buffer.concat(stderrChunks).toString('utf8') || `Exit ${code ?? signal}`));
+        });
+        loginProcess.stdin?.end(auth.password, 'utf8');
+      }).catch(async (error) => {
+        const errorMsg = `Failed to login to ${host}: ${error.message}`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        throw new BadRequestException(errorMsg);
+      });
     }
   }
 
@@ -427,6 +480,7 @@ export class DockerService {
     }
 
     const envVars = await this.loadBuildEnv(deploymentId);
+    await this.loginPullRegistries(envVars, deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
 
@@ -445,7 +499,7 @@ export class DockerService {
       }
 
       for (const [key, value] of Object.entries(envVars)) {
-        if (value !== undefined && value !== null) {
+        if (value !== undefined && value !== null && !isPullAuthEnvKey(key)) {
           buildArgs.push('--build-arg', `${key}=${value}`);
         }
       }
@@ -629,6 +683,7 @@ export class DockerService {
     const fullImageName = `${this.harborRegistryPull}/${this.harborProject}/${imageName}`;
 
     const envVars = await this.loadBuildEnv(deploymentId);
+    await this.loginPullRegistries(envVars, deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
 
@@ -734,6 +789,7 @@ export class DockerService {
     await this.appendLog(deploymentId, 'Preparing build with Railpack...');
 
     const envVars = await this.loadBuildEnv(deploymentId, 'railpack');
+    await this.loginPullRegistries(envVars, deploymentId);
 
     try {
       const prepareArgs = [
@@ -829,7 +885,7 @@ export class DockerService {
       }
 
       for (const [key, value] of Object.entries(envVars)) {
-        if (value && typeof value === 'string') {
+        if (value && typeof value === 'string' && !isPullAuthEnvKey(key)) {
           buildArgs.push('--secret', `id=${key},env=${key}`);
         }
       }

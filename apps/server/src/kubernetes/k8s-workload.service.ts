@@ -26,6 +26,7 @@ import {
   normalizeMinAvailable,
 } from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
+import { isPullAuthEnvKey } from '../env/reserved-env';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -1056,6 +1057,7 @@ export class K8sWorkloadService {
       if (!entry || typeof entry.key !== 'string') continue;
       const key = entry.key.trim();
       if (!key) continue;
+      if (isPullAuthEnvKey(key)) continue;
       const value = entry.value != null ? String(entry.value) : '';
       if (entry.secret) secret.set(key, value);
       else normal.set(key, value);

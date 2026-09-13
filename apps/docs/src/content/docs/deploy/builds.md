@@ -69,6 +69,17 @@ with no application. Check the build stage dropdown.
 **Missing build-time secrets.** A stage that needs an API key to run a codegen
 step will fail without it. Pass it as a build argument.
 
+**`401 Unauthorized` pulling a base image.** Registries such as `dhi.io` reject
+anonymous pulls. Put the credentials on the app as secrets, not on the Orchard
+instance:
+
+- `DHI_USERNAME` + `DHI_TOKEN` for Docker Hardened Images (`dhi.io`)
+- or `DOCKER_AUTH_CONFIG`, a Docker config JSON whose `auths` map lists each
+  registry
+
+Those keys are used only for `FROM` / `COPY --from` pulls. They are not passed
+as Dockerfile build args and are not injected into the running container.
+
 **The toolchain does not agree with itself.** Version skew inside the repo's own
 Dockerfile, for example a bundler that cannot load a framework's compiled output.
 Orchard reports it, but the fix is in the repo.
