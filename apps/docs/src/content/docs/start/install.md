@@ -255,6 +255,13 @@ kubectl -n orchard logs deploy/server | grep -A2 'no superadmin'
 Sign up with the account you want to own the instance, open that URL, and the
 token is consumed. If it expires, restart the server to mint a new one.
 
+:::caution
+**Add a passkey straight after claiming.** Until you do, and with no SMTP
+configured, a cleared cookie jar leaves nothing to sign in with. `sudo
+orchardctl claim` will mint a recovery link in exactly that situation, but a
+passkey is the thing that stops you needing one.
+:::
+
 ## Trying it on a laptop
 
 For a throwaway local cluster:

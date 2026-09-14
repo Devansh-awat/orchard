@@ -5,6 +5,7 @@ import {
   CLAIM_TTL_MS,
   hashClaimToken,
   claimUrl,
+  recoveryState,
 } from '../setup/setup-token';
 
 // Backs `orchard-claim` on the host. The claim token is only ever stored
@@ -14,12 +15,20 @@ import {
 async function main() {
   const prisma = new PrismaClient();
   try {
-    const superadmins = await prisma.user.count({ where: { isSuperAdmin: true } });
-    if (superadmins > 0) {
-      console.log('This instance already has a superadmin, so there is nothing to claim.');
-      console.log('Sign in with your passkey, or add one from Settings if you have not yet.');
+    const state = await recoveryState(prisma);
+    if (!state.claimable) {
+      console.log('This instance already has a superadmin, and a way to sign in as them.');
+      if (state.blockedBy === 'passkey') {
+        console.log('Use your passkey. This only mints a link when there is no other way in.');
+      } else if (state.blockedBy === 'smtp') {
+        console.log('Sign in with an email code. Email is configured on this instance.');
+      } else {
+        console.log('Sign in with your identity provider, which is configured on this instance.');
+      }
       return;
     }
+
+    const recovering = state.superadmins > 0;
 
     const token = randomBytes(32).toString('base64url');
     const value = JSON.stringify({
@@ -34,7 +43,15 @@ async function main() {
     });
 
     console.log('');
-    console.log('  Open this to claim the instance and sign in (valid for 24 hours):');
+    if (recovering) {
+      console.log('  No passkey, no email and no identity provider on this instance, so');
+      console.log('  there is no way to sign in as the superadmin it already has.');
+      console.log('');
+      console.log('  Open this to sign back in (valid for 24 hours). Use the same email');
+      console.log('  address as before, or you will create a second superadmin:');
+    } else {
+      console.log('  Open this to claim the instance and sign in (valid for 24 hours):');
+    }
     console.log('');
     console.log(`    ${claimUrl(token)}`);
     console.log('');

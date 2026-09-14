@@ -265,6 +265,12 @@ jobs:
         run: pnpm --filter server test:build-queue-visibility
       - name: Auto-deploy precondition tests
         run: pnpm --filter server test:auto-deploy-precondition
+      # The claim token is the only way into an instance whose operator has no
+      # passkey, no SMTP and no IdP. Too strict and they are locked out of their
+      # own machine; too loose and a live superadmin-granting token stands on
+      # every instance that simply has not added a passkey yet.
+      - name: Claim recovery tests
+        run: pnpm --filter server test:claim-recovery
       # A repo's own HEALTHCHECK decides how its pods are probed, so a
       # misread instruction either probes with a command the image does not
       # have or restarts a healthy container. Pins which stage's instruction

@@ -22,6 +22,7 @@ import {
   ClaimRecord,
   hashClaimToken,
   claimUrl,
+  recoveryState,
 } from './setup-token';
 
 export { SUPERADMIN_CLAIM_KEY };
@@ -102,11 +103,6 @@ export class SetupService implements OnModuleInit {
     }
   }
 
-  private async hasSuperAdmin(): Promise<boolean> {
-    const count = await this.prisma.user.count({ where: { isSuperAdmin: true } });
-    return count > 0;
-  }
-
   private async readClaim(): Promise<ClaimRecord | null> {
     const raw = await this.settings.get(SUPERADMIN_CLAIM_KEY);
     if (!raw) return null;
@@ -124,7 +120,15 @@ export class SetupService implements OnModuleInit {
   }
 
   async ensureClaimToken(): Promise<void> {
-    if (await this.hasSuperAdmin()) {
+    const state = await recoveryState(this.prisma);
+
+    // A claim token is only ever deleted once there is some other way to sign
+    // in as the superadmin. Deleting it merely because a superadmin exists is
+    // what made `orchardctl claim` useless for recovery: the link it minted was
+    // wiped by the next boot, and with two replicas that is seconds later.
+    // Tying the sweep to the same rule also closes the window on its own, the
+    // moment the operator adds a passkey.
+    if (!state.claimable) {
       await this.settings.delete(SUPERADMIN_CLAIM_KEY);
       return;
     }
@@ -134,6 +138,11 @@ export class SetupService implements OnModuleInit {
       this.logger.warn('This instance still has no superadmin. Redeem the claim token already issued, or restart the server to mint a new one.');
       return;
     }
+
+    // Minting is left to `orchardctl claim` once a superadmin exists. Doing it
+    // here would leave a live superadmin-granting token standing on every
+    // instance whose operator simply has not added a passkey yet.
+    if (state.superadmins > 0) return;
 
     const token = randomBytes(32).toString('base64url');
     const record: ClaimRecord = {
@@ -402,9 +411,12 @@ export class SetupService implements OnModuleInit {
   }
 
   async getStatus(): Promise<{ claimable: boolean }> {
-    if (await this.hasSuperAdmin()) return { claimable: false };
+    // A live token is the whole answer. Refusing whenever a superadmin exists
+    // would hide the form from the one case the token is minted for: an
+    // operator locked out of an instance that already has them.
     const claim = await this.readClaim();
-    return { claimable: Boolean(claim) && !SetupService.expired(claim) };
+    if (!claim || SetupService.expired(claim)) return { claimable: false };
+    return { claimable: (await recoveryState(this.prisma)).claimable };
   }
 
   private async assertTokenValid(token: string): Promise<void> {

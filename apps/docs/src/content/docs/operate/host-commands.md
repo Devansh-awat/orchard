@@ -184,6 +184,28 @@ Prints a single-use link that claims the instance and signs you in as the
 superadmin. Use it on a fresh install, or if you have locked yourself out. It
 mints the link inside the server pod, so it works with no email configured.
 
+It also works **after** the instance has been claimed, but only when there is
+genuinely no other way in. Claiming a box, skipping the passkey step and then
+clearing your cookies leaves nothing to sign in with if SMTP was never set up:
+no code to email, no passkey to present. That is a permanent lockout from your
+own machine, so this mints a recovery link instead.
+
+While any way back in exists it refuses, and names the one to use:
+
+```
+This instance already has a superadmin, and a way to sign in as them.
+Use your passkey. This only mints a link when there is no other way in.
+```
+
+A passkey on a superadmin, configured email, or a configured identity provider
+each count. Adding any of them also sweeps away an outstanding recovery link on
+the next restart, so the window closes on its own.
+
+Recovering signs you in as the email you enter, so use the same address as
+before. A different one creates a second superadmin. This grants nothing that
+root on the box did not already have: the same access mints the link, and can
+read the database it is stored in.
+
 ## logs and status
 
 ```bash
