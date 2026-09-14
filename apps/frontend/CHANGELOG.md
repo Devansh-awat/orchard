@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.3](https://github.com/hackclub/orchard/compare/frontend/v1.27.2...frontend/v1.27.3) (2026-09-14)
+
+
+### Bug Fixes
+
+* make the setup flow honest about github and app domains ([fe028da](https://github.com/hackclub/orchard/commit/fe028daf2ad22cbefec9a7d325567703ed529a61))
+
 ## [1.27.2](https://github.com/hackclub/orchard/compare/frontend/v1.27.1...frontend/v1.27.2) (2026-09-14)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.2](https://github.com/hackclub/orchard/compare/server/v2.34.1...server/v2.34.2) (2026-09-14)
+
+
+### Bug Fixes
+
+* make the setup flow honest about github and app domains ([fe028da](https://github.com/hackclub/orchard/commit/fe028daf2ad22cbefec9a7d325567703ed529a61))
+
 ## [2.34.1](https://github.com/hackclub/orchard/compare/server/v2.34.0...server/v2.34.1) (2026-09-14)
 
 
