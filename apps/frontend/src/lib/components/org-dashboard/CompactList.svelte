@@ -5,10 +5,11 @@
 	import { slide } from '$lib/utils/transitions';
 	import { timeAgo, projectSwatch, knownIcon, favUrl, IMG_ICONS } from './helpers.svelte';
 	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
-	import type { ProjectGroup, DeploymentSummary, LiveMetricsEntry } from './types';
+	import type { ProjectGroup, ProjectMeta, DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
 		groups,
+		metas,
 		favDeps,
 		orgSlug,
 		liveMetrics,
@@ -18,6 +19,7 @@
 		onFavErr
 	}: {
 		groups: ProjectGroup[];
+		metas: ReadonlyMap<string, ProjectMeta>;
 		favDeps: DeploymentSummary[];
 		orgSlug: string;
 		liveMetrics?: ReadonlyMap<string, LiveMetricsEntry>;
@@ -85,6 +87,7 @@
 	{#each groups as group, gi (group.id)}
 		{@const isOpen = expandedProjects.has(group.id)}
 		{@const icons = groupIcons(group)}
+		{@const projectIcon = metas.get(group.id)?.icon ?? null}
 		<section
 			class="cl-group"
 			class:cl-group--open={isOpen}
@@ -100,7 +103,11 @@
 					<span class="cl-chevron" {@attach springRotate(() => isOpen, { rest: 0, on: 90 })}>
 						<ChevronRight size={14} />
 					</span>
-					{#if icons.length > 0}
+					{#if projectIcon && /^https?:\/\//.test(projectIcon)}
+						<RemoteImg src={projectIcon} class="cl-icon" />
+					{:else if projectIcon}
+						<span class="cl-emoji">{projectIcon}</span>
+					{:else if icons.length > 0}
 						<span class="cl-cluster cl-cluster--{icons.length}">
 							{#each icons as ic (ic.id)}
 								<RemoteImg src={ic.src} class="cl-mini" onerror={() => onFavErr(ic.id)} />
@@ -289,6 +296,25 @@
 		width: 1.25rem;
 		height: 1.25rem;
 		flex-shrink: 0;
+	}
+
+	:global(.cl-icon) {
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+		object-fit: contain;
+		border-radius: var(--radius-xs);
+	}
+
+	.cl-emoji {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+		font-size: var(--text-body);
+		line-height: 1;
 	}
 
 	:global(.cl-mini) {

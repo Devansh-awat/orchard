@@ -655,6 +655,7 @@
 				{#if $dashboardDensity === 'compact'}
 					<CompactList
 						groups={projectGroups}
+						metas={projectMetas}
 						{favDeps}
 						{orgSlug}
 						{liveMetrics}

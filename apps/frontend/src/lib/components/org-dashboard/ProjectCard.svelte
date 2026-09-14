@@ -144,7 +144,7 @@
 		>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
-					<RemoteImg src={meta.icon} class="proj-av-img" style="background: {iconTint(group.id)}" />
+					<RemoteImg src={meta.icon} class="proj-av-img" />
 				{:else}
 					<span class="proj-av-emoji">{meta.icon}</span>
 				{/if}
