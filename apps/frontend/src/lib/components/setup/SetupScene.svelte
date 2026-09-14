@@ -146,14 +146,36 @@
 		animate(lockups, { scale: [1, 1.05] }, { duration: 0.9, ease: 'easeOut' });
 		await pause(640);
 
-		animate(root, { '--setup-band': [null, band(RESTING_BAND)] }, transition('smooth'));
+		// The closing move covers most of the viewport twice over: the band drops
+		// about 95% of the screen and the lockup flies half of it while shrinking
+		// to a third. At a flat spring that is a few hundred pixels per frame and
+		// reads as a cut rather than a move, so both get a duration scaled to how
+		// far they actually travel.
+		const travel = window.innerHeight / 2 - 52;
+		const bandDrop = window.innerHeight * (1.15 - RESTING_BAND);
+		// The lockup does not only travel, it shrinks to under a third, so its
+		// edges sweep much further than its centre does. Pacing it on the centre
+		// alone reads as a snap on a short viewport, where the centre moves less
+		// than the distance the spring treats as short in the first place.
+		const lockupBox = (lockups[0] as HTMLElement | undefined)?.getBoundingClientRect();
+		const sweep = lockupBox
+			? travel + (Math.hypot(lockupBox.width, lockupBox.height) / 2) * (1.05 - 0.3)
+			: travel;
+		animate(
+			root,
+			{ '--setup-band': [null, band(RESTING_BAND)] },
+			transition('smooth', { distance: bandDrop })
+		);
 		animate(
 			lockups,
-			{ scale: [1.05, 0.3], y: [0, -(window.innerHeight / 2 - 52)] },
-			transition('smooth')
+			{ scale: [1.05, 0.3], y: [0, -travel] },
+			transition('smooth', { distance: sweep })
 		);
-		animate([mark], { rotate: [0, -14] }, transition('smooth'));
-		await pause(430);
+		animate([mark], { rotate: [0, -14] }, transition('smooth', { distance: sweep }));
+		// Short enough that the card is already rising while the lockup is still
+		// on its way up. Waiting for the flight to land first made them two
+		// events: the scene finished, then a card appeared on top of it.
+		await pause(180);
 		settle();
 	}
 
@@ -224,7 +246,15 @@
 		};
 		window.addEventListener('resize', onResize);
 		animate('.setup-grain', { opacity: [0, 0.62] }, { duration: 1.2 });
-		overture();
+		// A throw anywhere in the overture would leave settle() uncalled, and the
+		// card only mounts once the scene reports settled. That is a first-run
+		// flow with no way past it: the operator is stuck on a splash screen and
+		// cannot claim their own instance. Any failure drops to the resting frame.
+		overture().catch((e) => {
+			console.error('[setup] overture failed, showing the resting frame', e);
+			rest();
+			settle();
+		});
 		return () => {
 			window.removeEventListener('resize', onResize);
 			drift?.stop();

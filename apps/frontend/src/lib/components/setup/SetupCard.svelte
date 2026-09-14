@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { animate } from 'motion';
-	import { transition, motionEnabled } from '$lib/utils/motion.svelte';
+	import { transition, motionEnabled, motionStagger } from '$lib/utils/motion.svelte';
 
 	let { total, index, children }: { total: number; index: number; children: Snippet } = $props();
 
@@ -24,7 +24,13 @@
 	}
 </script>
 
-<div class="setup-card-wrap">
+<!--
+  The card is mounted the moment the overture settles, so without an entrance it
+  is painted in the same frame the lockup is still flying to the top, and the
+  two read as a cut. Rising in underneath the lockup makes one move out of what
+  was two events.
+-->
+<div class="setup-card-wrap" {@attach motionStagger({ from: { y: 26 } })}>
 	<div class="setup-halo"></div>
 	<div class="setup-card" bind:this={shell}>
 		<div class="setup-dots">
