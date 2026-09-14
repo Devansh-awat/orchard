@@ -25,8 +25,11 @@ export class GithubAppSetupController {
   }
 
   @Post('manifest')
-  manifest(@Body() body: { organization?: string }) {
-    return this.setup.startManifestFlow(body?.organization?.trim() || undefined);
+  manifest(@Body() body: { organization?: string; returnTo?: string }) {
+    return this.setup.startManifestFlow(
+      body?.organization?.trim() || undefined,
+      body?.returnTo?.trim() || undefined,
+    );
   }
 
   @Delete()
@@ -43,12 +46,15 @@ export class GithubAppSetupController {
     @Res() res: Response,
   ) {
     const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    let returnTo: string | undefined;
     try {
-      await this.setup.completeManifestFlow(code, state);
+      returnTo = await this.setup.completeManifestFlow(code, state);
     } catch (e: any) {
       const message = encodeURIComponent(e?.message || 'Could not create the GitHub App');
       return res.redirect(`${base}/setup/github?error=${message}`);
     }
-    return res.redirect(`${base}/setup/github?created=1`);
+    const target = returnTo ?? '/setup/github';
+    const join = target.includes('?') ? '&' : '?';
+    return res.redirect(`${base}${target}${join}created=1`);
   }
 }

@@ -3,7 +3,7 @@
 	import { animate, stagger } from 'motion';
 	import { transition, decorativeMotion, motionEnabled } from '$lib/utils/motion.svelte';
 
-	let { onSettled }: { onSettled: () => void } = $props();
+	let { onSettled, instant = false }: { onSettled: () => void; instant?: boolean } = $props();
 
 	let field = $state<HTMLElement | null>(null);
 	let crest = $state<SVGSVGElement | null>(null);
@@ -81,7 +81,10 @@
 		const lockups = Array.from(document.querySelectorAll('.setup-lockup'));
 		const mark = document.querySelector('.setup-mark');
 
-		if (!decorativeMotion() || !mark) {
+		// `instant` is the return leg of a trip off-site, such as creating the
+		// GitHub App. Replaying the overture there would make the operator sit
+		// through the whole opening again to get back to the step they left.
+		if (instant || !decorativeMotion() || !mark) {
 			rest();
 			settle();
 			return;

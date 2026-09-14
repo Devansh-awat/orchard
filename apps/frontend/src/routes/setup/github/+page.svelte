@@ -135,12 +135,13 @@
 							<Button variant="danger" onclick={disconnect}>Disconnect</Button>
 						{/if}
 						{#if status.installUrl}
-							<Button variant="primary" href={status.installUrl} target="_blank" rel="noreferrer">
+							<Button variant="secondary" href={status.installUrl} target="_blank" rel="noreferrer">
 								<Github size={15} />
 								Install the App
 								<ExternalLink size={13} />
 							</Button>
 						{/if}
+						<Button variant="primary" onclick={() => goto('/setup')}>Continue</Button>
 					</div>
 				{:else}
 					<div class="github-form">

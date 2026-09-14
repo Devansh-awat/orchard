@@ -11,6 +11,8 @@ const STATE_TTL_MS = 15 * 60 * 1000;
 interface StateRecord {
   value: string;
   expiresAt: string;
+  /** Same-origin path to send the browser back to once the App exists. */
+  returnTo?: string;
 }
 
 interface ManifestConversion {
@@ -35,7 +37,7 @@ export class GithubAppSetupService {
     return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
   }
 
-  async startManifestFlow(organization?: string): Promise<{
+  async startManifestFlow(organization?: string, returnTo?: string): Promise<{
     postUrl: string;
     manifest: string;
     state: string;
@@ -58,6 +60,12 @@ export class GithubAppSetupService {
     const record: StateRecord = {
       value: state,
       expiresAt: new Date(Date.now() + STATE_TTL_MS).toISOString(),
+      // Creating the App navigates the browser all the way to GitHub and back,
+      // so where the operator came from has to survive the round trip or they
+      // land on a page with no relation to what they were doing.
+      returnTo: returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+        ? returnTo
+        : undefined,
     };
     await this.settings.set(STATE_KEY, JSON.stringify(record));
 
@@ -82,7 +90,7 @@ export class GithubAppSetupService {
     return { postUrl, manifest: JSON.stringify(manifest), state };
   }
 
-  private async consumeState(supplied: string): Promise<void> {
+  private async consumeState(supplied: string): Promise<string | undefined> {
     const raw = await this.settings.get(STATE_KEY);
     await this.settings.delete(STATE_KEY);
 
@@ -104,11 +112,12 @@ export class GithubAppSetupService {
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new BadRequestException('State mismatch');
     }
+    return record.returnTo;
   }
 
-  async completeManifestFlow(code: string, state: string): Promise<void> {
+  async completeManifestFlow(code: string, state: string): Promise<string | undefined> {
     if (!code) throw new BadRequestException('GitHub did not return a code');
-    await this.consumeState(state);
+    const returnTo = await this.consumeState(state);
 
     const response = await fetch(`https://api.github.com/app-manifests/${code}/conversions`, {
       method: 'POST',
@@ -132,6 +141,7 @@ export class GithubAppSetupService {
     });
 
     this.logger.log(`GitHub App ${app.slug} created and stored`);
+    return returnTo;
   }
 
   installUrl(): string | null {

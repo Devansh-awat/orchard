@@ -34,6 +34,10 @@
 	let githubLinked = $state(false);
 	let checkingGithub = $state(true);
 	let githubUsername = $state<string | null>(null);
+	// Whether the instance has a GitHub App at all, which is not the same as
+	// whether this user has linked one. Without it there is no client id, and
+	// the connect button used to send people to github.com with client_id=null.
+	let githubAvailable = $state(true);
 	let initialized = $state(false);
 
 	const currentUser = $derived($user);
@@ -90,6 +94,7 @@
 				const data = await response.json();
 				githubLinked = data.linked;
 				githubUsername = data.username || null;
+				githubAvailable = data.appConfigured !== false;
 			}
 		} catch (e) {
 			console.error('Failed to check GitHub status:', e);
@@ -365,7 +370,9 @@
 								<div>
 									<h2 class="setup-step-title">Connect GitHub</h2>
 									<p class="setup-step-desc">
-										Required to deploy. Verifies which repos you can access.
+										{githubAvailable
+											? 'Required to deploy. Verifies which repos you can access.'
+											: 'This instance has no GitHub App yet, so there is nothing to connect to.'}
 									</p>
 								</div>
 							</div>
@@ -391,6 +398,29 @@
 									<Button variant="primary" class="w-full" onclick={handleGithubNext}>
 										Continue <ArrowRight class="h-4 w-4" />
 									</Button>
+									<button onclick={handleBack} class="setup-back-link">
+										<ArrowLeft class="h-3.5 w-3.5" /> Back
+									</button>
+								</div>
+							{:else if !githubAvailable}
+								<div class="setup-github-info">
+									<p class="setup-github-info-title">Not available on this instance</p>
+									<ul class="setup-github-info-list">
+										<li>No GitHub App has been created here yet</li>
+										<li>A superadmin creates one during instance setup</li>
+										<li>Everything else works without it</li>
+									</ul>
+								</div>
+
+								<div class="setup-actions setup-actions--stacked">
+									<div class="flex gap-3 w-full">
+										<Button variant="secondary" class="flex-1" onclick={handleGithubSkip}>
+											Continue
+										</Button>
+										<Button variant="primary" class="flex-1" disabled>
+											<Link2 class="h-4 w-4" /> Connect GitHub
+										</Button>
+									</div>
 									<button onclick={handleBack} class="setup-back-link">
 										<ArrowLeft class="h-3.5 w-3.5" /> Back
 									</button>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { animate } from 'motion';
 	import { user, apiFetch, toasts } from '$lib/stores';
 	import { transition, motionEnabled } from '$lib/utils/motion.svelte';
@@ -8,14 +9,17 @@
 	import SetupCard from './SetupCard.svelte';
 	import SetupPasskeyStep from './SetupPasskeyStep.svelte';
 	import SetupOrgStep from './SetupOrgStep.svelte';
+	import SetupGithubStep from './SetupGithubStep.svelte';
 	import SetupCertificateStep from './SetupCertificateStep.svelte';
 	import SetupDoneStep from './SetupDoneStep.svelte';
 
 	type ServerStep = { id: string; done: boolean; skipped: boolean; required: boolean };
-	type Phase = 'passkey' | 'organization' | 'certificate' | 'done';
+	type Phase = 'passkey' | 'organization' | 'github' | 'certificate' | 'done';
 
-	const ORDER: Phase[] = ['passkey', 'organization', 'certificate', 'done'];
-	const BAND = [0.2, 0.38, 0.6, 1];
+	// 'github' and 'certificate' are client-side phases, not server steps: the
+	// server only tracks what it can verify about the user (passkey, org).
+	const ORDER: Phase[] = ['passkey', 'organization', 'github', 'certificate', 'done'];
+	const BAND = [0.2, 0.36, 0.52, 0.72, 1];
 
 	let steps = $state<ServerStep[]>([]);
 	let phase = $state<Phase>('passkey');
@@ -25,6 +29,7 @@
 	let scene = $state<ReturnType<typeof SetupScene> | null>(null);
 	let card = $state<ReturnType<typeof SetupCard> | null>(null);
 
+	const returning = $page.url.searchParams.has('created');
 	const index = $derived(ORDER.indexOf(phase));
 	const dots = $derived(ORDER.length - 1);
 
@@ -39,7 +44,7 @@
 			if (!response.ok) throw new Error('unavailable');
 			const data = await response.json();
 			steps = data.steps ?? [];
-			phase = firstUnsettled(steps) ?? 'certificate';
+			phase = firstUnsettled(steps) ?? 'github';
 		} catch {
 			phase = 'passkey';
 		}
@@ -75,7 +80,7 @@
 			const data = await response.json();
 			steps = data.steps ?? steps;
 		}
-		await move(firstUnsettled(steps) ?? 'certificate');
+		await move(firstUnsettled(steps) ?? 'github');
 	}
 
 	async function skip(step: string) {
@@ -91,7 +96,7 @@
 		}
 		const data = await response.json();
 		steps = data.steps ?? steps;
-		await move(firstUnsettled(steps) ?? 'certificate');
+		await move(firstUnsettled(steps) ?? 'github');
 	}
 
 	async function finish() {
@@ -117,7 +122,7 @@
 	onMount(load);
 </script>
 
-<SetupScene bind:this={scene} onSettled={() => (ready = true)} />
+<SetupScene bind:this={scene} instant={returning} onSettled={() => (ready = true)} />
 
 <div class="setup-stage" bind:this={stage} class:ready>
 	{#if ready}
@@ -126,6 +131,8 @@
 				<SetupPasskeyStep onDone={advance} />
 			{:else if phase === 'organization'}
 				<SetupOrgStep onDone={advance} onSkip={() => skip('organization')} />
+			{:else if phase === 'github'}
+				<SetupGithubStep onDone={() => move('certificate')} onSkip={() => move('certificate')} />
 			{:else if phase === 'certificate'}
 				<SetupCertificateStep onDone={() => move('done')} />
 			{:else}

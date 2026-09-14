@@ -12,6 +12,8 @@
 	let lastName = $state($user?.lastName || '');
 	let saving = $state(false);
 	let githubLinked = $state(false);
+	// See InvitationWelcome: without an App there is no client id to send.
+	let githubAvailable = $state(true);
 	let checkingGithub = $state(true);
 	let githubUsername = $state<string | null>(null);
 
@@ -39,6 +41,7 @@
 			if (response.ok) {
 				const data = await response.json();
 				githubLinked = data.linked;
+				githubAvailable = data.appConfigured !== false;
 				githubUsername = data.username || null;
 			}
 		} catch (e) {
@@ -306,9 +309,14 @@
 
 						<div class="mt-6 flex gap-3">
 							<Button variant="secondary" class="flex-1" onclick={handleGithubSkip}>
-								Skip for now
+								{githubAvailable ? 'Skip for now' : 'Continue'}
 							</Button>
-							<Button variant="primary" class="flex-1" onclick={handleLinkGithub}>
+							<Button
+								variant="primary"
+								class="flex-1"
+								disabled={!githubAvailable}
+								onclick={handleLinkGithub}
+							>
 								<Link2 class="h-4 w-4" />
 								Connect GitHub
 							</Button>

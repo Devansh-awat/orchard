@@ -49,7 +49,7 @@ export interface SetupState {
 const CERT_TTL_MS = 10_000;
 
 export interface SetupCertificate {
-  state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured';
+  state: 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured' | 'perHost';
   host: string | null;
   message: string | null;
 }
@@ -240,7 +240,14 @@ export class SetupService implements OnModuleInit {
   async getCertificate(): Promise<SetupCertificate> {
     const wildcard = platformWildcardDomains()[0];
     const host = wildcard ? `*${wildcard.suffix}` : null;
-    if (!wildcard?.secret) return { state: 'unconfigured', host, message: null };
+    // No app domain at all is a real gap: nothing can generate a URL.
+    if (!wildcard) return { state: 'unconfigured', host: null, message: null };
+    // A domain with no wildcard Secret named is the stock install, not a fault.
+    // Each generated host gets its own certificate from certClusterIssuer,
+    // which needs no DNS-01 and no way to copy a Secret between namespaces.
+    // Reporting it as "unconfigured" told operators their app domain was
+    // missing when they had just set it.
+    if (!wildcard.secret) return { state: 'perHost', host, message: null };
 
     const namespace = this.config.value(WILDCARD, 'sourceNamespace')?.trim();
     if (!namespace || !this.network) return { state: 'unknown', host, message: null };

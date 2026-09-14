@@ -111,6 +111,16 @@ export class GitHubController {
     }
 
     const clientId = this.githubService.getOAuthClientId();
+    if (!clientId) {
+      // Without an App there is no client id, and building the URL anyway sent
+      // people to github.com with `client_id=null`, which is a GitHub error page
+      // rather than anything Orchard can explain.
+      const back = isSafeRedirect(redirect) ? redirect : '/user/settings';
+      const message = encodeURIComponent(
+        'This instance has no GitHub App yet, so there is nothing to connect to. A superadmin creates one in setup.',
+      );
+      return res.redirect(`${frontendUrl}${back}${back.includes('?') ? '&' : '?'}error=${message}`);
+    }
     const redirectUri = this.githubAppConfig.callbackUrl();
 
     // Pass the session token as OAuth state so the callback can identify the
@@ -245,8 +255,13 @@ export class GitHubController {
       throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
     }
 
+    // Whether the instance can offer GitHub at all, which is a different
+    // question from whether this user has linked it. Without it the UI has no
+    // way to tell "not connected yet" from "there is nothing to connect to".
+    const appConfigured = this.githubAppConfig.isConfigured();
+
     if (!user.githubId) {
-      return { linked: false, username: null, tokenExpired: false, installations: [] };
+      return { linked: false, username: null, tokenExpired: false, installations: [], appConfigured };
     }
 
     const token = await this.githubService.getValidUserToken(user.id);
@@ -256,6 +271,7 @@ export class GitHubController {
         username: user.githubUsername,
         tokenExpired: true,
         installations: [],
+        appConfigured,
       };
     }
 
@@ -272,6 +288,7 @@ export class GitHubController {
         accountType: inst.accountType,
         repositorySelection: inst.repositorySelection,
       })),
+      appConfigured,
     };
   }
 

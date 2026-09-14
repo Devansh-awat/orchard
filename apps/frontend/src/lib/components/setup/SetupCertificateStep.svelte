@@ -4,7 +4,14 @@
 
 	let { onDone }: { onDone: () => Promise<void> | void } = $props();
 
-	type CertState = 'ready' | 'issuing' | 'failed' | 'rateLimited' | 'unknown' | 'unconfigured';
+	type CertState =
+		| 'ready'
+		| 'issuing'
+		| 'failed'
+		| 'rateLimited'
+		| 'unknown'
+		| 'unconfigured'
+		| 'perHost';
 	type Certificate = { state: CertState; host: string | null; message: string | null };
 
 	const POLL_MS = 3000;
@@ -37,6 +44,10 @@
 		unconfigured: {
 			title: 'No app domain set',
 			note: 'Set APP_DOMAIN to hand out generated URLs. Orchard works without it.'
+		},
+		perHost: {
+			title: 'Certificates issue per app',
+			note: 'No wildcard is configured, so each generated URL gets its own certificate. That is the default and nothing here is waiting on you.'
 		}
 	};
 
