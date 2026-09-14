@@ -481,6 +481,10 @@ var routeExclusions = map[string]string{
 	"GET /setup/status":              "first-run setup, before any account exists",
 	"GET /setup/github-app/callback": "first-run setup (GitHub App callback redirect)",
 	"POST /setup/claim":              "first-run setup, claims the instance from a browser",
+	"GET /setup/state":               "first-run setup wizard state, read by the browser",
+	"GET /setup/certificate":         "first-run setup, hands the browser the cluster certificate",
+	"POST /setup/skip":               "first-run setup, dismisses a wizard step",
+	"POST /setup/bootstrap":          "first-run setup, claims and signs in a browser in one step",
 
 	// form-support reads: the create form asks so it can validate before
 	// submitting. The CLI just submits and lets the server rule on it.
@@ -491,6 +495,14 @@ var routeExclusions = map[string]string{
 	"PATCH /databases/:id/replicas":     "no CLI command yet: database replica scaling",
 	"PATCH /deployments/:id/placement":  "no CLI command yet: node pool placement",
 	"POST /deployments/:id/retry-apply": "no CLI command yet: retry a failed cluster apply",
+
+	"PATCH /deployments/:id/disruption-budget": "no CLI command yet: disruption budget",
+	"GET /projects/:id/transfer-org/preview":   "no CLI command yet: move a project between orgs",
+	"POST /projects/:id/transfer-org":          "no CLI command yet: move a project between orgs",
+
+	// capability probe: booleans a signed-in browser reads to decide what to
+	// render, and the CLI asks the routes themselves instead
+	"GET /instance/features": "web UI capability probe",
 }
 
 func loadAuthSnapshot(t *testing.T) map[string]string {
