@@ -59,20 +59,55 @@ test('a stored value is used when no environment variable is set', async () => {
 
 test('the environment always wins over a stored value and locks the field', async () => {
   const { service } = build();
-  await withEnv({ SMTP_HOST: 'env.example.com' }, async () => {
+  await withEnv({ SMTP_HOST: undefined }, async () => {
     await service.save(EMAIL, { host: 'stored.example.com' });
+  });
+  await withEnv({ SMTP_HOST: 'env.example.com' }, async () => {
     assert.equal(service.value(EMAIL, 'host'), 'env.example.com');
     assert.ok(service.lockedFields(EMAIL).includes('host'));
   });
 });
 
-test('a locked field cannot be overwritten through save', async () => {
-  const { service, settings } = build();
+// Accepting the write and dropping it reads as a successful save in every
+// client that is not the admin panel, and the field goes back to what it was
+// on the next reload with nothing to explain why.
+test('a locked field is refused rather than quietly dropped', async () => {
+  const { service } = build();
   await withEnv({ SMTP_HOST: 'env.example.com' }, async () => {
-    await service.save(EMAIL, { host: 'attempted.example.com', user: 'someone' });
+    await assert.rejects(
+      () => service.save(EMAIL, { host: 'attempted.example.com', user: 'someone' }),
+      /SMTP_HOST/,
+    );
+  });
+});
+
+// The panel posts the whole section back, locked fields included, so a save
+// that only touches an unrelated field still has to go through — and must not
+// take the locked field's stored fallback down with it.
+test('saving around a locked field keeps the value it falls back to', async () => {
+  const { service, settings } = build();
+  await withEnv({ SMTP_HOST: undefined }, async () => {
+    await service.save(EMAIL, { host: 'stored.example.com' });
+  });
+  await withEnv({ SMTP_HOST: 'env.example.com' }, async () => {
+    await service.save(EMAIL, { host: 'env.example.com', user: 'someone' });
     const raw = JSON.parse(settings.rows.get(EMAIL.key)!);
-    assert.equal(raw.host, undefined);
+    assert.equal(raw.host, 'stored.example.com');
     assert.equal(raw.user, 'someone');
+  });
+  await withEnv({ SMTP_HOST: undefined }, async () => {
+    await service.reload();
+    assert.equal(service.value(EMAIL, 'host'), 'stored.example.com');
+  });
+});
+
+// State blanks secrets before the panel ever sees them, so the blank that comes
+// back is "unchanged", not an attempt to clear a pinned key.
+test('a locked secret the panel blanked is not read as a change', async () => {
+  const { service } = build();
+  await withEnv({ R2_SECRET_ACCESS_KEY: 'from-env', R2_BUCKET_NAME: undefined }, async () => {
+    await service.save(STORAGE, { secretAccessKey: '', bucketName: 'bucket' });
+    assert.equal(service.value(STORAGE, 'bucketName'), 'bucket');
   });
 });
 
@@ -213,7 +248,10 @@ test('the instance public IP falls back to nothing until it is set', async () =>
 test('the environment locks the instance public IP the same as every other field', async () => {
   const { service } = build();
   await withEnv({ PUBLIC_EXPOSURE_IP: '198.51.100.7' }, async () => {
-    await service.save(NETWORK, { publicIp: '203.0.113.10' });
+    await assert.rejects(
+      () => service.save(NETWORK, { publicIp: '203.0.113.10' }),
+      /PUBLIC_EXPOSURE_IP/,
+    );
     assert.equal(service.defaultPublicIp(), '198.51.100.7');
     assert.deepEqual(service.lockedFields(NETWORK), ['publicIp']);
   });

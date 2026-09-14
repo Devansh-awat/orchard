@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const USERSPACE_NODE_SCHEDULING_KEY = 'userspace_node_scheduling';
@@ -79,6 +79,19 @@ export class InstanceSettingsService {
     return this.storedBool(key, fallback);
   }
 
+  /**
+   * A variable that pins a toggle makes it read-only for everyone, not just for
+   * the admin panel that hides the switch. Refusing the write is the difference
+   * between a lock and a suggestion: an accepted write changes nothing now and
+   * then silently becomes the instance's answer the day the variable is unset.
+   */
+  private assertUnlocked(envVar: string): void {
+    if (this.envOverride(envVar) === null) return;
+    throw new ConflictException(
+      `This is pinned by the ${envVar} environment variable. Unset it to change this here.`,
+    );
+  }
+
   private async toggleState(key: string, envVar: string, fallback = false): Promise<ToggleState> {
     const envOverride = this.envOverride(envVar);
     const dbValue = await this.storedBool(key, fallback);
@@ -93,8 +106,9 @@ export class InstanceSettingsService {
     return this.toggleState(USERSPACE_NODE_SCHEDULING_KEY, USERSPACE_NODE_SCHEDULING_ENV);
   }
 
-  setUserspaceScheduling(value: boolean): Promise<void> {
-    return this.setBool(USERSPACE_NODE_SCHEDULING_KEY, value);
+  async setUserspaceScheduling(value: boolean): Promise<void> {
+    this.assertUnlocked(USERSPACE_NODE_SCHEDULING_ENV);
+    await this.setBool(USERSPACE_NODE_SCHEDULING_KEY, value);
   }
 
   isMcpEnabled(): Promise<boolean> {
@@ -105,7 +119,8 @@ export class InstanceSettingsService {
     return this.toggleState(MCP_ENABLED_KEY, MCP_ENABLED_ENV, true);
   }
 
-  setMcp(value: boolean): Promise<void> {
-    return this.setBool(MCP_ENABLED_KEY, value);
+  async setMcp(value: boolean): Promise<void> {
+    this.assertUnlocked(MCP_ENABLED_ENV);
+    await this.setBool(MCP_ENABLED_KEY, value);
   }
 }

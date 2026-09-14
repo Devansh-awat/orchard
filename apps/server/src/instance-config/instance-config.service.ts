@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException, ConflictException, Injectable, Logger, OnModuleInit,
+} from '@nestjs/common';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { setWildcardOverride } from '../projects/projects.utils';
@@ -21,9 +23,10 @@ export interface SectionState {
  * Runtime configuration that also has an environment variable.
  *
  * Same precedence as the GitHub App config it is modelled on: the environment
- * always wins, and setting a variable locks that field so the UI cannot change
- * it. That is what an operator wants for anything they must control absolutely,
- * and it means a chart-managed instance behaves exactly as before.
+ * always wins, and setting a variable locks that field so nothing can change
+ * it — a write that would is refused, not dropped. That is what an operator
+ * wants for anything they must control absolutely, and it means a
+ * chart-managed instance behaves exactly as before.
  *
  * Reads are synchronous against an in-memory cache because the consumers are
  * synchronous (an S3 client built in a lazy initializer, a mail transport).
@@ -171,8 +174,29 @@ export class InstanceConfigService implements OnModuleInit {
     const next: ConfigValues = {};
 
     for (const field of section.fields) {
-      if (locked.has(field.name)) continue;
       const incoming = input[field.name];
+
+      // A locked field is read-only for every client, not only for the panel
+      // that greys the input out. Echoing the value already in effect is still
+      // fine, because that is what saving an unrelated field in the same
+      // section sends back. The stored value is carried over untouched: it is
+      // what the field falls back to if the variable is ever unset, and
+      // dropping it here would delete that on the next unrelated save.
+      if (locked.has(field.name)) {
+        const pinned = InstanceConfigService.env(field.env) ?? '';
+        const proposed = incoming === undefined ? null : String(incoming).trim();
+        const changes = proposed !== null
+          && proposed !== pinned
+          && !(field.secret && proposed === '');
+        if (changes) {
+          throw new ConflictException(
+            `${field.name} is set by the ${field.env} environment variable and cannot be changed here`,
+          );
+        }
+        if (current[field.name]) next[field.name] = current[field.name];
+        continue;
+      }
+
       if (incoming === undefined) {
         if (current[field.name]) next[field.name] = current[field.name];
         continue;

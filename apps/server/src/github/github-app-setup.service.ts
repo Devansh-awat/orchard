@@ -1,4 +1,6 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable, Logger, BadRequestException, ConflictException,
+} from '@nestjs/common';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { GithubAppConfigService } from './github-app-config.service';
@@ -38,6 +40,17 @@ export class GithubAppSetupService {
     manifest: string;
     state: string;
   }> {
+    // Creating an App writes credentials the environment already pins, so the
+    // flow is refused rather than run to completion against a config that can
+    // never take effect. Same lock the setup page draws, enforced here so it
+    // holds for every client.
+    const locked = this.config.lockedFields();
+    if (locked.length > 0) {
+      throw new ConflictException(
+        'The GitHub App is set by environment variables and cannot be replaced here',
+      );
+    }
+
     const base = this.frontendUrl();
     const host = new URL(base).hostname;
 

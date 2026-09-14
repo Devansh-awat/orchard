@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { InstanceSettingsService } from '../src/instance-settings/instance-settings.service';
+import {
+  InstanceSettingsService, MCP_ENABLED_KEY,
+} from '../src/instance-settings/instance-settings.service';
 
 class FakePrisma {
   rows = new Map<string, string>();
@@ -64,14 +66,33 @@ test('turning MCP off is remembered', async () => {
 
 test('the environment overrides the stored value and reports itself as the reason', async () => {
   const { settings } = build();
-  await withEnv({ MCP_ENABLED: 'false' }, async () => {
+  await withEnv({ MCP_ENABLED: undefined }, async () => {
     await settings.setMcp(true);
+  });
+  await withEnv({ MCP_ENABLED: 'false' }, async () => {
     assert.equal(await settings.isMcpEnabled(), false);
     assert.deepEqual(await settings.getMcpState(), {
       enabled: false,
       dbValue: true,
       envOverride: false,
     });
+  });
+});
+
+// A pinned toggle is read-only for everyone, not only for the panel that hides
+// the switch. Storing the write changes nothing while the variable is set and
+// then becomes the instance's answer the day it is unset.
+test('a pinned toggle refuses the write instead of storing it', async () => {
+  const { prisma, settings } = build();
+  await withEnv({ MCP_ENABLED: 'false' }, async () => {
+    await assert.rejects(() => settings.setMcp(true), /MCP_ENABLED/);
+    assert.equal(prisma.rows.has(MCP_ENABLED_KEY), false);
+  });
+  await withEnv({ USERSPACE_NODE_SCHEDULING: 'true' }, async () => {
+    await assert.rejects(
+      () => settings.setUserspaceScheduling(false),
+      /USERSPACE_NODE_SCHEDULING/,
+    );
   });
 });
 
