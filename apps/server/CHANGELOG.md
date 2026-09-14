@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.1](https://github.com/hackclub/orchard/compare/server/v2.34.0...server/v2.34.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **server:** mint a claim link when there is no other way into the instance ([2c95a80](https://github.com/hackclub/orchard/commit/2c95a80fcc8315d1cf37105fd8b5555f6e20fe98))
+
 ## [2.34.0](https://github.com/hackclub/orchard/compare/server/v2.33.0...server/v2.34.0) (2026-09-14)
 
 
