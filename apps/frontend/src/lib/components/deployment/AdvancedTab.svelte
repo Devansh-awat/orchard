@@ -14,7 +14,11 @@
 	import { SectionCard, StatusBadge, statusMeta, Button, Input } from '$lib/components/ui';
 	import GitHubSourceCard from './GitHubSourceCard.svelte';
 	import NodePoolPicker from './NodePoolPicker.svelte';
-	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
+	import type {
+		AutoDeployStatus,
+		DockerfileHealthCheck,
+		GitHubDeploymentRecord
+	} from '$lib/types/deployment';
 
 	let {
 		deployment,
@@ -67,6 +71,7 @@
 		healthCheckTimeout = $bindable(),
 		healthCheckRetries = $bindable(),
 		startupFailureThreshold = $bindable(),
+		healthCheckOverride = $bindable(false),
 		savingHealthCheck,
 		isEditingHealthCheck = $bindable(),
 		onSaveHealthCheck,
@@ -116,6 +121,7 @@
 		healthCheckTimeout: number;
 		healthCheckRetries: number;
 		startupFailureThreshold: number;
+		healthCheckOverride: boolean;
 		savingHealthCheck: boolean;
 		isEditingHealthCheck: boolean;
 		onSaveHealthCheck: () => void;
@@ -143,6 +149,35 @@
 		{ id: 'tcp', label: 'Port check', desc: 'Open a TCP connection', icon: ServerCog },
 		{ id: 'exec', label: 'Command', desc: 'Run a command inside the container', icon: Terminal }
 	];
+
+	const dockerfileHealthCheck = $derived(
+		(deployment?.dockerfileHealthCheck ?? null) as DockerfileHealthCheck | null
+	);
+
+	const usingDockerfileHealthCheck = $derived(!!dockerfileHealthCheck && !healthCheckOverride);
+
+	const detectedCommand = $derived.by(() => {
+		const command = dockerfileHealthCheck?.command ?? [];
+		if (command.length === 3 && command[1] === '-c') return command[2];
+		return command.join(' ');
+	});
+
+	const detectedTiming = $derived.by(() => {
+		const hc = dockerfileHealthCheck;
+		if (!hc) return '';
+		const parts = [
+			`every ${hc.interval ?? 30}s`,
+			`${hc.timeout ?? 30}s timeout`,
+			`${hc.retries ?? 3} retries`
+		];
+		if (hc.startPeriod) parts.push(`${hc.startPeriod}s to start up`);
+		return parts.join(' · ');
+	});
+
+	function setHealthCheckOverride(next: boolean) {
+		healthCheckOverride = next;
+		isEditingHealthCheck = true;
+	}
 
 	const HC_BEHAVIORS = $derived([
 		{
@@ -623,196 +658,220 @@
 				onchange={() => (isEditingHealthCheck = true)}
 				oninput={() => (isEditingHealthCheck = true)}
 			>
-				<button
-					type="button"
-					class="hc-master"
-					role="switch"
-					aria-checked={healthCheckEnabled}
-					onclick={() => {
-						healthCheckEnabled = !healthCheckEnabled;
-						isEditingHealthCheck = true;
-					}}
-				>
-					<span class="hc-master-icon"><Activity size={18} class="h-4 w-4" /></span>
-					<span class="hc-master-text">
-						<span class="hc-master-title">Health checks</span>
-						<span class="hc-master-sub">
-							{healthCheckEnabled
-								? 'Orchard watches your app and recovers it automatically'
-								: 'Crashes and hangs go undetected until you notice them'}
+				{#if dockerfileHealthCheck}
+					<div class="hc-detected" class:hc-detected--inactive={healthCheckOverride}>
+						<span class="hc-detected-icon"><Terminal size={18} class="h-4 w-4" /></span>
+						<div class="hc-detected-text">
+							<span class="hc-detected-title">
+								{usingDockerfileHealthCheck
+									? 'Running the HEALTHCHECK from your Dockerfile'
+									: 'Your Dockerfile has a HEALTHCHECK, and these settings replace it'}
+							</span>
+							<code class="hc-detected-cmd">{detectedCommand}</code>
+							<span class="hc-detected-meta">{detectedTiming}</span>
+						</div>
+						<Button
+							size="sm"
+							variant={usingDockerfileHealthCheck ? 'secondary' : 'ghost'}
+							onclick={() => setHealthCheckOverride(!healthCheckOverride)}
+						>
+							{usingDockerfileHealthCheck ? 'Set your own' : 'Go back to it'}
+						</Button>
+					</div>
+				{/if}
+
+				{#if !usingDockerfileHealthCheck}
+					<button
+						type="button"
+						class="hc-master"
+						role="switch"
+						aria-checked={healthCheckEnabled}
+						onclick={() => {
+							healthCheckEnabled = !healthCheckEnabled;
+							isEditingHealthCheck = true;
+						}}
+					>
+						<span class="hc-master-icon"><Activity size={18} class="h-4 w-4" /></span>
+						<span class="hc-master-text">
+							<span class="hc-master-title">Health checks</span>
+							<span class="hc-master-sub">
+								{healthCheckEnabled
+									? 'Orchard watches your app and recovers it automatically'
+									: 'Crashes and hangs go undetected until you notice them'}
+							</span>
 						</span>
-					</span>
-					<span class="hc-switch"><span class="hc-switch-knob"></span></span>
-				</button>
+						<span class="hc-switch"><span class="hc-switch-knob"></span></span>
+					</button>
 
-				{#if healthCheckEnabled}
-					<section class="hc-group">
-						<h3 class="hc-group-title">Check method</h3>
-						<div class="hc-methods" role="radiogroup" aria-label="Health check method">
-							{#each HC_METHODS as method (method.id)}
-								{@const MethodIcon = method.icon}
-								<button
-									type="button"
-									role="radio"
-									aria-checked={healthCheckType === method.id}
-									class="hc-method"
-									class:hc-method--active={healthCheckType === method.id}
-									onclick={() => {
-										healthCheckType = method.id;
-										isEditingHealthCheck = true;
-									}}
-								>
-									<span class="hc-method-icon"><MethodIcon size={18} class="h-4 w-4" /></span>
-									<span class="hc-method-label">{method.label}</span>
-									<span class="hc-method-desc">{method.desc}</span>
-								</button>
-							{/each}
-						</div>
-
-						<div class="hc-config">
-							{#if healthCheckType === 'http'}
-								<div class="hc-config-row">
-									<div class="hc-field hc-field--grow">
-										<label class="hc-label" for="hc-path">Path</label>
-										<Input id="hc-path" bind:value={healthCheckPath} placeholder="/health" />
-									</div>
-									<div class="hc-field hc-field--port">
-										<label class="hc-label" for="hc-port">Port</label>
-										<input
-											id="hc-port"
-											type="number"
-											class="hc-num"
-											bind:value={healthCheckPort}
-											placeholder="80"
-										/>
-									</div>
-								</div>
-								<p class="hc-config-hint">
-									A GET request here should return 2xx while your app is healthy
-								</p>
-							{:else if healthCheckType === 'tcp'}
-								<div class="hc-config-row">
-									<div class="hc-field hc-field--port">
-										<label class="hc-label" for="hc-tcp-port">Port</label>
-										<input
-											id="hc-tcp-port"
-											type="number"
-											class="hc-num"
-											bind:value={healthCheckPort}
-											placeholder="80"
-										/>
-									</div>
-								</div>
-								<p class="hc-config-hint">
-									Orchard opens a connection to this port and closes it again
-								</p>
-							{:else}
-								<div class="hc-config-row">
-									<div class="hc-field hc-field--grow">
-										<label class="hc-label" for="hc-cmd">Command</label>
-										<Input
-											id="hc-cmd"
-											bind:value={healthCheckCommand}
-											placeholder="cat /tmp/healthy"
-										/>
-									</div>
-								</div>
-								<p class="hc-config-hint">
-									Runs inside the container and should exit 0 while healthy
-								</p>
-							{/if}
-						</div>
-					</section>
-
-					<section class="hc-group">
-						<h3 class="hc-group-title">On failure</h3>
-						<div class="hc-list">
-							{#each HC_BEHAVIORS as behavior (behavior.id)}
-								{@const on = behavior.get()}
-								<button
-									type="button"
-									class="hc-row"
-									role="switch"
-									aria-checked={on}
-									onclick={() => {
-										behavior.set(!on);
-										isEditingHealthCheck = true;
-									}}
-								>
-									<span class="hc-check" class:hc-check--on={on}>
-										{#if on}<Check size={12} class="h-3 w-3" />{/if}
-									</span>
-									<span class="hc-row-text">
-										<span class="hc-row-title">{behavior.label}</span>
-										<span class="hc-row-desc">{behavior.desc}</span>
-									</span>
-								</button>
-							{/each}
-						</div>
-					</section>
-
-					<details class="hc-advanced">
-						<summary class="hc-advanced-summary">
-							<span>Timing</span>
-							<ChevronDown size={14} class="h-3.5 w-3.5 hc-advanced-chevron" />
-						</summary>
-						<div class="hc-timing">
-							<div class="hc-field">
-								<label class="hc-label" for="hc-interval">Check every</label>
-								<div class="hc-num-wrap">
-									<input
-										id="hc-interval"
-										type="number"
-										class="hc-num"
-										bind:value={healthCheckInterval}
-										min="1"
-									/>
-									<span class="hc-num-suffix">seconds</span>
-								</div>
+					{#if healthCheckEnabled}
+						<section class="hc-group">
+							<h3 class="hc-group-title">Check method</h3>
+							<div class="hc-methods" role="radiogroup" aria-label="Health check method">
+								{#each HC_METHODS as method (method.id)}
+									{@const MethodIcon = method.icon}
+									<button
+										type="button"
+										role="radio"
+										aria-checked={healthCheckType === method.id}
+										class="hc-method"
+										class:hc-method--active={healthCheckType === method.id}
+										onclick={() => {
+											healthCheckType = method.id;
+											isEditingHealthCheck = true;
+										}}
+									>
+										<span class="hc-method-icon"><MethodIcon size={18} class="h-4 w-4" /></span>
+										<span class="hc-method-label">{method.label}</span>
+										<span class="hc-method-desc">{method.desc}</span>
+									</button>
+								{/each}
 							</div>
-							<div class="hc-field">
-								<label class="hc-label" for="hc-timeout">Wait up to</label>
-								<div class="hc-num-wrap">
-									<input
-										id="hc-timeout"
-										type="number"
-										class="hc-num"
-										bind:value={healthCheckTimeout}
-										min="1"
-									/>
-									<span class="hc-num-suffix">seconds</span>
-								</div>
+
+							<div class="hc-config">
+								{#if healthCheckType === 'http'}
+									<div class="hc-config-row">
+										<div class="hc-field hc-field--grow">
+											<label class="hc-label" for="hc-path">Path</label>
+											<Input id="hc-path" bind:value={healthCheckPath} placeholder="/health" />
+										</div>
+										<div class="hc-field hc-field--port">
+											<label class="hc-label" for="hc-port">Port</label>
+											<input
+												id="hc-port"
+												type="number"
+												class="hc-num"
+												bind:value={healthCheckPort}
+												placeholder="80"
+											/>
+										</div>
+									</div>
+									<p class="hc-config-hint">
+										A GET request here should return 2xx while your app is healthy
+									</p>
+								{:else if healthCheckType === 'tcp'}
+									<div class="hc-config-row">
+										<div class="hc-field hc-field--port">
+											<label class="hc-label" for="hc-tcp-port">Port</label>
+											<input
+												id="hc-tcp-port"
+												type="number"
+												class="hc-num"
+												bind:value={healthCheckPort}
+												placeholder="80"
+											/>
+										</div>
+									</div>
+									<p class="hc-config-hint">
+										Orchard opens a connection to this port and closes it again
+									</p>
+								{:else}
+									<div class="hc-config-row">
+										<div class="hc-field hc-field--grow">
+											<label class="hc-label" for="hc-cmd">Command</label>
+											<Input
+												id="hc-cmd"
+												bind:value={healthCheckCommand}
+												placeholder="cat /tmp/healthy"
+											/>
+										</div>
+									</div>
+									<p class="hc-config-hint">
+										Runs inside the container and should exit 0 while healthy
+									</p>
+								{/if}
 							</div>
-							<div class="hc-field">
-								<label class="hc-label" for="hc-retries">Fail after</label>
-								<div class="hc-num-wrap">
-									<input
-										id="hc-retries"
-										type="number"
-										class="hc-num"
-										bind:value={healthCheckRetries}
-										min="1"
-									/>
-									<span class="hc-num-suffix">failures</span>
-								</div>
+						</section>
+
+						<section class="hc-group">
+							<h3 class="hc-group-title">On failure</h3>
+							<div class="hc-list">
+								{#each HC_BEHAVIORS as behavior (behavior.id)}
+									{@const on = behavior.get()}
+									<button
+										type="button"
+										class="hc-row"
+										role="switch"
+										aria-checked={on}
+										onclick={() => {
+											behavior.set(!on);
+											isEditingHealthCheck = true;
+										}}
+									>
+										<span class="hc-check" class:hc-check--on={on}>
+											{#if on}<Check size={12} class="h-3 w-3" />{/if}
+										</span>
+										<span class="hc-row-text">
+											<span class="hc-row-title">{behavior.label}</span>
+											<span class="hc-row-desc">{behavior.desc}</span>
+										</span>
+									</button>
+								{/each}
 							</div>
-							{#if startupEnabled}
+						</section>
+
+						<details class="hc-advanced">
+							<summary class="hc-advanced-summary">
+								<span>Timing</span>
+								<ChevronDown size={14} class="h-3.5 w-3.5 hc-advanced-chevron" />
+							</summary>
+							<div class="hc-timing">
 								<div class="hc-field">
-									<label class="hc-label" for="hc-startup-retries">Startup grace</label>
+									<label class="hc-label" for="hc-interval">Check every</label>
 									<div class="hc-num-wrap">
 										<input
-											id="hc-startup-retries"
+											id="hc-interval"
 											type="number"
 											class="hc-num"
-											bind:value={startupFailureThreshold}
+											bind:value={healthCheckInterval}
 											min="1"
 										/>
-										<span class="hc-num-suffix">attempts</span>
+										<span class="hc-num-suffix">seconds</span>
 									</div>
 								</div>
-							{/if}
-						</div>
-					</details>
+								<div class="hc-field">
+									<label class="hc-label" for="hc-timeout">Wait up to</label>
+									<div class="hc-num-wrap">
+										<input
+											id="hc-timeout"
+											type="number"
+											class="hc-num"
+											bind:value={healthCheckTimeout}
+											min="1"
+										/>
+										<span class="hc-num-suffix">seconds</span>
+									</div>
+								</div>
+								<div class="hc-field">
+									<label class="hc-label" for="hc-retries">Fail after</label>
+									<div class="hc-num-wrap">
+										<input
+											id="hc-retries"
+											type="number"
+											class="hc-num"
+											bind:value={healthCheckRetries}
+											min="1"
+										/>
+										<span class="hc-num-suffix">failures</span>
+									</div>
+								</div>
+								{#if startupEnabled}
+									<div class="hc-field">
+										<label class="hc-label" for="hc-startup-retries">Startup grace</label>
+										<div class="hc-num-wrap">
+											<input
+												id="hc-startup-retries"
+												type="number"
+												class="hc-num"
+												bind:value={startupFailureThreshold}
+												min="1"
+											/>
+											<span class="hc-num-suffix">attempts</span>
+										</div>
+									</div>
+								{/if}
+							</div>
+						</details>
+					{/if}
 				{/if}
 			</div>
 		</SectionCard>

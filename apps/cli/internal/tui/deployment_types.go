@@ -58,12 +58,25 @@ type DepDetail struct {
 	LivenessEnabled         bool    `json:"livenessEnabled"`
 	ReadinessEnabled        bool    `json:"readinessEnabled"`
 	StartupEnabled          bool    `json:"startupEnabled"`
+	HealthCheckOverride     bool    `json:"healthCheckOverride"`
+
+	DockerfileHealthCheck *DockerfileHealthCheck `json:"dockerfileHealthCheck"`
 
 	EnvVars      []EnvVar            `json:"envVars"`
 	Ingresses    []DepIngress        `json:"ingresses"`
 	Services     []DepService        `json:"services"`
 	Volumes      []DepVolume         `json:"volumes"`
 	ImageHistory []ImageHistoryEntry `json:"imageHistory"`
+}
+
+// The HEALTHCHECK the repo's Dockerfile declares. It is what the deployment
+// probes with unless HealthCheckOverride is set.
+type DockerfileHealthCheck struct {
+	Command     []string `json:"command"`
+	Interval    flexNum  `json:"interval"`
+	Timeout     flexNum  `json:"timeout"`
+	Retries     flexNum  `json:"retries"`
+	StartPeriod flexNum  `json:"startPeriod"`
 }
 
 type DepIngress struct {

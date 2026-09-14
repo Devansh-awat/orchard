@@ -696,6 +696,11 @@ model Deployment {
   healthCheckTimeout      Int     @default(5) @map("health_check_timeout")
   healthCheckRetries      Int     @default(3) @map("health_check_retries")
   startupFailureThreshold Int     @default(30) @map("startup_failure_threshold")
+  // The HEALTHCHECK the last build read out of the repo's Dockerfile, if it
+  // declared one. It wins over the columns above, because it ships with the
+  // code — unless the user says otherwise by setting the override flag.
+  dockerfileHealthCheck   Json?   @map("dockerfile_health_check")
+  healthCheckOverride     Boolean @default(false) @map("health_check_override")
 
   templateInstanceId String? @map("template_instance_id") @db.Uuid
   composeStackId     String? @map("compose_stack_id") @db.Uuid

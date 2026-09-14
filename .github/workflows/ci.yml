@@ -260,6 +260,12 @@ jobs:
         run: pnpm --filter server test:build-queue-visibility
       - name: Auto-deploy precondition tests
         run: pnpm --filter server test:auto-deploy-precondition
+      # A repo's own HEALTHCHECK decides how its pods are probed, so a
+      # misread instruction either probes with a command the image does not
+      # have or restarts a healthy container. Pins which stage's instruction
+      # counts and which config a deployment resolves to.
+      - name: Dockerfile health check tests
+        run: pnpm --filter server test:dockerfile-health-check
 
   e2e:
     needs: changes

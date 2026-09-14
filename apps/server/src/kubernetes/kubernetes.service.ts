@@ -156,6 +156,9 @@ export interface CreateDeploymentOptions {
     path?: string | null;
     port?: number | null;
     command?: string | null;
+    // Already split into argv. A Dockerfile's HEALTHCHECK carries shell
+    // operators that splitting `command` on spaces would destroy.
+    execCommand?: string[] | null;
     livenessEnabled: boolean;
     readinessEnabled: boolean;
     startupEnabled: boolean;

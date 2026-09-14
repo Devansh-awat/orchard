@@ -288,6 +288,19 @@ const deploymentBase = z
     healthCheckTimeout: z.number().optional(),
     healthCheckRetries: z.number().optional(),
     startupFailureThreshold: z.number().optional(),
+    // The HEALTHCHECK found in the repo's Dockerfile at the last build. When
+    // present and healthCheckOverride is false, this is what actually runs.
+    dockerfileHealthCheck: z
+      .object({
+        command: z.array(z.string()),
+        interval: z.number().optional(),
+        timeout: z.number().optional(),
+        retries: z.number().optional(),
+        startPeriod: z.number().optional(),
+      })
+      .nullable()
+      .optional(),
+    healthCheckOverride: z.boolean().optional(),
     templateInstanceId: z.string().nullable().optional(),
     composeStackId: z.string().nullable().optional(),
     composeServiceName: z.string().nullable().optional(),
@@ -617,6 +630,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       healthCheckTimeout: z.number().int(),
       healthCheckRetries: z.number().int(),
       startupFailureThreshold: z.number().int(),
+      // Ignore the Dockerfile's HEALTHCHECK and run the fields above instead.
+      healthCheckOverride: z.boolean().optional(),
     }),
     response: deploymentDetail,
   },

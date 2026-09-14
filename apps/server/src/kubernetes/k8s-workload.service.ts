@@ -39,6 +39,33 @@ import { isPullAuthEnvKey } from '../env/reserved-env';
  * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
  * below so the bodies stay byte-identical.
  */
+function probeExecCommand(
+  command?: string | null,
+  execCommand?: string[] | null,
+): string[] {
+  if (execCommand && execCommand.length > 0) return execCommand;
+  if (command) return command.split(' ');
+  return ['/bin/sh', '-c', 'exit 0'];
+}
+
+// Only the fields Orchard sets. The API server fills in the rest (scheme,
+// successThreshold, termination grace), and comparing those would report drift
+// on every read.
+function probeSignature(probe: k8s.V1Probe | null | undefined): string {
+  if (!probe) return 'none';
+
+  let target = 'empty';
+  if (probe.httpGet) target = `http:${probe.httpGet.path ?? '/'}:${probe.httpGet.port}`;
+  else if (probe.tcpSocket) target = `tcp:${probe.tcpSocket.port}`;
+  else if (probe.exec) target = `exec:${JSON.stringify(probe.exec.command ?? [])}`;
+
+  return [target, probe.periodSeconds, probe.timeoutSeconds, probe.failureThreshold].join('|');
+}
+
+function probesEqual(a: k8s.V1Probe | null | undefined, b: k8s.V1Probe | null | undefined): boolean {
+  return probeSignature(a) === probeSignature(b);
+}
+
 function resolvePvcClaimName(vol: { name?: string; pvcName?: string | null }): string {
   const claimName = vol.pvcName?.trim() || vol.name?.trim();
   if (!claimName) {
@@ -779,7 +806,7 @@ export class K8sWorkloadService {
           } else if (hc.type === 'tcp') {
             probe.tcpSocket = { port: hc.port || 80 };
           } else if (hc.type === 'exec') {
-            probe.exec = { command: hc.command ? hc.command.split(' ') : ['/bin/sh', '-c', 'exit 0'] };
+            probe.exec = { command: probeExecCommand(hc.command, hc.execCommand) };
           }
           return probe;
         };
@@ -1257,6 +1284,7 @@ export class K8sWorkloadService {
     path?: string | null;
     port?: number | null;
     command?: string | null;
+    execCommand?: string[] | null;
     livenessEnabled: boolean;
     readinessEnabled: boolean;
     startupEnabled: boolean;
@@ -1305,7 +1333,7 @@ export class K8sWorkloadService {
             };
           } else if (options.type === 'exec') {
             probe.exec = {
-              command: options.command ? options.command.split(' ') : ['/bin/sh', '-c', 'exit 0'],
+              command: probeExecCommand(options.command, options.execCommand),
             };
           }
 
@@ -1321,6 +1349,22 @@ export class K8sWorkloadService {
         if (options.startupEnabled) {
           startupProbe = buildProbe(options.startupFailureThreshold);
         }
+      }
+
+      // The patch stamps an annotation, so every call that reaches the API
+      // server restarts the pods. Callers re-apply on every rebuild to heal
+      // drift, and the common case is no drift at all.
+      const live = containers[0];
+      const unchanged = probesEqual(live.livenessProbe, livenessProbe)
+        && probesEqual(live.readinessProbe, readinessProbe)
+        && probesEqual(live.startupProbe, startupProbe);
+
+      if (unchanged) {
+        return {
+          success: true,
+          deployment: cleanName,
+          namespace: cleanNamespace,
+        };
       }
 
       const patch = {

@@ -121,20 +121,25 @@ func (s *deploymentScreen) viewAdvanced(height int, strip string) string {
 	}
 	row("Pull policy", stTitle.Render(pullPolicy)+pullSuffix)
 
-	hc := onOff(d.HealthCheckEnabled)
-	if d.HealthCheckEnabled {
-		target := d.HealthCheckPath
-		if lc(d.HealthCheckType) == "exec" {
-			target = d.HealthCheckCommand
+	if df := activeDockerfileHealthCheck(d); df != nil {
+		row("Health check", onOff(true)+stMuted.Render(fmt.Sprintf("  from Dockerfile · %s · every %ds · timeout %ds · retries %d",
+			dockerfileHealthCheckCommand(df), intOr(df.Interval, 30), intOr(df.Timeout, 30), intOr(df.Retries, 3))))
+	} else {
+		hc := onOff(d.HealthCheckEnabled)
+		if d.HealthCheckEnabled {
+			target := d.HealthCheckPath
+			if lc(d.HealthCheckType) == "exec" {
+				target = d.HealthCheckCommand
+			}
+			if p := int(d.HealthCheckPort); p > 0 {
+				target += fmt.Sprintf(":%d", p)
+			}
+			hc += stMuted.Render(fmt.Sprintf("  %s %s · every %ss · timeout %ss · retries %s",
+				orDash(d.HealthCheckType), orDash(target),
+				fmtInt(d.HealthCheckInterval), fmtInt(d.HealthCheckTimeout), fmtInt(d.HealthCheckRetries)))
 		}
-		if p := int(d.HealthCheckPort); p > 0 {
-			target += fmt.Sprintf(":%d", p)
-		}
-		hc += stMuted.Render(fmt.Sprintf("  %s %s · every %ss · timeout %ss · retries %s",
-			orDash(d.HealthCheckType), orDash(target),
-			fmtInt(d.HealthCheckInterval), fmtInt(d.HealthCheckTimeout), fmtInt(d.HealthCheckRetries)))
+		row("Health check", hc)
 	}
-	row("Health check", hc)
 
 	if d.GithubRepo != "" {
 		row("Build", stMuted.Render(fmt.Sprintf("%s · dockerfile %s", orDash(d.BuildType), orDash(d.DockerfilePath))))
@@ -174,6 +179,25 @@ func (s *deploymentScreen) viewAdvanced(height int, strip string) string {
 	return cfg + "\n" + audit
 }
 
+// The Dockerfile's HEALTHCHECK when that is what the deployment runs with:
+// present in the repo, and not overridden by the fields below it.
+func activeDockerfileHealthCheck(d *DepDetail) *DockerfileHealthCheck {
+	if d.HealthCheckOverride || d.DockerfileHealthCheck == nil {
+		return nil
+	}
+	if len(d.DockerfileHealthCheck.Command) == 0 {
+		return nil
+	}
+	return d.DockerfileHealthCheck
+}
+
+func dockerfileHealthCheckCommand(df *DockerfileHealthCheck) string {
+	if len(df.Command) == 3 && df.Command[1] == "-c" {
+		return df.Command[2]
+	}
+	return strings.Join(df.Command, " ")
+}
+
 // newHealthCheckForm PUTs the full health-check config, starting from the
 // deployment's current values (the endpoint replaces the whole object).
 func newHealthCheckForm(cl *api.Client, depID string, d *DepDetail) *formScreen {
@@ -197,6 +221,7 @@ func newHealthCheckForm(cl *api.Client, depID string, d *DepDetail) *formScreen 
 		set(fld("interval", "Interval seconds", "30", false), numOr(d.HealthCheckInterval, 30)),
 		set(fld("timeout", "Timeout seconds", "5", false), numOr(d.HealthCheckTimeout, 5)),
 		set(fld("retries", "Retries", "3", false), numOr(d.HealthCheckRetries, 3)),
+		set(fld("override", "Ignore the Dockerfile HEALTHCHECK (on/off)", "off", false), onOffPlain(d.HealthCheckOverride)),
 	}
 	base := map[string]any{
 		"healthCheckEnabled":      d.HealthCheckEnabled,
@@ -208,6 +233,7 @@ func newHealthCheckForm(cl *api.Client, depID string, d *DepDetail) *formScreen 
 		"healthCheckTimeout":      intOr(d.HealthCheckTimeout, 5),
 		"healthCheckRetries":      intOr(d.HealthCheckRetries, 3),
 		"startupFailureThreshold": intOr(d.StartupFailureThreshold, 30),
+		"healthCheckOverride":     d.HealthCheckOverride,
 	}
 	if d.HealthCheckPath != "" {
 		base["healthCheckPath"] = d.HealthCheckPath
@@ -219,7 +245,7 @@ func newHealthCheckForm(cl *api.Client, depID string, d *DepDetail) *formScreen 
 		base["healthCheckCommand"] = d.HealthCheckCommand
 	}
 	return newForm("Health check",
-		"Configures liveness/readiness probes (PUT replaces the whole config).",
+		"Configures liveness/readiness probes (PUT replaces the whole config). A Dockerfile HEALTHCHECK wins unless override is on.",
 		fields,
 		func(v map[string]string) tea.Cmd {
 			return func() tea.Msg {
@@ -234,6 +260,14 @@ func newHealthCheckForm(cl *api.Client, depID string, d *DepDetail) *formScreen 
 					body["healthCheckEnabled"] = false
 				default:
 					return formResult{err: errInvalid("enabled must be on or off")}
+				}
+				switch lc(v["override"]) {
+				case "", "off", "false", "no":
+					body["healthCheckOverride"] = false
+				case "on", "true", "yes":
+					body["healthCheckOverride"] = true
+				default:
+					return formResult{err: errInvalid("override must be on or off")}
 				}
 				if v["type"] != "" {
 					body["healthCheckType"] = v["type"]

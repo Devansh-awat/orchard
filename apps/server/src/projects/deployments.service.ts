@@ -22,6 +22,7 @@ import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
+import { parseDockerfileHealthCheck } from '../github/dockerfile-healthcheck';
 import {
   normalizeWatchPaths,
   MAX_WATCH_PATHS,
@@ -41,6 +42,11 @@ import { BuildQueueService, QueueSnapshot } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
+import {
+  coerceDockerfileHealthCheck,
+  resolveHealthCheck,
+  ResolvedHealthCheck,
+} from './health-check-resolve';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
@@ -2119,6 +2125,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       healthCheckTimeout: number;
       healthCheckRetries: number;
       startupFailureThreshold: number;
+      healthCheckOverride?: boolean;
     },
     clerkId: string,
     userData?: {
@@ -2168,26 +2175,33 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         healthCheckTimeout: healthCheck.healthCheckTimeout,
         healthCheckRetries: healthCheck.healthCheckRetries,
         startupFailureThreshold: healthCheck.startupFailureThreshold,
+        healthCheckOverride: healthCheck.healthCheckOverride ?? false,
       },
     });
 
-    // Apply to the live Kubernetes deployment
+    // Apply what the deployment resolves to, not what was posted: with the
+    // override off, the Dockerfile's HEALTHCHECK is the live config and the
+    // saved fields are only what an override would fall back to.
+    const resolved = await this.resolveStoredHealthCheck(deploymentId);
+
     try {
       await this.k8sWorkload.updateDeploymentHealthCheck({
         namespace: deployment.namespace,
         deploymentName: deployment.name,
-        enabled: healthCheck.healthCheckEnabled,
-        type: healthCheck.healthCheckType,
-        path: healthCheck.healthCheckPath,
-        port: healthCheck.healthCheckPort,
-        command: healthCheck.healthCheckCommand,
-        livenessEnabled: healthCheck.livenessEnabled,
-        readinessEnabled: healthCheck.readinessEnabled,
-        startupEnabled: healthCheck.startupEnabled,
-        interval: healthCheck.healthCheckInterval,
-        timeout: healthCheck.healthCheckTimeout,
-        retries: healthCheck.healthCheckRetries,
-        startupFailureThreshold: healthCheck.startupFailureThreshold,
+        enabled: resolved?.enabled ?? false,
+        type: resolved?.type ?? healthCheck.healthCheckType,
+        path: resolved?.path,
+        port: resolved?.port,
+        command: resolved?.command,
+        execCommand: resolved?.execCommand,
+        livenessEnabled: resolved?.livenessEnabled ?? false,
+        readinessEnabled: resolved?.readinessEnabled ?? false,
+        startupEnabled: resolved?.startupEnabled ?? false,
+        interval: resolved?.interval ?? healthCheck.healthCheckInterval,
+        timeout: resolved?.timeout ?? healthCheck.healthCheckTimeout,
+        retries: resolved?.retries ?? healthCheck.healthCheckRetries,
+        startupFailureThreshold:
+          resolved?.startupFailureThreshold ?? healthCheck.startupFailureThreshold,
       });
     } catch (error) {
       // Log but don't fail - the DB is updated, K8s will sync on next restart/rebuild
@@ -2208,6 +2222,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         enabled: [deployment.healthCheckEnabled, healthCheck.healthCheckEnabled],
         type: [deployment.healthCheckType, healthCheck.healthCheckType],
         path: [deployment.healthCheckPath, healthCheck.healthCheckPath ?? null],
+        override: [deployment.healthCheckOverride, healthCheck.healthCheckOverride ?? false],
       },
     });
 
@@ -2220,6 +2235,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async loadHealthCheckOptions(
     deploymentId: string,
   ): Promise<CreateDeploymentOptions['healthCheck'] | undefined> {
+    const resolved = await this.resolveStoredHealthCheck(deploymentId);
+    return resolved?.enabled ? resolved : undefined;
+  }
+
+  // What the deployment actually probes with: the Dockerfile's HEALTHCHECK
+  // when the repo declares one, the stored configuration otherwise. Both the
+  // render path and the settings save read it, so the two can never disagree.
+  private async resolveStoredHealthCheck(
+    deploymentId: string,
+  ): Promise<ResolvedHealthCheck | undefined> {
     const hc = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       select: {
@@ -2235,23 +2260,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         healthCheckTimeout: true,
         healthCheckRetries: true,
         startupFailureThreshold: true,
+        healthCheckOverride: true,
+        dockerfileHealthCheck: true,
       },
     });
-    if (!hc || !hc.healthCheckEnabled) return undefined;
-    return {
-      enabled: hc.healthCheckEnabled,
-      type: hc.healthCheckType,
-      path: hc.healthCheckPath,
-      port: hc.healthCheckPort,
-      command: hc.healthCheckCommand,
-      livenessEnabled: hc.livenessEnabled,
-      readinessEnabled: hc.readinessEnabled,
-      startupEnabled: hc.startupEnabled,
-      interval: hc.healthCheckInterval,
-      timeout: hc.healthCheckTimeout,
-      retries: hc.healthCheckRetries,
-      startupFailureThreshold: hc.startupFailureThreshold,
-    };
+    if (!hc) return undefined;
+    return resolveHealthCheck(hc);
   }
 
   async updateDeploymentVolumes(
@@ -4589,6 +4603,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployEnabled: true,
         cpuRequestMilli: true,
         healthCheckEnabled: true,
+        healthCheckOverride: true,
+        dockerfileHealthCheck: true,
         imagePullPolicy: true,
         composeStackId: true,
         project: { select: { organizationId: true } },
@@ -4623,6 +4639,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Compose owns its services' config, so telling someone to change it here
     // would send them somewhere that rejects the change.
     const editable = !deployment.composeStackId;
+    const hasDockerfileHealthCheck = !deployment.healthCheckOverride
+      && !!coerceDockerfileHealthCheck(deployment.dockerfileHealthCheck);
 
     return {
       steps: [
@@ -4634,7 +4652,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         { id: 'domain', applicable: editable && hasPublicPort, done: hasCustomDomain },
         { id: 'resources', applicable: editable, done: deployment.cpuRequestMilli != null },
         { id: 'notifications', applicable: true, done: ruleCount + settingCount > 0 },
-        { id: 'health-check', applicable: editable, done: deployment.healthCheckEnabled },
+        {
+          id: 'health-check',
+          applicable: editable,
+          // A repo that declares its own HEALTHCHECK has already done this
+          // step, and being told to do it again is how a nudge becomes noise.
+          done: deployment.healthCheckEnabled || hasDockerfileHealthCheck,
+        },
         // No pull-policy step: a moving tag now defaults to Always, so the only
         // way to be on IfNotPresent is to have chosen it, and nagging someone
         // about a deliberate choice is just noise.
@@ -6084,6 +6108,55 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Read the repo's `HEALTHCHECK`, if it has one, so the probes follow the
+   * Dockerfile instead of a second copy of the same intent kept in Orchard.
+   *
+   * Re-read on every build rather than once at create time: the instruction
+   * lives in the repo, so adding, changing or deleting it is a commit, and the
+   * probes have to move with it. A build that succeeds must never fail over
+   * this, so every error here leaves the last known answer in place.
+   */
+  private async detectDockerfileHealthCheck(
+    deploymentId: string,
+    source: {
+      repoUrl: string;
+      branch: string;
+      dockerfilePath: string;
+      target?: string | null;
+      accessToken?: string | null;
+    } | null,
+  ) {
+    try {
+      let detected: ReturnType<typeof parseDockerfileHealthCheck> = null;
+
+      if (source) {
+        if (!source.accessToken) return;
+        const repo = this.githubService.parseRepoUrl(source.repoUrl);
+        if (!repo) return;
+
+        const content = await this.githubService.getFileContent(
+          source.accessToken, repo.owner, repo.repo, source.dockerfilePath, source.branch,
+        );
+        detected = parseDockerfileHealthCheck(content, source.target);
+      }
+
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          dockerfileHealthCheck: detected
+            ? (detected as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        },
+      });
+    } catch (error) {
+      console.warn(
+        `[Projects] Dockerfile health check detection failed for ${deploymentId}:`,
+        error.message,
+      );
+    }
+  }
+
+  /**
    * The volumes a deployment should be running with, read now.
    *
    * The build path is handed a snapshot of these when the build is queued, and
@@ -6275,6 +6348,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         );
       }
 
+      // Read before the deploy step, which resolves the probes from the
+      // deployment row: an edited HEALTHCHECK lands with the build that
+      // carries it, not one build late. A Railpack build has no Dockerfile at
+      // all and a local-context build ships one Orchard never sees, so either
+      // way anything read from an earlier build is dropped rather than left
+      // probing an image that never had the command.
+      const readsDockerfile = data.buildType !== 'railpack' && !data.localContextKey;
+      await this.detectDockerfileHealthCheck(
+        deploymentId,
+        readsDockerfile
+          ? {
+              repoUrl: data.repoUrl,
+              branch: data.branch,
+              dockerfilePath: data.dockerfilePath || 'Dockerfile',
+              target: data.target,
+              accessToken: githubAccessToken ?? data.githubAccessToken,
+            }
+          : null,
+      );
+
       const buildStartTime = Date.now();
 
       let localContextUrl: string | undefined;
@@ -6420,8 +6513,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         });
 
         // Same reasoning for probes: heal deployments whose health checks were
-        // dropped from the live spec.
-        const hc = await this.loadHealthCheckOptions(deploymentId);
+        // dropped from the live spec. Applied even when nothing is configured,
+        // because a HEALTHCHECK deleted from the Dockerfile has to take its
+        // probes out of the live pod with it. The patch is a no-op when the
+        // spec already matches, so this costs a rebuild nothing.
+        const hc = await this.resolveStoredHealthCheck(deploymentId);
         if (hc) {
           await this.k8sWorkload.updateDeploymentHealthCheck({
             namespace: data.namespace,
@@ -6431,6 +6527,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             path: hc.path,
             port: hc.port,
             command: hc.command,
+            execCommand: hc.execCommand,
             livenessEnabled: hc.livenessEnabled,
             readinessEnabled: hc.readinessEnabled,
             startupEnabled: hc.startupEnabled,

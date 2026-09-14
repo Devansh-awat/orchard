@@ -6108,6 +6108,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -6191,6 +6197,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -6299,6 +6334,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -7184,6 +7222,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -7267,6 +7311,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -7375,6 +7448,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -8230,6 +8306,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -8313,6 +8395,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -8421,6 +8532,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -9234,6 +9348,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -9317,6 +9437,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -9425,6 +9574,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -10276,6 +10428,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -10359,6 +10517,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -10467,6 +10654,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -11297,6 +11487,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -11380,6 +11576,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -11488,6 +11713,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -12496,6 +12724,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "availableReplicas": {
                       "type": "number"
                     },
@@ -12582,6 +12816,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -12716,6 +12979,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -13663,11 +13929,18 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "paths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
                     }
                   },
                   "required": [
                     "enabled",
                     "branch",
+                    "paths",
                     "appInstalled"
                   ],
                   "type": "object"
@@ -13728,6 +14001,12 @@
                     },
                     "autoDeployEnabled": {
                       "type": "boolean"
+                    },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
                     },
                     "buildCommand": {
                       "type": [
@@ -13812,6 +14091,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -13920,6 +14228,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -14717,6 +15028,13 @@
                 "properties": {
                   "branch": {
                     "type": "string"
+                  },
+                  "paths": {
+                    "description": "Glob patterns a push must touch to trigger a build. Empty deploys on every push. Prefix a pattern with ! to exclude. Omit to leave unchanged.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -14741,6 +15059,12 @@
                     },
                     "autoDeployEnabled": {
                       "type": "boolean"
+                    },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
                     },
                     "buildCommand": {
                       "type": [
@@ -14825,6 +15149,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -14933,6 +15286,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -15801,6 +16157,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "availableReplicas": {
                       "type": "number"
                     },
@@ -15887,6 +16249,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -16021,6 +16412,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -17204,6 +17598,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -17287,6 +17687,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -17395,6 +17824,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -18358,6 +18790,9 @@
                   "healthCheckInterval": {
                     "type": "integer"
                   },
+                  "healthCheckOverride": {
+                    "type": "boolean"
+                  },
                   "healthCheckPath": {
                     "type": "string"
                   },
@@ -18416,6 +18851,12 @@
                     },
                     "autoDeployEnabled": {
                       "type": "boolean"
+                    },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
                     },
                     "availableReplicas": {
                       "type": "number"
@@ -18503,6 +18944,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -18637,6 +19107,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -19599,6 +20072,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -19687,6 +20166,35 @@
                         "null"
                       ]
                     },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -19749,6 +20257,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -20226,6 +20737,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -20309,6 +20826,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -20417,6 +20963,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -22150,6 +22699,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -22238,6 +22793,35 @@
                         "null"
                       ]
                     },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -22300,6 +22884,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -22498,6 +23085,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -22581,6 +23174,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -22689,6 +23311,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -23517,6 +24142,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -23605,6 +24236,35 @@
                         "null"
                       ]
                     },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -23667,6 +24327,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -23992,6 +24655,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -24075,6 +24744,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -24183,6 +24881,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -25085,6 +25786,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -25173,6 +25880,35 @@
                         "null"
                       ]
                     },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -25235,6 +25971,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -25476,6 +26215,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -25559,6 +26304,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -25667,6 +26441,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -28631,6 +29408,12 @@
                         "autoDeployEnabled": {
                           "type": "boolean"
                         },
+                        "autoDeployPaths": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
                         "buildCommand": {
                           "type": [
                             "string",
@@ -28719,6 +29502,35 @@
                             "null"
                           ]
                         },
+                        "dockerfileHealthCheck": {
+                          "properties": {
+                            "command": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "interval": {
+                              "type": "number"
+                            },
+                            "retries": {
+                              "type": "number"
+                            },
+                            "startPeriod": {
+                              "type": "number"
+                            },
+                            "timeout": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "command"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
                         "dockerfilePath": {
                           "type": [
                             "string",
@@ -28781,6 +29593,9 @@
                         },
                         "healthCheckInterval": {
                           "type": "number"
+                        },
+                        "healthCheckOverride": {
+                          "type": "boolean"
                         },
                         "healthCheckPath": {
                           "type": [
@@ -36159,6 +36974,12 @@
                       "autoDeployEnabled": {
                         "type": "boolean"
                       },
+                      "autoDeployPaths": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
                       "buildCommand": {
                         "type": [
                           "string",
@@ -36242,6 +37063,35 @@
                       },
                       "detectedConfig": {
                         "additionalProperties": {},
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "dockerfileHealthCheck": {
+                        "properties": {
+                          "command": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "interval": {
+                            "type": "number"
+                          },
+                          "retries": {
+                            "type": "number"
+                          },
+                          "startPeriod": {
+                            "type": "number"
+                          },
+                          "timeout": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "command"
+                        ],
                         "type": [
                           "object",
                           "null"
@@ -36350,6 +37200,9 @@
                       },
                       "healthCheckInterval": {
                         "type": "number"
+                      },
+                      "healthCheckOverride": {
+                        "type": "boolean"
                       },
                       "healthCheckPath": {
                         "type": [
@@ -37291,6 +38144,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -37374,6 +38233,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -37482,6 +38370,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [
@@ -38475,6 +39366,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "autoDeployPaths": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "buildCommand": {
                       "type": [
                         "string",
@@ -38558,6 +39455,35 @@
                     },
                     "detectedConfig": {
                       "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "dockerfileHealthCheck": {
+                      "properties": {
+                        "command": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "interval": {
+                          "type": "number"
+                        },
+                        "retries": {
+                          "type": "number"
+                        },
+                        "startPeriod": {
+                          "type": "number"
+                        },
+                        "timeout": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "command"
+                      ],
                       "type": [
                         "object",
                         "null"
@@ -38666,6 +39592,9 @@
                     },
                     "healthCheckInterval": {
                       "type": "number"
+                    },
+                    "healthCheckOverride": {
+                      "type": "boolean"
                     },
                     "healthCheckPath": {
                       "type": [

@@ -1496,6 +1496,7 @@ export class DeploymentsController {
       healthCheckTimeout: number;
       healthCheckRetries: number;
       startupFailureThreshold: number;
+      healthCheckOverride?: boolean;
     },
     @Request() req
   ) {

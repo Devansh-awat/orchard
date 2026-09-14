@@ -59,6 +59,7 @@
 		healthCheckTimeout = $bindable(5),
 		healthCheckRetries = $bindable(3),
 		startupFailureThreshold = $bindable(30),
+		healthCheckOverride = $bindable(false),
 		savingHealthCheck,
 		isEditingHealthCheck = $bindable(false),
 		onSaveHealthCheck,
@@ -135,6 +136,7 @@
 		healthCheckTimeout: number;
 		healthCheckRetries: number;
 		startupFailureThreshold: number;
+		healthCheckOverride: boolean;
 		savingHealthCheck: boolean;
 		isEditingHealthCheck: boolean;
 		onSaveHealthCheck: () => void;
@@ -244,6 +246,7 @@
 				bind:healthCheckTimeout
 				bind:healthCheckRetries
 				bind:startupFailureThreshold
+				bind:healthCheckOverride
 				{savingHealthCheck}
 				bind:isEditingHealthCheck
 				{onSaveHealthCheck}
@@ -327,6 +330,7 @@
 				bind:healthCheckTimeout
 				bind:healthCheckRetries
 				bind:startupFailureThreshold
+				bind:healthCheckOverride
 				{savingHealthCheck}
 				bind:isEditingHealthCheck
 				{onSaveHealthCheck}
@@ -378,6 +382,7 @@
 				bind:healthCheckTimeout
 				bind:healthCheckRetries
 				bind:startupFailureThreshold
+				bind:healthCheckOverride
 				{savingHealthCheck}
 				bind:isEditingHealthCheck
 				{onSaveHealthCheck}

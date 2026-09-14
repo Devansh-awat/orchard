@@ -118,6 +118,7 @@
 		ImageHistory,
 		Volume,
 		AutoDeployStatus,
+		DockerfileHealthCheck,
 		GitHubAppInstallation,
 		GitHubDeploymentRecord,
 		ServicePortForm,
@@ -183,6 +184,8 @@
 		healthCheckTimeout?: number;
 		healthCheckRetries?: number;
 		startupFailureThreshold?: number;
+		dockerfileHealthCheck?: DockerfileHealthCheck | null;
+		healthCheckOverride?: boolean;
 		cpuRequestMilli?: number | null;
 		memoryRequestBytes?: number | null;
 		totalCpuUsage?: number | null;
@@ -521,6 +524,7 @@
 	let healthCheckTimeout = $state(5);
 	let healthCheckRetries = $state(3);
 	let startupFailureThreshold = $state(30);
+	let healthCheckOverride = $state(false);
 	let savingHealthCheck = $state(false);
 	let isEditingHealthCheck = $state(false);
 
@@ -1354,6 +1358,7 @@
 				healthCheckTimeout = data.healthCheckTimeout ?? 5;
 				healthCheckRetries = data.healthCheckRetries ?? 3;
 				startupFailureThreshold = data.startupFailureThreshold ?? 30;
+				healthCheckOverride = data.healthCheckOverride ?? false;
 			}
 
 			// Sync resource state (unless user has unsaved edits).
@@ -2060,7 +2065,8 @@
 					healthCheckInterval,
 					healthCheckTimeout,
 					healthCheckRetries,
-					startupFailureThreshold
+					startupFailureThreshold,
+					healthCheckOverride
 				})
 			});
 
@@ -3139,6 +3145,7 @@
 							bind:healthCheckTimeout
 							bind:healthCheckRetries
 							bind:startupFailureThreshold
+							bind:healthCheckOverride
 							{savingHealthCheck}
 							bind:isEditingHealthCheck
 							onSaveHealthCheck={saveHealthCheck}

@@ -105,6 +105,14 @@ export interface Volume {
 	readOnly: boolean;
 }
 
+export interface DockerfileHealthCheck {
+	command: string[];
+	interval?: number;
+	timeout?: number;
+	retries?: number;
+	startPeriod?: number;
+}
+
 export interface Deployment {
 	id: string;
 	name: string;
@@ -162,6 +170,8 @@ export interface Deployment {
 	healthCheckTimeout?: number;
 	healthCheckRetries?: number;
 	startupFailureThreshold?: number;
+	dockerfileHealthCheck?: DockerfileHealthCheck | null;
+	healthCheckOverride?: boolean;
 	cpuRequestMilli?: number | null;
 	memoryRequestBytes?: number | null;
 	totalCpuUsage?: number | null;
