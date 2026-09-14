@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.27.0](https://github.com/hackclub/orchard/compare/frontend/v1.26.1...frontend/v1.27.0) (2026-09-14)
+
+
+### Features
+
+* probe apps with the HEALTHCHECK their Dockerfile declares ([#44](https://github.com/hackclub/orchard/issues/44)) ([4afc98b](https://github.com/hackclub/orchard/commit/4afc98b71eaf5e83ed2d4135c29c54cb43b00fde))
+
+
+### Bug Fixes
+
+* **frontend:** make the setup logo petals actually appear ([dd6e533](https://github.com/hackclub/orchard/commit/dd6e5333988b9e2c6f8d5a3fa6839ed7e2c28b42))
+* **frontend:** show the project icon you set, on the tile you set it for ([#45](https://github.com/hackclub/orchard/issues/45)) ([93f873e](https://github.com/hackclub/orchard/commit/93f873e347594867772d9d8e3a48fe9452cd8615))
+* **server:** make a deployment's secret env vars write-only and encrypted at rest ([d5f82d9](https://github.com/hackclub/orchard/commit/d5f82d99b07ddfabd8995fcf96c37ae8875c25fb))
+
 ## [1.26.1](https://github.com/hackclub/orchard/compare/frontend/v1.26.0...frontend/v1.26.1) (2026-09-11)
 
 

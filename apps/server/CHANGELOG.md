@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.34.0](https://github.com/hackclub/orchard/compare/server/v2.33.0...server/v2.34.0) (2026-09-14)
+
+
+### Features
+
+* probe apps with the HEALTHCHECK their Dockerfile declares ([#44](https://github.com/hackclub/orchard/issues/44)) ([4afc98b](https://github.com/hackclub/orchard/commit/4afc98b71eaf5e83ed2d4135c29c54cb43b00fde))
+
+
+### Bug Fixes
+
+* **server:** enforce env-pinned config locks outside the admin panel ([fd181d9](https://github.com/hackclub/orchard/commit/fd181d94dc121fc14532e07b1ec9831448a0283a))
+* **server:** make a deployment's secret env vars write-only and encrypted at rest ([d5f82d9](https://github.com/hackclub/orchard/commit/d5f82d99b07ddfabd8995fcf96c37ae8875c25fb))
+
 ## [2.33.0](https://github.com/hackclub/orchard/compare/server/v2.32.0...server/v2.33.0) (2026-09-13)
 
 
