@@ -82,7 +82,7 @@
 		const mark = document.querySelector('.setup-mark');
 
 		if (!decorativeMotion() || !mark) {
-			root.style.setProperty('--setup-band', band(RESTING_BAND));
+			rest();
 			settle();
 			return;
 		}
@@ -100,7 +100,7 @@
 		await pause(360);
 		animate(
 			petals,
-			{ transform: 'scale(1)', opacity: [0, 1] },
+			{ scale: [0, 1], opacity: [0, 1] },
 			{
 				...transition('bouncy'),
 				delay: stagger(0.15)
@@ -161,8 +161,12 @@
 		return new Promise<void>((resolve) => setTimeout(resolve, ms));
 	}
 
-	function skip() {
-		if (done) return;
+	// The resting frame, written directly rather than animated. Both the skip
+	// handler and the reduced-motion path need it: every piece of the lockup
+	// starts hidden in CSS and is revealed by the overture, so anything that
+	// bypasses the overture has to reveal it or the mark renders as an empty
+	// outline with no petals and no word.
+	function rest() {
 		const root = document.documentElement;
 		root.style.setProperty('--setup-band', band(RESTING_BAND));
 		document.querySelectorAll('.setup-petal').forEach((el) => {
@@ -191,6 +195,11 @@
 		const crestEl = document.querySelector('.setup-crest') as HTMLElement | null;
 		if (wash) wash.style.opacity = '1';
 		if (crestEl) crestEl.style.opacity = '1';
+	}
+
+	function skip() {
+		if (done) return;
+		rest();
 		settle();
 	}
 
@@ -258,18 +267,22 @@
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M29.4148 15.7062C30.4602 18.5784 28.9793 21.7542 26.1072 22.7996C23.235 23.8449 20.0592 22.364 19.0138 19.4919C17.9685 16.6197 19.4493 13.4439 22.3215 12.3986C25.1937 11.3532 28.3695 12.8341 29.4148 15.7062Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M36.9862 36.5081C38.0315 39.3803 36.5506 42.5561 33.6785 43.6014C30.8063 44.6468 27.6305 43.1659 26.5852 40.2938C25.5398 37.4216 27.0207 34.2458 29.8928 33.2004C32.765 32.1551 35.9408 33.6359 36.9862 36.5081Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M43.6015 22.3216C44.6469 25.1937 43.166 28.3695 40.2938 29.4149C37.4217 30.4603 34.2459 28.9794 33.2005 26.1072C32.1551 23.2351 33.636 20.0593 36.5082 19.0139C39.3803 17.9685 42.5561 19.4494 43.6015 22.3216Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M22.7995 29.8928C23.8449 32.7649 22.364 35.9407 19.4918 36.9861C16.6196 38.0315 13.4439 36.5506 12.3985 33.6784C11.3531 30.8063 12.834 27.6305 15.7062 26.5851C18.5783 25.5397 21.7541 27.0206 22.7995 29.8928Z"
 				/>
 			</svg>
@@ -295,18 +308,22 @@
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M29.4148 15.7062C30.4602 18.5784 28.9793 21.7542 26.1072 22.7996C23.235 23.8449 20.0592 22.364 19.0138 19.4919C17.9685 16.6197 19.4493 13.4439 22.3215 12.3986C25.1937 11.3532 28.3695 12.8341 29.4148 15.7062Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M36.9862 36.5081C38.0315 39.3803 36.5506 42.5561 33.6785 43.6014C30.8063 44.6468 27.6305 43.1659 26.5852 40.2938C25.5398 37.4216 27.0207 34.2458 29.8928 33.2004C32.765 32.1551 35.9408 33.6359 36.9862 36.5081Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M43.6015 22.3216C44.6469 25.1937 43.166 28.3695 40.2938 29.4149C37.4217 30.4603 34.2459 28.9794 33.2005 26.1072C32.1551 23.2351 33.636 20.0593 36.5082 19.0139C39.3803 17.9685 42.5561 19.4494 43.6015 22.3216Z"
 				/>
 				<path
 					class="setup-petal"
+					opacity="0"
 					d="M22.7995 29.8928C23.8449 32.7649 22.364 35.9407 19.4918 36.9861C16.6196 38.0315 13.4439 36.5506 12.3985 33.6784C11.3531 30.8063 12.834 27.6305 15.7062 26.5851C18.5783 25.5397 21.7541 27.0206 22.7995 29.8928Z"
 				/>
 			</svg>
@@ -414,8 +431,14 @@
 		fill: currentColor;
 	}
 
+	/*
+	  The hidden start is `opacity="0"` on each path, and it has to stay an
+	  attribute. Motion writes opacity on an SVG element as a presentation
+	  attribute, which any CSS declaration outranks, so an `opacity: 0` here
+	  pins the petals invisible while the animation runs to completion against
+	  a value nothing is reading.
+	*/
 	.setup-petal {
-		opacity: 0;
 		transform-box: fill-box;
 		transform-origin: center;
 		transform: scale(0);
