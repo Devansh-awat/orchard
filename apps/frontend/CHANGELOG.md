@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.2](https://github.com/hackclub/orchard/compare/frontend/v1.27.1...frontend/v1.27.2) (2026-09-14)
+
+
+### Bug Fixes
+
+* **frontend:** restore the setup overture's original pacing ([cf9cae5](https://github.com/hackclub/orchard/commit/cf9cae5ac39e37094e31478c5d58055905672745))
+
 ## [1.27.1](https://github.com/hackclub/orchard/compare/frontend/v1.27.0...frontend/v1.27.1) (2026-09-14)
 
 
