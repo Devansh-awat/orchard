@@ -64,8 +64,9 @@ they work against the published site from anywhere.
 ## Orchard's own MCP is a different thing
 
 Orchard itself **does** have an MCP server, and it is remote. It exposes the
-platform rather than the docs: deploying, databases, logs, scaling. It lives at
-`https://your-orchard/mcp` and is documented under [MCP for agents](/mcp/).
+platform rather than the docs: deploying, databases, logs, scaling. It answers on
+its own hostname, `mcp.<your orchard domain>`, and is documented under
+[MCP for agents](/mcp/).
 
 So: point your agent at Orchard's MCP to _operate_ the platform, and at
 `llms.txt` to _read_ about it.

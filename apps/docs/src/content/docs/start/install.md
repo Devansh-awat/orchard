@@ -12,6 +12,9 @@ There are two paths, and picking the wrong one causes most install problems.
 - **A cluster you already operate** → the Helm chart. Do _not_ run the installer
   on an existing cluster; it will try to install k3s underneath you.
 
+You can also [hand the installer to an agent](#hand-it-to-an-agent) rather than
+driving it yourself.
+
 ## A bare Linux box
 
 ```bash
@@ -90,6 +93,52 @@ Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
 `ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,
 `ORCHARD_ZOT_NODE_PORT`, `ORCHARD_REGISTRY_HOST`, `ORCHARD_TUNNEL_TOKEN`,
 `ORCHARD_MCP`, `ORCHARD_MCP_DOMAIN`, `K3S_VERSION`, `GATEWAY_API_VERSION`.
+
+### Hand it to an agent
+
+The installer is a single command with an environment variable for every
+prompt, which makes it something you can delegate. Give an agent SSH on the box
+and this page, and it can do the whole thing.
+
+Point it at the markdown rather than pasting instructions, so it can re-read
+what it needs:
+
+```
+Install Orchard on <host> following https://docs.orchard.my/start/install.md
+My domain is example.com and my email is me@example.com.
+Ask me before anything that is not reversible.
+```
+
+Four things it cannot work out on its own, so decide them first or expect to be
+asked:
+
+| Decision                  | Why it is yours                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `public`, `tunnel`, `lan` | It can detect NAT, not whether you intend to expose this box                                  |
+| The domain                | Nothing on the box knows what you own                                                         |
+| The DNS records           | It probably has no access to your DNS provider, and the records must exist **before** the run |
+| Whether to proceed        | The installer takes over ports 80 and 443 and installs k3s system-wide                        |
+
+Three things to make sure it gets right, because each fails in a way that is
+quiet rather than loud:
+
+- **amd64 and a real machine.** The installer refuses other architectures, and
+  k3s cannot nest inside a Docker container. An agent that decides to "try it
+  in a container anyway" produces a cluster whose kubelet never starts a pod.
+- **DNS first.** In `public` mode the certificates are issued over HTTP-01, so
+  a record that does not exist yet means a certificate that never arrives. The
+  installer prints the records and waits.
+- **`--yes` skips the questions, not the requirements.** Unattended, a missing
+  MCP record leaves the MCP off rather than prompting, and the run reports it.
+
+At the end it prints a **claim link**. That link is the credential: single use,
+and it signs in as the instance superadmin. Treat it like a password, and open
+it yourself rather than letting the agent follow it. If it is lost or used,
+`sudo orchardctl claim` mints another.
+
+Once you are in, the agent can drive the instance it just built over
+[Orchard's own MCP](/mcp/), which the installer publishes at
+`mcp.<your domain>`.
 
 ### Sizing
 
