@@ -128,7 +128,7 @@
 				transform: ['rotateX(80deg) translateY(34px)', 'rotateX(0deg) translateY(0px)'],
 				filter: ['blur(14px)', 'blur(0px)']
 			},
-			{ ...transition('smooth'), delay: stagger(0.05) }
+			{ ...transition('smooth'), delay: stagger(0.09) }
 		);
 
 		await pause(1020);
@@ -147,35 +147,17 @@
 		await pause(640);
 
 		// The closing move covers most of the viewport twice over: the band drops
-		// about 95% of the screen and the lockup flies half of it while shrinking
-		// to a third. At a flat spring that is a few hundred pixels per frame and
-		// reads as a cut rather than a move, so both get a duration scaled to how
-		// far they actually travel.
+		// about 95% of the screen while the lockup flies half of it and shrinks
+		// to under a third. `cinematic` is sized for exactly this; the panel
+		// springs turn it into a cut, which is what it had become.
 		const travel = window.innerHeight / 2 - 52;
-		const bandDrop = window.innerHeight * (1.15 - RESTING_BAND);
-		// The lockup does not only travel, it shrinks to under a third, so its
-		// edges sweep much further than its centre does. Pacing it on the centre
-		// alone reads as a snap on a short viewport, where the centre moves less
-		// than the distance the spring treats as short in the first place.
-		const lockupBox = (lockups[0] as HTMLElement | undefined)?.getBoundingClientRect();
-		const sweep = lockupBox
-			? travel + (Math.hypot(lockupBox.width, lockupBox.height) / 2) * (1.05 - 0.3)
-			: travel;
-		animate(
-			root,
-			{ '--setup-band': [null, band(RESTING_BAND)] },
-			transition('smooth', { distance: bandDrop })
-		);
-		animate(
-			lockups,
-			{ scale: [1.05, 0.3], y: [0, -travel] },
-			transition('smooth', { distance: sweep })
-		);
-		animate([mark], { rotate: [0, -14] }, transition('smooth', { distance: sweep }));
-		// Short enough that the card is already rising while the lockup is still
-		// on its way up. Waiting for the flight to land first made them two
-		// events: the scene finished, then a card appeared on top of it.
-		await pause(180);
+		animate(root, { '--setup-band': [null, band(RESTING_BAND)] }, transition('cinematic'));
+		animate(lockups, { scale: [1.05, 0.3], y: [0, -travel] }, transition('cinematic'));
+		animate([mark], { rotate: [0, -14] }, transition('cinematic'));
+		// Roughly two thirds of the way through the flight, which is where the
+		// card used to arrive: late enough to read as following the lockup up
+		// rather than racing it, early enough that they are still one move.
+		await pause(400);
 		settle();
 	}
 

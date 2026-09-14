@@ -15,7 +15,7 @@
 import { animate } from 'motion';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
 
-export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive';
+export type SpringName = 'smooth' | 'snappy' | 'bouncy' | 'interactive' | 'cinematic';
 
 type Keyframes = Record<string, unknown>;
 type Options = Record<string, unknown>;
@@ -34,7 +34,14 @@ const SPRINGS: Record<SpringName, { visualDuration: number; bounce: number }> = 
 	smooth: { visualDuration: 0.26, bounce: 0.2 },
 	snappy: { visualDuration: 0.19, bounce: 0.25 },
 	bouncy: { visualDuration: 0.28, bounce: 0.45 },
-	interactive: { visualDuration: 0.1, bounce: 0.2 }
+	interactive: { visualDuration: 0.1, bounce: 0.2 },
+	// Full-viewport choreography, not chrome: the setup overture's closing move
+	// travels half the screen while shrinking to a third, and it is seen once.
+	// Measured off the build this was tuned on, that move ran about 0.75s to
+	// settle; the four springs above are all sized for a panel and turn it into
+	// a cut, which is what it had become. Low bounce because something this large overshooting reads as a
+	// wobble rather than as life. Do not reach for this for UI chrome.
+	cinematic: { visualDuration: 0.8, bounce: 0.14 }
 };
 
 /** Exits leave quicker and looser than entrances, the way the demo's do. */

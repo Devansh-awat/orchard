@@ -1,12 +1,30 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { animate } from 'motion';
-	import { transition, motionEnabled, motionStagger } from '$lib/utils/motion.svelte';
+	import { onMount } from 'svelte';
+	import { transition, motionEnabled, motion } from '$lib/utils/motion.svelte';
 
 	let { total, index, children }: { total: number; index: number; children: Snippet } = $props();
 
 	let shell = $state<HTMLElement | null>(null);
+	let wrap = $state<HTMLElement | null>(null);
 	let measured = 0;
+
+	// The card is mounted the moment the overture settles, so with no entrance
+	// it is painted in the same frame the lockup is still flying to the top and
+	// the two read as a cut. It rises from below through a blur instead, which
+	// is the same idiom the step-to-step swaps use, sized for the one that
+	// arrives under a full-screen move rather than inside a settled card.
+	onMount(() => {
+		if (!wrap || !motionEnabled()) return;
+		const target = wrap;
+		target.classList.add('motion-entering');
+		motion(
+			target,
+			{ opacity: [0, 1], y: [44, 0], filter: ['blur(12px)', 'blur(0px)'] },
+			'cinematic'
+		)?.finished.then(() => target.classList.remove('motion-entering'));
+	});
 
 	export function grow() {
 		if (!shell || !motionEnabled()) return;
@@ -24,13 +42,7 @@
 	}
 </script>
 
-<!--
-  The card is mounted the moment the overture settles, so without an entrance it
-  is painted in the same frame the lockup is still flying to the top, and the
-  two read as a cut. Rising in underneath the lockup makes one move out of what
-  was two events.
--->
-<div class="setup-card-wrap" {@attach motionStagger({ from: { y: 26 } })}>
+<div class="setup-card-wrap" bind:this={wrap}>
 	<div class="setup-halo"></div>
 	<div class="setup-card" bind:this={shell}>
 		<div class="setup-dots">

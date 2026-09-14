@@ -51,6 +51,7 @@ Springs are described the way SwiftUI describes them, by perceptual duration and
 | `snappy` | 0.19 | 0.25 | the default. popovers, toggles, hover, chevrons, panel chrome |
 | `bouncy` | 0.28 | 0.45 | one-shot celebratory pops, sparingly |
 | `interactive` | 0.1 | 0.2 | press feedback and anything tracking the pointer |
+| `cinematic` | 0.6 | 0.14 | full-viewport choreography seen once, like the setup overture. Never chrome |
 
 Keep bounce high and duration low. The bounce is what reads as alive; the duration is what reads as slow. The folder demo's 0.37s is sized for a full-screen gesture — application chrome opening a panel wants a fraction of that.
 
