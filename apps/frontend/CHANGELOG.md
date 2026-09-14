@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/hackclub/orchard/compare/frontend/v1.27.0...frontend/v1.27.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **frontend:** let the setup scene land instead of cutting to the card ([eeb983d](https://github.com/hackclub/orchard/commit/eeb983da42d9cb21976a0a4657252df4553602c7))
+
 ## [1.27.0](https://github.com/hackclub/orchard/compare/frontend/v1.26.1...frontend/v1.27.0) (2026-09-14)
 
 
