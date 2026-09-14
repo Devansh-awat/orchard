@@ -68,6 +68,17 @@ export function rawToEnvVars(raw: string): { key: string; value: string }[] {
 	return parsed;
 }
 
+export function rawToEnvVarsKeepingSecrets(
+	raw: string,
+	previous: { key: string; value: string; secret?: boolean }[]
+): { key: string; value: string; secret?: boolean }[] {
+	const before = new Map(previous.map((e) => [e.key, e]));
+	return rawToEnvVars(raw).map((e) => {
+		const old = before.get(e.key);
+		return old?.secret && e.value === '' ? { ...e, secret: true } : e;
+	});
+}
+
 export interface DetectedApp {
 	dir: string;
 	framework: string;

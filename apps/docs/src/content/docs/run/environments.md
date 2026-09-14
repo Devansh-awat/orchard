@@ -26,11 +26,15 @@ one, so staging and production differ without maintaining duplicate projects.
 
 ## Secrets
 
-Secret values are **encrypted at rest** and are **write-only in the UI**: once
-saved you can replace a value but not read it back. That is deliberate. A
-dashboard that will happily print every production credential to anyone with a
-session is a liability, and "I need to check what it is" is almost always
-"I need to set it again".
+Secret values are **encrypted at rest** and are **write-only**: once saved you
+can replace a value but not read it back, through the dashboard, the CLI, the
+API or MCP alike. That is deliberate. A dashboard that will happily print every
+production credential to anyone with a session is a liability, and "I need to
+check what it is" is almost always "I need to set it again".
+
+They also reach the container through the app's own Kubernetes Secret rather
+than inline in the pod spec, so `kubectl get deploy -o yaml` shows a reference
+and not the value.
 
 Size limits apply, because environment variables are not a file store.
 

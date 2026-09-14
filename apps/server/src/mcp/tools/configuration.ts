@@ -2,6 +2,12 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
 
+interface EnvVarInput {
+  key: string;
+  value: string | null;
+  secret?: boolean;
+}
+
 export function registerConfigurationTools(server: McpServer, client: OrchardClient) {
   // ── Environment Variables ─────────────────────────────────────────
 
@@ -17,6 +23,8 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
         envVars: z.array(z.object({
           key: z.string().describe('Environment variable name'),
           value: z.string().describe('Environment variable value'),
+          secret: z.boolean().optional()
+            .describe('Store in the deployment Kubernetes Secret. Write-only: reads never return it'),
         })).describe('Array of environment variable key-value pairs'),
       },
     },
@@ -37,13 +45,19 @@ This fetches the current env vars, merges in the provided ones (overwriting any 
         envVars: z.array(z.object({
           key: z.string().describe('Environment variable name'),
           value: z.string().describe('Environment variable value'),
+          secret: z.boolean().optional()
+            .describe('Store in the deployment Kubernetes Secret. Write-only: reads never return it'),
         })).describe('Array of environment variable key-value pairs to add or update'),
       },
     },
     async ({ deploymentId, envVars }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
-      const existing: { key: string; value: string }[] = (deployment.envVars || []).map(
-        (v: { key: string; value: string }) => ({ key: v.key, value: v.value }),
+      // A secret reads back with no value and its flag intact. Carrying both
+      // over is what keeps this a merge: a null value tells the server to keep
+      // what is stored, and dropping the flag would ask it to republish a
+      // secret in the clear, which it refuses.
+      const existing: EnvVarInput[] = (deployment.envVars || []).map(
+        (v: EnvVarInput) => ({ key: v.key, value: v.value ?? null, secret: v.secret }),
       );
 
       const newKeys = new Set(envVars.map((v) => v.key));

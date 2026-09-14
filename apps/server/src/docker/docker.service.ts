@@ -161,10 +161,13 @@ export class DockerService {
           select: { key: true, value: true, secret: true },
         })
         : [];
-      // Secret shared values are encrypted at rest — decrypt before resolving.
+      // Secret values are encrypted at rest — decrypt before resolving.
       const shared = sharedRows.map((v) => this.secretCrypto.maybeDecrypt(v));
 
-      const { resolved, errors } = resolveEnvVars(deployment.envVars, shared);
+      const { resolved, errors } = resolveEnvVars(
+        deployment.envVars.map((v) => this.secretCrypto.maybeDecrypt(v)),
+        shared,
+      );
       for (const e of errors) {
         await this.appendLog(
           deploymentId,
@@ -293,8 +296,12 @@ export class DockerService {
 
         if (deployment?.envVars && Array.isArray(deployment.envVars)) {
           for (const envVar of deployment.envVars) {
-            if (envVar.value && typeof envVar.value === 'string') {
-              secrets.push(`${envVar.key}=${envVar.value}`);
+            // Masking works on what the build actually sees, so a secret has to
+            // be back in plaintext here or the log would leak the value this
+            // list exists to hide.
+            const value = this.secretCrypto.maybeDecrypt(envVar).value;
+            if (value && typeof value === 'string') {
+              secrets.push(`${envVar.key}=${value}`);
             }
           }
         }

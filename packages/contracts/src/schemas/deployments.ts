@@ -7,7 +7,10 @@ const bigIntString = z.union([z.string(), z.number()]);
 
 const envVarInput = z.object({
   key: z.string(),
-  value: z.string(),
+  // A secret value is write-only: reads return null, and sending null back
+  // (or a blank on a row that is secret before and after) keeps what is
+  // stored, so a read-modify-write client never has to know one to keep one.
+  value: z.string().nullable().optional(),
   secret: z.boolean().optional(),
 });
 

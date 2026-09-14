@@ -672,11 +672,11 @@ export class ProjectsService {
       project.deployments.map(async (deployment) => {
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment);
 
-        const merged = {
+        const merged = DeploymentsService.redactSecretEnv({
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           status: computedStatus,
-        };
+        });
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged);
       })
     );

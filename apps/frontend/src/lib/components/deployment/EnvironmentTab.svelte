@@ -3,7 +3,7 @@
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from '$lib/utils/transitions';
 	import { SectionCard } from '$lib/components/ui';
-	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
+	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
 
 	let {
 		envVars = $bindable<Array<{ key: string; value: string; secret?: boolean }>>(),
@@ -51,7 +51,7 @@
 		if (mode === 'raw') {
 			envRawText = envVarsToRaw(envVars);
 		} else {
-			const parsed = rawToEnvVars(envRawText);
+			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
 			envVars = [...parsed, { key: '', value: '' }];
 		}
 		envViewMode = mode;
@@ -59,7 +59,7 @@
 
 	function handleSave() {
 		if (envViewMode === 'raw') {
-			const parsed = rawToEnvVars(envRawText);
+			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
 			envVars = [...parsed, { key: '', value: '' }];
 		}
 		isEditing = false;
@@ -98,6 +98,7 @@
 			{#each envVars as env, index (index)}
 				{@const isRevealed = revealedIndices.has(index)}
 				{@const hasKey = env.key.trim().length > 0}
+				{@const withheld = Boolean(env.secret) && env.value === ''}
 				<div class="env-row" transition:slide={{ duration: 150 }}>
 					<div class="env-row-inner">
 						<div class="env-key-col">
@@ -111,34 +112,38 @@
 						</div>
 						<div class="env-val-col">
 							<input
-								type={isRevealed ? 'text' : 'password'}
+								type={isRevealed && !withheld ? 'text' : 'password'}
 								bind:value={env.value}
-								placeholder={hasKey ? 'value' : ''}
+								placeholder={withheld ? 'Unchanged' : hasKey ? 'value' : ''}
 								class="env-val-input"
 								onfocus={() => (isEditing = true)}
 							/>
 						</div>
 						<div class="env-actions">
-							<button
-								type="button"
-								onclick={() => toggleReveal(index)}
-								class="env-action-btn"
-								aria-label={isRevealed ? 'Hide' : 'Show'}
-							>
-								{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye
-										size={14}
-										class="h-3.5 w-3.5"
-									/>{/if}
-							</button>
+							{#if !withheld}
+								<button
+									type="button"
+									onclick={() => toggleReveal(index)}
+									class="env-action-btn"
+									aria-label={isRevealed ? 'Hide' : 'Show'}
+								>
+									{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye
+											size={14}
+											class="h-3.5 w-3.5"
+										/>{/if}
+								</button>
+							{/if}
 							<button
 								type="button"
 								onclick={() => toggleSecret(index)}
 								class="env-action-btn"
 								class:env-action-secret={env.secret}
 								aria-label={env.secret
-									? 'Secret (stored in a Kubernetes Secret)'
+									? 'Secret (write-only, stored in a Kubernetes Secret)'
 									: 'Mark as secret'}
-								title={env.secret ? 'Secret — stored in a Kubernetes Secret' : 'Mark as secret'}
+								title={env.secret
+									? 'Secret — write-only, stored in a Kubernetes Secret'
+									: 'Mark as secret'}
 							>
 								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen
 										size={14}

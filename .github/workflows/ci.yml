@@ -242,6 +242,11 @@ jobs:
         run: pnpm --filter server test:instance-config
       - name: Instance toggle tests
         run: pnpm --filter server test:instance-settings
+      # A secret variable is write-only: it lives in the deployment's Kubernetes
+      # Secret and no read hands it back. Pins the keep rules that let a client
+      # edit one variable in a set it cannot fully read.
+      - name: Env secret write-only tests
+        run: pnpm --filter server test:env-secret-write-only
       # A hostname with no record is not a visible outage, it is a certificate
       # that never issues. Pins which names are expected, that the wildcard is
       # probed rather than assumed, and that "resolves elsewhere" stays advisory

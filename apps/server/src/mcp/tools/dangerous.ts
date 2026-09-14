@@ -152,9 +152,15 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
     },
     async ({ deploymentId, keys }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
-      const existing: { key: string; value: string }[] = (deployment.envVars || []).map(
-        (v: { key: string; value: string }) => ({ key: v.key, value: v.value }),
-      );
+      // A secret reads back with no value: keep its flag and send null so the
+      // ones being kept are kept, not republished or blanked.
+      const existing: { key: string; value: string | null; secret?: boolean }[] = (
+        deployment.envVars || []
+      ).map((v: { key: string; value: string | null; secret?: boolean }) => ({
+        key: v.key,
+        value: v.value ?? null,
+        secret: v.secret,
+      }));
 
       const keysToDelete = new Set(keys);
       const filtered = existing.filter((v) => !keysToDelete.has(v.key));

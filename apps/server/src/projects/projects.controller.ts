@@ -1380,7 +1380,7 @@ export class DeploymentsController {
     @Param('id') id: string,
     @Body()
     body: {
-      env: { key: string; value: string; secret?: boolean }[];
+      env: { key: string; value?: string | null; secret?: boolean }[];
     },
     @Request() req
   ) {

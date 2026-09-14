@@ -42,6 +42,7 @@ import { BuildQueueService, QueueSnapshot } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
+import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
 import {
   coerceDockerfileHealthCheck,
   resolveHealthCheck,
@@ -247,15 +248,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       .then((d) => d !== null)
       .catch(() => false);
     if (!exists) return;
-    const envVars = await this.prisma.deploymentEnvVar.findMany({
-      where: { deploymentId: deployment.id },
-      select: { key: true, value: true, secret: true },
-    });
+    const envVars = await this.readOwnEnvVars(deployment.id);
     const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
-    const { resolved } = resolveEnvVars(
-      envVars.map((e) => ({ key: e.key, value: e.value, secret: e.secret })),
-      sharedVars,
-    );
+    const { resolved } = resolveEnvVars(envVars, sharedVars);
     await this.k8sWorkload.updateDeploymentEnv({
       namespace: deployment.namespace,
       deploymentName: deployment.name,
@@ -916,13 +911,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           warnings,
         });
 
-        const merged = {
+        const merged = DeploymentsService.redactSecretEnv({
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           pods,
           status: computedStatus,
           warnings,
-        };
+        });
         return access.canEdit ? merged : this.scrubDeploymentForViewer(merged as any);
       })
     );
@@ -1567,7 +1562,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   async updateDeploymentEnvVars(
     deploymentId: string,
-    env: { key: string; value: string; secret?: boolean }[],
+    env: EnvVarWrite[],
     clerkId: string,
     userData?: {
       email?: string;
@@ -1600,16 +1595,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
-    const envEntries = Array.isArray(env)
-      ? env
-          .filter((entry) => entry && typeof entry.key === 'string')
-          .map((entry) => ({
-            key: entry.key.trim(),
-            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean(entry.secret),
-          }))
-          .filter((entry) => entry.key.length > 0)
-      : [];
+    const before = new Map(
+      (await this.readOwnEnvVars(deployment.id)).map((v) => [v.key, v]),
+    );
+    const envEntries = applyEnvKeepRules(Array.isArray(env) ? env : [], before);
 
     // Env keys get interpolated into Dockerfile ARG/ENV directives and shell
     // commands in the builder; a key with a newline or shell metachar would
@@ -1654,11 +1643,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const previousEnvVars = await this.prisma.deploymentEnvVar.findMany({
-      where: { deploymentId: deployment.id },
-      select: { key: true, value: true },
-    });
-    const prevMap = new Map(previousEnvVars.map((e) => [e.key, e.value]));
+    // Compare plaintext against plaintext: a secret is ciphertext at rest, so
+    // reading the rows raw would call every secret changed on every save.
+    const prevMap = new Map(Array.from(before, ([k, v]) => [k, v.value]));
     const newMap = new Map(envList.map((e) => [e.key, e.value]));
     const added: string[] = [];
     const removed: string[] = [];
@@ -1681,7 +1668,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           data: envList.map((entry) => ({
             deploymentId: deployment.id,
             key: entry.key,
-            value: entry.value,
+            value: this.crypto.encryptIfSecret(entry.value, entry.secret),
             secret: entry.secret,
           })),
         });
@@ -3707,7 +3694,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     })) || [];
 
     const { resolved: env } = resolveEnvVars(
-      deployment.envVars.map((ev) => ({ key: ev.key, value: ev.value, secret: ev.secret })),
+      deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
       await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
     );
 
@@ -4059,6 +4046,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * A deployment's own variables with secret values back in plaintext. Only
+   * things that hand a value to the cluster or the builder may call this — a
+   * response reaches a client, and a secret that reaches a client is one that
+   * was never write-only in the first place.
+   */
+  private async readOwnEnvVars(
+    deploymentId: string,
+  ): Promise<{ key: string; value: string; secret: boolean }[]> {
+    const own = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId },
+      select: { key: true, value: true, secret: true },
+    });
+    return own.map((v) => this.crypto.maybeDecrypt(v));
+  }
+
+  /**
    * Load a deployment's own env vars + its environment's shared vars, resolve
    * ${{shared.KEY}} references, and return the injectable list. Used by both
    * the runtime (pod env) and build (build args) paths so they never diverge.
@@ -4067,12 +4070,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     environmentId: string | null,
   ): Promise<{ resolved: EnvVar[]; errors: { key: string; missingRef: string }[] }> {
-    const own = await this.prisma.deploymentEnvVar.findMany({
-      where: { deploymentId },
-      select: { key: true, value: true, secret: true },
-    });
+    const own = await this.readOwnEnvVars(deploymentId);
     const shared = await this.loadSharedVarsForDeployment(deploymentId, environmentId);
     return resolveEnvVars(own, shared);
+  }
+
+  /**
+   * A secret value is write-only: it goes into the deployment's Kubernetes
+   * Secret and is never handed back, so nobody can read out a key they were
+   * only ever meant to set. Applied on the way out rather than on the way in,
+   * because the same rows feed the pod spec and the builder in plaintext.
+   */
+  static redactSecretEnv<
+    T extends { envVars?: { value: string | null; secret?: boolean }[] | null },
+  >(d: T): T {
+    if (!d?.envVars) return d;
+    return {
+      ...d,
+      envVars: d.envVars.map((ev) => (ev.secret ? { ...ev, value: null } : ev)),
+    };
   }
 
   scrubDeploymentForViewer<
@@ -4410,7 +4426,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       result.ingresses = result.ingresses.map((ing: any) => scrubIngress(ing));
     }
 
-    return result;
+    return DeploymentsService.redactSecretEnv(result);
   }
 
   normalizeServicePortInputs(
@@ -5099,7 +5115,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           data: env.map((entry) => ({
             deploymentId: deployment.id,
             key: entry.key,
-            value: entry.value,
+            value: this.crypto.encryptIfSecret(entry.value, entry.secret),
             secret: entry.secret,
           })),
         });
@@ -5528,7 +5544,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         data: env.map((entry) => ({
           deploymentId: deployment.id,
           key: entry.key,
-          value: entry.value,
+          value: this.crypto.encryptIfSecret(entry.value, entry.secret),
           secret: entry.secret,
         })),
       });
@@ -5819,7 +5835,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         data: env.map((entry) => ({
           deploymentId: deployment.id,
           key: entry.key,
-          value: entry.value,
+          value: this.crypto.encryptIfSecret(entry.value, entry.secret),
           secret: entry.secret,
         })),
       });
@@ -5973,14 +5989,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }))
       : [{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }];
 
-    const storedEnv = await this.prisma.deploymentEnvVar.findMany({
-      where: { deploymentId: deployment.id },
-    });
+    const storedEnv = await this.readOwnEnvVars(deployment.id);
     const sharedVars = await this.loadSharedVarsForDeployment('', deployment.environmentId);
-    const { resolved: resolvedEnv } = resolveEnvVars(
-      storedEnv.map((e) => ({ key: e.key, value: e.value, secret: e.secret })),
-      sharedVars,
-    );
+    const { resolved: resolvedEnv } = resolveEnvVars(storedEnv, sharedVars);
 
     const volumes = (deployment.volumes ?? []).map((vol) => ({
       name: vol.name,
@@ -7232,7 +7243,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     })) || [];
 
     const { resolved: env } = resolveEnvVars(
-      deployment.envVars.map((ev) => ({ key: ev.key, value: ev.value, secret: ev.secret })),
+      deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
       await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
     );
 

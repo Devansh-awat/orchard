@@ -16,7 +16,7 @@
 		formatBuildElapsed,
 		sanitizeLogs,
 		envVarsToRaw,
-		rawToEnvVars
+		rawToEnvVarsKeepingSecrets
 	} from '$lib/components/deployment/deployment-helpers';
 	import { resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
@@ -1567,7 +1567,7 @@
 		isEditingEnv = false;
 		try {
 			if (envViewMode === 'raw') {
-				const parsed = rawToEnvVars(envRawText);
+				const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
 				envVars = [...parsed, { key: '', value: '' }];
 			}
 			const filteredEnv = envVars.filter((e) => e.key.trim());
@@ -1914,7 +1914,7 @@
 		if (mode === 'raw') {
 			envRawText = envVarsToRaw(envVars);
 		} else {
-			const parsed = rawToEnvVars(envRawText);
+			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
 			envVars = [...parsed, { key: '', value: '' }];
 		}
 		envViewMode = mode;

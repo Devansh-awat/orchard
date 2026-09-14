@@ -59,6 +59,12 @@ const MEMORY_UNITS: Record<string, number> = {
   gib: 1024 ** 3,
 };
 
+interface PreservedEnv {
+  key: string;
+  value: string;
+  secret: boolean;
+}
+
 @Injectable()
 export class ComposeStacksService {
   private readonly logger = new Logger(ComposeStacksService.name);
@@ -337,14 +343,17 @@ export class ComposeStacksService {
     }
   }
 
+  // A preserved value keeps whatever the child was marked as: dropping the flag
+  // would republish a secret as an inline env var on the next apply, and its
+  // stored value is ciphertext that only the secret flag knows how to read.
   private mergeComposeEnv(
     composeEnv: { key: string; value: string }[],
-    preserved?: { key: string; value: string }[],
-  ): { key: string; value: string }[] {
-    const merged = new Map<string, string>();
-    for (const e of preserved ?? []) merged.set(e.key, e.value);
-    for (const e of composeEnv ?? []) merged.set(e.key, e.value);
-    return Array.from(merged.entries()).map(([key, value]) => ({ key, value }));
+    preserved?: PreservedEnv[],
+  ): PreservedEnv[] {
+    const merged = new Map<string, PreservedEnv>();
+    for (const e of preserved ?? []) merged.set(e.key, e);
+    for (const e of composeEnv ?? []) merged.set(e.key, { ...e, secret: false });
+    return Array.from(merged.values());
   }
 
   private async deployChildren(
@@ -352,7 +361,7 @@ export class ComposeStacksService {
     services: ParsedComposeService[],
     clerkId: string,
     userData?: UserData,
-    preservedEnv?: Map<string, { key: string; value: string }[]>,
+    preservedEnv?: Map<string, PreservedEnv[]>,
   ) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack disappeared');
@@ -468,10 +477,10 @@ export class ComposeStacksService {
       where: { composeStackId: stackId },
       select: {
         composeServiceName: true,
-        envVars: { select: { key: true, value: true } },
+        envVars: { select: { key: true, value: true, secret: true } },
       },
     });
-    const preservedEnv = new Map<string, { key: string; value: string }[]>();
+    const preservedEnv = new Map<string, PreservedEnv[]>();
     for (const child of existingChildren) {
       if (child.composeServiceName) preservedEnv.set(child.composeServiceName, child.envVars);
     }

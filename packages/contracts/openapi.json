@@ -17563,12 +17563,14 @@
                           "type": "boolean"
                         },
                         "value": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
-                        "key",
-                        "value"
+                        "key"
                       ],
                       "type": "object"
                     },
@@ -38014,12 +38016,14 @@
                           "type": "boolean"
                         },
                         "value": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
-                        "key",
-                        "value"
+                        "key"
                       ],
                       "type": "object"
                     },
@@ -39209,12 +39213,14 @@
                           "type": "boolean"
                         },
                         "value": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
-                        "key",
-                        "value"
+                        "key"
                       ],
                       "type": "object"
                     },

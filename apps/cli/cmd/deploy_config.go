@@ -52,10 +52,14 @@ func deployEnvGetCmd() *cobra.Command {
 			rows := [][]string{}
 			for _, v := range vars {
 				secret := ""
+				val := pick(v, "value")
 				if v["secret"] == true {
 					secret = "yes"
+					val = output.Dim("(write-only)")
+				} else if v["value"] == nil {
+					val = output.Dim("(hidden)")
 				}
-				rows = append(rows, []string{pick(v, "key"), pick(v, "value"), secret})
+				rows = append(rows, []string{pick(v, "key"), val, secret})
 			}
 			output.Table([]string{"key", "value", "secret"}, rows)
 			return nil

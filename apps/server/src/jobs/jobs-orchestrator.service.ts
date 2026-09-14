@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import {
   KubernetesService,
   buildPlacement,
@@ -74,6 +75,7 @@ export class JobsOrchestratorService {
     private readonly notifications: NotificationsService,
     private readonly nodes: NodesService,
     private readonly jobsService: JobsService,
+    private readonly crypto: SecretCryptoService,
   ) {}
 
   // Resolve a job's step-pod scheduling: org hostname allow/deny + assigned
@@ -166,7 +168,11 @@ export class JobsOrchestratorService {
     const deployment = step.deploymentId
       ? await this.prisma.deployment.findUnique({
           where: { id: step.deploymentId },
-          select: { id: true, image: true, envVars: { select: { key: true, value: true } } },
+          select: {
+            id: true,
+            image: true,
+            envVars: { select: { key: true, value: true, secret: true } },
+          },
         })
       : null;
     if (!deployment) {
@@ -180,8 +186,10 @@ export class JobsOrchestratorService {
       );
     }
 
+    // The app's secret values are ciphertext at rest and the job runs them for
+    // real, so they come back to plaintext here the same as for a pod.
     const merged = new Map<string, string>();
-    for (const e of deployment.envVars) merged.set(e.key, e.value);
+    for (const e of deployment.envVars) merged.set(e.key, this.crypto.maybeDecrypt(e).value);
     for (const e of base.envVars) merged.set(e.key, e.value);
 
     return {
