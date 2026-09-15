@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.35.0](https://github.com/hackclub/orchard/compare/server/v2.34.2...server/v2.35.0) (2026-09-15)
+
+
+### Features
+
+* **server:** make the pod shell fast, reconnecting and colour-capable ([d428970](https://github.com/hackclub/orchard/commit/d428970618d3b9232c53781f8a468bd9428ca239))
+* **server:** tell people when something signs in to their account ([f18f117](https://github.com/hackclub/orchard/commit/f18f117d079399033c5100a2515ae1a3ccbf5ac5))
+
+
+### Bug Fixes
+
+* repair the seed script after the workspace models were removed ([#54](https://github.com/hackclub/orchard/issues/54)) ([187090b](https://github.com/hackclub/orchard/commit/187090bd7ec945edc2660c655b9869ff625de30e))
+* **server:** fill email placeholders the formatter padded ([a349bcb](https://github.com/hackclub/orchard/commit/a349bcbde184da5dccea73651d9491d25bf0e0c2))
+* **server:** give the pod shell its real size, a heartbeat and no nagle ([254dc97](https://github.com/hackclub/orchard/commit/254dc970ecc17a8d2b8b3e104a47bb9df998abf4))
+* **server:** put the sign-in details in the email that asks if it was you ([e197b34](https://github.com/hackclub/orchard/commit/e197b34346954f7f479292ad30bdb1bfffdade37))
+
 ## [2.34.2](https://github.com/hackclub/orchard/compare/server/v2.34.1...server/v2.34.2) (2026-09-14)
 
 

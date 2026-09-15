@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.28.0](https://github.com/hackclub/orchard/compare/frontend/v1.27.3...frontend/v1.28.0) (2026-09-15)
+
+
+### Features
+
+* make consoles follow the theme and improve log timestamps ([#52](https://github.com/hackclub/orchard/issues/52)) ([586d4d7](https://github.com/hackclub/orchard/commit/586d4d7a118820d3e34ecb46c0faeb9e7ee448c0))
+* **server:** make the pod shell fast, reconnecting and colour-capable ([d428970](https://github.com/hackclub/orchard/commit/d428970618d3b9232c53781f8a468bd9428ca239))
+* **server:** tell people when something signs in to their account ([f18f117](https://github.com/hackclub/orchard/commit/f18f117d079399033c5100a2515ae1a3ccbf5ac5))
+
+
+### Bug Fixes
+
+* **server:** give the pod shell its real size, a heartbeat and no nagle ([254dc97](https://github.com/hackclub/orchard/commit/254dc970ecc17a8d2b8b3e104a47bb9df998abf4))
+
 ## [1.27.3](https://github.com/hackclub/orchard/compare/frontend/v1.27.2...frontend/v1.27.3) (2026-09-14)
 
 
