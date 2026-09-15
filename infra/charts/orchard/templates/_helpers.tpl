@@ -169,6 +169,10 @@ still has to name it.
             - name: REDIS_URL
               value: {{ default (printf "redis://redis.%s.svc.cluster.local:6379" .Values.namespace) .Values.redis.url | quote }}
             {{- end }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             {{- if and .Values.builders.enabled .Values.builders.dedicatedNode.enabled }}
             - { name: BUILDER_DEDICATED_NODE, value: "true" }
             {{- end }}

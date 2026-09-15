@@ -1004,6 +1004,11 @@
 		if (tab) tab.title = title.trim().slice(0, 80);
 	}
 
+	function setTerminalSession(id: string, handle: string) {
+		const tab = terminalTabs.find((t) => t.id === id);
+		if (tab) tab.sessionHandle = handle;
+	}
+
 	function setTerminalBell(id: string) {
 		const tab = terminalTabs.find((t) => t.id === id);
 		if (tab && activeConsoleTab !== id) tab.bell = true;
@@ -1494,6 +1499,7 @@
 						onCloseTerminalTab={closeTerminalTab}
 						onTerminalTitle={setTerminalTitle}
 						onTerminalBell={setTerminalBell}
+						onTerminalSession={setTerminalSession}
 						{podShortName}
 					/>
 				</section>

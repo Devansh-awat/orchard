@@ -253,6 +253,7 @@ export interface TerminalTabInfo {
 	label: string;
 	title?: string;
 	bell?: boolean;
+	sessionHandle?: string;
 }
 
 export type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';

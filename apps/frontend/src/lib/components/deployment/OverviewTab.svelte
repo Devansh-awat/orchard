@@ -57,6 +57,7 @@
 		onCloseTerminalTab,
 		onTerminalTitle,
 		onTerminalBell,
+		onTerminalSession,
 		onSelectLogsPod,
 		onPointerDown,
 		onPointerMove,
@@ -96,6 +97,7 @@
 		onCloseTerminalTab: (id: string) => void;
 		onTerminalTitle?: (id: string, title: string) => void;
 		onTerminalBell?: (id: string) => void;
+		onTerminalSession?: (id: string, handle: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
 		onPointerDown: (e: PointerEvent) => void;
 		onPointerMove: (e: PointerEvent) => void;
@@ -443,8 +445,10 @@
 						namespace={deployment.namespace || 'default'}
 						container={ttab.container}
 						visible={activeConsoleTab === ttab.id}
+						sessionHandle={ttab.sessionHandle}
 						onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
 						onBell={() => onTerminalBell?.(ttab.id)}
+						onSession={(handle) => onTerminalSession?.(ttab.id, handle)}
 					/>
 				{/each}
 			</div>

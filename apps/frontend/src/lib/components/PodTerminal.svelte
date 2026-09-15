@@ -16,11 +16,22 @@
 		namespace: string;
 		container: string;
 		visible?: boolean;
+		sessionHandle?: string;
 		onTitle?: (title: string) => void;
 		onBell?: () => void;
+		onSession?: (handle: string) => void;
 	}
 
-	let { podName, namespace, container, visible = true, onTitle, onBell }: Props = $props();
+	let {
+		podName,
+		namespace,
+		container,
+		visible = true,
+		sessionHandle,
+		onTitle,
+		onBell,
+		onSession
+	}: Props = $props();
 
 	let terminalRef = $state<HTMLDivElement | null>(null);
 	let terminal: any = null;
@@ -41,10 +52,12 @@
 	let disposed = false;
 	let appliedFontSize = 0;
 	let lastChunkHadOsc = false;
+	let currentHandle: string | null = sessionHandle ?? null;
+	let wasReconnect = false;
 
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder('utf-8');
-	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4500]);
+	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4409, 4429, 4500]);
 	const MAX_RETRIES = 40;
 	const DEFAULT_FONT_SIZE = 12;
 
@@ -140,6 +153,47 @@
 		return false;
 	}
 
+	interface AttachedFrame {
+		type: 'attached';
+		handle: string;
+		resumed: boolean;
+		reason: 'new' | 'resumed' | 'expired' | 'moved' | 'denied';
+		replayedBytes: number;
+		truncated: boolean;
+	}
+
+	function handleControl(raw: string) {
+		let frame: Partial<AttachedFrame> | null = null;
+		try {
+			frame = JSON.parse(raw);
+		} catch {
+			return;
+		}
+		if (!frame || frame.type !== 'attached' || typeof frame.handle !== 'string') return;
+		currentHandle = frame.handle;
+		onSession?.(frame.handle);
+		predictor?.flush('disconnect');
+		const reconnecting = wasReconnect;
+		wasReconnect = false;
+		if (frame.resumed) {
+			if (reconnecting) status('reconnected, session resumed');
+			if (terminal && ws && ws.readyState === WebSocket.OPEN) {
+				ws.send(
+					JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows, force: true })
+				);
+			}
+			return;
+		}
+		if (!reconnecting) return;
+		terminal?.write('\x1b[H\x1b[2J\x1b[3J');
+		if (frame.reason === 'expired') status('previous session expired, started a new shell');
+		else if (frame.reason === 'moved') {
+			status('reconnected on a different server, started a new shell');
+		} else if (frame.reason === 'denied') {
+			status('could not resume that session, started a new shell');
+		} else status('reconnected, started a new shell');
+	}
+
 	function onFocusIn() {
 		if (terminal?.getMode?.(1004)) sendRaw('\x1b[I');
 	}
@@ -210,7 +264,8 @@
 
 	function connectWebSocket() {
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}`;
+		const session = currentHandle ? `&session=${encodeURIComponent(currentHandle)}` : '';
+		const wsUrl = `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${session}`;
 
 		const socket = new WebSocket(wsUrl);
 		socket.binaryType = 'arraybuffer';
@@ -220,15 +275,16 @@
 			if (ws !== socket) return;
 			connected = true;
 			error = null;
-			if (retries > 0 && terminal) {
-				status('reconnected');
-			}
 			retries = 0;
 			openTerminal();
 		};
 
 		socket.onmessage = (event) => {
 			if (ws !== socket || !terminal) return;
+			if (typeof event.data === 'string') {
+				handleControl(event.data);
+				return;
+			}
 			if (!(event.data instanceof ArrayBuffer)) return;
 			const text = decoder.decode(event.data, { stream: true });
 			lastChunkHadOsc = text.includes('\x1b]');
@@ -250,6 +306,7 @@
 				return;
 			}
 			if (terminal && retries === 0) status('disconnected, reconnecting');
+			wasReconnect = true;
 			scheduleReconnect();
 		};
 
@@ -295,9 +352,7 @@
 		}
 		detachSocket();
 		predictor?.flush('disconnect');
-		if (terminal) {
-			terminal.write('\x1b[2J\x1b[H');
-		}
+		wasReconnect = terminal !== null;
 		connectWebSocket();
 	}
 
@@ -348,6 +403,7 @@
 			reconnectTimer = null;
 		}
 		detachSocket();
+		wasReconnect = terminal !== null;
 		connectWebSocket();
 	}
 

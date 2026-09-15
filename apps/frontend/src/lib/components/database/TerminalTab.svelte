@@ -40,6 +40,7 @@
 		onCloseTerminalTab,
 		onTerminalTitle,
 		onTerminalBell,
+		onTerminalSession,
 		podShortName
 	}: {
 		database: DatabaseDetail;
@@ -71,6 +72,7 @@
 		onCloseTerminalTab: (id: string) => void;
 		onTerminalTitle?: (id: string, title: string) => void;
 		onTerminalBell?: (id: string) => void;
+		onTerminalSession?: (id: string, handle: string) => void;
 		podShortName: (name: string) => string;
 	} = $props();
 
@@ -290,8 +292,10 @@
 					namespace={database.namespace!}
 					container={ttab.container}
 					visible={activeConsoleTab === ttab.id}
+					sessionHandle={ttab.sessionHandle}
 					onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
 					onBell={() => onTerminalBell?.(ttab.id)}
+					onSession={(handle) => onTerminalSession?.(ttab.id, handle)}
 				/>
 			{/each}
 		</div>

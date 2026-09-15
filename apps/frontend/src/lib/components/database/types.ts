@@ -117,4 +117,5 @@ export interface TerminalTab {
 	label: string;
 	title?: string;
 	bell?: boolean;
+	sessionHandle?: string;
 }
