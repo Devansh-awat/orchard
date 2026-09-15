@@ -6,6 +6,7 @@ import { Transporter } from 'nodemailer';
 import mjml2html from 'mjml';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fillTemplate } from './render-template';
 
 export interface OrganizationInviteEmailData {
   recipientEmail: string;
@@ -130,11 +131,18 @@ export class EmailService {
       /\/$/,
       ''
     );
-    mjmlContent = mjmlContent.replaceAll('{{assetBaseUrl}}', assetBaseUrl);
-
-    for (const [key, value] of Object.entries(variables)) {
-      mjmlContent = mjmlContent.replaceAll(`{{${key}}}`, this.escapeHtml(value));
+    const { output, unresolved } = fillTemplate(mjmlContent, {
+      ...Object.fromEntries(
+        Object.entries(variables).map(([key, value]) => [key, this.escapeHtml(value)])
+      ),
+      assetBaseUrl
+    });
+    if (unresolved.length > 0) {
+      console.warn(
+        `Email template ${templateName} left ${unresolved.join(', ')} unfilled; the recipient would see the raw marker`
+      );
     }
+    mjmlContent = output;
 
     const { html, errors } = await mjml2html(mjmlContent);
     if (errors.length > 0) {

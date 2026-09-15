@@ -268,6 +268,12 @@ jobs:
       # edit one variable in a set it cannot fully read.
       - name: Env secret write-only tests
         run: pnpm --filter server test:env-secret-write-only
+      # The markers in the MJML templates are data a formatter is happy to
+      # reflow, and one did: a padded `{{ otpCode }}` stopped matching and the
+      # sign-in mail shipped the marker instead of the code. Renders every
+      # template with the variables its caller passes.
+      - name: Email template tests
+        run: pnpm --filter server test:email-template
       # A hostname with no record is not a visible outage, it is a certificate
       # that never issues. Pins which names are expected, that the wildcard is
       # probed rather than assumed, and that "resolves elsewhere" stays advisory

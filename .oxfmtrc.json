@@ -20,6 +20,7 @@
     "**/*.generated.json",
     "packages/contracts/openapi.json",
     "**/*.astro",
+    "**/*.mjml",
     "infra/**",
     ".github/**",
     "apps/cli/**",
