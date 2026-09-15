@@ -156,6 +156,10 @@ Nothing prompts when every answer is supplied. Each flag has an environment
 variable equivalent, and **flags win over environment variables**. Run
 `./install.sh --help` for the same list at the terminal.
 
+Taking the box down for a while is `sudo orchardctl stop`, and `sudo orchardctl
+start` brings it back. That stops k3s, so it takes deployed apps with it;
+nothing is deleted and nothing needs redeploying afterwards.
+
 `--yes` is what suppresses the prompts. Without it the installer still asks, it
 just pre-fills what you gave it.
 

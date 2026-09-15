@@ -19,6 +19,9 @@ orchardctl mcp ...           the MCP endpoint agents connect to
 orchardctl public-ip ...     default address for publicly exposed ports
 orchardctl hostname ...      extra names the dashboard answers on
 orchardctl claim             print a link to claim the instance and sign in
+orchardctl stop              stop this instance until you start it again
+orchardctl start             start it back up
+orchardctl restart           both, back to back
 orchardctl logs [service]    follow logs (server, frontend, mcp)
 orchardctl status            show the control-plane pods
 orchardctl sync              refresh these commands from the deployed image
@@ -26,7 +29,8 @@ orchardctl sync              refresh these commands from the deployed image
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
 `orchard-config` are the same program. `update`, `config`, `registry`,
-`policies`, `mcp`, `public-ip`, `hostname`, `claim` and `sync` need root, because the values
+`policies`, `mcp`, `public-ip`, `hostname`, `claim`, `stop`, `start`, `restart`
+and `sync` need root, because the values
 file is `0600` and the rest runs through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
@@ -265,6 +269,31 @@ Recovering signs you in as the email you enter, so use the same address as
 before. A different one creates a second superadmin. This grants nothing that
 root on the box did not already have: the same access mints the link, and can
 read the database it is stored in.
+
+## stop, start and restart
+
+```bash
+sudo orchardctl stop
+sudo orchardctl start
+sudo orchardctl restart
+```
+
+Everything Orchard runs is a pod, so there is nothing to stop above k3s and
+nothing below it worth leaving up: these stop and start the k3s service, which
+takes the dashboard, the API, your databases and every deployed app with it.
+
+Nothing is deleted. Disks stay where they are, and apps come back on their own
+when the node does, so nothing has to be redeployed. It is for taking a box off
+the network for an afternoon or freeing the machine up for something else, not
+for uninstalling.
+
+`start` waits for the node to report Ready rather than returning the moment
+systemd does, because the API server is not listening yet when it does. A
+reboot has the same effect: k3s comes back on its own.
+
+`restart` restarts **the cluster**, not the Orchard pods. To roll those without
+touching k3s, use `orchardctl update`, which redeploys the chart and restarts
+what needs it.
 
 ## logs and status
 

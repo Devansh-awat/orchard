@@ -29,6 +29,9 @@ var Aliases = []string{
 	"orchard-public-ip",
 	"orchard-claim",
 	"orchard-hostname",
+	"orchard-stop",
+	"orchard-start",
+	"orchard-restart",
 }
 
 // All is the registry, in the order it is listed by help. main.go is a
@@ -43,6 +46,9 @@ func All() []*cli.Command {
 		PublicIP(),
 		Hostname(),
 		Claim(),
+		Stop(),
+		Start(),
+		Restart(),
 		Logs(),
 		Status(),
 		Sync(),
