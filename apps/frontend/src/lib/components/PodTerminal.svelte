@@ -56,7 +56,7 @@
 		if (!ghosttyModule || !terminalRef || terminal) return;
 
 		terminal = new ghosttyModule.Terminal({
-			fontSize: 11,
+			fontSize: 12,
 			fontFamily: monoFontFor(terminalRef),
 			cursorBlink: true,
 			cursorStyle: 'bar',
@@ -233,11 +233,6 @@
 		flex: 1;
 		min-height: 0;
 		padding: 0.75rem;
-	}
-
-	.pod-terminal-canvas :global(.terminal) {
-		width: 100%;
-		height: 100%;
 	}
 
 	/* Hide the textarea's native blinking text caret */

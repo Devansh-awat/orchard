@@ -83,8 +83,16 @@ export function applyTerminalTheme(terminal: any, theme: TerminalTheme): void {
 	} catch {}
 }
 
+const TERMINAL_MONO =
+	"ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
+
 export function monoFontFor(el: HTMLElement): string {
-	return getComputedStyle(el).getPropertyValue('--font-mono').trim() || 'monospace';
+	const styles = getComputedStyle(el);
+	return (
+		styles.getPropertyValue('--font-mono-terminal').trim() ||
+		styles.getPropertyValue('--font-mono').trim() ||
+		TERMINAL_MONO
+	);
 }
 
 export function watchTerminalTheme(

@@ -54,6 +54,8 @@
 @theme {
 	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	--font-mono-terminal:
+		ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 	--color-primary-50: #ffffff;
 	--color-primary-100: #efdddf;
 	--color-primary-200: #ba9da0;
