@@ -58,6 +58,26 @@ func runWait(ctx context.Context, cl *api.Client, spec api.WaitSpec, timeout tim
 
 // firstIngressHost returns the first ingress host attached to a deployment
 // payload, or "".
+// firstIngressURL prefers the URL the API computed, because a self-hosted
+// instance may serve on ports other than 80 and 443 and the hostname alone
+// does not say so. The https://<host> fallback is for servers that predate it.
+func firstIngressURL(raw map[string]any) string {
+	ings, _ := raw["ingresses"].([]any)
+	for _, e := range ings {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		if u := str(m["url"]); u != "" {
+			return u
+		}
+		if h := str(m["host"]); h != "" {
+			return "https://" + h
+		}
+	}
+	return ""
+}
+
 func firstIngressHost(raw map[string]any) string {
 	ings, _ := raw["ingresses"].([]any)
 	for _, e := range ings {
@@ -89,8 +109,8 @@ func printDeploySuccess(ctx context.Context, cl *api.Client, apiURL, id string) 
 	if err := cl.GetJSON(ctx, deployPath(id), &raw); err != nil {
 		return
 	}
-	if host := firstIngressHost(raw); host != "" {
-		output.Successf("live at https://%s", host)
+	if target := firstIngressURL(raw); target != "" {
+		output.Successf("live at %s", target)
 	}
 	if slug := orgSlugOf(raw); slug != "" {
 		fmt.Fprintln(os.Stderr, "  "+output.Dim("dashboard")+"  "+strings.TrimRight(apiURL, "/")+"/"+slug+"/deployments/"+str(raw["id"]))

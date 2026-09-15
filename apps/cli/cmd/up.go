@@ -162,8 +162,8 @@ func upCmd() *cobra.Command {
 				output.Successf("created deployment %s (%s build)", name, buildType)
 				if u := str(created["url"]); u != "" {
 					output.Successf("will be live at %s (visible to your org until made public)", u)
-				} else if host := firstIngressHost(created); host != "" {
-					output.Successf("will be live at https://%s (visible to your org until made public)", host)
+				} else if target := firstIngressURL(created); target != "" {
+					output.Successf("will be live at %s (visible to your org until made public)", target)
 				}
 			}
 

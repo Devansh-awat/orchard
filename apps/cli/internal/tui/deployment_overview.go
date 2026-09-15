@@ -112,7 +112,7 @@ func (s *deploymentScreen) viewOverview(height int, strip string) string {
 		if i > 0 {
 			k = ""
 		}
-		row(k, stLink.Render("https://"+ig.Host))
+		row(k, stLink.Render(ingressURL(ig.URL, ig.Host)))
 	}
 
 	// top-right: resources — braille area graphs + usage-vs-request bars
@@ -312,4 +312,16 @@ func (s *deploymentScreen) shellPickerOverlay(base string) string {
 		lines[top+i] = lipgloss.PlaceHorizontal(s.w, lipgloss.Center, bl)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ingressURL prefers the URL the API computed: a self-hosted instance may serve
+// on ports other than 80 and 443, which the hostname alone does not say.
+func ingressURL(url, host string) string {
+	if url != "" {
+		return url
+	}
+	if host == "" {
+		return ""
+	}
+	return "https://" + host
 }

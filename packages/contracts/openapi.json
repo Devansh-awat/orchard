@@ -6954,6 +6954,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -6967,6 +6970,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -8072,6 +8078,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -8085,6 +8094,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -9160,6 +9172,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -9173,6 +9188,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -10206,6 +10224,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -10219,6 +10240,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -11290,6 +11314,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -11303,6 +11330,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -12353,6 +12383,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -12366,6 +12399,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -13747,6 +13783,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -13760,6 +13799,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -14876,6 +14918,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -14889,6 +14934,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -15938,6 +15986,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -15951,6 +16002,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -17192,6 +17246,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -17205,6 +17262,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -18536,6 +18596,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -18549,6 +18612,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -19947,6 +20013,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -19960,6 +20029,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -21687,6 +21759,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -21700,6 +21775,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -24043,6 +24121,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -24056,6 +24137,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -25621,6 +25705,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -25634,6 +25721,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -27329,6 +27419,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -27342,6 +27435,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -30610,6 +30706,9 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -30617,8 +30716,9 @@
                     "name",
                     "host",
                     "path",
-                    "routes",
-                    "tlsEnabled"
+                    "tlsEnabled",
+                    "url",
+                    "routes"
                   ],
                   "type": "object"
                 }
@@ -38256,6 +38356,9 @@
                                 "null"
                               ]
                             },
+                            "tlsEnabled": {
+                              "type": "boolean"
+                            },
                             "tlsHosts": {
                               "items": {
                                 "type": "string"
@@ -38269,6 +38372,9 @@
                               ]
                             },
                             "updatedAt": {
+                              "type": "string"
+                            },
+                            "url": {
                               "type": "string"
                             }
                           },
@@ -39432,6 +39538,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -39445,6 +39554,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -40660,6 +40772,9 @@
                               "null"
                             ]
                           },
+                          "tlsEnabled": {
+                            "type": "boolean"
+                          },
                           "tlsHosts": {
                             "items": {
                               "type": "string"
@@ -40673,6 +40788,9 @@
                             ]
                           },
                           "updatedAt": {
+                            "type": "string"
+                          },
+                          "url": {
                             "type": "string"
                           }
                         },
@@ -41500,6 +41618,9 @@
                     },
                     "tlsEnabled": {
                       "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -41508,6 +41629,7 @@
                     "host",
                     "path",
                     "tlsEnabled",
+                    "url",
                     "routes",
                     "basicAuthEnabled",
                     "protectionMode",

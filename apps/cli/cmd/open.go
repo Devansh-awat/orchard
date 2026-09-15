@@ -77,11 +77,10 @@ listed. Pass --dash to open the deployment's dashboard page instead.`,
 				}
 				target = strings.TrimRight(cfg.APIURL, "/") + "/" + slug + "/deployments/" + str(raw["id"])
 			} else {
-				host := firstIngressHost(raw)
-				if host == "" {
+				target = firstIngressURL(raw)
+				if target == "" {
 					return errors.New("this deployment has no URL; add a domain in the Network tab or recreate with --auto-url")
 				}
-				target = "https://" + host
 			}
 
 			output.Successf("opening %s", target)

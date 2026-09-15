@@ -50,6 +50,13 @@ import { StorageService } from '../organizations/storage.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
 import { ApplyExecutorService } from '../apply/apply-executor.service';
 import { formatSlug, scrubIngress, isPlatformGeneratedHost } from './projects.utils';
+
+const INGRESS_URL_SELECT = {
+  host: true,
+  path: true,
+  tlsSecretName: true,
+  entrypoints: true
+} as const;
 import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
 import { isObservedJobStatus } from './build-recovery';
@@ -779,7 +786,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ingresses: {
           select: {
             id: true,
-            host: true
+            host: true,
+            path: true,
+            tlsSecretName: true,
+            entrypoints: true
           }
         },
         services: {
@@ -787,7 +797,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             ingresses: {
               select: {
                 id: true,
-                host: true
+                host: true,
+                path: true,
+                tlsSecretName: true,
+                entrypoints: true
               }
             }
           }
@@ -847,7 +860,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         seen.add(ing.id);
         return true;
       });
-      return { ...rest, status: computedStatuses[i], ingresses: uniqueIngresses };
+      return {
+        ...rest,
+        status: computedStatuses[i],
+        ingresses: uniqueIngresses.map((ing) => scrubIngress(ing))
+      };
     });
   }
 
@@ -890,7 +907,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         updatedAt: true,
         githubRepo: true,
         githubBranch: true,
-        ingresses: { select: { host: true }, take: 1 },
+        ingresses: { select: INGRESS_URL_SELECT, take: 1 },
         project: { select: { name: true } }
       },
       orderBy: { updatedAt: 'desc' },
@@ -914,7 +931,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             displayName: true,
             image: true,
             buildStatus: true,
-            ingresses: { select: { host: true }, take: 1 },
+            ingresses: { select: INGRESS_URL_SELECT, take: 1 },
             project: { select: { name: true } }
           }
         }
@@ -923,7 +940,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       take: recentLimit
     });
 
-    return { active: activeBuilds, recent: recentBuilds };
+    return {
+      active: activeBuilds.map((d) => ({ ...d, ingresses: d.ingresses.map(scrubIngress) })),
+      recent: recentBuilds.map((b) =>
+        b.deployment
+          ? { ...b, deployment: { ...b.deployment, ingresses: b.deployment.ingresses.map(scrubIngress) } }
+          : b
+      )
+    };
   }
 
   async getProjectDeployments(projectId: string, clerkId: string, userData?: any) {

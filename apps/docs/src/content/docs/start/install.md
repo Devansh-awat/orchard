@@ -86,9 +86,11 @@ so routing is unaffected, and the dashboard's own links carry the port.
 misbehaving: `public` cannot move off 80 without giving up HTTP-01, and `tunnel`
 binds no host port for them to change.
 
-One gap worth knowing: the CLI still prints app URLs as `https://<host>` with no
-port, because the API hands it hostnames rather than URLs. The dashboard is
-correct; `orchard open` on a custom-port instance is not.
+The port reaches clients through the API rather than through their own
+guesswork: every ingress the API returns carries a `url` the server computed
+from `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT`, which the installer writes into
+the server and frontend environments. The dashboard, `orchard open`, `orchard
+up` and the TUI all use it.
 
 ### What it asks
 

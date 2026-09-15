@@ -69,6 +69,7 @@ type Deployment struct {
 	EnvVars           []EnvVar `json:"envVars"`
 	Ingresses         []struct {
 		Host string `json:"host"`
+		URL  string `json:"url"`
 	} `json:"ingresses"`
 }
 

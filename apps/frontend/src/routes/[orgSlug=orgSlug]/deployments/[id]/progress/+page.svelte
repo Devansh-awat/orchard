@@ -5,7 +5,7 @@
 	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, ExternalLink, X } from 'lucide-svelte';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
-	import { appUrl } from '$lib/appUrl';
+	import { ingressUrl } from '$lib/ingress-url';
 	import { Button, Alert, SectionCard, StatusDot, resourceStatus } from '$lib/components/ui';
 
 	interface Deployment {
@@ -188,8 +188,7 @@
 	const buildErrorLead = $derived(deployment?.buildError?.trim().split('\n')[0] ?? null);
 
 	const liveUrl = $derived.by(() => {
-		const host = deployment?.ingresses?.[0]?.host;
-		return host ? appUrl(host) : null;
+		return ingressUrl(deployment?.ingresses?.[0]) || null;
 	});
 </script>
 

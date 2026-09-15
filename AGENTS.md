@@ -28,3 +28,9 @@
 - Conventional Commits, enforced by commitlint; release-please cuts per-service releases from them.
 - New API endpoints must be recorded in the auth-coverage snapshot (`UPDATE_SNAPSHOT=1 pnpm --filter server test:auth-coverage`).
 - Prisma migrations: `pnpm --filter server prisma:migrate` for dev; never edit applied migrations.
+- Typecheck errors claiming a schema column "does not exist" mean a stale generated client, not a
+  missing migration. Check `schema.prisma` first, then `pnpm prisma:generate`.
+- A URL is server-computed, never assembled client-side. The API returns `url` on every ingress it
+  serialises (`scrubIngress`), because an instance may serve on ports other than 80 and 443 and the
+  hostname alone does not say so. Adding a new ingress payload means selecting `host`, `path`,
+  `tlsSecretName` and `entrypoints` and mapping it through `scrubIngress`.

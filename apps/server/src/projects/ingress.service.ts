@@ -26,6 +26,8 @@ import { ProjectsService } from './projects.service';
 import {
   formatSlug,
   scrubIngress,
+  ingressTlsEnabled,
+  ingressPublicUrl,
   truncateK8sName,
   platformWildcardDomains,
   desiredWildcardTls,
@@ -1507,7 +1509,6 @@ export class IngressService implements OnModuleInit {
 
     return {
       ...scrubIngress(ingress),
-      tlsEnabled: !!ingress.tlsSecretName,
       address: ingress.statusAddress,
       routes: k8sRoutes
     };
@@ -1600,7 +1601,8 @@ export class IngressService implements OnModuleInit {
       name: ingress.name,
       host: ingress.host,
       path: ingress.path,
-      tlsEnabled: !!ingress.tlsSecretName,
+      tlsEnabled: ingressTlsEnabled(ingress),
+      url: ingressPublicUrl(ingress),
       routes: k8sRoutes,
       basicAuthEnabled: hasBasicAuth,
       protectionMode: ingress.protectionMode,

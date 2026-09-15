@@ -143,18 +143,58 @@ export function stripR2ProxyCreds<
  * password hash must only ever leave the server via the dedicated
  * protection endpoints, which require project edit.
  */
+type IngressRouting = {
+  host?: string | null;
+  path?: string | null;
+  tlsSecretName?: string | null;
+  entrypoints?: string[] | null;
+};
+
+// One rule for the whole API. A certificate means TLS; without one the
+// entrypoint the route was created on decides, which is what keeps a tunnel
+// install (Cloudflare terminates, nothing in the cluster holds a certificate)
+// from advertising http:// URLs.
+export function ingressTlsEnabled(ing: IngressRouting): boolean {
+  if (ing.tlsSecretName) return true;
+  if (Array.isArray(ing.entrypoints) && ing.entrypoints.length > 0) {
+    return ing.entrypoints.includes('websecure');
+  }
+  return true;
+}
+
+// The URL a person can paste, which is not derivable from the hostname alone:
+// a self-hosted install may serve on ports other than 80 and 443, and only the
+// server knows which. Clients that build their own `https://${host}` are wrong
+// on those instances, so the API hands them a URL instead.
+export function ingressPublicUrl(ing: IngressRouting): string {
+  if (!ing.host) return '';
+  const [name, ...rest] = ing.host.split('/');
+  if (!name) return '';
+  const tls = ingressTlsEnabled(ing);
+  const configured = (tls ? process.env.PUBLIC_HTTPS_PORT : process.env.PUBLIC_HTTP_PORT) || '';
+  const standard = tls ? '443' : '80';
+  const port = configured && configured !== standard ? `:${configured}` : '';
+  const embedded = rest.length > 0 ? `/${rest.join('/')}` : '';
+  return `${tls ? 'https' : 'http'}://${name}${port}${embedded}${ing.path ?? ''}`;
+}
+
 export function scrubIngress<
-  T extends {
+  T extends IngressRouting & {
     protectionPasswordHash?: string | null;
     protectionBypassSecret?: string | null;
   }
->(ing: T): Omit<T, 'protectionPasswordHash' | 'protectionBypassSecret'> {
+>(
+  ing: T
+): Omit<T, 'protectionPasswordHash' | 'protectionBypassSecret'> & {
+  tlsEnabled: boolean;
+  url: string;
+} {
   const {
     protectionPasswordHash: _protectionPasswordHash,
     protectionBypassSecret: _protectionBypassSecret,
     ...rest
   } = ing;
-  return rest;
+  return { ...rest, tlsEnabled: ingressTlsEnabled(ing), url: ingressPublicUrl(ing) };
 }
 
 export const GIB = 1024 * 1024 * 1024;

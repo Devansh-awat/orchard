@@ -1220,6 +1220,8 @@ server:
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
+    - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
+    - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
     - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN$url_suffix }
     - { name: SESSION_COOKIE_SECURE, value: "$cookie_secure" }
     - { name: MAX_CONCURRENT_BUILDS, value: "$MAX_BUILDS" }

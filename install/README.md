@@ -124,8 +124,10 @@ builderSandbox: # Kata VMs for build jobs
 
 **Custom ports.** `--http-port` and `--https-port` move Traefik off 80 and 443,
 and only `lan` mode accepts them. `public` needs 80 for the ACME HTTP-01
-challenge and 443 for browsers; `tunnel` binds neither. The dashboard's links
-carry the port; the CLI's do not yet.
+challenge and 443 for browsers; `tunnel` binds neither. The ports are written
+into the server environment as `PUBLIC_HTTP_PORT` and `PUBLIC_HTTPS_PORT`, so
+the `url` the API returns for every ingress carries them and the dashboard, CLI
+and TUI all link correctly.
 
 **Wildcard certificates.** Apps get per-hostname certificates. Wildcards need a
 DNS-01 issuer; see [SETUP-wildcards.md](../infra/charts/orchard/SETUP-wildcards.md).

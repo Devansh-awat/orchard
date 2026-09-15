@@ -13,6 +13,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { DatabasesService } from '../projects/databases.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { IngressService } from '../projects/ingress.service';
+import { scrubIngress } from '../projects/projects.utils';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { TemplateEngineService, ResolutionContext } from './template-engine.service';
@@ -516,14 +517,16 @@ export class TemplatesService implements OnModuleInit {
             id: true,
             name: true,
             host: true,
-            path: true
+            path: true,
+            tlsSecretName: true,
+            entrypoints: true
           }
         }
       }
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
-    return instance;
+    return { ...instance, ingresses: instance.ingresses.map((ing) => scrubIngress(ing)) };
   }
 
   async getProjectTemplateInstances(projectId: string, clerkId: string, userData?: any) {

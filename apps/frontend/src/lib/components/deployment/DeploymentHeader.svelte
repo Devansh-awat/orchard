@@ -3,7 +3,7 @@
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
 	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
-	import { appUrl } from '$lib/appUrl';
+	import { ingressUrl } from '$lib/ingress-url';
 	import { StatusBadge, Button, Menu, MenuItem } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 
@@ -215,7 +215,7 @@
 		<div class="dh-domains">
 			{#each deployment.ingresses.slice(0, 3) as ingress (ingress.id)}
 				<a
-					href={appUrl(ingress.host, ingress.path, ingress.tlsEnabled)}
+					href={ingressUrl(ingress)}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="dh-domain"

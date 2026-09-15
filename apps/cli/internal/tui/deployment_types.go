@@ -83,6 +83,7 @@ type DepIngress struct {
 	ID             string `json:"id"`
 	Host           string `json:"host"`
 	Path           string `json:"path"`
+	URL            string `json:"url"`
 	TLSEnabled     bool   `json:"tlsEnabled"`
 	ProtectionMode string `json:"protectionMode"`
 	DeploymentID   string `json:"deploymentId"`
