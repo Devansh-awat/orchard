@@ -43,9 +43,14 @@ export class SandboxMirrorConsumer {
 
     const status = sandboxStatusFromCr(readSandboxCr(cr));
     if (!status || status === row.status) return;
+    // Clearing the message is how a stale error gets dropped once the resource
+    // moves again. The one thing it must not drop is the reason a stop the
+    // server just asked for was made, which lands on the row before the suspend
+    // event that confirms it gets here.
+    const settlingAnIntentionalStop = status === 'stopped' && row.status === 'stopping';
     await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status, statusMessage: null }
+      data: settlingAnIntentionalStop ? { status } : { status, statusMessage: null }
     });
   }
 

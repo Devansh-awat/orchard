@@ -370,6 +370,7 @@ export class SandboxesService {
           organizationId,
           name,
           status: 'creating',
+          startedAt: new Date(),
           podName: '',
           namespace: this.k8s.namespace,
           image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
@@ -522,7 +523,8 @@ export class SandboxesService {
       data: {
         status: settled === 'running' ? 'running' : 'starting',
         statusMessage: null,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        startedAt: new Date()
       },
       include: { sshIdentity: { select: { id: true, name: true } } }
     });
@@ -551,7 +553,10 @@ export class SandboxesService {
     const settled = sandboxStatusFromCr(await this.k8s.getCrStatus(row.podName));
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status: !existed || settled === 'stopped' ? 'stopped' : 'stopping' },
+      data: {
+        status: !existed || settled === 'stopped' ? 'stopped' : 'stopping',
+        startedAt: null
+      },
       include: { sshIdentity: { select: { id: true, name: true } } }
     });
     this.audit

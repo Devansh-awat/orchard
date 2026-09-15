@@ -2196,6 +2196,7 @@ model Sandbox {
   memoryLimit   String        @map("memory_limit") @db.VarChar(20)
   diskSize      String        @map("disk_size") @db.VarChar(20)
   lastActiveAt  DateTime      @default(now()) @map("last_active_at") @db.Timestamp(6)
+  startedAt     DateTime?     @map("started_at") @db.Timestamp(6)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
 

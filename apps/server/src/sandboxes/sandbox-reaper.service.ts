@@ -133,7 +133,7 @@ export class SandboxReaperService {
         const existed = await this.k8s.suspend(row.podName);
         await this.prisma.sandbox.update({
           where: { id: row.id },
-          data: { status: existed ? 'stopping' : 'stopped' }
+          data: { status: existed ? 'stopping' : 'stopped', startedAt: null }
         });
         this.audit
           .log({
@@ -151,12 +151,22 @@ export class SandboxReaperService {
     }
   }
 
+  /**
+   * Cap how long a single run may last. Measured from startedAt, the beginning
+   * of the current run, not from when the row was first created: a sandbox is a
+   * durable thing a user starts and stops for weeks, and reading its age as its
+   * uptime means every box older than the cap gets suspended seconds after it
+   * goes ready, forever, with no way for the user to tell why.
+   *
+   * startedAt is null for a box that has not run since this was introduced, and
+   * a run whose start we cannot place is not a run we can call expired.
+   */
   private async enforceMaxLifetime(): Promise<void> {
     const lifetime = maxLifetimeMs();
     if (!lifetime) return;
     const cutoff = new Date(Date.now() - lifetime);
     const expired = await this.prisma.sandbox.findMany({
-      where: { status: 'running', createdAt: { lt: cutoff } }
+      where: { status: 'running', startedAt: { lt: cutoff } }
     });
     for (const row of expired) {
       try {
@@ -165,9 +175,20 @@ export class SandboxReaperService {
           where: { id: row.id },
           data: {
             status: existed ? 'stopping' : 'stopped',
-            statusMessage: 'Stopped after reaching max lifetime'
+            statusMessage: 'Stopped after reaching max lifetime',
+            startedAt: null
           }
         });
+        this.audit
+          .log({
+            action: 'sandbox.lifetime_stop',
+            actorUserId: null,
+            targetType: 'sandbox',
+            targetId: row.id,
+            targetLabel: row.name,
+            metadata: { lifetimeHours: Math.round(lifetime / 3600000) }
+          })
+          .catch(() => {});
       } catch (e: any) {
         this.logger.warn(`lifetime stop failed for sandbox ${row.id}: ${e?.message}`);
       }

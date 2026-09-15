@@ -395,9 +395,14 @@
 			</div>
 		</header>
 
-		{#if sandbox.status === 'error' && sandbox.statusMessage}
+		{#if sandbox.statusMessage && (sandbox.status === 'error' || sandbox.status === 'stopped')}
 			<div class="sbw-alert">
-				<Alert tone="error" title="Sandbox error">{sandbox.statusMessage}</Alert>
+				<Alert
+					tone={sandbox.status === 'error' ? 'error' : 'info'}
+					title={sandbox.status === 'error' ? 'Sandbox error' : 'Sandbox stopped'}
+				>
+					{sandbox.statusMessage}
+				</Alert>
 			</div>
 		{/if}
 
