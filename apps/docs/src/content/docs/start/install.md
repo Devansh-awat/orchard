@@ -159,6 +159,55 @@ sudo orchardctl hostname add mango --apply
 sudo orchardctl claim --url mango
 ```
 
+### Over Tailscale
+
+A `lan` install is the right mode for a box you reach over Tailscale: nothing is
+published, and WireGuard is already encrypting the hop, which is what makes
+plain HTTP on the dashboard reasonable there.
+
+Check what actually resolves before choosing a name. MagicDNS gives a machine
+both a short name and a fully qualified one, and the short one only resolves
+where the search domain is applied:
+
+```bash
+tailscale status
+tailscale ip -4
+```
+
+The installer picks up the Tailscale address by itself, because it takes every
+global IPv4 the machine has. The names are the part it cannot guess:
+
+```bash
+sudo orchardctl hostname add mango --apply
+sudo orchardctl hostname add mango.tailnet-name.ts.net --apply
+```
+
+To make one of them the name links are generated with, rather than one more
+name that works, change the primary and the URL the server hands out together.
+They are separate values and a mismatch is the confusing case: the dashboard
+answers, and every link it prints points somewhere else.
+
+```bash
+sudo yq -i '.ingress.host = "mango" |
+  (.server.env[] | select(.name == "FRONTEND_URL")).value = "http://mango:8081"' \
+  /etc/orchard/values.yaml
+
+sudo orchardctl update
+sudo orchardctl claim
+```
+
+`yq` is already on the box, installed alongside everything else. Use the port
+the instance serves on, which is 80 unless you moved it. `orchardctl config set`
+handles `ingress.host` on its own, but not `FRONTEND_URL`, which lives in a
+list of `{name, value}` entries rather than at a dotted path.
+
+To confirm what Traefik is matching on:
+
+```bash
+sudo kubectl -n orchard get ingressroute orchard \
+  -o jsonpath='{.spec.routes[*].match}'
+```
+
 And whether updates are **manual** (`orchard-update` when you want them) or
 **automatic** (a nightly systemd timer).
 

@@ -190,9 +190,34 @@ about: a Tailscale name, an mDNS name, a DNS record added afterwards.
 
 A `lan` install starts with every address the machine had at install time, its
 hostname, its `.local` name and the `sslip.io` name, so this is for what
-changed since. The primary hostname, the one generated links use, is not in
-this list; change that one with `orchardctl config set ingress.host <name>
---apply`.
+changed since: a Tailscale name, a DNS record added later, a machine renamed.
+
+The primary hostname, the one generated links are built with, is not in this
+list. Changing that one means changing two values together, because the name
+Traefik matches and the name the server puts in links are separate settings and
+a mismatch is the confusing failure: the dashboard answers, and every link it
+prints points somewhere else.
+
+```bash
+sudo yq -i '.ingress.host = "mango" |
+  (.server.env[] | select(.name == "FRONTEND_URL")).value = "http://mango"' \
+  /etc/orchard/values.yaml
+
+sudo orchardctl update
+sudo orchardctl claim
+```
+
+`orchardctl config set ingress.host` handles the first on its own.
+`FRONTEND_URL` needs `yq` or `orchardctl config edit`, because it lives in a
+list of `{name, value}` entries rather than at a dotted path. Include the port
+in the URL if the instance serves on one other than 80 or 443.
+
+What Traefik ended up matching on:
+
+```bash
+sudo kubectl -n orchard get ingressroute orchard \
+  -o jsonpath='{.spec.routes[*].match}'
+```
 
 These names are **matched, not certified**. On an instance that terminates TLS,
 a name with no certificate covering it is a browser warning rather than a

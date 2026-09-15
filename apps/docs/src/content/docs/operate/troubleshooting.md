@@ -69,6 +69,28 @@ in the public paths list.
 
 ## The platform
 
+**The dashboard 404s at a name the box clearly answers on.** Traefik routes by
+`Host` header, and it only knows the names it was given. The port being open
+proves nothing: a `curl` to an unlisted name reaches Traefik and gets a 404
+because no route matches it. List what it knows with `sudo orchardctl hostname`,
+and add the one you are using:
+
+```bash
+sudo orchardctl hostname add mango --apply
+```
+
+**A `lan` install is unreachable at its `sslip.io` name.** `sslip.io` is public
+DNS that maps a name back to the address inside it, so reaching it needs a
+resolver willing to answer for a private address, and not all of them are:
+Tailscale's is the usual culprit. Nothing is exposed either way, the address is
+private, but the name will not resolve. Installs since this was found also
+answer on the box's own addresses, so use one of those, or a name you control:
+
+```bash
+sudo orchardctl hostname add mango --apply
+sudo orchardctl claim --url mango
+```
+
 **The dashboard is slow or stale.** Reads come from the mirror. If it disagrees
 with the cluster, the cluster wins; the mirror reconciles. Persistent staleness
 is worth reporting with the app id.
