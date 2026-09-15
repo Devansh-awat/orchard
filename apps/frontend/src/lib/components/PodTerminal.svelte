@@ -72,7 +72,6 @@
 		fitAddon = new ghosttyModule.FitAddon();
 		terminal.loadAddon(fitAddon);
 		terminal.open(terminalRef);
-		terminal.reset();
 		fitAddon.fit();
 
 		resizeObserver = new ResizeObserver(() => {
@@ -91,12 +90,10 @@
 		});
 
 		terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-			if (event.type !== 'keydown') return true;
-			const copyChord = event.metaKey || (event.ctrlKey && event.shiftKey);
-			if (copyChord && event.key.toLowerCase() === 'c' && terminal.hasSelection()) {
-				void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
-				return false;
-			}
+			if (event.type !== 'keydown') return false;
+			if (!event.ctrlKey || !event.shiftKey || event.code !== 'KeyC') return false;
+			if (!terminal.hasSelection()) return false;
+			void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
 			return true;
 		});
 
