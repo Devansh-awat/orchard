@@ -29,6 +29,7 @@
 	import { decorativeMotion } from '$lib/utils/motion.svelte';
 	import { PodLogSource } from '$lib/utils/log-sources.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+	import TerminalSettings from '$lib/components/TerminalSettings.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
 
 	let {
@@ -54,6 +55,8 @@
 		onToggleConsoleExpand,
 		onOpenShell,
 		onCloseTerminalTab,
+		onTerminalTitle,
+		onTerminalBell,
 		onSelectLogsPod,
 		onPointerDown,
 		onPointerMove,
@@ -91,6 +94,8 @@
 		onToggleConsoleExpand: () => void;
 		onOpenShell: (podName: string, container: string) => void;
 		onCloseTerminalTab: (id: string) => void;
+		onTerminalTitle?: (id: string, title: string) => void;
+		onTerminalBell?: (id: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
 		onPointerDown: (e: PointerEvent) => void;
 		onPointerMove: (e: PointerEvent) => void;
@@ -266,9 +271,14 @@
 						<button
 							class="console-btn"
 							class:console-btn--active={activeConsoleTab === ttab.id}
-							onclick={() => (activeConsoleTab = ttab.id)}
+							class:console-btn--bell={ttab.bell && activeConsoleTab !== ttab.id}
+							title={ttab.title || ttab.label}
+							onclick={() => {
+								ttab.bell = false;
+								activeConsoleTab = ttab.id;
+							}}
 						>
-							{ttab.label}
+							<span class="console-tab-title">{ttab.title || ttab.label}</span>
 							<span
 								class="console-tab-close"
 								role="button"
@@ -391,6 +401,8 @@
 						{/each}
 					</Menu>
 
+					<TerminalSettings />
+
 					<button
 						onclick={onToggleConsoleExpand}
 						class="console-btn console-btn--icon"
@@ -431,6 +443,8 @@
 						namespace={deployment.namespace || 'default'}
 						container={ttab.container}
 						visible={activeConsoleTab === ttab.id}
+						onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
+						onBell={() => onTerminalBell?.(ttab.id)}
 					/>
 				{/each}
 			</div>

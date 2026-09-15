@@ -8,6 +8,7 @@
 		applyTerminalTheme,
 		watchTerminalTheme
 	} from '$lib/utils/terminal-theme';
+	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
 
 	let {
 		sandboxId,
@@ -157,14 +158,14 @@
 			setStatus(id, 'error', 'Could not load the terminal');
 			return;
 		}
-		await ensureTerminalFont(el, 12);
+		await ensureTerminalFont(el, terminalDisplay.fontSize);
 		if (handle.disposed || handle.term) return;
 
 		const term = new mod.Terminal({
-			fontSize: 12,
+			fontSize: terminalDisplay.fontSize,
 			fontFamily: monoFontFor(el),
-			cursorBlink: true,
-			cursorStyle: 'bar',
+			cursorBlink: terminalDisplay.cursorBlink,
+			cursorStyle: terminalDisplay.cursorStyle,
 			theme: buildTerminalTheme(el)
 		});
 		const fit = new mod.FitAddon();
@@ -283,6 +284,27 @@
 		if (!active || !running || bootstrapped) return;
 		bootstrapped = true;
 		openSession();
+	});
+
+	$effect(() => {
+		const size = terminalDisplay.fontSize;
+		const cursorStyle = terminalDisplay.cursorStyle;
+		const cursorBlink = terminalDisplay.cursorBlink;
+		for (const handle of handles.values()) {
+			const el = handle.el;
+			if (!handle.term || !el) continue;
+			handle.term.options.cursorStyle = cursorStyle;
+			handle.term.options.cursorBlink = cursorBlink;
+			void ensureTerminalFont(el, size).then(() => {
+				if (handle.disposed || !handle.term) return;
+				handle.term.options.fontSize = size;
+				try {
+					handle.fit?.fit();
+				} catch {
+					return;
+				}
+			});
+		}
 	});
 
 	$effect(() => {

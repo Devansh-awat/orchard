@@ -12,6 +12,7 @@
 		Skull
 	} from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+	import TerminalSettings from '$lib/components/TerminalSettings.svelte';
 	import { Button, TabBar, EmptyState, Select } from '$lib/components/ui';
 	import { explainExitCode, formatRelativeTime } from '$lib/utils/format';
 	import type { DatabaseDetail, TerminalTab as TerminalTabType } from './types';
@@ -37,6 +38,8 @@
 		onToggleKilled,
 		onOpenShellTab,
 		onCloseTerminalTab,
+		onTerminalTitle,
+		onTerminalBell,
 		podShortName
 	}: {
 		database: DatabaseDetail;
@@ -66,13 +69,15 @@
 		onToggleKilled?: (entryId: string) => void;
 		onOpenShellTab: (podName: string, container: string) => void;
 		onCloseTerminalTab: (id: string) => void;
+		onTerminalTitle?: (id: string, title: string) => void;
+		onTerminalBell?: (id: string) => void;
 		podShortName: (name: string) => string;
 	} = $props();
 
 	const consoleTabs = $derived([
 		{ id: 'logs', label: 'Logs' },
 		{ id: 'killed', label: 'Killed' },
-		...terminalTabs.map((t) => ({ id: t.id, label: t.label }))
+		...terminalTabs.map((t) => ({ id: t.id, label: t.title || t.label }))
 	]);
 </script>
 
@@ -194,6 +199,7 @@
 					<TerminalIcon class="h-3 w-3" />
 					Shell
 				</Button>
+				<TerminalSettings />
 				<Button
 					variant="ghost"
 					size="sm"
@@ -284,6 +290,8 @@
 					namespace={database.namespace!}
 					container={ttab.container}
 					visible={activeConsoleTab === ttab.id}
+					onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
+					onBell={() => onTerminalBell?.(ttab.id)}
 				/>
 			{/each}
 		</div>

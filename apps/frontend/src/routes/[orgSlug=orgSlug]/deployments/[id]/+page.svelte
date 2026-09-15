@@ -804,6 +804,16 @@
 		activeConsoleTab = id;
 	}
 
+	function setTerminalTitle(id: string, title: string) {
+		const tab = terminalTabs.find((t) => t.id === id);
+		if (tab) tab.title = title.trim().slice(0, 80);
+	}
+
+	function setTerminalBell(id: string) {
+		const tab = terminalTabs.find((t) => t.id === id);
+		if (tab && activeConsoleTab !== id) tab.bell = true;
+	}
+
 	function closeTerminalTab(id: string) {
 		terminalTabs = terminalTabs.filter((t) => t.id !== id);
 		if (activeConsoleTab === id) {
@@ -2972,6 +2982,8 @@
 							onToggleConsoleExpand={toggleConsoleExpand}
 							onOpenShell={openShell}
 							onCloseTerminalTab={closeTerminalTab}
+							onTerminalTitle={setTerminalTitle}
+							onTerminalBell={setTerminalBell}
 							onSelectLogsPod={selectLogsPod}
 							onPointerDown={handlePointerDown}
 							onPointerMove={handlePointerMove}

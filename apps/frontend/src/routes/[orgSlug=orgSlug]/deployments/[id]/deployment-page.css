@@ -3457,3 +3457,27 @@ a.dep-meta-lead-link:hover {
 .svc-port-block {
 	overflow: hidden;
 }
+
+.console-tab-title {
+	display: inline-block;
+	max-width: 14rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: bottom;
+}
+
+.console-btn--bell {
+	position: relative;
+}
+
+.console-btn--bell::after {
+	content: '';
+	position: absolute;
+	top: 0.3rem;
+	right: 1.35rem;
+	width: 0.35rem;
+	height: 0.35rem;
+	border-radius: 9999px;
+	background: var(--status-warning);
+}

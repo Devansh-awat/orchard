@@ -396,7 +396,8 @@ function handleExecSession(
     '/bin/sh',
     '-c',
     'export TERM=xterm-256color COLORTERM=truecolor; ' +
-      'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
+      'for s in bash zsh sh ash dash; do ' +
+      'if command -v "$s" >/dev/null 2>&1; then exec "$s"; fi; done; exec sh'
   ];
 
   exec

@@ -251,6 +251,8 @@ export interface TerminalTabInfo {
 	podName: string;
 	container: string;
 	label: string;
+	title?: string;
+	bell?: boolean;
 }
 
 export type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';

@@ -115,4 +115,6 @@ export interface TerminalTab {
 	podName: string;
 	container: string;
 	label: string;
+	title?: string;
+	bell?: boolean;
 }

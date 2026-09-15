@@ -8,16 +8,19 @@
 		watchTerminalTheme
 	} from '$lib/utils/terminal-theme';
 	import { PredictiveEcho } from '$lib/utils/terminal-predict';
-	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
+	import { attachMouseReporting } from '$lib/utils/terminal-mouse';
+	import { terminalDisplay, setTerminalDisplay } from '$lib/stores/terminal-display.svelte';
 
 	interface Props {
 		podName: string;
 		namespace: string;
 		container: string;
 		visible?: boolean;
+		onTitle?: (title: string) => void;
+		onBell?: () => void;
 	}
 
-	let { podName, namespace, container, visible = true }: Props = $props();
+	let { podName, namespace, container, visible = true, onTitle, onBell }: Props = $props();
 
 	let terminalRef = $state<HTMLDivElement | null>(null);
 	let terminal: any = null;
@@ -28,17 +31,22 @@
 	let connected = $state(false);
 	let error = $state<string | null>(null);
 	let mounted = $state(false);
+	let termGen = $state(0);
 
 	let resizeObserver: ResizeObserver | null = null;
 	let stopThemeWatch: (() => void) | null = null;
+	let stopMouse: (() => void) | null = null;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let retries = 0;
 	let disposed = false;
+	let appliedFontSize = 0;
+	let lastChunkHadOsc = false;
 
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder('utf-8');
 	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4500]);
 	const MAX_RETRIES = 40;
+	const DEFAULT_FONT_SIZE = 12;
 
 	function status(text: string) {
 		const line = `\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`;
@@ -46,12 +54,25 @@
 		else terminal?.write(line);
 	}
 
+	function focusTerminal() {
+		if (!terminal) return;
+		if (terminal.textarea) terminal.textarea.focus();
+		else terminal.focus();
+	}
+
+	function sendRaw(seq: string) {
+		terminal?.input(seq, true);
+	}
+
 	async function init() {
 		if (!terminalRef) return;
 
 		try {
 			ghosttyModule = await import('ghostty-web');
-			await Promise.all([ghosttyModule.init(), ensureTerminalFont(terminalRef, 12)]);
+			await Promise.all([
+				ghosttyModule.init(),
+				ensureTerminalFont(terminalRef, terminalDisplay.fontSize)
+			]);
 			connectWebSocket();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load terminal';
@@ -59,18 +80,87 @@
 		}
 	}
 
+	function pasteFromClipboard() {
+		const read = navigator.clipboard?.readText?.bind(navigator.clipboard);
+		if (!read) return;
+		void read()
+			.then((text) => {
+				if (text && terminal) terminal.paste(text);
+			})
+			.catch(() => {});
+	}
+
+	function handleKey(event: KeyboardEvent): boolean {
+		if (event.type !== 'keydown') return false;
+		predictor?.noteKeyDown(event);
+		const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
+
+		if (plain && event.shiftKey && event.key === 'Tab') {
+			sendRaw('\x1b[Z');
+			return true;
+		}
+
+		if (event.ctrlKey && event.shiftKey && !event.metaKey && !event.altKey) {
+			if (event.code === 'KeyC') {
+				if (!terminal.hasSelection()) return false;
+				void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
+				return true;
+			}
+			if (event.code === 'KeyV') {
+				pasteFromClipboard();
+				return true;
+			}
+		}
+
+		if (event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyK') {
+			event.stopPropagation();
+			terminal.clear();
+			return true;
+		}
+
+		const mod = (event.metaKey || event.ctrlKey) && !event.altKey;
+		if (mod) {
+			if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+				event.stopPropagation();
+				setTerminalDisplay('fontSize', terminalDisplay.fontSize + 1);
+				return true;
+			}
+			if (!event.shiftKey && (event.code === 'Minus' || event.code === 'NumpadSubtract')) {
+				event.stopPropagation();
+				setTerminalDisplay('fontSize', terminalDisplay.fontSize - 1);
+				return true;
+			}
+			if (!event.shiftKey && (event.code === 'Digit0' || event.code === 'Numpad0')) {
+				event.stopPropagation();
+				setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function onFocusIn() {
+		if (terminal?.getMode?.(1004)) sendRaw('\x1b[I');
+	}
+
+	function onFocusOut() {
+		if (terminal?.getMode?.(1004)) sendRaw('\x1b[O');
+	}
+
 	function openTerminal() {
 		if (!ghosttyModule || !terminalRef || terminal) return;
 
 		terminal = new ghosttyModule.Terminal({
-			fontSize: 12,
+			fontSize: terminalDisplay.fontSize,
 			fontFamily: monoFontFor(terminalRef),
-			cursorBlink: true,
-			cursorStyle: 'bar',
+			cursorBlink: terminalDisplay.cursorBlink,
+			cursorStyle: terminalDisplay.cursorStyle,
 			scrollback: 10_000,
 			smoothScrollDuration: 0,
 			theme: buildTerminalTheme(terminalRef, { background: '--console-bg' })
 		});
+		appliedFontSize = terminalDisplay.fontSize;
 
 		stopThemeWatch = watchTerminalTheme(terminalRef, (next) => applyTerminalTheme(terminal, next), {
 			background: '--console-bg'
@@ -81,6 +171,9 @@
 		terminal.open(terminalRef);
 		fitAddon.fit();
 		predictor = new PredictiveEcho(terminal, { enabled: () => terminalDisplay.predictiveEcho });
+		stopMouse = attachMouseReporting(terminal, terminalRef);
+		terminalRef.addEventListener('focusin', onFocusIn);
+		terminalRef.addEventListener('focusout', onFocusOut);
 
 		resizeObserver = new ResizeObserver(() => {
 			if (visible) fitWhenSized();
@@ -99,16 +192,20 @@
 			}
 		});
 
-		terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-			if (event.type !== 'keydown') return false;
-			predictor?.noteKeyDown(event);
-			if (!event.ctrlKey || !event.shiftKey || event.code !== 'KeyC') return false;
-			if (!terminal.hasSelection()) return false;
-			void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
-			return true;
+		terminal.onTitleChange((title: string) => {
+			onTitle?.(title);
 		});
 
-		terminal.focus();
+		terminal.onBell(() => {
+			if (lastChunkHadOsc) return;
+			if (terminalDisplay.bell !== 'visual') return;
+			onBell?.();
+		});
+
+		terminal.attachCustomKeyEventHandler(handleKey);
+
+		termGen += 1;
+		focusTerminal();
 	}
 
 	function connectWebSocket() {
@@ -136,6 +233,7 @@
 				event.data instanceof ArrayBuffer
 					? decoder.decode(event.data, { stream: true })
 					: String(event.data);
+			lastChunkHadOsc = text.includes('\x1b]');
 			if (predictor) predictor.applyRemote(text);
 			else terminal.write(text);
 		};
@@ -215,13 +313,31 @@
 	}
 
 	$effect(() => {
+		void termGen;
 		if (!terminal) return;
-		terminal.options.cursorBlink = visible;
+		terminal.options.cursorStyle = terminalDisplay.cursorStyle;
+		terminal.options.cursorBlink = visible && terminalDisplay.cursorBlink;
 		if (visible) {
-			requestAnimationFrame(() => fitWhenSized());
+			requestAnimationFrame(() => {
+				fitWhenSized();
+				focusTerminal();
+			});
 		} else {
 			terminal.blur();
 		}
+	});
+
+	$effect(() => {
+		void termGen;
+		const size = terminalDisplay.fontSize;
+		const host = terminalRef;
+		if (!terminal || !host || size === appliedFontSize) return;
+		appliedFontSize = size;
+		void ensureTerminalFont(host, size).then(() => {
+			if (!terminal || disposed) return;
+			terminal.options.fontSize = size;
+			fitWhenSized();
+		});
 	});
 
 	function onVisibilityChange() {
@@ -248,7 +364,10 @@
 		document.removeEventListener('visibilitychange', onVisibilityChange);
 		if (reconnectTimer) clearTimeout(reconnectTimer);
 		stopThemeWatch?.();
+		stopMouse?.();
 		resizeObserver?.disconnect();
+		terminalRef?.removeEventListener('focusin', onFocusIn);
+		terminalRef?.removeEventListener('focusout', onFocusOut);
 		detachSocket();
 		predictor?.dispose();
 		predictor = null;
@@ -292,7 +411,6 @@
 		padding: 0.75rem;
 	}
 
-	/* Hide the textarea's native blinking text caret */
 	.pod-terminal-canvas :global(textarea) {
 		caret-color: transparent !important;
 		color: transparent !important;
