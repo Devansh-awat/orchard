@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.29.0](https://github.com/hackclub/orchard/compare/frontend/v1.28.2...frontend/v1.29.0) (2026-09-15)
+
+
+### Features
+
+* **frontend:** mouse, paste, zoom, titles and a settings menu for the pod shell ([1817925](https://github.com/hackclub/orchard/commit/181792550b2984c93e2be4cd595188145fb7b725))
+* **frontend:** predictive local echo for the pod shell ([9fc5f56](https://github.com/hackclub/orchard/commit/9fc5f567c574aa86c60b121e8b3cb2ab3c65672c))
+* **frontend:** render terminals in jetbrains mono ([bc8feaa](https://github.com/hackclub/orchard/commit/bc8feaaae5da4677964749d08c78c0518c9a625e))
+* **server:** durable pod shell sessions that survive a dropped connection ([89309ff](https://github.com/hackclub/orchard/commit/89309ff9f0d0a5b8843879ce0b11e63829714be1))
+
+
+### Bug Fixes
+
+* **frontend:** keep pod shells alive across console tabs and guard stale sockets ([2e421a5](https://github.com/hackclub/orchard/commit/2e421a53a15f1ba5dbb19d837a583d9817913b1d))
+* **frontend:** render the terminal in the system mono instead of space mono ([f537274](https://github.com/hackclub/orchard/commit/f537274a83d4667b02f7f3a532ac987cfe2bfcec))
+* **server:** exec text frames are control only, real upstream backpressure, forced resize ([54a88fc](https://github.com/hackclub/orchard/commit/54a88fc52697e4f88d27e6929e0ce4edb0bc7e1f))
+
 ## [1.28.2](https://github.com/hackclub/orchard/compare/frontend/v1.28.1...frontend/v1.28.2) (2026-09-15)
 
 

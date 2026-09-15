@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.36.0](https://github.com/hackclub/orchard/compare/server/v2.35.1...server/v2.36.0) (2026-09-15)
+
+
+### Features
+
+* **frontend:** mouse, paste, zoom, titles and a settings menu for the pod shell ([1817925](https://github.com/hackclub/orchard/commit/181792550b2984c93e2be4cd595188145fb7b725))
+* **server:** durable pod shell sessions that survive a dropped connection ([89309ff](https://github.com/hackclub/orchard/commit/89309ff9f0d0a5b8843879ce0b11e63829714be1))
+
+
+### Bug Fixes
+
+* **server:** exec text frames are control only, real upstream backpressure, forced resize ([54a88fc](https://github.com/hackclub/orchard/commit/54a88fc52697e4f88d27e6929e0ce4edb0bc7e1f))
+
 ## [2.35.1](https://github.com/hackclub/orchard/compare/server/v2.35.0...server/v2.35.1) (2026-09-15)
 
 
