@@ -27,6 +27,8 @@ ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 INSTALL_URL=${ORCHARD_INSTALL_URL:-https://assets.orchard.my/install.sh}
 PROMPT_TIMEOUT=${ORCHARD_PROMPT_TIMEOUT:-900}
 PROMPT_FD_OPEN=false
+PROMPT_BLOCKED=''
+PROMPT_HINT_SHOWN=false
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
 IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
@@ -309,18 +311,55 @@ parse_args() {
   done
 }
 
-# Questions go over fd 3. Stdin is usually the installer itself (`curl | bash`)
-# so it cannot be read from, and /dev/tty is not always the terminal the person
-# is typing into: sudo hands the command its own pty, and anything that runs us
-# outside the terminal's foreground process group turns a read into a silent
-# SIGTTIN stop that looks exactly like a hang.
+# Fields of /proc/<pid>/stat, counted after the pid and the (comm) that may
+# contain anything: 2 is the parent, 5 is the controlling terminal.
+proc_stat_field() {
+  local pid=$1 n=$2
+  [ -r "/proc/$pid/stat" ] || return 1
+  awk -v n="$n" '{ sub(/^[0-9]+ \(.*\) /, ""); print $n }' "/proc/$pid/stat" 2>/dev/null
+}
+
+# `curl | sudo bash` looks like it is working and is not: the question appears,
+# the keystrokes echo, and nothing ever arrives. sudo 1.9.14 and newer run the
+# command in a pty of their own (use_pty, on by default on Ubuntu 24.04), that
+# pty is our /dev/tty, and because sudo's own stdin is the pipe carrying this
+# script it never relays the real terminal into it. The tell is an ancestor
+# sitting on a different terminal than ours; nobody is typing into ours.
+tty_is_the_one_being_typed_into() {
+  local ours pid t hops=0
+  ours=$(proc_stat_field $$ 5) || return 0
+  [ -n "$ours" ] && [ "$ours" != 0 ] || return 0
+  pid=$(proc_stat_field $$ 2) || return 0
+  while [ "$hops" -lt 12 ]; do
+    case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$pid" -gt 1 ] || return 0
+    t=$(proc_stat_field "$pid" 5) || return 0
+    [ -n "$t" ] || return 0
+    if [ "$t" != 0 ] && [ "$t" != "$ours" ]; then return 1; fi
+    pid=$(proc_stat_field "$pid" 2) || return 0
+    hops=$((hops + 1))
+  done
+  return 0
+}
+
+# Questions go over fd 3: stdin is usually this script itself, and /dev/tty is
+# only worth reading when it is the terminal someone is actually typing into.
 open_prompt_fd() {
   if [ -t 0 ]; then
     { if exec 3<&0; then PROMPT_FD_OPEN=true; fi; } 2>/dev/null
     if [ "$PROMPT_FD_OPEN" = true ]; then return 0; fi
   fi
+
+  if ! tty_is_the_one_being_typed_into; then
+    PROMPT_BLOCKED="this is running on a terminal of its own, so your keystrokes cannot reach it"
+    return 1
+  fi
+
   { if exec 3</dev/tty; then PROMPT_FD_OPEN=true; fi; } 2>/dev/null
-  [ "$PROMPT_FD_OPEN" = true ]
+  if [ "$PROMPT_FD_OPEN" != true ]; then
+    PROMPT_BLOCKED="no terminal to read an answer from"
+    return 1
+  fi
 }
 
 prompt_hint() {
@@ -340,8 +379,8 @@ ask() {
   if [ "$ASSUME_YES" = true ]; then printf '%s' "$default"; return; fi
 
   if [ "$PROMPT_FD_OPEN" != true ]; then
-    warn "no terminal to ask: $prompt"
-    prompt_hint
+    warn "cannot ask '$prompt': ${PROMPT_BLOCKED:-no terminal to read an answer from}"
+    if [ "$PROMPT_HINT_SHOWN" != true ]; then prompt_hint; fi
     die "nothing has been installed yet; nothing to undo"
   fi
 
@@ -1346,7 +1385,15 @@ main() {
   parse_args "$@"
 
   if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
-    warn "no terminal to ask questions on; domains and mode must come from flags or the environment"
+    warn "$PROMPT_BLOCKED"
+    prompt_hint
+    PROMPT_HINT_SHOWN=true
+    # The mode question is the first one and it is unconditional, so there is no
+    # point walking through the machine checks to arrive at a question that
+    # cannot be answered.
+    if [ -z "$ORCHARD_INGRESS_MODE" ]; then
+      die "stopping before the first question; nothing has been installed"
+    fi
   fi
   local i=0
   REMAINING=0
