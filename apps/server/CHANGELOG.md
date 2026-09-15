@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.35.1](https://github.com/hackclub/orchard/compare/server/v2.35.0...server/v2.35.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **server:** stop the pod shell reconnect loop and surface exec failures ([a6ef5bd](https://github.com/hackclub/orchard/commit/a6ef5bdd61c5e2a33d7e545ccff84eb5ecd2600a))
+
 ## [2.35.0](https://github.com/hackclub/orchard/compare/server/v2.34.2...server/v2.35.0) (2026-09-15)
 
 

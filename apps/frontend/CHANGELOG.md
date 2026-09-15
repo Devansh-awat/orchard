@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.2](https://github.com/hackclub/orchard/compare/frontend/v1.28.1...frontend/v1.28.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* **frontend:** stop swallowing every keystroke in the pod shell ([b3be0bb](https://github.com/hackclub/orchard/commit/b3be0bbecf9cd9f6179eb0407cfb4aef453e1660))
+* **server:** stop the pod shell reconnect loop and surface exec failures ([a6ef5bd](https://github.com/hackclub/orchard/commit/a6ef5bdd61c5e2a33d7e545ccff84eb5ecd2600a))
+
 ## [1.28.1](https://github.com/hackclub/orchard/compare/frontend/v1.28.0...frontend/v1.28.1) (2026-09-15)
 
 
