@@ -7,6 +7,8 @@
 		monoFontFor,
 		watchTerminalTheme
 	} from '$lib/utils/terminal-theme';
+	import { PredictiveEcho } from '$lib/utils/terminal-predict';
+	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
 
 	interface Props {
 		podName: string;
@@ -22,6 +24,7 @@
 	let fitAddon: any = null;
 	let ghosttyModule: any = null;
 	let ws: WebSocket | null = null;
+	let predictor: PredictiveEcho | null = null;
 	let connected = $state(false);
 	let error = $state<string | null>(null);
 	let mounted = $state(false);
@@ -38,7 +41,9 @@
 	const MAX_RETRIES = 40;
 
 	function status(text: string) {
-		terminal?.write(`\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`);
+		const line = `\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`;
+		if (predictor) predictor.writeLocal(line);
+		else terminal?.write(line);
 	}
 
 	async function init() {
@@ -75,6 +80,7 @@
 		terminal.loadAddon(fitAddon);
 		terminal.open(terminalRef);
 		fitAddon.fit();
+		predictor = new PredictiveEcho(terminal, { enabled: () => terminalDisplay.predictiveEcho });
 
 		resizeObserver = new ResizeObserver(() => {
 			if (visible) fitWhenSized();
@@ -82,10 +88,12 @@
 		resizeObserver.observe(terminalRef);
 
 		terminal.onData((data: string) => {
+			predictor?.onUserData(data);
 			if (ws && ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
 		});
 
 		terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+			predictor?.flush('resize');
 			if (ws && ws.readyState === WebSocket.OPEN) {
 				ws.send(JSON.stringify({ type: 'resize', cols, rows }));
 			}
@@ -93,6 +101,7 @@
 
 		terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
 			if (event.type !== 'keydown') return false;
+			predictor?.noteKeyDown(event);
 			if (!event.ctrlKey || !event.shiftKey || event.code !== 'KeyC') return false;
 			if (!terminal.hasSelection()) return false;
 			void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
@@ -123,16 +132,18 @@
 
 		socket.onmessage = (event) => {
 			if (ws !== socket || !terminal) return;
-			if (event.data instanceof ArrayBuffer) {
-				terminal.write(decoder.decode(event.data, { stream: true }));
-			} else {
-				terminal.write(event.data);
-			}
+			const text =
+				event.data instanceof ArrayBuffer
+					? decoder.decode(event.data, { stream: true })
+					: String(event.data);
+			if (predictor) predictor.applyRemote(text);
+			else terminal.write(text);
 		};
 
 		socket.onclose = (event: CloseEvent) => {
 			if (ws !== socket) return;
 			connected = false;
+			predictor?.flush('disconnect');
 			if (disposed) return;
 			if (PERMANENT_CLOSE_CODES.has(event.code)) {
 				error = event.reason || 'Session ended';
@@ -149,6 +160,7 @@
 		socket.onerror = () => {
 			if (ws !== socket) return;
 			connected = false;
+			predictor?.flush('disconnect');
 			error = 'Connection failed';
 		};
 	}
@@ -186,6 +198,7 @@
 			reconnectTimer = null;
 		}
 		detachSocket();
+		predictor?.flush('disconnect');
 		if (terminal) {
 			terminal.write('\x1b[2J\x1b[H');
 		}
@@ -237,6 +250,8 @@
 		stopThemeWatch?.();
 		resizeObserver?.disconnect();
 		detachSocket();
+		predictor?.dispose();
+		predictor = null;
 		terminal?.dispose();
 		terminal?.wasmTerm?.free?.();
 		terminal = null;
