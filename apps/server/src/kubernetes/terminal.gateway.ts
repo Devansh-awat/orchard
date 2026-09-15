@@ -234,9 +234,6 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         }
       });
 
-    // A shell sends one keystroke per packet. Nagle holds each one back waiting
-    // for company that never comes, which is up to 40ms of latency on every
-    // character typed — the single most noticeable thing about a slow terminal.
     socket.setNoDelay(true);
 
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -251,21 +248,12 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 // DB load is negligible per active terminal.
 const RECHECK_INTERVAL_MS = 15_000;
 
-// An exec session is idle whenever nobody is typing, and an idle WebSocket is
-// exactly what a proxy in front of us reaps. Ping well inside the usual 60s
-// tunnel timeout and drop a peer that misses two in a row.
 const HEARTBEAT_MS = 25_000;
 
-/**
- * A PassThrough that also looks like a TTY to `@kubernetes/client-node`.
- *
- * The client only opens the resize channel when `isResizable(stdout)` is true,
- * which it tests by looking for `rows`/`columns`. A plain PassThrough has
- * neither, so the pod's PTY was never told anything and stayed at the 80x24 the
- * API server defaults to — the browser drew a 200-column grid while the shell
- * wrapped for 80, which is what makes a re-edited command line overprint
- * itself. Carrying the size here is what connects the two.
- */
+const WS_HIGH_WATER = 1024 * 1024;
+
+const DRAIN_POLL_MS = 50;
+
 class ResizableOutput extends PassThrough {
   columns = 80;
 
@@ -316,23 +304,29 @@ function handleExecSession(
 
   const stopRecheck = () => clearInterval(recheckTimer);
 
-  // Forward stdout → ws
-  stdout.on('data', (chunk: Buffer) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(chunk);
-    }
-  });
+  const forward = (source: PassThrough) => {
+    source.on('data', (chunk: Buffer) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(chunk, { binary: true });
+      if (ws.bufferedAmount <= WS_HIGH_WATER) return;
+      source.pause();
+      const drain = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          clearInterval(drain);
+          source.resume();
+          return;
+        }
+        if (ws.bufferedAmount <= WS_HIGH_WATER) {
+          clearInterval(drain);
+          source.resume();
+        }
+      }, DRAIN_POLL_MS);
+    });
+  };
 
-  // Forward stderr → ws
-  stderr.on('data', (chunk: Buffer) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(chunk);
-    }
-  });
+  forward(stdout);
+  forward(stderr);
 
-  // Keystrokes arrive as binary, control frames as text. Sniffing for JSON
-  // instead would mean a shell where typing {"type":"resize"} silently does
-  // nothing, and would parse-and-throw once per character besides.
   ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
     if (isBinary === false || typeof data === 'string') {
       const msg = typeof data === 'string' ? data : data.toString();
@@ -342,17 +336,13 @@ function handleExecSession(
           stdout.setSize(Number(parsed.cols), Number(parsed.rows));
           return;
         }
-      } catch {
-        // Not a control frame after all; fall through and type it.
-      }
+      } catch {}
       stdin.write(msg);
       return;
     }
     stdin.write(data as Buffer);
   });
 
-  // Heartbeat. `ws` answers pings itself, so this only has to prove the far end
-  // is still there and keep the connection off a proxy's idle list.
   let alive = true;
   ws.on('pong', () => {
     alive = true;
@@ -389,7 +379,8 @@ function handleExecSession(
   const command = [
     '/bin/sh',
     '-c',
-    'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
+    'export TERM=xterm-256color COLORTERM=truecolor; ' +
+      'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
   ];
 
   exec
@@ -409,6 +400,11 @@ function handleExecSession(
         }
       }
     )
+    .then((upstream) => {
+      const socket = (upstream as unknown as { _socket?: net.Socket })._socket;
+      socket?.setNoDelay?.(true);
+      return upstream;
+    })
     .catch((err) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(`\r\nError: ${err.message}\r\n`);

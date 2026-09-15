@@ -27,6 +27,11 @@
 
 	let resizeObserver: ResizeObserver | null = null;
 	let stopThemeWatch: (() => void) | null = null;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let retries = 0;
+	let disposed = false;
+
+	const encoder = new TextEncoder();
 
 	async function init() {
 		if (!terminalRef) return;
@@ -49,6 +54,8 @@
 			fontFamily: monoFontFor(terminalRef),
 			cursorBlink: true,
 			cursorStyle: 'bar',
+			scrollback: 10_000,
+			smoothScrollDuration: 0,
 			theme: buildTerminalTheme(terminalRef, { background: '--console-bg' })
 		});
 
@@ -67,13 +74,23 @@
 		resizeObserver.observe(terminalRef);
 
 		terminal.onData((data: string) => {
-			if (ws && ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data));
+			if (ws && ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
 		});
 
 		terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
 			if (ws && ws.readyState === WebSocket.OPEN) {
 				ws.send(JSON.stringify({ type: 'resize', cols, rows }));
 			}
+		});
+
+		terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+			if (event.type !== 'keydown') return true;
+			const copyChord = event.metaKey || (event.ctrlKey && event.shiftKey);
+			if (copyChord && event.key.toLowerCase() === 'c' && terminal.hasSelection()) {
+				void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
+				return false;
+			}
+			return true;
 		});
 
 		terminal.focus();
@@ -89,22 +106,26 @@
 		ws.onopen = () => {
 			connected = true;
 			error = null;
+			if (retries > 0 && terminal) {
+				terminal.write('\r\n\x1b[90m--- reconnected ---\x1b[0m\r\n');
+			}
+			retries = 0;
 			// Now that we're connected, render the terminal
 			openTerminal();
 		};
 
 		ws.onmessage = (event) => {
 			if (!terminal) return;
-			const data =
-				event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data;
-			terminal.write(data);
+			terminal.write(event.data instanceof ArrayBuffer ? new Uint8Array(event.data) : event.data);
 		};
 
 		ws.onclose = () => {
 			connected = false;
-			if (terminal) {
-				terminal.write('\r\n\x1b[90m--- disconnected ---\x1b[0m\r\n');
+			if (disposed) return;
+			if (terminal && retries === 0) {
+				terminal.write('\r\n\x1b[90m--- disconnected, reconnecting ---\x1b[0m\r\n');
 			}
+			scheduleReconnect();
 		};
 
 		ws.onerror = () => {
@@ -113,8 +134,23 @@
 		};
 	}
 
+	function scheduleReconnect() {
+		if (disposed || reconnectTimer) return;
+		const delay = Math.min(500 * 2 ** retries, 10_000);
+		retries += 1;
+		reconnectTimer = setTimeout(() => {
+			reconnectTimer = null;
+			if (!disposed) connectWebSocket();
+		}, delay);
+	}
+
 	function reconnect() {
 		error = null;
+		retries = 0;
+		if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		}
 		ws?.close();
 		ws = null;
 		if (terminal) {
@@ -123,9 +159,6 @@
 		connectWebSocket();
 	}
 
-	// A hidden tab is display:none, so its box is 0x0 and a fit() there would
-	// compute a one-cell grid that the next paint draws over itself. Wait for the
-	// element to actually have a size before measuring.
 	function fitWhenSized(attempt = 0) {
 		if (!fitAddon || !terminalRef) return;
 		if (terminalRef.clientWidth > 0 && terminalRef.clientHeight > 0) {
@@ -147,6 +180,8 @@
 	});
 
 	onDestroy(() => {
+		disposed = true;
+		if (reconnectTimer) clearTimeout(reconnectTimer);
 		stopThemeWatch?.();
 		resizeObserver?.disconnect();
 		ws?.close();
@@ -188,10 +223,6 @@
 		padding: 0.75rem;
 	}
 
-	/* The renderer sizes its own backing store for the device pixel ratio.
-	   Stretching the canvas with CSS on top of that resamples every glyph, which
-	   is what made the text look soft on a retina screen. Let it own its size and
-	   fill the box by fitting to a whole number of cells instead. */
 	.pod-terminal-canvas :global(.terminal) {
 		width: 100%;
 		height: 100%;
