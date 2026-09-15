@@ -5,6 +5,7 @@ import { createHmac } from 'crypto';
 import { EmailService } from '../email/email.service';
 import {
   EVENT_TONE,
+  EventTone,
   NotificationMessage,
   TONE_COLORS,
   isNotificationEvent
@@ -304,7 +305,7 @@ function retryAfterFrom(headers: Record<string, any>): number | undefined {
   return undefined;
 }
 
-function toneOf(message: NotificationMessage): 'success' | 'failure' {
+function toneOf(message: NotificationMessage): EventTone {
   return isNotificationEvent(message.event) ? EVENT_TONE[message.event] : 'success';
 }
 

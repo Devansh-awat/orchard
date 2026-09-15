@@ -3,6 +3,7 @@ import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import {
+  CATEGORY_DEFAULT_VALUE,
   EVENT_CATEGORY,
   GLOBAL_SCOPE_ID,
   NotificationCategory,
@@ -22,7 +23,7 @@ const LOCK_KEY = 528_492;
 
 interface ClaimedEvent {
   id: string;
-  organizationId: string;
+  organizationId: string | null;
   event: string;
   scopeType: string;
   scopeId: string | null;
@@ -32,7 +33,7 @@ interface ClaimedEvent {
 }
 
 interface ScopeChain {
-  organizationId: string;
+  organizationId: string | null;
   projectId: string | null;
   resourceType: string;
   resourceId: string | null;
@@ -176,8 +177,11 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
       return;
     }
 
+    // An account-scoped event has no team lane at all. Not "no rules matched" —
+    // no rule may ever match, because the shared channel belongs to an
+    // organization and the event belongs to a person.
     const [channelIds, userDestinations] = await Promise.all([
-      this.resolveRuleLane(event, chain),
+      chain.organizationId ? this.resolveRuleLane(event, chain) : Promise.resolve([]),
       this.resolvePersonalLane(event, chain)
     ]);
 
@@ -223,6 +227,21 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
 
   private async resolveScope(event: ClaimedEvent): Promise<ScopeChain | null> {
     if (!event.scopeId) return null;
+    if (event.scopeType === 'user') {
+      const user = await this.prisma.user.findUnique({
+        where: { id: event.scopeId },
+        select: { id: true }
+      });
+      if (!user) return null;
+      return {
+        organizationId: null,
+        projectId: null,
+        resourceType: 'user',
+        resourceId: user.id,
+        projectOwnerId: null,
+        resourceCreatorId: user.id
+      };
+    }
     if (event.scopeType === 'deployment') {
       const dep = await this.prisma.deployment.findUnique({
         where: { id: event.scopeId },
@@ -288,6 +307,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
   // event). That is how you silence one flapping deployment on one channel
   // without unpicking the org-wide rule everyone else relies on.
   private async resolveRuleLane(event: ClaimedEvent, chain: ScopeChain): Promise<string[]> {
+    if (!chain.organizationId) return [];
     const rules = await this.prisma.notificationRule.findMany({
       where: {
         organizationId: chain.organizationId,
@@ -320,7 +340,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         category,
         OR: [
           { scopeType: 'global', scopeId: GLOBAL_SCOPE_ID },
-          { scopeType: 'org', scopeId: chain.organizationId },
+          ...(chain.organizationId ? [{ scopeType: 'org', scopeId: chain.organizationId }] : []),
           ...(chain.projectId ? [{ scopeType: 'project', scopeId: chain.projectId }] : []),
           ...(chain.resourceId
             ? [{ scopeType: chain.resourceType, scopeId: chain.resourceId }]
@@ -338,7 +358,9 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
       resourceCreatorId: chain.resourceCreatorId,
       projectOwnerId: chain.projectOwnerId
     };
-    const wanted = candidates.filter((userId) => shouldNotifyUser(userId, settings, involvement));
+    const wanted = candidates.filter((userId) =>
+      shouldNotifyUser(userId, settings, involvement, CATEGORY_DEFAULT_VALUE[category])
+    );
     if (wanted.length === 0) return [];
 
     const destinations = await this.prisma.userNotificationDestination.findMany({
@@ -349,7 +371,10 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
   }
 
   private async candidateUserIds(chain: ScopeChain): Promise<string[]> {
-    if (!chain.projectId) return [];
+    // The account the event is about, and nobody else. Org admins do not get
+    // told when someone signs in.
+    if (chain.resourceType === 'user') return chain.resourceId ? [chain.resourceId] : [];
+    if (!chain.projectId || !chain.organizationId) return [];
     const [members, project, orgAdmins] = await Promise.all([
       this.prisma.projectMember.findMany({
         where: { projectId: chain.projectId },

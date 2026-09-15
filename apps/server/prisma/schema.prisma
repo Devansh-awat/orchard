@@ -1785,8 +1785,11 @@ model UserNotificationDestination {
 // dedupeKey so racing replicas insert once. Retains the rendered payload for 30
 // days, which is what makes replay-after-an-outage possible.
 model NotificationEvent {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+  // Null for an event about a person rather than about org infrastructure: a
+  // sign-in belongs to an account, not to any one organization that account is
+  // a member of, and an org-filtered read must never pick it up.
+  organizationId String?   @map("organization_id") @db.Uuid
   event          String    @db.VarChar(50)
   scopeType      String    @map("scope_type") @db.VarChar(20)
   scopeId        String?   @map("scope_id") @db.Uuid
@@ -1800,7 +1803,7 @@ model NotificationEvent {
   occurredAt     DateTime  @default(now()) @map("occurred_at") @db.Timestamp(6)
   fannedOutAt    DateTime? @map("fanned_out_at") @db.Timestamp(6)
 
-  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deliveries   NotificationDelivery[]
 
   @@index([status, occurredAt], map: "idx_notification_events_pending")

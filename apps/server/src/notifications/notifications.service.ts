@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import {
@@ -11,7 +12,7 @@ import { backupKey, dbArchivingKey, dbStateKey, deployKey, jobRunKey, podKey } f
 import { NotificationFanoutService } from './notification-fanout.service';
 
 interface EmitInput {
-  organizationId: string;
+  organizationId: string | null;
   message: NotificationMessage;
   scopeType: ResourceScopeType;
   scopeId: string;
@@ -331,6 +332,27 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Something happened to an account: a sign-in, an app granted access. Unlike
+   * every other event here there is no organization and no team lane — it goes
+   * to the one person it is about, through their own destinations, and a
+   * channel rule cannot subscribe to it.
+   *
+   * Not deduped on a time bucket like the resource events are. Two sign-ins a
+   * minute apart are two things worth knowing about, and collapsing them would
+   * hide the second one, which is the one that matters.
+   */
+  async notifySecurity(userId: string, message: NotificationMessage) {
+    await this.emit({
+      organizationId: null,
+      scopeType: 'user',
+      scopeId: userId,
+      actorUserId: userId,
+      dedupeKey: `${message.event}:${message.targetId ?? userId}:${randomUUID()}`,
+      message: { ...message, targetId: message.targetId ?? userId }
+    });
+  }
+
   // Generic entry point, kept for callers that build their own message. Scope is
   // derived from the event so nobody has to remember that backups hang off a
   // database rather than a deployment.
@@ -358,8 +380,11 @@ export class NotificationsService {
   private async emit(input: EmitInput) {
     // Dispatch kill switch. The 'notifications' flag is enrollment-based (early
     // access), so force the enrollment property here: disabling the flag stops
-    // all sends; per-user rollout is enforced at the management endpoints.
-    const enabled = await this.analytics.isFeatureEnabled('notifications', input.organizationId, {
+    // all sends; per-user rollout is enforced at the management endpoints. An
+    // account-scoped event has no organization to key the flag on, so it is
+    // checked against the person it is about.
+    const flagSubject = input.organizationId ?? input.scopeId;
+    const enabled = await this.analytics.isFeatureEnabled('notifications', flagSubject, {
       personProperties: { '$feature_enrollment/notifications': true }
     });
     if (!enabled) return;
@@ -372,7 +397,7 @@ export class NotificationsService {
         "id", "organization_id", "event", "scope_type", "scope_id",
         "project_id", "actor_user_id", "payload", "dedupe_key", "status", "occurred_at"
       ) VALUES (
-        gen_random_uuid(), ${input.organizationId}::uuid, ${input.message.event}, ${input.scopeType},
+        gen_random_uuid(), ${input.organizationId ?? null}::uuid, ${input.message.event}, ${input.scopeType},
         ${input.scopeId}::uuid, ${input.message.projectId ?? null}::uuid,
         ${input.actorUserId ?? null}::uuid, ${JSON.stringify(input.message)}::jsonb,
         ${input.dedupeKey}, 'pending', (NOW() AT TIME ZONE 'UTC')

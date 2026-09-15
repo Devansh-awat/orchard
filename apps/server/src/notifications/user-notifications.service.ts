@@ -4,6 +4,7 @@ import { NotificationTransport } from './notification-transport';
 import { NotificationRulesService } from './notification-rules.service';
 import { assertSafeWebhookUrl } from './webhook-guard';
 import {
+  CATEGORY_DEFAULT_VALUE,
   DEFAULT_SETTING_VALUE,
   GLOBAL_SCOPE_ID,
   NOTIFICATION_CATEGORIES,
@@ -45,7 +46,8 @@ export class UserNotificationsService {
     });
 
     const global: Record<string, SettingValue> = {};
-    for (const category of NOTIFICATION_CATEGORIES) global[category] = DEFAULT_SETTING_VALUE;
+    for (const category of NOTIFICATION_CATEGORIES)
+      global[category] = CATEGORY_DEFAULT_VALUE[category];
     const overrides = new Map<
       string,
       { scopeType: string; scopeId: string; values: Record<string, SettingValue> }
@@ -99,7 +101,7 @@ export class UserNotificationsService {
     const out: Record<string, { value: SettingValue; source: string; own: boolean }> = {};
     for (const category of NOTIFICATION_CATEGORIES) {
       let best: { value: SettingValue; source: string; rank: number } = {
-        value: DEFAULT_SETTING_VALUE,
+        value: CATEGORY_DEFAULT_VALUE[category],
         source: 'default',
         rank: -1
       };

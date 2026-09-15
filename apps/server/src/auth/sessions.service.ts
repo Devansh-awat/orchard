@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. The
 // previous implementation hit http://ip-api.com over plaintext for every
@@ -23,10 +25,24 @@ const BROWSER_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
 
+  private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly moduleRef: ModuleRef
   ) {}
+
+  // NotificationsModule already imports AuthModule, so injecting the service
+  // here would close a provider cycle that swc turns into a TDZ crash at boot.
+  // Resolved on first use instead, which is after every module is up.
+  private notifications(): NotificationsService | null {
+    try {
+      return this.moduleRef.get(NotificationsService, { strict: false });
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * Create a new session record when a user logs in.
@@ -70,7 +86,64 @@ export class SessionsService {
       }
     });
 
+    void this.notifySignIn({
+      userId: params.userId,
+      sessionId: session.id,
+      authMethod: params.authMethod ?? null,
+      deviceName,
+      location,
+      ipAddress: params.ipAddress ?? null
+    });
+
     return session.id;
+  }
+
+  /**
+   * Tell the account holder that something got in. Every way into Orchard ends
+   * up here, so this is the one place that has to know about it — and an MCP
+   * session is not a person signing in, it is an app being handed the keys, so
+   * it reads as its own thing.
+   *
+   * Never allowed to fail a sign-in. Someone locked out because Slack is down
+   * is a worse outcome than a missed alert.
+   */
+  private async notifySignIn(input: {
+    userId: string;
+    sessionId: string;
+    authMethod: string | null;
+    deviceName: string | null;
+    location: string | null;
+    ipAddress: string | null;
+  }): Promise<void> {
+    try {
+      const notifications = this.notifications();
+      if (!notifications) return;
+
+      const app = input.authMethod === MCP_SESSION_AUTH_METHOD;
+      const where = [input.deviceName, input.location].filter(Boolean).join(' · ');
+      const fields = [
+        input.deviceName ? { name: app ? 'App' : 'Device', value: input.deviceName } : null,
+        input.location ? { name: 'Location', value: input.location } : null,
+        input.ipAddress ? { name: 'IP address', value: input.ipAddress } : null,
+        input.authMethod ? { name: 'Method', value: input.authMethod } : null
+      ].filter((f): f is { name: string; value: string } => f !== null);
+
+      await notifications.notifySecurity(input.userId, {
+        event: app ? 'security.app_authorized' : 'security.signed_in',
+        title: app
+          ? `${input.deviceName || 'An app'} was given access to your account`
+          : 'New sign-in to your Orchard account',
+        body: app
+          ? `It can act as you until you revoke it${where ? ` · ${where}` : ''}. If this was not you, revoke it and sign out everywhere.`
+          : `${where || 'A new session'} just signed in. If this was not you, change how you sign in and sign out everywhere.`,
+        url: `${this.frontendUrl}/user/settings?tab=security`,
+        targetId: input.sessionId,
+        targetName: input.deviceName ?? undefined,
+        fields
+      });
+    } catch (e: any) {
+      this.logger.warn(`sign-in notification failed: ${e?.message ?? e}`);
+    }
   }
 
   /**

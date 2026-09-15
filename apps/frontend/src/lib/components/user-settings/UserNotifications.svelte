@@ -18,7 +18,8 @@
 	} from '$lib/components/notifications/api';
 	import {
 		CATEGORY_LABELS,
-		SETTING_LABELS,
+		CATEGORY_OPTIONS,
+		settingLabel,
 		type NotificationCategory,
 		type SettingValue,
 		type UserDestination,
@@ -27,7 +28,7 @@
 
 	let { index = 0 }: { index?: number } = $props();
 
-	const CATEGORIES: NotificationCategory[] = ['deploys', 'health', 'jobs', 'data'];
+	const CATEGORIES: NotificationCategory[] = ['deploys', 'health', 'jobs', 'data', 'security'];
 
 	const DEST_META: Record<string, { label: string; icon: typeof Webhook; hue: string }> = {
 		email: { label: 'Email', icon: Mail, hue: 'var(--hue-amber)' },
@@ -175,8 +176,9 @@
 	function overrideSummary(override: UserSettings['overrides'][number]): string {
 		return Object.entries(override.values)
 			.map(([category, value]) => {
-				const label = CATEGORY_LABELS[category as NotificationCategory] ?? category;
-				return `${label}: ${SETTING_LABELS[value as SettingValue]?.label ?? value}`;
+				const key = category as NotificationCategory;
+				const label = CATEGORY_LABELS[key] ?? category;
+				return `${label}: ${settingLabel(key, value as SettingValue)?.label ?? value}`;
 			})
 			.join(' · ');
 	}
@@ -221,10 +223,12 @@
 					<div class="un-row">
 						<div class="un-row-meta">
 							<span class="un-row-label">{CATEGORY_LABELS[category]}</span>
-							<span class="un-row-hint">{SETTING_LABELS[settings.global[category]].hint}</span>
+							<span class="un-row-hint">
+								{settingLabel(category, settings.global[category]).hint}
+							</span>
 						</div>
 						<div class="un-seg" role="radiogroup" aria-label={CATEGORY_LABELS[category]}>
-							{#each ['always', 'subscribed', 'never'] as const as option (option)}
+							{#each CATEGORY_OPTIONS[category] as option (option)}
 								<button
 									type="button"
 									role="radio"
@@ -232,10 +236,10 @@
 									class="un-seg-btn"
 									class:un-seg-btn-active={settings.global[category] === option}
 									disabled={savingCategory === category}
-									title={SETTING_LABELS[option].hint}
+									title={settingLabel(category, option).hint}
 									onclick={() => choose(category, option)}
 								>
-									{SETTING_LABELS[option].label}
+									{settingLabel(category, option).label}
 								</button>
 							{/each}
 						</div>

@@ -48,14 +48,18 @@ export function resolveRuleLane(rules: RuleRow[], event: string): string[] {
 
 // Straight "most specific wins" over global -> org -> project -> resource, with
 // the system default standing in when a user has never expressed an opinion.
-export function resolveSettingValue(settings: SettingRow[], userId: string): SettingValue {
+export function resolveSettingValue(
+  settings: SettingRow[],
+  userId: string,
+  fallback: SettingValue = DEFAULT_SETTING_VALUE
+): SettingValue {
   let best: { rank: number; value: SettingValue } | null = null;
   for (const s of settings) {
     if (s.userId !== userId) continue;
     const rank = settingRank(s.scopeType);
     if (!best || rank > best.rank) best = { rank, value: s.value as SettingValue };
   }
-  return best?.value ?? DEFAULT_SETTING_VALUE;
+  return best?.value ?? fallback;
 }
 
 export interface InvolvementContext {
@@ -73,9 +77,10 @@ export function isInvolved(userId: string, ctx: InvolvementContext): boolean {
 export function shouldNotifyUser(
   userId: string,
   settings: SettingRow[],
-  ctx: InvolvementContext
+  ctx: InvolvementContext,
+  fallback: SettingValue = DEFAULT_SETTING_VALUE
 ): boolean {
-  const value = resolveSettingValue(settings, userId);
+  const value = resolveSettingValue(settings, userId, fallback);
   if (value === 'never') return false;
   if (value === 'always') return true;
   return isInvolved(userId, ctx);

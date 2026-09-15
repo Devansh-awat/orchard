@@ -6,8 +6,11 @@ import {
   shouldNotifyUser
 } from '../src/notifications/notification-resolution';
 import {
+  CATEGORY_DEFAULT_VALUE,
   EVENT_CATEGORY,
   NOTIFICATION_EVENTS,
+  RULE_SCOPE_TYPES,
+  TEAM_ROUTABLE_EVENTS,
   eventsForScopeType
 } from '../src/notifications/notification-events';
 import { backupKey, deployKey, jobRunKey, podKey } from '../src/notifications/dedupe-keys';
@@ -168,7 +171,40 @@ test('resource scopes only accept events that can happen there', () => {
   ]);
   assert.ok(eventsForScopeType('database').includes('backup.failed'));
   assert.ok(!eventsForScopeType('database').includes('deploy.failed'));
-  assert.deepEqual(eventsForScopeType('org').length, NOTIFICATION_EVENTS.length);
+  assert.deepEqual(eventsForScopeType('org').length, TEAM_ROUTABLE_EVENTS.length);
+});
+
+// A team channel belongs to an organization; a sign-in belongs to a person.
+// There is no scope at which it is acceptable to route one to the other, so the
+// rule editor is never offered the option in the first place.
+test('no rule scope can subscribe a shared channel to a security event', () => {
+  for (const scopeType of RULE_SCOPE_TYPES) {
+    for (const event of eventsForScopeType(scopeType)) {
+      assert.notEqual(EVENT_CATEGORY[event], 'security', `${scopeType} rules are offered ${event}`);
+    }
+  }
+});
+
+test('security is on until someone turns it off', () => {
+  assert.equal(CATEGORY_DEFAULT_VALUE.security, 'always');
+  assert.equal(
+    shouldNotifyUser('u1', [], NOBODY, CATEGORY_DEFAULT_VALUE.security),
+    true,
+    'a brand new account hears about its own sign-ins'
+  );
+});
+
+test('turning security off silences it even though the event is yours', () => {
+  const off = [{ userId: 'u1', scopeType: 'global', value: 'never' }];
+  assert.equal(shouldNotifyUser('u1', off, { ...NOBODY, actorUserId: 'u1' }, 'always'), false);
+});
+
+// The account-scoped events carry actorUserId = the account, so even a stored
+// 'subscribed' delivers. Worth pinning: it is what lets the two-state control
+// in the UI sit on top of a three-value column without a special case.
+test('a stored subscribed still delivers a security event', () => {
+  const sub = [{ userId: 'u1', scopeType: 'global', value: 'subscribed' }];
+  assert.equal(shouldNotifyUser('u1', sub, { ...NOBODY, actorUserId: 'u1' }, 'always'), true);
 });
 
 test('dedupe keys are stable for one transition and distinct across transitions', () => {

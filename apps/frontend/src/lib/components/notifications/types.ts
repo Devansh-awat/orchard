@@ -1,6 +1,6 @@
 export type NotificationScopeType = 'org' | 'project' | 'deployment' | 'database' | 'job';
 
-export type NotificationCategory = 'deploys' | 'health' | 'jobs' | 'data';
+export type NotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 'security';
 
 export type SettingValue = 'always' | 'subscribed' | 'never';
 
@@ -156,7 +156,8 @@ export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
 	deploys: 'Deploys',
 	health: 'App health',
 	jobs: 'Jobs',
-	data: 'Databases and backups'
+	data: 'Databases and backups',
+	security: 'Security'
 };
 
 export const SETTING_LABELS: Record<SettingValue, { label: string; hint: string }> = {
@@ -164,6 +165,34 @@ export const SETTING_LABELS: Record<SettingValue, { label: string; hint: string 
 	subscribed: { label: 'Mine only', hint: 'Builds you triggered and things you own' },
 	never: { label: 'Nothing', hint: 'No personal notifications for this' }
 };
+
+// Security is about the account rather than about anything the account
+// deployed, so "Mine only" has nothing to mean: a sign-in is always yours. Two
+// states, and the copy says what they do instead of how much of someone else's
+// work you hear about.
+export const CATEGORY_OPTIONS: Record<NotificationCategory, SettingValue[]> = {
+	deploys: ['always', 'subscribed', 'never'],
+	health: ['always', 'subscribed', 'never'],
+	jobs: ['always', 'subscribed', 'never'],
+	data: ['always', 'subscribed', 'never'],
+	security: ['always', 'never']
+};
+
+const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
+	always: {
+		label: 'On',
+		hint: 'Told when something signs in, or when an app is given access to your account'
+	},
+	never: { label: 'Off', hint: 'No alerts when something signs in to your account' }
+};
+
+export function settingLabel(
+	category: NotificationCategory,
+	value: SettingValue
+): { label: string; hint: string } {
+	if (category === 'security') return SECURITY_LABELS[value] ?? SETTING_LABELS[value];
+	return SETTING_LABELS[value];
+}
 
 const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 	org: null,
