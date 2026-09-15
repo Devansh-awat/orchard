@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/hackclub/orchard/compare/frontend/v1.28.0...frontend/v1.28.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **frontend:** make the live logs button actually follow ([69ef413](https://github.com/hackclub/orchard/commit/69ef413c0e607c423f3cda8275f6e9c40f3a7049))
+
 ## [1.28.0](https://github.com/hackclub/orchard/compare/frontend/v1.27.3...frontend/v1.28.0) (2026-09-15)
 
 
