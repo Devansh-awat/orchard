@@ -61,7 +61,7 @@ the data stays on your hardware.
 Got a bare Linux box with nothing on it?
 
 ```bash
-curl -fsSL https://assets.orchard.my/install.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
 It brings its own k3s, Traefik, CloudNativePG, cert-manager and registry. One

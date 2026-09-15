@@ -24,6 +24,9 @@ ORCHARD_METRICS=${ORCHARD_METRICS:-}
 ORCHARD_MCP=${ORCHARD_MCP:-true}
 ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-}
 ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
+INSTALL_URL=${ORCHARD_INSTALL_URL:-https://assets.orchard.my/install.sh}
+PROMPT_TIMEOUT=${ORCHARD_PROMPT_TIMEOUT:-900}
+PROMPT_FD_OPEN=false
 
 IMAGE_TAG=${ORCHARD_IMAGE_TAG:-latest}
 IMAGE_PULL_POLICY=${ORCHARD_IMAGE_PULL_POLICY:-Always}
@@ -136,7 +139,15 @@ info() { printf '      %s%s%s\n' "$C_GREY" "$*" "$C_RESET"; }
 note() { printf '      %s\n' "$*"; }
 bold() { printf '  %s%s%s\n' "$C_BOLD" "$*" "$C_RESET"; }
 warn() { printf '   %s!%s  %s%s%s\n' "$C_AMBER" "$C_RESET" "$C_AMBER" "$*" "$C_RESET" >&2; }
-die() { printf '\n   %sx  %s%s\n\n' "$C_FAIL" "$*" "$C_RESET" >&2; exit 1; }
+# $$ stays the top-level pid inside a subshell, BASHPID does not: a die() from
+# inside a command substitution (ask, mostly) has to take the whole install with
+# it rather than just returning an empty answer to the caller.
+die() {
+  printf '\n   %sx  %s%s\n\n' "$C_FAIL" "$*" "$C_RESET" >&2
+  if [ "${BASHPID:-$$}" != "$$" ]; then kill -s TERM "$$" 2>/dev/null || true; fi
+  exit 1
+}
+trap 'exit 1' TERM
 
 step() {
   local title left='' head
@@ -228,6 +239,8 @@ usage() {
     --mcp <true|false>           ORCHARD_MCP            the MCP endpoint agents connect to
                                                         (default: on)
     --yes, -y                    ORCHARD_ASSUME_YES     never prompt, take every default
+                                 ORCHARD_PROMPT_TIMEOUT seconds to wait on a question before
+                                                        giving up (default: 900, 0 waits forever)
     --help, -h                                         show this and exit
 
   Versions and images
@@ -296,16 +309,74 @@ parse_args() {
   done
 }
 
-ask() {
-  local prompt=$1 default=${2:-} answer
-  if [ "$ASSUME_YES" = true ]; then printf '%s' "$default"; return; fi
-  if [ -n "$default" ]; then
-    read -r -p "$prompt [$default]: " answer </dev/tty || true
-    printf '%s' "${answer:-$default}"
-  else
-    read -r -p "$prompt: " answer </dev/tty || true
-    printf '%s' "$answer"
+# Questions go over fd 3. Stdin is usually the installer itself (`curl | bash`)
+# so it cannot be read from, and /dev/tty is not always the terminal the person
+# is typing into: sudo hands the command its own pty, and anything that runs us
+# outside the terminal's foreground process group turns a read into a silent
+# SIGTTIN stop that looks exactly like a hang.
+open_prompt_fd() {
+  if [ -t 0 ]; then
+    { if exec 3<&0; then PROMPT_FD_OPEN=true; fi; } 2>/dev/null
+    if [ "$PROMPT_FD_OPEN" = true ]; then return 0; fi
   fi
+  { if exec 3</dev/tty; then PROMPT_FD_OPEN=true; fi; } 2>/dev/null
+  [ "$PROMPT_FD_OPEN" = true ]
+}
+
+prompt_hint() {
+  {
+    printf '\n      %sOrchard has a few questions before it installs anything.%s\n' "$C_GREY" "$C_RESET"
+    printf '      %sRun it with your terminal attached:%s\n' "$C_GREY" "$C_RESET"
+    # shellcheck disable=SC2016  # the $( ) is part of the command we are printing
+    printf '        sudo bash -c "$(curl -fsSL %s)"\n' "$INSTALL_URL"
+    printf '      %sor answer nothing and take every default:%s\n' "$C_GREY" "$C_RESET"
+    printf '        curl -fsSL %s | sudo bash -s -- --yes\n' "$INSTALL_URL"
+    printf '\n'
+  } >&2
+}
+
+ask() {
+  local prompt=$1 default=${2:-} answer='' rc=0
+  if [ "$ASSUME_YES" = true ]; then printf '%s' "$default"; return; fi
+
+  if [ "$PROMPT_FD_OPEN" != true ]; then
+    warn "no terminal to ask: $prompt"
+    prompt_hint
+    die "nothing has been installed yet; nothing to undo"
+  fi
+
+  # Ignored rather than default: a read from a background process group then
+  # fails with EIO instead of stopping us where nobody can see it.
+  trap '' TTIN TTOU
+
+  if [ -n "$default" ]; then
+    printf '%s [%s]: ' "$prompt" "$default" >&2
+  else
+    printf '%s: ' "$prompt" >&2
+  fi
+
+  if [ "$PROMPT_TIMEOUT" -gt 0 ]; then
+    IFS= read -r -t "$PROMPT_TIMEOUT" answer <&3 2>/dev/null || rc=$?
+  else
+    IFS= read -r answer <&3 2>/dev/null || rc=$?
+  fi
+  trap - TTIN TTOU
+
+  if [ "$rc" -ne 0 ]; then
+    printf '\n' >&2
+    if [ "$rc" -gt 128 ]; then
+      warn "no answer after $(fmt_secs "$PROMPT_TIMEOUT"); giving up on the question"
+    else
+      warn "could not read an answer from this terminal"
+    fi
+    prompt_hint
+    die "nothing has been installed yet; nothing to undo"
+  fi
+
+  answer=${answer%$'\r'}
+  answer=${answer#"${answer%%[![:space:]]*}"}
+  answer=${answer%"${answer##*[![:space:]]}"}
+  printf '%s' "${answer:-$default}"
 }
 
 preflight() {
@@ -400,14 +471,19 @@ choose_ingress_mode() {
     echo "  1) public    - I have a routable IP and can point DNS at it"
     echo "  2) tunnel    - Cloudflare Tunnel (works behind NAT/CGNAT)"
     echo "  3) lan       - LAN only, self-signed certificates"
-    local default
+    local default attempt=0
     default=$([ "$BEHIND_NAT" = true ] && echo 2 || echo 1)
-    case "$(ask 'Choose' "$default")" in
-      1) INGRESS_MODE=public ;;
-      2) INGRESS_MODE=tunnel ;;
-      3) INGRESS_MODE=lan ;;
-      *) die "invalid choice" ;;
-    esac
+    INGRESS_MODE=''
+    while [ -z "$INGRESS_MODE" ] && [ "$attempt" -lt 5 ]; do
+      attempt=$((attempt + 1))
+      case "$(ask 'Choose' "$default")" in
+        1|public) INGRESS_MODE=public ;;
+        2|tunnel) INGRESS_MODE=tunnel ;;
+        3|lan) INGRESS_MODE=lan ;;
+        *) warn "pick 1, 2 or 3" ;;
+      esac
+    done
+    [ -n "$INGRESS_MODE" ] || die "invalid choice"
   fi
   info "ingress mode: $INGRESS_MODE"
 
@@ -535,9 +611,7 @@ confirm_mcp_dns() {
     return 0
   fi
 
-  # Bounded rather than `while true`: ask reads from /dev/tty and falls back to
-  # the default when that is not available, which behind `curl | bash` with no
-  # terminal would spin here forever. Anyone who wants more attempts has
+  # Bounded rather than `while true`: anyone who wants more attempts has
   # `orchardctl mcp enable` afterwards.
   local attempt=0
   while [ $attempt -lt 6 ]; do
@@ -621,11 +695,16 @@ choose_update_policy() {
       bold "Updates"
       echo "  1) manual     - you run 'orchard-update' when you want a new version"
       echo "  2) automatic  - check nightly and upgrade in place"
-      case "$(ask 'Choose' 1)" in
-        1) ORCHARD_UPDATE_POLICY=manual ;;
-        2) ORCHARD_UPDATE_POLICY=automatic ;;
-        *) die "invalid choice" ;;
-      esac
+      local attempt=0
+      while [ -z "$ORCHARD_UPDATE_POLICY" ] && [ "$attempt" -lt 5 ]; do
+        attempt=$((attempt + 1))
+        case "$(ask 'Choose' 1)" in
+          1|manual) ORCHARD_UPDATE_POLICY=manual ;;
+          2|automatic) ORCHARD_UPDATE_POLICY=automatic ;;
+          *) warn "pick 1 or 2" ;;
+        esac
+      done
+      [ -n "$ORCHARD_UPDATE_POLICY" ] || die "invalid choice"
     fi
   fi
   info "update policy: $ORCHARD_UPDATE_POLICY"
@@ -1265,6 +1344,10 @@ summary() {
 
 main() {
   parse_args "$@"
+
+  if [ "$ASSUME_YES" != true ] && ! open_prompt_fd; then
+    warn "no terminal to ask questions on; domains and mode must come from flags or the environment"
+  fi
   local i=0
   REMAINING=0
   while [ "$i" -lt "$STEP_TOTAL" ]; do

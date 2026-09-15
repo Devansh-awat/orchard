@@ -3,8 +3,13 @@
 For a single Linux box with nothing on it yet:
 
 ```bash
-curl -fsSL https://assets.orchard.my/install.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
+
+Not `curl ... | sudo bash`: the installer asks questions, and a pipe takes the
+standard input it would read the answers from. `bash -c "$(...)"` keeps your
+terminal attached. `--yes` plus the environment variables below is the
+non-interactive path, and that one pipes fine.
 
 This is the amateur-friendly path. It creates its own k3s cluster and installs
 everything Orchard needs. If you already run Kubernetes, do **not** use this.

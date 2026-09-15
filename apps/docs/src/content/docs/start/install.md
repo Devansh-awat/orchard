@@ -18,11 +18,25 @@ driving it yourself.
 ## A bare Linux box
 
 ```bash
-curl -fsSL https://assets.orchard.my/install.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)"
 ```
 
 It installs k3s, Traefik, CloudNativePG, cert-manager, a `zot` registry for the
-images it builds, and Orchard itself. Everything it generates lands in
+images it builds, and Orchard itself.
+
+**Run it that way round, not `curl ... | sudo bash`.** The installer asks a few
+questions, and piping it into `bash` leaves the questions with nowhere to read
+your answer from: `bash` is already using its standard input to read the script,
+and on hosts where `sudo` gives the command its own pseudo-terminal your typing
+never reaches it. `bash -c "$(...)"` keeps your terminal attached. If you would
+rather not hand a script to `sudo` sight unseen, download it, read it, then run
+it:
+
+```bash
+curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh
+less orchard-install.sh
+sudo bash orchard-install.sh
+``` Everything it generates lands in
 `/etc/orchard/values.yaml`; edit that file and run `orchard-update` to apply
 changes.
 
