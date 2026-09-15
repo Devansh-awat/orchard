@@ -11,25 +11,25 @@ async function main() {
     update: {},
     create: {
       name: 'admin',
-      description: 'Full administrative access to workspace',
+      description: 'Full administrative access to a project',
     },
   });
 
-  const memberRole = await prisma.role.upsert({
+  await prisma.role.upsert({
     where: { name: 'member' },
     update: {},
     create: {
       name: 'member',
-      description: 'Standard member access to workspace',
+      description: 'Standard member access to a project',
     },
   });
 
-  const viewerRole = await prisma.role.upsert({
+  await prisma.role.upsert({
     where: { name: 'viewer' },
     update: {},
     create: {
       name: 'viewer',
-      description: 'Read-only access to workspace resources',
+      description: 'Read-only access to a project',
     },
   });
 
@@ -39,13 +39,14 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: 'admin@orchard.dev' },
-    update: {},
+    update: { setupCompleted: true },
     create: {
       email: 'admin@orchard.dev',
       username: 'orchard-admin',
       passwordHash,
       firstName: 'Orchard',
       lastName: 'Admin',
+      setupCompleted: true,
     },
   });
 
@@ -82,7 +83,7 @@ async function main() {
 
   console.log('✅ Added user to organization as owner');
 
-  const workspace = await prisma.workspace.upsert({
+  const project = await prisma.project.upsert({
     where: {
       organizationId_slug: {
         organizationId: organization.id,
@@ -94,51 +95,52 @@ async function main() {
       organizationId: organization.id,
       name: 'Midnight',
       slug: 'midnight',
-      description: 'Midnight workspace for testing',
+      namespace: 'orchard-demo-midnight',
+      description: 'Demo project for local development',
       createdBy: user.id,
+      ownerId: user.id,
     },
   });
 
-  console.log('✅ Created workspace: Midnight');
+  console.log('✅ Created project: Midnight (namespace: orchard-demo-midnight)');
 
-  await prisma.workspaceMember.upsert({
+  await prisma.projectMember.upsert({
     where: {
-      workspaceId_userId_roleId: {
-        workspaceId: workspace.id,
+      projectId_userId: {
+        projectId: project.id,
         userId: user.id,
-        roleId: adminRole.id,
       },
     },
     update: {},
     create: {
-      workspaceId: workspace.id,
+      projectId: project.id,
       userId: user.id,
       roleId: adminRole.id,
       addedBy: user.id,
     },
   });
 
-  console.log('✅ Added user to workspace as admin');
+  console.log('✅ Added user to project as admin');
 
-  const project = await prisma.project.upsert({
+  await prisma.environment.upsert({
     where: {
-      workspaceId_slug: {
-        workspaceId: workspace.id,
-        slug: 'midnight-staging',
+      projectId_slug: {
+        projectId: project.id,
+        slug: 'production',
       },
     },
     update: {},
     create: {
-      workspaceId: workspace.id,
-      name: 'Midnight Staging',
-      slug: 'midnight-staging',
-      namespace: 'midnight-staging',
-      description: 'Staging environment for Midnight',
-      createdBy: user.id,
+      projectId: project.id,
+      name: 'Production',
+      slug: 'production',
+      namespace: project.namespace,
+      isDefault: true,
+      isProduction: true,
     },
   });
 
-  console.log('✅ Created project: Midnight Staging (namespace: midnight-staging)');
+  console.log('✅ Created environment: Production');
 
   console.log('🌱 Seed completed!');
 }
@@ -151,4 +153,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
