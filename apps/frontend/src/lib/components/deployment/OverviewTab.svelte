@@ -424,16 +424,15 @@
 							</div>
 						{/snippet}
 					</LogViewer>
-				{:else}
-					{#each terminalTabs as ttab (ttab.id)}
-						<PodTerminal
-							podName={ttab.podName}
-							namespace={deployment.namespace || 'default'}
-							container={ttab.container}
-							visible={activeConsoleTab === ttab.id}
-						/>
-					{/each}
 				{/if}
+				{#each terminalTabs as ttab (ttab.id)}
+					<PodTerminal
+						podName={ttab.podName}
+						namespace={deployment.namespace || 'default'}
+						container={ttab.container}
+						visible={activeConsoleTab === ttab.id}
+					/>
+				{/each}
 			</div>
 		</div>
 	</div>

@@ -33,8 +33,9 @@
 	let disposed = false;
 
 	const encoder = new TextEncoder();
+	const decoder = new TextDecoder('utf-8');
 	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4500]);
-	const MAX_RETRIES = 6;
+	const MAX_RETRIES = 40;
 
 	function status(text: string) {
 		terminal?.write(`\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`);
@@ -105,26 +106,32 @@
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const wsUrl = `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}`;
 
-		ws = new WebSocket(wsUrl);
-		ws.binaryType = 'arraybuffer';
+		const socket = new WebSocket(wsUrl);
+		socket.binaryType = 'arraybuffer';
+		ws = socket;
 
-		ws.onopen = () => {
+		socket.onopen = () => {
+			if (ws !== socket) return;
 			connected = true;
 			error = null;
 			if (retries > 0 && terminal) {
 				status('reconnected');
 			}
 			retries = 0;
-			// Now that we're connected, render the terminal
 			openTerminal();
 		};
 
-		ws.onmessage = (event) => {
-			if (!terminal) return;
-			terminal.write(event.data instanceof ArrayBuffer ? new Uint8Array(event.data) : event.data);
+		socket.onmessage = (event) => {
+			if (ws !== socket || !terminal) return;
+			if (event.data instanceof ArrayBuffer) {
+				terminal.write(decoder.decode(event.data, { stream: true }));
+			} else {
+				terminal.write(event.data);
+			}
 		};
 
-		ws.onclose = (event: CloseEvent) => {
+		socket.onclose = (event: CloseEvent) => {
+			if (ws !== socket) return;
 			connected = false;
 			if (disposed) return;
 			if (PERMANENT_CLOSE_CODES.has(event.code)) {
@@ -139,10 +146,26 @@
 			scheduleReconnect();
 		};
 
-		ws.onerror = () => {
+		socket.onerror = () => {
+			if (ws !== socket) return;
 			connected = false;
 			error = 'Connection failed';
 		};
+	}
+
+	function detachSocket() {
+		const socket = ws;
+		ws = null;
+		if (!socket) return;
+		socket.onopen = null;
+		socket.onmessage = null;
+		socket.onclose = null;
+		socket.onerror = null;
+		try {
+			socket.close();
+		} catch {
+			return;
+		}
 	}
 
 	function scheduleReconnect() {
@@ -162,8 +185,7 @@
 			clearTimeout(reconnectTimer);
 			reconnectTimer = null;
 		}
-		ws?.close();
-		ws = null;
+		detachSocket();
 		if (terminal) {
 			terminal.write('\x1b[2J\x1b[H');
 		}
@@ -180,22 +202,41 @@
 	}
 
 	$effect(() => {
-		if (visible && fitAddon) {
+		if (!terminal) return;
+		terminal.options.cursorBlink = visible;
+		if (visible) {
 			requestAnimationFrame(() => fitWhenSized());
+		} else {
+			terminal.blur();
 		}
 	});
 
+	function onVisibilityChange() {
+		if (document.visibilityState !== 'visible' || disposed) return;
+		if (ws && ws.readyState === WebSocket.OPEN) return;
+		if (error && !reconnectTimer) return;
+		retries = 0;
+		if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		}
+		detachSocket();
+		connectWebSocket();
+	}
+
 	onMount(() => {
 		mounted = true;
+		document.addEventListener('visibilitychange', onVisibilityChange);
 		init();
 	});
 
 	onDestroy(() => {
 		disposed = true;
+		document.removeEventListener('visibilitychange', onVisibilityChange);
 		if (reconnectTimer) clearTimeout(reconnectTimer);
 		stopThemeWatch?.();
 		resizeObserver?.disconnect();
-		ws?.close();
+		detachSocket();
 		terminal?.dispose();
 		terminal?.wasmTerm?.free?.();
 		terminal = null;

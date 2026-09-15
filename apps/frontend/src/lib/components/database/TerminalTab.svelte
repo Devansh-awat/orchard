@@ -277,16 +277,15 @@
 						<span>No output yet</span>
 					</div>
 				{/if}
-			{:else}
-				{#each terminalTabs as ttab (ttab.id)}
-					<PodTerminal
-						podName={ttab.podName}
-						namespace={database.namespace!}
-						container={ttab.container}
-						visible={activeConsoleTab === ttab.id}
-					/>
-				{/each}
 			{/if}
+			{#each terminalTabs as ttab (ttab.id)}
+				<PodTerminal
+					podName={ttab.podName}
+					namespace={database.namespace!}
+					container={ttab.container}
+					visible={activeConsoleTab === ttab.id}
+				/>
+			{/each}
 		</div>
 	</div>
 {/if}
