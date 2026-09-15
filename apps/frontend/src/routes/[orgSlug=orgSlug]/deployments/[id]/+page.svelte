@@ -1511,8 +1511,8 @@
 				color: 'error'
 			});
 		} finally {
-			stopping = false;
-			starting = false;
+			if (kind === 'stop') stopping = false;
+			else starting = false;
 		}
 	}
 
@@ -1524,15 +1524,18 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ replicas: scaleReplicas })
 			});
+			const data = await response.json().catch(() => null);
 			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to scale app');
+				throw new Error(data?.message || 'Failed to scale app');
 			}
 			toasts.add({
-				title: 'App scaled',
-				description: `Scaled to ${scaleReplicas} replica(s)`,
+				title: data?.stopped ? 'App stopping' : 'App scaled',
+				description: data?.stopped
+					? 'All replicas are being spun down'
+					: `Scaled to ${data?.replicas ?? scaleReplicas} replica(s)`,
 				color: 'success'
 			});
+			if (typeof data?.replicas === 'number') scaleReplicas = data.replicas;
 			scaleDirty = false;
 			fetchDeployment();
 		} catch (e) {
@@ -3265,6 +3268,7 @@
 		title={`Stop "${deployment.displayName || deployment.name}"?`}
 		description={`All ${deployment.replicas} replica${deployment.replicas === 1 ? '' : 's'} will be spun down. You can start the app again with the same replica count.`}
 		confirmLabel="Stop app"
+		danger={false}
 		onconfirm={() => lifecycleAction('stop')}
 		oncancel={() => {}}
 	/>
