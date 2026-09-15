@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.39.1](https://github.com/hackclub/orchard/compare/server/v2.39.0...server/v2.39.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **hostctl:** take the claim link's port from frontend_url ([f8b3ef9](https://github.com/hackclub/orchard/commit/f8b3ef92be902b1fead8862f3c0887600cfc1810))
+
 ## [2.39.0](https://github.com/hackclub/orchard/compare/server/v2.38.2...server/v2.39.0) (2026-09-15)
 
 
