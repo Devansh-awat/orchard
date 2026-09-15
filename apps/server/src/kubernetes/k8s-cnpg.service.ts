@@ -2256,21 +2256,14 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     dbName: string,
     sql: string,
-    options: { asSuperuser?: boolean } = {}
+    options: { asSuperuser?: boolean; tuplesOnly?: boolean } = {}
   ): Promise<{ stdout: string; stderr: string; success: boolean }> {
     const pod = await this.findCnpgPrimaryPod(namespace, clusterName);
     const user = options.asSuperuser ? 'postgres' : 'postgres';
-    return this.execInPod(namespace, pod, 'postgres', [
-      'psql',
-      '-U',
-      user,
-      '-d',
-      dbName,
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      sql
-    ]);
+    const args = ['psql', '-U', user, '-d', dbName, '-v', 'ON_ERROR_STOP=1'];
+    if (options.tuplesOnly) args.push('-t', '-A');
+    args.push('-c', sql);
+    return this.execInPod(namespace, pod, 'postgres', args);
   }
 
   async listCnpgExtensions(
@@ -2364,7 +2357,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       ORDER BY total_exec_time DESC
       LIMIT 100
     ) t;`;
-    const r = await this.runPsqlInCnpg(namespace, clusterName, dbName, sql);
+    const r = await this.runPsqlInCnpg(namespace, clusterName, dbName, sql, { tuplesOnly: true });
     if (!r.success) {
       const out = (r.stdout + r.stderr).toLowerCase();
       if (out.includes('does not exist') || out.includes('shared_preload_libraries')) {
