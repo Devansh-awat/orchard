@@ -47,6 +47,11 @@ it and says so. Turning it on later is one command, and shipping an endpoint for
 a name that does not exist is not: the certificate is issued over HTTP-01, so it
 would retry against nothing and stay quietly broken.
 
+`public` and `lan` mode need ports 80 and 443 free. 80 is not optional and not
+movable: it is where Let's Encrypt sends the HTTP-01 challenge, and the ACME
+spec fixes the port. The installer reports what holds them during its first
+step and stops only if the mode you choose needs them.
+
 amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
 to run on anything else rather than leave you with apps that cannot start.
 
@@ -59,7 +64,9 @@ It also asks how traffic should reach the box:
 - **public**: you have a routable IP; point DNS at it and Let's Encrypt issues
   certificates over HTTP-01
 - **tunnel**: Cloudflare Tunnel, for boxes behind NAT or CGNAT. Cloudflare
-  terminates TLS, so cert-manager is skipped entirely
+  terminates TLS, so cert-manager is skipped entirely, Traefik stays on a
+  ClusterIP, and nothing binds a port on the host. This is also the answer when
+  something else on the box already owns 80 or 443
 - **lan**: LAN only, `sslip.io` hostnames, self-signed certificates
 
 And whether updates are **manual** (`orchard-update` when you want them) or

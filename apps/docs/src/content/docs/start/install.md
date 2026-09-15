@@ -47,6 +47,26 @@ run on other architectures rather than leaving you with apps that cannot start.
 nest its overlayfs snapshotter there, and under CPU emulation seccomp is
 unavailable, so the kubelet never creates a pod sandbox.
 
+### Ports 80 and 443
+
+`public` and `lan` mode both serve on 80 and 443, and neither is movable:
+
+- **80** is where Let's Encrypt sends the HTTP-01 challenge. The port is fixed by
+  the ACME spec, not by Orchard, so a certificate cannot be issued without it.
+  `lan` mode issues self-signed certificates instead, but still serves there
+  because that is where a browser looks.
+- **443** is the traffic itself.
+
+If something else on the box already owns them, `tunnel` mode is the way out.
+Cloudflare terminates TLS and `cloudflared` dials out from inside the cluster, so
+Traefik runs on a ClusterIP and nothing binds a host port at all. The installer
+checks both ports up front, tells you what is holding them, and only refuses if
+the mode you pick needs them.
+
+Running Orchard on a different port instead is not supported: every app gets its
+own hostname under your wildcard domain, and those URLs have nowhere to put a
+port number.
+
 ### What it asks
 
 Two things it cannot work out on its own: your **domain**, and an **email for
@@ -134,7 +154,7 @@ asked:
 | `public`, `tunnel`, `lan` | It can detect NAT, not whether you intend to expose this box                                  |
 | The domain                | Nothing on the box knows what you own                                                         |
 | The DNS records           | It probably has no access to your DNS provider, and the records must exist **before** the run |
-| Whether to proceed        | The installer takes over ports 80 and 443 and installs k3s system-wide                        |
+| Whether to proceed        | Installs k3s system-wide, and outside `tunnel` mode takes over ports 80 and 443               |
 
 Three things to make sure it gets right, because each fails in a way that is
 quiet rather than loud:

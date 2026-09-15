@@ -27,6 +27,8 @@ ASSUME_YES=${ORCHARD_ASSUME_YES:-false}
 INSTALL_URL=${ORCHARD_INSTALL_URL:-https://assets.orchard.my/install.sh}
 PROMPT_TIMEOUT=${ORCHARD_PROMPT_TIMEOUT:-900}
 PROMPT_FD_OPEN=false
+PORTS_BUSY=''
+PORTS_BUSY_DETAIL=''
 PROMPT_BLOCKED=''
 PROMPT_HINT_SHOWN=false
 
@@ -441,15 +443,24 @@ preflight() {
   [ "$DISK_GB" -ge 60 ] || warn "only ${DISK_GB}G free; build cache and images will fill this quickly"
   info "free disk: ${DISK_GB}G"
 
+  # Not fatal here: tunnel mode never binds either port, and the mode is not
+  # chosen until the next step. choose_ingress_mode stops the run if the mode
+  # that gets picked does need them.
   if command -v ss >/dev/null 2>&1; then
+    local holder
     for port in 80 443; do
       if ss -lnt "sport = :$port" 2>/dev/null | grep -q LISTEN; then
-        local holder
-        holder=$(ss -lntp "sport = :$port" 2>/dev/null | tail -1)
-        die "port $port is already in use: $holder"
+        holder=$(ss -lntp "sport = :$port" 2>/dev/null | tail -1 | sed 's/^ *//')
+        PORTS_BUSY="${PORTS_BUSY:+$PORTS_BUSY and }$port"
+        PORTS_BUSY_DETAIL="${PORTS_BUSY_DETAIL}      $holder"$'\n'
       fi
     done
-    info "ports 80/443 are free"
+    if [ -n "$PORTS_BUSY" ]; then
+      warn "port $PORTS_BUSY already in use:"
+      printf '%s' "$PORTS_BUSY_DETAIL" >&2
+    else
+      info "ports 80/443 are free"
+    fi
   else
     warn "ss not found; skipping port check"
   fi
@@ -510,6 +521,14 @@ choose_ingress_mode() {
     echo "  1) public    - I have a routable IP and can point DNS at it"
     echo "  2) tunnel    - Cloudflare Tunnel (works behind NAT/CGNAT)"
     echo "  3) lan       - LAN only, self-signed certificates"
+    if [ -n "$PORTS_BUSY" ]; then
+      echo
+      note "port $PORTS_BUSY is taken on this box, and public and lan both need 80"
+      note "and 443: 80 is where Let's Encrypt sends the HTTP-01 challenge and that"
+      note "cannot be moved, 443 is where the traffic goes. Tunnel mode needs"
+      note "neither, because cloudflared dials out from inside the cluster."
+      echo
+    fi
     local default attempt=0
     default=$([ "$BEHIND_NAT" = true ] && echo 2 || echo 1)
     INGRESS_MODE=''
@@ -530,6 +549,14 @@ choose_ingress_mode() {
     public|tunnel|lan) ;;
     *) die "unknown ingress mode: $INGRESS_MODE" ;;
   esac
+
+  if [ -n "$PORTS_BUSY" ] && [ "$INGRESS_MODE" != tunnel ]; then
+    warn "$INGRESS_MODE mode serves on 80 and 443, and port $PORTS_BUSY is taken:"
+    printf '%s' "$PORTS_BUSY_DETAIL" >&2
+    note "Free it, move whatever holds it, or install in tunnel mode"
+    note "(--mode tunnel), which binds nothing on this box."
+    die "stopped before installing anything"
+  fi
 }
 
 collect_domains() {
@@ -828,10 +855,18 @@ install_operators() {
 
   run_step "fetching chart repositories" 20s add_helm_repos
 
+  # A LoadBalancer service means k3s servicelb, which binds 80 and 443 on the
+  # node. In tunnel mode cloudflared reaches Traefik over its ClusterIP from
+  # inside the cluster, so claiming the host ports would only pick a fight with
+  # whatever else is on them.
+  local traefik_service=LoadBalancer
+  if [ "$INGRESS_MODE" = tunnel ]; then traefik_service=ClusterIP; fi
+
   run_step "Traefik" 1m30s helm upgrade --install traefik traefik/traefik \
     --namespace traefik --create-namespace \
     --set providers.kubernetesGateway.enabled=true \
     --set gateway.enabled=false \
+    --set service.spec.type="$traefik_service" \
     --wait --timeout 10m
 
   run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
