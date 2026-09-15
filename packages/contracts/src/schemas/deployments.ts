@@ -11,7 +11,7 @@ const envVarInput = z.object({
   // (or a blank on a row that is secret before and after) keeps what is
   // stored, so a read-modify-write client never has to know one to keep one.
   value: z.string().nullable().optional(),
-  secret: z.boolean().optional(),
+  secret: z.boolean().optional()
 });
 
 const portInput = z.object({
@@ -19,7 +19,7 @@ const portInput = z.object({
   containerPort: z.number().int().optional(),
   servicePort: z.number().int().optional(),
   protocol: z.string().optional(),
-  nodePort: z.number().int().optional(),
+  nodePort: z.number().int().optional()
 });
 
 const volumeInput = z.object({
@@ -29,19 +29,19 @@ const volumeInput = z.object({
   pvcName: z.string().optional(),
   storageSize: z.string().optional(),
   hostPath: z.string().optional(),
-  readOnly: z.boolean().optional(),
+  readOnly: z.boolean().optional()
 });
 
 const ingressRouteInput = z.object({
   path: z.string(),
   serviceName: z.string(),
-  servicePort: z.number().int(),
+  servicePort: z.number().int()
 });
 
 const basicAuthInput = z.object({
   enabled: z.boolean(),
   username: z.string().optional(),
-  password: z.string().optional(),
+  password: z.string().optional()
 });
 
 const envVarRecord = z
@@ -52,7 +52,7 @@ const envVarRecord = z
     value: z.string().nullable(),
     secret: z.boolean(),
     createdAt: z.string(),
-    updatedAt: z.string(),
+    updatedAt: z.string()
   })
   .passthrough();
 
@@ -66,7 +66,7 @@ const servicePortRecord = z
     protocol: z.string(),
     nodePort: z.number().nullable().optional(),
     publicEnabled: z.boolean().optional(),
-    publicPort: z.number().nullable().optional(),
+    publicPort: z.number().nullable().optional()
   })
   .passthrough();
 
@@ -86,7 +86,7 @@ const serviceRecord = z
     updatedAt: z.string(),
     ports: z.array(servicePortRecord).optional(),
     internalUrl: z.string().optional(),
-    internalUrls: z.array(z.string()).optional(),
+    internalUrls: z.array(z.string()).optional()
   })
   .passthrough();
 
@@ -94,7 +94,7 @@ const ingressRouteRecord = z
   .object({
     path: z.string(),
     serviceName: z.string(),
-    servicePort: z.number(),
+    servicePort: z.number()
   })
   .passthrough();
 
@@ -123,7 +123,7 @@ const ingressRecord = z
     routes: z.array(ingressRouteRecord).optional(),
     service: serviceRecord.nullable().optional(),
     createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().optional()
   })
   .passthrough();
 
@@ -139,7 +139,7 @@ const volumeRecord = z
     hostPath: z.string().nullable().optional(),
     readOnly: z.boolean(),
     createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().optional()
   })
   .passthrough();
 
@@ -168,15 +168,15 @@ const podRecord = z
               .object({
                 reason: z.string(),
                 exitCode: z.number().nullable().optional(),
-                finishedAt: z.string().nullable().optional(),
+                finishedAt: z.string().nullable().optional()
               })
               .passthrough()
               .nullable()
-              .optional(),
+              .optional()
           })
-          .passthrough(),
+          .passthrough()
       )
-      .optional(),
+      .optional()
   })
   .passthrough();
 
@@ -184,7 +184,7 @@ const podWarning = z
   .object({
     podName: z.string().optional(),
     message: z.string().optional(),
-    timestamp: z.string().optional(),
+    timestamp: z.string().optional()
   })
   .passthrough();
 
@@ -193,7 +193,7 @@ const userRef = z
     id: z.string(),
     username: z.string().nullable().optional(),
     firstName: z.string().nullable().optional(),
-    lastName: z.string().nullable().optional(),
+    lastName: z.string().nullable().optional()
   })
   .passthrough();
 
@@ -215,7 +215,7 @@ const imageHistoryRecord = z
     triggeredById: z.string().nullable().optional(),
     triggeredBy: userRef.nullable().optional(),
     isActive: z.boolean(),
-    createdAt: z.string(),
+    createdAt: z.string()
   })
   .passthrough();
 
@@ -224,7 +224,7 @@ const projectRef = z
     id: z.string(),
     name: z.string(),
     slug: z.string().optional(),
-    organizationId: z.string().optional(),
+    organizationId: z.string().optional()
   })
   .passthrough();
 
@@ -299,7 +299,7 @@ const deploymentBase = z
         interval: z.number().optional(),
         timeout: z.number().optional(),
         retries: z.number().optional(),
-        startPeriod: z.number().optional(),
+        startPeriod: z.number().optional()
       })
       .nullable()
       .optional(),
@@ -307,7 +307,7 @@ const deploymentBase = z
     templateInstanceId: z.string().nullable().optional(),
     composeStackId: z.string().nullable().optional(),
     composeServiceName: z.string().nullable().optional(),
-    environmentId: z.string().nullable().optional(),
+    environmentId: z.string().nullable().optional()
   })
   .passthrough();
 
@@ -318,7 +318,7 @@ const deploymentWithRelations = deploymentBase.extend({
   volumes: z.array(volumeRecord).optional(),
   ingresses: z.array(ingressRecord).optional(),
   project: projectRef.optional(),
-  warnings: z.array(podWarning).optional(),
+  warnings: z.array(podWarning).optional()
 });
 
 const deploymentDetail = deploymentWithRelations.extend({
@@ -332,11 +332,11 @@ const deploymentDetail = deploymentWithRelations.extend({
       id: z.string(),
       name: z.string(),
       slug: z.string(),
-      isDefault: z.boolean(),
+      isDefault: z.boolean()
     })
     .passthrough()
     .nullable()
-    .optional(),
+    .optional()
 });
 
 const deploymentSummary = z
@@ -351,7 +351,7 @@ const deploymentSummary = z
     updatedAt: z.string(),
     replicas: z.number(),
     ingresses: z.array(z.object({ id: z.string(), host: z.string() }).passthrough()),
-    project: projectRef,
+    project: projectRef
   })
   .passthrough();
 
@@ -367,9 +367,9 @@ const metricsResponse = z
         cpu: z.array(seriesPoint),
         mem: z.array(seriesPoint),
         rx: z.array(seriesPoint),
-        tx: z.array(seriesPoint),
+        tx: z.array(seriesPoint)
       })
-      .passthrough(),
+      .passthrough()
   })
   .passthrough();
 
@@ -381,7 +381,7 @@ const killedContainerMeta = z
     reason: z.string(),
     exitCode: z.number().nullable(),
     finishedAt: z.string().nullable(),
-    capturedAt: z.string(),
+    capturedAt: z.string()
   })
   .passthrough();
 
@@ -400,14 +400,14 @@ const githubDeploymentRecord = z
     logUrl: z.string().nullable().optional(),
     environmentUrl: z.string().nullable().optional(),
     createdAt: z.string(),
-    updatedAt: z.string(),
+    updatedAt: z.string()
   })
   .passthrough();
 
 const protectionResponse = z
   .object({
     protectionMode: z.enum(['none', 'password', 'orchard']),
-    protectionBypassSecret: z.string().nullable(),
+    protectionBypassSecret: z.string().nullable()
   })
   .passthrough();
 
@@ -419,14 +419,14 @@ const deploymentIngressRequest = z.object({
   tlsEnabled: z.boolean().optional(),
   annotations: z.record(z.string()).optional(),
   routes: z.array(ingressRouteInput).optional(),
-  basicAuth: basicAuthInput.optional(),
+  basicAuth: basicAuthInput.optional()
 });
 
 const projectIngressRequest = z.object({
   host: z.string(),
   tlsEnabled: z.boolean().optional(),
   routes: z.array(ingressRouteInput),
-  basicAuth: basicAuthInput.optional(),
+  basicAuth: basicAuthInput.optional()
 });
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
@@ -434,7 +434,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: 'List deployments visible to the caller (summary shape)',
     scope: 'read',
     request: z.object({ orgId: z.string().optional() }),
-    response: z.array(deploymentSummary),
+    response: z.array(deploymentSummary)
   },
   'GET /deployments/recent-builds': {
     summary: 'List active and recently completed builds',
@@ -455,9 +455,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
               githubRepo: z.string().nullable().optional(),
               githubBranch: z.string().nullable().optional(),
               ingresses: z.array(z.object({ host: z.string() }).passthrough()),
-              project: z.object({ name: z.string() }).passthrough(),
+              project: z.object({ name: z.string() }).passthrough()
             })
-            .passthrough(),
+            .passthrough()
         ),
         recent: z.array(
           z
@@ -475,31 +475,31 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
                   image: z.string().nullable().optional(),
                   buildStatus: z.string(),
                   ingresses: z.array(z.object({ host: z.string() }).passthrough()),
-                  project: z.object({ name: z.string() }).passthrough(),
+                  project: z.object({ name: z.string() }).passthrough()
                 })
-                .passthrough(),
+                .passthrough()
             })
-            .passthrough(),
-        ),
+            .passthrough()
+        )
       })
-      .passthrough(),
+      .passthrough()
   },
   'GET /deployments/:id': {
     summary: 'Get a deployment with live pods, services, ingresses, and image history',
     scope: 'read',
-    response: deploymentDetail,
+    response: deploymentDetail
   },
   'DELETE /deployments/:id': {
     summary: 'Delete a deployment and all its Kubernetes resources',
     scope: 'deploy',
     response: z
       .object({ success: z.boolean(), deploymentId: z.string(), projectId: z.string() })
-      .passthrough(),
+      .passthrough()
   },
   'GET /projects/:id/deployments': {
     summary: 'List deployments in a project with live pod state',
     scope: 'read',
-    response: z.array(deploymentWithRelations),
+    response: z.array(deploymentWithRelations)
   },
   'POST /projects/:id/deployments': {
     summary: 'Create a deployment from a Docker image',
@@ -519,10 +519,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .enum(['Always', 'IfNotPresent'])
         .nullish()
         .describe(
-          'Omit to derive it from the tag, which already gives a moving tag like :latest the Always behaviour. Pass a value only to pin it.',
-        ),
+          'Omit to derive it from the tag, which already gives a moving tag like :latest the Always behaviour. Pass a value only to pin it.'
+        )
     }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'POST /projects/:id/deployments/from-github': {
     summary: 'Create a deployment built from a GitHub repository',
@@ -552,36 +552,36 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       exposePublic: z.boolean().optional(),
       volumes: z.array(volumeInput).optional(),
       cpuRequestMilli: z.number().int().nullable().optional(),
-      memoryRequestBytes: z.number().int().nullable().optional(),
+      memoryRequestBytes: z.number().int().nullable().optional()
     }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PUT /deployments/:id/env': {
     summary: 'Replace the environment variables of a deployment',
     scope: 'deploy',
     request: z.object({ env: z.array(envVarInput) }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PATCH /deployments/:id/resources': {
     summary: 'Update per-pod CPU and memory requests',
     scope: 'deploy',
     request: z.object({
       cpuRequestMilli: z.number().int().nullable().optional(),
-      memoryRequestBytes: z.number().int().nullable().optional(),
+      memoryRequestBytes: z.number().int().nullable().optional()
     }),
-    response: deploymentBase,
+    response: deploymentBase
   },
   'PATCH /deployments/:id/image': {
     summary: 'Change the container image of an image-based deployment',
     scope: 'deploy',
     request: z.object({ image: z.string() }),
-    response: deploymentBase,
+    response: deploymentBase
   },
   'PATCH /deployments/:id/strategy': {
     summary: 'Change the deploy strategy',
     scope: 'deploy',
     request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate']) }),
-    response: deploymentBase,
+    response: deploymentBase
   },
   'GET /deployments/:id/next-steps': {
     summary: 'What is still worth configuring on this deployment',
@@ -592,11 +592,13 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           id: z.string(),
           applicable: z
             .boolean()
-            .describe('False when the step cannot apply here, e.g. auto-deploy on a non-GitHub app.'),
-          done: z.boolean(),
-        }),
-      ),
-    }),
+            .describe(
+              'False when the step cannot apply here, e.g. auto-deploy on a non-GitHub app.'
+            ),
+          done: z.boolean()
+        })
+      )
+    })
   },
   'PATCH /deployments/:id/pull-policy': {
     summary: 'Pin or clear the image pull policy override',
@@ -606,16 +608,16 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .enum(['Always', 'IfNotPresent'])
         .nullable()
         .describe(
-          'Pin the policy, or null to go back to deriving it from the image tag. A pinned value survives an image change.',
-        ),
+          'Pin the policy, or null to go back to deriving it from the image tag. A pinned value survives an image change.'
+        )
     }),
-    response: deploymentBase,
+    response: deploymentBase
   },
   'PUT /deployments/:id/volumes': {
     summary: 'Replace the volumes of a deployment',
     scope: 'deploy',
     request: z.object({ volumes: z.array(volumeInput) }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PUT /deployments/:id/health-check': {
     summary: 'Update health check configuration',
@@ -634,9 +636,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       healthCheckRetries: z.number().int(),
       startupFailureThreshold: z.number().int(),
       // Ignore the Dockerfile's HEALTHCHECK and run the fields above instead.
-      healthCheckOverride: z.boolean().optional(),
+      healthCheckOverride: z.boolean().optional()
     }),
-    response: deploymentDetail,
+    response: deploymentDetail
   },
   'PUT /deployments/:id/build-config': {
     summary: 'Update build settings',
@@ -652,9 +654,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       installCommand: z.string().nullable().optional(),
       buildCommand: z.string().nullable().optional(),
       startCommand: z.string().nullable().optional(),
-      outputDirectory: z.string().nullable().optional(),
+      outputDirectory: z.string().nullable().optional()
     }),
-    response: deploymentDetail,
+    response: deploymentDetail
   },
   'POST /deployments/:id/scale': {
     summary: 'Scale a deployment to a replica count',
@@ -665,9 +667,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         success: z.boolean(),
         deploymentId: z.string(),
         projectId: z.string(),
-        replicas: z.number(),
+        replicas: z.number()
       })
-      .passthrough(),
+      .passthrough()
   },
   'POST /deployments/:id/restart': {
     summary: 'Rolling-restart all pods of a deployment',
@@ -677,31 +679,31 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         success: z.boolean(),
         deployment: z.string(),
         namespace: z.string(),
-        restartedAt: z.string(),
+        restartedAt: z.string()
       })
-      .passthrough(),
+      .passthrough()
   },
   'POST /deployments/:id/rebuild': {
     summary: 'Trigger a rebuild from the linked GitHub repository',
     scope: 'deploy',
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'POST /deployments/:id/cancel': {
     summary: 'Cancel an in-progress build',
     scope: 'deploy',
     response: z
       .object({ success: z.boolean(), deploymentId: z.string(), message: z.string() })
-      .passthrough(),
+      .passthrough()
   },
   'POST /deployments/:id/rollback/:imageHistoryId': {
     summary: 'Roll back to a previous image',
     scope: 'deploy',
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'GET /deployments/:id/pods': {
     summary: 'List the pods of a deployment',
     scope: 'read',
-    response: z.array(podRecord),
+    response: z.array(podRecord)
   },
   'GET /deployments/:id/pods-live': {
     summary: 'Live pod state with usage totals',
@@ -712,9 +714,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         warnings: z.array(podWarning),
         availableReplicas: z.number(),
         totalCpuUsage: z.number().nullable(),
-        totalMemoryUsage: z.number().nullable(),
+        totalMemoryUsage: z.number().nullable()
       })
-      .passthrough(),
+      .passthrough()
   },
   'GET /deployments/:id/metrics': {
     summary: 'CPU, memory, and network time series for a deployment',
@@ -722,9 +724,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({
       start: z.string().optional(),
       end: z.string().optional(),
-      step: z.string().optional(),
+      step: z.string().optional()
     }),
-    response: metricsResponse,
+    response: metricsResponse
   },
   'GET /deployments/:id/logs': {
     summary: 'Build logs and status (logs redacted for viewers)',
@@ -733,29 +735,29 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       .object({
         logs: z.string(),
         status: z.string(),
-        buildError: z.string().nullable(),
+        buildError: z.string().nullable()
       })
-      .passthrough(),
+      .passthrough()
   },
   'GET /deployments/:id/image-history': {
     summary: 'List image history entries',
     scope: 'read',
-    response: z.array(imageHistoryRecord),
+    response: z.array(imageHistoryRecord)
   },
   'GET /deployments/:id/image-history/:imageHistoryId/logs': {
     summary: 'Build logs for an image history entry',
     scope: 'read',
-    response: z.object({ logs: z.string() }).passthrough(),
+    response: z.object({ logs: z.string() }).passthrough()
   },
   'GET /deployments/:id/killed-containers': {
     summary: 'List recently killed containers with captured metadata',
     scope: 'read',
-    response: z.array(killedContainerMeta),
+    response: z.array(killedContainerMeta)
   },
   'GET /deployments/:id/killed-containers/:entryId/logs': {
     summary: 'Captured logs of a killed container',
     scope: 'read',
-    response: killedContainerMeta.extend({ logs: z.string() }),
+    response: killedContainerMeta.extend({ logs: z.string() })
   },
   'POST /deployments/:deploymentId/services': {
     summary: 'Create a service for a deployment',
@@ -764,29 +766,29 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       name: z.string(),
       ports: z.array(portInput),
       exposePublic: z.boolean().optional(),
-      domain: z.string().nullable().optional(),
+      domain: z.string().nullable().optional()
     }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PUT /deployments/:deploymentId/services/:serviceId': {
     summary: 'Update service ports and domain',
     scope: 'deploy',
     request: z.object({
       ports: z.array(portInput).optional(),
-      domain: z.string().nullable().optional(),
+      domain: z.string().nullable().optional()
     }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'DELETE /deployments/:deploymentId/services/:serviceId': {
     summary: 'Delete a service from a deployment',
     scope: 'deploy',
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PATCH /deployments/:deploymentId/services/:serviceId/exposure': {
     summary: 'Toggle public exposure of a service',
     scope: 'deploy',
     request: z.object({ exposePublic: z.boolean() }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'POST /deployments/:deploymentId/services/:serviceId/ports/:portId/public': {
     summary: 'Expose a service port on the public IP',
@@ -797,31 +799,31 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         host: z.string(),
         ip: z.string(),
         port: z.number(),
-        protocol: z.string(),
+        protocol: z.string()
       })
-      .passthrough(),
+      .passthrough()
   },
   'DELETE /deployments/:deploymentId/services/:serviceId/ports/:portId/public': {
     summary: 'Remove the public exposure of a service port',
     scope: 'deploy',
-    response: z.object({ enabled: z.boolean() }).passthrough(),
+    response: z.object({ enabled: z.boolean() }).passthrough()
   },
   'POST /deployments/:id/ingresses': {
     summary: 'Create an ingress for a deployment',
     scope: 'deploy',
     request: deploymentIngressRequest,
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'PUT /deployments/:deploymentId/ingresses/:ingressId': {
     summary: 'Update a deployment ingress',
     scope: 'deploy',
     request: deploymentIngressRequest,
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'DELETE /deployments/:deploymentId/ingresses/:ingressId': {
     summary: 'Delete a deployment ingress',
     scope: 'deploy',
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'GET /ingresses/:id': {
     summary: 'Get an ingress by id with resolved routes',
@@ -831,18 +833,18 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       address: z.string().nullable().optional(),
       routes: z.array(ingressRouteRecord),
       deployment: deploymentBase.nullable().optional(),
-      project: projectRef.optional(),
-    }),
+      project: projectRef.optional()
+    })
   },
   'POST /projects/:id/ingresses': {
     summary: 'Create a project-level ingress (returns the full project)',
     scope: 'deploy',
-    request: projectIngressRequest,
+    request: projectIngressRequest
   },
   'PUT /projects/:id/ingresses/:ingressId': {
     summary: 'Update a project-level ingress (returns the full project)',
     scope: 'deploy',
-    request: projectIngressRequest,
+    request: projectIngressRequest
   },
   'GET /projects/:id/ingresses/:ingressId': {
     summary: 'Get a project-level ingress with resolved routes',
@@ -857,34 +859,34 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         routes: z.array(ingressRouteRecord),
         basicAuthEnabled: z.boolean(),
         protectionMode: z.enum(['none', 'password', 'orchard']),
-        project: projectRef,
+        project: projectRef
       })
-      .passthrough(),
+      .passthrough()
   },
   'DELETE /projects/:id/ingresses/:ingressId': {
     summary: 'Delete a project-level ingress',
     scope: 'deploy',
-    response: z.object({ success: z.boolean() }).passthrough(),
+    response: z.object({ success: z.boolean() }).passthrough()
   },
   'GET /projects/:id/ingresses/:ingressId/protection': {
     summary: 'Get ingress protection settings',
     scope: 'read',
-    response: protectionResponse,
+    response: protectionResponse
   },
   'PUT /projects/:id/ingresses/:ingressId/protection': {
     summary: 'Update ingress protection mode',
     scope: 'deploy',
     request: z.object({
       mode: z.enum(['none', 'password', 'orchard']),
-      password: z.string().optional(),
+      password: z.string().optional()
     }),
-    response: protectionResponse,
+    response: protectionResponse
   },
   'POST /projects/ingresses/validate-dns': {
     summary: 'Validate that a custom domain points at the ingress CNAME',
     scope: 'read',
     request: z.object({ projectId: z.string(), domain: z.string() }),
-    response: z.object({ valid: z.boolean(), message: z.string() }).passthrough(),
+    response: z.object({ valid: z.boolean(), message: z.string() }).passthrough()
   },
   'GET /deployments/:id/auto-deploy': {
     summary: 'Get auto-deploy status',
@@ -894,9 +896,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         enabled: z.boolean(),
         branch: z.string().nullable(),
         paths: z.array(z.string()),
-        appInstalled: z.boolean(),
+        appInstalled: z.boolean()
       })
-      .passthrough(),
+      .passthrough()
   },
   'POST /deployments/:id/auto-deploy/enable': {
     summary: 'Enable auto-deploy for a branch',
@@ -907,20 +909,20 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .array(z.string())
         .optional()
         .describe(
-          'Glob patterns a push must touch to trigger a build. Empty deploys on every push. Prefix a pattern with ! to exclude. Omit to leave unchanged.',
-        ),
+          'Glob patterns a push must touch to trigger a build. Empty deploys on every push. Prefix a pattern with ! to exclude. Omit to leave unchanged.'
+        )
     }),
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'POST /deployments/:id/auto-deploy/disable': {
     summary: 'Disable auto-deploy',
     scope: 'deploy',
-    response: deploymentWithRelations,
+    response: deploymentWithRelations
   },
   'GET /deployments/:id/github-deployments': {
     summary: 'List GitHub Deployments API records for a deployment',
     scope: 'read',
-    response: z.array(githubDeploymentRecord),
+    response: z.array(githubDeploymentRecord)
   },
   'GET /deployments/:id/webhook-tokens': {
     summary: 'List webhook tokens (hashes only, never the secret)',
@@ -931,10 +933,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           id: z.string(),
           label: z.string().nullable(),
           createdAt: z.string(),
-          lastUsedAt: z.string().nullable(),
+          lastUsedAt: z.string().nullable()
         })
-        .passthrough(),
-    ),
+        .passthrough()
+    )
   },
   'POST /deployments/:id/webhook-tokens': {
     summary: 'Create a webhook token (plaintext returned once)',
@@ -945,13 +947,13 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         id: z.string(),
         token: z.string(),
         label: z.string().nullable(),
-        createdAt: z.string(),
+        createdAt: z.string()
       })
-      .passthrough(),
+      .passthrough()
   },
   'DELETE /deployments/:id/webhook-tokens/:tokenId': {
     summary: 'Delete a webhook token',
     scope: 'deploy',
-    response: z.object({ ok: z.boolean() }).passthrough(),
-  },
+    response: z.object({ ok: z.boolean() }).passthrough()
+  }
 };

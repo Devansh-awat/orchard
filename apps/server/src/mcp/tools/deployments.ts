@@ -15,18 +15,28 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
         name: z.string().describe('Deployment name'),
         image: z.string().describe('Docker image (e.g. nginx:latest, ghcr.io/user/app:v1)'),
         replicas: z.number().optional().describe('Number of replicas (default: 1)'),
-        port: z.number().optional().describe('Port the container listens on (default: 80). The created service will target this port.'),
-        env: z.array(z.object({
-          key: z.string().describe('Environment variable name'),
-          value: z.string().describe('Environment variable value'),
-        })).optional().describe('Environment variables to set on the deployment'),
+        port: z
+          .number()
+          .optional()
+          .describe(
+            'Port the container listens on (default: 80). The created service will target this port.'
+          ),
+        env: z
+          .array(
+            z.object({
+              key: z.string().describe('Environment variable name'),
+              value: z.string().describe('Environment variable value')
+            })
+          )
+          .optional()
+          .describe('Environment variables to set on the deployment'),
         cpuRequestMilli: z
           .number()
           .int()
           .positive()
           .optional()
           .describe(
-            'CPU request in millicores per pod (e.g. 500 = 0.5 CPU). Subject to project / org / per-member quotas — the API will reject the request if the resulting allocation exceeds the caller\'s limit.',
+            "CPU request in millicores per pod (e.g. 500 = 0.5 CPU). Subject to project / org / per-member quotas — the API will reject the request if the resulting allocation exceeds the caller's limit."
           ),
         memoryRequestBytes: z
           .number()
@@ -34,17 +44,27 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           .positive()
           .optional()
           .describe(
-            'Memory request in bytes per pod (e.g. 536870912 = 512Mi). Subject to project / org / per-member quotas.',
+            'Memory request in bytes per pod (e.g. 536870912 = 512Mi). Subject to project / org / per-member quotas.'
           ),
         imagePullPolicy: z
           .enum(['Always', 'IfNotPresent'])
           .optional()
           .describe(
-            'Leave unset: the policy is derived from the tag, so a moving tag like latest already gets Always. Only pass this to override that.',
-          ),
-      },
+            'Leave unset: the policy is derived from the tag, so a moving tag like latest already gets Always. Only pass this to override that.'
+          )
+      }
     },
-    async ({ projectId, name, image, replicas, port, env, cpuRequestMilli, memoryRequestBytes, imagePullPolicy }) => {
+    async ({
+      projectId,
+      name,
+      image,
+      replicas,
+      port,
+      env,
+      cpuRequestMilli,
+      memoryRequestBytes,
+      imagePullPolicy
+    }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments`, {
         name,
         image,
@@ -53,10 +73,10 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
         ...(memoryRequestBytes != null && { memoryRequestBytes }),
-        ...(imagePullPolicy != null && { imagePullPolicy }),
+        ...(imagePullPolicy != null && { imagePullPolicy })
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -70,23 +90,35 @@ Returns:
 If linked is false, tell the user to link their GitHub account at /user/settings in the Orchard UI.
 If installations is empty, tell the user to install the Orchard GitHub App on their personal account or org. The install URL can be fetched server-side; ask the user to visit /user/settings.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const status = await client.get('/github/status');
-      let hint = 'GitHub account not linked. Ask the user to link it at /user/settings in the Orchard UI before deploying.';
+      let hint =
+        'GitHub account not linked. Ask the user to link it at /user/settings in the Orchard UI before deploying.';
       if (status.linked) {
         hint = status.installations?.length
           ? 'Use deploy_from_github with githubRepo="owner/repo" where owner matches one of the installation accountLogins. Use list_github_app_repos to see deployable repos.'
           : 'Account linked but no GitHub App installations visible. Ask the user to install the Orchard GitHub App on their account/org via the Orchard UI settings.';
       }
-      return { content: [{ type: 'text', text: JSON.stringify({
-        linked: status.linked,
-        username: status.username,
-        installations: status.installations,
-        hint,
-      }, null, 2) }] };
-    },
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                linked: status.linked,
+                username: status.username,
+                installations: status.installations,
+                hint
+              },
+              null,
+              2
+            )
+          }
+        ]
+      };
+    }
   );
 
   server.registerTool(
@@ -107,22 +139,69 @@ Before using this tool:
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().describe('Deployment name'),
-        githubRepo: z.string().describe('GitHub repository in owner/repo format (e.g. user/my-app)'),
+        githubRepo: z
+          .string()
+          .describe('GitHub repository in owner/repo format (e.g. user/my-app)'),
         branch: z.string().optional().describe('Branch to deploy from (default: main)'),
-        dockerfilePath: z.string().optional().describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
-        buildFromRoot: z.boolean().optional().describe('Whether to use repo root as build context (default: false)'),
-        buildType: z.enum(['dockerfile', 'railpack']).optional().describe('"dockerfile" builds the repo Dockerfile; "railpack" detects the language/framework and builds with no Dockerfile'),
-        rootDirectory: z.string().optional().describe('Directory of the app inside the repo, e.g. apps/web. Only for railpack builds. Leave unset for a single-app repo'),
-        framework: z.string().optional().describe('Framework label, e.g. vite or nextjs. Normally left unset so Railpack detects it'),
-        installCommand: z.string().optional().describe('Override the install step. Leave unset to use Railpack detection'),
-        buildCommand: z.string().optional().describe('Override the build step. Leave unset to use Railpack detection'),
-        startCommand: z.string().optional().describe('Override the container start command. Leave unset to use Railpack detection'),
-        outputDirectory: z.string().optional().describe('Directory of built static files, e.g. dist. Setting this makes the app a static site served by Caddy instead of a running server'),
-        port: z.number().optional().describe('Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'),
-        env: z.array(z.object({
-          key: z.string().describe('Environment variable name'),
-          value: z.string().describe('Environment variable value'),
-        })).optional().describe('Environment variables to set on the deployment'),
+        dockerfilePath: z
+          .string()
+          .optional()
+          .describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
+        buildFromRoot: z
+          .boolean()
+          .optional()
+          .describe('Whether to use repo root as build context (default: false)'),
+        buildType: z
+          .enum(['dockerfile', 'railpack'])
+          .optional()
+          .describe(
+            '"dockerfile" builds the repo Dockerfile; "railpack" detects the language/framework and builds with no Dockerfile'
+          ),
+        rootDirectory: z
+          .string()
+          .optional()
+          .describe(
+            'Directory of the app inside the repo, e.g. apps/web. Only for railpack builds. Leave unset for a single-app repo'
+          ),
+        framework: z
+          .string()
+          .optional()
+          .describe(
+            'Framework label, e.g. vite or nextjs. Normally left unset so Railpack detects it'
+          ),
+        installCommand: z
+          .string()
+          .optional()
+          .describe('Override the install step. Leave unset to use Railpack detection'),
+        buildCommand: z
+          .string()
+          .optional()
+          .describe('Override the build step. Leave unset to use Railpack detection'),
+        startCommand: z
+          .string()
+          .optional()
+          .describe('Override the container start command. Leave unset to use Railpack detection'),
+        outputDirectory: z
+          .string()
+          .optional()
+          .describe(
+            'Directory of built static files, e.g. dist. Setting this makes the app a static site served by Caddy instead of a running server'
+          ),
+        port: z
+          .number()
+          .optional()
+          .describe(
+            'Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'
+          ),
+        env: z
+          .array(
+            z.object({
+              key: z.string().describe('Environment variable name'),
+              value: z.string().describe('Environment variable value')
+            })
+          )
+          .optional()
+          .describe('Environment variables to set on the deployment'),
         cpuRequestMilli: z
           .number()
           .int()
@@ -134,13 +213,27 @@ Before using this tool:
           .int()
           .positive()
           .optional()
-          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
-      },
+          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.')
+      }
     },
     async ({
-      projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env,
-      cpuRequestMilli, memoryRequestBytes,
-      buildType, rootDirectory, framework, installCommand, buildCommand, startCommand, outputDirectory,
+      projectId,
+      name,
+      githubRepo,
+      branch,
+      dockerfilePath,
+      buildFromRoot,
+      port,
+      env,
+      cpuRequestMilli,
+      memoryRequestBytes,
+      buildType,
+      rootDirectory,
+      framework,
+      installCommand,
+      buildCommand,
+      startCommand,
+      outputDirectory
     }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
         name,
@@ -158,10 +251,10 @@ Before using this tool:
         ...(port && { port }),
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
-        ...(memoryRequestBytes != null && { memoryRequestBytes }),
+        ...(memoryRequestBytes != null && { memoryRequestBytes })
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -180,28 +273,81 @@ Before calling, you should still confirm with list_github_deploy_targets that th
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().describe('Deployment name'),
-        repoUrl: z.string().describe('Full GitHub URL to the repo (https:// or git@). May include /tree/<branch> or /blob/<branch> segments — the branch will be parsed out.'),
-        branch: z.string().optional().describe('Branch to deploy. Overrides any branch inferred from the URL. Defaults to main if neither is provided.'),
-        dockerfilePath: z.string().optional().describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
-        buildFromRoot: z.boolean().optional().describe('Whether to use repo root as build context (default: false)'),
-        port: z.number().optional().describe('Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'),
-        env: z.array(z.object({
-          key: z.string().describe('Environment variable name'),
-          value: z.string().describe('Environment variable value'),
-        })).optional().describe('Environment variables to set on the deployment'),
-        cpuRequestMilli: z.number().int().positive().optional().describe('CPU request in millicores per pod. Subject to project/org/member quotas.'),
-        memoryRequestBytes: z.number().int().positive().optional().describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
-      },
+        repoUrl: z
+          .string()
+          .describe(
+            'Full GitHub URL to the repo (https:// or git@). May include /tree/<branch> or /blob/<branch> segments — the branch will be parsed out.'
+          ),
+        branch: z
+          .string()
+          .optional()
+          .describe(
+            'Branch to deploy. Overrides any branch inferred from the URL. Defaults to main if neither is provided.'
+          ),
+        dockerfilePath: z
+          .string()
+          .optional()
+          .describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
+        buildFromRoot: z
+          .boolean()
+          .optional()
+          .describe('Whether to use repo root as build context (default: false)'),
+        port: z
+          .number()
+          .optional()
+          .describe(
+            'Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'
+          ),
+        env: z
+          .array(
+            z.object({
+              key: z.string().describe('Environment variable name'),
+              value: z.string().describe('Environment variable value')
+            })
+          )
+          .optional()
+          .describe('Environment variables to set on the deployment'),
+        cpuRequestMilli: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('CPU request in millicores per pod. Subject to project/org/member quotas.'),
+        memoryRequestBytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.')
+      }
     },
-    async ({ projectId, name, repoUrl, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
+    async ({
+      projectId,
+      name,
+      repoUrl,
+      branch,
+      dockerfilePath,
+      buildFromRoot,
+      port,
+      env,
+      cpuRequestMilli,
+      memoryRequestBytes
+    }) => {
       const trimmed = repoUrl.trim();
-      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/\s]+))?(?:\/.*)?$/i);
+      const httpsMatch = trimmed.match(
+        /^https?:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/\s]+))?(?:\/.*)?$/i
+      );
       const sshMatch = trimmed.match(/^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i);
       const m = httpsMatch ?? sshMatch;
       if (!m) {
         return {
           isError: true,
-          content: [{ type: 'text', text: `Could not parse GitHub URL: ${repoUrl}. Expected something like https://github.com/owner/repo or https://github.com/owner/repo/tree/branch.` }],
+          content: [
+            {
+              type: 'text',
+              text: `Could not parse GitHub URL: ${repoUrl}. Expected something like https://github.com/owner/repo or https://github.com/owner/repo/tree/branch.`
+            }
+          ]
         };
       }
       const owner = m[1];
@@ -218,10 +364,10 @@ Before calling, you should still confirm with list_github_deploy_targets that th
         ...(port && { port }),
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
-        ...(memoryRequestBytes != null && { memoryRequestBytes }),
+        ...(memoryRequestBytes != null && { memoryRequestBytes })
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -246,8 +392,8 @@ Pass null for either field to clear it and fall back to the project / org defaul
           .positive()
           .nullable()
           .optional()
-          .describe('New memory request in bytes per pod, or null to clear.'),
-      },
+          .describe('New memory request in bytes per pod, or null to clear.')
+      }
     },
     async ({ deploymentId, cpuRequestMilli, memoryRequestBytes }) => {
       const body: Record<string, unknown> = {};
@@ -255,7 +401,7 @@ Pass null for either field to clear it and fall back to the project / org defaul
       if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
       const result = await client.patch(`/deployments/${deploymentId}/resources`, body);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -265,13 +411,13 @@ Pass null for either field to clear it and fall back to the project / org defaul
 Whether this re-pulls the image depends on the deployment's pull policy. That policy is derived from the tag by default, so an app on a moving tag like :latest re-pulls and push-then-restart works. If someone pinned the policy to IfNotPresent, the node reuses its cached layer and a restart will not pick up a new push.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID to restart'),
-      },
+        deploymentId: z.string().describe('The deployment UUID to restart')
+      }
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/restart`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -286,13 +432,13 @@ Read the \`build\` field on the response before doing anything else:
 Everything else on the response is the deployment as it stands right now, so when a build is queued the build fields still describe the previous build. That is expected, not a failed call.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID to rebuild'),
-      },
+        deploymentId: z.string().describe('The deployment UUID to rebuild')
+      }
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/rebuild`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -302,29 +448,30 @@ Everything else on the response is the deployment as it stands right now, so whe
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        replicas: z.number().min(0).max(10).describe('Number of replicas (0 to pause, max 10)'),
-      },
+        replicas: z.number().min(0).max(10).describe('Number of replicas (0 to pause, max 10)')
+      }
     },
     async ({ deploymentId, replicas }) => {
       const result = await client.post(`/deployments/${deploymentId}/scale`, { replicas });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'rollback_deployment',
     {
-      description: 'Rollback a deployment to a previous image version. Use get_image_history to see available versions.',
+      description:
+        'Rollback a deployment to a previous image version. Use get_image_history to see available versions.',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        imageHistoryId: z.string().describe('The image history entry UUID to rollback to'),
-      },
+        imageHistoryId: z.string().describe('The image history entry UUID to rollback to')
+      }
     },
     async ({ deploymentId, imageHistoryId }) => {
       const result = await client.post(`/deployments/${deploymentId}/rollback/${imageHistoryId}`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -333,13 +480,13 @@ Everything else on the response is the deployment as it stands right now, so whe
       description: 'Cancel an in-progress build for a deployment',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/cancel`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -358,17 +505,17 @@ Check with \`get_auto_deploy_status\` afterwards. If it reports \`deliverable: f
           .array(z.string())
           .optional()
           .describe(
-            'Watch paths: glob patterns a push must touch to trigger a build (e.g. ["apps/web/**", "!**/*.md"]). Empty array deploys on every push. Omit to leave the current paths unchanged.',
-          ),
-      },
+            'Watch paths: glob patterns a push must touch to trigger a build (e.g. ["apps/web/**", "!**/*.md"]). Empty array deploys on every push. Omit to leave the current paths unchanged.'
+          )
+      }
     },
     async ({ deploymentId, branch, paths }) => {
       const result = await client.post(`/deployments/${deploymentId}/auto-deploy/enable`, {
         branch,
-        ...(paths !== undefined ? { paths } : {}),
+        ...(paths !== undefined ? { paths } : {})
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -381,13 +528,13 @@ Check with \`get_auto_deploy_status\` afterwards. If it reports \`deliverable: f
 Use this whenever auto-deploy looks like it is on but pushes are not producing builds. The usual cause is the App not being installed on that specific repository.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const result = await client.get(`/deployments/${deploymentId}/auto-deploy`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -396,12 +543,12 @@ Use this whenever auto-deploy looks like it is on but pushes are not producing b
       description: 'Disable auto-deploy for a deployment',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/auto-deploy/disable`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 }

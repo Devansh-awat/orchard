@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
 import {
   cpuLimitMilliFromResources,
-  memoryLimitBytesFromResources,
+  memoryLimitBytesFromResources
 } from '../../kubernetes/quantity';
 import { resolvePullPolicy } from '../../kubernetes/trusted-images';
 import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disruption-budget';
@@ -40,7 +40,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly applyQueue: ApplyQueueService,
+    private readonly applyQueue: ApplyQueueService
   ) {}
 
   onModuleDestroy() {
@@ -79,20 +79,22 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
 
     const row = await this.prisma.deployment.findUnique({
       where: { id: ctx.deploymentId },
-      select: { pdbMinAvailable: true },
+      select: { pdbMinAvailable: true }
     });
     if (!row || row.pdbMinAvailable === observed) return;
 
     const pendingApply = await this.prisma.k8sApplyItem.count({
-      where: { deploymentId: ctx.deploymentId, status: { in: ['pending', 'applying'] } },
+      where: { deploymentId: ctx.deploymentId, status: { in: ['pending', 'applying'] } }
     });
     if (pendingApply > 0) return;
 
     await this.prisma.deployment.update({
       where: { id: ctx.deploymentId },
-      data: { pdbMinAvailable: observed },
+      data: { pdbMinAvailable: observed }
     });
-    this.logger.log(`adopted external disruption budget for ${ctx.deploymentId}: minAvailable=${observed}`);
+    this.logger.log(
+      `adopted external disruption budget for ${ctx.deploymentId}: minAvailable=${observed}`
+    );
 
     // A budget edited by hand can ask for more pods than the app runs, which
     // leaves zero allowed disruptions and stalls any drain that touches it.
@@ -100,7 +102,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     // removal until the replica count can satisfy it again.
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: ctx.deploymentId },
-      select: { replicas: true },
+      select: { replicas: true }
     });
     if (deployment && !disruptionBudgetActive(observed, deployment.replicas)) {
       await this.queueBudgetReconcile(ctx.deploymentId);
@@ -111,7 +113,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     await this.applyQueue.enqueue({
       dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
       opType: 'deployment.disruptionBudget',
-      deploymentId,
+      deploymentId
     });
   }
 
@@ -136,16 +138,16 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       availableReplicas: dep.status?.availableReplicas ?? 0,
       updatedReplicas: dep.status?.updatedReplicas ?? 0,
       observedImage: dep.spec?.template?.spec?.containers?.[0]?.image ?? null,
-      conditions: (dep.status?.conditions ?? []) as object[],
+      conditions: (dep.status?.conditions ?? []) as object[]
     };
 
     const existing = await this.prisma.k8sWorkload.findUnique({
-      where: { deploymentId: ctx.deploymentId },
+      where: { deploymentId: ctx.deploymentId }
     });
     await this.prisma.k8sWorkload.upsert({
       where: { deploymentId: ctx.deploymentId },
       create: { deploymentId: ctx.deploymentId, ...data },
-      update: data,
+      update: data
     });
 
     await this.adoptWorkloadSpec(ctx.deploymentId, dep);
@@ -177,12 +179,12 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
         memoryRequestBytes: true,
         deployStrategy: true,
         imagePullPolicy: true,
-        buildStatus: true,
-      },
+        buildStatus: true
+      }
     });
     if (!row || row.buildStatus === 'building') return;
     const pendingApply = await this.prisma.k8sApplyItem.count({
-      where: { deploymentId, status: { in: ['pending', 'applying'] } },
+      where: { deploymentId, status: { in: ['pending', 'applying'] } }
     });
     if (pendingApply > 0) return;
 
@@ -241,7 +243,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     if (Object.keys(changes).length === 0) return;
     await this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: changes,
+      data: changes
     });
     this.logger.log(`adopted external spec for ${deploymentId}: ${adopted.join(', ')}`);
 
@@ -286,7 +288,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       type: 'deployment.changed',
       id: ctx.deploymentId,
       projectId: ctx.projectId,
-      payload,
+      payload
     });
   }
 
@@ -306,8 +308,8 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       select: {
         id: true,
         projectId: true,
-        project: { select: { organizationId: true } },
-      },
+        project: { select: { organizationId: true } }
+      }
     });
     const ctx: Ctx | null = row
       ? { deploymentId: row.id, orgId: row.project.organizationId, projectId: row.projectId }

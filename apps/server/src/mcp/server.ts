@@ -12,14 +12,15 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
   const server = new McpServer(
     {
       name: 'orchard',
-      version: '1.0.0',
+      version: '1.0.0'
     },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {} } }
   );
 
-  const client = token || actingUser
-    ? new OrchardClient(process.env.ORCHARD_API_URL, token, actingUser)
-    : new OrchardClient();
+  const client =
+    token || actingUser
+      ? new OrchardClient(process.env.ORCHARD_API_URL, token, actingUser)
+      : new OrchardClient();
 
   // Read-only queries (list, get, inspect)
   registerQueryTools(server, client);

@@ -8,7 +8,7 @@ function userBag(req: any) {
     username: req.user.username,
     firstName: req.user.firstName,
     lastName: req.user.lastName,
-    imageUrl: req.user.imageUrl,
+    imageUrl: req.user.imageUrl
   };
 }
 
@@ -32,7 +32,7 @@ export class ComposeStacksController {
       autoDeployEnabled?: boolean;
       environmentId?: string;
     },
-    @Request() req: any,
+    @Request() req: any
   ) {
     return this.composeStacks.createFromGithub(projectId, body, clerkId(req), userBag(req));
   }
@@ -56,17 +56,13 @@ export class ComposeStacksController {
   async setAutoDeploy(
     @Param('id') id: string,
     @Body() body: { enabled: boolean },
-    @Request() req: any,
+    @Request() req: any
   ) {
     return this.composeStacks.setAutoDeploy(id, Boolean(body?.enabled), clerkId(req), userBag(req));
   }
 
   @Patch('compose-stacks/:id/name')
-  async rename(
-    @Param('id') id: string,
-    @Body() body: { name?: string },
-    @Request() req: any,
-  ) {
+  async rename(@Param('id') id: string, @Body() body: { name?: string }, @Request() req: any) {
     return this.composeStacks.renameComposeStack(id, body?.name ?? '', clerkId(req), userBag(req));
   }
 

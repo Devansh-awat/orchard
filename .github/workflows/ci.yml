@@ -38,6 +38,8 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
+              - '.oxlintrc.json'
+              - '.oxfmtrc.json'
               - '.github/workflows/**'
             server:
               - 'apps/server/**'
@@ -46,6 +48,8 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
+              - '.oxlintrc.json'
+              - '.oxfmtrc.json'
               - '.github/workflows/**'
             hostctl:
               - 'apps/server/hostctl/**'
@@ -70,14 +74,65 @@ jobs:
               - 'packages/contracts/**'
               - '.env.example'
               - 'pnpm-lock.yaml'
+              - '.oxlintrc.json'
+              - '.oxfmtrc.json'
               - '.github/workflows/**'
             landing:
               - 'apps/landing/**'
               - 'pnpm-lock.yaml'
+              - '.oxlintrc.json'
+              - '.oxfmtrc.json'
               - '.github/workflows/**'
             chart:
               - 'infra/charts/**'
               - '.github/workflows/**'
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        if: env.SAME_REPO == 'true'
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        if: env.SAME_REPO == 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.head_ref }}
+      - uses: actions/checkout@v4
+        if: env.SAME_REPO != 'true'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Oxfmt (auto-fix + self-commit)
+        if: env.SAME_REPO == 'true'
+        run: |
+          pnpm format
+          if git diff --quiet; then echo "already formatted"; exit 0; fi
+          if ! pnpm format:check >/dev/null 2>&1; then
+            echo "oxfmt output failed re-validation — refusing to commit" >&2
+            git checkout -- .; exit 1
+          fi
+          git config user.name "leafdbot[bot]"
+          git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
+          git commit -am "chore(ci): apply formatter fixes"
+          git push
+      - name: Oxfmt (check only)
+        if: env.SAME_REPO != 'true'
+        run: pnpm format:check
+      - name: Oxlint
+        run: pnpm exec oxlint --quiet --format github
+      - name: Design guardrails
+        run: node apps/frontend/scripts/check-design.mjs
 
   commitlint:
     runs-on: ubuntu-latest
@@ -101,48 +156,14 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      # Fork PRs have no access to the bot app secret, so they get a plain
-      # checkout and a prettier --check instead of the self-commit flow.
-      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      - uses: actions/create-github-app-token@v1
-        id: app-token
-        if: env.SAME_REPO == 'true'
-        with:
-          app-id: 1090304
-          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
       - uses: actions/checkout@v4
-        if: env.SAME_REPO == 'true'
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          ref: ${{ github.head_ref }}
-      - uses: actions/checkout@v4
-        if: env.SAME_REPO != 'true'
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prettier (auto-fix + self-commit)
-        if: env.SAME_REPO == 'true'
-        run: |
-          pnpm --filter frontend exec prettier --write .
-          if git diff --quiet; then echo "already formatted"; exit 0; fi
-          if ! pnpm --filter frontend exec prettier --check . >/dev/null 2>&1; then
-            echo "prettier output failed re-validation — refusing to commit" >&2
-            git checkout -- .; exit 1
-          fi
-          git config user.name "leafdbot[bot]"
-          git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
-          git commit -am "chore(ci): apply linter fixes"
-          git push
-      - name: Prettier (check only)
-        if: env.SAME_REPO != 'true'
-        run: pnpm --filter frontend exec prettier --check .
       - name: Unit tests
         run: pnpm --filter frontend test
       - name: Build
@@ -394,8 +415,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prettier
-        run: pnpm --filter landing exec prettier --check .
       - name: Build
         run: pnpm --filter landing build
 
@@ -418,8 +437,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Generated reference is up to date
         run: pnpm --filter docs check:generated
-      - name: Prettier
-        run: pnpm --filter docs exec prettier --check .
       - name: Build
         run: pnpm --filter docs build
 

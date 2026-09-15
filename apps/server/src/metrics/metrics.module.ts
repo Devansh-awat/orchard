@@ -8,6 +8,6 @@ import { OrganizationsModule } from '../organizations/organizations.module';
   imports: [PrismaModule, OrganizationsModule],
   providers: [MetricsService],
   controllers: [MetricsController],
-  exports: [MetricsService],
+  exports: [MetricsService]
 })
 export class MetricsModule {}

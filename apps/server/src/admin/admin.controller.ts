@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Query,
-  Param,
-  Body,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Query, Param, Body, Req } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { SuperAdmin } from '../auth/decorators';
 
@@ -28,12 +18,12 @@ export class AdminController {
   async getUsers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string,
+    @Query('search') search?: string
   ) {
     return this.adminService.getAllUsers(
       parseInt(page || '1', 10),
       parseInt(limit || '20', 10),
-      search,
+      search
     );
   }
 
@@ -45,8 +35,13 @@ export class AdminController {
   @Patch('users/:id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: { firstName?: string; lastName?: string; isSuperAdmin?: boolean; maxSandboxes?: number | null },
-    @Req() req: any,
+    @Body() body: {
+      firstName?: string;
+      lastName?: string;
+      isSuperAdmin?: boolean;
+      maxSandboxes?: number | null;
+    },
+    @Req() req: any
   ) {
     return this.adminService.updateUser(id, req.auth.userId, body);
   }
@@ -62,12 +57,12 @@ export class AdminController {
   async getOrganizations(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string,
+    @Query('search') search?: string
   ) {
     return this.adminService.getAllOrganizations(
       parseInt(page || '1', 10),
       parseInt(limit || '20', 10),
-      search,
+      search
     );
   }
 
@@ -82,7 +77,7 @@ export class AdminController {
       plan?: string;
       primaryOwnerEmail?: string;
     },
-    @Req() req: any,
+    @Req() req: any
   ) {
     return this.adminService.createOrganization(body, req.auth?.userId);
   }
@@ -90,7 +85,7 @@ export class AdminController {
   @Patch('organizations/:id')
   async updateOrganization(
     @Param('id') id: string,
-    @Body() body: { name?: string; description?: string },
+    @Body() body: { name?: string; description?: string }
   ) {
     return this.adminService.updateOrganization(id, body);
   }

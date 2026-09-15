@@ -1,5 +1,0 @@
-dist
-.astro
-openapi.generated.json
-src/content/docs/reference
-public/fonts

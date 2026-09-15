@@ -7,7 +7,7 @@ function registerWithStubs() {
   const server = {
     registerTool: (name: string, config: any, handler: any) => {
       tools.set(name, { config, handler });
-    },
+    }
   };
   const posts: { path: string; body: any }[] = [];
   const client = {
@@ -15,7 +15,7 @@ function registerWithStubs() {
     post: async (path: string, body: any) => {
       posts.push({ path, body });
       return { valid: true };
-    },
+    }
   };
   registerQueryTools(server as any, client as any);
   return { tools, posts };
@@ -37,7 +37,7 @@ test('validate_dns posts projectId alongside domain', async () => {
   assert.deepEqual(posts, [
     {
       path: '/projects/ingresses/validate-dns',
-      body: { projectId: 'proj-123', domain: 'myapp.example.com' },
-    },
+      body: { projectId: 'proj-123', domain: 'myapp.example.com' }
+    }
   ]);
 });

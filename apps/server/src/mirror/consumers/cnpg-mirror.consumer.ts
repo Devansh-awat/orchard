@@ -38,7 +38,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   onModuleDestroy() {
@@ -92,10 +92,13 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
   // Failures propagate: the informer holds the cluster object's derived_version
   // back and replays it, which is the only thing that would ever come back for
   // a database whose status write was lost.
-  private async writebackStatus(ctx: Ctx, input: { cluster?: any; deleted?: boolean }): Promise<void> {
+  private async writebackStatus(
+    ctx: Ctx,
+    input: { cluster?: any; deleted?: boolean }
+  ): Promise<void> {
     const db = await this.prisma.database.findUnique({
       where: { id: ctx.databaseId },
-      select: { status: true },
+      select: { status: true }
     });
     if (!db) return;
 
@@ -121,7 +124,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
 
   private async trackArchiving(ctx: Ctx, ns: string, name: string, cluster: any): Promise<void> {
     const cond = (cluster.status?.conditions || []).find(
-      (c: any) => c.type === 'ContinuousArchiving',
+      (c: any) => c.type === 'ContinuousArchiving'
     );
     if (!cond) return;
     const ok = cond.status === 'True';
@@ -172,7 +175,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
       type: 'database.changed',
       id: ctx.databaseId,
       projectId: ctx.projectId,
-      payload,
+      payload
     });
   }
 
@@ -189,7 +192,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
       restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
       lastTermination: term?.reason
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
-        : null,
+        : null
     };
   }
 
@@ -206,8 +209,8 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
       select: {
         id: true,
         projectId: true,
-        project: { select: { organizationId: true } },
-      },
+        project: { select: { organizationId: true } }
+      }
     });
     const ctx: Ctx | null = db
       ? { databaseId: db.id, orgId: db.project.organizationId, projectId: db.projectId }

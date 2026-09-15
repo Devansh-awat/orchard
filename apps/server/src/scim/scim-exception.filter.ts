@@ -22,7 +22,7 @@ export class ScimExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const r = exception.getResponse() as any;
-      detail = typeof r === 'string' ? r : r?.detail ?? r?.message ?? exception.message;
+      detail = typeof r === 'string' ? r : (r?.detail ?? r?.message ?? exception.message);
     } else if (exception instanceof Error) {
       detail = exception.message;
       this.logger.error(`Unhandled SCIM error: ${exception.stack ?? exception.message}`);
@@ -33,7 +33,7 @@ export class ScimExceptionFilter implements ExceptionFilter {
       schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
       status: String(status),
       ...(scimType ? { scimType } : {}),
-      detail,
+      detail
     });
   }
 }

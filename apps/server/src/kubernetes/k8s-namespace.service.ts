@@ -25,13 +25,13 @@ export function tenantIngressNamespaces(): string[] {
 
 function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
   return names.map((name) => ({
-    namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': name } },
+    namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': name } }
   }));
 }
 
 export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
   { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
-  { namespaceSelector: { matchExpressions: [{ key: 'orchard.dev/managed', operator: 'Exists' }] } },
+  { namespaceSelector: { matchExpressions: [{ key: 'orchard.dev/managed', operator: 'Exists' }] } }
 ];
 
 /**
@@ -50,7 +50,7 @@ export class K8sNamespaceService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kubernetes: KubernetesService,
+    private readonly kubernetes: KubernetesService
   ) {}
 
   /**
@@ -67,10 +67,14 @@ export class K8sNamespaceService implements OnModuleInit {
       this.reconcileTenantNetworkPolicies()
         .then(({ updated, failed }) => {
           if (updated.length) {
-            this.logger.log(`re-applied the tenant network policy to ${updated.length} namespace(s)`);
+            this.logger.log(
+              `re-applied the tenant network policy to ${updated.length} namespace(s)`
+            );
           }
           if (failed.length) {
-            this.logger.warn(`could not re-apply the tenant network policy to: ${failed.join(', ')}`);
+            this.logger.warn(
+              `could not re-apply the tenant network policy to: ${failed.join(', ')}`
+            );
           }
         })
         .catch((e) => this.logger.warn(`tenant network policy reconcile skipped: ${e?.message}`));
@@ -129,7 +133,7 @@ export class K8sNamespaceService implements OnModuleInit {
     } else {
       const quotaBody: k8s.V1ResourceQuota = {
         metadata: { name: quotaName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
-        spec: { hard: hardQuota },
+        spec: { hard: hardQuota }
       };
       try {
         await api.replaceNamespacedResourceQuota(quotaName, ns, quotaBody);
@@ -150,7 +154,8 @@ export class K8sNamespaceService implements OnModuleInit {
     // If we set any ResourceQuota with requests.cpu/memory, a LimitRange with defaults is required.
     const needLimitRange =
       hasDefaults ||
-      (hardQuota['requests.cpu'] !== undefined || hardQuota['requests.memory'] !== undefined);
+      hardQuota['requests.cpu'] !== undefined ||
+      hardQuota['requests.memory'] !== undefined;
     if (!needLimitRange) {
       try {
         await api.deleteNamespacedLimitRange(limitName, ns);
@@ -164,12 +169,14 @@ export class K8sNamespaceService implements OnModuleInit {
 
     const defaultReq: Record<string, string> = {};
     const defaultLim: Record<string, string> = {};
-    const cpuDefault = options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0
-      ? options.defaultPodCpuMilli
-      : 100; // 100m
-    const memDefault = options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
-      ? options.defaultPodMemoryBytes
-      : 128 * 1024 * 1024; // 128Mi
+    const cpuDefault =
+      options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0
+        ? options.defaultPodCpuMilli
+        : 100; // 100m
+    const memDefault =
+      options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
+        ? options.defaultPodMemoryBytes
+        : 128 * 1024 * 1024; // 128Mi
     defaultReq['cpu'] = `${cpuDefault}m`;
     defaultReq['memory'] = String(memDefault);
     defaultLim['cpu'] = `${cpuDefault * 4}m`;
@@ -182,10 +189,10 @@ export class K8sNamespaceService implements OnModuleInit {
           {
             type: 'Container',
             default: defaultLim,
-            defaultRequest: defaultReq,
-          } as k8s.V1LimitRangeItem,
-        ],
-      },
+            defaultRequest: defaultReq
+          } as k8s.V1LimitRangeItem
+        ]
+      }
     };
 
     try {
@@ -200,13 +207,16 @@ export class K8sNamespaceService implements OnModuleInit {
   }
 
   // Aggregate resource requests for an org across all its namespaces.
-  async getOrgUsage(namespaces: string[]): Promise<{ cpuMilli: number; memoryBytes: number; pods: number; services: number }> {
+  async getOrgUsage(
+    namespaces: string[]
+  ): Promise<{ cpuMilli: number; memoryBytes: number; pods: number; services: number }> {
     this.ensureKubeConfig();
-    if (!this.kc || namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
+    if (!this.kc || namespaces.length === 0)
+      return { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
     const nsSet = new Set(namespaces);
     const [allPods, svcCounts] = await Promise.all([
       clusterPods(this.kc),
-      clusterServiceCounts(this.kc),
+      clusterServiceCounts(this.kc)
     ]);
 
     let cpuMilli = 0;
@@ -262,9 +272,9 @@ export class K8sNamespaceService implements OnModuleInit {
             // protection by sandboxing root-in-container.
             'pod-security.kubernetes.io/enforce': 'baseline',
             'pod-security.kubernetes.io/audit': 'restricted',
-            'pod-security.kubernetes.io/warn': 'restricted',
-          },
-        },
+            'pod-security.kubernetes.io/warn': 'restricted'
+          }
+        }
       };
 
       await api.createNamespace(body);
@@ -272,7 +282,10 @@ export class K8sNamespaceService implements OnModuleInit {
       try {
         await this.createNetworkPolicy(cleanNamespace);
       } catch (networkPolicyError) {
-        console.error(`[K8s] Failed to create network policy for namespace ${cleanNamespace}:`, networkPolicyError);
+        console.error(
+          `[K8s] Failed to create network policy for namespace ${cleanNamespace}:`,
+          networkPolicyError
+        );
       }
 
       // Bootstrap the per-tenant Role+RoleBinding that lets the orchard-server
@@ -283,25 +296,31 @@ export class K8sNamespaceService implements OnModuleInit {
       try {
         await this.bootstrapTenantSecretsRbac(cleanNamespace);
       } catch (rbacErr) {
-        console.error(`[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`, rbacErr);
+        console.error(
+          `[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`,
+          rbacErr
+        );
       }
 
       return {
         success: true,
         namespace: cleanNamespace,
-        created: true,
+        created: true
       };
     } catch (error) {
       if (error.response?.statusCode === 409) {
         try {
           await this.bootstrapTenantSecretsRbac(cleanNamespace);
         } catch (rbacErr) {
-          console.error(`[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`, rbacErr);
+          console.error(
+            `[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`,
+            rbacErr
+          );
         }
         return {
           success: true,
           namespace: cleanNamespace,
-          created: false,
+          created: false
         };
       }
 
@@ -309,13 +328,13 @@ export class K8sNamespaceService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to create namespace in Kubernetes',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to create namespace',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -329,7 +348,7 @@ export class K8sNamespaceService implements OnModuleInit {
    */
   async tagNamespaceMoved(
     namespace: string,
-    move: { fromOrgSlug: string; toOrgSlug: string; movedBy: string },
+    move: { fromOrgSlug: string; toOrgSlug: string; movedBy: string }
   ): Promise<void> {
     this.ensureKubeConfig();
     const cleanNamespace = String(namespace || '').trim();
@@ -351,19 +370,23 @@ export class K8sNamespaceService implements OnModuleInit {
     const now = new Date().toISOString();
     history.push({ from: move.fromOrgSlug, to: move.toOrgSlug, at: now, by: move.movedBy });
 
-    const labelSlug = move.toOrgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '').substring(0, 63) || 'unknown';
+    const labelSlug =
+      move.toOrgSlug
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '')
+        .substring(0, 63) || 'unknown';
     const patch = {
       metadata: {
         labels: {
           'orchard.my/moved': 'true',
-          'orchard.my/current-org': labelSlug,
+          'orchard.my/current-org': labelSlug
         },
         annotations: {
           'orchard.my/moved-from': move.fromOrgSlug,
           'orchard.my/moved-at': now,
-          'orchard.my/move-history': JSON.stringify(history).substring(0, 250000),
-        },
-      },
+          'orchard.my/move-history': JSON.stringify(history).substring(0, 250000)
+        }
+      }
     };
 
     try {
@@ -375,7 +398,7 @@ export class K8sNamespaceService implements OnModuleInit {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+        { headers: { 'Content-Type': 'application/merge-patch+json' } }
       );
     } catch (e: any) {
       console.error(`[K8s] Failed to tag moved namespace ${cleanNamespace}:`, e?.message ?? e);
@@ -394,7 +417,7 @@ export class K8sNamespaceService implements OnModuleInit {
     const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
     const labels = {
       'app.kubernetes.io/name': 'server',
-      'app.kubernetes.io/managed-by': 'leaf',
+      'app.kubernetes.io/managed-by': 'leaf'
     };
     const roleName = 'orchard-server-tenant-secrets';
     try {
@@ -404,9 +427,9 @@ export class K8sNamespaceService implements OnModuleInit {
           {
             apiGroups: [''],
             resources: ['secrets', 'configmaps'],
-            verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'],
-          },
-        ],
+            verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+          }
+        ]
       });
     } catch (e: any) {
       if (e?.response?.statusCode !== 409) throw e;
@@ -415,7 +438,7 @@ export class K8sNamespaceService implements OnModuleInit {
       await rbacApi.createNamespacedRoleBinding(namespace, {
         metadata: { name: roleName, namespace, labels },
         roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: roleName },
-        subjects: [{ kind: 'ServiceAccount', name: 'orchard-server', namespace: serverNamespace }],
+        subjects: [{ kind: 'ServiceAccount', name: 'orchard-server', namespace: serverNamespace }]
       });
     } catch (e: any) {
       if (e?.response?.statusCode !== 409) throw e;
@@ -438,14 +461,14 @@ export class K8sNamespaceService implements OnModuleInit {
       return {
         success: true,
         namespace: cleanNamespace,
-        deleted: true,
+        deleted: true
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {
         return {
           success: true,
           namespace: cleanNamespace,
-          deleted: false,
+          deleted: false
         };
       }
 
@@ -453,13 +476,13 @@ export class K8sNamespaceService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to delete namespace in Kubernetes',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to delete namespace',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -479,8 +502,11 @@ export class K8sNamespaceService implements OnModuleInit {
     const failed: string[] = [];
 
     const namespaces = await api.listNamespace(
-      undefined, undefined, undefined, undefined,
-      'orchard.my/managed=true',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'orchard.my/managed=true'
     );
 
     for (const ns of namespaces.body.items) {
@@ -509,22 +535,22 @@ export class K8sNamespaceService implements OnModuleInit {
 
     try {
       const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-      
+
       const networkPolicyBody: k8s.V1NetworkPolicy = {
         metadata: {
           name: 'default-deny-all',
           namespace: cleanNamespace,
           labels: {
-            'orchard.my/managed': 'true',
-          },
+            'orchard.my/managed': 'true'
+          }
         },
         spec: {
           podSelector: {},
           policyTypes: ['Ingress', 'Egress'],
           ingress: [
             {
-              from: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()]),
-            },
+              from: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()])
+            }
           ],
           // Egress is allow-listed. Pods may:
           //   1. Talk to other pods in the same tenant namespace.
@@ -542,25 +568,25 @@ export class K8sNamespaceService implements OnModuleInit {
           // services, and the cloud metadata IMDS.
           egress: [
             {
-              to: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()]),
+              to: namespacePeers([cleanNamespace, ...tenantIngressNamespaces()])
             },
             {
               to: [
                 {
                   namespaceSelector: {
                     matchLabels: {
-                      'kubernetes.io/metadata.name': 'kube-system',
-                    },
+                      'kubernetes.io/metadata.name': 'kube-system'
+                    }
                   },
                   podSelector: {
-                    matchLabels: { 'k8s-app': 'kube-dns' },
-                  },
-                },
+                    matchLabels: { 'k8s-app': 'kube-dns' }
+                  }
+                }
               ],
               ports: [
                 { protocol: 'UDP', port: 53 },
-                { protocol: 'TCP', port: 53 },
-              ],
+                { protocol: 'TCP', port: 53 }
+              ]
             },
             {
               to: [
@@ -572,14 +598,14 @@ export class K8sNamespaceService implements OnModuleInit {
                       '172.16.0.0/12',
                       '192.168.0.0/16',
                       '169.254.0.0/16',
-                      '100.64.0.0/10',
-                    ],
-                  },
-                },
-              ],
+                      '100.64.0.0/10'
+                    ]
+                  }
+                }
+              ]
             },
             {
-              to: TENANT_NAMESPACE_EGRESS_PEERS,
+              to: TENANT_NAMESPACE_EGRESS_PEERS
             },
             // CNPG barman sidecars in tenant namespaces stream WAL/backups to
             // r2-proxy, which lives at a ClusterIP in 10.x — blanket RFC1918
@@ -590,15 +616,15 @@ export class K8sNamespaceService implements OnModuleInit {
                 {
                   namespaceSelector: {
                     matchLabels: {
-                      'kubernetes.io/metadata.name': 'orchard-r2-proxy',
-                    },
-                  },
-                },
+                      'kubernetes.io/metadata.name': 'orchard-r2-proxy'
+                    }
+                  }
+                }
               ],
-              ports: [{ protocol: 'TCP', port: 9000 }],
-            },
-          ],
-        },
+              ports: [{ protocol: 'TCP', port: 9000 }]
+            }
+          ]
+        }
       };
 
       // Replace on conflict: a namespace created before a configuration change
@@ -611,7 +637,7 @@ export class K8sNamespaceService implements OnModuleInit {
         await networkingApi.replaceNamespacedNetworkPolicy(
           'default-deny-all',
           cleanNamespace,
-          networkPolicyBody,
+          networkPolicyBody
         );
       }
 
@@ -622,7 +648,7 @@ export class K8sNamespaceService implements OnModuleInit {
         return {
           success: true,
           namespace: cleanNamespace,
-          created: true,
+          created: true
         };
       }
 
@@ -634,7 +660,7 @@ export class K8sNamespaceService implements OnModuleInit {
         metadata: {
           name: 'allow-cilium-ingress',
           namespace: cleanNamespace,
-          labels: { 'orchard.my/managed': 'true' },
+          labels: { 'orchard.my/managed': 'true' }
         },
         spec: {
           endpointSelector: {},
@@ -646,17 +672,21 @@ export class K8sNamespaceService implements OnModuleInit {
                 {
                   matchLabels: {
                     'kubernetes.io/metadata.name': 'network',
-                    'app.kubernetes.io/name': 'kubernetes-ingress',
-                  },
-                },
-              ],
-            },
-          ],
-        },
+                    'app.kubernetes.io/name': 'kubernetes-ingress'
+                  }
+                }
+              ]
+            }
+          ]
+        }
       };
       try {
         await customApi.createNamespacedCustomObject(
-          'cilium.io', 'v2', cleanNamespace, 'ciliumnetworkpolicies', allowCiliumIngress,
+          'cilium.io',
+          'v2',
+          cleanNamespace,
+          'ciliumnetworkpolicies',
+          allowCiliumIngress
         );
       } catch (e: any) {
         if (e.response?.statusCode !== 409) throw e;
@@ -668,18 +698,22 @@ export class K8sNamespaceService implements OnModuleInit {
         metadata: {
           name: 'allow-cnpg-apiserver',
           namespace: cleanNamespace,
-          labels: { 'orchard.my/managed': 'true' },
+          labels: { 'orchard.my/managed': 'true' }
         },
         spec: {
           endpointSelector: {
-            matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }],
+            matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }]
           },
-          egress: [{ toEntities: ['kube-apiserver'] }],
-        },
+          egress: [{ toEntities: ['kube-apiserver'] }]
+        }
       };
       try {
         await customApi.createNamespacedCustomObject(
-          'cilium.io', 'v2', cleanNamespace, 'ciliumnetworkpolicies', cnpgApiServerPolicy,
+          'cilium.io',
+          'v2',
+          cleanNamespace,
+          'ciliumnetworkpolicies',
+          cnpgApiServerPolicy
         );
       } catch (e: any) {
         if (e.response?.statusCode !== 409) throw e;
@@ -688,14 +722,14 @@ export class K8sNamespaceService implements OnModuleInit {
       return {
         success: true,
         namespace: cleanNamespace,
-        created: true,
+        created: true
       };
     } catch (error) {
       if (error.response?.statusCode === 409) {
         return {
           success: true,
           namespace: cleanNamespace,
-          created: false,
+          created: false
         };
       }
 
@@ -703,17 +737,14 @@ export class K8sNamespaceService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to create network policy in Kubernetes',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to create network policy',
-        message: error.message,
+        message: error.message
       });
     }
   }
-
-
-
 }

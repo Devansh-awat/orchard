@@ -192,7 +192,7 @@ export class MirrorInformer {
     private readonly prisma: PrismaService,
     private readonly shard: string,
     private readonly config: MirrorResourceConfig,
-    private readonly hooks: MirrorInformerHooks,
+    private readonly hooks: MirrorInformerHooks
   ) {
     this.logger = new Logger(`Mirror:${shard}/${config.kind}`);
   }
@@ -275,13 +275,13 @@ export class MirrorInformer {
   }
 
   private listAndSync(
-    countRepairs: boolean,
+    countRepairs: boolean
   ): Promise<{ resourceVersion: string; repairs: number }> {
     return this.serialize(() => this.runListAndSync(countRepairs));
   }
 
   private async runListAndSync(
-    countRepairs: boolean,
+    countRepairs: boolean
   ): Promise<{ resourceVersion: string; repairs: number }> {
     if (this.stopped) return { resourceVersion: this.resourceVersion, repairs: 0 };
 
@@ -294,8 +294,8 @@ export class MirrorInformer {
         deploymentId: true,
         projectId: true,
         databaseId: true,
-        jobId: true,
-      },
+        jobId: true
+      }
     });
     const existing = new Map(existingRows.map((r) => [r.uid, r]));
 
@@ -311,7 +311,7 @@ export class MirrorInformer {
     do {
       const page = await this.config.list(this.kc, {
         limit: LIST_PAGE_SIZE,
-        continueToken,
+        continueToken
       });
       // Paginated LIST is a consistent read: every page reports the snapshot's
       // resourceVersion, so the first one is the version to resume watching at.
@@ -333,7 +333,7 @@ export class MirrorInformer {
         seenKeys.push({
           namespace: obj.metadata.namespace ?? '',
           name: obj.metadata.name,
-          refs: resolved.ok ? resolved.refs : null,
+          refs: resolved.ok ? resolved.refs : null
         });
         if (!resolved.ok) {
           // Leave the row untouched. Its stored resourceVersion stays behind
@@ -400,7 +400,7 @@ export class MirrorInformer {
   private classify(
     prior: StoredRow | undefined,
     obj: any,
-    refs: MirrorRefs,
+    refs: MirrorRefs
   ): 'current' | 'underived' | 'stale' {
     if (!prior) return 'stale';
     const rv = String(obj.metadata.resourceVersion ?? '');
@@ -428,7 +428,7 @@ export class MirrorInformer {
     const next = this.syncChain.then(fn, fn);
     this.syncChain = next.then(
       () => undefined,
-      () => undefined,
+      () => undefined
     );
     return next;
   }
@@ -512,12 +512,12 @@ export class MirrorInformer {
             return entry;
           } catch (err) {
             this.logger.warn(
-              `event handler failed for ${entry.obj?.metadata?.name}: ${errorText(err)}`,
+              `event handler failed for ${entry.obj?.metadata?.name}: ${errorText(err)}`
             );
             return null;
           }
-        }),
-      ),
+        })
+      )
     );
     const ok = applied.filter((entry): entry is PendingWrite => entry !== null);
     if (ok.length < entries.length) this.scheduleRepair();
@@ -548,7 +548,7 @@ export class MirrorInformer {
     const watch = new k8s.Watch(this.kc);
     const queryParams: Record<string, unknown> = {
       allowWatchBookmarks: true,
-      resourceVersion,
+      resourceVersion
     };
     if (this.config.labelSelector) queryParams.labelSelector = this.config.labelSelector;
 
@@ -556,7 +556,7 @@ export class MirrorInformer {
       this.config.watchPath,
       queryParams,
       (phase, obj) => this.dispatch(phase, obj),
-      (err) => this.onDone(err),
+      (err) => this.onDone(err)
     );
   }
 
@@ -696,7 +696,7 @@ export class MirrorInformer {
       deploymentId: refs.deploymentId ?? null,
       projectId: refs.projectId ?? null,
       databaseId: refs.databaseId ?? null,
-      jobId: refs.jobId ?? null,
+      jobId: refs.jobId ?? null
     };
   }
 
@@ -729,8 +729,8 @@ export class MirrorInformer {
     const naturalKeys = Prisma.join(
       rows.map(
         (r) =>
-          Prisma.sql`(${r.kind}::varchar, ${r.namespace}::varchar, ${r.name}::varchar, ${r.apiVersion}::varchar, ${r.uid}::varchar)`,
-      ),
+          Prisma.sql`(${r.kind}::varchar, ${r.namespace}::varchar, ${r.name}::varchar, ${r.apiVersion}::varchar, ${r.uid}::varchar)`
+      )
     );
     const values = Prisma.join(
       rows.map(
@@ -740,8 +740,8 @@ export class MirrorInformer {
           ${r.shard}::varchar,
           ${JSON.stringify(r.manifest)}::jsonb, ${r.deploymentId}::uuid, ${r.projectId}::uuid,
           ${r.databaseId}::uuid, ${r.jobId}::uuid, (NOW() AT TIME ZONE 'UTC')
-        )`,
-      ),
+        )`
+      )
     );
 
     await this.prisma.$transaction([
@@ -775,7 +775,7 @@ export class MirrorInformer {
           "database_id" = EXCLUDED."database_id",
           "job_id" = EXCLUDED."job_id",
           "synced_at" = EXCLUDED."synced_at"
-      `,
+      `
     ]);
   }
 }

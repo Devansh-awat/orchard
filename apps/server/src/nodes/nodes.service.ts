@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
+  ForbiddenException
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +28,7 @@ export class NodesService {
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
     private readonly authz: AuthorizationService,
-    private readonly settings: InstanceSettingsService,
+    private readonly settings: InstanceSettingsService
   ) {}
 
   // Full reconcile against the live cluster. The node informer keeps the table
@@ -57,7 +57,7 @@ export class NodesService {
         schedulable: row.schedulable,
         cpuCapacity: row.cpuCapacity,
         memoryCapacity: row.memoryCapacity,
-        lastSeenAt: seenAt,
+        lastSeenAt: seenAt
       },
       update: {
         labels: row.labels,
@@ -65,8 +65,8 @@ export class NodesService {
         schedulable: row.schedulable,
         cpuCapacity: row.cpuCapacity,
         memoryCapacity: row.memoryCapacity,
-        lastSeenAt: seenAt,
-      },
+        lastSeenAt: seenAt
+      }
     });
   }
 
@@ -81,8 +81,8 @@ export class NodesService {
     const nodes = await this.prisma.node.findMany({
       orderBy: { name: 'asc' },
       include: {
-        _count: { select: { assignments: true } },
-      },
+        _count: { select: { assignments: true } }
+      }
     });
     const usage = await this.k8s.getClusterPodUsage();
     const perNode = new Map<string, { cpuMilli: number; memBytes: number; pods: number }>();
@@ -101,8 +101,8 @@ export class NodesService {
         usage: {
           cpuMilli: u.cpuMilli,
           memoryBytes: u.memBytes,
-          pods: u.pods,
-        },
+          pods: u.pods
+        }
       };
     });
   }
@@ -113,11 +113,11 @@ export class NodesService {
       include: {
         assignments: {
           include: {
-            organization: { select: { id: true, name: true, slug: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, slug: true, avatarUrl: true } }
           },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
     });
     if (!node) throw new NotFoundException('Node not found');
 
@@ -129,7 +129,7 @@ export class NodesService {
     const projects = namespaces.length
       ? await this.prisma.project.findMany({
           where: { namespace: { in: namespaces } },
-          select: { namespace: true, organizationId: true },
+          select: { namespace: true, organizationId: true }
         })
       : [];
     const nsToOrg = new Map(projects.map((p) => [p.namespace, p.organizationId]));
@@ -149,15 +149,20 @@ export class NodesService {
       usage: {
         cpuMilli: onThisNode.reduce((a, b) => a + b.cpuRequestMilli, 0),
         memoryBytes: onThisNode.reduce((a, b) => a + b.memoryRequestBytes, 0),
-        pods: onThisNode.length,
+        pods: onThisNode.length
       },
-      perOrgUsage: Array.from(perOrg.entries()).map(([orgId, u]) => ({ orgId, ...u })),
+      perOrgUsage: Array.from(perOrg.entries()).map(([orgId, u]) => ({ orgId, ...u }))
     };
   }
 
   async updateNode(
     id: string,
-    data: { schedulable?: boolean; notes?: string | null; cpuCapacity?: string | null; memoryCapacity?: string | null },
+    data: {
+      schedulable?: boolean;
+      notes?: string | null;
+      cpuCapacity?: string | null;
+      memoryCapacity?: string | null;
+    }
   ) {
     const node = await this.prisma.node.findUnique({ where: { id } });
     if (!node) throw new NotFoundException('Node not found');
@@ -167,8 +172,8 @@ export class NodesService {
         ...(data.schedulable !== undefined && { schedulable: data.schedulable }),
         ...(data.notes !== undefined && { notes: data.notes }),
         ...(data.cpuCapacity !== undefined && { cpuCapacity: data.cpuCapacity }),
-        ...(data.memoryCapacity !== undefined && { memoryCapacity: data.memoryCapacity }),
-      },
+        ...(data.memoryCapacity !== undefined && { memoryCapacity: data.memoryCapacity })
+      }
     });
   }
 
@@ -187,7 +192,7 @@ export class NodesService {
 
     return this.prisma.orgNodeAssignment.upsert({
       where: {
-        organizationId_nodeId: { organizationId: orgId, nodeId },
+        organizationId_nodeId: { organizationId: orgId, nodeId }
       },
       create: {
         nodeId,
@@ -195,20 +200,20 @@ export class NodesService {
         mode: input.mode ?? 'allow',
         cpuLimit: input.cpuLimit ?? null,
         memoryLimit: input.memoryLimit ?? null,
-        maxServices: input.maxServices ?? null,
+        maxServices: input.maxServices ?? null
       },
       update: {
         ...(input.mode !== undefined && { mode: input.mode }),
         ...(input.cpuLimit !== undefined && { cpuLimit: input.cpuLimit }),
         ...(input.memoryLimit !== undefined && { memoryLimit: input.memoryLimit }),
-        ...(input.maxServices !== undefined && { maxServices: input.maxServices }),
-      },
+        ...(input.maxServices !== undefined && { maxServices: input.maxServices })
+      }
     });
   }
 
   async deleteAssignment(nodeId: string, orgId: string) {
     await this.prisma.orgNodeAssignment.deleteMany({
-      where: { nodeId, organizationId: orgId },
+      where: { nodeId, organizationId: orgId }
     });
     return { success: true };
   }
@@ -223,8 +228,8 @@ export class NodesService {
           select: {
             namespace: true,
             organizationId: true,
-            organization: { select: { id: true, name: true, slug: true, avatarUrl: true } },
-          },
+            organization: { select: { id: true, name: true, slug: true, avatarUrl: true } }
+          }
         })
       : [];
     const nsToOrg = new Map(projects.map((p) => [p.namespace, p.organization]));
@@ -264,7 +269,7 @@ export class NodesService {
       cpuMilli: b.cpuMilli,
       memoryBytes: b.memBytes,
       pods: b.pods,
-      byNode: Array.from(b.byNode.entries()).map(([name, u]) => ({ nodeName: name, ...u })),
+      byNode: Array.from(b.byNode.entries()).map(([name, u]) => ({ nodeName: name, ...u }))
     }));
   }
 
@@ -274,11 +279,16 @@ export class NodesService {
   async getPlacementForOrg(organizationId: string): Promise<{
     allowedNodes: string[] | null;
     deniedNodes: string[];
-    quotas: { nodeName: string; cpuLimitMilli: number | null; memoryLimitBytes: number | null; maxServices: number | null }[];
+    quotas: {
+      nodeName: string;
+      cpuLimitMilli: number | null;
+      memoryLimitBytes: number | null;
+      maxServices: number | null;
+    }[];
   }> {
     const assignments = await this.prisma.orgNodeAssignment.findMany({
       where: { organizationId },
-      include: { node: true },
+      include: { node: true }
     });
     const allows = assignments.filter((a) => a.mode === 'allow');
     const denies = assignments.filter((a) => a.mode === 'deny');
@@ -289,8 +299,8 @@ export class NodesService {
         nodeName: a.node.name,
         cpuLimitMilli: a.cpuLimit ? parseCpu(a.cpuLimit) : null,
         memoryLimitBytes: a.memoryLimit ? parseMemory(a.memoryLimit) : null,
-        maxServices: a.maxServices,
-      })),
+        maxServices: a.maxServices
+      }))
     };
   }
 
@@ -303,7 +313,7 @@ export class NodesService {
     return {
       nodeSelector: (pool.nodeSelector as unknown as PoolPlacement['nodeSelector']) ?? [],
       tolerations: (pool.tolerations as unknown as PoolPlacement['tolerations']) ?? [],
-      affinityMode: pool.affinityMode,
+      affinityMode: pool.affinityMode
     };
   }
 
@@ -322,7 +332,9 @@ export class NodesService {
     const clean = taints.map((t) => {
       if (!t?.key) throw new BadRequestException('each taint needs a key');
       if (!t.effect || !TAINT_EFFECTS.has(t.effect)) {
-        throw new BadRequestException(`taint effect must be one of ${[...TAINT_EFFECTS].join(', ')}`);
+        throw new BadRequestException(
+          `taint effect must be one of ${[...TAINT_EFFECTS].join(', ')}`
+        );
       }
       return { key: t.key, ...(t.value ? { value: t.value } : {}), effect: t.effect };
     });
@@ -334,7 +346,8 @@ export class NodesService {
   async setNodeLabels(id: string, labels: Record<string, string | null>) {
     const node = await this.prisma.node.findUnique({ where: { id } });
     if (!node) throw new NotFoundException('Node not found');
-    if (!labels || typeof labels !== 'object') throw new BadRequestException('labels must be an object');
+    if (!labels || typeof labels !== 'object')
+      throw new BadRequestException('labels must be an object');
     await this.k8s.patchNode(node.name, { metadata: { labels } });
     return { success: true };
   }
@@ -358,7 +371,7 @@ export class NodesService {
     }
     const pool = await this.prisma.nodePool.findUnique({
       where: { id: nodePoolId },
-      select: { userSelectable: true },
+      select: { userSelectable: true }
     });
     if (!pool) throw new NotFoundException('Node pool not found');
     if (!pool.userSelectable) {

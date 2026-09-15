@@ -22,7 +22,7 @@ export function setSessionCookie(res: Response, token: string): void {
     sameSite: 'lax',
     maxAge: ONE_WEEK_MS,
     path: '/',
-    domain: process.env.COOKIE_DOMAIN || undefined,
+    domain: process.env.COOKIE_DOMAIN || undefined
   });
 }
 
@@ -32,7 +32,7 @@ export function clearSessionCookie(res: Response): void {
     secure: isSessionCookieSecure(),
     sameSite: 'lax',
     path: '/',
-    domain: process.env.COOKIE_DOMAIN || undefined,
+    domain: process.env.COOKIE_DOMAIN || undefined
   });
 }
 
@@ -46,7 +46,7 @@ export function setGithubOauthStateCookie(res: Response, state: string): void {
     secure: isSessionCookieSecure(),
     sameSite: 'lax',
     maxAge: TEN_MINUTES_MS,
-    path: GITHUB_OAUTH_STATE_PATH,
+    path: GITHUB_OAUTH_STATE_PATH
   });
 }
 

@@ -10,7 +10,7 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
   if (lintMatch) {
     const rules = lintMatch[1].trim();
     parts.push(
-      `Dockerfile lint check failed (${rules}). Your Dockerfile sets "# check=error=true", which turns Dockerfile lint warnings into build failures. Remove that line, or change it to "# check=skip=${rules.replace(/,\s*/g, ',')}" to skip these rules.`,
+      `Dockerfile lint check failed (${rules}). Your Dockerfile sets "# check=error=true", which turns Dockerfile lint warnings into build failures. Remove that line, or change it to "# check=skip=${rules.replace(/,\s*/g, ',')}" to skip these rules.`
     );
   }
 
@@ -39,11 +39,11 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
   }
 
   const reasonsMatch = (logs ?? '').match(
-    /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/,
+    /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/
   );
   if (reasonsMatch) {
     parts.push(
-      ...reasonsMatch[1].split('\n').filter((l) => l.trim() && !/ - No message$/.test(l)),
+      ...reasonsMatch[1].split('\n').filter((l) => l.trim() && !l.endsWith(' - No message'))
     );
   }
 

@@ -14,12 +14,12 @@ const TOOLS: ToolDef[] = [
   {
     name: 'get_current_user',
     description: "Get the currently authenticated user's profile information",
-    parameters: { type: 'object' as const, properties: {}, required: [] },
+    parameters: { type: 'object' as const, properties: {}, required: [] }
   },
   {
     name: 'list_organizations',
     description: 'List all organizations the authenticated user belongs to',
-    parameters: { type: 'object' as const, properties: {}, required: [] },
+    parameters: { type: 'object' as const, properties: {}, required: [] }
   },
   {
     name: 'list_projects',
@@ -27,9 +27,9 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: {
-        organizationId: { type: 'string', description: 'Organization UUID to filter by (optional)' },
-      },
-    },
+        organizationId: { type: 'string', description: 'Organization UUID to filter by (optional)' }
+      }
+    }
   },
   {
     name: 'get_project',
@@ -37,8 +37,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { projectId: { type: 'string', description: 'The project UUID' } },
-      required: ['projectId'],
-    },
+      required: ['projectId']
+    }
   },
   {
     name: 'list_deployments',
@@ -46,17 +46,18 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { projectId: { type: 'string', description: 'The project UUID' } },
-      required: ['projectId'],
-    },
+      required: ['projectId']
+    }
   },
   {
     name: 'get_deployment',
-    description: 'Get deployment details including status, image, replicas, env vars, services, and ingresses',
+    description:
+      'Get deployment details including status, image, replicas, env vars, services, and ingresses',
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'get_pod_logs',
@@ -66,10 +67,10 @@ const TOOLS: ToolDef[] = [
       properties: {
         podName: { type: 'string', description: 'The pod name' },
         namespace: { type: 'string', description: 'Kubernetes namespace (optional)' },
-        tailLines: { type: 'number', description: 'Number of lines from the end (default 100)' },
+        tailLines: { type: 'number', description: 'Number of lines from the end (default 100)' }
       },
-      required: ['podName'],
-    },
+      required: ['podName']
+    }
   },
   {
     name: 'list_pods',
@@ -77,8 +78,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'get_deployment_metrics',
@@ -88,24 +89,25 @@ const TOOLS: ToolDef[] = [
       properties: {
         deploymentId: { type: 'string', description: 'The deployment UUID' },
         start: { type: 'number', description: 'Start timestamp in ms (default: 1h ago)' },
-        end: { type: 'number', description: 'End timestamp in ms (default: now)' },
+        end: { type: 'number', description: 'End timestamp in ms (default: now)' }
       },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'get_database_metrics',
-    description: 'Fetch CPU/memory time-series metrics for a database pod. Use to confirm OOM patterns and size memory requests.',
+    description:
+      'Fetch CPU/memory time-series metrics for a database pod. Use to confirm OOM patterns and size memory requests.',
     parameters: {
       type: 'object' as const,
       properties: {
         databaseId: { type: 'string', description: 'The database UUID' },
         start: { type: 'number', description: 'Start timestamp in ms (default: 1h ago)' },
         end: { type: 'number', description: 'End timestamp in ms (default: now)' },
-        step: { type: 'number', description: 'Sample step in ms (default: 30000, min 1000)' },
+        step: { type: 'number', description: 'Sample step in ms (default: 30000, min 1000)' }
       },
-      required: ['databaseId'],
-    },
+      required: ['databaseId']
+    }
   },
   {
     name: 'list_databases',
@@ -113,17 +115,18 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { projectId: { type: 'string', description: 'The project UUID' } },
-      required: ['projectId'],
-    },
+      required: ['projectId']
+    }
   },
   {
     name: 'get_database',
-    description: 'Get database connection info (host, port, user, password, dbname) plus liveStatus with health: ready, phase, restartCount, message (e.g. "OOMKilled"), lastTerminationReason, lastTerminationExitCode, lastTerminationAt. Check liveStatus.message and liveStatus.lastTerminationReason to diagnose why a db is unhealthy — top-level status: "ready" only reflects provisioning state, not runtime health.',
+    description:
+      'Get database connection info (host, port, user, password, dbname) plus liveStatus with health: ready, phase, restartCount, message (e.g. "OOMKilled"), lastTerminationReason, lastTerminationExitCode, lastTerminationAt. Check liveStatus.message and liveStatus.lastTerminationReason to diagnose why a db is unhealthy — top-level status: "ready" only reflects provisioning state, not runtime health.',
     parameters: {
       type: 'object' as const,
       properties: { databaseId: { type: 'string', description: 'The database UUID' } },
-      required: ['databaseId'],
-    },
+      required: ['databaseId']
+    }
   },
   {
     name: 'get_build_logs',
@@ -131,8 +134,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'get_env_vars',
@@ -140,8 +143,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'list_ingresses',
@@ -149,8 +152,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'analyze_deployment_resources',
@@ -158,8 +161,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
 
   // ── Deployment actions ───────────────────────────────────────────
@@ -169,8 +172,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'rebuild_deployment',
@@ -178,8 +181,8 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'scale_deployment',
@@ -188,16 +191,17 @@ const TOOLS: ToolDef[] = [
       type: 'object' as const,
       properties: {
         deploymentId: { type: 'string', description: 'The deployment UUID' },
-        replicas: { type: 'number', description: 'Number of replicas (0-10)' },
+        replicas: { type: 'number', description: 'Number of replicas (0-10)' }
       },
-      required: ['deploymentId', 'replicas'],
-    },
+      required: ['deploymentId', 'replicas']
+    }
   },
 
   // ── Configuration ────────────────────────────────────────────────
   {
     name: 'add_env_vars',
-    description: 'Add or update environment variables on a deployment (merges, does not remove existing)',
+    description:
+      'Add or update environment variables on a deployment (merges, does not remove existing)',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -207,13 +211,13 @@ const TOOLS: ToolDef[] = [
           items: {
             type: 'object',
             properties: { key: { type: 'string' }, value: { type: 'string' } },
-            required: ['key', 'value'],
+            required: ['key', 'value']
           },
-          description: 'Environment variable key-value pairs to add/update',
-        },
+          description: 'Environment variable key-value pairs to add/update'
+        }
       },
-      required: ['deploymentId', 'envVars'],
-    },
+      required: ['deploymentId', 'envVars']
+    }
   },
   {
     name: 'create_ingress',
@@ -224,10 +228,10 @@ const TOOLS: ToolDef[] = [
         deploymentId: { type: 'string', description: 'The deployment UUID' },
         host: { type: 'string', description: 'The domain name (e.g. myapp.example.com)' },
         path: { type: 'string', description: 'URL path prefix (default: /)' },
-        servicePort: { type: 'number', description: 'Service port to route to' },
+        servicePort: { type: 'number', description: 'Service port to route to' }
       },
-      required: ['deploymentId', 'host'],
-    },
+      required: ['deploymentId', 'host']
+    }
   },
 
   // ── Resource creation ────────────────────────────────────────────
@@ -239,10 +243,10 @@ const TOOLS: ToolDef[] = [
       properties: {
         organizationId: { type: 'string', description: 'The organization UUID' },
         name: { type: 'string', description: 'Project name' },
-        description: { type: 'string', description: 'Project description (optional)' },
+        description: { type: 'string', description: 'Project description (optional)' }
       },
-      required: ['organizationId', 'name'],
-    },
+      required: ['organizationId', 'name']
+    }
   },
   {
     name: 'create_deployment',
@@ -254,10 +258,10 @@ const TOOLS: ToolDef[] = [
         name: { type: 'string', description: 'Deployment name' },
         image: { type: 'string', description: 'Docker image (e.g. nginx:latest)' },
         port: { type: 'number', description: 'Container port to expose' },
-        replicas: { type: 'number', description: 'Number of replicas (default 1)' },
+        replicas: { type: 'number', description: 'Number of replicas (default 1)' }
       },
-      required: ['projectId', 'name', 'image'],
-    },
+      required: ['projectId', 'name', 'image']
+    }
   },
   {
     name: 'deploy_from_github',
@@ -270,10 +274,10 @@ const TOOLS: ToolDef[] = [
         githubRepo: { type: 'string', description: 'GitHub repo in owner/repo format' },
         branch: { type: 'string', description: 'Branch to deploy (optional)' },
         dockerfilePath: { type: 'string', description: 'Path to Dockerfile (optional)' },
-        port: { type: 'number', description: 'Container port to expose' },
+        port: { type: 'number', description: 'Container port to expose' }
       },
-      required: ['projectId', 'name', 'githubRepo'],
-    },
+      required: ['projectId', 'name', 'githubRepo']
+    }
   },
   {
     name: 'create_database',
@@ -283,31 +287,33 @@ const TOOLS: ToolDef[] = [
       properties: {
         projectId: { type: 'string', description: 'The project UUID' },
         name: { type: 'string', description: 'Database name' },
-        storageSize: { type: 'string', description: 'Storage size (e.g. 1Gi, default 1Gi)' },
+        storageSize: { type: 'string', description: 'Storage size (e.g. 1Gi, default 1Gi)' }
       },
-      required: ['projectId', 'name'],
-    },
+      required: ['projectId', 'name']
+    }
   },
 
   // ── Dangerous ────────────────────────────────────────────────────
   {
     name: 'delete_deployment',
-    description: 'Delete a deployment and all associated resources. This is destructive and cannot be undone.',
+    description:
+      'Delete a deployment and all associated resources. This is destructive and cannot be undone.',
     parameters: {
       type: 'object' as const,
       properties: { deploymentId: { type: 'string', description: 'The deployment UUID' } },
-      required: ['deploymentId'],
-    },
+      required: ['deploymentId']
+    }
   },
   {
     name: 'delete_database',
-    description: 'Permanently destroy a PostgreSQL database. This is destructive and cannot be undone.',
+    description:
+      'Permanently destroy a PostgreSQL database. This is destructive and cannot be undone.',
     parameters: {
       type: 'object' as const,
       properties: { databaseId: { type: 'string', description: 'The database UUID' } },
-      required: ['databaseId'],
-    },
-  },
+      required: ['databaseId']
+    }
+  }
 ];
 
 // Convert to OpenAI function-calling format
@@ -316,8 +322,8 @@ export const TOOLS_OPENAI: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.
   function: {
     name: t.name,
     description: t.description,
-    parameters: t.parameters,
-  },
+    parameters: t.parameters
+  }
 }));
 
 // ── Tool executor ────────────────────────────────────────────────────
@@ -326,7 +332,7 @@ export const TOOLS_OPENAI: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.
 export async function executeTool(
   apiFetch: ApiFetch,
   name: string,
-  input: Record<string, any>,
+  input: Record<string, any>
 ): Promise<string> {
   switch (name) {
     // Query
@@ -349,7 +355,9 @@ export async function executeTool(
       if (input.namespace) qs.set('namespace', input.namespace);
       if (input.tailLines) qs.set('tailLines', String(input.tailLines));
       const q = qs.toString();
-      return json(await apiFetch('GET', `/kubernetes/pods/${input.podName}/logs${q ? `?${q}` : ''}`));
+      return json(
+        await apiFetch('GET', `/kubernetes/pods/${input.podName}/logs${q ? `?${q}` : ''}`)
+      );
     }
     case 'list_pods':
       return json(await apiFetch('GET', `/deployments/${input.deploymentId}/pods`));
@@ -358,7 +366,9 @@ export async function executeTool(
       if (input.start) qs.set('start', String(input.start));
       if (input.end) qs.set('end', String(input.end));
       const q = qs.toString();
-      return json(await apiFetch('GET', `/deployments/${input.deploymentId}/metrics${q ? `?${q}` : ''}`));
+      return json(
+        await apiFetch('GET', `/deployments/${input.deploymentId}/metrics${q ? `?${q}` : ''}`)
+      );
     }
     case 'get_database_metrics': {
       const qs = new URLSearchParams();
@@ -366,7 +376,9 @@ export async function executeTool(
       if (input.end) qs.set('end', String(input.end));
       if (input.step) qs.set('step', String(input.step));
       const q = qs.toString();
-      return json(await apiFetch('GET', `/databases/${input.databaseId}/metrics${q ? `?${q}` : ''}`));
+      return json(
+        await apiFetch('GET', `/databases/${input.databaseId}/metrics${q ? `?${q}` : ''}`)
+      );
     }
     case 'list_databases':
       return json(await apiFetch('GET', `/projects/${input.projectId}/databases`));
@@ -391,46 +403,67 @@ export async function executeTool(
     case 'rebuild_deployment':
       return json(await apiFetch('POST', `/deployments/${input.deploymentId}/rebuild`));
     case 'scale_deployment':
-      return json(await apiFetch('PATCH', `/deployments/${input.deploymentId}/scale`, { replicas: input.replicas }));
+      return json(
+        await apiFetch('PATCH', `/deployments/${input.deploymentId}/scale`, {
+          replicas: input.replicas
+        })
+      );
 
     // Configuration
     case 'add_env_vars':
-      return json(await apiFetch('POST', `/deployments/${input.deploymentId}/env/merge`, { envVars: input.envVars }));
+      return json(
+        await apiFetch('POST', `/deployments/${input.deploymentId}/env/merge`, {
+          envVars: input.envVars
+        })
+      );
     case 'create_ingress':
-      return json(await apiFetch('POST', `/deployments/${input.deploymentId}/ingresses`, {
-        host: input.host,
-        path: input.path,
-        servicePort: input.servicePort,
-      }));
+      return json(
+        await apiFetch('POST', `/deployments/${input.deploymentId}/ingresses`, {
+          host: input.host,
+          path: input.path,
+          servicePort: input.servicePort
+        })
+      );
 
     // Resource creation
     case 'create_project':
-      return json(await apiFetch('POST', '/projects', {
-        name: input.name,
-        slug: input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-        organizationId: input.organizationId,
-        description: input.description,
-      }));
+      return json(
+        await apiFetch('POST', '/projects', {
+          name: input.name,
+          slug: input.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, ''),
+          organizationId: input.organizationId,
+          description: input.description
+        })
+      );
     case 'create_deployment':
-      return json(await apiFetch('POST', `/projects/${input.projectId}/deployments`, {
-        name: input.name,
-        image: input.image,
-        port: input.port,
-        replicas: input.replicas,
-      }));
+      return json(
+        await apiFetch('POST', `/projects/${input.projectId}/deployments`, {
+          name: input.name,
+          image: input.image,
+          port: input.port,
+          replicas: input.replicas
+        })
+      );
     case 'deploy_from_github':
-      return json(await apiFetch('POST', `/projects/${input.projectId}/deployments/github`, {
-        name: input.name,
-        githubRepo: input.githubRepo,
-        branch: input.branch,
-        dockerfilePath: input.dockerfilePath,
-        port: input.port,
-      }));
+      return json(
+        await apiFetch('POST', `/projects/${input.projectId}/deployments/github`, {
+          name: input.name,
+          githubRepo: input.githubRepo,
+          branch: input.branch,
+          dockerfilePath: input.dockerfilePath,
+          port: input.port
+        })
+      );
     case 'create_database':
-      return json(await apiFetch('POST', `/projects/${input.projectId}/databases`, {
-        name: input.name,
-        storageSize: input.storageSize,
-      }));
+      return json(
+        await apiFetch('POST', `/projects/${input.projectId}/databases`, {
+          name: input.name,
+          storageSize: input.storageSize
+        })
+      );
 
     // Dangerous
     case 'delete_deployment':

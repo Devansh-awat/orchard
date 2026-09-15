@@ -3,15 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const snapshotPath = resolve(
-  packageRoot,
-  '../../apps/server/test/auth-coverage.snapshot.json',
-);
+const snapshotPath = resolve(packageRoot, '../../apps/server/test/auth-coverage.snapshot.json');
 const outputPath = resolve(packageRoot, 'src/routes.generated.ts');
 
-const snapshot: Record<string, string> = JSON.parse(
-  readFileSync(snapshotPath, 'utf8'),
-);
+const snapshot: Record<string, string> = JSON.parse(readFileSync(snapshotPath, 'utf8'));
 
 const entries = Object.entries(snapshot)
   .map(([key, auth]) => {
@@ -27,12 +22,11 @@ const entries = Object.entries(snapshot)
     return { method, path, auth };
   })
   .sort((a, b) =>
-    a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path),
+    a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)
   );
 
 const lines = entries.map(
-  (route) =>
-    `  { method: '${route.method}', path: '${route.path}', auth: '${route.auth}' },`,
+  (route) => `  { method: '${route.method}', path: '${route.path}', auth: '${route.auth}' },`
 );
 
 const banner =

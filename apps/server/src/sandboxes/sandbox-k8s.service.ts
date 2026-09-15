@@ -19,7 +19,7 @@ import {
   SANDBOX_ID_LABEL,
   SANDBOX_SHARD,
   SandboxCrStatus,
-  readSandboxCr,
+  readSandboxCr
 } from './sandbox-cr';
 
 // How long a mirror heartbeat may go unwritten before its shard's picture of
@@ -63,7 +63,11 @@ export function k8sErrorMessage(e: any): string {
 
 export function sandboxWorkdir(repoUrl: string | null): string {
   if (!repoUrl) return '/persist/home';
-  const base = repoUrl.replace(/\.git$/, '').split('/').pop() || '';
+  const base =
+    repoUrl
+      .replace(/\.git$/, '')
+      .split('/')
+      .pop() || '';
   return base ? `/persist/home/${base}` : '/persist/home';
 }
 
@@ -88,7 +92,7 @@ export class SandboxK8sService {
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
-    private readonly settings: InstanceSettingsService,
+    private readonly settings: InstanceSettingsService
   ) {}
 
   // Every sandbox resource carries the id of the install that made it. Several
@@ -149,14 +153,13 @@ export class SandboxK8sService {
               'app.kubernetes.io/managed-by': 'Helm',
               'pod-security.kubernetes.io/enforce': 'privileged',
               'pod-security.kubernetes.io/audit': 'privileged',
-              'pod-security.kubernetes.io/warn': 'privileged',
+              'pod-security.kubernetes.io/warn': 'privileged'
             },
             annotations: {
               'meta.helm.sh/release-name': 'orchard',
-              'meta.helm.sh/release-namespace':
-                process.env.ORCHARD_SERVER_NAMESPACE || 'orchard',
-            },
-          },
+              'meta.helm.sh/release-namespace': process.env.ORCHARD_SERVER_NAMESPACE || 'orchard'
+            }
+          }
         });
         this.logger.log(`created sandbox namespace ${this.namespace}`);
       } catch (e: any) {
@@ -188,8 +191,8 @@ export class SandboxK8sService {
         labels: { 'app.kubernetes.io/managed-by': 'Helm' },
         annotations: {
           'meta.helm.sh/release-name': 'orchard',
-          'meta.helm.sh/release-namespace': serverNamespace,
-        },
+          'meta.helm.sh/release-namespace': serverNamespace
+        }
       },
       spec: {
         podSelector: {},
@@ -199,33 +202,33 @@ export class SandboxK8sService {
             from: [
               {
                 namespaceSelector: {
-                  matchLabels: { 'kubernetes.io/metadata.name': serverNamespace },
+                  matchLabels: { 'kubernetes.io/metadata.name': serverNamespace }
                 },
                 podSelector: {
-                  matchLabels: { 'app.kubernetes.io/name': 'server' },
-                },
-              },
+                  matchLabels: { 'app.kubernetes.io/name': 'server' }
+                }
+              }
             ],
             ports: [
               { protocol: 'TCP', port: 22 as any },
-              { protocol: 'TCP', port: 4096 as any },
-            ],
-          },
+              { protocol: 'TCP', port: 4096 as any }
+            ]
+          }
         ],
         egress: [
           {
             to: [
               {
                 namespaceSelector: {
-                  matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' },
+                  matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' }
                 },
-                podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } },
-              },
+                podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } }
+              }
             ],
             ports: [
               { protocol: 'UDP', port: 53 as any },
-              { protocol: 'TCP', port: 53 as any },
-            ],
+              { protocol: 'TCP', port: 53 as any }
+            ]
           },
           {
             to: [
@@ -237,14 +240,14 @@ export class SandboxK8sService {
                     '172.16.0.0/12',
                     '192.168.0.0/16',
                     '169.254.0.0/16',
-                    '100.64.0.0/10',
-                  ],
-                },
-              },
-            ],
-          },
-        ],
-      },
+                    '100.64.0.0/10'
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
     };
     try {
       await net.createNamespacedNetworkPolicy(this.namespace, policy);
@@ -260,7 +263,7 @@ export class SandboxK8sService {
     const name = this.secretName(spec.podName);
     const stringData: Record<string, string> = {
       authorized_keys: `${input.authorizedKeys.join('\n')}\n`,
-      'bootstrap.sh': SANDBOX_BOOTSTRAP_SCRIPT,
+      'bootstrap.sh': SANDBOX_BOOTSTRAP_SCRIPT
     };
     if (input.githubToken) stringData['github-token'] = input.githubToken;
     if (input.claudeToken) stringData['claude-token'] = input.claudeToken;
@@ -272,12 +275,12 @@ export class SandboxK8sService {
             type: 'oauth',
             refresh: '',
             access: input.claudeToken,
-            expires: 99999999999999,
-          },
+            expires: 99999999999999
+          }
         })
       : '{}';
     const opencodeConfig: Record<string, any> = {
-      plugin: ['@cortexkit/opencode-anthropic-auth'],
+      plugin: ['@cortexkit/opencode-anthropic-auth']
     };
     if (input.mcpToken && process.env.SANDBOX_MCP_URL) {
       opencodeConfig.mcp = {
@@ -285,8 +288,8 @@ export class SandboxK8sService {
           type: 'remote',
           url: process.env.SANDBOX_MCP_URL,
           headers: { Authorization: `Bearer ${input.mcpToken}` },
-          enabled: true,
-        },
+          enabled: true
+        }
       };
     }
     stringData['opencode-config.json'] = JSON.stringify(opencodeConfig);
@@ -294,10 +297,10 @@ export class SandboxK8sService {
       metadata: {
         name,
         namespace: this.namespace,
-        labels: this.labels(spec, instanceId),
+        labels: this.labels(spec, instanceId)
       },
       type: 'Opaque',
-      stringData,
+      stringData
     };
     try {
       await core.readNamespacedSecret(name, this.namespace);
@@ -310,14 +313,14 @@ export class SandboxK8sService {
 
   private labels(
     spec: Pick<SandboxSpecInput, 'id' | 'userId'>,
-    instanceId: string,
+    instanceId: string
   ): Record<string, string> {
     return {
       'app.kubernetes.io/name': 'sandbox',
       'app.kubernetes.io/managed-by': MANAGED_BY,
       [SANDBOX_ID_LABEL]: spec.id,
       'orchard.my/user-id': spec.userId,
-      [INSTANCE_LABEL]: instanceId,
+      [INSTANCE_LABEL]: instanceId
     };
   }
 
@@ -335,38 +338,50 @@ export class SandboxK8sService {
         {
           name: 'GIT_TOKEN',
           valueFrom: {
-            secretKeyRef: { name: this.secretName(spec.podName), key: 'github-token', optional: true },
-          },
+            secretKeyRef: {
+              name: this.secretName(spec.podName),
+              key: 'github-token',
+              optional: true
+            }
+          }
         },
         {
           name: 'CLAUDE_CODE_OAUTH_TOKEN',
           valueFrom: {
-            secretKeyRef: { name: this.secretName(spec.podName), key: 'claude-token', optional: true },
-          },
+            secretKeyRef: {
+              name: this.secretName(spec.podName),
+              key: 'claude-token',
+              optional: true
+            }
+          }
         },
         {
           name: 'OPENAI_API_KEY',
           valueFrom: {
-            secretKeyRef: { name: this.secretName(spec.podName), key: 'openai-token', optional: true },
-          },
-        },
+            secretKeyRef: {
+              name: this.secretName(spec.podName),
+              key: 'openai-token',
+              optional: true
+            }
+          }
+        }
       ],
       resources: {
         requests: { cpu: '250m', memory: '512Mi' },
-        limits: { cpu: spec.cpuLimit, memory: spec.memoryLimit },
+        limits: { cpu: spec.cpuLimit, memory: spec.memoryLimit }
       },
       volumeMounts: [
         {
           name: 'authkeys',
           mountPath: '/etc/ssh/authorized_keys.d',
-          readOnly: true,
+          readOnly: true
         },
         {
           name: 'init',
           mountPath: '/orchard-init',
-          readOnly: true,
-        },
-      ],
+          readOnly: true
+        }
+      ]
     };
     if (homeMode === 'block') {
       container.volumeDevices = [{ name: 'home', devicePath: '/dev/sandboxhome' }];
@@ -380,7 +395,7 @@ export class SandboxK8sService {
       metadata: {
         name: spec.podName,
         namespace: this.namespace,
-        labels: this.labels(spec, instanceId),
+        labels: this.labels(spec, instanceId)
       },
       spec: {
         operatingMode: 'Running',
@@ -400,8 +415,8 @@ export class SandboxK8sService {
                   secretName: this.secretName(spec.podName),
                   items: [{ key: 'authorized_keys', path: 'authorized_keys' }],
                   defaultMode: 0o644,
-                  optional: false,
-                },
+                  optional: false
+                }
               },
               {
                 name: 'init',
@@ -411,14 +426,14 @@ export class SandboxK8sService {
                     { key: 'bootstrap.sh', path: 'bootstrap.sh' },
                     { key: 'setup.sh', path: 'setup.sh' },
                     { key: 'opencode-auth.json', path: 'opencode-auth.json' },
-                    { key: 'opencode-config.json', path: 'opencode-config.json' },
+                    { key: 'opencode-config.json', path: 'opencode-config.json' }
                   ],
                   defaultMode: 0o644,
-                  optional: false,
-                },
-              },
-            ],
-          },
+                  optional: false
+                }
+              }
+            ]
+          }
         },
         volumeClaimTemplates: [
           {
@@ -429,11 +444,11 @@ export class SandboxK8sService {
               ...(process.env.SANDBOX_STORAGE_CLASS
                 ? { storageClassName: process.env.SANDBOX_STORAGE_CLASS }
                 : {}),
-              resources: { requests: { storage: spec.diskSize } },
-            },
-          },
-        ],
-      },
+              resources: { requests: { storage: spec.diskSize } }
+            }
+          }
+        ]
+      }
     };
   }
 
@@ -446,7 +461,11 @@ export class SandboxK8sService {
     const instanceId = await this.instanceId();
     try {
       await this.custom().createNamespacedCustomObject(
-        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, this.buildCr(spec, instanceId),
+        CRD_GROUP,
+        CRD_VERSION,
+        this.namespace,
+        CRD_PLURAL,
+        this.buildCr(spec, instanceId)
       );
       return true;
     } catch (e: any) {
@@ -457,14 +476,20 @@ export class SandboxK8sService {
 
   private async patchOperatingMode(
     podName: string,
-    mode: 'Running' | 'Suspended',
+    mode: 'Running' | 'Suspended'
   ): Promise<boolean> {
     try {
       await this.custom().patchNamespacedCustomObject(
-        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, podName,
+        CRD_GROUP,
+        CRD_VERSION,
+        this.namespace,
+        CRD_PLURAL,
+        podName,
         { spec: { operatingMode: mode } },
-        undefined, undefined, undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } }
       );
       return true;
     } catch (e: any) {
@@ -480,13 +505,19 @@ export class SandboxK8sService {
   async refreshSpec(spec: SandboxSpecInput): Promise<void> {
     const desired = this.buildCr(spec, await this.instanceId());
     await this.custom().patchNamespacedCustomObject(
-      CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, spec.podName,
+      CRD_GROUP,
+      CRD_VERSION,
+      this.namespace,
+      CRD_PLURAL,
+      spec.podName,
       {
         metadata: { labels: desired.metadata.labels },
-        spec: { podTemplate: desired.spec.podTemplate },
+        spec: { podTemplate: desired.spec.podTemplate }
       },
-      undefined, undefined, undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
   }
 
@@ -506,7 +537,11 @@ export class SandboxK8sService {
     const core = this.core();
     try {
       await custom.deleteNamespacedCustomObject(
-        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, spec.podName,
+        CRD_GROUP,
+        CRD_VERSION,
+        this.namespace,
+        CRD_PLURAL,
+        spec.podName
       );
     } catch (e: any) {
       if (e.response?.statusCode !== 404) throw e;
@@ -517,14 +552,18 @@ export class SandboxK8sService {
       if (e.response?.statusCode !== 404) throw e;
     }
     const pvcs = await core.listNamespacedPersistentVolumeClaim(
-      this.namespace, undefined, undefined, undefined, undefined,
-      `${SANDBOX_ID_LABEL}=${spec.id}`,
+      this.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `${SANDBOX_ID_LABEL}=${spec.id}`
     );
     const claims = pvcs.body.items.length
       ? pvcs.body.items
-      : (await core.listNamespacedPersistentVolumeClaim(this.namespace)).body.items.filter(
-        (p) => p.metadata?.name?.includes(spec.podName),
-      );
+      : (await core.listNamespacedPersistentVolumeClaim(this.namespace)).body.items.filter((p) =>
+          p.metadata?.name?.includes(spec.podName)
+        );
     for (const pvc of claims) {
       if (!pvc.metadata?.name) continue;
       try {
@@ -558,10 +597,10 @@ export class SandboxK8sService {
           kind: CRD_KIND,
           namespace: this.namespace,
           name: podName,
-          apiVersion: CRD_API_VERSION,
-        },
+          apiVersion: CRD_API_VERSION
+        }
       },
-      select: { manifest: true },
+      select: { manifest: true }
     });
     return row ? readSandboxCr(row.manifest) : SANDBOX_CR_ABSENT;
   }
@@ -569,7 +608,11 @@ export class SandboxK8sService {
   private async readCrFromCluster(podName: string): Promise<SandboxCrStatus> {
     try {
       const res: any = await this.custom().getNamespacedCustomObject(
-        CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, podName,
+        CRD_GROUP,
+        CRD_VERSION,
+        this.namespace,
+        CRD_PLURAL,
+        podName
       );
       return readSandboxCr(res.body);
     } catch (e: any) {
@@ -586,7 +629,7 @@ export class SandboxK8sService {
     if (this.mirrorDisabled) return true;
     const row = await this.prisma.k8sMirrorHeartbeat.findUnique({
       where: { shard: SANDBOX_SHARD },
-      select: { holder: true, healthy: true, lastListAt: true, updatedAt: true },
+      select: { holder: true, healthy: true, lastListAt: true, updatedAt: true }
     });
     if (!row?.holder || !row.healthy || !row.lastListAt) return false;
     return Date.now() - row.updatedAt.getTime() < MIRROR_FRESH_MS;
@@ -608,22 +651,26 @@ export class SandboxK8sService {
     const rows = this.mirrorDisabled
       ? []
       : await this.prisma.k8sObject.findMany({
-        where: {
-          kind: 'Pod',
-          namespace: this.namespace,
-          shard: SANDBOX_SHARD,
-          manifest: { path: ['metadata', 'labels', SANDBOX_ID_LABEL], equals: sandboxId },
-        },
-        select: { manifest: true },
-      });
+          where: {
+            kind: 'Pod',
+            namespace: this.namespace,
+            shard: SANDBOX_SHARD,
+            manifest: { path: ['metadata', 'labels', SANDBOX_ID_LABEL], equals: sandboxId }
+          },
+          select: { manifest: true }
+        });
     for (const row of rows) {
       const pod = row.manifest as any;
       if (!isPodLive(pod)) continue;
       return { name: String(pod.metadata.name), ip: pod.status.podIP ?? null };
     }
     const pods = await this.core().listNamespacedPod(
-      this.namespace, undefined, undefined, undefined, undefined,
-      `${SANDBOX_ID_LABEL}=${sandboxId}`,
+      this.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `${SANDBOX_ID_LABEL}=${sandboxId}`
     );
     const live = pods.body.items.find(isPodLive);
     if (!live?.metadata?.name) return null;
@@ -633,7 +680,7 @@ export class SandboxK8sService {
   async execCapture(
     sandboxId: string,
     command: string[],
-    timeoutMs = 15000,
+    timeoutMs = 15000
   ): Promise<{ stdout: string; ok: boolean }> {
     const pod = await this.runningPod(sandboxId);
     if (!pod) throw new Error('sandbox pod is not running');
@@ -645,21 +692,15 @@ export class SandboxK8sService {
     });
     return Promise.race([
       new Promise<{ stdout: string; ok: boolean }>((resolve, reject) => {
-        exec.exec(
-          this.namespace,
-          pod.name,
-          'sandbox',
-          command,
-          stdout,
-          null,
-          null,
-          false,
-          (status) => resolve({ stdout: output, ok: status.status === 'Success' }),
-        ).catch(reject);
+        exec
+          .exec(this.namespace, pod.name, 'sandbox', command, stdout, null, null, false, (status) =>
+            resolve({ stdout: output, ok: status.status === 'Success' })
+          )
+          .catch(reject);
       }),
       new Promise<{ stdout: string; ok: boolean }>((_, reject) => {
         setTimeout(() => reject(new Error('sandbox command timed out')), timeoutMs);
-      }),
+      })
     ]);
   }
 
@@ -675,25 +716,27 @@ export class SandboxK8sService {
       });
       const result = await Promise.race([
         new Promise<boolean>((resolve, reject) => {
-          exec.exec(
-            this.namespace,
-            pod.name,
-            'sandbox',
-            [
-              '/bin/sh',
-              '-c',
-              "pgrep -af 'claude|codex' | grep -vE 'pgrep|opencode serve' | head -1; curl -s -m 3 http://127.0.0.1:4096/session/status | grep -o '\"type\":\"busy\"' | head -1",
-            ],
-            stdout,
-            null,
-            null,
-            false,
-            () => resolve(output.trim().length > 0),
-          ).catch(reject);
+          exec
+            .exec(
+              this.namespace,
+              pod.name,
+              'sandbox',
+              [
+                '/bin/sh',
+                '-c',
+                "pgrep -af 'claude|codex' | grep -vE 'pgrep|opencode serve' | head -1; curl -s -m 3 http://127.0.0.1:4096/session/status | grep -o '\"type\":\"busy\"' | head -1"
+              ],
+              stdout,
+              null,
+              null,
+              false,
+              () => resolve(output.trim().length > 0)
+            )
+            .catch(reject);
         }),
         new Promise<boolean>((_, reject) => {
           setTimeout(() => reject(new Error('busy check timed out')), 5000);
-        }),
+        })
       ]);
       return result;
     } catch (e: any) {

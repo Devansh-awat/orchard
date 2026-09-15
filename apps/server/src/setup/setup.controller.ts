@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Request, Response, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Request,
+  Response,
+  BadRequestException
+} from '@nestjs/common';
 import { Response as ExpressResponse } from 'express';
 import { Public, Auth } from '../auth/decorators';
 import { SessionsService } from '../auth/sessions.service';
@@ -11,7 +19,7 @@ export class SetupController {
   constructor(
     private readonly setup: SetupService,
     private readonly sessions: SessionsService,
-    private readonly oauth: OAuthService,
+    private readonly oauth: OAuthService
   ) {}
 
   @Public()
@@ -59,10 +67,11 @@ export class SetupController {
   async bootstrap(
     @Body() body: { token?: string; email?: string },
     @Request() req,
-    @Response() res: ExpressResponse,
+    @Response() res: ExpressResponse
   ): Promise<void> {
     const email = (body?.email || process.env.SETUP_ADMIN_EMAIL || '').trim();
-    if (!email) throw new BadRequestException('An email address is required to claim this instance');
+    if (!email)
+      throw new BadRequestException('An email address is required to claim this instance');
 
     const user = await this.setup.bootstrap(body?.token ?? '', email);
 
@@ -70,7 +79,7 @@ export class SetupController {
       userId: user.id,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      authMethod: 'setup_claim',
+      authMethod: 'setup_claim'
     });
 
     const displayName = user.firstName
@@ -82,10 +91,12 @@ export class SetupController {
       user.email,
       displayName,
       'setup_claim',
-      sessionId,
+      sessionId
     );
 
     setSessionCookie(res, token);
-    res.status(200).json({ success: true, user: { id: user.id, email: user.email, username: user.username } });
+    res
+      .status(200)
+      .json({ success: true, user: { id: user.id, email: user.email, username: user.username } });
   }
 }

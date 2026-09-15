@@ -34,7 +34,7 @@ export class BackupSyncService {
     private readonly prisma: PrismaService,
     private readonly k8sCnpg: K8sCnpgService,
     private readonly leader: LeaderElectionService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   @Interval(60_000)
@@ -49,11 +49,16 @@ export class BackupSyncService {
           mode: 'cnpg',
           namespace: { not: null },
           ...(ingest
-            ? { OR: [{ backups: { some: { status: { in: ['pending', 'running'] } } } }, { backupScheduleCron: { not: null } }] }
-            : { backups: { some: { status: { in: ['pending', 'running'] } } } }),
+            ? {
+                OR: [
+                  { backups: { some: { status: { in: ['pending', 'running'] } } } },
+                  { backupScheduleCron: { not: null } }
+                ]
+              }
+            : { backups: { some: { status: { in: ['pending', 'running'] } } } })
         },
         select: { id: true, namespace: true, clusterName: true, mode: true },
-        take: 200,
+        take: 200
       });
       for (const db of databases) {
         const anyNewlyCompleted = await this.reconcileDatabase(db, { ingest }).catch((e) => {
@@ -95,15 +100,15 @@ export class BackupSyncService {
         mode: 'cnpg',
         namespace: { not: null },
         clusterName: { not: null },
-        status: { notIn: ['deleting', 'restoring', 'error'] },
+        status: { notIn: ['deleting', 'restoring', 'error'] }
       },
       select: {
         id: true,
         namespace: true,
         clusterName: true,
         backupScheduleCron: true,
-        _count: { select: { backups: true } },
-      },
+        _count: { select: { backups: true } }
+      }
     });
 
     let repaired = 0;
@@ -120,28 +125,35 @@ export class BackupSyncService {
 
         const cron = db.backupScheduleCron || DEFAULT_BACKUP_CRON;
         await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron), {
-          immediate: true,
+          immediate: true
         });
         if (!db.backupScheduleCron) {
           await this.prisma.database.update({
             where: { id: db.id },
-            data: { backupScheduleCron: cron },
+            data: { backupScheduleCron: cron }
           });
         }
         repaired += 1;
-        this.logger.log(`[DB/backup] restored backup schedule ${cron} for ${namespace}/${clusterName}`);
+        this.logger.log(
+          `[DB/backup] restored backup schedule ${cron} for ${namespace}/${clusterName}`
+        );
       } catch (e: any) {
-        this.logger.warn(`schedule sweep failed for ${namespace}/${clusterName}: ${k8sErrorMessage(e)}`);
+        this.logger.warn(
+          `schedule sweep failed for ${namespace}/${clusterName}: ${k8sErrorMessage(e)}`
+        );
       }
     }
   }
 
-  async reconcileDatabase(database: DatabaseRef, opts: { ingest?: boolean } = {}): Promise<boolean> {
+  async reconcileDatabase(
+    database: DatabaseRef,
+    opts: { ingest?: boolean } = {}
+  ): Promise<boolean> {
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) return false;
     let anyNewlyCompleted = false;
 
     const rows = await this.prisma.databaseBackup.findMany({
-      where: { databaseId: database.id, status: { in: ['pending', 'running'] } },
+      where: { databaseId: database.id, status: { in: ['pending', 'running'] } }
     });
 
     for (const row of rows) {
@@ -178,10 +190,10 @@ export class BackupSyncService {
             ...(terminal
               ? {
                   completedAt: new Date(live?.status?.stoppedAt || Date.now()),
-                  errorMessage: newStatus === 'failed' ? errorMessage : null,
+                  errorMessage: newStatus === 'failed' ? errorMessage : null
                 }
-              : {}),
-          },
+              : {})
+          }
         });
         if ((newStatus === 'completed' || newStatus === 'failed') && claimed.count > 0) {
           if (newStatus === 'completed') anyNewlyCompleted = true;
@@ -211,7 +223,7 @@ export class BackupSyncService {
 
     const existing = await this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
-      select: { backupName: true },
+      select: { backupName: true }
     });
     const known = new Set(existing.map((r) => r.backupName));
 
@@ -232,10 +244,13 @@ export class BackupSyncService {
             backupName: name,
             type: lb.metadata?.labels?.['cnpg.io/scheduled-backup'] ? 'scheduled' : 'full',
             status,
-            errorMessage: status === 'failed' ? String(lb.status?.error || '').substring(0, 2000) || null : null,
+            errorMessage:
+              status === 'failed'
+                ? String(lb.status?.error || '').substring(0, 2000) || null
+                : null,
             completedAt: terminal ? new Date(lb.status?.stoppedAt || Date.now()) : null,
-            createdAt,
-          },
+            createdAt
+          }
         });
         if (status === 'completed') anyNewlyCompleted = true;
         if (terminal) this.maybeNotify(created.id, status as 'completed' | 'failed', createdAt);
@@ -248,14 +263,20 @@ export class BackupSyncService {
     if (Date.now() - createdAt.getTime() > NOTIFY_MAX_AGE_MS) return;
     this.notifications
       .notifyBackup(backupId, status)
-      .catch((e) => this.logger.warn(`backup notification failed for ${backupId}: ${e?.message ?? e}`));
+      .catch((e) =>
+        this.logger.warn(`backup notification failed for ${backupId}: ${e?.message ?? e}`)
+      );
   }
 
-  async pruneOldBackups(database: { id: string; namespace: string | null; clusterName: string | null }) {
+  async pruneOldBackups(database: {
+    id: string;
+    namespace: string | null;
+    clusterName: string | null;
+  }) {
     if (!database.namespace || !database.clusterName) return;
     const completed = await this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id, status: 'completed' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
     if (completed.length <= MAX_COMPLETED_BACKUPS) return;
     const toDelete = completed.slice(MAX_COMPLETED_BACKUPS);

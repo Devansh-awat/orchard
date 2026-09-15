@@ -5,7 +5,10 @@
  */
 
 export function wildcardSecretNameFor(suffix: string): string {
-  return `wildcard-${suffix.replace(/^\./, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-tls`;
+  return `wildcard-${suffix
+    .replace(/^\./, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .toLowerCase()}-tls`;
 }
 
 // Suffixes Orchard hands out automatically at create time. A host under one of
@@ -104,7 +107,7 @@ export function redactDatabaseForViewer<
     publicConnectionString?: string | null;
     r2ProxyAccessKey?: string | null;
     r2ProxySecret?: string | null;
-  },
+  }
 >(d: T): T {
   return {
     ...d,
@@ -112,7 +115,7 @@ export function redactDatabaseForViewer<
     connectionString: null,
     publicConnectionString: null,
     r2ProxyAccessKey: null,
-    r2ProxySecret: null,
+    r2ProxySecret: null
   } as T;
 }
 
@@ -126,12 +129,12 @@ export function stripR2ProxyCreds<
   T extends {
     r2ProxyAccessKey?: string | null;
     r2ProxySecret?: string | null;
-  },
+  }
 >(d: T): T {
   return {
     ...d,
     r2ProxyAccessKey: null,
-    r2ProxySecret: null,
+    r2ProxySecret: null
   } as T;
 }
 
@@ -144,7 +147,7 @@ export function scrubIngress<
   T extends {
     protectionPasswordHash?: string | null;
     protectionBypassSecret?: string | null;
-  },
+  }
 >(ing: T): Omit<T, 'protectionPasswordHash' | 'protectionBypassSecret'> {
   const {
     protectionPasswordHash: _protectionPasswordHash,
@@ -198,7 +201,7 @@ export const OWN_CERT_PREFIX = 'leaf-cert-';
 export function desiredWildcardTls(
   host: string,
   currentSecret: string | null,
-  newIssuer: string,
+  newIssuer: string
 ): { secretName: string | null; clusterIssuer: string | null } | null {
   if (!currentSecret) return null;
 

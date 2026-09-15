@@ -62,7 +62,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     private readonly orgEvents: OrgEventsService,
     private readonly leader: LeaderElectionService,
     private readonly logCapture: PodLogCaptureService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   async onModuleInit() {
@@ -84,7 +84,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     });
     this.informer.on('error', (err) => {
       this.logger.warn(
-        `pod informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`,
+        `pod informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`
       );
       this.scheduleRestart();
     });
@@ -116,7 +116,10 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const coreApi = kc.makeApiClient(k8s.CoreV1Api);
       const { body } = await coreApi.listPodForAllNamespaces(
-        undefined, undefined, undefined, ORCHARD_SELECTOR,
+        undefined,
+        undefined,
+        undefined,
+        ORCHARD_SELECTOR
       );
       const pods = body.items ?? [];
       const seen = new Map<string, Set<string>>();
@@ -142,7 +145,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       let pruned = 0;
       for (const [deploymentId, names] of seen) {
         const { count } = await this.prisma.pod.deleteMany({
-          where: { deploymentId, name: { notIn: [...names] } },
+          where: { deploymentId, name: { notIn: [...names] } }
         });
         pruned += count;
       }
@@ -242,7 +245,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       type: 'pod.changed',
       id: ctx.deploymentId,
       projectId: ctx.projectId,
-      payload,
+      payload
     });
   }
 
@@ -254,19 +257,16 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     return {
       name,
       status: computePodStatus(pod),
-      ready: pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
+      ready:
+        pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
       restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
       lastTermination: term?.reason
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
-        : null,
+        : null
     };
   }
 
-  private async syncPod(
-    type: 'add' | 'update' | 'delete',
-    deploymentId: string,
-    pod: k8s.V1Pod,
-  ) {
+  private async syncPod(type: 'add' | 'update' | 'delete', deploymentId: string, pod: k8s.V1Pod) {
     const name = pod.metadata?.name;
     if (!name) return;
 
@@ -277,10 +277,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       }
 
       const containerStatuses = pod.status?.containerStatuses ?? [];
-      const restartCount = containerStatuses.reduce(
-        (sum, c) => sum + (c.restartCount ?? 0),
-        0,
-      );
+      const restartCount = containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0);
       const ready =
         pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null;
       const term = latestTermination(containerStatuses);
@@ -292,17 +289,17 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
         ready,
         lastTerminationReason: term?.reason ?? null,
         lastExitCode: term?.exitCode ?? null,
-        lastTerminatedAt: term?.finishedAt ?? null,
+        lastTerminatedAt: term?.finishedAt ?? null
       };
 
       await this.prisma.pod.upsert({
         where: { deploymentId_name: { deploymentId, name } },
         create: { deploymentId, name, ...data },
-        update: data,
+        update: data
       });
     } catch (err) {
       this.logger.warn(
-        `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`,
+        `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`
       );
     }
   }
@@ -311,17 +308,25 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const pods = await this.prisma.pod.findMany({
         where: { deploymentId: ctx.deploymentId },
-        select: { status: true },
+        select: { status: true }
       });
       const crashing = pods.some((p) => p.status === 'crashing');
       const track = this.crashTracks.get(ctx.deploymentId);
 
       if (!track) {
         if (type === 'add') {
-          this.crashTracks.set(ctx.deploymentId, { crashing, notifiedCrash: false, lastNotifiedAt: 0 });
+          this.crashTracks.set(ctx.deploymentId, {
+            crashing,
+            notifiedCrash: false,
+            lastNotifiedAt: 0
+          });
           return;
         }
-        this.crashTracks.set(ctx.deploymentId, { crashing: false, notifiedCrash: false, lastNotifiedAt: 0 });
+        this.crashTracks.set(ctx.deploymentId, {
+          crashing: false,
+          notifiedCrash: false,
+          lastNotifiedAt: 0
+        });
         if (crashing) this.scheduleCrashConfirm(ctx);
         return;
       }
@@ -341,7 +346,11 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
           track.notifiedCrash = false;
           this.notifications
             .notifyPodState(ctx.deploymentId, 'recovered')
-            .catch((err) => this.logger.warn(`recovery notification failed for ${ctx.deploymentId}: ${err?.message ?? err}`));
+            .catch((err) =>
+              this.logger.warn(
+                `recovery notification failed for ${ctx.deploymentId}: ${err?.message ?? err}`
+              )
+            );
         }
       }
 
@@ -351,7 +360,9 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
         this.crashTracks.delete(ctx.deploymentId);
       }
     } catch (err) {
-      this.logger.warn(`trackCrashState(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
+      this.logger.warn(
+        `trackCrashState(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`
+      );
     }
   }
 
@@ -373,7 +384,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const crashingPod = await this.prisma.pod.findFirst({
         where: { deploymentId: ctx.deploymentId, status: 'crashing' },
-        select: { lastTerminationReason: true, lastExitCode: true },
+        select: { lastTerminationReason: true, lastExitCode: true }
       });
       if (!crashingPod) {
         track.crashing = false;
@@ -388,7 +399,9 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
         : undefined;
       await this.notifications.notifyPodState(ctx.deploymentId, 'crashing', detail);
     } catch (err) {
-      this.logger.warn(`confirmCrash(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
+      this.logger.warn(
+        `confirmCrash(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`
+      );
     }
   }
 
@@ -404,8 +417,8 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           projectId: true,
-          project: { select: { organizationId: true } },
-        },
+          project: { select: { organizationId: true } }
+        }
       });
       if (dep) {
         ctx = { deploymentId: dep.id, orgId: dep.project.organizationId, projectId: dep.projectId };
@@ -419,5 +432,3 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     return ctx;
   }
 }
-
-

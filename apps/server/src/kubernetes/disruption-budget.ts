@@ -48,8 +48,8 @@ export function disruptionBudgetManifest(options: {
         'app.kubernetes.io/name': options.name,
         // The mirror informer watches on this selector, so a budget without it
         // is invisible to Orchard.
-        'app.kubernetes.io/managed-by': 'orchard',
-      },
+        'app.kubernetes.io/managed-by': 'orchard'
+      }
     },
     spec: {
       minAvailable: options.minAvailable,
@@ -57,7 +57,7 @@ export function disruptionBudgetManifest(options: {
       // A pod that is running but has never gone ready isn't part of what the
       // budget protects, so let the drain take it. Without this a single
       // crash-looping replica makes the whole node undrainable.
-      unhealthyPodEvictionPolicy: 'AlwaysAllow',
-    },
+      unhealthyPodEvictionPolicy: 'AlwaysAllow'
+    }
   };
 }

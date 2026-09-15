@@ -27,7 +27,7 @@ export class OidcStateStore implements OnModuleInit, OnModuleDestroy {
     if (!url) {
       if (process.env.NODE_ENV === 'production') {
         this.logger.warn(
-          'REDIS_URL not set: OIDC login state is per-pod; SSO breaks with multiple replicas',
+          'REDIS_URL not set: OIDC login state is per-pod; SSO breaks with multiple replicas'
         );
       }
       return;

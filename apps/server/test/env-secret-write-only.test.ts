@@ -14,19 +14,19 @@ const stored = (rows: StoredEnvVar[]) => new Map(rows.map((r) => [r.key, r]));
 
 const BEFORE = stored([
   { key: 'DATABASE_URL', value: 'postgres://real', secret: true },
-  { key: 'PORT', value: '3000', secret: false },
+  { key: 'PORT', value: '3000', secret: false }
 ]);
 
 test('a read never hands back a secret value', () => {
   const out = DeploymentsService.redactSecretEnv({
     envVars: [
       { key: 'DATABASE_URL', value: 'postgres://real', secret: true },
-      { key: 'PORT', value: '3000', secret: false },
-    ],
+      { key: 'PORT', value: '3000', secret: false }
+    ]
   } as any);
   assert.deepEqual(out.envVars, [
     { key: 'DATABASE_URL', value: null, secret: true },
-    { key: 'PORT', value: '3000', secret: false },
+    { key: 'PORT', value: '3000', secret: false }
   ]);
 });
 
@@ -36,13 +36,13 @@ test('a null value keeps the secret the client was never shown', () => {
   const out = applyEnvKeepRules(
     [
       { key: 'DATABASE_URL', value: null, secret: true },
-      { key: 'PORT', value: '8080', secret: false },
+      { key: 'PORT', value: '8080', secret: false }
     ],
-    BEFORE,
+    BEFORE
   );
   assert.deepEqual(out, [
     { key: 'DATABASE_URL', value: 'postgres://real', secret: true },
-    { key: 'PORT', value: '8080', secret: false },
+    { key: 'PORT', value: '8080', secret: false }
   ]);
 });
 
@@ -56,7 +56,7 @@ test('a blank on a row that is secret before and after keeps it', () => {
 test('a real value replaces a secret', () => {
   const out = applyEnvKeepRules(
     [{ key: 'DATABASE_URL', value: 'postgres://new', secret: true }],
-    BEFORE,
+    BEFORE
   );
   assert.deepEqual(out, [{ key: 'DATABASE_URL', value: 'postgres://new', secret: true }]);
 });
@@ -66,18 +66,18 @@ test('a real value replaces a secret', () => {
 test('un-marking a secret without a value is refused', () => {
   assert.throws(
     () => applyEnvKeepRules([{ key: 'DATABASE_URL', value: null, secret: false }], BEFORE),
-    /Cannot un-mark DATABASE_URL as secret/,
+    /Cannot un-mark DATABASE_URL as secret/
   );
   assert.throws(
     () => applyEnvKeepRules([{ key: 'DATABASE_URL', secret: false }], BEFORE),
-    /Cannot un-mark DATABASE_URL as secret/,
+    /Cannot un-mark DATABASE_URL as secret/
   );
 });
 
 test('un-marking a secret while supplying a value is allowed', () => {
   const out = applyEnvKeepRules(
     [{ key: 'DATABASE_URL', value: 'now-public', secret: false }],
-    BEFORE,
+    BEFORE
   );
   assert.deepEqual(out, [{ key: 'DATABASE_URL', value: 'now-public', secret: false }]);
 });

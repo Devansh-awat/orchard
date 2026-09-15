@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  InstanceSettingsService, MCP_ENABLED_KEY,
+  InstanceSettingsService,
+  MCP_ENABLED_KEY
 } from '../src/instance-settings/instance-settings.service';
 
 class FakePrisma {
@@ -15,7 +16,7 @@ class FakePrisma {
     upsert: async ({ where, update }: any) => {
       this.rows.set(where.key, update.value);
       return { key: where.key, value: update.value };
-    },
+    }
   };
 }
 
@@ -49,7 +50,7 @@ test('MCP is on when nothing has been stored', async () => {
     assert.deepEqual(await settings.getMcpState(), {
       enabled: true,
       dbValue: true,
-      envOverride: null,
+      envOverride: null
     });
   });
 });
@@ -74,7 +75,7 @@ test('the environment overrides the stored value and reports itself as the reaso
     assert.deepEqual(await settings.getMcpState(), {
       enabled: false,
       dbValue: true,
-      envOverride: false,
+      envOverride: false
     });
   });
 });
@@ -89,10 +90,7 @@ test('a pinned toggle refuses the write instead of storing it', async () => {
     assert.equal(prisma.rows.has(MCP_ENABLED_KEY), false);
   });
   await withEnv({ USERSPACE_NODE_SCHEDULING: 'true' }, async () => {
-    await assert.rejects(
-      () => settings.setUserspaceScheduling(false),
-      /USERSPACE_NODE_SCHEDULING/,
-    );
+    await assert.rejects(() => settings.setUserspaceScheduling(false), /USERSPACE_NODE_SCHEDULING/);
   });
 });
 

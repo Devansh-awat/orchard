@@ -13,5 +13,8 @@
  * another would be wrong.
  */
 export function optionalDomain(value: string | undefined): string {
-  return (value || '').trim().replace(/^\.+|\.+$/g, '').toLowerCase();
+  return (value || '')
+    .trim()
+    .replace(/^\.+|\.+$/g, '')
+    .toLowerCase();
 }

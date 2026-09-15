@@ -1680,8 +1680,7 @@
 					aria-label="Message the agent"
 					oninput={autosize}
 					onkeydown={onComposerKey}
-					onpaste={onComposerPaste}
-				></textarea>
+					onpaste={onComposerPaste}></textarea>
 				<div class="chat-composer-foot">
 					{#if ocMode}
 						<div class="chat-chips">

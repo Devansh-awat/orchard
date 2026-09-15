@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   HttpException,
-  HttpStatus,
+  HttpStatus
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,10 +28,7 @@ const WEBHOOK_RATE_MAX = 30;
 
 @Injectable()
 export class WebhooksService {
-  private readonly triggerBuckets = new Map<
-    string,
-    { count: number; windowStart: number }
-  >();
+  private readonly triggerBuckets = new Map<string, { count: number; windowStart: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -39,7 +36,7 @@ export class WebhooksService {
     private readonly k8sWorkload: K8sWorkloadService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   private enforceTriggerRateLimit(tokenId: string): void {
@@ -52,16 +49,14 @@ export class WebhooksService {
     }
 
     if (bucket.count >= WEBHOOK_RATE_MAX) {
-      const retryAfter = Math.ceil(
-        (bucket.windowStart + WEBHOOK_RATE_WINDOW_MS - now) / 1000,
-      );
+      const retryAfter = Math.ceil((bucket.windowStart + WEBHOOK_RATE_WINDOW_MS - now) / 1000);
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: `Webhook rate limit exceeded (${WEBHOOK_RATE_MAX}/min). Try again in ${retryAfter}s.`,
-          retryAfter,
+          retryAfter
         },
-        HttpStatus.TOO_MANY_REQUESTS,
+        HttpStatus.TOO_MANY_REQUESTS
       );
     }
 
@@ -72,13 +67,13 @@ export class WebhooksService {
     deploymentId: string,
     clerkId: string,
     label?: string,
-    originatingApiTokenId?: string | null,
+    originatingApiTokenId?: string | null
   ) {
     const user = await this.resolveUser(clerkId);
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: true },
+      include: { project: true }
     });
 
     if (!deployment) {
@@ -102,8 +97,8 @@ export class WebhooksService {
         // H-3: tie the webhook's lifetime to the API token that minted it
         // (if any). Session-auth callers leave this NULL, in which case the
         // webhook lifetime is bound to the user + project-edit re-check.
-        originatingApiTokenId: originatingApiTokenId ?? null,
-      },
+        originatingApiTokenId: originatingApiTokenId ?? null
+      }
     });
 
     void this.audit.log({
@@ -115,7 +110,7 @@ export class WebhooksService {
       deploymentId,
       targetType: 'webhook_token',
       targetId: record.id,
-      targetLabel: label || record.id,
+      targetLabel: label || record.id
     });
 
     return {
@@ -124,7 +119,7 @@ export class WebhooksService {
       // NULL by design now that the column is no longer persisted.
       token,
       label: record.label,
-      createdAt: record.createdAt,
+      createdAt: record.createdAt
     };
   }
 
@@ -133,7 +128,7 @@ export class WebhooksService {
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: true },
+      include: { project: true }
     });
 
     if (!deployment) {
@@ -148,22 +143,18 @@ export class WebhooksService {
         id: true,
         label: true,
         createdAt: true,
-        lastUsedAt: true,
+        lastUsedAt: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
-  async deleteWebhookToken(
-    deploymentId: string,
-    tokenId: string,
-    clerkId: string,
-  ) {
+  async deleteWebhookToken(deploymentId: string, tokenId: string, clerkId: string) {
     const user = await this.resolveUser(clerkId);
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: true },
+      include: { project: true }
     });
 
     if (!deployment) {
@@ -173,7 +164,7 @@ export class WebhooksService {
     await this.authz.requireProjectEdit(deployment.projectId, user.id, 'manage webhook tokens');
 
     const tokenRecord = await this.prisma.deploymentWebhookToken.findFirst({
-      where: { id: tokenId, deploymentId },
+      where: { id: tokenId, deploymentId }
     });
 
     if (!tokenRecord) {
@@ -181,7 +172,7 @@ export class WebhooksService {
     }
 
     await this.prisma.deploymentWebhookToken.delete({
-      where: { id: tokenId },
+      where: { id: tokenId }
     });
 
     void this.audit.log({
@@ -193,23 +184,19 @@ export class WebhooksService {
       deploymentId,
       targetType: 'webhook_token',
       targetId: tokenId,
-      targetLabel: tokenRecord.label || tokenId,
+      targetLabel: tokenRecord.label || tokenId
     });
 
     return { ok: true };
   }
 
-  async triggerWebhookDeploy(
-    rawToken: string,
-    image?: string,
-    tag?: string,
-  ) {
+  async triggerWebhookDeploy(rawToken: string, image?: string, tag?: string) {
     // H-3: look up by hash only. Plaintext-column lookup is gone — all
     // post-migration rows have token=NULL, and querying the legacy column
     // would defeat the at-rest hashing.
     const tokenRecord = await this.prisma.deploymentWebhookToken.findUnique({
       where: { tokenHash: hashWebhookToken(rawToken) },
-      include: { deployment: { include: { project: true } } },
+      include: { deployment: { include: { project: true } } }
     });
 
     if (!tokenRecord) {
@@ -246,7 +233,7 @@ export class WebhooksService {
         targetType: 'webhook_token',
         targetId: tokenRecord.id,
         targetLabel: tokenRecord.label ?? tokenRecord.id,
-        metadata: { outcome: 'failure', action: 'rejected', reason: 'legacy_token_no_creator' },
+        metadata: { outcome: 'failure', action: 'rejected', reason: 'legacy_token_no_creator' }
       });
       throw new NotFoundException('Invalid webhook token');
     }
@@ -258,7 +245,7 @@ export class WebhooksService {
     if (tokenRecord.originatingApiTokenId) {
       const parent = await this.prisma.apiToken.findUnique({
         where: { id: tokenRecord.originatingApiTokenId },
-        select: { id: true, restrictedProjectIds: true, expiresAt: true },
+        select: { id: true, restrictedProjectIds: true, expiresAt: true }
       });
       const parentValid =
         !!parent &&
@@ -278,7 +265,11 @@ export class WebhooksService {
           targetType: 'webhook_token',
           targetId: tokenRecord.id,
           targetLabel: tokenRecord.label ?? tokenRecord.id,
-          metadata: { outcome: 'failure', action: 'rejected', reason: 'originating_api_token_invalid' },
+          metadata: {
+            outcome: 'failure',
+            action: 'rejected',
+            reason: 'originating_api_token_invalid'
+          }
         });
         throw new NotFoundException('Invalid webhook token');
       }
@@ -288,7 +279,7 @@ export class WebhooksService {
       await this.authz.requireProjectEdit(
         projectId,
         tokenRecord.createdByUserId,
-        'trigger deployment via webhook',
+        'trigger deployment via webhook'
       );
     } catch {
       await this.prisma.deploymentWebhookToken
@@ -303,7 +294,7 @@ export class WebhooksService {
         targetType: 'webhook_token',
         targetId: tokenRecord.id,
         targetLabel: tokenRecord.label ?? tokenRecord.id,
-        metadata: { outcome: 'failure', action: 'rejected', reason: 'creator_lost_access' },
+        metadata: { outcome: 'failure', action: 'rejected', reason: 'creator_lost_access' }
       });
       throw new NotFoundException('Invalid webhook token');
     }
@@ -312,14 +303,14 @@ export class WebhooksService {
     this.prisma.deploymentWebhookToken
       .update({
         where: { id: tokenRecord.id },
-        data: { lastUsedAt: new Date() },
+        data: { lastUsedAt: new Date() }
       })
       .catch(() => {});
 
     const writeAudit = (
       outcome: 'success' | 'failure',
       action: string,
-      extra?: Record<string, string | number | boolean | null>,
+      extra?: Record<string, string | number | boolean | null>
     ) => {
       void this.audit.log({
         action: 'deployment.webhook_triggered',
@@ -335,23 +326,21 @@ export class WebhooksService {
           action,
           image: image ?? null,
           tag: tag ?? null,
-          ...(extra ?? {}),
-        },
+          ...(extra ?? {})
+        }
       });
     };
 
     if (['building', 'deploying'].includes(deployment.status)) {
       writeAudit('failure', 'rejected', { reason: 'building' });
-      throw new ConflictException(
-        'Deployment is currently building, try again later',
-      );
+      throw new ConflictException('Deployment is currently building, try again later');
     }
 
     // Only allow image/tag updates for docker image deployments (not GitHub-based)
     if ((image || tag) && deployment.githubRepo) {
       writeAudit('failure', 'rejected', { reason: 'github_repo_image_update' });
       throw new BadRequestException(
-        'Image updates via webhook are only supported for Docker image deployments. Use the rebuild endpoint for GitHub-based deployments.',
+        'Image updates via webhook are only supported for Docker image deployments. Use the rebuild endpoint for GitHub-based deployments.'
       );
     }
 
@@ -365,11 +354,11 @@ export class WebhooksService {
         await this.k8sWorkload.updateDeploymentImage(
           deployment.name,
           deployment.namespace,
-          fullImage,
+          fullImage
         );
       } catch (err) {
         writeAudit('failure', 'image-update', {
-          error: err instanceof Error ? err.message : String(err),
+          error: err instanceof Error ? err.message : String(err)
         });
         throw err;
       }
@@ -377,14 +366,14 @@ export class WebhooksService {
       // Update DB
       await this.prisma.deployment.update({
         where: { id: deployment.id },
-        data: { image: fullImage },
+        data: { image: fullImage }
       });
 
       // Track in image history
       await this.prisma.$transaction(async (tx) => {
         await tx.imageHistory.updateMany({
           where: { deploymentId: deployment.id, isActive: true },
-          data: { isActive: false },
+          data: { isActive: false }
         });
 
         await tx.imageHistory.create({
@@ -392,21 +381,21 @@ export class WebhooksService {
             deploymentId: deployment.id,
             image: fullImage,
             tag: resolvedTag,
-            isActive: true,
-          },
+            isActive: true
+          }
         });
 
         // Prune old entries beyond 10
         const allImages = await tx.imageHistory.findMany({
           where: { deploymentId: deployment.id },
           orderBy: { createdAt: 'desc' },
-          select: { id: true },
+          select: { id: true }
         });
 
         if (allImages.length > 10) {
           const idsToRemove = allImages.slice(10).map((img) => img.id);
           await tx.imageHistory.deleteMany({
-            where: { id: { in: idsToRemove } },
+            where: { id: { in: idsToRemove } }
           });
         }
       });
@@ -415,28 +404,24 @@ export class WebhooksService {
       return {
         ok: true,
         deploymentId: deployment.id,
-        action: 'image-update',
+        action: 'image-update'
       };
-    } 
-      try {
-        await this.k8sWorkload.restartDeployment(
-          deployment.name,
-          deployment.namespace,
-        );
-      } catch (err) {
-        writeAudit('failure', 'restart', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        throw err;
-      }
+    }
+    try {
+      await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
+    } catch (err) {
+      writeAudit('failure', 'restart', {
+        error: err instanceof Error ? err.message : String(err)
+      });
+      throw err;
+    }
 
-      writeAudit('success', 'restart');
-      return {
-        ok: true,
-        deploymentId: deployment.id,
-        action: 'restart',
-      };
-    
+    writeAudit('success', 'restart');
+    return {
+      ok: true,
+      deploymentId: deployment.id,
+      action: 'restart'
+    };
   }
 
   private async resolveUser(clerkId: string) {
@@ -446,5 +431,4 @@ export class WebhooksService {
     }
     return user;
   }
-
 }

@@ -4,7 +4,7 @@ export interface TerminalSignal {
 
 export function isUnseenTerminalSignal(
   signal: TerminalSignal | null | undefined,
-  lastSeenAt: number,
+  lastSeenAt: number
 ): boolean {
   return !!signal && signal.at !== lastSeenAt;
 }
@@ -12,7 +12,7 @@ export function isUnseenTerminalSignal(
 export function remainingIntervalMs(
   pollInterval: number,
   waitedMs: number,
-  earlyWakeEarned: boolean,
+  earlyWakeEarned: boolean
 ): number {
   if (earlyWakeEarned) return 0;
   const remaining = pollInterval - waitedMs;

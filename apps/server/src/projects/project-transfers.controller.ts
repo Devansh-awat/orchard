@@ -20,7 +20,7 @@ export class ProjectTransfersController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -31,7 +31,7 @@ export class ProjectTransfersController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -42,7 +42,7 @@ export class ProjectTransfersController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 }

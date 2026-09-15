@@ -10,5 +10,5 @@ export function routeKey(route: { method: string; path: string }): string {
 
 export const registry: Route[] = routes.map((route) => ({
   ...route,
-  ...attachments[routeKey(route)],
+  ...attachments[routeKey(route)]
 }));

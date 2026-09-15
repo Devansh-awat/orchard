@@ -7,7 +7,7 @@ import {
   Param,
   Body,
   Request,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { SsoService, ProviderInput, SettingsInput } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
@@ -30,13 +30,13 @@ export class SsoAdminController {
     private readonly login: SsoLoginService,
     private readonly domains: OrgDomainsService,
     private readonly authz: AuthorizationService,
-    private readonly users: UsersService,
+    private readonly users: UsersService
   ) {}
 
   private async requireAdmin(organizationId: string, req: any) {
     const user = await this.users.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
-      username: req.user.username,
+      username: req.user.username
     });
     if (!user) throw new NotFoundException('User not found');
     await this.authz.requireOrgAdmin(organizationId, user.id);
@@ -50,14 +50,14 @@ export class SsoAdminController {
     const [settings, providers, domains] = await Promise.all([
       this.sso.getSettings(organizationId),
       this.sso.listProviders(organizationId),
-      this.domains.list(organizationId),
+      this.domains.list(organizationId)
     ]);
     return {
       settings,
       providers,
       domains,
       presets: publicPresets(),
-      loginUrl: await this.sso.loginUrlForOrg(organizationId),
+      loginUrl: await this.sso.loginUrlForOrg(organizationId)
     };
   }
 
@@ -75,7 +75,7 @@ export class SsoAdminController {
   async addDomain(
     @Param('id') organizationId: string,
     @Body('domain') domain: string,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.domains.add(organizationId, domain, actor);
@@ -85,7 +85,7 @@ export class SsoAdminController {
   async verifyDomain(
     @Param('id') organizationId: string,
     @Param('domainId') domainId: string,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.domains.verify(organizationId, domainId, actor);
@@ -95,7 +95,7 @@ export class SsoAdminController {
   async removeDomain(
     @Param('id') organizationId: string,
     @Param('domainId') domainId: string,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.domains.remove(organizationId, domainId, actor);
@@ -105,7 +105,7 @@ export class SsoAdminController {
   async updateSettings(
     @Param('id') organizationId: string,
     @Body() body: SettingsInput,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.sso.updateSettings(organizationId, body, actor);
@@ -121,7 +121,7 @@ export class SsoAdminController {
   async createProvider(
     @Param('id') organizationId: string,
     @Body() body: ProviderInput,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.sso.createProvider(organizationId, body, actor);
@@ -131,7 +131,7 @@ export class SsoAdminController {
   async getProvider(
     @Param('id') organizationId: string,
     @Param('providerId') providerId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.requireAdmin(organizationId, req);
     return this.sso.getProviderForAdmin(providerId, organizationId);
@@ -142,7 +142,7 @@ export class SsoAdminController {
     @Param('id') organizationId: string,
     @Param('providerId') providerId: string,
     @Body() body: ProviderInput,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.sso.updateProvider(providerId, organizationId, body, actor);
@@ -152,7 +152,7 @@ export class SsoAdminController {
   async deleteProvider(
     @Param('id') organizationId: string,
     @Param('providerId') providerId: string,
-    @Request() req,
+    @Request() req
   ) {
     const actor = await this.requireAdmin(organizationId, req);
     return this.sso.deleteProvider(providerId, organizationId, actor);
@@ -162,7 +162,7 @@ export class SsoAdminController {
   async testProvider(
     @Param('id') organizationId: string,
     @Param('providerId') providerId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.requireAdmin(organizationId, req);
     // Scope check first: testing a provider id from another org must 404.

@@ -57,7 +57,7 @@ export function formatBuildDurationBetween(
 	return formatBuildDuration(Math.round(ms / 1000));
 }
 
-// eslint-disable-next-line no-control-regex
+// oxlint-disable-next-line no-control-regex
 const ANSI_CODE_RE = /\x1b\[[0-9;]*m/g;
 const ISO_TS_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
 

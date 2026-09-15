@@ -35,8 +35,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /deployments/:deploymentId/services': {
     summary: 'Create a service for a deployment',
     request: z.object({ name: z.string(), port: z.number().int() }),
-    response: z.object({ id: z.string() }),
-  },
+    response: z.object({ id: z.string() })
+  }
 };
 ```
 

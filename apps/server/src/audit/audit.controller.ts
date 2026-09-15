@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query, Req, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Req,
+  ForbiddenException,
+  NotFoundException
+} from '@nestjs/common';
 import { Request } from 'express';
 import { Auth } from '../auth/decorators';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,7 +21,7 @@ export class AuditController {
   constructor(
     private readonly auditService: AuditService,
     private readonly prisma: PrismaService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   // Superadmin-only global ledger.
@@ -22,10 +30,13 @@ export class AuditController {
     @Req() req: Request,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
-    @Query('action') action?: string,
+    @Query('action') action?: string
   ) {
     const userId = await this.resolveUserId(req);
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { isSuperAdmin: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isSuperAdmin: true }
+    });
     if (!user?.isSuperAdmin) {
       throw new ForbiddenException('Superadmin access required');
     }
@@ -33,7 +44,7 @@ export class AuditController {
       scope: { kind: 'global' },
       cursor: cursor || null,
       limit: limit ? parseInt(limit, 10) : undefined,
-      action,
+      action
     });
   }
 
@@ -44,7 +55,7 @@ export class AuditController {
     @Req() req: Request,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
-    @Query('action') action?: string,
+    @Query('action') action?: string
   ) {
     const userId = await this.resolveUserId(req);
     await this.authz.requireOrgAdmin(organizationId, userId);
@@ -52,7 +63,7 @@ export class AuditController {
       scope: { kind: 'organization', organizationId },
       cursor: cursor || null,
       limit: limit ? parseInt(limit, 10) : undefined,
-      action,
+      action
     });
   }
 
@@ -63,12 +74,12 @@ export class AuditController {
     @Req() req: Request,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
-    @Query('action') action?: string,
+    @Query('action') action?: string
   ) {
     const userId = await this.resolveUserId(req);
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
 
@@ -78,7 +89,7 @@ export class AuditController {
       scope: { kind: 'deployment', deploymentId },
       cursor: cursor || null,
       limit: limit ? parseInt(limit, 10) : undefined,
-      action,
+      action
     });
   }
 
@@ -86,7 +97,10 @@ export class AuditController {
     const sub = (req as any).user?.sub as string | undefined;
     if (!sub) throw new ForbiddenException('Not authenticated');
     if (UUID_RE.test(sub)) return sub;
-    const user = await this.prisma.user.findFirst({ where: { externalAuthId: sub }, select: { id: true } });
+    const user = await this.prisma.user.findFirst({
+      where: { externalAuthId: sub },
+      select: { id: true }
+    });
     if (!user) throw new ForbiddenException('User not found');
     return user.id;
   }

@@ -12,9 +12,9 @@ function scimUnauthorized(res: Response): HttpException {
     {
       schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
       status: '401',
-      detail: 'Invalid or missing SCIM bearer token',
+      detail: 'Invalid or missing SCIM bearer token'
     },
-    401,
+    401
   );
 }
 

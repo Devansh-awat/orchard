@@ -46,7 +46,7 @@ export class OrgEventsService implements OnModuleInit {
 
   constructor(
     private readonly authz: AuthorizationService,
-    private readonly bus: EventBusService,
+    private readonly bus: EventBusService
   ) {}
 
   onModuleInit() {
@@ -68,11 +68,7 @@ export class OrgEventsService implements OnModuleInit {
     this.subject.next({ event: { ...ev, ts: Date.now() } });
   }
 
-  private visibleTo(
-    event: OrgEvent,
-    userId: string,
-    allowed: Set<string> | null,
-  ): boolean {
+  private visibleTo(event: OrgEvent, userId: string, allowed: Set<string> | null): boolean {
     if (allowed === null) return true;
     if (event.type === 'membership.changed') return event.id === userId;
     if (!event.projectId) return false;
@@ -87,14 +83,14 @@ export class OrgEventsService implements OnModuleInit {
   forDeployment(type: OrgEventType, deploymentId: string): Observable<OrgEvent> {
     return this.subject.asObservable().pipe(
       filter((d) => d.event.type === type && d.event.id === deploymentId),
-      map((d) => d.event),
+      map((d) => d.event)
     );
   }
 
   forOrgAsSseScoped(
     organizationId: string,
     userId: string,
-    visibleProjectIds: string[] | null,
+    visibleProjectIds: string[] | null
   ): Observable<ScopedMessage> {
     const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
     let alive = true;
@@ -108,7 +104,7 @@ export class OrgEventsService implements OnModuleInit {
         }
         return this.visibleTo(d.event, userId, allowed);
       }),
-      map((d) => ({ data: d.event, id: d.streamId })),
+      map((d) => ({ data: d.event, id: d.streamId }))
     );
   }
 
@@ -116,7 +112,7 @@ export class OrgEventsService implements OnModuleInit {
     fromId: string,
     organizationId: string,
     userId: string,
-    visibleProjectIds: string[] | null,
+    visibleProjectIds: string[] | null
   ): Promise<ScopedMessage[]> {
     const entries = await this.bus.replay(fromId);
     if (entries.length === 0) return [];
@@ -131,10 +127,7 @@ export class OrgEventsService implements OnModuleInit {
   }
 
   addSubscriber(organizationId: string) {
-    this.subscriberCounts.set(
-      organizationId,
-      (this.subscriberCounts.get(organizationId) ?? 0) + 1,
-    );
+    this.subscriberCounts.set(organizationId, (this.subscriberCounts.get(organizationId) ?? 0) + 1);
   }
 
   removeSubscriber(organizationId: string) {

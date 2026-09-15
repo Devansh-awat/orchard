@@ -119,8 +119,7 @@
 			bind:value={setupScript}
 			rows="4"
 			placeholder="#!/bin/bash&#10;sudo apt-get install -y postgresql-client"
-			spellcheck="false"
-		></textarea>
+			spellcheck="false"></textarea>
 		<div class="sbs-script-actions">
 			<Button
 				size="sm"

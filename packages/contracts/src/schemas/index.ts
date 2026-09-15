@@ -14,5 +14,5 @@ export const attachments: Record<string, RouteAttachment> = {
   ...events,
   ...jobs,
   ...sandboxes,
-  ...sshIdentities,
+  ...sshIdentities
 };

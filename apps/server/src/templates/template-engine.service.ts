@@ -83,7 +83,7 @@ export class TemplateEngineService {
       required: p.required ?? false,
       placeholder: p.placeholder,
       validation: p.validation,
-      options: p.options,
+      options: p.options
     }));
 
     const resources: ResourceDef[] = doc.resources.map((r: any) => {
@@ -105,16 +105,16 @@ export class TemplateEngineService {
         icon: doc.metadata.icon,
         version: doc.metadata.version || '1.0.0',
         category: doc.metadata.category,
-        tags: doc.metadata.tags || [],
+        tags: doc.metadata.tags || []
       },
       parameters,
-      resources,
+      resources
     };
   }
 
   validateParameters(
     values: Record<string, any>,
-    definitions: ParameterDef[],
+    definitions: ParameterDef[]
   ): Record<string, any> {
     const resolved: Record<string, any> = {};
 
@@ -123,8 +123,11 @@ export class TemplateEngineService {
 
       // Auto-generate secret if not provided
       if (def.type === 'secret' && (value === undefined || value === null || value === '')) {
-        const length = def.validation?.min && def.validation.min > 0 ? Math.max(def.validation.min, 16) : 32;
-        value = randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
+        const length =
+          def.validation?.min && def.validation.min > 0 ? Math.max(def.validation.min, 16) : 32;
+        value = randomBytes(Math.ceil(length / 2))
+          .toString('hex')
+          .slice(0, length);
       }
 
       // Apply default
@@ -146,12 +149,12 @@ export class TemplateEngineService {
             }
             if (def.validation?.min !== undefined && value < def.validation.min) {
               throw new BadRequestException(
-                `Parameter "${def.displayName}" must be at least ${def.validation.min}`,
+                `Parameter "${def.displayName}" must be at least ${def.validation.min}`
               );
             }
             if (def.validation?.max !== undefined && value > def.validation.max) {
               throw new BadRequestException(
-                `Parameter "${def.displayName}" must be at most ${def.validation.max}`,
+                `Parameter "${def.displayName}" must be at most ${def.validation.max}`
               );
             }
             break;
@@ -161,7 +164,7 @@ export class TemplateEngineService {
           case 'select':
             if (def.options && !def.options.some((o) => o.value === value)) {
               throw new BadRequestException(
-                `Parameter "${def.displayName}" must be one of: ${def.options.map((o) => o.value).join(', ')}`,
+                `Parameter "${def.displayName}" must be one of: ${def.options.map((o) => o.value).join(', ')}`
               );
             }
             break;
@@ -172,7 +175,7 @@ export class TemplateEngineService {
               if (!regex.test(value)) {
                 throw new BadRequestException(
                   def.validation.message ||
-                    `Parameter "${def.displayName}" does not match the required format`,
+                    `Parameter "${def.displayName}" does not match the required format`
                 );
               }
             }
@@ -181,12 +184,12 @@ export class TemplateEngineService {
             value = String(value);
             if (def.validation?.min !== undefined && value.length < def.validation.min) {
               throw new BadRequestException(
-                `Parameter "${def.displayName}" must be at least ${def.validation.min} characters`,
+                `Parameter "${def.displayName}" must be at least ${def.validation.min} characters`
               );
             }
             if (def.validation?.max !== undefined && value.length > def.validation.max) {
               throw new BadRequestException(
-                `Parameter "${def.displayName}" must be at most ${def.validation.max} characters`,
+                `Parameter "${def.displayName}" must be at most ${def.validation.max} characters`
               );
             }
             break;
@@ -246,7 +249,7 @@ export class TemplateEngineService {
         const resource = context.resources[resourceName];
         if (!resource) {
           throw new BadRequestException(
-            `Resource "${resourceName}" not found in context. Resources are resolved top-to-bottom.`,
+            `Resource "${resourceName}" not found in context. Resources are resolved top-to-bottom.`
           );
         }
         return resource[field];
@@ -256,10 +259,7 @@ export class TemplateEngineService {
     throw new BadRequestException(`Invalid expression: {{ ${expr} }}`);
   }
 
-  resolveResourceConfig(
-    resource: ResourceDef,
-    context: ResolutionContext,
-  ): Record<string, any> {
+  resolveResourceConfig(resource: ResourceDef, context: ResolutionContext): Record<string, any> {
     return this.resolveValue(resource.config, context);
   }
 }

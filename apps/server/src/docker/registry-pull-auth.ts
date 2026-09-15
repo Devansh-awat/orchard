@@ -6,11 +6,7 @@ export type RegistryAuth = {
 
 export type RegistryAuths = Record<string, RegistryAuth>;
 
-export const PULL_AUTH_ENV_KEYS = new Set([
-  'DOCKER_AUTH_CONFIG',
-  'DHI_USERNAME',
-  'DHI_TOKEN',
-]);
+export const PULL_AUTH_ENV_KEYS = new Set(['DOCKER_AUTH_CONFIG', 'DHI_USERNAME', 'DHI_TOKEN']);
 
 export class PullAuthError extends Error {
   constructor(message: string) {
@@ -27,7 +23,7 @@ export function registryAuth(username: string, password: string): RegistryAuth {
   return {
     username,
     password,
-    auth: Buffer.from(`${username}:${password}`, 'utf8').toString('base64'),
+    auth: Buffer.from(`${username}:${password}`, 'utf8').toString('base64')
   };
 }
 

@@ -85,7 +85,9 @@ function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-export function parseBasicAuthHeader(header: string | undefined): { username: string; password: string } | null {
+export function parseBasicAuthHeader(
+  header: string | undefined
+): { username: string; password: string } | null {
   if (!header) return null;
   const match = /^Basic\s+(.+)$/i.exec(header.trim());
   if (!match) return null;
@@ -112,7 +114,7 @@ export class ProtectionService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
@@ -142,8 +144,8 @@ export class ProtectionService {
         protectionBypassPaths: true,
         host: true,
         project: { select: { organizationId: true, name: true } },
-        service: { select: { name: true, port: true } },
-      },
+        service: { select: { name: true, port: true } }
+      }
     });
 
     if (!ingress) {
@@ -153,9 +155,11 @@ export class ProtectionService {
 
     const entry: CachedIngress = {
       ...ingress,
-      upstreamHost: ingress.service ? `${ingress.service.name}.${ingress.namespace}.svc.cluster.local` : null,
+      upstreamHost: ingress.service
+        ? `${ingress.service.name}.${ingress.namespace}.svc.cluster.local`
+        : null,
       upstreamPort: ingress.service?.port ?? null,
-      expiresAt: Date.now() + 5_000,
+      expiresAt: Date.now() + 5_000
     };
     this.ingressCache.set(host, entry);
     return entry;
@@ -166,7 +170,7 @@ export class ProtectionService {
     originalPath: string,
     cookieHeader: string | undefined,
     bypassHeader: string | undefined,
-    authorizationHeader?: string | undefined,
+    authorizationHeader?: string | undefined
   ): Promise<ProtectionDecision> {
     const ingress = await this.resolveIngressFromHost(host);
     // Fail closed. A host we cannot resolve is not a host we can vouch for,
@@ -200,28 +204,31 @@ export class ProtectionService {
         allow: false,
         status: 401,
         headers: {
-          'www-authenticate': `Basic realm="${BASIC_AUTH_REALM}", charset="UTF-8"`,
-        },
+          'www-authenticate': `Basic realm="${BASIC_AUTH_REALM}", charset="UTF-8"`
+        }
       };
     }
 
     const tokenMatch = originalPath.match(/[?&]__orchard_token=([^&]+)/);
     if (tokenMatch) {
       const exchangeToken = decodeURIComponent(tokenMatch[1]);
-      const payload = await this.verifyProtectionJwt(exchangeToken, 'protection_exchange', ingress.id);
+      const payload = await this.verifyProtectionJwt(
+        exchangeToken,
+        'protection_exchange',
+        ingress.id
+      );
       if (payload) {
         const cookieJwt = await this.generateProtectionCookie(ingress.id, payload.sub as string);
-        const cleanPath = originalPath
-          .replace(/[?&]__orchard_token=[^&]+/, '')
-          .replace(/\?$/, '') || '/';
+        const cleanPath =
+          originalPath.replace(/[?&]__orchard_token=[^&]+/, '').replace(/\?$/, '') || '/';
 
         return {
           allow: false,
           status: 302,
           headers: {
             location: `https://${host}${cleanPath}`,
-            'set-cookie': `_orchard_protection=${cookieJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`,
-          },
+            'set-cookie': `_orchard_protection=${cookieJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`
+          }
         };
       }
     }
@@ -235,7 +242,7 @@ export class ProtectionService {
     const returnTo = `https://${host}${originalPath}`;
     const params = new URLSearchParams({
       ingressId: ingress.id,
-      returnTo,
+      returnTo
     });
     if (ingress.protectionMode === 'password') {
       params.set('mode', 'password');
@@ -245,8 +252,8 @@ export class ProtectionService {
       allow: false,
       status: 302,
       headers: {
-        location: `${this.frontendUrl}/auth/protect?${params.toString()}`,
-      },
+        location: `${this.frontendUrl}/auth/protect?${params.toString()}`
+      }
     };
   }
 
@@ -271,7 +278,7 @@ export class ProtectionService {
   async verifyProtectionJwt(
     token: string,
     expectedType: string,
-    expectedIngressId: string,
+    expectedIngressId: string
   ): Promise<Record<string, unknown> | null> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
@@ -285,7 +292,7 @@ export class ProtectionService {
 
   private async verifyBasicAuthHeader(
     ingress: Pick<CachedIngress, 'protectionUsername' | 'protectionPasswordHash'>,
-    header: string | undefined,
+    header: string | undefined
   ): Promise<boolean> {
     // A row that lost its credentials is not an open door.
     if (!ingress.protectionUsername || !ingress.protectionPasswordHash) return false;
@@ -301,7 +308,7 @@ export class ProtectionService {
   async verifyPassword(ingressId: string, password: string): Promise<boolean> {
     const ingress = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
-      select: { protectionPasswordHash: true, protectionMode: true },
+      select: { protectionPasswordHash: true, protectionMode: true }
     });
     if (!ingress || ingress.protectionMode !== 'password' || !ingress.protectionPasswordHash) {
       return false;
@@ -314,15 +321,15 @@ export class ProtectionService {
       where: { id: ingressId },
       select: {
         projectId: true,
-        project: { select: { organizationId: true } },
-      },
+        project: { select: { organizationId: true } }
+      }
     });
     if (!ingress) return false;
 
     const access = await this.authz.resolveProjectAccess(
       ingress.projectId,
       ingress.project.organizationId,
-      userId,
+      userId
     );
     return !!access?.canView;
   }
@@ -337,21 +344,21 @@ export class ProtectionService {
       select: {
         host: true,
         protectionMode: true,
-        project: { select: { name: true } },
-      },
+        project: { select: { name: true } }
+      }
     });
     if (!ingress || ingress.protectionMode === 'none') return null;
     return {
       host: ingress.host,
       protectionMode: ingress.protectionMode,
-      projectName: ingress.project.name,
+      projectName: ingress.project.name
     };
   }
 
   async validateReturnTo(ingressId: string, returnTo: string): Promise<void> {
     const ingress = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
-      select: { host: true },
+      select: { host: true }
     });
     if (!ingress) throw new NotFoundException('Ingress not found');
 
@@ -379,7 +386,7 @@ export class ProtectionService {
       req.originalUrl || req.url,
       cookieHeader,
       bypassHeader,
-      authorizationHeader,
+      authorizationHeader
     );
 
     if (!decision.allow) {
@@ -402,7 +409,9 @@ export class ProtectionService {
   }
 
   async handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<boolean> {
-    const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
+    const host = String(req.headers.host || '')
+      .toLowerCase()
+      .replace(/:\d+$/, '');
     const ingress = await this.resolveIngressFromHost(host);
     if (!ingress) return false;
 
@@ -415,7 +424,7 @@ export class ProtectionService {
 
     let allowed = pathMatchesBypass(
       normalizeRequestPath(req.url || '/'),
-      ingress.protectionBypassPaths,
+      ingress.protectionBypassPaths
     );
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
     if (!allowed && bypassHeader && ingress.protectionBypassSecret) {
@@ -427,10 +436,7 @@ export class ProtectionService {
       // Browsers do not send Authorization on a WebSocket handshake, but they
       // do replay it for a same-origin upgrade once the page itself was
       // fetched with credentials, and non-browser clients set it explicitly.
-      allowed = await this.verifyBasicAuthHeader(
-        ingress,
-        req.headers['authorization']?.toString(),
-      );
+      allowed = await this.verifyBasicAuthHeader(ingress, req.headers['authorization']?.toString());
     }
     if (!allowed && ingress.protectionMode !== 'basic') {
       const cookie = this.extractCookie(req.headers.cookie, '_orchard_protection');
@@ -480,7 +486,12 @@ export class ProtectionService {
     return true;
   }
 
-  private proxyToUpstream(req: Request, res: Response, upstreamHost: string, upstreamPort: number): Promise<void> {
+  private proxyToUpstream(
+    req: Request,
+    res: Response,
+    upstreamHost: string,
+    upstreamPort: number
+  ): Promise<void> {
     return new Promise((resolve) => {
       const headers = { ...req.headers };
       delete headers['connection'];
@@ -489,10 +500,9 @@ export class ProtectionService {
 
       const priorFor = req.headers['x-forwarded-for'];
       const peer = req.socket?.remoteAddress;
-      const forwardedFor = [
-        Array.isArray(priorFor) ? priorFor.join(', ') : priorFor,
-        peer,
-      ].filter(Boolean).join(', ');
+      const forwardedFor = [Array.isArray(priorFor) ? priorFor.join(', ') : priorFor, peer]
+        .filter(Boolean)
+        .join(', ');
       if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
       headers['x-forwarded-proto'] =
         (req.headers['x-forwarded-proto'] as string) || (req.secure ? 'https' : 'http');
@@ -505,13 +515,13 @@ export class ProtectionService {
           path: req.originalUrl || req.url,
           method: req.method,
           headers,
-          timeout: 30_000,
+          timeout: 30_000
         },
         (proxyRes) => {
           res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
           proxyRes.pipe(res);
           proxyRes.on('end', resolve);
-        },
+        }
       );
 
       proxyReq.on('timeout', () => {

@@ -9,7 +9,7 @@ const BUCKETS: Record<string, { capacity: number; refillPerSec: number }> = {
   slack: { capacity: 5, refillPerSec: 1 },
   discord: { capacity: 5, refillPerSec: 2.5 },
   webhook: { capacity: 20, refillPerSec: 10 },
-  email: { capacity: 20, refillPerSec: 0.33 },
+  email: { capacity: 20, refillPerSec: 0.33 }
 };
 
 // Take a token if one is available, otherwise report how long until the next
@@ -87,7 +87,7 @@ export class NotificationRateLimiter implements OnModuleInit, OnModuleDestroy {
         `orchard:notif:bucket:${destinationKey}`,
         String(bucket.capacity),
         String(bucket.refillPerSec),
-        String(Date.now()),
+        String(Date.now())
       );
       return Number(wait) || 0;
     } catch (e: any) {
@@ -99,7 +99,12 @@ export class NotificationRateLimiter implements OnModuleInit, OnModuleDestroy {
   // Suppresses a repeat of the same alert about the same thing. Distinct from
   // the token bucket: that one paces a destination, this one stops a flapping
   // resource from saying the same sentence every minute.
-  async shouldSuppress(destinationKey: string, event: string, targetId: string | null, ttlMs: number): Promise<boolean> {
+  async shouldSuppress(
+    destinationKey: string,
+    event: string,
+    targetId: string | null,
+    ttlMs: number
+  ): Promise<boolean> {
     if (ttlMs <= 0) return false;
     const key = `orchard:notif:cooldown:${destinationKey}:${event}:${targetId ?? '-'}`;
     if (!this.redis) return this.suppressLocal(key, ttlMs);
@@ -111,7 +116,10 @@ export class NotificationRateLimiter implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private takeLocal(destinationKey: string, bucket: { capacity: number; refillPerSec: number }): number {
+  private takeLocal(
+    destinationKey: string,
+    bucket: { capacity: number; refillPerSec: number }
+  ): number {
     const now = Date.now();
     const state = this.local.get(destinationKey) ?? { tokens: bucket.capacity, ts: now };
     const elapsed = Math.max(0, now - state.ts) / 1000;

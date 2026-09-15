@@ -39,7 +39,8 @@ const METADATA_MAX_KEYS = 24;
 // case-insensitive on the key. Redaction is applied to both single values and
 // diff tuples ([old, new]) so a "password changed from X to Y" entry doesn't
 // land X and Y in plaintext in the audit log.
-const REDACT_KEY_PATTERN = /pass(word)?|secret|token|api[_-]?key|credential|connection[_-]?string|database[_-]?url|private[_-]?key|access[_-]?key/i;
+const REDACT_KEY_PATTERN =
+  /pass(word)?|secret|token|api[_-]?key|credential|connection[_-]?string|database[_-]?url|private[_-]?key|access[_-]?key/i;
 const REDACTED_PLACEHOLDER = '[redacted]';
 
 @Injectable()
@@ -49,7 +50,7 @@ export class AuditService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
-    @Optional() private readonly leaderElection?: LeaderElectionService,
+    @Optional() private readonly leaderElection?: LeaderElectionService
   ) {}
 
   /**
@@ -69,18 +70,20 @@ export class AuditService {
           targetType: input.targetType ?? null,
           targetId: input.targetId ?? null,
           targetLabel: input.targetLabel ? input.targetLabel.slice(0, 255) : null,
-          ...(sanitized !== undefined ? { metadata: sanitized } : {}),
-        },
+          ...(sanitized !== undefined ? { metadata: sanitized } : {})
+        }
       });
       this.forwardToAnalytics(input, sanitized);
     } catch (err) {
-      this.logger.warn(`Failed to record audit log "${input.action}": ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `Failed to record audit log "${input.action}": ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
   private forwardToAnalytics(
     input: AuditLogInput,
-    sanitized: Prisma.InputJsonValue | undefined,
+    sanitized: Prisma.InputJsonValue | undefined
   ): void {
     // distinct_id: prefer user, fall back to org/project so server-driven
     // events (cron, webhooks) still attribute somewhere.
@@ -108,8 +111,8 @@ export class AuditService {
         target_label: input.targetLabel ?? null,
         ...(sanitized !== undefined
           ? { metadata: sanitized as unknown as Record<string, unknown> }
-          : {}),
-      },
+          : {})
+      }
     });
   }
 
@@ -117,7 +120,11 @@ export class AuditService {
    * Build a `{field: [old, new]}` diff with only changed primitive fields, capped in size.
    * Returns null if no changes.
    */
-  diff<T extends Record<string, any>>(before: T | null | undefined, after: T | null | undefined, fields: (keyof T)[]): Record<string, [unknown, unknown]> | null {
+  diff<T extends Record<string, any>>(
+    before: T | null | undefined,
+    after: T | null | undefined,
+    fields: (keyof T)[]
+  ): Record<string, [unknown, unknown]> | null {
     if (!before || !after) return null;
     const out: Record<string, [unknown, unknown]> = {};
     for (const field of fields) {
@@ -154,14 +161,23 @@ export class AuditService {
       where,
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
-      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {})
     });
 
-    const userIds = Array.from(new Set(rows.map((r) => r.actorUserId).filter((id): id is string => Boolean(id))));
+    const userIds = Array.from(
+      new Set(rows.map((r) => r.actorUserId).filter((id): id is string => Boolean(id)))
+    );
     const users = userIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: userIds } },
-          select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true
+          }
         })
       : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
@@ -172,9 +188,9 @@ export class AuditService {
     return {
       entries: trimmed.map((row) => ({
         ...row,
-        actor: row.actorUserId ? userMap.get(row.actorUserId) ?? null : null,
+        actor: row.actorUserId ? (userMap.get(row.actorUserId) ?? null) : null
       })),
-      nextCursor: hasMore ? trimmed[trimmed.length - 1].id : null,
+      nextCursor: hasMore ? trimmed[trimmed.length - 1].id : null
     };
   }
 
@@ -193,7 +209,7 @@ export class AuditService {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
     try {
       const { count } = await this.prisma.auditLog.deleteMany({
-        where: { createdAt: { lt: cutoff } },
+        where: { createdAt: { lt: cutoff } }
       });
       if (count > 0) {
         this.logger.log(`Pruned ${count} audit log entries older than ${RETENTION_DAYS} days`);
@@ -205,7 +221,7 @@ export class AuditService {
           targetType: 'audit_log',
           targetId: null,
           targetLabel: `retention=${RETENTION_DAYS}d`,
-          metadata: { count, cutoff: cutoff.toISOString() },
+          metadata: { count, cutoff: cutoff.toISOString() }
         }).catch((e) => this.logger.warn(`failed to write audit.pruned meta-event: ${e}`));
       }
     } catch (err) {
@@ -215,7 +231,7 @@ export class AuditService {
 
   private truncate(value: unknown): unknown {
     if (typeof value === 'string' && value.length > METADATA_VALUE_MAX_LEN) {
-      return `${value.slice(0, METADATA_VALUE_MAX_LEN)  }…`;
+      return `${value.slice(0, METADATA_VALUE_MAX_LEN)}…`;
     }
     if (typeof value === 'bigint') return value.toString();
     return value;

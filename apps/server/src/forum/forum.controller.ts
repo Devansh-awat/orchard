@@ -15,7 +15,7 @@ import {
   UnauthorizedException,
   UploadedFile,
   UseGuards,
-  UseInterceptors,
+  UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ForumService } from './forum.service';
@@ -27,7 +27,7 @@ const IMAGE_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
-  'image/webp': 'webp',
+  'image/webp': 'webp'
 };
 
 @Injectable()
@@ -44,7 +44,7 @@ export class ForumController {
   constructor(
     private readonly forum: ForumService,
     private readonly users: UsersService,
-    private readonly storage: StorageService,
+    private readonly storage: StorageService
   ) {}
 
   private async requester(req: any): Promise<{ id: string; admin: boolean }> {
@@ -72,14 +72,14 @@ export class ForumController {
     @Query('category') category?: string,
     @Query('status') status?: string,
     @Query('scope') scope?: string,
-    @Query('sort') sort?: string,
+    @Query('sort') sort?: string
   ) {
     return this.forum.listThreads({
       categorySlug: category || undefined,
       status: status || undefined,
       scope: scope || undefined,
       sort: sort || undefined,
-      userId: await this.userId(req),
+      userId: await this.userId(req)
     });
   }
 
@@ -88,7 +88,7 @@ export class ForumController {
   async createThread(
     @Req() req: any,
     @Body()
-    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] },
+    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] }
   ) {
     return this.forum.createThread(await this.userId(req), body);
   }
@@ -122,7 +122,7 @@ export class ForumController {
   async reply(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() body: { body: string; images?: string[] },
+    @Body() body: { body: string; images?: string[] }
   ) {
     return this.forum.createReply(await this.userId(req), id, body.body, body.images);
   }

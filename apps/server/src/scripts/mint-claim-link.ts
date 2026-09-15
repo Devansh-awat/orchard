@@ -5,7 +5,7 @@ import {
   CLAIM_TTL_MS,
   hashClaimToken,
   claimUrl,
-  recoveryState,
+  recoveryState
 } from '../setup/setup-token';
 
 // Backs `orchard-claim` on the host. The claim token is only ever stored
@@ -33,13 +33,13 @@ async function main() {
     const token = randomBytes(32).toString('base64url');
     const value = JSON.stringify({
       hash: hashClaimToken(token),
-      expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString(),
+      expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString()
     });
 
     await prisma.instanceSetting.upsert({
       where: { key: SUPERADMIN_CLAIM_KEY },
       create: { key: SUPERADMIN_CLAIM_KEY, value },
-      update: { value },
+      update: { value }
     });
 
     console.log('');

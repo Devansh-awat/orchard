@@ -29,7 +29,7 @@ export const SANDBOX_CR_ABSENT: SandboxCrStatus = {
   operatingMode: null,
   ready: false,
   message: null,
-  podIp: null,
+  podIp: null
 };
 
 export function readSandboxCr(cr: any): SandboxCrStatus {
@@ -41,9 +41,10 @@ export function readSandboxCr(cr: any): SandboxCrStatus {
     operatingMode: cr?.spec?.operatingMode === 'Suspended' ? 'Suspended' : 'Running',
     ready: conditions.some((c) => c.type === 'Ready' && c.status === 'True'),
     message: failing?.message || null,
-    podIp: Array.isArray(cr?.status?.podIPs) && cr.status.podIPs.length
-      ? String(cr.status.podIPs[0])
-      : null,
+    podIp:
+      Array.isArray(cr?.status?.podIPs) && cr.status.podIPs.length
+        ? String(cr.status.podIPs[0])
+        : null
   };
 }
 

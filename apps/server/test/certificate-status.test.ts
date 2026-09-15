@@ -14,11 +14,15 @@ function serviceWith(items: any[] | Error) {
         listNamespacedCustomObject: async () => {
           if (items instanceof Error) throw items;
           return { body: { items } };
-        },
-      }),
-    },
+        }
+      })
+    }
   };
-  Object.defineProperty(svc, 'kc', { get() { return svc.kubernetes.kc; } });
+  Object.defineProperty(svc, 'kc', {
+    get() {
+      return svc.kubernetes.kc;
+    }
+  });
   return svc as K8sNetworkService;
 }
 
@@ -27,7 +31,9 @@ function cert(conditions: any[], extra: Record<string, unknown> = {}) {
 }
 
 test('a Ready certificate reports ready and carries its expiry', async () => {
-  const svc = serviceWith([cert([{ type: 'Ready', status: 'True' }], { notAfter: '2026-12-01T00:00:00Z' })]);
+  const svc = serviceWith([
+    cert([{ type: 'Ready', status: 'True' }], { notAfter: '2026-12-01T00:00:00Z' })
+  ]);
   const r = await svc.getCertificateStatus('ns', 'my-tls');
   assert.equal(r.state, 'ready');
   assert.equal(r.notAfter, '2026-12-01T00:00:00Z');
@@ -35,7 +41,9 @@ test('a Ready certificate reports ready and carries its expiry', async () => {
 
 test('a hard failure reports failed with the reason cert-manager gave', async () => {
   const svc = serviceWith([
-    cert([{ type: 'Ready', status: 'False', reason: 'Failed', message: 'order is in state failed' }]),
+    cert([
+      { type: 'Ready', status: 'False', reason: 'Failed', message: 'order is in state failed' }
+    ])
   ]);
   const r = await svc.getCertificateStatus('ns', 'my-tls');
   assert.equal(r.state, 'failed');
@@ -46,12 +54,15 @@ test('a hard failure reports failed with the reason cert-manager gave', async ()
 // must not be lumped in with ordinary failures.
 test('an ACME rate limit is separated from other failures', async () => {
   const svc = serviceWith([
-    cert([{
-      type: 'Ready',
-      status: 'False',
-      reason: 'Failed',
-      message: 'acme: error 429 - urn:ietf:params:acme:error:rateLimited: too many certificates already issued for "example.com"',
-    }]),
+    cert([
+      {
+        type: 'Ready',
+        status: 'False',
+        reason: 'Failed',
+        message:
+          'acme: error 429 - urn:ietf:params:acme:error:rateLimited: too many certificates already issued for "example.com"'
+      }
+    ])
   ]);
   const r = await svc.getCertificateStatus('ns', 'my-tls');
   assert.equal(r.state, 'rateLimited');
@@ -59,7 +70,7 @@ test('an ACME rate limit is separated from other failures', async () => {
 
 test('an in-flight order reports issuing rather than failed', async () => {
   const svc = serviceWith([
-    cert([{ type: 'Ready', status: 'False', reason: 'InProgress', message: 'waiting on order' }]),
+    cert([{ type: 'Ready', status: 'False', reason: 'InProgress', message: 'waiting on order' }])
   ]);
   assert.equal((await svc.getCertificateStatus('ns', 'my-tls')).state, 'issuing');
 });

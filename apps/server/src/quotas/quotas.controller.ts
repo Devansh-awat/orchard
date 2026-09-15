@@ -7,7 +7,8 @@ import {
   Body,
   Req,
   Inject,
-  forwardRef, NotFoundException 
+  forwardRef,
+  NotFoundException
 } from '@nestjs/common';
 import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
@@ -67,16 +68,11 @@ export class AdminBackfillController {
   @Post('apply')
   async apply(
     @Body()
-    body: {
-      kind: 'deployment' | 'database';
-      id: string;
-      cpuMilli: number;
-      memoryBytes: number;
-    },
+    body: { kind: 'deployment' | 'database'; id: string; cpuMilli: number; memoryBytes: number }
   ) {
     await this.backfill.apply(
       { kind: body.kind, id: body.id },
-      { cpuMilli: body.cpuMilli, memoryBytes: body.memoryBytes },
+      { cpuMilli: body.cpuMilli, memoryBytes: body.memoryBytes }
     );
     return { success: true };
   }
@@ -90,7 +86,7 @@ export class OrgQuotasController {
     private readonly quotas: QuotasService,
     @Inject(forwardRef(() => OrganizationsService))
     private readonly orgs: OrganizationsService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {}
 
   @Get()
@@ -110,12 +106,12 @@ export class OrgQuotasController {
     @Param('orgId') orgId: string,
     @Param('projectId') projectId: string,
     @Body() body: CapBody,
-    @Req() req: any,
+    @Req() req: any
   ) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { organizationId: true },
+      select: { organizationId: true }
     });
     if (!project || project.organizationId !== orgId) {
       throw new NotFoundException('Project not found in this organization');
@@ -142,7 +138,7 @@ export class OrgQuotasController {
       cpuUnlimited?: boolean;
       memoryUnlimited?: boolean;
     },
-    @Req() req: any,
+    @Req() req: any
   ) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
     return this.quotas.setMemberAllowance(orgId, userId, body);
@@ -152,7 +148,7 @@ export class OrgQuotasController {
   async updateDefaultAllowance(
     @Param('orgId') orgId: string,
     @Body() body: { cpuMilli?: number | null; memoryBytes?: number | null },
-    @Req() req: any,
+    @Req() req: any
   ) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
     return this.quotas.setOrgDefaultMemberAllowance(orgId, body);
@@ -162,7 +158,7 @@ export class OrgQuotasController {
   async getMyUsage(@Param('orgId') orgId: string, @Req() req: any) {
     const userId = req.auth.userId;
     const membership = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: orgId, userId } },
+      where: { organizationId_userId: { organizationId: orgId, userId } }
     });
     if (!membership) throw new NotFoundException('Not a member of this org');
 
@@ -174,18 +170,22 @@ export class OrgQuotasController {
         select: {
           cpuLimitMilli: true,
           memoryLimitBytes: true,
-          projects: { select: { namespace: true } },
-        },
-      }),
+          projects: { select: { namespace: true } }
+        }
+      })
     ]);
 
     const orgCpuCap = org?.cpuLimitMilli ?? null;
     const orgMemCap = org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
 
     // Compute org-level remaining by fetching total org usage
-    const orgUsage = await this.quotas.getOrgTotalUsage(orgId, org?.projects?.map(p => p.namespace) ?? []);
+    const orgUsage = await this.quotas.getOrgTotalUsage(
+      orgId,
+      org?.projects?.map((p) => p.namespace) ?? []
+    );
     const orgCpuRemaining = orgCpuCap != null ? Math.max(0, orgCpuCap - orgUsage.cpuMilli) : null;
-    const orgMemRemaining = orgMemCap != null ? Math.max(0, orgMemCap - orgUsage.memoryBytes) : null;
+    const orgMemRemaining =
+      orgMemCap != null ? Math.max(0, orgMemCap - orgUsage.memoryBytes) : null;
 
     // Effective limit = min(user allowance, org remaining)
     // If user allowance is null (unlimited), effective = org remaining
@@ -220,13 +220,13 @@ export class OrgQuotasController {
       usage,
       orgCap: {
         cpuLimitMilli: orgCpuCap,
-        memoryLimitBytes: orgMemCap,
+        memoryLimitBytes: orgMemCap
       },
       /** The max this user can assign to a single new deployment right now */
       effectiveLimit: {
         cpuMilli: effectiveCpuLimit,
-        memoryBytes: effectiveMemLimit,
-      },
+        memoryBytes: effectiveMemLimit
+      }
     };
   }
 }

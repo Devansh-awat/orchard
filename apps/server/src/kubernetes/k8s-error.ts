@@ -29,8 +29,9 @@ export function k8sHttpException(e: unknown): HttpException | null {
   if (!isK8sHttpError(e)) return null;
   const err = e as { statusCode?: number; response?: { statusCode?: number } };
   const status = err.statusCode ?? err.response?.statusCode ?? HttpStatus.BAD_GATEWAY;
-  const mapped = status === HttpStatus.UNAUTHORIZED || status === HttpStatus.FORBIDDEN
-    ? HttpStatus.BAD_GATEWAY
-    : status;
+  const mapped =
+    status === HttpStatus.UNAUTHORIZED || status === HttpStatus.FORBIDDEN
+      ? HttpStatus.BAD_GATEWAY
+      : status;
   return new HttpException(k8sErrorMessage(e), mapped);
 }

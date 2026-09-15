@@ -20,24 +20,24 @@
  */
 
 @font-face {
-  font-family: "Plus Jakarta Sans";
-  src: url("/fonts/PlusJakartaSans-VariableFont_wght.ttf") format("truetype");
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
   font-weight: 200 800;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "Space Mono";
-  src: url("/fonts/SpaceMono-Regular.ttf") format("truetype");
+  font-family: 'Space Mono';
+  src: url('/fonts/SpaceMono-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 :root {
-  --sl-font: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --sl-font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sl-font: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Platform shell */
   --o-canvas: #f6f5f6;
@@ -83,7 +83,7 @@
   --sl-text-code: 0.875rem;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --o-canvas: #0a0a0b;
   --o-raised: #121214;
   --o-ink: #f6eef0;
@@ -200,9 +200,9 @@ site-search button:hover {
  * Active item: soft tint plus accent text. Never a filled accent block, and the
  * weight is identical across states so nothing shifts as you navigate.
  */
-.sidebar-content a[aria-current="page"],
-.sidebar-content a[aria-current="page"]:hover,
-.sidebar-content a[aria-current="page"]:focus {
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
   background: var(--o-accent-tint);
   color: var(--o-accent-strong);
   font-weight: 500;

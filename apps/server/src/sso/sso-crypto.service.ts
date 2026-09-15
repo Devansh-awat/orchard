@@ -23,7 +23,9 @@ export class SsoCryptoService {
 
   encrypt(plaintext: string): string {
     if (!this.key) {
-      throw new Error('SSO_ENCRYPTION_KEY is not configured; refusing to store SSO secrets in plaintext');
+      throw new Error(
+        'SSO_ENCRYPTION_KEY is not configured; refusing to store SSO secrets in plaintext'
+      );
     }
     const iv = randomBytes(16);
     const cipher = createCipheriv('aes-256-gcm', this.key, iv);
@@ -45,7 +47,7 @@ export class SsoCryptoService {
     decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
     return Buffer.concat([
       decipher.update(Buffer.from(encryptedHex, 'hex')),
-      decipher.final(),
+      decipher.final()
     ]).toString('utf8');
   }
 

@@ -560,7 +560,7 @@
 
 	function parseRepoInput(value: string): { owner: string; repo: string; url: string } | null {
 		// Match full GitHub URL: https://github.com/owner/repo(.git)
-		const urlMatch = value.match(/(?:https?:\/\/)?github\.com\/([^\/\s]+)\/([^\/\s#?.]+)/);
+		const urlMatch = value.match(/(?:https?:\/\/)?github\.com\/([^/\s]+)\/([^/\s#?.]+)/);
 		if (urlMatch) {
 			const owner = urlMatch[1];
 			const repo = urlMatch[2].replace(/\.git$/, '');
@@ -1641,8 +1641,7 @@
 						bind:value={envRawText}
 						oninput={() => (envsManuallyEdited = true)}
 						placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-						class="env-raw-textarea"
-					></textarea>
+						class="env-raw-textarea"></textarea>
 				{/if}
 			</div>
 		</div>

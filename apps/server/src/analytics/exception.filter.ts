@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpServer,
   HttpStatus,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import { Request, Response } from 'express';
@@ -28,7 +28,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
 
   constructor(
     private readonly analytics: AnalyticsService,
-    applicationRef?: HttpServer,
+    applicationRef?: HttpServer
   ) {
     super(applicationRef);
   }
@@ -42,10 +42,14 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
     try {
       if (host.getType() === 'http') {
         const ctx = host.switchToHttp();
-        const req = ctx.getRequest<Request & { auth?: { userId?: string }; user?: { sub?: string } }>();
+        const req = ctx.getRequest<
+          Request & { auth?: { userId?: string }; user?: { sub?: string } }
+        >();
         const res = ctx.getResponse<Response>();
         const status =
-          normalized instanceof HttpException ? normalized.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+          normalized instanceof HttpException
+            ? normalized.getStatus()
+            : HttpStatus.INTERNAL_SERVER_ERROR;
         // An unwrapped k8s error can land on a 4xx, but it is still a bug we
         // never handled, so it stays in Error Tracking.
         if (status >= 500 || !(exception instanceof HttpException)) {
@@ -57,14 +61,14 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
             http_method: req.method,
             http_path: req.route?.path ?? req.url,
             http_status: status,
-            user_agent: req.headers['user-agent'] ?? null,
+            user_agent: req.headers['user-agent'] ?? null
           });
         }
         void res;
       } else {
         markSpanError(exception);
         this.analytics.captureException(exception, 'background', {
-          context_type: host.getType(),
+          context_type: host.getType()
         });
       }
     } catch (e) {

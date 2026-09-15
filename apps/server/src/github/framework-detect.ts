@@ -82,8 +82,13 @@ export function parseRepoConfig(contents: string | null): RepoBuildConfig | null
 
   const config: RepoBuildConfig = {};
   for (const key of [
-    'framework', 'rootDirectory', 'installCommand',
-    'buildCommand', 'startCommand', 'outputDirectory', 'dockerfile',
+    'framework',
+    'rootDirectory',
+    'installCommand',
+    'buildCommand',
+    'startCommand',
+    'outputDirectory',
+    'dockerfile'
   ] as const) {
     const value = raw[key];
     if (typeof value === 'string' && value.trim()) config[key] = value.trim();
@@ -106,7 +111,7 @@ export function applyRepoConfig(app: DetectedApp, config: RepoBuildConfig | null
     // set would describe a command that is no longer the one being run.
     serverEntry: config.startCommand ? null : app.serverEntry,
     outputDirectory: config.outputDirectory ?? app.outputDirectory,
-    port: config.port ?? app.port,
+    port: config.port ?? app.port
   };
 }
 
@@ -119,7 +124,7 @@ const MANIFESTS = [
   'Gemfile',
   'Cargo.toml',
   'composer.json',
-  'index.html',
+  'index.html'
 ];
 
 // A repo can be enormous; detection must stay a bounded number of API calls.
@@ -132,9 +137,9 @@ const MAX_CONCURRENT_READS = 8;
 async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<R>,
+  fn: (item: T) => Promise<R>
 ): Promise<R[]> {
-  const results = new Array<R>(items.length);
+  const results: R[] = Array.from({ length: items.length });
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
@@ -147,9 +152,23 @@ async function mapWithConcurrency<T, R>(
 }
 
 const IGNORED_SEGMENTS = new Set([
-  'node_modules', '.git', 'vendor', 'dist', 'build', 'out', 'target',
-  '.next', '.nuxt', '.svelte-kit', '.venv', 'venv', '__pycache__',
-  'testdata', 'fixtures', 'examples', 'example',
+  'node_modules',
+  '.git',
+  'vendor',
+  'dist',
+  'build',
+  'out',
+  'target',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.venv',
+  'venv',
+  '__pycache__',
+  'testdata',
+  'fixtures',
+  'examples',
+  'example'
 ]);
 
 export type FileReader = (path: string) => Promise<string | null>;
@@ -187,7 +206,7 @@ export function detectPackageManager(paths: Set<string>): PackageManager {
 export function workspaceScriptCommand(
   pm: PackageManager,
   packageName: string,
-  script: string,
+  script: string
 ): string {
   switch (pm) {
     case 'pnpm':
@@ -263,7 +282,7 @@ function railpackFindsStartCommand(pkg: PackageJson, dir: string, paths: Set<str
 async function classify(
   dir: string,
   paths: Set<string>,
-  read: FileReader,
+  read: FileReader
 ): Promise<DetectedApp | null> {
   const has = (name: string) => paths.has(join(dir, name));
 
@@ -284,7 +303,7 @@ async function classify(
     outputDirectory: null,
     port: 3000,
     packageName: null,
-    serverEntry: null,
+    serverEntry: null
   };
 
   if (has('package.json')) {
@@ -307,8 +326,12 @@ async function classify(
       // config actually selects.
       app.framework = 'sveltekit';
       const svelteConfig = await firstExisting(
-        'svelte.config.js', 'svelte.config.mjs', 'svelte.config.ts',
-        'vite.config.js', 'vite.config.mjs', 'vite.config.ts',
+        'svelte.config.js',
+        'svelte.config.mjs',
+        'svelte.config.ts',
+        'vite.config.js',
+        'vite.config.mjs',
+        'vite.config.ts'
       );
       if (svelteConfig && /@sveltejs\/adapter-static/.test(svelteConfig)) {
         app.outputDirectory = 'build';
@@ -334,12 +357,20 @@ async function classify(
       app.framework = 'astro';
       app.port = 4321;
       const cfg = await firstExisting('astro.config.mjs', 'astro.config.ts', 'astro.config.js');
-      const hasAdapter = ['@astrojs/node', '@astrojs/vercel', '@astrojs/cloudflare', '@astrojs/netlify']
-        .some((d) => deps[d]);
+      const hasAdapter = [
+        '@astrojs/node',
+        '@astrojs/vercel',
+        '@astrojs/cloudflare',
+        '@astrojs/netlify'
+      ].some((d) => deps[d]);
       const serverOutput = cfg ? /output:\s*['"]server['"]/.test(cfg) : false;
       if (!hasAdapter && !serverOutput) {
         app.outputDirectory = outDirFromConfig(cfg) ?? 'dist';
-      } else if (needsStart && deps['@astrojs/node'] && !/mode:\s*['"]middleware['"]/.test(cfg ?? '')) {
+      } else if (
+        needsStart &&
+        deps['@astrojs/node'] &&
+        !/mode:\s*['"]middleware['"]/.test(cfg ?? '')
+      ) {
         // Same gap as SvelteKit: Railpack has no Astro entry in its
         // start-command checklist at all. Standalone is the only mode that
         // produces a server we can start — middleware mode expects the user to
@@ -366,7 +397,11 @@ async function classify(
       app.framework = 'fastify';
     } else if (deps.express) {
       app.framework = 'express';
-    } else if (deps.vite && (has('vite.config.js') || has('vite.config.ts')) && pkg.scripts?.build) {
+    } else if (
+      deps.vite &&
+      (has('vite.config.js') || has('vite.config.ts')) &&
+      pkg.scripts?.build
+    ) {
       app.framework = 'vite';
       const cfg = await firstExisting('vite.config.ts', 'vite.config.js');
       app.outputDirectory = outDirFromConfig(cfg) ?? 'dist';
@@ -379,7 +414,8 @@ async function classify(
   }
 
   if (has('go.mod')) return { ...base, framework: 'go', port: 8080 };
-  if (has('requirements.txt') || has('pyproject.toml')) return { ...base, framework: 'python', port: 8000 };
+  if (has('requirements.txt') || has('pyproject.toml'))
+    return { ...base, framework: 'python', port: 8000 };
   if (has('Gemfile')) return { ...base, framework: 'ruby' };
   if (has('Cargo.toml')) return { ...base, framework: 'rust', port: 8080 };
   if (has('composer.json')) return { ...base, framework: 'php', port: 8080 };
@@ -389,7 +425,7 @@ async function classify(
       ...base,
       framework: 'static',
       outputDirectory: paths.has(join(dir, 'public/index.html')) ? 'public' : '.',
-      port: 80,
+      port: 80
     };
   }
 
@@ -453,7 +489,7 @@ export async function detectApps(paths: string[], read: FileReader): Promise<Rep
   const classified = await mapWithConcurrency(
     candidateDirs.slice(0, MAX_CANDIDATE_DIRS),
     MAX_CONCURRENT_READS,
-    (dir) => classify(dir, pathSet, read),
+    (dir) => classify(dir, pathSet, read)
   );
   const apps = classified.filter((app): app is DetectedApp => app !== null);
 
@@ -465,9 +501,11 @@ export async function detectApps(paths: string[], read: FileReader): Promise<Rep
   // Only the app the config points at is affected; the others stay as detected.
   const target = repoConfig?.rootDirectory ?? (repoConfig ? '' : null);
   return {
-    apps: scoped.map((app) => (target !== null && app.dir === target ? applyRepoConfig(app, repoConfig) : app)),
+    apps: scoped.map((app) =>
+      target !== null && app.dir === target ? applyRepoConfig(app, repoConfig) : app
+    ),
     workspace,
-    repoConfig,
+    repoConfig
   };
 }
 
@@ -503,7 +541,7 @@ function scopeToWorkspace(app: DetectedApp, workspace: WorkspaceInfo): DetectedA
     // Install stays unscoped: Railpack already installs a workspace correctly.
     buildCommand: app.buildCommand ?? workspaceScriptCommand(pm, app.packageName, 'build'),
     startCommand,
-    outputDirectory: app.outputDirectory ? `${app.dir}/${app.outputDirectory}` : null,
+    outputDirectory: app.outputDirectory ? `${app.dir}/${app.outputDirectory}` : null
   };
 }
 

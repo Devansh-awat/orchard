@@ -5,9 +5,9 @@ metadata:
   displayName: Node.js + PostgreSQL
   description: A Node.js application backed by PostgreSQL. Provides DATABASE_URL automatically.
   icon: nodejs
-  version: "1.0.0"
+  version: '1.0.0'
   category: backend
-  tags: ["nodejs", "javascript", "postgres", "api"]
+  tags: ['nodejs', 'javascript', 'postgres', 'api']
 
 parameters:
   - name: appName
@@ -17,7 +17,7 @@ parameters:
     default: my-app
     required: true
     validation:
-      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
       message: Must be lowercase alphanumeric with hyphens, 3-60 chars
 
   - name: image
@@ -25,7 +25,7 @@ parameters:
     description: Your Node.js application Docker image
     type: string
     required: true
-    placeholder: "my-registry/my-app:latest"
+    placeholder: 'my-registry/my-app:latest'
 
   - name: port
     displayName: App Port
@@ -49,7 +49,7 @@ parameters:
     description: Public domain for the application
     type: string
     required: true
-    placeholder: "api.example.com"
+    placeholder: 'api.example.com'
 
   - name: enableTls
     displayName: Enable HTTPS
@@ -60,33 +60,33 @@ resources:
   - name: db
     type: database
     config:
-      name: "{{ params.appName }}-db"
+      name: '{{ params.appName }}-db'
 
   - name: app
     type: deployment
     config:
-      name: "{{ params.appName }}"
-      image: "{{ params.image }}"
-      replicas: "{{ params.replicas }}"
+      name: '{{ params.appName }}'
+      image: '{{ params.image }}'
+      replicas: '{{ params.replicas }}'
       ports:
         - name: http
-          containerPort: "{{ params.port }}"
-          servicePort: "{{ params.port }}"
+          containerPort: '{{ params.port }}'
+          servicePort: '{{ params.port }}'
           protocol: TCP
       env:
         - key: DATABASE_URL
-          value: "{{ resources.db.connectionString }}"
+          value: '{{ resources.db.connectionString }}'
         - key: PORT
-          value: "{{ params.port }}"
+          value: '{{ params.port }}'
         - key: NODE_ENV
           value: production
 
   - name: ingress
     type: ingress
     config:
-      host: "{{ params.domain }}"
-      tlsEnabled: "{{ params.enableTls }}"
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
       routes:
         - path: /
-          serviceName: "{{ resources.app.serviceName }}"
-          servicePort: "{{ params.port }}"
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: '{{ params.port }}'

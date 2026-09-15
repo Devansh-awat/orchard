@@ -10,6 +10,6 @@ import { ComposeStacksController } from './compose-stacks.controller';
   imports: [ProjectsModule, AuthModule, UsersModule, GitHubModule],
   providers: [ComposeStacksService],
   controllers: [ComposeStacksController],
-  exports: [ComposeStacksService],
+  exports: [ComposeStacksService]
 })
 export class ComposeStacksModule {}

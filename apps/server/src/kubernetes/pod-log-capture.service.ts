@@ -67,7 +67,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
     ownerId: string,
     namespace: string,
     pod: k8s.V1Pod,
-    scope: CaptureScope = 'deployment',
+    scope: CaptureScope = 'deployment'
   ) {
     if (!this.redis) return;
     const podName = pod.metadata?.name;
@@ -89,7 +89,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
           '1',
           'PX',
           TTL_MS,
-          'NX',
+          'NX'
         );
         if (!claimed) continue;
 
@@ -101,12 +101,12 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
             namespace,
             cs.name,
             TAIL_LINES,
-            usePrevious,
+            usePrevious
           );
           logs = res?.logs ?? '';
         } catch (e) {
           this.logger.warn(
-            `capture log fetch failed for ${podName}/${cs.name}: ${(e as Error).message}`,
+            `capture log fetch failed for ${podName}/${cs.name}: ${(e as Error).message}`
           );
         }
 
@@ -118,14 +118,14 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
           exitCode: term.exitCode ?? null,
           finishedAt: finishedAt ? finishedAt.toISOString() : null,
           capturedAt: new Date(finishedMs || Date.now()).toISOString(),
-          logs,
+          logs
         };
 
         await this.redis.set(
           this.entryKey(scope, ownerId, entryId),
           JSON.stringify(entry),
           'PX',
-          TTL_MS,
+          TTL_MS
         );
         await this.redis.lpush(this.idxKey(scope, ownerId), entryId);
         await this.redis.ltrim(this.idxKey(scope, ownerId), 0, INDEX_MAX - 1);
@@ -154,7 +154,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
           reason: e.reason,
           exitCode: e.exitCode,
           finishedAt: e.finishedAt,
-          capturedAt: e.capturedAt,
+          capturedAt: e.capturedAt
         });
       } catch {}
     }
@@ -164,7 +164,7 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
   async getLogs(
     ownerId: string,
     entryId: string,
-    scope: CaptureScope = 'deployment',
+    scope: CaptureScope = 'deployment'
   ): Promise<KilledEntry | null> {
     if (!this.redis) return null;
     const row = await this.redis.get(this.entryKey(scope, ownerId, entryId));

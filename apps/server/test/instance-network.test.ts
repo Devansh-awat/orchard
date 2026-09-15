@@ -9,11 +9,11 @@ test('every hostname the instance serves is derived from what it already knows',
   const rows = expectedHostnames({
     frontendUrl: 'https://orchard.example.com',
     appDomain: 'apps.example.com',
-    mcpUrl: 'https://mcp.example.com',
+    mcpUrl: 'https://mcp.example.com'
   });
   assert.deepEqual(
     rows.map((r) => r.record),
-    ['orchard.example.com', '*.apps.example.com', 'mcp.example.com'],
+    ['orchard.example.com', '*.apps.example.com', 'mcp.example.com']
   );
 });
 
@@ -41,7 +41,7 @@ test('nothing is expected for a hostname that is not configured', () => {
   assert.deepEqual(expectedHostnames({}), []);
   assert.deepEqual(
     expectedHostnames({ frontendUrl: 'https://orchard.example.com' }).map((r) => r.role),
-    ['platform'],
+    ['platform']
   );
 });
 
@@ -68,7 +68,7 @@ test('a name resolving somewhere other than the dashboard is reported but not fa
     {
       FRONTEND_URL: 'https://orchard.example.com',
       APP_DOMAIN: 'apps.example.com',
-      MCP_BASE_URL: 'https://mcp.example.com',
+      MCP_BASE_URL: 'https://mcp.example.com'
     },
     async () => {
       (service as any).resolve = async (host: string) => {
@@ -84,14 +84,18 @@ test('a name resolving somewhere other than the dashboard is reported but not fa
       // Behind a proxy or CDN this is the normal state, so it must never put a
       // permanent warning badge on an instance that works.
       assert.equal(await service.allResolve(), true);
-    },
+    }
   );
 });
 
 test('a name with no record reads as missing', async () => {
   const service = new DnsCheckService(noConfig);
   await withEnv(
-    { FRONTEND_URL: 'https://orchard.example.com', APP_DOMAIN: '', MCP_BASE_URL: 'https://mcp.example.com' },
+    {
+      FRONTEND_URL: 'https://orchard.example.com',
+      APP_DOMAIN: '',
+      MCP_BASE_URL: 'https://mcp.example.com'
+    },
     async () => {
       (service as any).resolve = async (host: string) => {
         if (host === 'orchard.example.com') return ['203.0.113.10'];
@@ -104,7 +108,7 @@ test('a name with no record reads as missing', async () => {
       const mcp = report.rows.find((r) => r.role === 'mcp');
       assert.equal(mcp?.verdict, 'missing');
       assert.match(mcp?.message ?? '', /No record found/);
-    },
+    }
   );
 });
 
@@ -114,13 +118,13 @@ test('everything pointing at the dashboard reads as done', async () => {
     {
       FRONTEND_URL: 'https://orchard.example.com',
       APP_DOMAIN: 'apps.example.com',
-      MCP_BASE_URL: 'https://mcp.example.com',
+      MCP_BASE_URL: 'https://mcp.example.com'
     },
     async () => {
       (service as any).resolve = async () => ['203.0.113.10'];
       await service.report(true);
       assert.equal(await service.allResolve(), true);
-    },
+    }
   );
 });
 
@@ -143,7 +147,7 @@ test('only a missing record is outstanding', async () => {
     {
       FRONTEND_URL: 'https://orchard.example.com',
       APP_DOMAIN: 'apps.example.com',
-      MCP_BASE_URL: 'https://mcp.example.com',
+      MCP_BASE_URL: 'https://mcp.example.com'
     },
     async () => {
       (service as any).resolve = async (host: string) => {
@@ -158,8 +162,11 @@ test('only a missing record is outstanding', async () => {
 
       const report = await service.report(true);
       const outstanding = DnsCheckService.outstanding(report);
-      assert.deepEqual(outstanding.map((r) => r.record), ['mcp.example.com']);
-    },
+      assert.deepEqual(
+        outstanding.map((r) => r.record),
+        ['mcp.example.com']
+      );
+    }
   );
 
   assert.deepEqual(DnsCheckService.outstanding(null), []);

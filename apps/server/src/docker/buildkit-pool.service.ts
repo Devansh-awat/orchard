@@ -78,8 +78,11 @@ export class BuildKitPoolService {
 
   private sanitizeLabel(v: string): string {
     return truncateK8sName(
-      v.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
-      63,
+      v
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+/, ''),
+      63
     );
   }
 
@@ -105,7 +108,7 @@ export class BuildKitPoolService {
         undefined,
         undefined,
         undefined,
-        this.labelSelector(tenantKey),
+        this.labelSelector(tenantKey)
       ),
       coreApi.listNamespacedPod(
         this.namespace,
@@ -113,8 +116,8 @@ export class BuildKitPoolService {
         undefined,
         undefined,
         undefined,
-        this.legacyLabelSelector(tenantKey),
-      ),
+        this.legacyLabelSelector(tenantKey)
+      )
     ]);
 
     for (const pod of [...existing.body.items, ...legacy.body.items]) {
@@ -151,23 +154,21 @@ export class BuildKitPoolService {
         namespace: this.namespace,
         labels: {
           'app.kubernetes.io/name': 'buildkit-daemon',
-          'app.kubernetes.io/managed-by': 'orchard',
-        },
+          'app.kubernetes.io/managed-by': 'orchard'
+        }
       },
       spec: {
         podSelector: {
-          matchLabels: { 'orchard.my/buildkit-daemon': 'true' },
+          matchLabels: { 'orchard.my/buildkit-daemon': 'true' }
         },
         policyTypes: ['Ingress'],
         ingress: [
           {
-            from: [
-              { podSelector: { matchLabels: { 'app.kubernetes.io/name': 'image-builder' } } },
-            ],
-            ports: [{ protocol: 'TCP', port: 1234 }],
-          },
-        ],
-      },
+            from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/name': 'image-builder' } } }],
+            ports: [{ protocol: 'TCP', port: 1234 }]
+          }
+        ]
+      }
     };
 
     try {
@@ -197,85 +198,84 @@ export class BuildKitPoolService {
           'orchard.my/buildkit-daemon': 'true',
           'orchard.my/tenant-key': sanitizedKey,
           'app.kubernetes.io/name': 'buildkit-daemon',
-          'app.kubernetes.io/managed-by': 'orchard',
+          'app.kubernetes.io/managed-by': 'orchard'
         },
         annotations: {
-          'orchard.my/last-used': new Date().toISOString(),
-        },
+          'orchard.my/last-used': new Date().toISOString()
+        }
       },
       spec: {
         restartPolicy: 'Always',
         automountServiceAccountToken: false,
         ...(this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
-        ...(this.dedicatedNodeEnabled ? {
-          nodeSelector: { 'orchard-builder': 'true' },
-          tolerations: [{
-            key: 'orchard-builder',
-            operator: 'Exists' as const,
-            effect: 'NoSchedule' as const,
-          }],
-        } : {}),
+        ...(this.dedicatedNodeEnabled
+          ? {
+              nodeSelector: { 'orchard-builder': 'true' },
+              tolerations: [
+                {
+                  key: 'orchard-builder',
+                  operator: 'Exists' as const,
+                  effect: 'NoSchedule' as const
+                }
+              ]
+            }
+          : {}),
         containers: [
           {
             name: 'buildkitd',
             image: 'moby/buildkit:latest',
-            args: [
-              '--addr', 'tcp://0.0.0.0:1234',
-              '--addr', 'unix:///run/buildkit/buildkitd.sock',
-            ],
+            args: ['--addr', 'tcp://0.0.0.0:1234', '--addr', 'unix:///run/buildkit/buildkitd.sock'],
             securityContext: { privileged: true },
             ports: [{ containerPort: 1234, name: 'buildkit', protocol: 'TCP' }],
             readinessProbe: {
               exec: { command: ['buildctl', 'debug', 'workers'] },
               initialDelaySeconds: 3,
-              periodSeconds: 10,
+              periodSeconds: 10
             },
-            env: [
-              { name: 'DOCKER_CONFIG', value: '/root/.docker' },
-            ],
+            env: [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }],
             volumeMounts: [
               {
                 name: 'buildkit-state',
                 mountPath: '/var/lib/buildkit',
-                subPath: sanitizedKey,
+                subPath: sanitizedKey
               },
               {
                 name: 'buildkit-config',
                 mountPath: '/etc/buildkit',
-                readOnly: true,
+                readOnly: true
               },
               {
                 name: 'docker-config',
                 mountPath: '/root/.docker',
-                readOnly: true,
-              },
+                readOnly: true
+              }
             ],
             resources: {
               requests: { cpu: '250m', memory: '1Gi' },
-              limits: { cpu: '4', memory: '16Gi' },
-            },
-          },
+              limits: { cpu: '4', memory: '16Gi' }
+            }
+          }
         ],
         volumes: [
           {
             name: 'buildkit-state',
             ...(this.localCachePvc
               ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
-              : { emptyDir: {} }),
+              : { emptyDir: {} })
           },
           {
             name: 'buildkit-config',
-            configMap: { name: 'buildkit-config' },
+            configMap: { name: 'buildkit-config' }
           },
           {
             name: 'docker-config',
             secret: {
               secretName: process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds',
-              items: [{ key: '.dockerconfigjson', path: 'config.json' }],
-            },
-          },
-        ],
-      },
+              items: [{ key: '.dockerconfigjson', path: 'config.json' }]
+            }
+          }
+        ]
+      }
     };
 
     try {
@@ -305,7 +305,7 @@ export class BuildKitPoolService {
 
         if (phase === 'Running' && ip) {
           // Check readiness
-          const ready = pod.status?.containerStatuses?.every(c => c.ready) ?? false;
+          const ready = pod.status?.containerStatuses?.every((c) => c.ready) ?? false;
           if (ready) {
             console.log(`[BuildKitPool] Daemon ${podName} ready at ${ip}`);
             return { podName, podIp: ip };
@@ -322,7 +322,9 @@ export class BuildKitPoolService {
         if (err.message?.includes('state')) throw err;
       }
 
-      await new Promise(r => { setTimeout(r, 3000); });
+      await new Promise((r) => {
+        setTimeout(r, 3000);
+      });
     }
 
     throw new Error(`Daemon pod ${podName} not ready after ${timeoutMs / 1000}s`);
@@ -341,7 +343,7 @@ export class BuildKitPoolService {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
       );
     } catch (err) {
       console.warn(`[BuildKitPool] Failed to touch daemon ${podName}:`, err.message);
@@ -364,7 +366,7 @@ export class BuildKitPoolService {
           undefined,
           undefined,
           undefined,
-          'orchard.my/buildkit-daemon=true',
+          'orchard.my/buildkit-daemon=true'
         ),
         coreApi.listNamespacedPod(
           this.namespace,
@@ -372,15 +374,16 @@ export class BuildKitPoolService {
           undefined,
           undefined,
           undefined,
-          'orchard.dev/buildkit-daemon=true',
-        ),
+          'orchard.dev/buildkit-daemon=true'
+        )
       ]);
 
       const now = Date.now();
       const seen = new Set<string>();
       for (const pod of [...pods.body.items, ...legacyPods.body.items]) {
         const annotations = pod.metadata?.annotations;
-        const lastUsed = annotations?.['orchard.my/last-used'] ?? annotations?.['orchard.dev/last-used'];
+        const lastUsed =
+          annotations?.['orchard.my/last-used'] ?? annotations?.['orchard.dev/last-used'];
         const name = pod.metadata?.name;
         if (!name || seen.has(name)) continue;
         seen.add(name);
@@ -389,7 +392,9 @@ export class BuildKitPoolService {
         const idleMs = now - lastUsedMs;
 
         if (idleMs > maxIdleMs) {
-          console.log(`[BuildKitPool] Reaping idle daemon ${name} (idle ${Math.round(idleMs / 60_000)}m)`);
+          console.log(
+            `[BuildKitPool] Reaping idle daemon ${name} (idle ${Math.round(idleMs / 60_000)}m)`
+          );
           try {
             await coreApi.deleteNamespacedPod(name, this.namespace);
           } catch (err) {

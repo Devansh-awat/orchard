@@ -8,7 +8,7 @@ import {
   Request,
   BadRequestException,
   Sse,
-  MessageEvent,
+  MessageEvent
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { Auth } from '../auth/decorators';
@@ -22,7 +22,7 @@ export class ObservabilityController {
   constructor(
     private readonly observability: ObservabilityService,
     private readonly errorIngest: ErrorIngestService,
-    private readonly projectAccess: ProjectAccessService,
+    private readonly projectAccess: ProjectAccessService
   ) {}
 
   @Get('deployments/:id/capabilities')
@@ -37,7 +37,7 @@ export class ObservabilityController {
     @Request() req,
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
-    @Query('step') stepStr?: string,
+    @Query('step') stepStr?: string
   ) {
     await this.assertAccess(id, req);
     const end = Number(endStr) || Date.now();
@@ -51,7 +51,7 @@ export class ObservabilityController {
   async streamBuildLogs(
     @Param('id') id: string,
     @Request() req,
-    @Query('offset') offsetStr?: string,
+    @Query('offset') offsetStr?: string
   ): Promise<Observable<MessageEvent>> {
     await this.assertAccess(id, req);
     const lastEventId =
@@ -65,14 +65,19 @@ export class ObservabilityController {
     @Param('id') id: string,
     @Request() req,
     @Query('tailLines') tailLinesStr?: string,
-    @Query('sinceTime') sinceTimeQuery?: string,
+    @Query('sinceTime') sinceTimeQuery?: string
   ): Promise<Observable<MessageEvent>> {
     await this.assertAccess(id, req);
     const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 100), 5000);
     const lastEventId =
       typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
     const sinceTime = lastEventId || sinceTimeQuery || undefined;
-    return this.observability.streamRuntimeLogs(id, req.user.sub, tailLines, sinceTime) as Observable<MessageEvent>;
+    return this.observability.streamRuntimeLogs(
+      id,
+      req.user.sub,
+      tailLines,
+      sinceTime
+    ) as Observable<MessageEvent>;
   }
 
   @Get('deployments/:id/logs/structured')
@@ -81,7 +86,7 @@ export class ObservabilityController {
     @Request() req,
     @Query('tailLines') tailLinesStr?: string,
     @Query('level') level?: string,
-    @Query('search') search?: string,
+    @Query('search') search?: string
   ) {
     await this.assertAccess(id, req);
     const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 200), 20000);
@@ -101,11 +106,7 @@ export class ObservabilityController {
   }
 
   @Get('deployments/:id/errors')
-  async getErrors(
-    @Param('id') id: string,
-    @Request() req,
-    @Query('window') windowStr?: string,
-  ) {
+  async getErrors(@Param('id') id: string, @Request() req, @Query('window') windowStr?: string) {
     await this.assertAccess(id, req);
     const window = Math.min(Math.max(1, Number(windowStr) || 60), 1440);
     return this.errorIngest.listGroups(id, window);
@@ -116,7 +117,7 @@ export class ObservabilityController {
     @Param('id') id: string,
     @Param('fingerprint') fingerprint: string,
     @Body() body: { status?: string; assigneeId?: string | null },
-    @Request() req,
+    @Request() req
   ) {
     const { user } = await this.assertAccess(id, req);
     return this.errorIngest.updateGroup(id, fingerprint, body, user.id);
@@ -128,7 +129,7 @@ export class ObservabilityController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 }

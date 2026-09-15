@@ -51,7 +51,7 @@ export class OtelConsoleLogger extends ConsoleLogger {
     }
     emitLog(level, body, {
       ...(context ? { 'logger.name': context } : {}),
-      ...(stack ? { 'exception.stacktrace': stack } : {}),
+      ...(stack ? { 'exception.stacktrace': stack } : {})
     });
   }
 }

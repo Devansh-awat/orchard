@@ -45,7 +45,7 @@
 		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 
 		sanitized = sanitized.replace(
-			/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi,
+			/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi,
 			'$1 ***REDACTED***'
 		);
 

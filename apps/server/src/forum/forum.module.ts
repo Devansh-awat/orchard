@@ -8,6 +8,6 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 @Module({
   imports: [PrismaModule, UsersModule, OrganizationsModule],
   controllers: [ForumController],
-  providers: [ForumService, GroveEnabledGuard],
+  providers: [ForumService, GroveEnabledGuard]
 })
 export class ForumModule {}

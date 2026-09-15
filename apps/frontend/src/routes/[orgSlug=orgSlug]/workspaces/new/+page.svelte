@@ -159,8 +159,7 @@
 					bind:value={description}
 					placeholder="A brief description of this workspace"
 					rows="2"
-					class="nw-input"
-				></textarea>
+					class="nw-input"></textarea>
 			</div>
 		</div>
 

@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import {
   SessionsService,
   MCP_SESSION_AUTH_METHOD,
-  MCP_SESSION_TTL_MS,
+  MCP_SESSION_TTL_MS
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -45,7 +45,7 @@ export class McpOAuthService {
 
   constructor(
     private readonly sessions: SessionsService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {}
 
   // Auth codes and pending-authorize state live in Postgres (mcp_oauth_codes)
@@ -62,7 +62,7 @@ export class McpOAuthService {
       codeChallenge: row.codeChallenge ?? undefined,
       codeChallengeMethod: row.codeChallengeMethod ?? undefined,
       orchardToken: row.orchardToken,
-      expiresAt: row.expiresAt.getTime(),
+      expiresAt: row.expiresAt.getTime()
     };
   }
 
@@ -73,12 +73,12 @@ export class McpOAuthService {
       codeChallenge: entry.codeChallenge ?? null,
       codeChallengeMethod: entry.codeChallengeMethod ?? null,
       orchardToken: entry.orchardToken,
-      expiresAt: new Date(entry.expiresAt),
+      expiresAt: new Date(entry.expiresAt)
     };
     await this.prisma.mcpOauthCode.upsert({
       where: { id },
       create: { id, ...data },
-      update: data,
+      update: data
     });
   }
 
@@ -103,7 +103,7 @@ export class McpOAuthService {
       clientId: row.id,
       clientSecret: row.clientSecret ?? undefined,
       redirectUris: Array.isArray(row.redirectUris) ? (row.redirectUris as string[]) : [],
-      name: row.name,
+      name: row.name
     };
     this.oauthClients.set(clientId, client);
     return client;
@@ -132,7 +132,7 @@ export class McpOAuthService {
       resource: this.baseUrl,
       authorization_servers: [this.baseUrl],
       scopes_supported: ['mcp:access'],
-      bearer_methods_supported: ['header'],
+      bearer_methods_supported: ['header']
     };
   }
 
@@ -146,7 +146,7 @@ export class McpOAuthService {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
       code_challenge_methods_supported: ['S256'],
-      scopes_supported: ['mcp:access'],
+      scopes_supported: ['mcp:access']
     };
   }
 
@@ -179,16 +179,22 @@ export class McpOAuthService {
     response_types?: string[];
     token_endpoint_auth_method?: string;
   }): Promise<{ error?: string; error_description?: string; registration?: any }> {
-    console.error(`[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`);
+    console.error(
+      `[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`
+    );
     const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
     if (redirectUris.length === 0) {
-      return { error: 'invalid_redirect_uri', error_description: 'at least one redirect_uri is required' };
+      return {
+        error: 'invalid_redirect_uri',
+        error_description: 'at least one redirect_uri is required'
+      };
     }
     for (const uri of redirectUris) {
       if (typeof uri !== 'string' || !this.isAllowedRedirectUri(uri)) {
         return {
           error: 'invalid_redirect_uri',
-          error_description: 'redirect_uri must be https or loopback http (no userinfo, no fragment)',
+          error_description:
+            'redirect_uri must be https or loopback http (no userinfo, no fragment)'
         };
       }
     }
@@ -205,14 +211,14 @@ export class McpOAuthService {
         id: clientId,
         clientSecret: clientSecret ?? null,
         name,
-        redirectUris,
-      },
+        redirectUris
+      }
     });
     this.oauthClients.set(clientId, {
       clientId,
       clientSecret,
       redirectUris,
-      name,
+      name
     });
 
     return {
@@ -223,8 +229,8 @@ export class McpOAuthService {
         redirect_uris: redirectUris,
         grant_types: body.grant_types || ['authorization_code'],
         response_types: body.response_types || ['code'],
-        token_endpoint_auth_method: body.token_endpoint_auth_method || 'none',
-      },
+        token_endpoint_auth_method: body.token_endpoint_auth_method || 'none'
+      }
     };
   }
 
@@ -236,9 +242,13 @@ export class McpOAuthService {
     code_challenge?: string;
     code_challenge_method?: string;
   }): Promise<{ error?: string; error_description?: string; redirectUrl?: string }> {
-    console.error(`[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`);
+    console.error(
+      `[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`
+    );
     if (query.response_type !== 'code') {
-      console.error(`[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`);
+      console.error(
+        `[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`
+      );
       return { error: 'unsupported_response_type' };
     }
 
@@ -260,7 +270,7 @@ export class McpOAuthService {
       return {
         error: 'invalid_client',
         error_description:
-          'Unknown client_id. This client was never registered with this server, or its registration was issued by a different one. Clear any manually configured OAuth Client ID and let the client register itself.',
+          'Unknown client_id. This client was never registered with this server, or its registration was issued by a different one. Clear any manually configured OAuth Client ID and let the client register itself.'
       };
     }
     if (!client.redirectUris.includes(query.redirect_uri)) {
@@ -279,13 +289,13 @@ export class McpOAuthService {
       codeChallenge: query.code_challenge,
       codeChallengeMethod: query.code_challenge_method,
       orchardToken: '',
-      expiresAt: Date.now() + 10 * 60 * 1000,
+      expiresAt: Date.now() + 10 * 60 * 1000
     });
     await this.putCode(`client_state_${mcpState}`, {
       clientId: query.state || '',
       redirectUri: '',
       orchardToken: '',
-      expiresAt: Date.now() + 10 * 60 * 1000,
+      expiresAt: Date.now() + 10 * 60 * 1000
     });
 
     // Redirect to Orchard frontend login page with MCP state. client_name and
@@ -297,11 +307,11 @@ export class McpOAuthService {
       mcp_state: mcpState,
       mcp_server: this.baseUrl,
       client_name: client.name,
-      redirect_uri: query.redirect_uri,
+      redirect_uri: query.redirect_uri
     });
 
     return {
-      redirectUrl: `${this.frontendUrl}/mcp/authorize?${params.toString()}`,
+      redirectUrl: `${this.frontendUrl}/mcp/authorize?${params.toString()}`
     };
   }
 
@@ -327,7 +337,9 @@ export class McpOAuthService {
       payload = result.payload;
       console.error(`[MCP OAuth] Session token valid: sub=${payload.sub}, email=${payload.email}`);
     } catch (err) {
-      console.error(`[MCP OAuth] Session token invalid: ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `[MCP OAuth] Session token invalid: ${err instanceof Error ? err.message : err}`
+      );
       return { error: 'Invalid session token' };
     }
 
@@ -344,7 +356,7 @@ export class McpOAuthService {
       userId: payload.sub,
       authMethod: MCP_SESSION_AUTH_METHOD,
       deviceName: client?.name || 'MCP Client',
-      ttlMs: MCP_SESSION_TTL_MS,
+      ttlMs: MCP_SESSION_TTL_MS
     });
 
     const orchardToken = await this.mintAccessToken({
@@ -353,7 +365,7 @@ export class McpOAuthService {
       name: payload.name,
       externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
-      sessionId: mcpSessionId,
+      sessionId: mcpSessionId
     });
 
     const mcpAuthCode = randomBytes(32).toString('hex');
@@ -364,7 +376,7 @@ export class McpOAuthService {
       codeChallenge: pending.codeChallenge,
       codeChallengeMethod: pending.codeChallengeMethod,
       orchardToken,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: Date.now() + 5 * 60 * 1000
     });
 
     await this.deleteCode(`pending_${mcp_state}`);
@@ -390,7 +402,7 @@ export class McpOAuthService {
       name: claims.name,
       externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
-      sessionId: claims.sessionId,
+      sessionId: claims.sessionId
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -413,7 +425,7 @@ export class McpOAuthService {
       externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
       sessionId: claims.sessionId,
-      clientId,
+      clientId
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -428,7 +440,7 @@ export class McpOAuthService {
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
       refresh_token: await this.mintRefreshToken(claims, clientId),
-      scope: 'mcp:access',
+      scope: 'mcp:access'
     };
   }
 
@@ -439,7 +451,7 @@ export class McpOAuthService {
       name: payload.name,
       externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
-      sessionId: payload.sessionId,
+      sessionId: payload.sessionId
     };
   }
 
@@ -484,7 +496,7 @@ export class McpOAuthService {
 
     console.error(`[MCP OAuth] Refresh succeeded for sub=${payload.sub}`);
     return {
-      token_response: await this.buildTokenResponse(this.claimsFromPayload(payload), body.client_id),
+      token_response: await this.buildTokenResponse(this.claimsFromPayload(payload), body.client_id)
     };
   }
 
@@ -496,7 +508,9 @@ export class McpOAuthService {
     code_verifier?: string;
     refresh_token?: string;
   }): Promise<{ error?: string; error_description?: string; token_response?: any }> {
-    console.error(`[MCP OAuth] Token exchange: grant_type=${body.grant_type}, client_id=${body.client_id}, code_length=${body.code?.length}, redirect_uri=${body.redirect_uri}`);
+    console.error(
+      `[MCP OAuth] Token exchange: grant_type=${body.grant_type}, client_id=${body.client_id}, code_length=${body.code?.length}, redirect_uri=${body.redirect_uri}`
+    );
     if (body.grant_type === 'refresh_token') {
       return this.refreshAccessToken(body);
     }
@@ -514,7 +528,9 @@ export class McpOAuthService {
     }
 
     if (authCode.clientId !== body.client_id) {
-      console.error(`[MCP OAuth] Token exchange failed: invalid_client (expected=${authCode.clientId}, got=${body.client_id})`);
+      console.error(
+        `[MCP OAuth] Token exchange failed: invalid_client (expected=${authCode.clientId}, got=${body.client_id})`
+      );
       return { error: 'invalid_client' };
     }
 
@@ -526,7 +542,9 @@ export class McpOAuthService {
       return { error: 'invalid_client' };
     }
     if (authCode.redirectUri && authCode.redirectUri !== body.redirect_uri) {
-      console.error(`[MCP OAuth] Token exchange failed: redirect_uri mismatch (expected=${authCode.redirectUri}, got=${body.redirect_uri})`);
+      console.error(
+        `[MCP OAuth] Token exchange failed: redirect_uri mismatch (expected=${authCode.redirectUri}, got=${body.redirect_uri})`
+      );
       return { error: 'invalid_grant', error_description: 'redirect_uri mismatch' };
     }
     if (!client.redirectUris.includes(body.redirect_uri ?? '')) {
@@ -544,9 +562,7 @@ export class McpOAuthService {
       console.error(`[MCP OAuth] Token exchange failed: code_verifier required`);
       return { error: 'invalid_grant', error_description: 'code_verifier required' };
     }
-    const expectedChallenge = createHash('sha256')
-      .update(body.code_verifier)
-      .digest('base64url');
+    const expectedChallenge = createHash('sha256').update(body.code_verifier).digest('base64url');
     if (expectedChallenge !== authCode.codeChallenge) {
       console.error(`[MCP OAuth] Token exchange failed: code_verifier mismatch`);
       return { error: 'invalid_grant', error_description: 'code_verifier mismatch' };
@@ -570,8 +586,8 @@ export class McpOAuthService {
       token_response: await this.buildTokenResponse(
         this.claimsFromPayload(payload),
         body.client_id,
-        orchardToken,
-      ),
+        orchardToken
+      )
     };
   }
 
@@ -588,9 +604,7 @@ export class McpOAuthService {
    * calls against the original creator's `OrchardClient` (i.e. their
    * orchard token), running as that user against the first-party API.
    */
-  async validateBearerTokenWithSub(
-    authHeader?: string,
-  ): Promise<{
+  async validateBearerTokenWithSub(authHeader?: string): Promise<{
     token: string;
     sub: string;
     email?: string;
@@ -602,7 +616,9 @@ export class McpOAuthService {
       return null;
     }
     const token = authHeader.substring(7);
-    console.error(`[MCP OAuth] Token length: ${token.length}, prefix: ${token.substring(0, 20)}...`);
+    console.error(
+      `[MCP OAuth] Token length: ${token.length}, prefix: ${token.substring(0, 20)}...`
+    );
     try {
       const result = await jwtVerify(token, this.getJwtSecret());
 
@@ -645,11 +661,15 @@ export class McpOAuthService {
         token,
         sub,
         email: result.payload.email as string | undefined,
-        externalAuthId: (result.payload.externalAuthId ?? result.payload.hackClubId) as string | undefined,
-        sessionId,
+        externalAuthId: (result.payload.externalAuthId ?? result.payload.hackClubId) as
+          | string
+          | undefined,
+        sessionId
       };
     } catch (err) {
-      console.error(`[MCP OAuth] Token verification failed: ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `[MCP OAuth] Token verification failed: ${err instanceof Error ? err.message : err}`
+      );
       return null;
     }
   }

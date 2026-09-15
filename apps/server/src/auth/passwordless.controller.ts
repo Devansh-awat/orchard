@@ -8,7 +8,7 @@ import {
   Req,
   Res,
   HttpException,
-  HttpStatus,
+  HttpStatus
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
@@ -59,7 +59,7 @@ export class PasswordlessController {
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
   private getClientIp(req: Request): string {
@@ -75,14 +75,14 @@ export class PasswordlessController {
    */
   private async hasPrivateBetaAccess(
     email: string,
-    existingUser: { id: string; isSuperAdmin: boolean } | null,
+    existingUser: { id: string; isSuperAdmin: boolean } | null
   ): Promise<boolean> {
     if (signupMode() === 'open') return true;
     if (existingUser?.isSuperAdmin) return true;
 
     if (existingUser) {
       const membership = await this.prisma.organizationMember.findFirst({
-        where: { userId: existingUser.id },
+        where: { userId: existingUser.id }
       });
       if (membership) return true;
     }
@@ -92,8 +92,8 @@ export class PasswordlessController {
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
         email: email.toLowerCase(),
-        expiresAt: { gt: new Date() },
-      },
+        expiresAt: { gt: new Date() }
+      }
     });
     return !!invitation;
   }
@@ -103,8 +103,7 @@ export class PasswordlessController {
    */
   private async resolveInternalUser(userId: string) {
     const where: Prisma.UserWhereInput = { OR: [] };
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (uuidRegex.test(userId)) {
       where.OR!.push({ id: userId });
@@ -133,7 +132,7 @@ export class PasswordlessController {
   @Post('otp/request')
   async requestOtp(
     @Body() body: RequestOtpDto,
-    @Req() req: Request,
+    @Req() req: Request
   ): Promise<{ success: boolean; message: string }> {
     const { email } = body;
 
@@ -160,7 +159,7 @@ export class PasswordlessController {
   async verifyOtp(
     @Body() body: VerifyOtpDto,
     @Req() req: Request,
-    @Res() res: Response,
+    @Res() res: Response
   ): Promise<void> {
     const { email, code } = body;
 
@@ -184,13 +183,10 @@ export class PasswordlessController {
     // signups don't leave an orphan user row with zero organizations.
     const normalizedEmail = result.email.toLowerCase().trim();
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail }
     });
 
-    const hasAccess = await this.hasPrivateBetaAccess(
-      normalizedEmail,
-      existingUser,
-    );
+    const hasAccess = await this.hasPrivateBetaAccess(normalizedEmail, existingUser);
     if (!hasAccess) {
       throw new HttpException(signupDeniedError(), HttpStatus.FORBIDDEN);
     }
@@ -211,7 +207,7 @@ export class PasswordlessController {
       userId: user.id,
       ipAddress,
       userAgent: req.headers['user-agent'],
-      authMethod: 'otp',
+      authMethod: 'otp'
     });
 
     // Generate session token
@@ -224,7 +220,7 @@ export class PasswordlessController {
       user.email,
       displayName,
       'otp',
-      sessionId,
+      sessionId
     );
 
     // Set cookie and respond
@@ -239,8 +235,8 @@ export class PasswordlessController {
         firstName: user.firstName,
         lastName: user.lastName,
         imageUrl: user.imageUrl,
-        setupCompleted: user.setupCompleted,
-      },
+        setupCompleted: user.setupCompleted
+      }
     });
   }
 
@@ -253,9 +249,7 @@ export class PasswordlessController {
    * GET /auth/passkey/check?email=user@example.com
    */
   @Get('passkey/check')
-  async checkPasskeys(
-    @Req() req: Request,
-  ): Promise<{ hasPasskeys: boolean }> {
+  async checkPasskeys(@Req() req: Request): Promise<{ hasPasskeys: boolean }> {
     const email = req.query.email as string;
 
     if (!email) {
@@ -277,10 +271,7 @@ export class PasswordlessController {
     const email = req.user.email;
     const user = await this.resolveInternalUser(req.user.sub);
 
-    const options = await this.passkeyService.generateRegistrationOptions(
-      user.id,
-      email,
-    );
+    const options = await this.passkeyService.generateRegistrationOptions(user.id, email);
 
     return options;
   }
@@ -291,10 +282,7 @@ export class PasswordlessController {
    */
   @Auth()
   @Post('passkey/register/verify')
-  async verifyRegistration(
-    @Body() body: RegisterPasskeyDto,
-    @Req() req: any,
-  ) {
+  async verifyRegistration(@Body() body: RegisterPasskeyDto, @Req() req: any) {
     const email = req.user.email;
     const user = await this.resolveInternalUser(req.user.sub);
 
@@ -302,7 +290,7 @@ export class PasswordlessController {
       user.id,
       email,
       body.response,
-      body.friendlyName,
+      body.friendlyName
     );
 
     return result;
@@ -313,15 +301,9 @@ export class PasswordlessController {
    * POST /auth/passkey/authenticate/options
    */
   @Post('passkey/authenticate/options')
-  async getAuthenticationOptions(
-    @Body() body: { email?: string },
-    @Req() req: Request,
-  ) {
+  async getAuthenticationOptions(@Body() body: { email?: string }, @Req() req: Request) {
     const ipAddress = this.getClientIp(req);
-    const options = await this.passkeyService.generateAuthenticationOptions(
-      body.email,
-      ipAddress,
-    );
+    const options = await this.passkeyService.generateAuthenticationOptions(body.email, ipAddress);
 
     return options;
   }
@@ -334,14 +316,11 @@ export class PasswordlessController {
   async verifyAuthentication(
     @Body() body: AuthenticatePasskeyDto,
     @Req() req: Request,
-    @Res() res: Response,
+    @Res() res: Response
   ): Promise<void> {
     const ipAddress = this.getClientIp(req);
 
-    const result = await this.passkeyService.verifyAuthentication(
-      body.response,
-      ipAddress,
-    );
+    const result = await this.passkeyService.verifyAuthentication(body.response, ipAddress);
 
     if (!result.verified || !result.userId) {
       throw new HttpException('Authentication failed', HttpStatus.UNAUTHORIZED);
@@ -349,7 +328,7 @@ export class PasswordlessController {
 
     // Get user details
     const user = await this.prisma.user.findUnique({
-      where: { id: result.userId },
+      where: { id: result.userId }
     });
 
     if (!user) {
@@ -359,7 +338,7 @@ export class PasswordlessController {
     // Private beta: reject users not invited to any organization
     const hasAccess = await this.hasPrivateBetaAccess(user.email, {
       id: user.id,
-      isSuperAdmin: user.isSuperAdmin,
+      isSuperAdmin: user.isSuperAdmin
     });
     if (!hasAccess) {
       throw new HttpException(signupDeniedError(), HttpStatus.FORBIDDEN);
@@ -373,7 +352,7 @@ export class PasswordlessController {
       userId: user.id,
       ipAddress,
       userAgent: req.headers['user-agent'],
-      authMethod: 'passkey',
+      authMethod: 'passkey'
     });
 
     // Generate session token
@@ -386,7 +365,7 @@ export class PasswordlessController {
       user.email,
       displayName,
       'passkey',
-      sessionId,
+      sessionId
     );
 
     // Set cookie and respond
@@ -401,8 +380,8 @@ export class PasswordlessController {
         firstName: user.firstName,
         lastName: user.lastName,
         imageUrl: user.imageUrl,
-        setupCompleted: user.setupCompleted,
-      },
+        setupCompleted: user.setupCompleted
+      }
     });
   }
 
@@ -429,10 +408,7 @@ export class PasswordlessController {
    */
   @Auth()
   @Delete('passkeys/:id')
-  async deletePasskey(
-    @Param('id') passkeyId: string,
-    @Req() req: any,
-  ) {
+  async deletePasskey(@Param('id') passkeyId: string, @Req() req: any) {
     const user = await this.resolveInternalUser(req.user.sub);
 
     await this.passkeyService.deletePasskey(user.id, passkeyId);
@@ -448,15 +424,11 @@ export class PasswordlessController {
   async updatePasskey(
     @Param('id') passkeyId: string,
     @Body() body: UpdatePasskeyDto,
-    @Req() req: any,
+    @Req() req: any
   ) {
     const user = await this.resolveInternalUser(req.user.sub);
 
-    await this.passkeyService.updatePasskeyName(
-      user.id,
-      passkeyId,
-      body.friendlyName,
-    );
+    await this.passkeyService.updatePasskeyName(user.id, passkeyId, body.friendlyName);
 
     return { success: true };
   }
@@ -485,7 +457,7 @@ export class PasswordlessController {
       user.email,
       displayName,
       req.user.authMethod || 'otp',
-      req.user.sessionId,
+      req.user.sessionId
     );
 
     res.status(200).json({ token });
@@ -510,8 +482,8 @@ export class PasswordlessController {
     return {
       sessions: sessions.map((s) => ({
         ...s,
-        isCurrent: s.id === currentSessionId,
-      })),
+        isCurrent: s.id === currentSessionId
+      }))
     };
   }
 
@@ -521,24 +493,15 @@ export class PasswordlessController {
    */
   @Auth()
   @Delete('sessions/:id')
-  async revokeSession(
-    @Param('id') sessionId: string,
-    @Req() req: any,
-  ) {
+  async revokeSession(@Param('id') sessionId: string, @Req() req: any) {
     const user = await this.resolveInternalUser(req.user.sub);
 
     // Prevent revoking current session via this endpoint
     if (sessionId === req.user.sessionId) {
-      throw new HttpException(
-        'Use logout to end your current session',
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('Use logout to end your current session', HttpStatus.BAD_REQUEST);
     }
 
-    const revoked = await this.sessionsService.revokeSession(
-      user.id,
-      sessionId,
-    );
+    const revoked = await this.sessionsService.revokeSession(user.id, sessionId);
 
     if (!revoked) {
       throw new HttpException('Session not found', HttpStatus.NOT_FOUND);
@@ -557,10 +520,7 @@ export class PasswordlessController {
     const user = await this.resolveInternalUser(req.user.sub);
     const currentSessionId = req.user.sessionId;
 
-    const count = await this.sessionsService.revokeAllSessions(
-      user.id,
-      currentSessionId,
-    );
+    const count = await this.sessionsService.revokeAllSessions(user.id, currentSessionId);
 
     return { success: true, revokedCount: count };
   }
@@ -576,7 +536,7 @@ export class PasswordlessController {
     const normalizedEmail = email.toLowerCase().trim();
 
     let user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail }
     });
 
     if (!user) {
@@ -597,8 +557,8 @@ export class PasswordlessController {
           // H-6: this code path runs only after a successful OTP verify in
           // verifyOtp() above, so the email has just been proven owned.
           emailVerified: true,
-          emailVerifiedAt: new Date(),
-        },
+          emailVerifiedAt: new Date()
+        }
       });
       void this.audit.log({
         action: 'user.signed_up',
@@ -606,7 +566,7 @@ export class PasswordlessController {
         actorEmail: user.email,
         targetType: 'user',
         targetId: user.id,
-        metadata: { signup_method: 'otp' },
+        metadata: { signup_method: 'otp' }
       });
     }
 

@@ -73,22 +73,18 @@
 
 	const rows = $derived(
 		[
-			...(deployment.imageHistory ?? []).map(
-				(history): Row => ({
-					kind: 'image',
-					key: `image:${history.id}`,
-					at: new Date(history.createdAt).getTime(),
-					history
-				})
-			),
-			...pendingRuns.map(
-				(run): Row => ({
-					kind: 'run',
-					key: `run:${run.id}`,
-					at: new Date(run.createdAt).getTime(),
-					run
-				})
-			)
+			...(deployment.imageHistory ?? []).map((history): Row => ({
+				kind: 'image',
+				key: `image:${history.id}`,
+				at: new Date(history.createdAt).getTime(),
+				history
+			})),
+			...pendingRuns.map((run): Row => ({
+				kind: 'run',
+				key: `run:${run.id}`,
+				at: new Date(run.createdAt).getTime(),
+				run
+			}))
 		].sort((a, b) => b.at - a.at)
 	);
 

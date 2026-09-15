@@ -51,7 +51,10 @@ function applyJsonPatch(doc: any, ops: any[]): any {
   const next = structuredClone(doc);
   for (const op of ops) {
     assert.equal(op.op, 'add', `unexpected op ${op.op}`);
-    const segments = op.path.split('/').slice(1).map((s: string) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+    const segments = op.path
+      .split('/')
+      .slice(1)
+      .map((s: string) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
     const leaf = segments.pop()!;
     let cursor = next;
     for (const segment of segments) {
@@ -70,10 +73,13 @@ function liveDeployment(env: k8s.V1EnvVar[]): k8s.V1Deployment {
     spec: {
       selector: { matchLabels: { 'app.kubernetes.io/name': NAME } },
       template: {
-        metadata: { labels: { 'app.kubernetes.io/name': NAME }, annotations: { 'kept/by': 'someone-else' } },
-        spec: { containers: [{ name: NAME, image: 'registry.example/demo:v1', env }] },
-      },
-    },
+        metadata: {
+          labels: { 'app.kubernetes.io/name': NAME },
+          annotations: { 'kept/by': 'someone-else' }
+        },
+        spec: { containers: [{ name: NAME, image: 'registry.example/demo:v1', env }] }
+      }
+    }
   };
 }
 
@@ -86,12 +92,7 @@ function fakeCluster(deployment: k8s.V1Deployment) {
     async readNamespacedDeployment() {
       return { body: state.deployment };
     },
-    async patchNamespacedDeployment(
-      _name: string,
-      _ns: string,
-      body: any,
-      ..._rest: any[]
-    ) {
+    async patchNamespacedDeployment(_name: string, _ns: string, body: any, ..._rest: any[]) {
       const options = _rest[_rest.length - 1];
       const contentType = options?.headers?.['Content-Type'] ?? '';
       calls.push({ body, contentType });
@@ -103,7 +104,7 @@ function fakeCluster(deployment: k8s.V1Deployment) {
         assert.fail(`unexpected patch content type: ${contentType}`);
       }
       return { body: state.deployment };
-    },
+    }
   };
 
   const coreApi = {
@@ -114,7 +115,7 @@ function fakeCluster(deployment: k8s.V1Deployment) {
       }
       // The apiserver hands back base64 `data`, never the `stringData` we wrote.
       const data = Object.fromEntries(
-        Object.entries(stored).map(([k, v]) => [k, Buffer.from(v, 'utf8').toString('base64')]),
+        Object.entries(stored).map(([k, v]) => [k, Buffer.from(v, 'utf8').toString('base64')])
       );
       return { body: { metadata: { name, resourceVersion: '1' }, data } };
     },
@@ -131,16 +132,16 @@ function fakeCluster(deployment: k8s.V1Deployment) {
         throw Object.assign(new Error('not found'), { statusCode: 404 });
       }
       return { body: {} };
-    },
+    }
   };
 
   const kubernetes = {
     kc: {
       makeApiClient(type: any) {
         return type === k8s.CoreV1Api ? coreApi : appsApi;
-      },
+      }
     },
-    ensureKubeConfig() {},
+    ensureKubeConfig() {}
   };
 
   const service = new K8sWorkloadService({} as any, kubernetes as any);
@@ -157,17 +158,19 @@ test('a variable removed from the config leaves the pod spec', async () => {
       { name: 'HOST', value: '0.0.0.0' },
       { name: 'FORCE_COLOR', value: '1' },
       { name: 'REVIEW_IDS', value: '42,43' },
-      { name: 'OPENAI_API_KEY', value: 'sk-proj-secret' },
-    ]),
+      { name: 'OPENAI_API_KEY', value: 'sk-proj-secret' }
+    ])
   );
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '1' }],
+    env: [{ key: 'JOBS', value: '1' }]
   });
 
-  const names = containerEnv(state.deployment).map((e) => e.name).sort();
+  const names = containerEnv(state.deployment)
+    .map((e) => e.name)
+    .sort();
   assert.deepEqual(names, ['FORCE_COLOR', 'HOST', 'JOBS']);
   assert.ok(!names.includes('REVIEW_IDS'), 'REVIEW_IDS survived the update');
   assert.ok(!names.includes('OPENAI_API_KEY'), 'OPENAI_API_KEY survived the update');
@@ -186,16 +189,18 @@ test('clearing every variable empties the list instead of leaving it alone', asy
   const { service, state } = fakeCluster(
     liveDeployment([
       { name: 'REVIEW_IDS', value: '42' },
-      { name: 'HOST', value: '0.0.0.0' },
-    ]),
+      { name: 'HOST', value: '0.0.0.0' }
+    ])
   );
 
   await service.updateDeploymentEnv({ namespace: NAMESPACE, deploymentName: NAME, env: [] });
 
   // HOST/FORCE_COLOR are injected defaults, so "empty" means only those.
   assert.deepEqual(
-    containerEnv(state.deployment).map((e) => e.name).sort(),
-    ['FORCE_COLOR', 'HOST'],
+    containerEnv(state.deployment)
+      .map((e) => e.name)
+      .sort(),
+    ['FORCE_COLOR', 'HOST']
   );
 });
 
@@ -205,12 +210,12 @@ test('a secret dropped from the config loses both its env entry and its Secret',
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'TOKEN', value: 'shhh', secret: true }],
+    env: [{ key: 'TOKEN', value: 'shhh', secret: true }]
   });
   assert.deepEqual(state.secrets.get(`${NAME}-env`), { TOKEN: 'shhh' });
   assert.ok(
     containerEnv(state.deployment).some((e) => e.name === 'TOKEN' && e.valueFrom?.secretKeyRef),
-    'secret should be referenced via secretKeyRef, not inline',
+    'secret should be referenced via secretKeyRef, not inline'
   );
 
   await service.updateDeploymentEnv({ namespace: NAMESPACE, deploymentName: NAME, env: [] });
@@ -224,7 +229,7 @@ test('values still update in place', async () => {
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '2' }],
+    env: [{ key: 'JOBS', value: '2' }]
   });
 
   assert.equal(containerEnv(state.deployment).find((e) => e.name === 'JOBS')?.value, '2');
@@ -235,15 +240,15 @@ test('re-asserting the same env does not roll the pods', async () => {
     liveDeployment([
       { name: 'HOST', value: '0.0.0.0' },
       { name: 'FORCE_COLOR', value: '1' },
-      { name: 'JOBS', value: '1' },
-    ]),
+      { name: 'JOBS', value: '1' }
+    ])
   );
 
   // What a rebuild now does: push the stored config back at the live object.
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '1' }],
+    env: [{ key: 'JOBS', value: '1' }]
   });
 
   assert.equal(calls.length, 0, 'an unchanged env must not patch the pod template');
@@ -254,21 +259,21 @@ test('ordering alone is not a change, but a changed value is', async () => {
     liveDeployment([
       { name: 'JOBS', value: '1' },
       { name: 'FORCE_COLOR', value: '1' },
-      { name: 'HOST', value: '0.0.0.0' },
-    ]),
+      { name: 'HOST', value: '0.0.0.0' }
+    ])
   );
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '1' }],
+    env: [{ key: 'JOBS', value: '1' }]
   });
   assert.equal(calls.length, 0, 'reordering is not a change');
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '2' }],
+    env: [{ key: 'JOBS', value: '2' }]
   });
   assert.equal(calls.length, 1, 'a changed value must roll the pods');
 });
@@ -279,7 +284,7 @@ test('a rotated secret rolls the pods even though the pod spec is identical', as
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'TOKEN', value: 'old', secret: true }],
+    env: [{ key: 'TOKEN', value: 'old', secret: true }]
   });
   const afterFirst = calls.length;
 
@@ -287,14 +292,14 @@ test('a rotated secret rolls the pods even though the pod spec is identical', as
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'TOKEN', value: 'rotated', secret: true }],
+    env: [{ key: 'TOKEN', value: 'rotated', secret: true }]
   });
   assert.equal(calls.length, afterFirst + 1, 'a rotated secret must still roll the pods');
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'TOKEN', value: 'rotated', secret: true }],
+    env: [{ key: 'TOKEN', value: 'rotated', secret: true }]
   });
   assert.equal(calls.length, afterFirst + 1, 'an unchanged secret must not');
 });
@@ -303,27 +308,28 @@ test('env lands on the app container, not on a sidecar that happens to be first'
   const deployment = liveDeployment([{ name: 'REVIEW_IDS', value: '42' }]);
   const app = deployment.spec!.template.spec!.containers[0];
   deployment.spec!.template.spec!.containers = [
-    { name: 'logging-sidecar', image: 'sidecar:v1', env: [{ name: 'SIDECAR_ONLY', value: 'keep' }] },
-    app,
+    {
+      name: 'logging-sidecar',
+      image: 'sidecar:v1',
+      env: [{ name: 'SIDECAR_ONLY', value: 'keep' }]
+    },
+    app
   ];
   const { service, state } = fakeCluster(deployment);
 
   await service.updateDeploymentEnv({
     namespace: NAMESPACE,
     deploymentName: NAME,
-    env: [{ key: 'JOBS', value: '1' }],
+    env: [{ key: 'JOBS', value: '1' }]
   });
 
   const containers = state.deployment.spec!.template.spec!.containers;
   assert.deepEqual(
     containers[0].env,
     [{ name: 'SIDECAR_ONLY', value: 'keep' }],
-    'the sidecar env must be left alone',
+    'the sidecar env must be left alone'
   );
-  assert.deepEqual(
-    containers[1].env!.map((e) => e.name).sort(),
-    ['FORCE_COLOR', 'HOST', 'JOBS'],
-  );
+  assert.deepEqual(containers[1].env!.map((e) => e.name).sort(), ['FORCE_COLOR', 'HOST', 'JOBS']);
 });
 
 test('the rollout annotation is bumped without clobbering the others', () => {
@@ -331,13 +337,13 @@ test('the rollout annotation is bumped without clobbering the others', () => {
     containerIndex: 0,
     env: [],
     stamp: '2026-08-11T19:41:56.000Z',
-    templateMetadata: { annotations: { 'kept/by': 'someone-else' } },
+    templateMetadata: { annotations: { 'kept/by': 'someone-else' } }
   });
 
   assert.deepEqual(ops[0], {
     op: 'add',
     path: '/spec/template/metadata/annotations',
-    value: { 'kept/by': 'someone-else', [ENV_UPDATED_ANNOTATION]: '2026-08-11T19:41:56.000Z' },
+    value: { 'kept/by': 'someone-else', [ENV_UPDATED_ANNOTATION]: '2026-08-11T19:41:56.000Z' }
   });
 });
 
@@ -346,13 +352,13 @@ test('a pod template with no metadata gets one seeded rather than a broken path'
     containerIndex: 0,
     env: [],
     stamp: 'now',
-    templateMetadata: null,
+    templateMetadata: null
   });
 
   assert.deepEqual(ops[0], {
     op: 'add',
     path: '/spec/template/metadata',
-    value: { annotations: { [ENV_UPDATED_ANNOTATION]: 'now' } },
+    value: { annotations: { [ENV_UPDATED_ANNOTATION]: 'now' } }
   });
 });
 
@@ -361,14 +367,14 @@ test('the container env op targets the container by index and replaces the whole
     containerIndex: 0,
     env: [{ name: 'A', value: '1' }],
     stamp: 'now',
-    templateMetadata: {},
+    templateMetadata: {}
   });
 
   const envOp = ops.find((o) => o.path.endsWith('/env'));
   assert.deepEqual(envOp, {
     op: 'add',
     path: '/spec/template/spec/containers/0/env',
-    value: [{ name: 'A', value: '1' }],
+    value: [{ name: 'A', value: '1' }]
   });
 });
 
@@ -390,10 +396,12 @@ test('the container env op targets the container by index and replaces the whole
 
 function syncFixture(options: { existingRecord: any; env: k8s.V1EnvVar[] }) {
   const calls: { method: string; args: any[] }[] = [];
-  const record = (method: string) => (...args: any[]) => {
-    calls.push({ method, args });
-    return Promise.resolve(method === 'deploymentEnvVar.createMany' ? { count: 0 } : []);
-  };
+  const record =
+    (method: string) =>
+    (...args: any[]) => {
+      calls.push({ method, args });
+      return Promise.resolve(method === 'deploymentEnvVar.createMany' ? { count: 0 } : []);
+    };
 
   const prisma = {
     project: { findFirst: async () => ({ id: 'p1', namespace: NAMESPACE }) },
@@ -403,13 +411,13 @@ function syncFixture(options: { existingRecord: any; env: k8s.V1EnvVar[] }) {
       update: async () => options.existingRecord,
       create: async () => ({ id: 'd-new' }),
       findMany: async () => [],
-      delete: record('deployment.delete'),
+      delete: record('deployment.delete')
     },
     deploymentEnvVar: {
       createMany: record('deploymentEnvVar.createMany'),
       upsert: record('deploymentEnvVar.upsert'),
-      deleteMany: record('deploymentEnvVar.deleteMany'),
-    },
+      deleteMany: record('deploymentEnvVar.deleteMany')
+    }
   };
 
   const appsApi = {
@@ -421,24 +429,26 @@ function syncFixture(options: { existingRecord: any; env: k8s.V1EnvVar[] }) {
               metadata: { name: NAME },
               spec: {
                 replicas: 1,
-                template: { spec: { containers: [{ name: NAME, image: 'demo:v1', env: options.env }] } },
+                template: {
+                  spec: { containers: [{ name: NAME, image: 'demo:v1', env: options.env }] }
+                }
               },
-              status: { availableReplicas: 1 },
-            },
-          ],
-        },
+              status: { availableReplicas: 1 }
+            }
+          ]
+        }
       };
-    },
+    }
   };
   // No Service object: the ports half of the sync is not what these pin.
   const coreApi = {
     async readNamespacedService() {
       throw Object.assign(new Error('not found'), { response: { statusCode: 404 } });
-    },
+    }
   };
   const kubernetes = {
     kc: { makeApiClient: (type: any) => (type === k8s.CoreV1Api ? coreApi : appsApi) },
-    ensureKubeConfig() {},
+    ensureKubeConfig() {}
   };
 
   const service = new K8sWorkloadService(prisma as any, kubernetes as any, {} as any);
@@ -449,7 +459,7 @@ const LIVE_ENV: k8s.V1EnvVar[] = [
   { name: 'HOST', value: '0.0.0.0' },
   { name: 'FORCE_COLOR', value: '1' },
   { name: 'JOBS', value: '1' },
-  { name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } },
+  { name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } }
 ];
 
 test('syncing a namespace never rewrites the env of an app Orchard already owns', async () => {
@@ -465,14 +475,14 @@ test('a secret var is never deleted just because the pod spec has no inline valu
   const { service, calls } = syncFixture({
     existingRecord: { id: 'd1' },
     // Everything routes through the Secret, which is what emptied the whole set.
-    env: [{ name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } }],
+    env: [{ name: 'TOKEN', valueFrom: { secretKeyRef: { name: `${NAME}-env`, key: 'TOKEN' } } }]
   });
 
   await service.syncNamespaceToDatabase(NAMESPACE);
 
   assert.ok(
     !calls.some((c) => c.method === 'deploymentEnvVar.deleteMany'),
-    'syncing must never delete stored env vars',
+    'syncing must never delete stored env vars'
   );
 });
 
@@ -486,10 +496,10 @@ test('adopting a Deployment Orchard did not create seeds its inline env once', a
   assert.deepEqual(
     created[0].args[0].data.map((row: any) => row.key).sort(),
     ['FORCE_COLOR', 'HOST', 'JOBS'],
-    'only inline values can be adopted; a secretKeyRef has no value to read',
+    'only inline values can be adopted; a secretKeyRef has no value to read'
   );
   assert.ok(
     !calls.some((c) => c.method === 'deploymentEnvVar.deleteMany'),
-    'seeding a fresh record has nothing to delete',
+    'seeding a fresh record has nothing to delete'
   );
 });

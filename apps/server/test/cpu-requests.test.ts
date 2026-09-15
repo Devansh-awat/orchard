@@ -4,13 +4,13 @@ import {
   cpuRequestFromLimitMilli,
   cpuMilliToK8s,
   cpuLimitMilliFromResources,
-  memoryLimitBytesFromResources,
+  memoryLimitBytesFromResources
 } from '../src/kubernetes/quantity';
 
 function render(limitMilli: number) {
   return {
     limits: { cpu: cpuMilliToK8s(limitMilli), memory: '1Gi' },
-    requests: { cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(limitMilli)), memory: '1Gi' },
+    requests: { cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(limitMilli)), memory: '1Gi' }
   };
 }
 

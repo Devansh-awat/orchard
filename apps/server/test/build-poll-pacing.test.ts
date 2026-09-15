@@ -27,11 +27,7 @@ function simulateLoop(opts: {
       lastSeenAt = terminal.at;
       earlyWakes++;
     }
-    totalSleep += remainingIntervalMs(
-      POLL_INTERVAL,
-      opts.waitResolvesAfterMs(i),
-      earlyWakeEarned,
-    );
+    totalSleep += remainingIntervalMs(POLL_INTERVAL, opts.waitResolvesAfterMs(i), earlyWakeEarned);
   }
 
   return { totalSleep, earlyWakes };
@@ -44,14 +40,14 @@ test('a deleted job does not collapse the poll interval to zero', () => {
   const { totalSleep, earlyWakes } = simulateLoop({
     iterations: 5,
     waitResolvesAfterMs: () => 0,
-    observationAt: () => 1000,
+    observationAt: () => 1000
   });
 
   assert.equal(earlyWakes, 1, 'the vanish should be acted on exactly once');
   assert.equal(
     totalSleep,
     POLL_INTERVAL * 4,
-    'every iteration after the first must wait out the full interval',
+    'every iteration after the first must wait out the full interval'
   );
 });
 
@@ -62,7 +58,7 @@ test('a genuine new transition still wakes the loop early', () => {
   const { totalSleep, earlyWakes } = simulateLoop({
     iterations: 3,
     waitResolvesAfterMs: (i) => (i === 0 ? POLL_INTERVAL : 10),
-    observationAt: (i) => transitions[i],
+    observationAt: (i) => transitions[i]
   });
 
   assert.equal(earlyWakes, 2);
@@ -73,7 +69,7 @@ test('no informer falls back to a fixed interval', () => {
   const { totalSleep, earlyWakes } = simulateLoop({
     iterations: 4,
     waitResolvesAfterMs: () => 0,
-    observationAt: () => null,
+    observationAt: () => null
   });
 
   assert.equal(earlyWakes, 0);

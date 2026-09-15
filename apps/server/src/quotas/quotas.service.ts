@@ -14,7 +14,12 @@ export interface Caps {
 }
 
 type EffectiveProjectCaps = Caps & {
-  source: { cpu: 'project' | 'org' | null; memory: 'project' | 'org' | null; pods: 'project' | 'org' | null; services: 'project' | 'org' | null };
+  source: {
+    cpu: 'project' | 'org' | null;
+    memory: 'project' | 'org' | null;
+    pods: 'project' | 'org' | null;
+    services: 'project' | 'org' | null;
+  };
 };
 
 @Injectable()
@@ -22,7 +27,7 @@ export class QuotasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
-    private readonly k8sNamespace: K8sNamespaceService,
+    private readonly k8sNamespace: K8sNamespaceService
   ) {}
 
   // Resolve the caps applied to a project namespace.
@@ -46,14 +51,17 @@ export class QuotasService {
             maxPods: true,
             maxServices: true,
             defaultPodCpuMilli: true,
-            defaultPodMemoryBytes: true,
-          },
-        },
-      },
+            defaultPodMemoryBytes: true
+          }
+        }
+      }
     });
     if (!project) throw new NotFoundException('Project not found');
 
-    const pick = <T>(a: T | null, b: T | null): { value: T | null; source: 'project' | 'org' | null } => {
+    const pick = <T>(
+      a: T | null,
+      b: T | null
+    ): { value: T | null; source: 'project' | 'org' | null } => {
       if (a !== null && a !== undefined) return { value: a, source: 'project' };
       if (b !== null && b !== undefined) return { value: b, source: 'org' };
       return { value: null, source: null };
@@ -62,7 +70,7 @@ export class QuotasService {
     const cpu = pick(project.cpuLimitMilli, project.organization.cpuLimitMilli);
     const mem = pick(
       project.memoryLimitBytes ? Number(project.memoryLimitBytes) : null,
-      project.organization.memoryLimitBytes ? Number(project.organization.memoryLimitBytes) : null,
+      project.organization.memoryLimitBytes ? Number(project.organization.memoryLimitBytes) : null
     );
     const pods = pick(project.maxPods, project.organization.maxPods);
     const svcs = pick(project.maxServices, project.organization.maxServices);
@@ -73,12 +81,12 @@ export class QuotasService {
         memoryLimitBytes: mem.value,
         maxPods: pods.value,
         maxServices: svcs.value,
-        source: { cpu: cpu.source, memory: mem.source, pods: pods.source, services: svcs.source },
+        source: { cpu: cpu.source, memory: mem.source, pods: pods.source, services: svcs.source }
       },
       defaultPodCpuMilli: project.organization.defaultPodCpuMilli,
       defaultPodMemoryBytes: project.organization.defaultPodMemoryBytes
         ? Number(project.organization.defaultPodMemoryBytes)
-        : null,
+        : null
     };
   }
 
@@ -87,18 +95,12 @@ export class QuotasService {
   async resolvePodResources(
     projectId: string,
     override?: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
-    image?: string | null,
+    image?: string | null
   ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
     const fallback = defaultPodResourcesForImage(image);
-    const cpu =
-      override?.cpuRequestMilli ??
-      defaultPodCpuMilli ??
-      fallback.cpuMilli;
-    const mem =
-      override?.memoryRequestBytes ??
-      defaultPodMemoryBytes ??
-      fallback.memoryBytes;
+    const cpu = override?.cpuRequestMilli ?? defaultPodCpuMilli ?? fallback.cpuMilli;
+    const mem = override?.memoryRequestBytes ?? defaultPodMemoryBytes ?? fallback.memoryBytes;
     // Floor applies to the explicit override too: a user asking for 128Mi of
     // Postgres is asking for a database that OOMKills itself during its backup.
     return { cpuMilli: cpu, memoryBytes: Math.max(mem, minPodMemoryBytesForImage(image)) };
@@ -108,10 +110,11 @@ export class QuotasService {
   async applyProjectQuota(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { namespace: true, environments: { select: { namespace: true } } },
+      select: { namespace: true, environments: { select: { namespace: true } } }
     });
     if (!project) return;
-    const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
+    const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } =
+      await this.resolveProjectCaps(projectId);
     // RollingUpdate briefly runs old and new pods side by side (maxSurge 25%),
     // so the namespace ResourceQuota gets matching headroom on top of the cap —
     // otherwise a namespace running at its cap can never replace a pod: the
@@ -129,7 +132,7 @@ export class QuotasService {
     // namespace in case an environment row is missing (belt and suspenders).
     const namespaces = new Set<string>([
       project.namespace,
-      ...project.environments.map((e) => e.namespace),
+      ...project.environments.map((e) => e.namespace)
     ]);
     await Promise.allSettled(
       Array.from(namespaces).map((namespace) =>
@@ -140,9 +143,9 @@ export class QuotasService {
           maxPods: podsWithHeadroom,
           maxServices: caps.maxServices,
           defaultPodCpuMilli,
-          defaultPodMemoryBytes,
-        }),
-      ),
+          defaultPodMemoryBytes
+        })
+      )
     );
   }
 
@@ -150,14 +153,14 @@ export class QuotasService {
   async applyAllProjectsForOrg(organizationId: string) {
     const projects = await this.prisma.project.findMany({
       where: { organizationId },
-      select: { id: true },
+      select: { id: true }
     });
     await Promise.allSettled(
       projects.map((p) =>
         this.applyProjectQuota(p.id).catch((err) => {
           console.error(`[Quotas] Failed to apply quota for project ${p.id}:`, err);
-        }),
-      ),
+        })
+      )
     );
   }
 
@@ -169,11 +172,11 @@ export class QuotasService {
     // the project namespace, so a Set dedupes the overlap.
     const projectSelect = {
       namespace: true,
-      environments: { select: { namespace: true } },
+      environments: { select: { namespace: true } }
     } as const;
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { quotaGroupId: true, projects: { select: projectSelect } },
+      select: { quotaGroupId: true, projects: { select: projectSelect } }
     });
     if (!self) return [];
     const namespaces = new Set<string>();
@@ -187,7 +190,7 @@ export class QuotasService {
     if (self.quotaGroupId) {
       const others = await this.prisma.organization.findMany({
         where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
-        select: { projects: { select: projectSelect } },
+        select: { projects: { select: projectSelect } }
       });
       for (const o of others) collect(o.projects);
     }
@@ -198,15 +201,15 @@ export class QuotasService {
   // the org past its org-wide cap. Additive resources only — cpu/memory.
   async enforceOrgCapForNewPod(
     organizationId: string,
-    requested: { cpuMilli: number; memoryBytes: number },
+    requested: { cpuMilli: number; memoryBytes: number }
   ) {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: {
         cpuLimitMilli: true,
         memoryLimitBytes: true,
-        maxPods: true,
-      },
+        maxPods: true
+      }
     });
     if (!org) return;
     const capCpu = org.cpuLimitMilli;
@@ -218,23 +221,26 @@ export class QuotasService {
 
     if (capCpu && usage.cpuMilli + requested.cpuMilli > capCpu) {
       throw new ForbiddenException(
-        `Organization CPU quota exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, limit ${capCpu}m`,
+        `Organization CPU quota exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, limit ${capCpu}m`
       );
     }
     if (capMem && usage.memoryBytes + requested.memoryBytes > capMem) {
       throw new ForbiddenException(
-        `Organization memory quota exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, limit ${formatBytes(capMem)}`,
+        `Organization memory quota exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, limit ${formatBytes(capMem)}`
       );
     }
     if (capPods && usage.pods + 1 > capPods) {
       throw new ForbiddenException(
-        `Organization pod count quota exceeded: ${usage.pods}/${capPods}`,
+        `Organization pod count quota exceeded: ${usage.pods}/${capPods}`
       );
     }
   }
 
   /** Org total resource usage — lightweight, no caps/metadata. */
-  async getOrgTotalUsage(organizationId: string, namespaces: string[]): Promise<{ cpuMilli: number; memoryBytes: number }> {
+  async getOrgTotalUsage(
+    organizationId: string,
+    namespaces: string[]
+  ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     if (namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0 };
     const usage = await this.k8sNamespace.getOrgUsage(namespaces);
     return { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes };
@@ -253,8 +259,8 @@ export class QuotasService {
         maxServices: true,
         defaultPodCpuMilli: true,
         defaultPodMemoryBytes: true,
-        quotaGroupId: true,
-      },
+        quotaGroupId: true
+      }
     });
     if (!org) throw new NotFoundException('Org not found');
     const namespaces = await this.getQuotaGroupNamespaces(organizationId);
@@ -270,24 +276,26 @@ export class QuotasService {
         maxServices: org.maxServices,
         defaultPodCpuMilli: org.defaultPodCpuMilli,
         defaultPodMemoryBytes: org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null,
-        quotaGroupId: org.quotaGroupId,
+        quotaGroupId: org.quotaGroupId
       },
       usage,
-      connections,
+      connections
     };
   }
 
   // List other orgs sharing this org's quotaGroupId (empty if not linked).
-  async getOrgConnections(organizationId: string): Promise<{ id: string; name: string; slug: string }[]> {
+  async getOrgConnections(
+    organizationId: string
+  ): Promise<{ id: string; name: string; slug: string }[]> {
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { quotaGroupId: true },
+      select: { quotaGroupId: true }
     });
     if (!self?.quotaGroupId) return [];
     const others = await this.prisma.organization.findMany({
       where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
       select: { id: true, name: true, slug: true },
-      orderBy: { name: 'asc' },
+      orderBy: { name: 'asc' }
     });
     return others;
   }
@@ -309,13 +317,13 @@ export class QuotasService {
           maxPods: true,
           maxServices: true,
           defaultPodCpuMilli: true,
-          defaultPodMemoryBytes: true,
-        },
+          defaultPodMemoryBytes: true
+        }
       }),
       this.prisma.organization.findUnique({
         where: { id: otherOrgId },
-        select: { id: true, quotaGroupId: true },
-      }),
+        select: { id: true, quotaGroupId: true }
+      })
     ]);
     if (!primary) throw new NotFoundException('Primary org not found');
     if (!other) throw new NotFoundException('Other org not found');
@@ -328,14 +336,14 @@ export class QuotasService {
     if (primary.quotaGroupId) {
       const existing = await this.prisma.organization.findMany({
         where: { quotaGroupId: primary.quotaGroupId },
-        select: { id: true },
+        select: { id: true }
       });
       for (const o of existing) targetIds.add(o.id);
     }
     if (other.quotaGroupId && other.quotaGroupId !== primary.quotaGroupId) {
       const existing = await this.prisma.organization.findMany({
         where: { quotaGroupId: other.quotaGroupId },
-        select: { id: true },
+        select: { id: true }
       });
       for (const o of existing) targetIds.add(o.id);
     }
@@ -349,8 +357,8 @@ export class QuotasService {
         maxPods: primary.maxPods,
         maxServices: primary.maxServices,
         defaultPodCpuMilli: primary.defaultPodCpuMilli,
-        defaultPodMemoryBytes: primary.defaultPodMemoryBytes,
-      },
+        defaultPodMemoryBytes: primary.defaultPodMemoryBytes
+      }
     });
     // Reapply quotas to every project of every org in the group so K8s ResourceQuotas match.
     await Promise.allSettled(Array.from(targetIds).map((id) => this.applyAllProjectsForOrg(id)));
@@ -361,22 +369,22 @@ export class QuotasService {
   async unlinkOrganization(organizationId: string) {
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { quotaGroupId: true },
+      select: { quotaGroupId: true }
     });
     if (!self?.quotaGroupId) return { quotaGroupId: null };
     const groupId = self.quotaGroupId;
     await this.prisma.organization.update({
       where: { id: organizationId },
-      data: { quotaGroupId: null },
+      data: { quotaGroupId: null }
     });
     const remaining = await this.prisma.organization.findMany({
       where: { quotaGroupId: groupId },
-      select: { id: true },
+      select: { id: true }
     });
     if (remaining.length <= 1) {
       await this.prisma.organization.updateMany({
         where: { quotaGroupId: groupId },
-        data: { quotaGroupId: null },
+        data: { quotaGroupId: null }
       });
     }
     // Reapply quotas since the shared-pool perspective changed for everyone touched.
@@ -385,28 +393,31 @@ export class QuotasService {
     return { quotaGroupId: null };
   }
 
-  async updateOrgCaps(organizationId: string, data: Partial<Caps> & {
-    defaultPodCpuMilli?: number | null;
-    defaultPodMemoryBytes?: number | null;
-  }) {
+  async updateOrgCaps(
+    organizationId: string,
+    data: Partial<Caps> & {
+      defaultPodCpuMilli?: number | null;
+      defaultPodMemoryBytes?: number | null;
+    }
+  ) {
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { quotaGroupId: true },
+      select: { quotaGroupId: true }
     });
     if (!self) throw new NotFoundException('Org not found');
 
     const update = {
       ...(data.cpuLimitMilli !== undefined && { cpuLimitMilli: data.cpuLimitMilli }),
       ...(data.memoryLimitBytes !== undefined && {
-        memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes),
+        memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes)
       }),
       ...(data.maxPods !== undefined && { maxPods: data.maxPods }),
       ...(data.maxServices !== undefined && { maxServices: data.maxServices }),
       ...(data.defaultPodCpuMilli !== undefined && { defaultPodCpuMilli: data.defaultPodCpuMilli }),
       ...(data.defaultPodMemoryBytes !== undefined && {
         defaultPodMemoryBytes:
-          data.defaultPodMemoryBytes === null ? null : BigInt(data.defaultPodMemoryBytes),
-      }),
+          data.defaultPodMemoryBytes === null ? null : BigInt(data.defaultPodMemoryBytes)
+      })
     };
 
     // Connected orgs share one set of caps — mirror the change across the group.
@@ -414,14 +425,14 @@ export class QuotasService {
       ? (
           await this.prisma.organization.findMany({
             where: { quotaGroupId: self.quotaGroupId },
-            select: { id: true },
+            select: { id: true }
           })
         ).map((o) => o.id)
       : [organizationId];
 
     await this.prisma.organization.updateMany({
       where: { id: { in: targetIds } },
-      data: update,
+      data: update
     });
     await Promise.allSettled(targetIds.map((id) => this.applyAllProjectsForOrg(id)));
     return this.prisma.organization.findUnique({ where: { id: organizationId } });
@@ -433,11 +444,11 @@ export class QuotasService {
       data: {
         ...(data.cpuLimitMilli !== undefined && { cpuLimitMilli: data.cpuLimitMilli }),
         ...(data.memoryLimitBytes !== undefined && {
-          memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes),
+          memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes)
         }),
         ...(data.maxPods !== undefined && { maxPods: data.maxPods }),
-        ...(data.maxServices !== undefined && { maxServices: data.maxServices }),
-      },
+        ...(data.maxServices !== undefined && { maxServices: data.maxServices })
+      }
     });
     await this.applyProjectQuota(projectId);
     return project;
@@ -448,11 +459,14 @@ export class QuotasService {
   // Resolved allowance for a member. Null = unlimited on that axis.
   async resolveMemberAllowance(
     organizationId: string,
-    userId: string,
+    userId: string
   ): Promise<{
     cpuMilli: number | null;
     memoryBytes: number | null;
-    source: { cpu: 'explicit' | 'default' | 'unlimited'; memory: 'explicit' | 'default' | 'unlimited' };
+    source: {
+      cpu: 'explicit' | 'default' | 'unlimited';
+      memory: 'explicit' | 'default' | 'unlimited';
+    };
   }> {
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
@@ -464,10 +478,10 @@ export class QuotasService {
         organization: {
           select: {
             defaultMemberCpuMilli: true,
-            defaultMemberMemoryBytes: true,
-          },
-        },
-      },
+            defaultMemberMemoryBytes: true
+          }
+        }
+      }
     });
     if (!member) {
       // Non-members get no allowance — but in practice this isn't called for non-members.
@@ -510,7 +524,7 @@ export class QuotasService {
   async getMemberUsage(
     organizationId: string,
     userId: string,
-    excludeDeploymentId?: string,
+    excludeDeploymentId?: string
   ): Promise<{
     cpuMilli: number;
     memoryBytes: number;
@@ -536,8 +550,8 @@ export class QuotasService {
             name: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
-            replicas: true,
-          },
+            replicas: true
+          }
         },
         databases: {
           select: {
@@ -545,16 +559,16 @@ export class QuotasService {
             name: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
-            replicas: true,
-          },
+            replicas: true
+          }
         },
         templateInstances: {
           select: {
             id: true,
-            name: true,
-          },
-        },
-      },
+            name: true
+          }
+        }
+      }
     });
     let cpu = 0;
     let mem = 0;
@@ -583,7 +597,7 @@ export class QuotasService {
           projectName: p.name,
           cpuMilli: c,
           memoryBytes: m,
-          replicas: d.replicas ?? 1,
+          replicas: d.replicas ?? 1
         });
       }
       for (const db of p.databases) {
@@ -602,7 +616,7 @@ export class QuotasService {
           projectName: p.name,
           cpuMilli: c,
           memoryBytes: m,
-          replicas: instances,
+          replicas: instances
         });
       }
     }
@@ -614,7 +628,7 @@ export class QuotasService {
     organizationId: string,
     ownerId: string | null | undefined,
     requested: { cpuMilli: number; memoryBytes: number },
-    excludeDeploymentId?: string,
+    excludeDeploymentId?: string
   ) {
     if (!ownerId) return;
     const allowance = await this.resolveMemberAllowance(organizationId, ownerId);
@@ -622,7 +636,7 @@ export class QuotasService {
     const usage = await this.getMemberUsage(organizationId, ownerId, excludeDeploymentId);
     if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {
       throw new ForbiddenException(
-        `User CPU allowance exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`,
+        `User CPU allowance exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`
       );
     }
     if (
@@ -630,20 +644,24 @@ export class QuotasService {
       usage.memoryBytes + requested.memoryBytes > allowance.memoryBytes
     ) {
       throw new ForbiddenException(
-        `User memory allowance exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`,
+        `User memory allowance exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`
       );
     }
   }
 
   // Everything a single project currently requests, with the same
   // replica arithmetic getMemberUsage applies to an owner's whole portfolio.
-  async getProjectRequestedResources(projectId: string): Promise<{ cpuMilli: number; memoryBytes: number }> {
+  async getProjectRequestedResources(
+    projectId: string
+  ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: {
-        deployments: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } },
-        databases: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } },
-      },
+        deployments: {
+          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true }
+        },
+        databases: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } }
+      }
     });
     if (!project) return { cpuMilli: 0, memoryBytes: 0 };
     let cpu = 0;
@@ -665,7 +683,7 @@ export class QuotasService {
   async enforceMemberAllowanceForProjectTransfer(
     organizationId: string,
     newOwnerId: string,
-    projectId: string,
+    projectId: string
   ) {
     const allowance = await this.resolveMemberAllowance(organizationId, newOwnerId);
     if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
@@ -673,7 +691,7 @@ export class QuotasService {
     const usage = await this.getMemberUsage(organizationId, newOwnerId);
     if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {
       throw new ForbiddenException(
-        `Transfer would exceed the new owner's CPU allowance: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`,
+        `Transfer would exceed the new owner's CPU allowance: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`
       );
     }
     if (
@@ -681,7 +699,7 @@ export class QuotasService {
       usage.memoryBytes + requested.memoryBytes > allowance.memoryBytes
     ) {
       throw new ForbiddenException(
-        `Transfer would exceed the new owner's memory allowance: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`,
+        `Transfer would exceed the new owner's memory allowance: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`
       );
     }
   }
@@ -703,7 +721,7 @@ export class QuotasService {
         cpuMilli: number | null;
         memoryBytes: number | null;
       };
-    },
+    }
   ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -716,17 +734,19 @@ export class QuotasService {
             cpuAllowanceMilli: true,
             memoryAllowanceBytes: true,
             cpuAllowanceUnlimited: true,
-            memoryAllowanceUnlimited: true,
-          },
-        },
-      },
+            memoryAllowanceUnlimited: true
+          }
+        }
+      }
     });
     if (!org) throw new NotFoundException('Org not found');
     const defaultCpu =
       overrides?.defaultOverride?.cpuMilli !== undefined
         ? overrides.defaultOverride.cpuMilli
         : org.defaultMemberCpuMilli;
-    let defaultMem: number | null = org.defaultMemberMemoryBytes ? Number(org.defaultMemberMemoryBytes) : null;
+    let defaultMem: number | null = org.defaultMemberMemoryBytes
+      ? Number(org.defaultMemberMemoryBytes)
+      : null;
     if (overrides?.defaultOverride?.memoryBytes !== undefined) {
       defaultMem = overrides.defaultOverride.memoryBytes;
     }
@@ -761,14 +781,16 @@ export class QuotasService {
       memoryBytes?: number | null;
       cpuUnlimited?: boolean;
       memoryUnlimited?: boolean;
-    },
+    }
   ) {
     const member = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
+      where: { organizationId_userId: { organizationId, userId } }
     });
     if (!member) throw new NotFoundException('Member not found');
 
-    let nextMemoryBytes: number | null = member.memoryAllowanceBytes ? Number(member.memoryAllowanceBytes) : null;
+    let nextMemoryBytes: number | null = member.memoryAllowanceBytes
+      ? Number(member.memoryAllowanceBytes)
+      : null;
     if (data.memoryBytes !== undefined) {
       nextMemoryBytes = data.memoryBytes;
     }
@@ -779,9 +801,7 @@ export class QuotasService {
       cpuUnlimited:
         data.cpuUnlimited !== undefined ? data.cpuUnlimited : member.cpuAllowanceUnlimited,
       memoryUnlimited:
-        data.memoryUnlimited !== undefined
-          ? data.memoryUnlimited
-          : member.memoryAllowanceUnlimited,
+        data.memoryUnlimited !== undefined ? data.memoryUnlimited : member.memoryAllowanceUnlimited
     };
 
     return this.prisma.organizationMember.update({
@@ -789,27 +809,25 @@ export class QuotasService {
       data: {
         cpuAllowanceMilli: next.cpuUnlimited ? null : next.cpuMilli,
         memoryAllowanceBytes:
-          next.memoryUnlimited || next.memoryBytes === null
-            ? null
-            : BigInt(next.memoryBytes),
+          next.memoryUnlimited || next.memoryBytes === null ? null : BigInt(next.memoryBytes),
         cpuAllowanceUnlimited: next.cpuUnlimited,
-        memoryAllowanceUnlimited: next.memoryUnlimited,
-      },
+        memoryAllowanceUnlimited: next.memoryUnlimited
+      }
     });
   }
 
   async setOrgDefaultMemberAllowance(
     organizationId: string,
-    data: { cpuMilli?: number | null; memoryBytes?: number | null },
+    data: { cpuMilli?: number | null; memoryBytes?: number | null }
   ) {
     return this.prisma.organization.update({
       where: { id: organizationId },
       data: {
         ...(data.cpuMilli !== undefined && { defaultMemberCpuMilli: data.cpuMilli }),
         ...(data.memoryBytes !== undefined && {
-          defaultMemberMemoryBytes: data.memoryBytes === null ? null : BigInt(data.memoryBytes),
-        }),
-      },
+          defaultMemberMemoryBytes: data.memoryBytes === null ? null : BigInt(data.memoryBytes)
+        })
+      }
     });
   }
 
@@ -833,12 +851,12 @@ export class QuotasService {
                 email: true,
                 firstName: true,
                 lastName: true,
-                imageUrl: true,
-              },
-            },
-          },
-        },
-      },
+                imageUrl: true
+              }
+            }
+          }
+        }
+      }
     });
     if (!org) throw new NotFoundException('Org not found');
     const rows = await Promise.all(
@@ -851,11 +869,11 @@ export class QuotasService {
           allowance: {
             cpuMilli: allowance.cpuMilli,
             memoryBytes: allowance.memoryBytes,
-            source: allowance.source,
+            source: allowance.source
           },
-          usage: { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes },
+          usage: { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes }
         };
-      }),
+      })
     );
     const commitment = await this.computeOrgAllowanceCommitment(organizationId);
     return {
@@ -865,10 +883,10 @@ export class QuotasService {
         defaultMemberCpuMilli: org.defaultMemberCpuMilli,
         defaultMemberMemoryBytes: org.defaultMemberMemoryBytes
           ? Number(org.defaultMemberMemoryBytes)
-          : null,
+          : null
       },
       commitment,
-      members: rows,
+      members: rows
     };
   }
 
@@ -883,9 +901,9 @@ export class QuotasService {
         cpuLimitMilli: true,
         memoryLimitBytes: true,
         maxPods: true,
-        maxServices: true,
+        maxServices: true
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: 'asc' }
     });
     const namespaces = projects.map((p) => p.namespace);
     const usage = await this.k8sNamespace.getOrgUsage(namespaces); // aggregate; we also want per-ns
@@ -905,8 +923,8 @@ export class QuotasService {
       projects: projects.map((p) => ({
         ...p,
         memoryLimitBytes: p.memoryLimitBytes ? Number(p.memoryLimitBytes) : null,
-        usage: perNs.get(p.namespace) || { cpuMilli: 0, memoryBytes: 0, pods: 0 },
-      })),
+        usage: perNs.get(p.namespace) || { cpuMilli: 0, memoryBytes: 0, pods: 0 }
+      }))
     };
   }
 }

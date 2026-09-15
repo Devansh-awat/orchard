@@ -235,7 +235,7 @@ gateway:
   http:
     appDomain: apps.example.com
 tenant:
-  storageClass: "" # empty means cluster default
+  storageClass: '' # empty means cluster default
   ingressClass: nginx
   certClusterIssuer: letsencrypt-prod
 signupMode: open

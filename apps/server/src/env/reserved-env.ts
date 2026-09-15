@@ -34,7 +34,7 @@ export const RUNTIME_OWNED_ENV_KEYS = new Set([
   'PWD',
   'SHELL',
   'LD_PRELOAD',
-  'LD_LIBRARY_PATH',
+  'LD_LIBRARY_PATH'
 ]);
 
 /**
@@ -49,11 +49,11 @@ export const BUILDER_RESERVED_ENV_KEYS = new Set([
   ...RUNTIME_OWNED_ENV_KEYS,
   ...PULL_AUTH_ENV_KEYS,
   'BUILDKITD_FLAGS',
-  'DOCKER_CONFIG',
+  'DOCKER_CONFIG'
 ]);
 
 export function builderContainerEnv(
-  envVars: Record<string, string>,
+  envVars: Record<string, string>
 ): { name: string; value: string }[] {
   return Object.entries(envVars)
     .filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key))
@@ -76,6 +76,6 @@ export function builderContainerEnv(
  */
 export function buildSafeEnv(envVars: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(envVars).filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key)),
+    Object.entries(envVars).filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key))
   );
 }

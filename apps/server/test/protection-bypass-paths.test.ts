@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeRequestPath,
   normalizeBypassPath,
-  pathMatchesBypass,
+  pathMatchesBypass
 } from '../src/auth/protection.service';
 
 test('request paths drop query strings and fragments', () => {

@@ -8,7 +8,7 @@ import {
   Logger,
   Optional,
   OnModuleInit,
-  OnModuleDestroy,
+  OnModuleDestroy
 } from '@nestjs/common';
 import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,11 +23,7 @@ import { DockerService } from '../docker/docker.service';
 import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
 import { parseDockerfileHealthCheck } from '../github/dockerfile-healthcheck';
-import {
-  normalizeWatchPaths,
-  MAX_WATCH_PATHS,
-  MAX_WATCH_PATH_LENGTH,
-} from '../github/watch-paths';
+import { normalizeWatchPaths, MAX_WATCH_PATHS, MAX_WATCH_PATH_LENGTH } from '../github/watch-paths';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
@@ -46,7 +42,7 @@ import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
 import {
   coerceDockerfileHealthCheck,
   resolveHealthCheck,
-  ResolvedHealthCheck,
+  ResolvedHealthCheck
 } from './health-check-resolve';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
@@ -104,7 +100,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly applyQueue: ApplyQueueService,
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
-    @Optional() private readonly buildJobInformer?: BuildJobInformerService,
+    @Optional() private readonly buildJobInformer?: BuildJobInformerService
   ) {}
 
   async runQueuedBuild(run: {
@@ -126,7 +122,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         run.commitMessage ?? 'Queued deploy',
         run.commitAuthorName ?? undefined,
         run.commitAuthorUsername ?? undefined,
-        run.id,
+        run.id
       );
     }
   }
@@ -138,7 +134,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (!event.deploymentId) return;
       this.reconcileBuild(event.deploymentId).catch((error) => {
         this.logger.warn(
-          `[BuildRecovery] Event-driven reconcile of ${event.deploymentId} failed: ${error.message}`,
+          `[BuildRecovery] Event-driven reconcile of ${event.deploymentId} failed: ${error.message}`
         );
       });
     });
@@ -162,7 +158,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!user) throw new NotFoundException('User not found');
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { projectId: true },
+      select: { projectId: true }
     });
     if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
     await this.authz.requireProjectEdit(deployment.projectId, user.id, 'retry apply');
@@ -173,7 +169,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async applyScaleToCluster(deploymentId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { name: true, namespace: true, replicas: true },
+      select: { name: true, namespace: true, replicas: true }
     });
     if (!deployment) return;
     const exists = await this.k8sWorkload
@@ -185,7 +181,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
       metadata: { name: deployment.name, namespace: deployment.namespace },
-      spec: { replicas: deployment.replicas },
+      spec: { replicas: deployment.replicas }
     } as never);
   }
 
@@ -197,7 +193,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async applyDisruptionBudgetToCluster(deploymentId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { name: true, namespace: true, replicas: true, pdbMinAvailable: true },
+      select: { name: true, namespace: true, replicas: true, pdbMinAvailable: true }
     });
     if (!deployment) return;
     const exists = await this.k8sWorkload
@@ -209,7 +205,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       name: deployment.name,
       namespace: deployment.namespace,
       minAvailable: deployment.pdbMinAvailable,
-      replicas: deployment.replicas,
+      replicas: deployment.replicas
     });
   }
 
@@ -225,14 +221,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.applyQueue.enqueue({
           dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
           opType: 'deployment.disruptionBudget',
-          deploymentId,
+          deploymentId
         });
         return;
       }
       await this.applyDisruptionBudgetToCluster(deploymentId);
     } catch (error) {
       this.logger.warn(
-        `[PDB] Failed to sync disruption budget for ${deploymentId}: ${(error as Error)?.message ?? error}`,
+        `[PDB] Failed to sync disruption budget for ${deploymentId}: ${(error as Error)?.message ?? error}`
       );
     }
   }
@@ -240,7 +236,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async applyEnvToCluster(deploymentId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { id: true, name: true, namespace: true, environmentId: true },
+      select: { id: true, name: true, namespace: true, environmentId: true }
     });
     if (!deployment) return;
     const exists = await this.k8sWorkload
@@ -249,12 +245,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       .catch(() => false);
     if (!exists) return;
     const envVars = await this.readOwnEnvVars(deployment.id);
-    const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+    const sharedVars = await this.loadSharedVarsForDeployment(
+      deployment.id,
+      deployment.environmentId
+    );
     const { resolved } = resolveEnvVars(envVars, sharedVars);
     await this.k8sWorkload.updateDeploymentEnv({
       namespace: deployment.namespace,
       deploymentName: deployment.name,
-      env: resolved,
+      env: resolved
     });
   }
 
@@ -273,7 +272,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const stuckBuilds = await this.prisma.deployment.findMany({
         where: {
           buildStatus: 'building',
-          updatedAt: { lt: new Date(Date.now() - 15_000) },
+          updatedAt: { lt: new Date(Date.now() - 15_000) }
         },
         select: {
           id: true,
@@ -283,18 +282,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           replicas: true,
           buildStep: true,
           buildStepTimestamps: true,
-          projectId: true,
-        },
+          projectId: true
+        }
       });
 
       if (stuckBuilds.length === 0) return;
-      this.logger.log(`[BuildRecovery] Found ${stuckBuilds.length} stuck build(s), attempting recovery`);
+      this.logger.log(
+        `[BuildRecovery] Found ${stuckBuilds.length} stuck build(s), attempting recovery`
+      );
 
       for (const deployment of stuckBuilds) {
         try {
           await this.recoverStuckBuild(deployment);
         } catch (error) {
-          this.logger.error(`[BuildRecovery] Failed to recover deployment ${deployment.id}: ${error.message}`);
+          this.logger.error(
+            `[BuildRecovery] Failed to recover deployment ${deployment.id}: ${error.message}`
+          );
         }
       }
     } catch (error) {
@@ -314,16 +317,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         replicas: true,
         buildStep: true,
         buildStepTimestamps: true,
-        projectId: true,
-      },
+        projectId: true
+      }
     });
     if (!deployment) return;
     await this.recoverStuckBuild(deployment);
   }
 
   private async recoverStuckBuild(deployment: {
-    id: string; name: string; namespace: string; image: string | null;
-    replicas: number; buildStep: string | null; buildStepTimestamps: any; projectId: string;
+    id: string;
+    name: string;
+    namespace: string;
+    image: string | null;
+    replicas: number;
+    buildStep: string | null;
+    buildStepTimestamps: any;
+    projectId: string;
   }) {
     if (this.activeRecoveries.has(deployment.id)) return;
 
@@ -342,22 +351,30 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.doRecoverStuckBuild(deployment);
     } catch (error) {
-      this.logger.error(`[BuildRecovery] Unexpected error recovering ${deployment.id}: ${error.message}`);
+      this.logger.error(
+        `[BuildRecovery] Unexpected error recovering ${deployment.id}: ${error.message}`
+      );
     } finally {
       this.activeRecoveries.delete(deployment.id);
     }
   }
 
   private async doRecoverStuckBuild(deployment: {
-    id: string; name: string; namespace: string; image: string | null;
-    replicas: number; buildStep: string | null; buildStepTimestamps: any; projectId: string;
+    id: string;
+    name: string;
+    namespace: string;
+    image: string | null;
+    replicas: number;
+    buildStep: string | null;
+    buildStepTimestamps: any;
+    projectId: string;
   }) {
     const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
 
     const activeRun = await this.prisma.buildRun.findFirst({
       where: { deploymentId: deployment.id, status: 'building' },
       orderBy: { startedAt: 'desc' },
-      select: { workerId: true, heartbeatAt: true },
+      select: { workerId: true, heartbeatAt: true }
     });
     if (
       activeRun?.workerId &&
@@ -368,10 +385,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (workerAlive !== false) {
         return;
       }
-      this.logger.log(`[BuildRecovery] Worker pod for ${deployment.id} is gone; adopting immediately`);
+      this.logger.log(
+        `[BuildRecovery] Worker pod for ${deployment.id} is gone; adopting immediately`
+      );
     }
 
-    this.logger.log(`[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`);
+    this.logger.log(
+      `[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`
+    );
 
     if (deployment.buildStep === 'deploying' && deployment.image) {
       await this.finishRecoveredBuild(deployment, deployment.image);
@@ -380,14 +401,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
     if (jobs === null) {
-      this.logger.warn(`[BuildRecovery] Could not list build jobs for ${deployment.id}; retrying next scan`);
+      this.logger.warn(
+        `[BuildRecovery] Could not list build jobs for ${deployment.id}; retrying next scan`
+      );
       return;
     }
     const jobName = metadata.__jobName as string | undefined;
     let foundJob: { name: string; image: string | null; status: string } | null = null;
 
     if (jobName) {
-      const fromLabel = jobs.find(j => j.name === jobName);
+      const fromLabel = jobs.find((j) => j.name === jobName);
       if (fromLabel) {
         foundJob = fromLabel;
       } else {
@@ -408,18 +431,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (expectedImage) {
         const pushed = await this.dockerService.imageExistsInRegistry(expectedImage);
         if (pushed === true) {
-          this.logger.log(`[BuildRecovery] Build job for ${deployment.id} is gone but ${expectedImage} exists in the registry; finishing deploy`);
+          this.logger.log(
+            `[BuildRecovery] Build job for ${deployment.id} is gone but ${expectedImage} exists in the registry; finishing deploy`
+          );
           await this.finishRecoveredBuild(deployment, expectedImage);
           return;
         }
         if (pushed === null) {
-          this.logger.warn(`[BuildRecovery] Could not check registry for ${deployment.id}; retrying next scan`);
+          this.logger.warn(
+            `[BuildRecovery] Could not check registry for ${deployment.id}; retrying next scan`
+          );
           return;
         }
       }
       const requeued = await this.requeueOrphanedBuild(deployment.id);
       if (requeued) {
-        this.logger.log(`[BuildRecovery] No build job or pushed image found for ${deployment.id}; requeued the build`);
+        this.logger.log(
+          `[BuildRecovery] No build job or pushed image found for ${deployment.id}; requeued the build`
+        );
       } else {
         await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
       }
@@ -469,24 +498,31 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   private async finishRecoveredBuild(
     deployment: { id: string; name: string; namespace: string },
-    image: string,
+    image: string
   ) {
     try {
-      const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then(d => d !== null).catch(() => false);
+      const k8sExists = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((d) => d !== null)
+        .catch(() => false);
       if (k8sExists) {
         await this.prisma.deployment.update({
           where: { id: deployment.id },
-          data: { image, buildStep: 'deploying' },
+          data: { image, buildStep: 'deploying' }
         });
         await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, image);
         await this.recordRecoveredImageHistory(deployment.id, image).catch((error) => {
-          this.logger.warn(`[BuildRecovery] Failed to record image history for ${deployment.id}: ${error.message}`);
+          this.logger.warn(
+            `[BuildRecovery] Failed to record image history for ${deployment.id}: ${error.message}`
+          );
         });
         await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
         this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
       } else {
-        await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
+        await this.markBuildFailed(
+          deployment.id,
+          'Build succeeded but k8s deployment not found. Please redeploy.'
+        );
       }
     } catch (error) {
       await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
@@ -505,36 +541,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         branch: true,
         triggerType: true,
         triggeredById: true,
-        startedAt: true,
-      },
+        startedAt: true
+      }
     });
     const dep = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { buildLogs: true },
+      select: { buildLogs: true }
     });
     await this.prisma.$transaction(async (tx) => {
       const existing = await tx.imageHistory.findFirst({
         where: { deploymentId, image },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' }
       });
       if (existing) {
         await tx.imageHistory.updateMany({
           where: { deploymentId, isActive: true, id: { not: existing.id } },
-          data: { isActive: false },
+          data: { isActive: false }
         });
         await tx.imageHistory.update({
           where: { id: existing.id },
           data: {
             isActive: true,
             buildLogs: existing.buildLogs ?? dep?.buildLogs ?? null,
-            buildCompletedAt: existing.buildCompletedAt ?? new Date(),
-          },
+            buildCompletedAt: existing.buildCompletedAt ?? new Date()
+          }
         });
         return;
       }
       await tx.imageHistory.updateMany({
         where: { deploymentId, isActive: true },
-        data: { isActive: false },
+        data: { isActive: false }
       });
       await tx.imageHistory.create({
         data: {
@@ -551,8 +587,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           buildCompletedAt: new Date(),
           triggerType: run?.triggerType ?? null,
           triggeredById: run?.triggeredById ?? null,
-          isActive: true,
-        },
+          isActive: true
+        }
       });
     });
   }
@@ -566,41 +602,51 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const run = await this.prisma.buildRun.findFirst({
         where: { deploymentId, checkRunId: { not: null } },
         orderBy: { scheduledAt: 'desc' },
-        select: { checkRunId: true, githubInstallationId: true, repoFullName: true },
+        select: { checkRunId: true, githubInstallationId: true, repoFullName: true }
       });
       if (!run?.checkRunId || !run.githubInstallationId || !run.repoFullName) return;
       const [owner, repo] = run.repoFullName.split('/');
       if (!owner || !repo) return;
       const logUrl = await this.getDeploymentProgressUrl(deploymentId);
       await this.githubService.updateCheckRun(
-        run.githubInstallationId, owner, repo, Number(run.checkRunId),
+        run.githubInstallationId,
+        owner,
+        repo,
+        Number(run.checkRunId),
         {
           status: 'completed',
           conclusion: ok ? 'success' : 'failure',
           output: {
             title: ok ? 'Deployment Successful' : 'Deployment Failed',
             summary: detail,
-            text: logUrl ? `[View the full build log in Orchard](${logUrl})` : undefined,
-          },
-        },
+            text: logUrl ? `[View the full build log in Orchard](${logUrl})` : undefined
+          }
+        }
       );
       const marker = await this.prisma.gitHubDeployment.findFirst({
         where: { deploymentId, status: { in: ['pending', 'in_progress'] } },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' }
       });
       if (marker) {
         await this.githubService.updateDeploymentStatusWithApp(
-          run.githubInstallationId, marker.owner, marker.repo,
-          Number(marker.githubDeploymentId), ok ? 'success' : 'failure',
-          { description: detail.substring(0, 130), logUrl: logUrl ?? undefined },
+          run.githubInstallationId,
+          marker.owner,
+          marker.repo,
+          Number(marker.githubDeploymentId),
+          ok ? 'success' : 'failure',
+          { description: detail.substring(0, 130), logUrl: logUrl ?? undefined }
         );
-        await this.prisma.gitHubDeployment.update({
-          where: { id: marker.id },
-          data: { status: ok ? 'success' : 'failure' },
-        }).catch(() => {});
+        await this.prisma.gitHubDeployment
+          .update({
+            where: { id: marker.id },
+            data: { status: ok ? 'success' : 'failure' }
+          })
+          .catch(() => {});
       }
     } catch (e: any) {
-      this.logger.warn(`[BuildRecovery] Failed to close GitHub check for ${deploymentId}: ${e?.message || e}`);
+      this.logger.warn(
+        `[BuildRecovery] Failed to close GitHub check for ${deploymentId}: ${e?.message || e}`
+      );
     }
   }
 
@@ -609,7 +655,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async requeueOrphanedBuild(deploymentId: string): Promise<boolean> {
     const run = await this.prisma.buildRun.findFirst({
       where: { deploymentId, status: 'building' },
-      orderBy: { startedAt: 'desc' },
+      orderBy: { startedAt: 'desc' }
     });
     if (!run) return false;
     if (run.detail === DeploymentsService.REQUEUE_DETAIL) return false;
@@ -625,12 +671,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         heartbeatAt: null,
         checkRunId: null,
         githubInstallationId: null,
-        repoFullName: null,
-      },
+        repoFullName: null
+      }
     });
     await this.prisma.deployment.updateMany({
       where: { id: deploymentId, buildStatus: 'building' },
-      data: { buildStatus: 'pending' },
+      data: { buildStatus: 'pending' }
     });
     await this.prisma.$executeRaw`
       UPDATE "deployments"
@@ -644,11 +690,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async markBuildFailed(deploymentId: string, reason: string) {
     const { count } = await this.prisma.deployment.updateMany({
       where: { id: deploymentId, buildStatus: { not: 'succeeded' } },
-      data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason },
+      data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason }
     });
     if (count === 0) {
       this.logger.warn(
-        `[BuildRecovery] Refusing to fail ${deploymentId} ("${reason}") - the build already succeeded`,
+        `[BuildRecovery] Refusing to fail ${deploymentId} ("${reason}") - the build already succeeded`
       );
       recordBuildOutcome({
         outcome: 'failed',
@@ -656,7 +702,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         reason: 'internal',
         deploymentId,
         suppressed: true,
-        detail: reason,
+        detail: reason
       });
       return;
     }
@@ -672,7 +718,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async markBuildSucceeded(deploymentId: string, logMessage: string) {
     const data = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { buildStepTimestamps: true },
+      select: { buildStepTimestamps: true }
     });
     const timestamps = (data?.buildStepTimestamps as Record<string, any> | null) || {};
     timestamps['complete'] = Date.now();
@@ -682,8 +728,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         status: 'running',
         buildStatus: 'succeeded',
         buildStep: 'complete',
-        buildStepTimestamps: timestamps,
-      },
+        buildStepTimestamps: timestamps
+      }
     });
     await this.prisma.$executeRaw`
       UPDATE "deployments"
@@ -715,26 +761,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ingresses: {
           select: {
             id: true,
-            host: true,
-          },
+            host: true
+          }
         },
         services: {
           select: {
             ingresses: {
               select: {
                 id: true,
-                host: true,
-              },
-            },
-          },
+                host: true
+              }
+            }
+          }
         },
         project: {
           select: {
             id: true,
             name: true,
             slug: true,
-            organizationId: true,
-          },
+            organizationId: true
+          }
         },
         // Lets the org-wide search resolve a person to their apps. Deliberately
         // no email — that is scrubbed from viewers everywhere else too.
@@ -744,18 +790,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             username: true,
             firstName: true,
             lastName: true,
-            imageUrl: true,
-          },
-        },
+            imageUrl: true
+          }
+        }
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: 'desc' }
     });
 
     // Statuses come from the pods table the mirror informers maintain, so the
     // home page reflects live cluster state without touching the apiserver.
     const storedPods = await this.prisma.pod.findMany({
       where: { deploymentId: { in: deployments.map((d) => d.id) } },
-      select: { deploymentId: true, status: true, restartCount: true },
+      select: { deploymentId: true, status: true, restartCount: true }
     });
     const podsByDeployment = new Map<string, { status: string; restartCount: number }[]>();
     for (const pod of storedPods) {
@@ -768,9 +814,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deployments.map((d) =>
         this.computeDeploymentStatus(d, {
           pods: podsByDeployment.get(d.id) ?? [],
-          warnings: [],
-        }),
-      ),
+          warnings: []
+        })
+      )
     );
 
     // Merge direct ingresses and service-linked ingresses, deduplicating by id
@@ -790,7 +836,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async listRecentBuilds(
     userId: string,
     orgId?: string,
-    opts: { scope?: 'mine' | 'all'; activeLimit?: number; recentLimit?: number } = {},
+    opts: { scope?: 'mine' | 'all'; activeLimit?: number; recentLimit?: number } = {}
   ) {
     const { scope = 'all', activeLimit = 5, recentLimit = 5 } = opts;
     let projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
@@ -801,8 +847,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const mineCount = await this.prisma.project.count({
         where: {
           ...(orgId ? { organizationId: orgId } : {}),
-          members: { some: { userId: memberUserId } },
-        },
+          members: { some: { userId: memberUserId } }
+        }
       });
       if (mineCount > 0) {
         projectFilter = { AND: [projectFilter, { members: { some: { userId: memberUserId } } }] };
@@ -813,7 +859,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const activeBuilds = await this.prisma.deployment.findMany({
       where: {
         project: projectFilter,
-        buildStatus: { in: ['building', 'pending'] },
+        buildStatus: { in: ['building', 'pending'] }
       },
       select: {
         id: true,
@@ -827,10 +873,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         githubRepo: true,
         githubBranch: true,
         ingresses: { select: { host: true }, take: 1 },
-        project: { select: { name: true } },
+        project: { select: { name: true } }
       },
       orderBy: { updatedAt: 'desc' },
-      take: activeLimit,
+      take: activeLimit
     });
 
     // Recent completed builds from image history
@@ -851,12 +897,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             image: true,
             buildStatus: true,
             ingresses: { select: { host: true }, take: 1 },
-            project: { select: { name: true } },
-          },
-        },
+            project: { select: { name: true } }
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
-      take: recentLimit,
+      take: recentLimit
     });
 
     return { active: activeBuilds, recent: recentBuilds };
@@ -868,7 +914,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const access = await this.authz.requireProjectView(projectId, user.id);
 
     const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
+      where: { id: projectId }
     });
 
     if (!project) {
@@ -880,17 +926,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         pods: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     const mirroredPods = await this.fetchMirroredPods(deployments.map((d) => d.id));
@@ -908,7 +954,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
         const computedStatus = await this.computeDeploymentStatus(deployment, {
           pods,
-          warnings,
+          warnings
         });
 
         const merged = DeploymentsService.redactSecretEnv({
@@ -916,7 +962,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           pods,
           status: computedStatus,
-          warnings,
+          warnings
         });
         return access.canEdit ? merged : this.scrubDeploymentForViewer(merged as any);
       })
@@ -931,23 +977,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         environment: {
-          select: { id: true, name: true, slug: true, isDefault: true },
+          select: { id: true, name: true, slug: true, isDefault: true }
         },
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         volumes: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         imageHistory: {
           orderBy: { createdAt: 'desc' },
@@ -971,12 +1017,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 id: true,
                 username: true,
                 firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-      },
+                lastName: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -994,7 +1040,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const totalMemoryUsage: number | null = null;
 
     const workload = await this.prisma.k8sWorkload.findUnique({
-      where: { deploymentId },
+      where: { deploymentId }
     });
     const availableReplicas =
       workload?.availableReplicas ??
@@ -1012,7 +1058,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const projectIngresses = deployment.projectId
         ? await this.prisma.ingress.findMany({
             where: { projectId: deployment.projectId, id: { notIn: Array.from(existingIds) } },
-            include: { service: true },
+            include: { service: true }
           })
         : [];
 
@@ -1021,9 +1067,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         where: {
           kind: 'Ingress',
           namespace,
-          name: { in: [...new Set(candidateIngresses.map((i: any) => i.name))] },
+          name: { in: [...new Set(candidateIngresses.map((i: any) => i.name))] }
         },
-        select: { name: true, manifest: true },
+        select: { name: true, manifest: true }
       });
       const k8sByName = new Map<string, any>(mirrored.map((m) => [m.name, m.manifest]));
 
@@ -1036,14 +1082,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           ? k8sPaths.map((p: any) => ({
               path: p.path || '/',
               serviceName: p.backend?.service?.name || '',
-              servicePort: p.backend?.service?.port?.number || 0,
+              servicePort: p.backend?.service?.port?.number || 0
             }))
           : [
               {
                 path: ing.path,
                 serviceName: ing.service?.name || '',
-                servicePort: ing.service?.port || 0,
-              },
+                servicePort: ing.service?.port || 0
+              }
             ];
         return { ingress: scrubIngress({ ...ing, routes }), k8sPaths };
       };
@@ -1053,7 +1099,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         .map((pi: any) => {
           const { ingress, k8sPaths } = enrich(pi);
           const hasRouteForDeployment = k8sPaths.some((p: any) =>
-            serviceNames.has(p.backend?.service?.name || ''),
+            serviceNames.has(p.backend?.service?.name || '')
           );
           return hasRouteForDeployment ? ingress : null;
         })
@@ -1069,9 +1115,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           if (!ing?.tlsSecretName) return;
           ing.certificateStatus = await this.k8sNetwork.getCertificateStatus(
             ing.namespace,
-            ing.tlsSecretName,
+            ing.tlsSecretName
           );
-        }),
+        })
       );
 
       deploymentWithInternalUrls.ingresses = enrichedIngresses;
@@ -1091,17 +1137,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // `imagePullPolicy` is the override (null = automatic); this is what the
       // cluster is actually doing. Clients render this and only send the
       // override back, so nobody has to reimplement the tag rules.
-      effectiveImagePullPolicy: resolvePullPolicy(
-        deployment.imagePullPolicy,
-        deployment.image,
-      ),
+      effectiveImagePullPolicy: resolvePullPolicy(deployment.imagePullPolicy, deployment.image)
     };
     return canEdit ? result : this.scrubDeploymentForViewer(result);
   }
 
   async getDeploymentPods(deploymentId: string, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     if (!deployment) {
@@ -1118,7 +1161,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   async getDeploymentPodsLive(deploymentId: string, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     if (!deployment) {
@@ -1189,10 +1232,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1210,7 +1253,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
       console.log(`[Projects] Successfully cancelled build jobs for deployment ${deploymentId}`);
     } catch (error) {
-      console.error(`[Projects] Error cancelling build jobs for deployment ${deploymentId}:`, error);
+      console.error(
+        `[Projects] Error cancelling build jobs for deployment ${deploymentId}:`,
+        error
+      );
     }
 
     const currentLogs = deployment.buildLogs || '';
@@ -1220,8 +1266,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'failed',
         buildStep: null,
         buildError: 'Build cancelled by user',
-        buildLogs: `${currentLogs  }[${Date.now()}] [INFO] Build cancelled by user\n`,
-      },
+        buildLogs: `${currentLogs}[${Date.now()}] [INFO] Build cancelled by user\n`
+      }
     });
 
     void this.audit.log({
@@ -1233,13 +1279,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentId,
       targetType: 'deployment',
       targetId: deploymentId,
-      targetLabel: deployment.name,
+      targetLabel: deployment.name
     });
 
     return {
       success: true,
       deploymentId,
-      message: 'Build cancelled successfully',
+      message: 'Build cancelled successfully'
     };
   }
 
@@ -1266,10 +1312,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1278,7 +1324,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (deployment.composeStackId && !options?.fromComposeStack) {
       throw new BadRequestException(
-        'This deployment is managed by a Compose file. Delete it via its parent compose stack.',
+        'This deployment is managed by a Compose file. Delete it via its parent compose stack.'
       );
     }
 
@@ -1289,7 +1335,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.prisma.ingress.findMany({ where: { deploymentId } }),
       this.prisma.service.findMany({ where: { deploymentId } }),
       this.prisma.deploymentVolume.findMany({ where: { deploymentId } }),
-      this.prisma.imageHistory.findMany({ where: { deploymentId }, select: { image: true } }),
+      this.prisma.imageHistory.findMany({ where: { deploymentId }, select: { image: true } })
     ]);
 
     // Delete all ingresses from Kubernetes
@@ -1327,7 +1373,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       console.error(`Failed to unexpose public ports for ${deployment.name}:`, error);
     }
     try {
-      await this.k8sNetwork.deletePublicDeploymentNetworkPolicy(deployment.namespace, deployment.name);
+      await this.k8sNetwork.deletePublicDeploymentNetworkPolicy(
+        deployment.namespace,
+        deployment.name
+      );
     } catch (error) {
       console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
     }
@@ -1336,7 +1385,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.tailscaleService.cleanupDeployment(deployment);
     } catch (error) {
-      console.error(`[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`, error);
+      console.error(
+        `[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`,
+        error
+      );
     }
 
     // Delete the K8s deployment itself
@@ -1350,18 +1402,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // ingresses only started cascading in 20260808060000; before that the FK was
     // SET NULL and every delete left a protected orphan row behind.
     await this.prisma.deployment.delete({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     this.notifications
       .purgeScope('deployment', deploymentId)
-      .catch((err) => console.error(`[Projects] Failed to purge notification scope for ${deploymentId}:`, err));
+      .catch((err) =>
+        console.error(`[Projects] Failed to purge notification scope for ${deploymentId}:`, err)
+      );
 
     // Delete all associated repositories from Harbor in the background
     if (imageHistoryEntries.length > 0) {
       const imageRefs = imageHistoryEntries.map((entry) => entry.image);
       this.dockerService.deleteRepositoriesFromRegistry(imageRefs).catch((err) => {
-        console.error(`[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`, err);
+        console.error(
+          `[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`,
+          err
+        );
       });
     }
 
@@ -1374,13 +1431,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentId,
       targetType: 'deployment',
       targetId: deploymentId,
-      targetLabel: deployment.name,
+      targetLabel: deployment.name
     });
 
     return {
       success: true,
       deploymentId,
-      projectId: deployment.projectId,
+      projectId: deployment.projectId
     };
   }
 
@@ -1407,10 +1464,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1427,57 +1484,55 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const currentReplicas = deployment.replicas || 0;
     const delta = replicas - currentReplicas;
     if (delta > 0) {
-      const perPod = await this.quotasService.resolvePodResources(deployment.projectId, {
-        cpuRequestMilli: deployment.cpuRequestMilli ?? null,
-        memoryRequestBytes:
-          deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
-      }, deployment.image);
+      const perPod = await this.quotasService.resolvePodResources(
+        deployment.projectId,
+        {
+          cpuRequestMilli: deployment.cpuRequestMilli ?? null,
+          memoryRequestBytes:
+            deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null
+        },
+        deployment.image
+      );
       const requested = {
         cpuMilli: perPod.cpuMilli * delta,
-        memoryBytes: perPod.memoryBytes * delta,
+        memoryBytes: perPod.memoryBytes * delta
       };
-      await this.quotasService.enforceOrgCapForNewPod(
-        deployment.project.organizationId,
-        requested,
-      );
+      await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, requested);
       await this.quotasService.enforceMemberAllowanceForNewPod(
         deployment.project.organizationId,
         deployment.project.ownerId,
-        requested,
+        requested
       );
     }
 
     if (this.applyPipelineEnabled()) {
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { replicas },
+        data: { replicas }
       });
       await this.applyQueue.enqueue({
         dedupeKey: `op:deployment.scale:${deploymentId}`,
         opType: 'deployment.scale',
         deploymentId,
-        requestedById: user.id,
+        requestedById: user.id
       });
       // Crossing the replica count in either direction flips whether the
       // budget can exist at all, so it is reconciled on every scale.
       await this.syncDisruptionBudget(deploymentId);
     } else {
       // Only push to K8s if the deployment exists in the cluster.
-      const k8sExistsScale = await this.k8sWorkload.getKubernetesDeployment(
-        deployment.name, deployment.namespace,
-      ).then((d) => d !== null).catch(() => false);
+      const k8sExistsScale = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((d) => d !== null)
+        .catch(() => false);
 
       if (k8sExistsScale) {
-        await this.k8sWorkload.scaleDeployment(
-          deployment.name,
-          deployment.namespace,
-          replicas
-        );
+        await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, replicas);
       }
 
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { replicas },
+        data: { replicas }
       });
       await this.syncDisruptionBudget(deploymentId);
     }
@@ -1492,14 +1547,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: deployment.name,
-      metadata: { replicas: [deployment.replicas, replicas] },
+      metadata: { replicas: [deployment.replicas, replicas] }
     });
 
     return {
       success: true,
       deploymentId,
       projectId: deployment.projectId,
-      replicas,
+      replicas
     };
   }
 
@@ -1525,10 +1580,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1538,9 +1593,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'restart deployments');
 
     const desiredReplicas = deployment.replicas || 1;
-    const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace);
+    const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name,
+      deployment.namespace
+    );
     if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
-      await this.k8sWorkload.patchDeploymentReplicas(deployment.name, deployment.namespace, desiredReplicas);
+      await this.k8sWorkload.patchDeploymentReplicas(
+        deployment.name,
+        deployment.namespace,
+        desiredReplicas
+      );
     }
 
     const result = await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
@@ -1554,7 +1616,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentId,
       targetType: 'deployment',
       targetId: deploymentId,
-      targetLabel: deployment.name,
+      targetLabel: deployment.name
     });
 
     return result;
@@ -1583,10 +1645,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1595,9 +1657,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
-    const before = new Map(
-      (await this.readOwnEnvVars(deployment.id)).map((v) => [v.key, v]),
-    );
+    const before = new Map((await this.readOwnEnvVars(deployment.id)).map((v) => [v.key, v]));
     const envEntries = applyEnvKeepRules(Array.isArray(env) ? env : [], before);
 
     // Env keys get interpolated into Dockerfile ARG/ENV directives and shell
@@ -1619,26 +1679,30 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const envList = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
       value: e.value,
-      secret: e.secret,
+      secret: e.secret
     }));
 
     if (!this.applyPipelineEnabled()) {
       // Only push to K8s if the deployment actually exists in the cluster.
       // If the build hasn't succeeded yet, just persist to DB — the env vars
       // will be applied when the build completes and creates the K8s deployment.
-      const k8sExists = await this.k8sWorkload.getKubernetesDeployment(
-        deployment.name, deployment.namespace,
-      ).then((d) => d !== null).catch(() => false);
+      const k8sExists = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((d) => d !== null)
+        .catch(() => false);
 
       if (k8sExists) {
         // Resolve ${{shared.KEY}} against the environment's shared vars, then
         // push the resolved values (secrets routed to a k8s Secret) to the pod.
-        const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+        const sharedVars = await this.loadSharedVarsForDeployment(
+          deployment.id,
+          deployment.environmentId
+        );
         const { resolved } = resolveEnvVars(envList, sharedVars);
         await this.k8sWorkload.updateDeploymentEnv({
           namespace: deployment.namespace,
           deploymentName: deployment.name,
-          env: resolved,
+          env: resolved
         });
       }
     }
@@ -1659,8 +1723,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const updatedDeployment = await this.prisma.$transaction(async (tx) => {
       await tx.deploymentEnvVar.deleteMany({
         where: {
-          deploymentId: deployment.id,
-        },
+          deploymentId: deployment.id
+        }
       });
 
       if (envList.length > 0) {
@@ -1669,8 +1733,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deploymentId: deployment.id,
             key: entry.key,
             value: this.crypto.encryptIfSecret(entry.value, entry.secret),
-            secret: entry.secret,
-          })),
+            secret: entry.secret
+          }))
         });
       }
 
@@ -1679,22 +1743,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         include: {
           project: {
             include: {
-              organization: true,
-            },
+              organization: true
+            }
           },
           pods: true,
           services: {
             include: {
-              ports: true,
-            },
+              ports: true
+            }
           },
           envVars: true,
           ingresses: {
             include: {
-              service: true,
-            },
-          },
-        },
+              service: true
+            }
+          }
+        }
       });
     });
 
@@ -1703,7 +1767,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         dedupeKey: `op:deployment.updateEnv:${deployment.id}`,
         opType: 'deployment.updateEnv',
         deploymentId: deployment.id,
-        requestedById: user.id,
+        requestedById: user.id
       });
     }
 
@@ -1719,7 +1783,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetId: deployment.id,
         targetLabel: deployment.name,
         // Keys only — never values.
-        metadata: { added: added.join(',') || null, removed: removed.join(',') || null, changed: changed.join(',') || null },
+        metadata: {
+          added: added.join(',') || null,
+          removed: removed.join(',') || null,
+          changed: changed.join(',') || null
+        }
       });
     }
 
@@ -1757,7 +1825,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    },
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -1770,10 +1838,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1786,9 +1854,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const changesSuperAdminFlags =
       (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
-      (persistentBuildCache !== undefined && persistentBuildCache !== (deployment.persistentBuildCache ?? false));
+      (persistentBuildCache !== undefined &&
+        persistentBuildCache !== (deployment.persistentBuildCache ?? false));
     if (changesSuperAdminFlags && !(await this.authz.isSuperAdmin(user.id))) {
-      throw new ForbiddenException('Super builds and persistent build cache are superadmin-only settings');
+      throw new ForbiddenException(
+        'Super builds and persistent build cache are superadmin-only settings'
+      );
     }
 
     // Super builds cannot execute a Railpack plan, so refuse the combination
@@ -1797,22 +1868,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const nextDepot = buildWithDepot ?? deployment.buildWithDepot ?? false;
     if (nextBuildType === 'railpack' && nextDepot) {
       throw new BadRequestException(
-        'Super builds do not support automatic (Railpack) builds. Turn off super builds, or use a Dockerfile build.',
+        'Super builds do not support automatic (Railpack) builds. Turn off super builds, or use a Dockerfile build.'
       );
     }
 
-    const rootDirectory = 'rootDirectory' in body
-      ? normalizeRootDirectory(body.rootDirectory)
-      : undefined;
-    if ('rootDirectory' in body && body.rootDirectory && rootDirectory === null && body.rootDirectory.trim() !== '') {
+    const rootDirectory =
+      'rootDirectory' in body ? normalizeRootDirectory(body.rootDirectory) : undefined;
+    if (
+      'rootDirectory' in body &&
+      body.rootDirectory &&
+      rootDirectory === null &&
+      body.rootDirectory.trim() !== ''
+    ) {
       throw new BadRequestException(
-        'Root directory must be a path inside the repository, without ".." segments.',
+        'Root directory must be a path inside the repository, without ".." segments.'
       );
     }
 
     /** Trim, and treat an emptied input as clearing the override. */
     const override = (key: keyof typeof body) =>
-      (key in body ? { [key]: (body[key] as string | null)?.trim() || null } : {});
+      key in body ? { [key]: (body[key] as string | null)?.trim() || null } : {};
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -1823,20 +1898,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(body.buildType !== undefined && { buildType: body.buildType }),
         // A Railpack build ignores the Dockerfile path, so clear a stale one on
         // switch; mirror the cross-nulling the create path already does.
-        ...(nextBuildType === 'railpack'
-          ? { dockerfilePath: null }
-          : override('dockerfilePath')),
+        ...(nextBuildType === 'railpack' ? { dockerfilePath: null } : override('dockerfilePath')),
         ...(rootDirectory !== undefined && { rootDirectory }),
         ...override('framework'),
         ...override('installCommand'),
         ...override('buildCommand'),
         ...override('startCommand'),
-        ...override('outputDirectory'),
-      },
+        ...override('outputDirectory')
+      }
     });
 
     const changed = (key: string, before: unknown, after: unknown) =>
-      (after !== undefined && after !== before ? { [key]: [before, after] } : {});
+      after !== undefined && after !== before ? { [key]: [before, after] } : {};
 
     void this.audit.log({
       action: 'deployment.build_options.updated',
@@ -1858,8 +1931,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...changed('installCommand', deployment.installCommand, body.installCommand),
         ...changed('buildCommand', deployment.buildCommand, body.buildCommand),
         ...changed('startCommand', deployment.startCommand, body.startCommand),
-        ...changed('outputDirectory', deployment.outputDirectory, body.outputDirectory),
-      },
+        ...changed('outputDirectory', deployment.outputDirectory, body.outputDirectory)
+      }
     });
 
     return this.getDeployment(deploymentId);
@@ -1888,10 +1961,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -1914,19 +1987,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         where: {
           environmentId: deployment.environmentId,
           id: { not: deploymentId },
-          OR: [{ name: nextDisplayName }, { displayName: nextDisplayName }],
+          OR: [{ name: nextDisplayName }, { displayName: nextDisplayName }]
         },
-        select: { id: true },
+        select: { id: true }
       });
       if (conflict) {
-        throw new BadRequestException('A deployment with this name already exists in this environment');
+        throw new BadRequestException(
+          'A deployment with this name already exists in this environment'
+        );
       }
     }
 
     const previousEffective = deployment.displayName ?? deployment.name;
     await this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { displayName: nextDisplayName },
+      data: { displayName: nextDisplayName }
     });
 
     void this.audit.log({
@@ -1939,7 +2014,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: trimmed,
-      metadata: { displayName: [previousEffective, trimmed] },
+      metadata: { displayName: [previousEffective, trimmed] }
     });
 
     return this.getDeployment(deploymentId);
@@ -1972,10 +2047,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -2007,7 +2082,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Same boundary checks as createDeploymentFromGitHub; DockerService
     // re-validates on clone as defence in depth.
     const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
-    if (branch.length > 200 || branch.startsWith('-') || branch.includes('..') || !GIT_REF_RE.test(branch)) {
+    if (
+      branch.length > 200 ||
+      branch.startsWith('-') ||
+      branch.includes('..') ||
+      !GIT_REF_RE.test(branch)
+    ) {
       throw new BadRequestException('Invalid branch name');
     }
     if (dockerfilePath) {
@@ -2031,7 +2111,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!parsed) {
       throw new BadRequestException('Could not parse repository URL');
     }
-    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(
+      user.id,
+      parsed.owner,
+      parsed.repo
+    );
     if (!canAccess) {
       const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
@@ -2041,7 +2125,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
+    const repoInstallation = await this.githubService.findInstallationForRepo(
+      parsed.owner,
+      parsed.repo
+    );
 
     const repoChanged = repoUrl !== deployment.githubRepo;
     // Auto-deploy webhooks are matched on githubInstallationId, so it must be
@@ -2068,10 +2155,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               queuedCommitMessage: null,
               queuedCommitAuthorName: null,
               queuedCommitAuthorUsername: null,
-              queuedAt: null,
+              queuedAt: null
             }
-          : {}),
-      },
+          : {})
+      }
     });
 
     void this.audit.log({
@@ -2090,8 +2177,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(dockerfilePath !== (deployment.dockerfilePath ?? '')
           ? { dockerfilePath: [deployment.dockerfilePath, dockerfilePath || null] }
           : {}),
-        ...(deployment.autoDeployEnabled && !keepAutoDeploy ? { autoDeployEnabled: [true, false] } : {}),
-      },
+        ...(deployment.autoDeployEnabled && !keepAutoDeploy
+          ? { autoDeployEnabled: [true, false] }
+          : {})
+      }
     });
 
     return this.getDeployment(deploymentId);
@@ -2134,10 +2223,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -2162,8 +2251,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         healthCheckTimeout: healthCheck.healthCheckTimeout,
         healthCheckRetries: healthCheck.healthCheckRetries,
         startupFailureThreshold: healthCheck.startupFailureThreshold,
-        healthCheckOverride: healthCheck.healthCheckOverride ?? false,
-      },
+        healthCheckOverride: healthCheck.healthCheckOverride ?? false
+      }
     });
 
     // Apply what the deployment resolves to, not what was posted: with the
@@ -2188,7 +2277,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         timeout: resolved?.timeout ?? healthCheck.healthCheckTimeout,
         retries: resolved?.retries ?? healthCheck.healthCheckRetries,
         startupFailureThreshold:
-          resolved?.startupFailureThreshold ?? healthCheck.startupFailureThreshold,
+          resolved?.startupFailureThreshold ?? healthCheck.startupFailureThreshold
       });
     } catch (error) {
       // Log but don't fail - the DB is updated, K8s will sync on next restart/rebuild
@@ -2209,8 +2298,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         enabled: [deployment.healthCheckEnabled, healthCheck.healthCheckEnabled],
         type: [deployment.healthCheckType, healthCheck.healthCheckType],
         path: [deployment.healthCheckPath, healthCheck.healthCheckPath ?? null],
-        override: [deployment.healthCheckOverride, healthCheck.healthCheckOverride ?? false],
-      },
+        override: [deployment.healthCheckOverride, healthCheck.healthCheckOverride ?? false]
+      }
     });
 
     return this.getDeployment(deploymentId);
@@ -2220,7 +2309,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   // must re-apply the stored health-check config, otherwise the probes the
   // save button patched in get wiped on the next rebuild.
   private async loadHealthCheckOptions(
-    deploymentId: string,
+    deploymentId: string
   ): Promise<CreateDeploymentOptions['healthCheck'] | undefined> {
     const resolved = await this.resolveStoredHealthCheck(deploymentId);
     return resolved?.enabled ? resolved : undefined;
@@ -2230,7 +2319,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   // when the repo declares one, the stored configuration otherwise. Both the
   // render path and the settings save read it, so the two can never disagree.
   private async resolveStoredHealthCheck(
-    deploymentId: string,
+    deploymentId: string
   ): Promise<ResolvedHealthCheck | undefined> {
     const hc = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -2248,8 +2337,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         healthCheckRetries: true,
         startupFailureThreshold: true,
         healthCheckOverride: true,
-        dockerfileHealthCheck: true,
-      },
+        dockerfileHealthCheck: true
+      }
     });
     if (!hc) return undefined;
     return resolveHealthCheck(hc);
@@ -2286,10 +2375,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -2310,7 +2399,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetType: 'deployment',
         targetId: deploymentId,
         targetLabel: deployment.name,
-        metadata: { reason: 'hostPath_volume' },
+        metadata: { reason: 'hostPath_volume' }
       });
       throw new ForbiddenException('hostPath volumes are not permitted');
     }
@@ -2334,10 +2423,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               name: vol.name.trim(),
               type: volType,
               mountPath: vol.mountPath.trim(),
-              pvcName: vol.type === 'pvc' ? (vol.pvcName?.trim() || vol.name.trim()) : null,
+              pvcName: vol.type === 'pvc' ? vol.pvcName?.trim() || vol.name.trim() : null,
               storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
               hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
-              readOnly: Boolean(vol.readOnly),
+              readOnly: Boolean(vol.readOnly)
             };
           })
           .filter((vol) => {
@@ -2356,23 +2445,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     for (const vol of volumesList) {
       if (!DNS1123.test(vol.name) || vol.name.length > 63) {
         throw new BadRequestException(
-          `Volume name "${vol.name}" must be 1-63 lowercase letters, numbers, or hyphens`,
+          `Volume name "${vol.name}" must be 1-63 lowercase letters, numbers, or hyphens`
         );
       }
       if (!vol.mountPath.startsWith('/')) {
         throw new BadRequestException(
-          `Mount path "${vol.mountPath}" must be an absolute path starting with /`,
+          `Mount path "${vol.mountPath}" must be an absolute path starting with /`
         );
       }
       if (vol.type === 'pvc') {
         if (!DNS1123.test(vol.pvcName!) || vol.pvcName!.length > 63) {
           throw new BadRequestException(
-            `Volume name "${vol.pvcName}" must be 1-63 lowercase letters, numbers, or hyphens`,
+            `Volume name "${vol.pvcName}" must be 1-63 lowercase letters, numbers, or hyphens`
           );
         }
         if (vol.storageSize && !K8S_QUANTITY.test(vol.storageSize)) {
           throw new BadRequestException(
-            `Storage size "${vol.storageSize}" is not valid, use a size like 1Gi or 500Mi`,
+            `Storage size "${vol.storageSize}" is not valid, use a size like 1Gi or 500Mi`
           );
         }
       }
@@ -2393,14 +2482,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (hasPvcVolume && deployment.deployStrategy !== 'recreate') {
         await tx.deployment.update({
           where: { id: deployment.id },
-          data: { deployStrategy: 'recreate' },
+          data: { deployStrategy: 'recreate' }
         });
       }
 
       await tx.deploymentVolume.deleteMany({
         where: {
-          deploymentId: deployment.id,
-        },
+          deploymentId: deployment.id
+        }
       });
 
       if (volumesList.length > 0) {
@@ -2413,8 +2502,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             pvcName: vol.pvcName,
             storageSize: vol.storageSize,
             hostPath: vol.hostPath,
-            readOnly: vol.readOnly,
-          })),
+            readOnly: vol.readOnly
+          }))
         });
       }
 
@@ -2423,23 +2512,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         include: {
           project: {
             include: {
-              organization: true,
-            },
+              organization: true
+            }
           },
           pods: true,
           services: {
             include: {
-              ports: true,
-            },
+              ports: true
+            }
           },
           envVars: true,
           volumes: true,
           ingresses: {
             include: {
-              service: true,
-            },
-          },
-        },
+              service: true
+            }
+          }
+        }
       });
     });
 
@@ -2448,16 +2537,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // this throws, the caller hears about it and the next rebuild reconciles
     // the cluster to what was stored, which is the right way round: losing the
     // patch is recoverable, losing the record is not.
-    const k8sExistsVol = await this.k8sWorkload.getKubernetesDeployment(
-      deployment.name, deployment.namespace,
-    ).then((d) => d !== null).catch(() => false);
+    const k8sExistsVol = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
 
     if (k8sExistsVol) {
       await this.k8sWorkload.updateDeploymentVolumes({
         namespace: deployment.namespace,
         deploymentName: deployment.name,
         volumes: volumesList,
-        deployStrategy: effectiveStrategy,
+        deployStrategy: effectiveStrategy
       });
     }
 
@@ -2471,7 +2561,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: deployment.name,
-      metadata: { count: volumesList.length, names: volumesList.map((v) => v.name).join(',') || null },
+      metadata: {
+        count: volumesList.length,
+        names: volumesList.map((v) => v.name).join(',') || null
+      }
     });
 
     return this.addInternalUrlsToDeployment(updatedDeployment);
@@ -2511,15 +2604,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         services: {
           include: {
-            ports: true,
-          },
-        },
-      },
+            ports: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -2542,17 +2635,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: {
         name: normalizedName,
         deployment: {
-          projectId: deployment.projectId,
-        },
-      },
+          projectId: deployment.projectId
+        }
+      }
     });
 
     if (existingServiceWithName) {
-      throw new BadRequestException('A service with this name already exists in the project namespace');
+      throw new BadRequestException(
+        'A service with this name already exists in the project namespace'
+      );
     }
 
     const portsPayload = this.normalizeServicePortInputs(data.ports, {
-      requireAtLeastOne: true,
+      requireAtLeastOne: true
     });
 
     const domainProvided = Object.hasOwn(data ?? {}, 'domain');
@@ -2584,13 +2679,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentName: deployment.name,
       serviceName: normalizedName,
       type: requestedType,
-      ports: portsPayload,
+      ports: portsPayload
     });
 
     const resolvedPorts =
-      creationResult.ports && creationResult.ports.length > 0
-        ? creationResult.ports
-        : portsPayload;
+      creationResult.ports && creationResult.ports.length > 0 ? creationResult.ports : portsPayload;
 
     const primaryPort = resolvedPorts[0];
 
@@ -2605,8 +2698,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           protocol: primaryPort.protocol,
           nodePort: primaryPort.nodePort ?? null,
           externalIp: creationResult.externalIp ?? null,
-          domain: normalizedDomain,
-        },
+          domain: normalizedDomain
+        }
       });
 
       if (resolvedPorts.length > 0) {
@@ -2617,8 +2710,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             port: port.servicePort,
             targetPort: port.containerPort,
             protocol: port.protocol,
-            nodePort: port.nodePort ?? null,
-          })),
+            nodePort: port.nodePort ?? null
+          }))
         });
       }
     });
@@ -2628,22 +2721,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     return this.addInternalUrlsToDeployment(result);
@@ -2684,13 +2777,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           include: {
             project: {
               include: {
-                organization: true,
-              },
-            },
-          },
+                organization: true
+              }
+            }
+          }
         },
-        ports: true,
-      },
+        ports: true
+      }
     });
 
     if (!service) {
@@ -2723,17 +2816,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    let portsPayload: {
-      name?: string;
-      containerPort?: number;
-      servicePort?: number;
-      protocol?: string;
-      nodePort?: number;
-    }[] | null = null;
+    let portsPayload:
+      | {
+          name?: string;
+          containerPort?: number;
+          servicePort?: number;
+          protocol?: string;
+          nodePort?: number;
+        }[]
+      | null = null;
 
     if (Array.isArray(changes?.ports)) {
       portsPayload = this.normalizeServicePortInputs(changes.ports, {
-        requireAtLeastOne: true,
+        requireAtLeastOne: true
       });
     }
 
@@ -2741,26 +2836,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('No changes provided for service update');
     }
 
-    let updateResult:
-      | {
-          type: string;
-          ports: {
-            name: string;
-            containerPort: number;
-            servicePort: number;
-            protocol: string;
-            nodePort?: number;
-          }[];
-          externalIp: string | null;
-        }
-      | null = null;
+    let updateResult: {
+      type: string;
+      ports: {
+        name: string;
+        containerPort: number;
+        servicePort: number;
+        protocol: string;
+        nodePort?: number;
+      }[];
+      externalIp: string | null;
+    } | null = null;
 
     if (portsPayload) {
       updateResult = await this.k8sNetwork.updateServicePorts({
         namespace: service.deployment.namespace,
         deploymentName: service.deployment.name,
         serviceName: service.name,
-        ports: portsPayload,
+        ports: portsPayload
       });
     }
 
@@ -2771,7 +2864,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         servicePort: port.servicePort,
         containerPort: port.containerPort,
         protocol: port.protocol,
-        nodePort: port.nodePort ?? null,
+        nodePort: port.nodePort ?? null
       }));
     } else if (service.ports.length > 0) {
       resolvedPorts = service.ports.map((port) => ({
@@ -2779,7 +2872,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         servicePort: port.port,
         containerPort: port.targetPort,
         protocol: port.protocol,
-        nodePort: port.nodePort ?? null,
+        nodePort: port.nodePort ?? null
       }));
     } else {
       resolvedPorts = [
@@ -2788,23 +2881,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           servicePort: service.port,
           containerPort: service.targetPort,
           protocol: service.protocol,
-          nodePort: service.nodePort ?? null,
-        },
+          nodePort: service.nodePort ?? null
+        }
       ];
     }
 
-    const primaryPort =
-      resolvedPorts[0] || {
-        name: service.name,
-        servicePort: service.port,
-        containerPort: service.targetPort,
-        protocol: service.protocol,
-        nodePort: service.nodePort ?? null,
-      };
+    const primaryPort = resolvedPorts[0] || {
+      name: service.name,
+      servicePort: service.port,
+      containerPort: service.targetPort,
+      protocol: service.protocol,
+      nodePort: service.nodePort ?? null
+    };
 
     let resolvedType = service.type;
     if (updateResult) {
-      resolvedType = updateResult.type === 'ClusterIP' ? ServiceType.internal : ServiceType.external;
+      resolvedType =
+        updateResult.type === 'ClusterIP' ? ServiceType.internal : ServiceType.external;
     }
 
     const resolvedExternalIp =
@@ -2823,7 +2916,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             publicEnabled: true,
             publicPort: p.publicPort,
             targetPort: p.targetPort,
-            protocol: p.protocol,
+            protocol: p.protocol
           });
         }
       }
@@ -2848,13 +2941,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (Object.keys(data).length > 0) {
         await tx.service.update({
           where: { id: service.id },
-          data,
+          data
         });
       }
 
       if (portsPayload) {
         await tx.servicePort.deleteMany({
-          where: { serviceId: service.id },
+          where: { serviceId: service.id }
         });
 
         if (resolvedPorts.length > 0) {
@@ -2870,9 +2963,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 protocol: port.protocol,
                 nodePort: port.nodePort,
                 publicEnabled: prior ? prior.publicEnabled : false,
-                publicPort: prior ? prior.publicPort : null,
+                publicPort: prior ? prior.publicPort : null
               };
-            }),
+            })
           });
         }
       }
@@ -2880,21 +2973,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (portsPayload && priorPublic.size > 0) {
       const keptKeys = new Set(
-        resolvedPorts.map((p) => `${p.servicePort}:${p.protocol.toUpperCase()}`),
+        resolvedPorts.map((p) => `${p.servicePort}:${p.protocol.toUpperCase()}`)
       );
       for (const [key, prior] of priorPublic) {
         if (keptKeys.has(key)) {
           if (prior.publicPort) {
             const kept = resolvedPorts.find(
-              (p) => `${p.servicePort}:${p.protocol.toUpperCase()}` === key,
+              (p) => `${p.servicePort}:${p.protocol.toUpperCase()}` === key
             );
             if (kept && kept.containerPort !== prior.targetPort) {
               try {
                 const org = await this.prisma.organization.findUnique({
-                  where: { id: service.deployment.project.organizationId },
+                  where: { id: service.deployment.project.organizationId }
                 });
-                const ip = (org?.databasePublicIp || '').trim()
-                  || this.instanceConfig.defaultPublicIp();
+                const ip =
+                  (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
                 if (ip) {
                   await this.k8sNetwork.exposeDeploymentPortPublic({
                     namespace: service.deployment.namespace,
@@ -2902,11 +2995,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                     loadBalancerIp: ip,
                     publicPort: prior.publicPort,
                     targetPort: kept.containerPort,
-                    protocol: prior.protocol,
+                    protocol: prior.protocol
                   });
                 }
               } catch (e: any) {
-                console.error(`[Deployment/public] Failed to re-expose port on update: ${e?.message}`);
+                console.error(
+                  `[Deployment/public] Failed to re-expose port on update: ${e?.message}`
+                );
               }
             }
           }
@@ -2916,7 +3011,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               namespace: service.deployment.namespace,
               deploymentName: service.deployment.name,
               publicPort: prior.publicPort,
-              protocol: prior.protocol,
+              protocol: prior.protocol
             });
           } catch (e: any) {
             console.error(`[Deployment/public] Failed to unexpose removed port: ${e?.message}`);
@@ -2926,13 +3021,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.syncPublicDeploymentNetworkPolicy(
         service.deployment.namespace,
         service.deployment.name,
-        service.deployment.id,
+        service.deployment.id
       );
     }
 
     if (portsPayload) {
       const affectedIngresses = await this.prisma.ingress.findMany({
-        where: { serviceId: service.id },
+        where: { serviceId: service.id }
       });
       for (const ing of affectedIngresses) {
         try {
@@ -2940,10 +3035,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             ing.namespace,
             ing.name,
             ing.path,
-            primaryPort.servicePort,
+            primaryPort.servicePort
           );
         } catch (e: any) {
-          console.error(`[Deployment] Failed to sync ingress ${ing.name} path ${ing.path} port: ${e?.message}`);
+          console.error(
+            `[Deployment] Failed to sync ingress ${ing.name} path ${ing.path} port: ${e?.message}`
+          );
         }
       }
     }
@@ -2953,22 +3050,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
     return this.addInternalUrlsToDeployment(result);
   }
@@ -2998,19 +3095,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           include: {
             project: {
               include: {
-                organization: true,
-              },
+                organization: true
+              }
             },
             services: {
               include: {
-                ports: true,
-              },
-            },
-          },
+                ports: true
+              }
+            }
+          }
         },
         ports: true,
-        ingresses: true,
-      },
+        ingresses: true
+      }
     });
 
     if (!service) {
@@ -3027,9 +3124,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
-    const otherServices = service.deployment.services.filter(
-      (entry) => entry.id !== service.id
-    );
+    const otherServices = service.deployment.services.filter((entry) => entry.id !== service.id);
 
     const remainingPortsInput: {
       name?: string;
@@ -3047,7 +3142,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               containerPort: port.targetPort,
               servicePort: port.port,
               protocol: port.protocol,
-              nodePort: port.nodePort ?? undefined,
+              nodePort: port.nodePort ?? undefined
             }))
           : [
               {
@@ -3055,8 +3150,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 containerPort: entry.targetPort,
                 servicePort: entry.port,
                 protocol: entry.protocol,
-                nodePort: entry.nodePort ?? undefined,
-              },
+                nodePort: entry.nodePort ?? undefined
+              }
             ];
 
       remainingPortsInput.push(...servicePorts);
@@ -3069,10 +3164,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             namespace: service.deployment.namespace,
             deploymentName: service.deployment.name,
             publicPort: p.publicPort,
-            protocol: p.protocol,
+            protocol: p.protocol
           });
         } catch (e: any) {
-          console.error(`[Deployment/public] Failed to unexpose port on service delete: ${e?.message}`);
+          console.error(
+            `[Deployment/public] Failed to unexpose port on service delete: ${e?.message}`
+          );
         }
       }
     }
@@ -3081,23 +3178,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       namespace: service.deployment.namespace,
       deploymentName: service.deployment.name,
       serviceName: service.name,
-      remainingPorts: remainingPortsInput,
+      remainingPorts: remainingPortsInput
     });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.servicePort.deleteMany({
-        where: { serviceId: service.id },
+        where: { serviceId: service.id }
       });
 
       await tx.service.delete({
-        where: { id: service.id },
+        where: { id: service.id }
       });
     });
 
     await this.syncPublicDeploymentNetworkPolicy(
       service.deployment.namespace,
       service.deployment.name,
-      service.deployment.id,
+      service.deployment.id
     );
 
     const result = await this.prisma.deployment.findUnique({
@@ -3105,22 +3202,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
     return this.addInternalUrlsToDeployment(result);
   }
@@ -3151,13 +3248,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           include: {
             project: {
               include: {
-                organization: true,
-              },
-            },
-          },
+                organization: true
+              }
+            }
+          }
         },
-        ports: true,
-      },
+        ports: true
+      }
     });
 
     if (!service) {
@@ -3175,32 +3272,32 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const exposureResult = await this.k8sNetwork.updateServiceExposure({
       namespace: service.deployment.namespace,
       serviceName: service.name,
-      type: desiredType,
+      type: desiredType
     });
 
-    const normalizedPorts = Array.isArray(exposureResult.ports) && exposureResult.ports.length > 0
-      ? exposureResult.ports.map((port) => ({
-          name: port.name,
-          servicePort: port.servicePort,
-          containerPort: port.containerPort,
-          protocol: port.protocol,
-          nodePort:
-            port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null,
-        }))
-      : service.ports.map((port) => ({
-          name: port.name || `port-${port.port}`,
-          servicePort: port.port,
-          containerPort: port.targetPort,
-          protocol: port.protocol,
-          nodePort: port.nodePort ?? null,
-        }));
+    const normalizedPorts =
+      Array.isArray(exposureResult.ports) && exposureResult.ports.length > 0
+        ? exposureResult.ports.map((port) => ({
+            name: port.name,
+            servicePort: port.servicePort,
+            containerPort: port.containerPort,
+            protocol: port.protocol,
+            nodePort: port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null
+          }))
+        : service.ports.map((port) => ({
+            name: port.name || `port-${port.port}`,
+            servicePort: port.port,
+            containerPort: port.targetPort,
+            protocol: port.protocol,
+            nodePort: port.nodePort ?? null
+          }));
 
     const primaryPort = normalizedPorts[0] || {
       name: service.name,
       servicePort: service.port,
       containerPort: service.targetPort,
       protocol: service.protocol,
-      nodePort: service.nodePort ?? null,
+      nodePort: service.nodePort ?? null
     };
 
     const priorPublic = snapshotPublicPortState(service.ports);
@@ -3214,12 +3311,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           port: primaryPort.servicePort,
           targetPort: primaryPort.containerPort,
           protocol: primaryPort.protocol,
-          nodePort: primaryPort.nodePort,
-        },
+          nodePort: primaryPort.nodePort
+        }
       });
 
       await tx.servicePort.deleteMany({
-        where: { serviceId: service.id },
+        where: { serviceId: service.id }
       });
 
       if (normalizedPorts.length > 0) {
@@ -3234,15 +3331,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               protocol: port.protocol,
               nodePort: port.nodePort,
               publicEnabled: prior ? prior.publicEnabled : false,
-              publicPort: prior ? prior.publicPort : null,
+              publicPort: prior ? prior.publicPort : null
             };
-          }),
+          })
         });
       }
     });
 
     const keptKeys = new Set(
-      normalizedPorts.map((port) => publicPortKey(port.servicePort, port.protocol)),
+      normalizedPorts.map((port) => publicPortKey(port.servicePort, port.protocol))
     );
     for (const [key, prior] of priorPublic) {
       if (keptKeys.has(key) || !prior.publicPort) continue;
@@ -3251,7 +3348,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           namespace: service.deployment.namespace,
           deploymentName: service.deployment.name,
           publicPort: prior.publicPort,
-          protocol: key.split(':')[1],
+          protocol: key.split(':')[1]
         });
       } catch (e: any) {
         console.error(`[Deployment/public] Failed to unexpose dropped port: ${e?.message}`);
@@ -3263,22 +3360,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -3291,7 +3388,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'service',
       targetId: serviceId,
       targetLabel: service.name,
-      metadata: { type: [service.type, exposePublic ? 'external' : 'internal'] },
+      metadata: { type: [service.type, exposePublic ? 'external' : 'internal'] }
     });
 
     return this.addInternalUrlsToDeployment(result);
@@ -3323,10 +3420,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -3346,10 +3443,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Check if the GitHub App has access to this repository
-    const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+    const installation = await this.githubService.findInstallationForRepo(
+      repoInfo.owner,
+      repoInfo.repo
+    );
     if (!installation) {
       throw new BadRequestException(
-        this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo),
+        this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
       );
     }
 
@@ -3381,27 +3481,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployEnabled: true,
         autoDeployBranch: branch,
         githubInstallationId: installation.installationId,
-        ...(watchPaths !== undefined ? { autoDeployPaths: watchPaths } : {}),
+        ...(watchPaths !== undefined ? { autoDeployPaths: watchPaths } : {})
       },
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -3418,8 +3518,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         repo: deployment.githubRepo,
         branch: [previousBranch ?? null, branch],
         wasEnabled: previouslyEnabled,
-        ...(watchPaths !== undefined ? { paths: [previousPaths, watchPaths] } : {}),
-      },
+        ...(watchPaths !== undefined ? { paths: [previousPaths, watchPaths] } : {})
+      }
     });
 
     return this.addInternalUrlsToDeployment(updated);
@@ -3447,10 +3547,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -3466,27 +3566,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        autoDeployEnabled: false,
+        autoDeployEnabled: false
       },
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -3502,8 +3602,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       metadata: {
         repo: deployment.githubRepo,
         branch: [previousBranch ?? null, null],
-        wasEnabled: previouslyEnabled,
-      },
+        wasEnabled: previouslyEnabled
+      }
     });
 
     return this.addInternalUrlsToDeployment(updated);
@@ -3515,24 +3615,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     commitMessage: string,
     commitAuthorName?: string,
     commitAuthorUsername?: string,
-    fromQueueRunId?: string,
+    fromQueueRunId?: string
   ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         envVars: true,
         volumes: true,
         services: {
           include: {
-            ports: true,
-          },
-        },
-      },
+            ports: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -3551,10 +3651,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         commitMessage,
         commitAuthorName,
         commitAuthorUsername,
-        branch: deployment.autoDeployBranch || deployment.githubBranch,
+        branch: deployment.autoDeployBranch || deployment.githubBranch
       });
       if (!startNow) {
-        console.log(`[Projects] Queued auto-deploy for ${deploymentId} (commit ${commitSha?.substring(0, 7)})`);
+        console.log(
+          `[Projects] Queued auto-deploy for ${deploymentId} (commit ${commitSha?.substring(0, 7)})`
+        );
         return { queued: true, commitSha };
       }
     }
@@ -3570,12 +3672,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (repoInfo) {
       try {
-        const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+        const installation = await this.githubService.findInstallationForRepo(
+          repoInfo.owner,
+          repoInfo.repo
+        );
         if (installation) {
           installationId = installation.installationId;
 
           // Get installation access token for cloning the repo
-          installationAccessToken = await this.githubService.getOrRefreshInstallationToken(installationId);
+          installationAccessToken =
+            await this.githubService.getOrRefreshInstallationToken(installationId);
 
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
           const orgSlug = deployment.project?.organization?.slug;
@@ -3597,17 +3703,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               output: {
                 title: 'Building...',
                 summary: `Deploying \`${deployment.name}\` from commit \`${commitSha.substring(0, 7)}\``,
-                text: `**Commit:** ${commitMessage.split('\n')[0]}\n\n**Branch:** ${deployment.autoDeployBranch || deployment.githubBranch}\n\n---\n\nBuilding...`,
-              },
+                text: `**Commit:** ${commitMessage.split('\n')[0]}\n\n**Branch:** ${deployment.autoDeployBranch || deployment.githubBranch}\n\n---\n\nBuilding...`
+              }
             }
           );
 
           checkRunId = checkRun.id;
-          console.log(`[Projects] Created GitHub check run ${checkRunId} for deployment ${deploymentId}`);
+          console.log(
+            `[Projects] Created GitHub check run ${checkRunId} for deployment ${deploymentId}`
+          );
           await this.buildQueue.attachGitHubContext(deploymentId, {
             checkRunId,
             installationId,
-            repoFullName: `${repoInfo.owner}/${repoInfo.repo}`,
+            repoFullName: `${repoInfo.owner}/${repoInfo.repo}`
           });
 
           // Also create a GitHub Deployment (appears under "Deployments" section)
@@ -3642,11 +3750,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 commitSha,
                 environment: deployment.name,
                 status: 'in_progress',
-                logUrl,
-              },
+                logUrl
+              }
             });
 
-            console.log(`[Projects] Created GitHub deployment ${ghDeployment.id} for ${deploymentId}`);
+            console.log(
+              `[Projects] Created GitHub deployment ${ghDeployment.id} for ${deploymentId}`
+            );
           } catch (ghErr) {
             console.error(`[Projects] Failed to create GitHub deployment: ${ghErr.message}`);
           }
@@ -3670,42 +3780,48 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         queuedCommitMessage: null,
         queuedCommitAuthorName: null,
         queuedCommitAuthorUsername: null,
-        queuedAt: null,
-      },
+        queuedAt: null
+      }
     });
 
     // Extract image name from current image
     const imageParts = deployment.image?.split('/') || [];
-    const imageNameWithTag = imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
+    const imageNameWithTag =
+      imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
     // Generate unique tag based on timestamp
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
 
     // Get service configuration
     const service = deployment.services[0];
-    const rawPorts = service?.ports.map(port => ({
-      name: port.name,
-      containerPort: port.targetPort,
-      servicePort: port.port,
-      protocol: port.protocol,
-      nodePort: port.nodePort || undefined,
-    })) || [];
+    const rawPorts =
+      service?.ports.map((port) => ({
+        name: port.name,
+        containerPort: port.targetPort,
+        servicePort: port.port,
+        protocol: port.protocol,
+        nodePort: port.nodePort || undefined
+      })) || [];
 
     const { resolved: env } = resolveEnvVars(
       deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
-      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId)
     );
 
-    const volumes = (deployment.volumes || []).map(vol => ({
+    const volumes = (deployment.volumes || []).map((vol) => ({
       name: vol.name,
       type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
       mountPath: vol.mountPath,
       pvcName: vol.pvcName || undefined,
       storageSize: vol.storageSize || undefined,
       hostPath: vol.hostPath || undefined,
-      readOnly: vol.readOnly,
+      readOnly: vol.readOnly
     }));
 
     // Start build process with GitHub check run info
@@ -3738,9 +3854,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         checkLogUrl: logUrl,
         installationId: installationId ? installationId.toString() : null,
         repoInfo,
-        triggerType: 'auto',
+        triggerType: 'auto'
       },
-      installationAccessToken, // Use GitHub App installation token for cloning
+      installationAccessToken // Use GitHub App installation token for cloning
     ).catch((error) => {
       console.error(`[Projects] Auto-deploy failed for deployment ${deploymentId}:`, error);
     });
@@ -3751,7 +3867,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { deploymentId },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(limit, 1), 100),
-      include: { triggeredBy: { select: { username: true, imageUrl: true } } },
+      include: { triggeredBy: { select: { username: true, imageUrl: true } } }
     });
     return runs.map((r) => ({
       id: r.id,
@@ -3765,7 +3881,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       scheduledAt: r.scheduledAt,
       startedAt: r.startedAt,
       finishedAt: r.finishedAt,
-      createdAt: r.createdAt,
+      createdAt: r.createdAt
     }));
   }
 
@@ -3775,7 +3891,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
     const run = await this.prisma.buildRun.findFirst({
       where: { id: runId, deploymentId },
-      select: { logs: true, status: true },
+      select: { logs: true, status: true }
     });
     if (!run) {
       throw new NotFoundException(`Build run ${runId} not found`);
@@ -3786,7 +3902,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (run.status === 'building') {
       const deployment = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { buildLogs: true },
+        select: { buildLogs: true }
       });
       return { logs: deployment?.buildLogs ?? null, live: true };
     }
@@ -3803,8 +3919,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployPaths: true,
         githubRepo: true,
         githubBranch: true,
-        githubInstallationId: true,
-      },
+        githubInstallationId: true
+      }
     });
 
     if (!deployment) {
@@ -3817,7 +3933,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
       if (repoInfo) {
         try {
-          const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+          const installation = await this.githubService.findInstallationForRepo(
+            repoInfo.owner,
+            repoInfo.repo
+          );
           appInstalled = !!installation;
         } catch {
           appInstalled = false;
@@ -3833,7 +3952,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // the branch matches, and nothing ever fires.
     const linked = deployment.githubInstallationId
       ? (await this.prisma.gitHubAppInstallation.count({
-          where: { installationId: deployment.githubInstallationId, suspendedAt: null },
+          where: { installationId: deployment.githubInstallationId, suspendedAt: null }
         })) > 0
       : false;
 
@@ -3851,8 +3970,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         : 'The GitHub App is not installed on this repository, so pushes cannot reach Orchard.';
     } else if (deployment.autoDeployEnabled && !linked) {
       message =
-        'This deployment is not bound to a GitHub App installation, so pushes are dropped. '
-        + 'Re-enable auto-deploy to bind it.';
+        'This deployment is not bound to a GitHub App installation, so pushes are dropped. ' +
+        'Re-enable auto-deploy to bind it.';
     }
 
     return {
@@ -3862,7 +3981,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       appInstalled,
       linked,
       deliverable,
-      message,
+      message
     };
   }
 
@@ -3871,7 +3990,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.gitHubDeployment.findMany({
       where: { deploymentId },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 20
     });
   }
   // ── Public deployment-port exposure ──
@@ -3879,11 +3998,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async pickFreePublicDeploymentPort(ip: string): Promise<number> {
     const dbPortsRaw = await this.prisma.database.findMany({
       where: { publicIp: ip, publicPort: { not: null } },
-      select: { publicPort: true },
+      select: { publicPort: true }
     });
     const svcPortsRaw = await this.prisma.servicePort.findMany({
       where: { publicEnabled: true, publicPort: { not: null } },
-      select: { publicPort: true },
+      select: { publicPort: true }
     });
     const taken = new Set<number>();
     for (const r of dbPortsRaw) if (typeof r.publicPort === 'number') taken.add(r.publicPort);
@@ -3905,13 +4024,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     throw new BadRequestException('Could not find a free public port after 200 attempts');
   }
 
-  private async syncPublicDeploymentNetworkPolicy(namespace: string, deploymentName: string, deploymentId: string) {
+  private async syncPublicDeploymentNetworkPolicy(
+    namespace: string,
+    deploymentName: string,
+    deploymentId: string
+  ) {
     const publicPorts = await this.prisma.servicePort.findMany({
       where: {
         publicEnabled: true,
-        service: { deploymentId },
+        service: { deploymentId }
       },
-      select: { targetPort: true, protocol: true },
+      select: { targetPort: true, protocol: true }
     });
     const deduped = new Map<string, { port: number; protocol: string }>();
     for (const p of publicPorts) {
@@ -3922,7 +4045,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.k8sNetwork.upsertPublicDeploymentNetworkPolicy(
         namespace,
         deploymentName,
-        Array.from(deduped.values()),
+        Array.from(deduped.values())
       );
     } catch (e: any) {
       console.error(`[Deployment/public] Failed to sync NetworkPolicy: ${e?.message}`);
@@ -3934,14 +4057,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     serviceId: string,
     portId: string,
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
-    const { user, port, deployment } = await this.access.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const { user, port, deployment } = await this.access.assertServicePortEditor(
+      deploymentId,
+      serviceId,
+      portId,
+      clerkId,
+      userData
+    );
 
-    const org = await this.prisma.organization.findUnique({ where: { id: deployment.project.organizationId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: deployment.project.organizationId }
+    });
     const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {
-      throw new BadRequestException('No public IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.');
+      throw new BadRequestException(
+        'No public IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.'
+      );
     }
 
     if (port.publicEnabled && port.publicPort) {
@@ -3957,15 +4090,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       loadBalancerIp: ip,
       publicPort,
       targetPort: port.targetPort,
-      protocol: port.protocol,
+      protocol: port.protocol
     });
 
     await this.prisma.servicePort.update({
       where: { id: port.id },
-      data: { publicEnabled: true, publicPort },
+      data: { publicEnabled: true, publicPort }
     });
 
-    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+    await this.syncPublicDeploymentNetworkPolicy(
+      deployment.namespace,
+      deployment.name,
+      deployment.id
+    );
 
     void this.audit.log({
       action: 'service.port.public_enabled',
@@ -3977,7 +4114,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'service_port',
       targetId: port.id,
       targetLabel: `${deployment.name}:${port.targetPort}`,
-      metadata: { publicPort, protocol: port.protocol, ip },
+      metadata: { publicPort, protocol: port.protocol, ip }
     });
 
     const host = this.k8sNetwork.publicDeploymentBaseDomain();
@@ -3989,9 +4126,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     serviceId: string,
     portId: string,
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
-    const { user, port, deployment } = await this.access.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const { user, port, deployment } = await this.access.assertServicePortEditor(
+      deploymentId,
+      serviceId,
+      portId,
+      clerkId,
+      userData
+    );
     const previousPublicPort = port.publicPort;
 
     if (port.publicEnabled && port.publicPort) {
@@ -4000,7 +4143,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           namespace: deployment.namespace,
           deploymentName: deployment.name,
           publicPort: port.publicPort,
-          protocol: port.protocol,
+          protocol: port.protocol
         });
       } catch (e: any) {
         console.error(`[Deployment/public] Failed to delete public Service: ${e?.message}`);
@@ -4009,10 +4152,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.prisma.servicePort.update({
       where: { id: port.id },
-      data: { publicEnabled: false, publicPort: null },
+      data: { publicEnabled: false, publicPort: null }
     });
 
-    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+    await this.syncPublicDeploymentNetworkPolicy(
+      deployment.namespace,
+      deployment.name,
+      deployment.id
+    );
 
     void this.audit.log({
       action: 'service.port.public_disabled',
@@ -4024,7 +4171,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'service_port',
       targetId: port.id,
       targetLabel: `${deployment.name}:${port.targetPort}`,
-      metadata: { previousPublicPort, protocol: port.protocol },
+      metadata: { previousPublicPort, protocol: port.protocol }
     });
 
     return { enabled: false };
@@ -4033,12 +4180,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   /** Load the shared vars of a deployment's environment (empty if none). */
   async loadSharedVarsForDeployment(
     deploymentId: string,
-    environmentId: string | null,
+    environmentId: string | null
   ): Promise<EnvVar[]> {
     if (!environmentId) return [];
     const vars = await this.prisma.environmentSharedVar.findMany({
       where: { environmentId },
-      select: { key: true, value: true, secret: true },
+      select: { key: true, value: true, secret: true }
     });
     // Secret values are stored encrypted at rest — decrypt before they feed the
     // resolver so plaintext reaches the pod/build.
@@ -4052,11 +4199,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    * was never write-only in the first place.
    */
   private async readOwnEnvVars(
-    deploymentId: string,
+    deploymentId: string
   ): Promise<{ key: string; value: string; secret: boolean }[]> {
     const own = await this.prisma.deploymentEnvVar.findMany({
       where: { deploymentId },
-      select: { key: true, value: true, secret: true },
+      select: { key: true, value: true, secret: true }
     });
     return own.map((v) => this.crypto.maybeDecrypt(v));
   }
@@ -4068,7 +4215,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    */
   async loadResolvedEnvForDeployment(
     deploymentId: string,
-    environmentId: string | null,
+    environmentId: string | null
   ): Promise<{ resolved: EnvVar[]; errors: { key: string; missingRef: string }[] }> {
     const own = await this.readOwnEnvVars(deploymentId);
     const shared = await this.loadSharedVarsForDeployment(deploymentId, environmentId);
@@ -4082,12 +4229,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    * because the same rows feed the pod spec and the builder in plaintext.
    */
   static redactSecretEnv<
-    T extends { envVars?: { value: string | null; secret?: boolean }[] | null },
+    T extends { envVars?: { value: string | null; secret?: boolean }[] | null }
   >(d: T): T {
     if (!d?.envVars) return d;
     return {
       ...d,
-      envVars: d.envVars.map((ev) => (ev.secret ? { ...ev, value: null } : ev)),
+      envVars: d.envVars.map((ev) => (ev.secret ? { ...ev, value: null } : ev))
     };
   }
 
@@ -4097,18 +4244,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       buildLogs?: string | null;
       buildError?: string | null;
       ingresses?: any[] | null;
-    },
+    }
   >(d: T): T {
     return {
       ...d,
-      envVars: d.envVars
-        ? d.envVars.map((ev) => ({ ...ev, value: null }))
-        : d.envVars,
-      ingresses: d.ingresses
-        ? d.ingresses.map((ing) => scrubIngress(ing))
-        : d.ingresses,
+      envVars: d.envVars ? d.envVars.map((ev) => ({ ...ev, value: null })) : d.envVars,
+      ingresses: d.ingresses ? d.ingresses.map((ing) => scrubIngress(ing)) : d.ingresses,
       buildLogs: null,
-      buildError: null,
+      buildError: null
     } as T;
   }
 
@@ -4119,13 +4262,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     M extends {
       user?: { email?: string | null } | null;
       adder?: { email?: string | null } | null;
-    },
+    }
   >(members: M[] | null | undefined): M[] {
     if (!members) return [] as M[];
     return members.map((m) => ({
       ...m,
       user: m.user ? { ...m.user, email: null } : m.user,
-      adder: m.adder ? { ...m.adder, email: null } : m.adder,
+      adder: m.adder ? { ...m.adder, email: null } : m.adder
     }));
   }
 
@@ -4136,26 +4279,38 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     data: { nodePoolId?: string | null; placementOverride?: unknown },
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string },
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: true },
+      include: { project: true }
     });
     if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
-    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployment placement');
+    await this.authz.requireProjectEdit(
+      deployment.project.id,
+      user.id,
+      'update deployment placement'
+    );
     await this.nodesService.assertPoolAssignable({
       nodePoolId: data.nodePoolId,
       placementOverride: data.placementOverride,
-      userId: user.id,
+      userId: user.id
     });
     return this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         nodePoolId: data.nodePoolId ?? null,
-        placementOverride: (data.placementOverride ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull,
-      },
+        placementOverride: (data.placementOverride ?? Prisma.DbNull) as
+          | Prisma.InputJsonValue
+          | typeof Prisma.DbNull
+      }
     });
   }
 
@@ -4165,7 +4320,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { organizationId: true },
+      select: { organizationId: true }
     });
     if (!project) return { allowedNodes: null, deniedNodes: [] };
     const placement = await this.nodesService.getPlacementForOrg(project.organizationId);
@@ -4175,11 +4330,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   assertNotComposeManaged(
     deployment: { composeStackId?: string | null } | null | undefined,
     action: string,
-    hint?: string,
+    hint?: string
   ) {
     if (deployment?.composeStackId) {
       throw new BadRequestException(
-        `This deployment is managed by a Compose file. ${action} via its parent compose stack.${hint ? ` ${hint}` : ''}`,
+        `This deployment is managed by a Compose file. ${action} via its parent compose stack.${hint ? ` ${hint}` : ''}`
       );
     }
   }
@@ -4188,14 +4343,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (deploymentIds.length === 0) return [];
     const objects = await this.prisma.k8sObject.findMany({
       where: { kind: 'Pod', deploymentId: { in: deploymentIds } },
-      select: { deploymentId: true, manifest: true },
+      select: { deploymentId: true, manifest: true }
     });
     return objects.map((o) => {
       const pod = o.manifest as any;
       const containerStatuses: any[] = pod.status?.containerStatuses ?? [];
       const restartCount = containerStatuses.reduce(
         (sum: number, c: any) => sum + (c.restartCount ?? 0),
-        0,
+        0
       );
       const createdAt = pod.status?.startTime ?? pod.metadata?.creationTimestamp ?? null;
       return {
@@ -4222,11 +4377,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               ? {
                   reason: term.reason,
                   exitCode: term.exitCode ?? null,
-                  finishedAt: term.finishedAt ?? null,
+                  finishedAt: term.finishedAt ?? null
                 }
-              : null,
+              : null
           };
-        }),
+        })
       };
     });
   }
@@ -4249,7 +4404,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           podName: pod.name,
           message: reason
             ? `Back-off restarting failed container (${reason})`
-            : 'Back-off restarting failed container',
+            : 'Back-off restarting failed container'
         };
       });
   }
@@ -4277,10 +4432,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             ? {
                 reason: container.lastTerminationReason,
                 exitCode: container.lastExitCode ?? null,
-                finishedAt: container.lastTerminatedAt ?? null,
+                finishedAt: container.lastTerminatedAt ?? null
               }
-            : null,
-        })) ?? [],
+            : null
+        })) ?? []
     }));
   }
 
@@ -4290,7 +4445,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
    */
   async computeDeploymentStatus(
     deployment: any,
-    prefetched?: { pods: any[]; warnings: any[] },
+    prefetched?: { pods: any[]; warnings: any[] }
   ): Promise<string> {
     if (deployment.replicas === 0) {
       return 'stopped';
@@ -4309,7 +4464,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       } else {
         const livePods = await this.k8sWorkload.getDeploymentPods(
           deployment.name,
-          deployment.namespace,
+          deployment.namespace
         );
         pods = this.formatLivePods(livePods?.pods) ?? [];
         warnings = livePods?.warnings || [];
@@ -4323,10 +4478,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         return 'pending';
       }
 
-      const hasBackOffWarning = warnings.some(warning =>
-        warning.message?.toLowerCase().includes('back-off') ||
-        warning.message?.toLowerCase().includes('backoff') ||
-        warning.message?.toLowerCase().includes('crashloop')
+      const hasBackOffWarning = warnings.some(
+        (warning) =>
+          warning.message?.toLowerCase().includes('back-off') ||
+          warning.message?.toLowerCase().includes('backoff') ||
+          warning.message?.toLowerCase().includes('crashloop')
       );
 
       const hasCrashingPods = allPods.some((pod: any) => {
@@ -4395,7 +4551,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // built any other way would otherwise be advertised on an unroutable port.
       const portsWithUrls = ports.map((port: any) => ({
         ...port,
-        internalUrl: `${host}:${port.port || port.targetPort || service.port || 80}`,
+        internalUrl: `${host}:${port.port || port.targetPort || service.port || 80}`
       }));
 
       const internalUrls = portsWithUrls.map((p: any) => p.internalUrl);
@@ -4406,7 +4562,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ports: portsWithUrls.length > 0 ? portsWithUrls : ports,
         internalHost: host,
         internalUrl: internalUrls.length > 0 ? internalUrls[0] : fallback,
-        internalUrls: internalUrls.length > 0 ? internalUrls : [fallback],
+        internalUrls: internalUrls.length > 0 ? internalUrls : [fallback]
       };
     });
   }
@@ -4495,7 +4651,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         containerPort,
         servicePort,
         protocol,
-        nodePort,
+        nodePort
       });
     }
 
@@ -4509,7 +4665,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async updateDeploymentStrategy(
     deploymentId: string,
     strategy: 'rollingUpdate' | 'recreate',
-    userId?: string,
+    userId?: string
   ) {
     if (strategy !== 'rollingUpdate' && strategy !== 'recreate') {
       throw new BadRequestException('Invalid deploy strategy');
@@ -4517,7 +4673,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { volumes: true },
+      include: { volumes: true }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
     this.assertNotComposeManaged(deployment, 'Change deploy strategy');
@@ -4532,19 +4688,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
     if (hasPvc && strategy === 'rollingUpdate') {
       throw new BadRequestException(
-        'This deployment has a PVC volume — rolling updates are not supported. Remove the PVC to switch back to rolling updates.',
+        'This deployment has a PVC volume — rolling updates are not supported. Remove the PVC to switch back to rolling updates.'
       );
     }
 
     await this.k8sWorkload.updateDeploymentStrategy(
       deployment.name,
       deployment.namespace,
-      strategy,
+      strategy
     );
 
     return this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { deployStrategy: strategy },
+      data: { deployStrategy: strategy }
     });
   }
 
@@ -4560,12 +4716,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async updateDeploymentDisruptionBudget(
     deploymentId: string,
     minAvailable: number,
-    userId?: string,
+    userId?: string
   ) {
     const parsed = Number(minAvailable);
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_PDB_MIN_AVAILABLE) {
       throw new BadRequestException(
-        `Minimum available pods must be a whole number between 0 and ${MAX_PDB_MIN_AVAILABLE}`,
+        `Minimum available pods must be a whole number between 0 and ${MAX_PDB_MIN_AVAILABLE}`
       );
     }
 
@@ -4575,12 +4731,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
-      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change the disruption budget');
+      await this.authz.requireProjectEdit(
+        deployment.projectId,
+        userId,
+        'change the disruption budget'
+      );
     }
 
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { pdbMinAvailable: parsed },
+      data: { pdbMinAvailable: parsed }
     });
 
     // Deliberately not swallowed here: this is the one path where the user is
@@ -4590,7 +4750,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         dedupeKey: `op:deployment.disruptionBudget:${deploymentId}`,
         opType: 'deployment.disruptionBudget',
         deploymentId,
-        requestedById: userId,
+        requestedById: userId
       });
     } else {
       await this.applyDisruptionBudgetToCluster(deploymentId);
@@ -4598,7 +4758,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     return {
       ...updated,
-      pdbActive: disruptionBudgetActive(parsed, updated.replicas),
+      pdbActive: disruptionBudgetActive(parsed, updated.replicas)
     };
   }
 
@@ -4625,8 +4785,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         composeStackId: true,
         project: { select: { organizationId: true } },
         services: { select: { ports: { select: { id: true } } } },
-        ingresses: { select: { host: true } },
-      },
+        ingresses: { select: { host: true } }
+      }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
 
@@ -4639,15 +4799,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const scopes: [string, string][] = [
       ['deployment', deployment.id],
       ['project', deployment.projectId],
-      ['org', deployment.project.organizationId],
+      ['org', deployment.project.organizationId]
     ];
     const [ruleCount, settingCount] = await Promise.all([
       this.prisma.notificationRule.count({
-        where: { enabled: true, OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) },
+        where: { enabled: true, OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) }
       }),
       this.prisma.userNotificationSetting.count({
-        where: { OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) },
-      }),
+        where: { OR: scopes.map(([scopeType, scopeId]) => ({ scopeType, scopeId })) }
+      })
     ]);
 
     const hasPublicPort = deployment.services.some((s) => s.ports.length > 0);
@@ -4655,15 +4815,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Compose owns its services' config, so telling someone to change it here
     // would send them somewhere that rejects the change.
     const editable = !deployment.composeStackId;
-    const hasDockerfileHealthCheck = !deployment.healthCheckOverride
-      && !!coerceDockerfileHealthCheck(deployment.dockerfileHealthCheck);
+    const hasDockerfileHealthCheck =
+      !deployment.healthCheckOverride &&
+      !!coerceDockerfileHealthCheck(deployment.dockerfileHealthCheck);
 
     return {
       steps: [
         {
           id: 'auto-deploy',
           applicable: editable && !!deployment.githubRepo,
-          done: deployment.autoDeployEnabled,
+          done: deployment.autoDeployEnabled
         },
         { id: 'domain', applicable: editable && hasPublicPort, done: hasCustomDomain },
         { id: 'resources', applicable: editable, done: deployment.cpuRequestMilli != null },
@@ -4673,13 +4834,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           applicable: editable,
           // A repo that declares its own HEALTHCHECK has already done this
           // step, and being told to do it again is how a nudge becomes noise.
-          done: deployment.healthCheckEnabled || hasDockerfileHealthCheck,
+          done: deployment.healthCheckEnabled || hasDockerfileHealthCheck
         },
         // No pull-policy step: a moving tag now defaults to Always, so the only
         // way to be on IfNotPresent is to have chosen it, and nagging someone
         // about a deliberate choice is just noise.
-        { id: 'cli', applicable: true, done: false },
-      ],
+        { id: 'cli', applicable: true, done: false }
+      ]
     };
   }
 
@@ -4688,14 +4849,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async updateDeploymentPullPolicy(
     deploymentId: string,
     policy: 'Always' | 'IfNotPresent' | null,
-    userId?: string,
+    userId?: string
   ) {
     if (policy != null && policy !== 'Always' && policy !== 'IfNotPresent') {
       throw new BadRequestException('Invalid image pull policy');
     }
 
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
     this.assertNotComposeManaged(deployment, 'Change the image pull policy');
@@ -4718,13 +4879,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.k8sWorkload.updateDeploymentPullPolicy(
         deployment.name,
         deployment.namespace,
-        effective,
+        effective
       );
     }
 
     return this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { imagePullPolicy: policy },
+      data: { imagePullPolicy: policy }
     });
   }
 
@@ -4735,7 +4896,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
     this.assertNotComposeManaged(deployment, 'Change the image');
@@ -4750,16 +4911,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // overwritten by the next build.
     if (deployment.githubRepo) {
       throw new BadRequestException(
-        'This deployment is built from a GitHub repository. Use Redeploy to rebuild from source.',
+        'This deployment is built from a GitHub repository. Use Redeploy to rebuild from source.'
       );
     }
 
     // updateDeploymentImage patches k8s AND writes deployment.image in Prisma.
-    await this.k8sWorkload.updateDeploymentImage(
-      deployment.name,
-      deployment.namespace,
-      trimmed,
-    );
+    await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, trimmed);
 
     // The pull policy is derived from the tag, so moving from a pinned tag to a
     // moving one has to re-derive it. Only when the user has not pinned it: an
@@ -4772,7 +4929,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .updateDeploymentPullPolicy(deployment.name, deployment.namespace, after)
           .catch((e: any) => {
             console.warn(
-              `[Deployments] pull policy re-derive failed for ${deployment.name}: ${e?.message ?? e}`,
+              `[Deployments] pull policy re-derive failed for ${deployment.name}: ${e?.message ?? e}`
             );
           });
       }
@@ -4784,76 +4941,87 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   async updateDeploymentResources(
     deploymentId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
-    userId?: string,
+    userId?: string
   ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: true },
+      include: { project: true }
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
     this.assertNotComposeManaged(
       deployment,
       'Update resources',
-      'Set `deploy.resources.limits` on the service in your compose file, then redeploy the stack to apply it.',
+      'Set `deploy.resources.limits` on the service in your compose file, then redeploy the stack to apply it.'
     );
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
-      await this.authz.requireProjectEdit(deployment.projectId, userId, 'update deployment resources');
+      await this.authz.requireProjectEdit(
+        deployment.projectId,
+        userId,
+        'update deployment resources'
+      );
     }
 
     // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
     const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
 
     // Only push to K8s if the deployment exists in the cluster.
-    const k8sExistsRes = await this.k8sWorkload.getKubernetesDeployment(
-      deployment.name, deployment.namespace,
-    ).then((d) => d !== null).catch(() => false);
+    const k8sExistsRes = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
 
     if (isUnlimited) {
       if (k8sExistsRes) {
-        await this.k8sWorkload.removeDeploymentResources(
-          deployment.namespace,
-          deployment.name,
-        );
+        await this.k8sWorkload.removeDeploymentResources(deployment.namespace, deployment.name);
       }
     } else {
-      const resolved = await this.quotasService.resolvePodResources(deployment.projectId, {
-        cpuRequestMilli: data.cpuRequestMilli,
-        memoryRequestBytes: data.memoryRequestBytes,
-      }, deployment.image);
+      const resolved = await this.quotasService.resolvePodResources(
+        deployment.projectId,
+        {
+          cpuRequestMilli: data.cpuRequestMilli,
+          memoryRequestBytes: data.memoryRequestBytes
+        },
+        deployment.image
+      );
 
       // The deployment's current footprint is already counted in org/member
       // usage, so only the increase is additive — charging the full new
       // footprint would double-count the running pods. Previously-unlimited
       // deployments contribute nothing to counted usage, so their whole new
       // footprint is the increase.
-      const wasUnlimited = deployment.cpuRequestMilli === 0 &&
+      const wasUnlimited =
+        deployment.cpuRequestMilli === 0 &&
         (deployment.memoryRequestBytes === null || deployment.memoryRequestBytes === BigInt(0));
       const current = wasUnlimited
         ? { cpuMilli: 0, memoryBytes: 0 }
-        : await this.quotasService.resolvePodResources(deployment.projectId, {
-            cpuRequestMilli: deployment.cpuRequestMilli,
-            memoryRequestBytes:
-              deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
-          }, deployment.image);
+        : await this.quotasService.resolvePodResources(
+            deployment.projectId,
+            {
+              cpuRequestMilli: deployment.cpuRequestMilli,
+              memoryRequestBytes:
+                deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null
+            },
+            deployment.image
+          );
       const replicasRes = deployment.replicas || 1;
       const increase = {
         cpuMilli: Math.max(0, (resolved.cpuMilli - current.cpuMilli) * replicasRes),
-        memoryBytes: Math.max(0, (resolved.memoryBytes - current.memoryBytes) * replicasRes),
+        memoryBytes: Math.max(0, (resolved.memoryBytes - current.memoryBytes) * replicasRes)
       };
 
       if (increase.cpuMilli > 0 || increase.memoryBytes > 0) {
         // Org-wide delta check.
         await this.quotasService.enforceOrgCapForNewPod(
           deployment.project.organizationId,
-          increase,
+          increase
         );
         // Per-user allowance check (charged to project owner).
         await this.quotasService.enforceMemberAllowanceForNewPod(
           deployment.project.organizationId,
           deployment.project.ownerId,
-          increase,
+          increase
         );
       }
 
@@ -4861,7 +5029,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.k8sWorkload.updateDeploymentResources(
           deployment.namespace,
           deployment.name,
-          resolved,
+          resolved
         );
       }
     }
@@ -4870,8 +5038,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { id: deploymentId },
       data: {
         cpuRequestMilli: data.cpuRequestMilli,
-        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
-      },
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null
+      }
     });
   }
 
@@ -4928,8 +5096,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        organization: true,
-      },
+        organization: true
+      }
     });
 
     if (!project) {
@@ -4948,7 +5116,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const nameInput = String(data.name || '').trim();
     const image = String(data.image || '').trim();
-    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+    const replicas =
+      data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
 
     if (!nameInput) {
       throw new BadRequestException('Deployment name is required');
@@ -4965,11 +5134,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const existingDeployment = await this.prisma.deployment.findFirst({
-      where: { environmentId: environment.id, name },
+      where: { environmentId: environment.id, name }
     });
 
     if (existingDeployment) {
-      throw new BadRequestException('A deployment with this name already exists in this environment');
+      throw new BadRequestException(
+        'A deployment with this name already exists in this environment'
+      );
     }
 
     const envEntries = Array.isArray(data.env)
@@ -4978,7 +5149,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret),
+            secret: Boolean((entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -4992,7 +5163,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
       value: e.value,
-      secret: e.secret,
+      secret: e.secret
     }));
 
     // Injected form resolves shared references against the environment's shared
@@ -5002,36 +5173,43 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const exposePublic = Boolean(data.exposePublic);
 
-    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
-      ? data.ports
-      : [
-          {
-            name: 'http',
-            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
-            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
-            protocol: 'TCP',
-          },
-        ];
+    const rawPorts =
+      Array.isArray(data.ports) && data.ports.length > 0
+        ? data.ports
+        : [
+            {
+              name: 'http',
+              containerPort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+              servicePort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+              protocol: 'TCP'
+            }
+          ];
 
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
 
     // Resolve per-pod resources (explicit override → org default → fallback).
-    const podResources = await this.quotasService.resolvePodResources(project.id, {
-      cpuRequestMilli: data.cpuRequestMilli ?? null,
-      memoryRequestBytes: data.memoryRequestBytes ?? null,
-    }, image);
+    const podResources = await this.quotasService.resolvePodResources(
+      project.id,
+      {
+        cpuRequestMilli: data.cpuRequestMilli ?? null,
+        memoryRequestBytes: data.memoryRequestBytes ?? null
+      },
+      image
+    );
 
     await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
       cpuMilli: podResources.cpuMilli * replicas,
-      memoryBytes: podResources.memoryBytes * replicas,
+      memoryBytes: podResources.memoryBytes * replicas
     });
     await this.quotasService.enforceMemberAllowanceForNewPod(
       project.organizationId,
       project.ownerId,
       {
         cpuMilli: podResources.cpuMilli * replicas,
-        memoryBytes: podResources.memoryBytes * replicas,
-      },
+        memoryBytes: podResources.memoryBytes * replicas
+      }
     );
     // Make sure the namespace ResourceQuota/LimitRange reflect current caps.
     await this.quotasService.applyProjectQuota(project.id).catch((err) => {
@@ -5041,7 +5219,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.nodesService.assertPoolAssignable({
       nodePoolId: data.nodePoolId,
       placementOverride: data.placementOverride,
-      userId: user.id,
+      userId: user.id
     });
     const placement = await this.resolvePlacementForProject(project.id);
     const pool = await this.nodesService.resolvePool(data.nodePoolId ?? null);
@@ -5049,7 +5227,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // PVC volumes force the Recreate update strategy on k8s; mirror that in
     // the DB so the UI shows the truth from the moment the deployment exists.
     const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
-    const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
+    const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate
+      ? 'recreate'
+      : 'rollingUpdate';
     // Stored as given: null keeps it automatic and re-derives if the image
     // later changes; a value here is the caller pinning it.
     const pullPolicyOverride =
@@ -5081,138 +5261,149 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       resources: podResources,
       deployStrategy: initialStrategy,
       imagePullPolicy: resolvePullPolicy(pullPolicyOverride, image),
-      pdbMinAvailable: initialPdbMinAvailable,
+      pdbMinAvailable: initialPdbMinAvailable
     });
 
     let createdDeployment;
     try {
       createdDeployment = await this.prisma.$transaction(async (tx) => {
-      const deployment = await tx.deployment.create({
-        data: {
-          projectId: project.id,
-          environmentId: environment.id,
-          name,
-          namespace: environment.namespace,
-          image,
-          replicas,
-          status: 'running',
-          createdBy: user.id,
-          templateInstanceId: data.templateInstanceId ?? null,
-          composeStackId: data.composeStackId ?? null,
-          composeServiceName: data.composeServiceName ?? null,
-          deployStrategy: initialStrategy,
-          imagePullPolicy: pullPolicyOverride,
-          pdbMinAvailable: initialPdbMinAvailable,
-          nodePoolId: data.nodePoolId ?? null,
-          placementOverride: (placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
-          cpuRequestMilli: data.cpuRequestMilli ?? null,
-          memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
-        },
-      });
-
-      if (env.length > 0) {
-        await tx.deploymentEnvVar.createMany({
-          data: env.map((entry) => ({
-            deploymentId: deployment.id,
-            key: entry.key,
-            value: this.crypto.encryptIfSecret(entry.value, entry.secret),
-            secret: entry.secret,
-          })),
+        const deployment = await tx.deployment.create({
+          data: {
+            projectId: project.id,
+            environmentId: environment.id,
+            name,
+            namespace: environment.namespace,
+            image,
+            replicas,
+            status: 'running',
+            createdBy: user.id,
+            templateInstanceId: data.templateInstanceId ?? null,
+            composeStackId: data.composeStackId ?? null,
+            composeServiceName: data.composeServiceName ?? null,
+            deployStrategy: initialStrategy,
+            imagePullPolicy: pullPolicyOverride,
+            pdbMinAvailable: initialPdbMinAvailable,
+            nodePoolId: data.nodePoolId ?? null,
+            placementOverride: (placementOverride ?? undefined) as
+              | Prisma.InputJsonValue
+              | undefined,
+            cpuRequestMilli: data.cpuRequestMilli ?? null,
+            memoryRequestBytes:
+              data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null
+          }
         });
-      }
 
-      if (volumes.length > 0) {
-        await tx.deploymentVolume.createMany({
-          data: volumes.map((vol) => {
-            let volType: 'pvc' | 'hostPath' | 'emptyDir' = 'emptyDir';
-            if (vol.type === 'pvc') volType = 'pvc';
-            else if (vol.type === 'hostPath') volType = 'hostPath';
-            return {
+        if (env.length > 0) {
+          await tx.deploymentEnvVar.createMany({
+            data: env.map((entry) => ({
               deploymentId: deployment.id,
-              name: vol.name.trim(),
-              type: volType,
-              mountPath: vol.mountPath.trim(),
-              pvcName: vol.type === 'pvc' ? (vol.pvcName?.trim() || vol.name.trim()) : null,
-              storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
-              hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
-              readOnly: Boolean(vol.readOnly),
-            };
-          }),
+              key: entry.key,
+              value: this.crypto.encryptIfSecret(entry.value, entry.secret),
+              secret: entry.secret
+            }))
+          });
+        }
+
+        if (volumes.length > 0) {
+          await tx.deploymentVolume.createMany({
+            data: volumes.map((vol) => {
+              let volType: 'pvc' | 'hostPath' | 'emptyDir' = 'emptyDir';
+              if (vol.type === 'pvc') volType = 'pvc';
+              else if (vol.type === 'hostPath') volType = 'hostPath';
+              return {
+                deploymentId: deployment.id,
+                name: vol.name.trim(),
+                type: volType,
+                mountPath: vol.mountPath.trim(),
+                pvcName: vol.type === 'pvc' ? vol.pvcName?.trim() || vol.name.trim() : null,
+                storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+                hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+                readOnly: Boolean(vol.readOnly)
+              };
+            })
+          });
+        }
+
+        const normalizedPorts = deploymentResult.ports || [];
+        const primaryPort = normalizedPorts[0] || {
+          name: 'http',
+          containerPort: 80,
+          servicePort: 80,
+          protocol: 'TCP',
+          nodePort: null
+        };
+        const primaryNodePort =
+          primaryPort.nodePort !== undefined && primaryPort.nodePort !== null
+            ? primaryPort.nodePort
+            : null;
+
+        const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
+        const externalIp = deploymentResult.externalIp || null;
+
+        const service = await tx.service.create({
+          data: {
+            deploymentId: deployment.id,
+            name,
+            type: serviceType,
+            port: primaryPort.servicePort,
+            targetPort: primaryPort.containerPort,
+            protocol: primaryPort.protocol,
+            externalIp,
+            nodePort: primaryNodePort
+          }
         });
-      }
 
-      const normalizedPorts = deploymentResult.ports || [];
-      const primaryPort = normalizedPorts[0] || {
-        name: 'http',
-        containerPort: 80,
-        servicePort: 80,
-        protocol: 'TCP',
-        nodePort: null,
-      };
-      const primaryNodePort =
-        primaryPort.nodePort !== undefined && primaryPort.nodePort !== null
-          ? primaryPort.nodePort
-          : null;
+        if (normalizedPorts.length > 0) {
+          await tx.servicePort.createMany({
+            data: normalizedPorts.map((portEntry) => ({
+              serviceId: service.id,
+              name: portEntry.name,
+              port: portEntry.servicePort,
+              targetPort: portEntry.containerPort,
+              protocol: portEntry.protocol,
+              nodePort:
+                portEntry.nodePort !== undefined && portEntry.nodePort !== null
+                  ? portEntry.nodePort
+                  : null
+            }))
+          });
+        }
 
-      const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
-      const externalIp = deploymentResult.externalIp || null;
-
-      const service = await tx.service.create({
-        data: {
-          deploymentId: deployment.id,
-          name,
-          type: serviceType,
-          port: primaryPort.servicePort,
-          targetPort: primaryPort.containerPort,
-          protocol: primaryPort.protocol,
-          externalIp,
-          nodePort: primaryNodePort,
-        },
-      });
-
-      if (normalizedPorts.length > 0) {
-        await tx.servicePort.createMany({
-          data: normalizedPorts.map((portEntry) => ({
-            serviceId: service.id,
-            name: portEntry.name,
-            port: portEntry.servicePort,
-            targetPort: portEntry.containerPort,
-            protocol: portEntry.protocol,
-            nodePort:
-              portEntry.nodePort !== undefined && portEntry.nodePort !== null
-                ? portEntry.nodePort
-                : null,
-          })),
+        return tx.deployment.findUnique({
+          where: { id: deployment.id },
+          include: {
+            pods: true,
+            services: {
+              include: {
+                ports: true
+              }
+            },
+            envVars: true,
+            volumes: true,
+            ingresses: {
+              include: {
+                service: true
+              }
+            },
+            project: {
+              include: {
+                organization: true
+              }
+            }
+          }
         });
-      }
-
-      return tx.deployment.findUnique({
-        where: { id: deployment.id },
-        include: {
-          pods: true,
-          services: {
-            include: {
-              ports: true,
-            },
-          },
-          envVars: true,
-          volumes: true,
-          ingresses: {
-            include: {
-              service: true,
-            },
-          },
-          project: {
-            include: {
-              organization: true,
-            },
-          },
-        },
-      });
       });
     } catch (e) {
-      try { await this.k8sWorkload.deleteDeployment(name, environment.namespace); } catch { /* ignore */ }
-      try { await this.k8sNetwork.deleteService(environment.namespace, name); } catch { /* ignore */ }
+      try {
+        await this.k8sWorkload.deleteDeployment(name, environment.namespace);
+      } catch {
+        /* ignore */
+      }
+      try {
+        await this.k8sNetwork.deleteService(environment.namespace, name);
+      } catch {
+        /* ignore */
+      }
       throw e;
     }
 
@@ -5227,7 +5418,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetType: 'deployment',
         targetId: createdDeployment.id,
         targetLabel: createdDeployment.name,
-        metadata: { image, replicas, source: 'image' },
+        metadata: { image, replicas, source: 'image' }
       });
     }
 
@@ -5300,8 +5491,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        organization: true,
-      },
+        organization: true
+      }
     });
 
     if (!project) {
@@ -5316,12 +5507,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('hostPath volumes are not permitted');
     }
 
-    if ((data.buildWithDepot || data.persistentBuildCache) && !(await this.authz.isSuperAdmin(user.id))) {
-      throw new ForbiddenException('Super builds and persistent build cache are superadmin-only settings');
+    if (
+      (data.buildWithDepot || data.persistentBuildCache) &&
+      !(await this.authz.isSuperAdmin(user.id))
+    ) {
+      throw new ForbiddenException(
+        'Super builds and persistent build cache are superadmin-only settings'
+      );
     }
 
     const nameInput = String(data.name || '').trim();
-    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+    const replicas =
+      data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
     let repoUrl = String(data.repoUrl || data['githubRepo'] || '').trim();
     // Accept owner/repo shorthand and convert to full URL
     if (repoUrl && !repoUrl.startsWith('http')) {
@@ -5337,7 +5534,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // enforced again inside DockerService.cloneRepository as defence in
     // depth — see isSafeGitRef / isSafeRelativePath there.
     const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
-    if (branch.length > 200 || branch.startsWith('-') || branch.includes('..') || !GIT_REF_RE.test(branch)) {
+    if (
+      branch.length > 200 ||
+      branch.startsWith('-') ||
+      branch.includes('..') ||
+      !GIT_REF_RE.test(branch)
+    ) {
       throw new BadRequestException('Invalid branch name');
     }
     if (tag.length > 200 || tag.startsWith('-') || tag.includes('..') || !GIT_REF_RE.test(tag)) {
@@ -5373,7 +5575,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!parsed) {
       throw new BadRequestException('Could not parse repository URL');
     }
-    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(
+      user.id,
+      parsed.owner,
+      parsed.repo
+    );
     if (!canAccess) {
       // If the user can't access via their token, check if the repo is public
       const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
@@ -5390,7 +5596,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // installation with a colliding repo full_name.
     // For public repos without the app installed, installationId will be null
     // (auto-deploy won't work, but manual builds can clone without auth).
-    const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
+    const repoInstallation = await this.githubService.findInstallationForRepo(
+      parsed.owner,
+      parsed.repo
+    );
 
     // Auto-deploy defaults ON when the installation covers the repo, because
     // push webhooks can then actually fire. Asking for it without one used to
@@ -5399,7 +5608,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // symptom is a commit that never queues.
     if (data.autoDeployEnabled === true && !repoInstallation) {
       throw new BadRequestException(
-        this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo),
+        this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo)
       );
     }
 
@@ -5415,26 +5624,32 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const existingDeployment = await this.prisma.deployment.findFirst({
-      where: { environmentId: environment.id, name },
+      where: { environmentId: environment.id, name }
     });
 
     if (existingDeployment) {
-      throw new BadRequestException('A deployment with this name already exists in this environment');
+      throw new BadRequestException(
+        'A deployment with this name already exists in this environment'
+      );
     }
 
     const imageName = `${project.namespace}-${name}`;
-    
+
     // Generate unique tag based on timestamp
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
-    
+
     const envEntries = Array.isArray(data.env)
       ? data.env
           .filter((entry) => entry && typeof entry.key === 'string')
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret),
+            secret: Boolean((entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -5448,7 +5663,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
       value: e.value,
-      secret: e.secret,
+      secret: e.secret
     }));
 
     // Injected form resolves shared references against the environment's shared
@@ -5460,7 +5675,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Auto-detect port from Dockerfile EXPOSE directive if no port specified
     let detectedPort: number | null = null;
-    const hasExplicitPort = (data.port && Number.isInteger(data.port) && data.port > 0) ||
+    const hasExplicitPort =
+      (data.port && Number.isInteger(data.port) && data.port > 0) ||
       (Array.isArray(data.ports) && data.ports.length > 0);
 
     if (!hasExplicitPort && repoUrl && dockerfilePath) {
@@ -5473,11 +5689,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             repoInfo.owner,
             repoInfo.repo,
             dockerfilePath,
-            branch,
+            branch
           );
           detectedPort = this.githubService.parseExposedPort(dockerfileContent);
           if (detectedPort) {
-            console.log(`[Projects] Auto-detected EXPOSE port ${detectedPort} from ${dockerfilePath}`);
+            console.log(
+              `[Projects] Auto-detected EXPOSE port ${detectedPort} from ${dockerfilePath}`
+            );
           }
         }
       } catch (error) {
@@ -5487,16 +5705,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const defaultPort = detectedPort || 80;
 
-    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
-      ? data.ports
-      : [
-          {
-            name: 'http',
-            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
-            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
-            protocol: 'TCP',
-          },
-        ];
+    const rawPorts =
+      Array.isArray(data.ports) && data.ports.length > 0
+        ? data.ports
+        : [
+            {
+              name: 'http',
+              containerPort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
+              servicePort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
+              protocol: 'TCP'
+            }
+          ];
 
     // Create deployment record with buildStatus='building' and status='pending'
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
@@ -5529,13 +5750,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
         buildStepTimestamps: { __start: Date.now() },
         cpuRequestMilli: data.cpuRequestMilli ?? null,
-        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        memoryRequestBytes:
+          data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         composeStackId: data.composeStackId ?? null,
         composeServiceName: data.composeServiceName ?? null,
         templateInstanceId: data.templateInstanceId ?? null,
         autoDeployEnabled: data.autoDeployEnabled ?? repoInstallation != null,
-        autoDeployBranch: data.autoDeployBranch ?? null,
-      },
+        autoDeployBranch: data.autoDeployBranch ?? null
+      }
     });
 
     // Add environment variables
@@ -5545,8 +5767,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId: deployment.id,
           key: entry.key,
           value: this.crypto.encryptIfSecret(entry.value, entry.secret),
-          secret: entry.secret,
-        })),
+          secret: entry.secret
+        }))
       });
     }
 
@@ -5563,12 +5785,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             name: vol.name.trim(),
             type: volType,
             mountPath: vol.mountPath.trim(),
-            pvcName: vol.type === 'pvc' ? (vol.pvcName?.trim() || vol.name.trim()) : null,
+            pvcName: vol.type === 'pvc' ? vol.pvcName?.trim() || vol.name.trim() : null,
             storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
             hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
-            readOnly: Boolean(vol.readOnly),
+            readOnly: Boolean(vol.readOnly)
           };
-        }),
+        })
       });
     }
 
@@ -5587,8 +5809,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           targetPort: primaryPort.containerPort,
           protocol: primaryPort.protocol || 'TCP',
           externalIp: null,
-          nodePort: null,
-        },
+          nodePort: null
+        }
       });
 
       await this.prisma.servicePort.createMany({
@@ -5598,8 +5820,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           port: portEntry.servicePort,
           targetPort: portEntry.containerPort,
           protocol: portEntry.protocol || 'TCP',
-          nodePort: null,
-        })),
+          nodePort: null
+        }))
       });
     }
 
@@ -5610,9 +5832,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         deploymentId: deployment.id,
         triggerType: 'initial',
         branch,
-        triggeredById: user.id,
+        triggeredById: user.id
       })
-      .catch((err) => this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`));
+      .catch((err) =>
+        this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`)
+      );
 
     void this.audit.log({
       action: 'deployment.created',
@@ -5624,7 +5848,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deployment.id,
       targetLabel: deployment.name,
-      metadata: { source: 'github', repoUrl, branch, buildType },
+      metadata: { source: 'github', repoUrl, branch, buildType }
     });
 
     // Start build process asynchronously - don't await!
@@ -5650,9 +5874,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         volumes,
         isRebuild: false,
         triggerType: 'manual',
-        triggeredById: user.id,
+        triggeredById: user.id
       },
-      await this.githubService.getValidUserToken(user.id),
+      await this.githubService.getValidUserToken(user.id)
     ).catch((error) => {
       console.error(`[Projects] Async build failed for deployment ${deployment.id}:`, error);
     });
@@ -5664,21 +5888,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
     return this.addInternalUrlsToDeployment(result);
   }
@@ -5715,10 +5939,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    },
+    }
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException('Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)');
+      throw new BadRequestException(
+        'Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)'
+      );
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
@@ -5728,7 +5954,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { organization: true },
+      include: { organization: true }
     });
     if (!project) {
       throw new NotFoundException(`Project ${projectId} not found`);
@@ -5765,13 +5991,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const existingDeployment = await this.prisma.deployment.findFirst({
-      where: { environmentId: environment.id, name },
+      where: { environmentId: environment.id, name }
     });
     if (existingDeployment) {
-      throw new BadRequestException('A deployment with this name already exists in this environment');
+      throw new BadRequestException(
+        'A deployment with this name already exists in this environment'
+      );
     }
 
-    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+    const replicas =
+      data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
 
     const envEntries = Array.isArray(data.env)
       ? data.env
@@ -5779,7 +6008,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
-            secret: Boolean((entry as any).secret),
+            secret: Boolean((entry as any).secret)
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -5790,19 +6019,22 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
       value: e.value,
-      secret: e.secret,
+      secret: e.secret
     }));
 
-    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
-      ? data.ports
-      : [
-          {
-            name: 'http',
-            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
-            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
-            protocol: 'TCP',
-          },
-        ];
+    const rawPorts =
+      Array.isArray(data.ports) && data.ports.length > 0
+        ? data.ports
+        : [
+            {
+              name: 'http',
+              containerPort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+              servicePort:
+                data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+              protocol: 'TCP'
+            }
+          ];
 
     const imageName = `${project.namespace}-${name}`;
     const deployment = await this.prisma.deployment.create({
@@ -5826,8 +6058,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         createdBy: user.id,
         buildLogs: `[INFO] Created local deployment ${name}; waiting for a build context upload (orchard up)\n`,
         cpuRequestMilli: data.cpuRequestMilli ?? null,
-        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
-      },
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null
+      }
     });
 
     if (env.length > 0) {
@@ -5836,8 +6068,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId: deployment.id,
           key: entry.key,
           value: this.crypto.encryptIfSecret(entry.value, entry.secret),
-          secret: entry.secret,
-        })),
+          secret: entry.secret
+        }))
       });
     }
 
@@ -5850,8 +6082,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         targetPort: rawPorts[0].containerPort,
         protocol: rawPorts[0].protocol || 'TCP',
         externalIp: null,
-        nodePort: null,
-      },
+        nodePort: null
+      }
     });
     await this.prisma.servicePort.createMany({
       data: rawPorts.map((portEntry) => ({
@@ -5860,8 +6092,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         port: portEntry.servicePort,
         targetPort: portEntry.containerPort,
         protocol: portEntry.protocol || 'TCP',
-        nodePort: null,
-      })),
+        nodePort: null
+      }))
     });
 
     void this.audit.log({
@@ -5874,7 +6106,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deployment.id,
       targetLabel: deployment.name,
-      metadata: { source: 'local', buildType },
+      metadata: { source: 'local', buildType }
     });
 
     const result = await this.prisma.deployment.findUnique({
@@ -5884,8 +6116,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         services: { include: { ports: true } },
         envVars: true,
         ingresses: { include: { service: true } },
-        project: { include: { organization: true } },
-      },
+        project: { include: { organization: true } }
+      }
     });
     return this.addInternalUrlsToDeployment(result);
   }
@@ -5905,10 +6137,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    },
+    }
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException('Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)');
+      throw new BadRequestException(
+        'Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)'
+      );
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
@@ -5921,17 +6155,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: { include: { organization: true } },
         services: { include: { ports: true } },
-        volumes: true,
-      },
+        volumes: true
+      }
     });
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'deploy from a local build context');
+    await this.authz.requireProjectEdit(
+      deployment.projectId,
+      user.id,
+      'deploy from a local build context'
+    );
 
     if (deployment.githubRepo) {
-      throw new BadRequestException('This deployment builds from GitHub; push to the repository instead');
+      throw new BadRequestException(
+        'This deployment builds from GitHub; push to the repository instead'
+      );
     }
     if (!file?.buffer?.length) {
       throw new BadRequestException('Build context is empty');
@@ -5948,7 +6188,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.storage.putBuildContext(key, file.buffer);
     const previousKey = deployment.buildContextKey;
 
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
     const imageName = `${deployment.project.namespace}-${deployment.name}`;
     const buildMethodLabel = deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
@@ -5962,8 +6206,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'building',
         buildError: null,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build from uploaded context (${(file.size / 1024 / 1024).toFixed(1)}MB, sha256 ${sha.slice(0, 12)})\n`,
-        buildStepTimestamps: { __start: Date.now() },
-      },
+        buildStepTimestamps: { __start: Date.now() }
+      }
     });
 
     if (previousKey && previousKey !== key) {
@@ -5975,9 +6219,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         deploymentId: deployment.id,
         triggerType: 'manual',
         branch: 'local',
-        triggeredById: user.id,
+        triggeredById: user.id
       })
-      .catch((err) => this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`));
+      .catch((err) =>
+        this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`)
+      );
 
     const targetService = deployment.services?.[0];
     const rawPorts = targetService?.ports?.length
@@ -5985,7 +6231,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           name: p.name ?? undefined,
           containerPort: p.targetPort,
           servicePort: p.port,
-          protocol: p.protocol,
+          protocol: p.protocol
         }))
       : [{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }];
 
@@ -6000,7 +6246,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       pvcName: vol.pvcName ?? undefined,
       storageSize: vol.storageSize ?? undefined,
       hostPath: vol.hostPath ?? undefined,
-      readOnly: vol.readOnly,
+      readOnly: vol.readOnly
     }));
 
     this.buildAndDeployAsync(
@@ -6022,9 +6268,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         volumes,
         isRebuild: Boolean(previousKey),
         triggerType: 'manual',
-        triggeredById: user.id,
+        triggeredById: user.id
       },
-      null,
+      null
     ).catch((error) => {
       console.error(`[Projects] Async local build failed for deployment ${deployment.id}:`, error);
     });
@@ -6036,8 +6282,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         services: { include: { ports: true } },
         envVars: true,
         ingresses: { include: { service: true } },
-        project: { include: { organization: true } },
-      },
+        project: { include: { organization: true } }
+      }
     });
     return this.addInternalUrlsToDeployment(result);
   }
@@ -6046,7 +6292,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { project: { select: { organization: { select: { slug: true } } } } },
+      select: { project: { select: { organization: { select: { slug: true } } } } }
     });
     const orgSlug = deployment?.project?.organization?.slug;
     return orgSlug
@@ -6077,14 +6323,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     repoUrl: string,
     branch: string,
-    accessToken: string | null | undefined,
+    accessToken: string | null | undefined
   ) {
     if (!accessToken) return;
 
     try {
       const deployment = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { startCommand: true, outputDirectory: true, rootDirectory: true },
+        select: { startCommand: true, outputDirectory: true, rootDirectory: true }
       });
       if (!deployment) return;
       // Already answered — by the user, by detection at create time, or by an
@@ -6097,14 +6343,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (!repo) return;
 
       const apps = await this.githubService.detectRepoApps(
-        accessToken, repo.owner, repo.repo, branch,
+        accessToken,
+        repo.owner,
+        repo.repo,
+        branch
       );
       const app = apps.find((a) => a.dir === (deployment.rootDirectory ?? ''));
       if (!app?.startCommand) return;
 
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { startCommand: app.startCommand },
+        data: { startCommand: app.startCommand }
       });
 
       const note = `[${Date.now()}] [WARNING] Railpack cannot detect a start command for a ${app.framework} app, so this build uses \`${app.startCommand}\`. Change it in the deployment's build settings.`;
@@ -6135,7 +6384,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       dockerfilePath: string;
       target?: string | null;
       accessToken?: string | null;
-    } | null,
+    } | null
   ) {
     try {
       let detected: ReturnType<typeof parseDockerfileHealthCheck> = null;
@@ -6146,7 +6395,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (!repo) return;
 
         const content = await this.githubService.getFileContent(
-          source.accessToken, repo.owner, repo.repo, source.dockerfilePath, source.branch,
+          source.accessToken,
+          repo.owner,
+          repo.repo,
+          source.dockerfilePath,
+          source.branch
         );
         detected = parseDockerfileHealthCheck(content, source.target);
       }
@@ -6156,13 +6409,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         data: {
           dockerfileHealthCheck: detected
             ? (detected as unknown as Prisma.InputJsonValue)
-            : Prisma.DbNull,
-        },
+            : Prisma.DbNull
+        }
       });
     } catch (error) {
       console.warn(
         `[Projects] Dockerfile health check detection failed for ${deploymentId}:`,
-        error.message,
+        error.message
       );
     }
   }
@@ -6187,7 +6440,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       pvcName: vol.pvcName || undefined,
       storageSize: vol.storageSize || undefined,
       hostPath: vol.hostPath || undefined,
-      readOnly: vol.readOnly,
+      readOnly: vol.readOnly
     }));
   }
 
@@ -6202,7 +6455,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     name: string,
     namespace: string,
-    deployStrategy: 'rollingUpdate' | 'recreate',
+    deployStrategy: 'rollingUpdate' | 'recreate'
   ): Promise<void> {
     try {
       const desired = await this.currentVolumes(deploymentId);
@@ -6211,13 +6464,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (live === K8sWorkloadService.volumeSignature(desired)) return;
 
       console.warn(
-        `[Deployment/volumes] ${namespace}/${name} drifted from its configured volumes, re-applying`,
+        `[Deployment/volumes] ${namespace}/${name} drifted from its configured volumes, re-applying`
       );
       await this.k8sWorkload.updateDeploymentVolumes({
         namespace,
         deploymentName: name,
         volumes: desired,
-        deployStrategy: desired.some((v) => v.type === 'pvc') ? 'recreate' : deployStrategy,
+        deployStrategy: desired.some((v) => v.type === 'pvc') ? 'recreate' : deployStrategy
       });
     } catch (e: any) {
       console.error(`[Deployment/volumes] could not reconcile ${namespace}/${name}: ${e?.message}`);
@@ -6264,7 +6517,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // presigned GET is minted just before job creation.
       localContextKey?: string;
     },
-    githubAccessToken?: string,
+    githubAccessToken?: string
   ) {
     console.log(`[Projects] Starting buildAndDeployAsync for deployment ${deploymentId}`);
 
@@ -6280,7 +6533,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       buildType: data.buildType,
       triggerType: data.triggerType,
       triggeredById: data.triggeredById,
-      isRebuild: data.isRebuild,
+      isRebuild: data.isRebuild
     });
 
     try {
@@ -6301,7 +6554,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         try {
           const currentDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { buildStep: true },
+            select: { buildStep: true }
           });
 
           const step = currentDeployment?.buildStep ?? null;
@@ -6312,7 +6565,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             cloning: 'Scheduling builder...',
             building: 'Building image...',
             pushing: 'Pushing to registry...',
-            deploying: 'Deploying to cluster...',
+            deploying: 'Deploying to cluster...'
           };
           const stepLabel = stepLabels[step ?? ''] || 'Building...';
 
@@ -6326,8 +6579,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               output: {
                 title: stepLabel,
                 summary: `Deploying \`${data.name}\` from commit \`${data.commitSha?.substring(0, 7) || 'unknown'}\``,
-                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
-              },
+                text: data.checkLogUrl
+                  ? `[View the full build log in Orchard](${data.checkLogUrl})`
+                  : 'Open the deployment in Orchard to view the full build log.'
+              }
             }
           );
         } catch (err) {
@@ -6338,13 +6593,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const buildTypeLabel = data.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
-      console.log(`[Projects] Building image from GitHub using ${buildTypeLabel}: ${data.repoUrl}@${data.branch} -> ${data.imageName}:${data.tag}${data.target ? ` (target: ${data.target})` : ''}`, {
-        deploymentId,
-        dockerfilePath: data.dockerfilePath,
-        buildFromRoot: data.buildFromRoot,
-        hasAccessToken: !!githubAccessToken,
-        isRebuild: data.isRebuild,
-      });
+      console.log(
+        `[Projects] Building image from GitHub using ${buildTypeLabel}: ${data.repoUrl}@${data.branch} -> ${data.imageName}:${data.tag}${data.target ? ` (target: ${data.target})` : ''}`,
+        {
+          deploymentId,
+          dockerfilePath: data.dockerfilePath,
+          buildFromRoot: data.buildFromRoot,
+          hasAccessToken: !!githubAccessToken,
+          isRebuild: data.isRebuild
+        }
+      );
 
       // Before the builder reads the deployment row, not after: docker.service
       // assembles the RAILPACK_* overrides from that row on every trigger
@@ -6355,7 +6613,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId,
           data.repoUrl,
           data.branch,
-          githubAccessToken ?? data.githubAccessToken,
+          githubAccessToken ?? data.githubAccessToken
         );
       }
 
@@ -6374,9 +6632,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               branch: data.branch,
               dockerfilePath: data.dockerfilePath || 'Dockerfile',
               target: data.target,
-              accessToken: githubAccessToken ?? data.githubAccessToken,
+              accessToken: githubAccessToken ?? data.githubAccessToken
             }
-          : null,
+          : null
       );
 
       const buildStartTime = Date.now();
@@ -6386,46 +6644,51 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         localContextUrl = await this.storage.signBuildContextGet(data.localContextKey, 15 * 60);
       }
 
-      const image = await buildTrace.activate(() => this.dockerService.buildAndPushFromGitHub({
-        repoUrl: data.repoUrl,
-        localContextUrl,
-        branch: data.branch,
-        dockerfilePath: data.dockerfilePath || 'Dockerfile',
-        target: data.target,
-        buildFromRoot: data.buildFromRoot,
-        buildWithDepot: data.buildWithDepot,
-        persistentBuildCache: data.persistentBuildCache,
-        buildType: data.buildType,
-        imageName: data.imageName,
-        tag: data.tag,
-        deploymentId,
-        accessToken: githubAccessToken,
-        // Scope this build's slice of the shared buildkit-cache PVC to the
-        // project namespace. Kata's mount surface ⇒ the build VM only sees
-        // this directory and can't reach other tenants' cache entries.
-        cacheTenantKey: data.namespace,
-      }));
+      const image = await buildTrace.activate(() =>
+        this.dockerService.buildAndPushFromGitHub({
+          repoUrl: data.repoUrl,
+          localContextUrl,
+          branch: data.branch,
+          dockerfilePath: data.dockerfilePath || 'Dockerfile',
+          target: data.target,
+          buildFromRoot: data.buildFromRoot,
+          buildWithDepot: data.buildWithDepot,
+          persistentBuildCache: data.persistentBuildCache,
+          buildType: data.buildType,
+          imageName: data.imageName,
+          tag: data.tag,
+          deploymentId,
+          accessToken: githubAccessToken,
+          // Scope this build's slice of the shared buildkit-cache PVC to the
+          // project namespace. Kata's mount surface ⇒ the build VM only sees
+          // this directory and can't reach other tenants' cache entries.
+          cacheTenantKey: data.namespace
+        })
+      );
 
       const buildCompletedAt = new Date();
       const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
-      console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
+      console.log(
+        `[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`
+      );
 
       const [, k8sDeploymentExists] = await Promise.all([
         (async () => {
           const tsData = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { buildStepTimestamps: true },
+            select: { buildStepTimestamps: true }
           });
           const ts = (tsData?.buildStepTimestamps as Record<string, any> | null) || {};
           ts['deploying'] = Date.now();
           await this.prisma.deployment.update({
             where: { id: deploymentId },
-            data: { image, buildStep: 'deploying', buildStepTimestamps: ts },
+            data: { image, buildStep: 'deploying', buildStepTimestamps: ts }
           });
         })(),
-        this.k8sWorkload.getKubernetesDeployment(
-          data.name, data.namespace,
-        ).then((d) => d !== null).catch(() => false),
+        this.k8sWorkload
+          .getKubernetesDeployment(data.name, data.namespace)
+          .then((d) => d !== null)
+          .catch(() => false)
       ]);
 
       this.prisma.$executeRaw`
@@ -6434,73 +6697,75 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         WHERE "id" = ${deploymentId}::uuid
       `.catch(() => {});
 
-      const imageHistoryPromise = this.prisma.$transaction(async (tx) => {
-        await tx.imageHistory.updateMany({
-          where: { deploymentId, isActive: true },
-          data: { isActive: false },
-        });
-
-        const deployment = await tx.deployment.findUnique({
-          where: { id: deploymentId },
-          select: { buildLogs: true },
-        });
-
-        await tx.imageHistory.create({
-          data: {
-            deploymentId,
-            image,
-            tag: data.tag,
-            commitSha: data.commitSha || null,
-            commitMessage: data.commitMessage || null,
-            commitAuthorName: data.commitAuthorName || null,
-            commitAuthorUsername: data.commitAuthorUsername || null,
-            branch: data.branch,
-            buildLogs: deployment?.buildLogs || null,
-            buildStartedAt: new Date(buildStartTime),
-            buildCompletedAt,
-            triggerType: data.triggerType || null,
-            triggeredById: data.triggeredById || null,
-            isActive: true,
-          },
-        });
-
-        const allImages = await tx.imageHistory.findMany({
-          where: { deploymentId },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, image: true },
-        });
-
-        if (allImages.length > 10) {
-          const imagesToRemove = allImages.slice(10);
-          const idsToRemove = imagesToRemove.map((img) => img.id);
-
-          await tx.imageHistory.deleteMany({
-            where: { id: { in: idsToRemove } },
+      const imageHistoryPromise = this.prisma
+        .$transaction(async (tx) => {
+          await tx.imageHistory.updateMany({
+            where: { deploymentId, isActive: true },
+            data: { isActive: false }
           });
 
-          const imageRefs = imagesToRemove.map((img) => img.image);
-          this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
-            console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+          const deployment = await tx.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildLogs: true }
           });
-        }
-      }).catch((err) => {
-        console.error('[Projects] Image history save failed:', err);
-      });
+
+          await tx.imageHistory.create({
+            data: {
+              deploymentId,
+              image,
+              tag: data.tag,
+              commitSha: data.commitSha || null,
+              commitMessage: data.commitMessage || null,
+              commitAuthorName: data.commitAuthorName || null,
+              commitAuthorUsername: data.commitAuthorUsername || null,
+              branch: data.branch,
+              buildLogs: deployment?.buildLogs || null,
+              buildStartedAt: new Date(buildStartTime),
+              buildCompletedAt,
+              triggerType: data.triggerType || null,
+              triggeredById: data.triggeredById || null,
+              isActive: true
+            }
+          });
+
+          const allImages = await tx.imageHistory.findMany({
+            where: { deploymentId },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, image: true }
+          });
+
+          if (allImages.length > 10) {
+            const imagesToRemove = allImages.slice(10);
+            const idsToRemove = imagesToRemove.map((img) => img.id);
+
+            await tx.imageHistory.deleteMany({
+              where: { id: { in: idsToRemove } }
+            });
+
+            const imageRefs = imagesToRemove.map((img) => img.image);
+            this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
+              console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('[Projects] Image history save failed:', err);
+        });
 
       let deploymentResult: any;
       let shouldCreateNew = false;
 
       if (data.isRebuild && k8sDeploymentExists) {
-        await this.k8sWorkload.updateDeploymentImage(
-          data.name,
-          data.namespace,
-          image,
-        );
+        await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image);
 
         const desiredReplicas = data.replicas || 1;
         const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
         if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
-          await this.k8sWorkload.patchDeploymentReplicas(data.name, data.namespace, desiredReplicas);
+          await this.k8sWorkload.patchDeploymentReplicas(
+            data.name,
+            data.namespace,
+            desiredReplicas
+          );
         }
 
         // Image-only rebuild keeps the existing spec, so re-apply the stored
@@ -6509,19 +6774,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         // the container's env list is still sitting on the live object.
         const rebuildDeployment = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { environmentId: true },
+          select: { environmentId: true }
         });
         const { resolved: rebuildEnv } = await this.loadResolvedEnvForDeployment(
           deploymentId,
-          rebuildDeployment?.environmentId ?? null,
+          rebuildDeployment?.environmentId ?? null
         );
-        await this.k8sWorkload.updateDeploymentEnv({
-          namespace: data.namespace,
-          deploymentName: data.name,
-          env: rebuildEnv,
-        }).catch((err) => {
-          console.error('[Projects] re-applying env on rebuild failed:', err.message);
-        });
+        await this.k8sWorkload
+          .updateDeploymentEnv({
+            namespace: data.namespace,
+            deploymentName: data.name,
+            env: rebuildEnv
+          })
+          .catch((err) => {
+            console.error('[Projects] re-applying env on rebuild failed:', err.message);
+          });
 
         // Same reasoning for probes: heal deployments whose health checks were
         // dropped from the live spec. Applied even when nothing is configured,
@@ -6530,43 +6797,47 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         // spec already matches, so this costs a rebuild nothing.
         const hc = await this.resolveStoredHealthCheck(deploymentId);
         if (hc) {
-          await this.k8sWorkload.updateDeploymentHealthCheck({
-            namespace: data.namespace,
-            deploymentName: data.name,
-            enabled: hc.enabled,
-            type: hc.type,
-            path: hc.path,
-            port: hc.port,
-            command: hc.command,
-            execCommand: hc.execCommand,
-            livenessEnabled: hc.livenessEnabled,
-            readinessEnabled: hc.readinessEnabled,
-            startupEnabled: hc.startupEnabled,
-            interval: hc.interval,
-            timeout: hc.timeout,
-            retries: hc.retries,
-            startupFailureThreshold: hc.startupFailureThreshold,
-          }).catch((err) => {
-            console.error('[Projects] re-applying health check on rebuild failed:', err.message);
-          });
+          await this.k8sWorkload
+            .updateDeploymentHealthCheck({
+              namespace: data.namespace,
+              deploymentName: data.name,
+              enabled: hc.enabled,
+              type: hc.type,
+              path: hc.path,
+              port: hc.port,
+              command: hc.command,
+              execCommand: hc.execCommand,
+              livenessEnabled: hc.livenessEnabled,
+              readinessEnabled: hc.readinessEnabled,
+              startupEnabled: hc.startupEnabled,
+              interval: hc.interval,
+              timeout: hc.timeout,
+              retries: hc.retries,
+              startupFailureThreshold: hc.startupFailureThreshold
+            })
+            .catch((err) => {
+              console.error('[Projects] re-applying health check on rebuild failed:', err.message);
+            });
         }
 
         const existingDeploymentDb = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          include: { services: { include: { ports: true } } },
+          include: { services: { include: { ports: true } } }
         });
         deploymentResult = {
           ports: existingDeploymentDb?.services[0]?.ports || [],
-          externalIp: existingDeploymentDb?.services[0]?.externalIp || null,
+          externalIp: existingDeploymentDb?.services[0]?.externalIp || null
         };
 
         const deploymentRow = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { projectId: true, cpuRequestMilli: true, memoryRequestBytes: true },
+          select: { projectId: true, cpuRequestMilli: true, memoryRequestBytes: true }
         });
         if (deploymentRow) {
-          const isUnlimitedDeploy = deploymentRow.cpuRequestMilli === 0 &&
-            (deploymentRow.memoryRequestBytes === BigInt(0) || deploymentRow.memoryRequestBytes === null);
+          const isUnlimitedDeploy =
+            deploymentRow.cpuRequestMilli === 0 &&
+            (deploymentRow.memoryRequestBytes === BigInt(0) ||
+              deploymentRow.memoryRequestBytes === null);
           if (!isUnlimitedDeploy) {
             this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
               console.error('[Projects] applyProjectQuota failed:', err);
@@ -6588,8 +6859,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             pdbMinAvailable: true,
             nodePoolId: true,
             placementOverride: true,
-            project: { select: { organizationId: true, ownerId: true } },
-          },
+            project: { select: { organizationId: true, ownerId: true } }
+          }
         });
         const buildStrategy: 'rollingUpdate' | 'recreate' =
           (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
@@ -6599,30 +6870,38 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
         const deployPool = await this.nodesService.resolvePool(deploymentRow?.nodePoolId ?? null);
         const deployOverride = this.nodesService.toPlacementOverride(
-          deploymentRow?.placementOverride ?? null,
+          deploymentRow?.placementOverride ?? null
         );
 
         let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
-        const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
-          (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
+        const isUnlimitedDeploy =
+          deploymentRow?.cpuRequestMilli === 0 &&
+          (deploymentRow?.memoryRequestBytes === BigInt(0) ||
+            deploymentRow?.memoryRequestBytes === null);
         if (deploymentRow && !isUnlimitedDeploy) {
-          rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
-            cpuRequestMilli: deploymentRow.cpuRequestMilli,
-            memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
-          }, deploymentRow.image);
+          rebuildResources = await this.quotasService.resolvePodResources(
+            deploymentRow.projectId,
+            {
+              cpuRequestMilli: deploymentRow.cpuRequestMilli,
+              memoryRequestBytes: deploymentRow.memoryRequestBytes
+                ? Number(deploymentRow.memoryRequestBytes)
+                : null
+            },
+            deploymentRow.image
+          );
           if (!k8sDeploymentExists) {
             await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
               cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
-              memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+              memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1)
             });
             await this.quotasService.enforceMemberAllowanceForNewPod(
               deploymentRow.project.organizationId,
               deploymentRow.project.ownerId,
               {
                 cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
-                memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+                memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1)
               },
-              deploymentRow.id,
+              deploymentRow.id
             );
           }
           await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
@@ -6634,9 +6913,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (data.isRebuild && !k8sDeploymentExists) {
           const existingDeploymentDb = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            include: { services: { include: { ports: true } } },
+            include: { services: { include: { ports: true } } }
           });
-          const hasServices = existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
+          const hasServices =
+            existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
           if (!hasServices) {
             shouldCreateNew = true;
           }
@@ -6665,14 +6945,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deployStrategy: buildStrategy,
             imagePullPolicy: buildPullPolicy,
             pdbMinAvailable: deploymentRow?.pdbMinAvailable ?? 1,
-            healthCheck,
+            healthCheck
           });
         } else {
-          await this.k8sWorkload.updateDeploymentImage(
-            data.name,
-            data.namespace,
-            image,
-          );
+          await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image);
           // A rebuild patches the image and nothing else, so it is also the
           // only chance to notice the running spec has drifted from what was
           // configured while a build was in flight.
@@ -6680,15 +6956,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deploymentId,
             data.name,
             data.namespace,
-            buildStrategy === 'recreate' ? 'recreate' : 'rollingUpdate',
+            buildStrategy === 'recreate' ? 'recreate' : 'rollingUpdate'
           );
           const existingDeploymentDb = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            include: { services: { include: { ports: true } } },
+            include: { services: { include: { ports: true } } }
           });
           deploymentResult = {
             ports: existingDeploymentDb?.services[0]?.ports || [],
-            externalIp: existingDeploymentDb?.services[0]?.externalIp || null,
+            externalIp: existingDeploymentDb?.services[0]?.externalIp || null
           };
         }
       }
@@ -6701,10 +6977,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.prisma.$transaction(async (tx) => {
           const existingDeployment = await tx.deployment.findUnique({
             where: { id: deploymentId },
-            include: { services: { include: { ports: true } } },
+            include: { services: { include: { ports: true } } }
           });
 
-          const hasServices = existingDeployment?.services && existingDeployment.services.length > 0;
+          const hasServices =
+            existingDeployment?.services && existingDeployment.services.length > 0;
 
           if (hasServices) {
             // Services were created upfront — update with K8s-assigned values
@@ -6718,19 +6995,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               where: { id: existingService.id },
               data: {
                 nodePort: primaryNodePort,
-                externalIp,
-              },
+                externalIp
+              }
             });
 
             // Update each port with its K8s-assigned nodePort
             for (const existingPort of existingService.ports) {
               const matchingPort = normalizedPorts.find(
-                (p) => p.containerPort === existingPort.targetPort && p.protocol === existingPort.protocol
+                (p) =>
+                  p.containerPort === existingPort.targetPort &&
+                  p.protocol === existingPort.protocol
               );
               if (matchingPort?.nodePort) {
                 await tx.servicePort.update({
                   where: { id: existingPort.id },
-                  data: { nodePort: matchingPort.nodePort },
+                  data: { nodePort: matchingPort.nodePort }
                 });
               }
             }
@@ -6742,7 +7021,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               containerPort: 80,
               servicePort: 80,
               protocol: 'TCP',
-              nodePort: null,
+              nodePort: null
             };
             const primaryNodePort =
               primaryPort.nodePort !== undefined && primaryPort.nodePort !== null
@@ -6761,8 +7040,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 targetPort: primaryPort.containerPort,
                 protocol: primaryPort.protocol,
                 externalIp,
-                nodePort: primaryNodePort,
-              },
+                nodePort: primaryNodePort
+              }
             });
 
             if (normalizedPorts.length > 0) {
@@ -6776,15 +7055,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                   nodePort:
                     portEntry.nodePort !== undefined && portEntry.nodePort !== null
                       ? portEntry.nodePort
-                      : null,
-                })),
+                      : null
+                }))
               });
             }
           }
 
           // Update deployment status to success
-          const txDeployData = await tx.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
-          const txTimestamps = (txDeployData?.buildStepTimestamps as Record<string, number> | null) || {};
+          const txDeployData = await tx.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildLogs: true, buildStepTimestamps: true }
+          });
+          const txTimestamps =
+            (txDeployData?.buildStepTimestamps as Record<string, number> | null) || {};
           txTimestamps['complete'] = Date.now();
           await tx.deployment.update({
             where: { id: deploymentId },
@@ -6792,15 +7075,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               status: 'running',
               buildStatus: 'succeeded',
               buildStep: 'complete',
-              buildLogs: `${txDeployData?.buildLogs || ''  }\nDeployment is live.`,
-              buildStepTimestamps: txTimestamps,
-            },
+              buildLogs: `${txDeployData?.buildLogs || ''}\nDeployment is live.`,
+              buildStepTimestamps: txTimestamps
+            }
           });
         });
       } else {
         // For rebuilds where deployment already existed, just update the status
-        const rebuildData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
-        const rebuildTimestamps = (rebuildData?.buildStepTimestamps as Record<string, number> | null) || {};
+        const rebuildData = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildLogs: true, buildStepTimestamps: true }
+        });
+        const rebuildTimestamps =
+          (rebuildData?.buildStepTimestamps as Record<string, number> | null) || {};
         rebuildTimestamps['complete'] = Date.now();
         await this.prisma.deployment.update({
           where: { id: deploymentId },
@@ -6808,9 +7095,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             status: 'running',
             buildStatus: 'succeeded',
             buildStep: 'complete',
-            buildLogs: `${rebuildData?.buildLogs || ''  }\nRebuild complete. Deployment is live.`,
-            buildStepTimestamps: rebuildTimestamps,
-          },
+            buildLogs: `${rebuildData?.buildLogs || ''}\nRebuild complete. Deployment is live.`,
+            buildStepTimestamps: rebuildTimestamps
+          }
         });
       }
 
@@ -6818,20 +7105,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       this.notifications
         .notifyDeploy(deploymentId, 'succeeded')
-        .catch((err) => this.logger.warn(`deploy notification failed for ${deploymentId}: ${err?.message ?? err}`));
+        .catch((err) =>
+          this.logger.warn(`deploy notification failed for ${deploymentId}: ${err?.message ?? err}`)
+        );
 
-      this.buildQueue.onBuildFinished(deploymentId).catch((err) =>
-        this.logger.warn(`build queue release failed for ${deploymentId}: ${err?.message ?? err}`),
-      );
+      this.buildQueue
+        .onBuildFinished(deploymentId)
+        .catch((err) =>
+          this.logger.warn(`build queue release failed for ${deploymentId}: ${err?.message ?? err}`)
+        );
 
       // Update GitHub deployment status to success
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
         try {
-
           // Get the environment URL from ingresses if available
           const deploymentWithIngress = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            include: { ingresses: true },
+            include: { ingresses: true }
           });
           const environmentUrl = deploymentWithIngress?.ingresses?.[0]?.host
             ? `https://${deploymentWithIngress.ingresses[0].host}`
@@ -6846,7 +7136,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             {
               logUrl: await this.getDeploymentProgressUrl(deploymentId),
               environmentUrl,
-              description: 'Deployment successful!',
+              description: 'Deployment successful!'
             }
           );
 
@@ -6854,12 +7144,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           await this.prisma.gitHubDeployment.updateMany({
             where: {
               deploymentId,
-              githubDeploymentId: BigInt(data.githubDeploymentId),
+              githubDeploymentId: BigInt(data.githubDeploymentId)
             },
             data: {
               status: 'success',
-              environmentUrl,
-            },
+              environmentUrl
+            }
           });
         } catch (err) {
           console.error(`[Projects] Failed to update GitHub deployment status: ${err.message}`);
@@ -6877,7 +7167,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         try {
           const finalDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { ingresses: { select: { host: true } } },
+            select: { ingresses: { select: { host: true } } }
           });
 
           const environmentUrl = finalDeployment?.ingresses?.[0]?.host
@@ -6897,8 +7187,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 summary: environmentUrl
                   ? `\`${data.name}\` is live at [${environmentUrl}](${environmentUrl}).`
                   : `\`${data.name}\` deployed successfully.`,
-                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
-              },
+                text: data.checkLogUrl
+                  ? `[View the full build log in Orchard](${data.checkLogUrl})`
+                  : 'Open the deployment in Orchard to view the full build log.'
+              }
             }
           );
 
@@ -6914,13 +7206,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           // Find the GitHub deployment we created
           const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
             where: { deploymentId, status: 'in_progress' },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: 'desc' }
           });
 
           if (ghDeployment) {
             const finalDeploymentData = await this.prisma.deployment.findUnique({
               where: { id: deploymentId },
-              include: { ingresses: true },
+              include: { ingresses: true }
             });
             const environmentUrl = finalDeploymentData?.ingresses?.[0]?.host
               ? `https://${finalDeploymentData.ingresses[0].host}`
@@ -6935,16 +7227,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               {
                 logUrl: await this.getDeploymentProgressUrl(deploymentId),
                 environmentUrl,
-                description: 'Deployment successful!',
+                description: 'Deployment successful!'
               }
             );
 
             await this.prisma.gitHubDeployment.update({
               where: { id: ghDeployment.id },
-              data: { status: 'success', environmentUrl },
+              data: { status: 'success', environmentUrl }
             });
 
-            console.log(`[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to success`);
+            console.log(
+              `[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to success`
+            );
           }
         } catch (err) {
           console.error(`[Projects] Failed to update GitHub deployment: ${err.message}`);
@@ -6970,7 +7264,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         errorStack: error.stack,
         statusCode: error.statusCode || error.status,
         response: error.response,
-        isRebuild: data.isRebuild,
+        isRebuild: data.isRebuild
       };
 
       console.error(`[Projects] Build failed for deployment ${deploymentId}:`, errorDetails);
@@ -6978,14 +7272,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       try {
         const currentDeployment = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { buildLogs: true, buildStep: true, status: true, buildStatus: true },
+          select: { buildLogs: true, buildStep: true, status: true, buildStatus: true }
         });
 
         buildTrace.finishFailure(error, currentDeployment?.buildStep ?? undefined);
 
         // Don't overwrite a successful build status from a newer build
         if (currentDeployment?.buildStatus === 'succeeded') {
-          console.log(`[Projects] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
+          console.log(
+            `[Projects] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`
+          );
           return;
         }
 
@@ -6996,19 +7292,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           data: {
             buildStatus: 'failed',
             buildError: error.message,
-            buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry,
-          },
+            buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry
+          }
         });
 
-        this.buildQueue.onBuildFinished(deploymentId).catch((relErr) =>
-          this.logger.warn(`build queue release failed for ${deploymentId}: ${relErr?.message ?? relErr}`),
-        );
+        this.buildQueue
+          .onBuildFinished(deploymentId)
+          .catch((relErr) =>
+            this.logger.warn(
+              `build queue release failed for ${deploymentId}: ${relErr?.message ?? relErr}`
+            )
+          );
       } catch (dbErr) {
         buildTrace.finishFailure(error); // no-op if already finished above
         console.error(`[Projects] Failed to update error status in database:`, {
           deploymentId,
           dbError: dbErr.message,
-          originalError: error.message,
+          originalError: error.message
         });
       }
 
@@ -7023,7 +7323,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             'failure',
             {
               logUrl: await this.getDeploymentProgressUrl(deploymentId),
-              description: `Build failed: ${error.message?.substring(0, 100)}`,
+              description: `Build failed: ${error.message?.substring(0, 100)}`
             }
           );
 
@@ -7031,11 +7331,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           await this.prisma.gitHubDeployment.updateMany({
             where: {
               deploymentId,
-              githubDeploymentId: BigInt(data.githubDeploymentId),
+              githubDeploymentId: BigInt(data.githubDeploymentId)
             },
             data: {
-              status: 'failure',
-            },
+              status: 'failure'
+            }
           });
         } catch (ghErr) {
           console.error(`[Projects] Failed to update GitHub deployment status: ${ghErr.message}`);
@@ -7047,7 +7347,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         try {
           const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
             where: { deploymentId, status: 'in_progress' },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: 'desc' }
           });
 
           if (ghDeployment) {
@@ -7059,16 +7359,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               'failure',
               {
                 logUrl: await this.getDeploymentProgressUrl(deploymentId),
-                description: `Build failed: ${error.message?.substring(0, 100)}`,
+                description: `Build failed: ${error.message?.substring(0, 100)}`
               }
             );
 
             await this.prisma.gitHubDeployment.update({
               where: { id: ghDeployment.id },
-              data: { status: 'failure' },
+              data: { status: 'failure' }
             });
 
-            console.log(`[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to failure`);
+            console.log(
+              `[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to failure`
+            );
           }
         } catch (ghErr) {
           console.error(`[Projects] Failed to update GitHub deployment: ${ghErr.message}`);
@@ -7089,8 +7391,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               output: {
                 title: 'Deployment Failed',
                 summary: `❌ Failed to deploy \`${data.name}\`: ${error.message?.substring(0, 200) || 'Unknown error'}`,
-                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
-              },
+                text: data.checkLogUrl
+                  ? `[View the full build log in Orchard](${data.checkLogUrl})`
+                  : 'Open the deployment in Orchard to view the full build log.'
+              }
             }
           );
 
@@ -7132,7 +7436,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       pool: queue.pool,
       message:
         `${reason} It will start automatically, so do not retry. ` +
-        `Poll this deployment's build status, or list_deployment_errors, rather than calling rebuild again.`,
+        `Poll this deployment's build status, or list_deployment_errors, rather than calling rebuild again.`
     };
   }
 
@@ -7146,7 +7450,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       lastName?: string;
       imageUrl?: string;
     },
-    fromQueueRunId?: string,
+    fromQueueRunId?: string
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -7159,17 +7463,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         envVars: true,
         volumes: true,
         services: {
           include: {
-            ports: true,
-          },
-        },
-      },
+            ports: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -7192,7 +7496,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         deploymentId,
         triggerType: 'manual',
         branch: deployment.githubBranch,
-        triggeredById: user.id,
+        triggeredById: user.id
       });
       if (!startNow) {
         console.log(`[Projects] Queued manual rebuild for ${deploymentId}`);
@@ -7219,42 +7523,48 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStep: null,
         buildStepTimestamps: { __start: Date.now() },
         buildLogs: `🔄 Rebuilding deployment from ${deployment.githubRepo}@${deployment.githubBranch}\n`,
-        buildError: null,
-      },
+        buildError: null
+      }
     });
 
     // Extract image name from current image
     const imageParts = deployment.image?.split('/') || [];
-    const imageNameWithTag = imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
+    const imageNameWithTag =
+      imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
     const [imageName] = imageNameWithTag.split(':');
 
     // Generate unique tag based on timestamp
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+/, '')
+      .slice(0, 14);
     const uniqueTag = `v${timestamp}`;
 
     // Get service configuration
     const service = deployment.services[0];
-    const rawPorts = service?.ports.map(port => ({
-      name: port.name,
-      containerPort: port.targetPort,
-      servicePort: port.port,
-      protocol: port.protocol,
-      nodePort: port.nodePort || undefined,
-    })) || [];
+    const rawPorts =
+      service?.ports.map((port) => ({
+        name: port.name,
+        containerPort: port.targetPort,
+        servicePort: port.port,
+        protocol: port.protocol,
+        nodePort: port.nodePort || undefined
+      })) || [];
 
     const { resolved: env } = resolveEnvVars(
       deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
-      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId)
     );
 
-    const volumes = (deployment.volumes || []).map(vol => ({
+    const volumes = (deployment.volumes || []).map((vol) => ({
       name: vol.name,
       type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
       mountPath: vol.mountPath,
       pvcName: vol.pvcName || undefined,
       storageSize: vol.storageSize || undefined,
       hostPath: vol.hostPath || undefined,
-      readOnly: vol.readOnly,
+      readOnly: vol.readOnly
     }));
 
     // Start rebuild process asynchronously
@@ -7279,9 +7589,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         volumes,
         isRebuild: true,
         triggerType: 'manual',
-        triggeredById: user.id,
+        triggeredById: user.id
       },
-      await this.githubService.getValidUserToken(user.id),
+      await this.githubService.getValidUserToken(user.id)
     ).catch((error) => {
       console.error(`[Projects] Rebuild failed for deployment ${deploymentId}:`, error);
     });
@@ -7296,7 +7606,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: deployment.name,
-      metadata: { repo: deployment.githubRepo, branch: deployment.githubBranch, tag: uniqueTag },
+      metadata: { repo: deployment.githubRepo, branch: deployment.githubBranch, tag: uniqueTag }
     });
 
     const result = await this.prisma.deployment.findUnique({
@@ -7305,32 +7615,32 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
     return {
       ...this.addInternalUrlsToDeployment(result),
-      build: { accepted: true, started: true, status: 'building' as const },
+      build: { accepted: true, started: true, status: 'building' as const }
     };
   }
 
   async getImageHistory(deploymentId: string, clerkId: string) {
     await this.access.assertDeploymentView(deploymentId, clerkId);
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     if (!deployment) {
@@ -7339,7 +7649,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     return this.prisma.imageHistory.findMany({
       where: { deploymentId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -7347,7 +7657,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.access.assertDeploymentView(deploymentId, clerkId);
     const entry = await this.prisma.imageHistory.findUnique({
       where: { id: imageHistoryId },
-      select: { deploymentId: true, buildLogs: true },
+      select: { deploymentId: true, buildLogs: true }
     });
 
     if (!entry || entry.deploymentId !== deploymentId) {
@@ -7380,10 +7690,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!deployment) {
@@ -7393,7 +7703,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rollback deployments');
 
     const imageHistory = await this.prisma.imageHistory.findUnique({
-      where: { id: imageHistoryId },
+      where: { id: imageHistoryId }
     });
 
     if (!imageHistory || imageHistory.deploymentId !== deploymentId) {
@@ -7404,7 +7714,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.k8sWorkload.updateDeploymentImage(
       deployment.name,
       deployment.namespace,
-      imageHistory.image,
+      imageHistory.image
     );
 
     // Update database
@@ -7412,13 +7722,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Mark all images as inactive
       await tx.imageHistory.updateMany({
         where: { deploymentId },
-        data: { isActive: false },
+        data: { isActive: false }
       });
 
       // Mark this image as active
       await tx.imageHistory.update({
         where: { id: imageHistoryId },
-        data: { isActive: true },
+        data: { isActive: true }
       });
 
       // Update deployment
@@ -7426,8 +7736,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         where: { id: deploymentId },
         data: {
           image: imageHistory.image,
-          status: 'running',
-        },
+          status: 'running'
+        }
       });
     });
 
@@ -7437,21 +7747,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -7464,10 +7774,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: deployment.name,
-      metadata: { image: [deployment.image, imageHistory.image] },
+      metadata: { image: [deployment.image, imageHistory.image] }
     });
 
     return this.addInternalUrlsToDeployment(result);
   }
-
 }

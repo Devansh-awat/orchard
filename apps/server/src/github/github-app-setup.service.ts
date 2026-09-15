@@ -1,6 +1,4 @@
-import {
-  Injectable, Logger, BadRequestException, ConflictException,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException } from '@nestjs/common';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { GithubAppConfigService } from './github-app-config.service';
@@ -30,14 +28,17 @@ export class GithubAppSetupService {
 
   constructor(
     private readonly settings: InstanceSettingsService,
-    private readonly config: GithubAppConfigService,
+    private readonly config: GithubAppConfigService
   ) {}
 
   private frontendUrl(): string {
     return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
   }
 
-  async startManifestFlow(organization?: string, returnTo?: string): Promise<{
+  async startManifestFlow(
+    organization?: string,
+    returnTo?: string
+  ): Promise<{
     postUrl: string;
     manifest: string;
     state: string;
@@ -49,7 +50,7 @@ export class GithubAppSetupService {
     const locked = this.config.lockedFields();
     if (locked.length > 0) {
       throw new ConflictException(
-        'The GitHub App is set by environment variables and cannot be replaced here',
+        'The GitHub App is set by environment variables and cannot be replaced here'
       );
     }
 
@@ -63,9 +64,8 @@ export class GithubAppSetupService {
       // Creating the App navigates the browser all the way to GitHub and back,
       // so where the operator came from has to survive the round trip or they
       // land on a page with no relation to what they were doing.
-      returnTo: returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
-        ? returnTo
-        : undefined,
+      returnTo:
+        returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : undefined
     };
     await this.settings.set(STATE_KEY, JSON.stringify(record));
 
@@ -78,9 +78,9 @@ export class GithubAppSetupService {
       public: false,
       default_permissions: {
         contents: 'read',
-        metadata: 'read',
+        metadata: 'read'
       },
-      default_events: ['push', 'repository'],
+      default_events: ['push', 'repository']
     };
 
     const postUrl = organization
@@ -121,7 +121,7 @@ export class GithubAppSetupService {
 
     const response = await fetch(`https://api.github.com/app-manifests/${code}/conversions`, {
       method: 'POST',
-      headers: { Accept: 'application/vnd.github+json' },
+      headers: { Accept: 'application/vnd.github+json' }
     });
 
     if (!response.ok) {
@@ -137,7 +137,7 @@ export class GithubAppSetupService {
       privateKey: app.pem,
       webhookSecret: app.webhook_secret,
       clientId: app.client_id,
-      clientSecret: app.client_secret,
+      clientSecret: app.client_secret
     });
 
     this.logger.log(`GitHub App ${app.slug} created and stored`);

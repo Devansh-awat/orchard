@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException
+} from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
 import { K8sCnpgService } from './k8s-cnpg.service';
 import { K8sWorkloadService } from './k8s-workload.service';
@@ -19,7 +31,7 @@ export class KubernetesController {
     private readonly k8sWorkload: K8sWorkloadService,
     private readonly k8sNetwork: K8sNetworkService,
     private readonly authz: AuthorizationService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {}
 
   /**
@@ -27,11 +39,16 @@ export class KubernetesController {
    * appropriate access. Returns 404 (not 403) when the caller has no path to
    * the project — matches the wider RBAC contract.
    */
-  private async resolveNamespace(namespace: string | undefined, req: any, mode: 'view' | 'edit', action = 'access this namespace') {
+  private async resolveNamespace(
+    namespace: string | undefined,
+    req: any,
+    mode: 'view' | 'edit',
+    action = 'access this namespace'
+  ) {
     if (!namespace) throw new BadRequestException('namespace query parameter is required');
     const project = await this.prisma.project.findFirst({
       where: { namespace },
-      select: { id: true },
+      select: { id: true }
     });
     if (!project) throw new NotFoundException(`Namespace ${namespace} not found`);
     const userId = await this.resolveUserId(req);
@@ -55,7 +72,7 @@ export class KubernetesController {
     const scrubContainers = (containers: any[] | undefined) =>
       containers?.map((c: any) => ({
         ...c,
-        env: c.env?.map((e: any) => (e?.value !== undefined ? { ...e, value: null } : e)),
+        env: c.env?.map((e: any) => (e?.value !== undefined ? { ...e, value: null } : e))
       }));
     return {
       ...pod,
@@ -63,8 +80,8 @@ export class KubernetesController {
         ...pod.spec,
         containers: scrubContainers(pod.spec.containers),
         initContainers: scrubContainers(pod.spec.initContainers),
-        ephemeralContainers: scrubContainers(pod.spec.ephemeralContainers),
-      },
+        ephemeralContainers: scrubContainers(pod.spec.ephemeralContainers)
+      }
     };
   }
 
@@ -72,7 +89,10 @@ export class KubernetesController {
     const sub = req.user?.sub as string | undefined;
     if (!sub) throw new ForbiddenException('Not authenticated');
     if (UUID_RE.test(sub)) return sub;
-    const user = await this.prisma.user.findFirst({ where: { externalAuthId: sub }, select: { id: true } });
+    const user = await this.prisma.user.findFirst({
+      where: { externalAuthId: sub },
+      select: { id: true }
+    });
     if (!user) throw new ForbiddenException('User not found');
     return user.id;
   }
@@ -81,7 +101,7 @@ export class KubernetesController {
   async listPods(
     @Query('namespace') namespace: string,
     @Req() req: any,
-    @Query('live') live?: string,
+    @Query('live') live?: string
   ) {
     await this.resolveNamespace(namespace, req, 'view');
     if (live === '1' || live === 'true') {
@@ -89,7 +109,7 @@ export class KubernetesController {
     }
     const objects = await this.prisma.k8sObject.findMany({
       where: { kind: 'Pod', namespace },
-      select: { manifest: true },
+      select: { manifest: true }
     });
     const pods = objects.map((o) => {
       const pod = o.manifest as any;
@@ -106,10 +126,10 @@ export class KubernetesController {
           ready: container.ready,
           restartCount: container.restartCount,
           image: container.image,
-          state: container.state,
+          state: container.state
         })),
         labels: pod.metadata?.labels,
-        annotations: pod.metadata?.annotations,
+        annotations: pod.metadata?.annotations
       };
     });
     return { namespace, podCount: pods.length, pods };
@@ -120,7 +140,7 @@ export class KubernetesController {
     @Param('podName') podName: string,
     @Req() req: any,
     @Query('namespace') namespace?: string,
-    @Query('live') live?: string,
+    @Query('live') live?: string
   ) {
     const access = await this.resolveNamespace(namespace, req, 'view');
     const scrub = (pod: any) =>
@@ -130,7 +150,7 @@ export class KubernetesController {
     }
     const object = await this.prisma.k8sObject.findFirst({
       where: { kind: 'Pod', namespace, name: podName },
-      select: { manifest: true },
+      select: { manifest: true }
     });
     if (!object) return scrub(await this.k8sWorkload.getPod(podName, namespace));
     return scrub(object.manifest);
@@ -140,7 +160,7 @@ export class KubernetesController {
   async deletePod(
     @Param('podName') podName: string,
     @Req() req: any,
-    @Query('namespace') namespace?: string,
+    @Query('namespace') namespace?: string
   ) {
     await this.resolveNamespace(namespace, req, 'edit', 'delete a pod');
     return this.k8sWorkload.deletePod(podName, namespace);
@@ -155,7 +175,7 @@ export class KubernetesController {
     @Query('tailLines') tailLines?: string,
     @Query('previous') previous?: string,
     @Query('sinceSeconds') sinceSeconds?: string,
-    @Query('sinceTime') sinceTime?: string,
+    @Query('sinceTime') sinceTime?: string
   ) {
     await this.resolveNamespace(namespace, req, 'edit', 'stream pod logs');
     if (sinceSeconds && sinceTime) {
@@ -170,7 +190,15 @@ export class KubernetesController {
     }
     const parsedTailLines = tailLines ? parseInt(tailLines, 10) : 100;
     const wantPrevious = previous === 'true' || previous === '1';
-    return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines, wantPrevious, parsedSinceSeconds, sinceTime);
+    return this.k8sWorkload.getPodLogs(
+      podName,
+      namespace,
+      container,
+      parsedTailLines,
+      wantPrevious,
+      parsedSinceSeconds,
+      sinceTime
+    );
   }
 
   // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS
@@ -182,9 +210,14 @@ export class KubernetesController {
   @RequireScope('exec')
   async execInPod(
     @Param('podName') podName: string,
-    @Body() body: { namespace?: string; command: string | string[]; container?: string; timeoutMs?: number },
+    @Body() body: {
+      namespace?: string;
+      command: string | string[];
+      container?: string;
+      timeoutMs?: number;
+    },
     @Req() req: any,
-    @Query('namespace') namespaceQuery?: string,
+    @Query('namespace') namespaceQuery?: string
   ) {
     const namespace = (body?.namespace || namespaceQuery || '').trim();
     if (!namespace) throw new BadRequestException('namespace is required');
@@ -204,8 +237,11 @@ export class KubernetesController {
     const result = await Promise.race([
       this.k8sCnpg.runExec(namespace, podName, cmd, body?.container),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new BadRequestException(`exec timed out after ${timeoutMs}ms`)), timeoutMs);
-      }),
+        setTimeout(
+          () => reject(new BadRequestException(`exec timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
+      })
     ]);
     return result;
   }

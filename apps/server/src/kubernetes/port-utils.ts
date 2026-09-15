@@ -36,12 +36,14 @@ export function mapServicePorts(
         }
       }
     }
-    const protocol = entry.protocol && entry.protocol.trim().length > 0
-      ? entry.protocol.trim().toUpperCase()
-      : 'TCP';
-    let name = entry.name && entry.name.trim().length > 0
-      ? entry.name.trim().toLowerCase()
-      : `port-${index + 1}`;
+    const protocol =
+      entry.protocol && entry.protocol.trim().length > 0
+        ? entry.protocol.trim().toUpperCase()
+        : 'TCP';
+    let name =
+      entry.name && entry.name.trim().length > 0
+        ? entry.name.trim().toLowerCase()
+        : `port-${index + 1}`;
     if (name.length > 63) {
       name = name.substring(0, 63);
     }
@@ -54,7 +56,7 @@ export function mapServicePorts(
       containerPort,
       servicePort: portNumber,
       protocol,
-      nodePort,
+      nodePort
     });
   });
   return mapped;
@@ -81,7 +83,7 @@ export function ensureUniqueServicePorts(ports: SanitizedPortEntry[]): Sanitized
     }
     return {
       ...entry,
-      name,
+      name
     };
   });
 }
@@ -101,14 +103,14 @@ export function snapshotPublicPortState(
     protocol: string | null;
     publicEnabled: boolean;
     publicPort: number | null;
-  }[],
+  }[]
 ): Map<string, PublicPortState> {
   const snapshot = new Map<string, PublicPortState>();
   for (const port of ports) {
     if (!port.publicEnabled || !port.publicPort) continue;
     snapshot.set(publicPortKey(port.port, port.protocol), {
       publicEnabled: true,
-      publicPort: port.publicPort,
+      publicPort: port.publicPort
     });
   }
   return snapshot;
@@ -139,12 +141,16 @@ export function sanitizePortEntries(portInputs: DeploymentPortInput[]): Sanitize
       return;
     }
 
-    const protocol = typeof input.protocol === 'string' && input.protocol.trim().length > 0
-      ? input.protocol.trim().toUpperCase()
-      : 'TCP';
+    const protocol =
+      typeof input.protocol === 'string' && input.protocol.trim().length > 0
+        ? input.protocol.trim().toUpperCase()
+        : 'TCP';
 
     const rawName = typeof input.name === 'string' ? input.name : '';
-    let baseName = rawName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    let baseName = rawName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-');
     baseName = baseName.replace(/^-+|-+$/g, '');
     if (!baseName) {
       baseName = `port-${autoCounter++}`;
@@ -171,9 +177,11 @@ export function sanitizePortEntries(portInputs: DeploymentPortInput[]): Sanitize
       servicePort,
       protocol,
       nodePort:
-        typeof (input as any).nodePort === 'number' && Number.isInteger((input as any).nodePort) && (input as any).nodePort > 0
+        typeof (input as any).nodePort === 'number' &&
+        Number.isInteger((input as any).nodePort) &&
+        (input as any).nodePort > 0
           ? (input as any).nodePort
-          : undefined,
+          : undefined
     });
   });
 
@@ -183,7 +191,7 @@ export function sanitizePortEntries(portInputs: DeploymentPortInput[]): Sanitize
       containerPort: 80,
       servicePort: 80,
       protocol: 'TCP',
-      nodePort: undefined,
+      nodePort: undefined
     });
   }
 

@@ -20,18 +20,26 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        envVars: z.array(z.object({
-          key: z.string().describe('Environment variable name'),
-          value: z.string().describe('Environment variable value'),
-          secret: z.boolean().optional()
-            .describe('Store in the deployment Kubernetes Secret. Write-only: reads never return it'),
-        })).describe('Array of environment variable key-value pairs'),
-      },
+        envVars: z
+          .array(
+            z.object({
+              key: z.string().describe('Environment variable name'),
+              value: z.string().describe('Environment variable value'),
+              secret: z
+                .boolean()
+                .optional()
+                .describe(
+                  'Store in the deployment Kubernetes Secret. Write-only: reads never return it'
+                )
+            })
+          )
+          .describe('Array of environment variable key-value pairs')
+      }
     },
     async ({ deploymentId, envVars }) => {
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: envVars });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -42,13 +50,21 @@ This fetches the current env vars, merges in the provided ones (overwriting any 
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        envVars: z.array(z.object({
-          key: z.string().describe('Environment variable name'),
-          value: z.string().describe('Environment variable value'),
-          secret: z.boolean().optional()
-            .describe('Store in the deployment Kubernetes Secret. Write-only: reads never return it'),
-        })).describe('Array of environment variable key-value pairs to add or update'),
-      },
+        envVars: z
+          .array(
+            z.object({
+              key: z.string().describe('Environment variable name'),
+              value: z.string().describe('Environment variable value'),
+              secret: z
+                .boolean()
+                .optional()
+                .describe(
+                  'Store in the deployment Kubernetes Secret. Write-only: reads never return it'
+                )
+            })
+          )
+          .describe('Array of environment variable key-value pairs to add or update')
+      }
     },
     async ({ deploymentId, envVars }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
@@ -56,19 +72,18 @@ This fetches the current env vars, merges in the provided ones (overwriting any 
       // over is what keeps this a merge: a null value tells the server to keep
       // what is stored, and dropping the flag would ask it to republish a
       // secret in the clear, which it refuses.
-      const existing: EnvVarInput[] = (deployment.envVars || []).map(
-        (v: EnvVarInput) => ({ key: v.key, value: v.value ?? null, secret: v.secret }),
-      );
+      const existing: EnvVarInput[] = (deployment.envVars || []).map((v: EnvVarInput) => ({
+        key: v.key,
+        value: v.value ?? null,
+        secret: v.secret
+      }));
 
       const newKeys = new Set(envVars.map((v) => v.key));
-      const merged = [
-        ...existing.filter((v) => !newKeys.has(v.key)),
-        ...envVars,
-      ];
+      const merged = [...existing.filter((v) => !newKeys.has(v.key)), ...envVars];
 
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   // ── Volumes ───────────────────────────────────────────────────────
@@ -86,21 +101,33 @@ To remove all volumes, pass an empty array.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        volumes: z.array(z.object({
-          name: z.string().describe('Volume name (unique within deployment)'),
-          type: z.enum(['pvc', 'hostPath', 'emptyDir']).describe('Volume type'),
-          mountPath: z.string().describe('Path inside the container to mount the volume'),
-          pvcName: z.string().optional().describe('PVC name (required for pvc type). The PVC will be auto-created if it does not exist.'),
-          storageSize: z.string().optional().describe('Storage size for PVC (e.g. 1Gi, 5Gi, 10Gi). Default: 1Gi'),
-          hostPath: z.string().optional().describe('Host path (required for hostPath type)'),
-          readOnly: z.boolean().optional().describe('Mount as read-only (default: false)'),
-        })).describe('List of volumes to attach'),
-      },
+        volumes: z
+          .array(
+            z.object({
+              name: z.string().describe('Volume name (unique within deployment)'),
+              type: z.enum(['pvc', 'hostPath', 'emptyDir']).describe('Volume type'),
+              mountPath: z.string().describe('Path inside the container to mount the volume'),
+              pvcName: z
+                .string()
+                .optional()
+                .describe(
+                  'PVC name (required for pvc type). The PVC will be auto-created if it does not exist.'
+                ),
+              storageSize: z
+                .string()
+                .optional()
+                .describe('Storage size for PVC (e.g. 1Gi, 5Gi, 10Gi). Default: 1Gi'),
+              hostPath: z.string().optional().describe('Host path (required for hostPath type)'),
+              readOnly: z.boolean().optional().describe('Mount as read-only (default: false)')
+            })
+          )
+          .describe('List of volumes to attach')
+      }
     },
     async ({ deploymentId, volumes }) => {
       const result = await client.put(`/deployments/${deploymentId}/volumes`, { volumes });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   // ── Image & deploy strategy ───────────────────────────────────────
@@ -113,13 +140,15 @@ Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_d
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        image: z.string().describe('New Docker image reference (e.g. nginx:1.27, ghcr.io/org/app:v2.1.0)'),
-      },
+        image: z
+          .string()
+          .describe('New Docker image reference (e.g. nginx:1.27, ghcr.io/org/app:v2.1.0)')
+      }
     },
     async ({ deploymentId, image }) => {
       const result = await client.patch(`/deployments/${deploymentId}/image`, { image });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -133,13 +162,13 @@ When the deployment has a PVC attached, the backend forces \`recreate\` and reje
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        strategy: z.enum(['rollingUpdate', 'recreate']).describe('The new update strategy'),
-      },
+        strategy: z.enum(['rollingUpdate', 'recreate']).describe('The new update strategy')
+      }
     },
     async ({ deploymentId, strategy }) => {
       const result = await client.patch(`/deployments/${deploymentId}/strategy`, { strategy });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -163,15 +192,15 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
         imagePullPolicy: z
           .enum(['Always', 'IfNotPresent'])
           .nullable()
-          .describe('The pull policy to pin, or null to go back to automatic'),
-      },
+          .describe('The pull policy to pin, or null to go back to automatic')
+      }
     },
     async ({ deploymentId, imagePullPolicy }) => {
       const result = await client.patch(`/deployments/${deploymentId}/pull-policy`, {
-        imagePullPolicy,
+        imagePullPolicy
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   // ── Networking ────────────────────────────────────────────────────
@@ -186,17 +215,17 @@ The user must point their domain's DNS to the cluster before creating the ingres
         deploymentId: z.string().describe('The deployment UUID to route traffic to'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix (default: /)'),
-        servicePort: z.number().optional().describe('The service port to route to (default: 80)'),
-      },
+        servicePort: z.number().optional().describe('The service port to route to (default: 80)')
+      }
     },
     async ({ deploymentId, host, path, servicePort }) => {
       const ingress = await client.post(`/deployments/${deploymentId}/ingresses`, {
         host,
         path: path ?? '/',
-        servicePort: servicePort ?? 80,
+        servicePort: servicePort ?? 80
       });
       return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -209,8 +238,8 @@ The user must point their domain's DNS to the cluster before creating the ingres
         ingressId: z.string().describe('The ingress UUID to update'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix'),
-        servicePort: z.number().optional().describe('The service port to route to'),
-      },
+        servicePort: z.number().optional().describe('The service port to route to')
+      }
     },
     async ({ deploymentId, ingressId, host, path, servicePort }) => {
       const body: Record<string, any> = { host };
@@ -218,7 +247,7 @@ The user must point their domain's DNS to the cluster before creating the ingres
       if (servicePort !== undefined) body.servicePort = servicePort;
       const ingress = await client.put(`/deployments/${deploymentId}/ingresses/${ingressId}`, body);
       return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -229,10 +258,12 @@ The user must point their domain's DNS to the cluster before creating the ingres
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         name: z.string().describe('Service name'),
-        type: z.enum(['internal', 'external']).describe('Service type: internal (ClusterIP) or external (NodePort/LoadBalancer)'),
+        type: z
+          .enum(['internal', 'external'])
+          .describe('Service type: internal (ClusterIP) or external (NodePort/LoadBalancer)'),
         port: z.number().describe('Service port (the port exposed by the service)'),
-        targetPort: z.number().describe('Container port to route to'),
-      },
+        targetPort: z.number().describe('Container port to route to')
+      }
     },
     async ({ deploymentId, name, type, port, targetPort }) => {
       const service = await client.post(`/deployments/${deploymentId}/services`, {
@@ -242,11 +273,11 @@ The user must point their domain's DNS to the cluster before creating the ingres
           {
             containerPort: Number(targetPort),
             servicePort: Number(port),
-            protocol: 'TCP',
-          },
-        ],
+            protocol: 'TCP'
+          }
+        ]
       });
       return { content: [{ type: 'text', text: JSON.stringify(service, null, 2) }] };
-    },
+    }
   );
 }

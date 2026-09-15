@@ -7,17 +7,20 @@ const sig = K8sWorkloadService.volumeSignature;
 // The signature is what decides whether a rebuild re-applies volumes, so it has
 // to see a missing volume as different and an unchanged one as identical.
 test('an attached volume is not equal to no volumes', () => {
-  assert.notEqual(sig([{ name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }]), sig([]));
+  assert.notEqual(
+    sig([{ name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }]),
+    sig([])
+  );
 });
 
 test('the same volume in a different order is the same volume set', () => {
   const a = sig([
     { name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' },
-    { name: 'cache', type: 'emptyDir', mountPath: '/cache' },
+    { name: 'cache', type: 'emptyDir', mountPath: '/cache' }
   ]);
   const b = sig([
     { name: 'cache', type: 'emptyDir', mountPath: '/cache' },
-    { name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' },
+    { name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }
   ]);
   assert.equal(a, b);
 });
@@ -25,7 +28,7 @@ test('the same volume in a different order is the same volume set', () => {
 test('a claim name defaults to the volume name, so both spellings match', () => {
   assert.equal(
     sig([{ name: 'data', type: 'pvc', mountPath: '/data' }]),
-    sig([{ name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }]),
+    sig([{ name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }])
   );
 });
 
@@ -41,7 +44,7 @@ test('moving the mount path, the claim, or read-only is a change', () => {
 test('a pvc and an emptyDir at the same path are not interchangeable', () => {
   assert.notEqual(
     sig([{ name: 'data', type: 'pvc', mountPath: '/data', pvcName: 'data' }]),
-    sig([{ name: 'data', type: 'emptyDir', mountPath: '/data' }]),
+    sig([{ name: 'data', type: 'emptyDir', mountPath: '/data' }])
   );
 });
 

@@ -71,7 +71,7 @@ export class AuthorizationService {
 
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isSuperAdmin: true },
+      select: { isSuperAdmin: true }
     });
     const value = Boolean(u?.isSuperAdmin);
     this.superAdminCache.set(userId, { value, expiresAt: now + SUPERADMIN_TTL_MS });
@@ -103,7 +103,7 @@ export class AuthorizationService {
    */
   async assertSsoNotEnforced(
     user: { id: string; isSuperAdmin?: boolean | null } | null,
-    authMethod: AuthMethod,
+    authMethod: AuthMethod
   ): Promise<void> {
     if (authMethod === 'sso') return;
     if (user?.isSuperAdmin) return;
@@ -111,13 +111,15 @@ export class AuthorizationService {
       const enforced = await this.prisma.organizationMember.findFirst({
         where: {
           userId: user.id,
-          organization: { ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } } },
+          organization: {
+            ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } }
+          }
         },
-        select: { organizationId: true },
+        select: { organizationId: true }
       });
       if (enforced) {
         throw new ForbiddenException(
-          'Your organization requires single sign-on. Use the SSO login link for your workspace.',
+          'Your organization requires single sign-on. Use the SSO login link for your workspace.'
         );
       }
     }
@@ -135,10 +137,7 @@ export class AuthorizationService {
    * Call this BEFORE user creation/JIT in the OAuth, OTP, and passkey
    * registration flows. SSO callback itself is exempt (authMethod='sso').
    */
-  async assertSsoNotEnforcedForEmail(
-    email: string,
-    authMethod: AuthMethod,
-  ): Promise<void> {
+  async assertSsoNotEnforcedForEmail(email: string, authMethod: AuthMethod): Promise<void> {
     if (authMethod === 'sso') return;
     const normalized = email.toLowerCase().trim();
     if (!normalized) return;
@@ -146,13 +145,15 @@ export class AuthorizationService {
       where: {
         email: normalized,
         expiresAt: { gt: new Date() },
-        organization: { ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } } },
+        organization: {
+          ssoSettings: { is: { enforced: true, enabled: true, platformEnabled: true } }
+        }
       },
-      select: { organizationId: true },
+      select: { organizationId: true }
     });
     if (invitation) {
       throw new ForbiddenException(
-        'Your organization requires single sign-on. Use the SSO login link for your workspace.',
+        'Your organization requires single sign-on. Use the SSO login link for your workspace.'
       );
     }
   }
@@ -164,8 +165,7 @@ export class AuthorizationService {
     // member management, billing). Strip isAdmin so admin checks fall through
     // to ForbiddenException even when the underlying user is an org owner.
     const tokenCtx = requestAuthStorage.getStore();
-    const tokenIsProjectScoped =
-      !!tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0;
+    const tokenIsProjectScoped = !!tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0;
 
     // Tenant confinement: a session minted by one org's IdP sees only that org,
     // whatever the underlying account is a member of. Same 404 shape as a
@@ -180,21 +180,26 @@ export class AuthorizationService {
       // fuzzing oracle and a foot-gun for write endpoints keyed on the bogus id.
       const exists = await this.prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { id: true },
+        select: { id: true }
       });
       if (!exists) return null;
-      return { organizationId, role: 'owner', isAdmin: !tokenIsProjectScoped, source: 'superadmin' };
+      return {
+        organizationId,
+        role: 'owner',
+        isAdmin: !tokenIsProjectScoped,
+        source: 'superadmin'
+      };
     }
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
-      select: { role: true },
+      select: { role: true }
     });
     if (!member) return null;
     return {
       organizationId,
       role: member.role,
       isAdmin: !tokenIsProjectScoped && (member.role === 'owner' || member.role === 'admin'),
-      source: 'membership',
+      source: 'membership'
     };
   }
 
@@ -240,14 +245,11 @@ export class AuthorizationService {
    * makes the failure mode explicit rather than letting a join silently
    * return zero rows.
    */
-  async requirePhysicalOrgMembership(
-    organizationId: string,
-    userId: string,
-  ): Promise<OrgAccess> {
+  async requirePhysicalOrgMembership(organizationId: string, userId: string): Promise<OrgAccess> {
     const access = await this.requireOrgMember(organizationId, userId);
     if (access.source !== 'membership') {
       throw new ForbiddenException(
-        'This action requires a real organization membership; superadmin access is not sufficient.',
+        'This action requires a real organization membership; superadmin access is not sufficient.'
       );
     }
     return access;
@@ -274,7 +276,7 @@ export class AuthorizationService {
   async getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess | null> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true }
     });
     if (!project) return null;
     return this.resolveProjectAccess(project.id, project.organizationId, userId);
@@ -287,7 +289,7 @@ export class AuthorizationService {
   async resolveProjectAccess(
     projectId: string,
     organizationId: string,
-    userId: string,
+    userId: string
   ): Promise<ProjectAccess | null> {
     // Token project-scoping: when the request is authenticated by an API token
     // with a non-empty restrictedProjectIds, treat any project outside that
@@ -315,19 +317,19 @@ export class AuthorizationService {
         canView: true,
         canEdit: true,
         canManageMembers: true,
-        canDelete: true,
+        canDelete: true
       };
     }
 
     const [orgMember, projectMember] = await Promise.all([
       this.prisma.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId, userId } },
-        select: { role: true },
+        select: { role: true }
       }),
       this.prisma.projectMember.findFirst({
         where: { projectId, userId },
-        include: { role: true },
-      }),
+        include: { role: true }
+      })
     ]);
 
     // Org admins/owners see and control every project in the org.
@@ -341,7 +343,7 @@ export class AuthorizationService {
         canView: true,
         canEdit: true,
         canManageMembers: true,
-        canDelete: true,
+        canDelete: true
       };
     }
 
@@ -366,7 +368,7 @@ export class AuthorizationService {
         canView: true,
         canEdit: true,
         canManageMembers: true,
-        canDelete: true,
+        canDelete: true
       };
     }
     if (roleName === 'member') {
@@ -379,7 +381,7 @@ export class AuthorizationService {
         canView: true,
         canEdit: true,
         canManageMembers: false,
-        canDelete: false,
+        canDelete: false
       };
     }
     // viewer (or any unknown role name → treated as read-only, never as edit)
@@ -392,7 +394,7 @@ export class AuthorizationService {
       canView: true,
       canEdit: false,
       canManageMembers: false,
-      canDelete: false,
+      canDelete: false
     };
   }
 
@@ -406,7 +408,11 @@ export class AuthorizationService {
   }
 
   /** Mutate deployments/services/ingresses/databases/etc. — viewers are blocked. */
-  async requireProjectEdit(projectId: string, userId: string, action = 'modify this project'): Promise<ProjectAccess> {
+  async requireProjectEdit(
+    projectId: string,
+    userId: string,
+    action = 'modify this project'
+  ): Promise<ProjectAccess> {
     const access = await this.requireProjectView(projectId, userId);
     if (!access.canEdit) {
       throw new ForbiddenException(`Your role does not allow you to ${action}`);
@@ -417,7 +423,9 @@ export class AuthorizationService {
   async requireProjectManageMembers(projectId: string, userId: string): Promise<ProjectAccess> {
     const access = await this.requireProjectView(projectId, userId);
     if (!access.canManageMembers) {
-      throw new ForbiddenException('Only project admins or organization admins can manage project members');
+      throw new ForbiddenException(
+        'Only project admins or organization admins can manage project members'
+      );
     }
     return access;
   }
@@ -430,7 +438,11 @@ export class AuthorizationService {
    * the person who does. Org admins/owners keep the escape hatch they need to
    * reassign projects when a member leaves.
    */
-  canTransferProjectOwnership(access: ProjectAccess, ownerId: string | null, userId: string): boolean {
+  canTransferProjectOwnership(
+    access: ProjectAccess,
+    ownerId: string | null,
+    userId: string
+  ): boolean {
     if (access.source === 'superadmin') return true;
     if (access.orgRole === 'owner' || access.orgRole === 'admin') return true;
     return !!ownerId && ownerId === userId;
@@ -440,11 +452,11 @@ export class AuthorizationService {
     const access = await this.requireProjectView(projectId, userId);
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { ownerId: true },
+      select: { ownerId: true }
     });
     if (!this.canTransferProjectOwnership(access, project?.ownerId ?? null, userId)) {
       throw new ForbiddenException(
-        'Only the project owner or an organization admin can transfer ownership of this project',
+        'Only the project owner or an organization admin can transfer ownership of this project'
       );
     }
     return access;
@@ -453,7 +465,9 @@ export class AuthorizationService {
   async requireProjectDelete(projectId: string, userId: string): Promise<ProjectAccess> {
     const access = await this.requireProjectView(projectId, userId);
     if (!access.canDelete) {
-      throw new ForbiddenException('Only project admins or organization admins can delete this project');
+      throw new ForbiddenException(
+        'Only project admins or organization admins can delete this project'
+      );
     }
     return access;
   }
@@ -477,14 +491,14 @@ export class AuthorizationService {
       if (!tokenAllowList) return null;
       const projects = await this.prisma.project.findMany({
         where: { organizationId, id: { in: tokenAllowList } },
-        select: { id: true },
+        select: { id: true }
       });
       return projects.map((p) => p.id);
     }
 
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
-      select: { role: true },
+      select: { role: true }
     });
     if (!member) {
       throw new NotFoundException('Organization not found');
@@ -493,14 +507,14 @@ export class AuthorizationService {
       if (!tokenAllowList) return null;
       const projects = await this.prisma.project.findMany({
         where: { organizationId, id: { in: tokenAllowList } },
-        select: { id: true },
+        select: { id: true }
       });
       return projects.map((p) => p.id);
     }
 
     const memberships = await this.prisma.projectMember.findMany({
       where: { userId, project: { organizationId } },
-      select: { projectId: true },
+      select: { projectId: true }
     });
     const ids = memberships.map((m) => m.projectId);
     if (!tokenAllowList) return ids;

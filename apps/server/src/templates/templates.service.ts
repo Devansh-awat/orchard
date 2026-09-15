@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
-  OnModuleInit,
+  OnModuleInit
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,10 +15,7 @@ import { DeploymentsService } from '../projects/deployments.service';
 import { IngressService } from '../projects/ingress.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
-import {
-  TemplateEngineService,
-  ResolutionContext,
-} from './template-engine.service';
+import { TemplateEngineService, ResolutionContext } from './template-engine.service';
 
 @Injectable()
 export class TemplatesService implements OnModuleInit {
@@ -32,7 +29,7 @@ export class TemplatesService implements OnModuleInit {
     private readonly ingress: IngressService,
     private readonly templateEngine: TemplateEngineService,
     private readonly authz: AuthorizationService,
-    private readonly usersService: UsersService,
+    private readonly usersService: UsersService
   ) {}
 
   private async resolveUserId(clerkId: string, userData?: any): Promise<string> {
@@ -45,7 +42,7 @@ export class TemplatesService implements OnModuleInit {
     const userId = await this.resolveUserId(clerkId, userData);
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isSuperAdmin: true },
+      select: { isSuperAdmin: true }
     });
     if (!u?.isSuperAdmin) {
       throw new ForbiddenException('Only superadmins can manage global templates');
@@ -67,7 +64,9 @@ export class TemplatesService implements OnModuleInit {
       return;
     }
 
-    const files = fs.readdirSync(builtInDir).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
+    const files = fs
+      .readdirSync(builtInDir)
+      .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
     this.logger.log(`Found ${files.length} template files: ${files.join(', ')}`);
 
     for (const file of files) {
@@ -87,7 +86,7 @@ export class TemplatesService implements OnModuleInit {
             category: parsed.metadata.category,
             tags: parsed.metadata.tags || [],
             yaml: yamlContent,
-            isBuiltIn: true,
+            isBuiltIn: true
           },
           create: {
             name: parsed.metadata.name,
@@ -98,8 +97,8 @@ export class TemplatesService implements OnModuleInit {
             category: parsed.metadata.category,
             tags: parsed.metadata.tags || [],
             yaml: yamlContent,
-            isBuiltIn: true,
-          },
+            isBuiltIn: true
+          }
         });
 
         this.logger.log(`Seeded built-in template: ${parsed.metadata.name}`);
@@ -121,8 +120,8 @@ export class TemplatesService implements OnModuleInit {
         version: true,
         category: true,
         tags: true,
-        isBuiltIn: true,
-      },
+        isBuiltIn: true
+      }
     });
   }
 
@@ -137,8 +136,8 @@ export class TemplatesService implements OnModuleInit {
       parameters: parsed.parameters,
       resources: parsed.resources.map((r) => ({
         name: r.name,
-        type: r.type,
-      })),
+        type: r.type
+      }))
     };
   }
 
@@ -148,10 +147,12 @@ export class TemplatesService implements OnModuleInit {
 
     // Check for name conflicts
     const existing = await this.prisma.template.findUnique({
-      where: { name: parsed.metadata.name },
+      where: { name: parsed.metadata.name }
     });
     if (existing) {
-      throw new BadRequestException(`A template with name "${parsed.metadata.name}" already exists`);
+      throw new BadRequestException(
+        `A template with name "${parsed.metadata.name}" already exists`
+      );
     }
 
     const template = await this.prisma.template.create({
@@ -164,14 +165,14 @@ export class TemplatesService implements OnModuleInit {
         category: parsed.metadata.category,
         tags: parsed.metadata.tags || [],
         yaml: yamlContent,
-        isBuiltIn: false,
-      },
+        isBuiltIn: false
+      }
     });
 
     return {
       ...template,
       parameters: parsed.parameters,
-      resources: parsed.resources.map((r) => ({ name: r.name, type: r.type })),
+      resources: parsed.resources.map((r) => ({ name: r.name, type: r.type }))
     };
   }
 
@@ -187,10 +188,12 @@ export class TemplatesService implements OnModuleInit {
 
     // Check name conflicts with other templates
     const nameConflict = await this.prisma.template.findFirst({
-      where: { name: parsed.metadata.name, id: { not: id } },
+      where: { name: parsed.metadata.name, id: { not: id } }
     });
     if (nameConflict) {
-      throw new BadRequestException(`A template with name "${parsed.metadata.name}" already exists`);
+      throw new BadRequestException(
+        `A template with name "${parsed.metadata.name}" already exists`
+      );
     }
 
     const template = await this.prisma.template.update({
@@ -203,14 +206,14 @@ export class TemplatesService implements OnModuleInit {
         version: parsed.metadata.version,
         category: parsed.metadata.category,
         tags: parsed.metadata.tags || [],
-        yaml: yamlContent,
-      },
+        yaml: yamlContent
+      }
     });
 
     return {
       ...template,
       parameters: parsed.parameters,
-      resources: parsed.resources.map((r) => ({ name: r.name, type: r.type })),
+      resources: parsed.resources.map((r) => ({ name: r.name, type: r.type }))
     };
   }
 
@@ -224,11 +227,11 @@ export class TemplatesService implements OnModuleInit {
 
     // Check for active instances
     const instances = await this.prisma.templateInstance.count({
-      where: { templateId: id },
+      where: { templateId: id }
     });
     if (instances > 0) {
       throw new BadRequestException(
-        `Cannot delete template with ${instances} active instance(s). Delete instances first.`,
+        `Cannot delete template with ${instances} active instance(s). Delete instances first.`
       );
     }
 
@@ -251,7 +254,7 @@ export class TemplatesService implements OnModuleInit {
     resourceOverride?: {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
-    },
+    }
   ) {
     const template = await this.prisma.template.findUnique({ where: { id: templateId } });
     if (!template) throw new NotFoundException('Template not found');
@@ -274,13 +277,13 @@ export class TemplatesService implements OnModuleInit {
         name: validatedParams.appName || parsed.metadata.displayName,
         parameters: validatedParams,
         status: 'deploying',
-        createdBy: user?.id,
-      },
+        createdBy: user?.id
+      }
     });
 
     const context: ResolutionContext = {
       params: validatedParams,
-      resources: {},
+      resources: {}
     };
 
     try {
@@ -296,10 +299,10 @@ export class TemplatesService implements OnModuleInit {
                 templateInstanceId: instance.id,
                 replicas: config.replicas ? Number(config.replicas) : 1,
                 cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
               },
               clerkId,
-              userData,
+              userData
             );
 
             context.resources[resource.name] = {
@@ -309,7 +312,7 @@ export class TemplatesService implements OnModuleInit {
               dbName: db.dbName,
               dbUser: db.dbUser,
               dbPassword: db.dbPassword,
-              connectionString: `postgresql://${db.dbUser}:${db.dbPassword}@${db.host}:${db.port}/${db.dbName}`,
+              connectionString: `postgresql://${db.dbUser}:${db.dbPassword}@${db.host}:${db.port}/${db.dbName}`
             };
             break;
           }
@@ -328,7 +331,8 @@ export class TemplatesService implements OnModuleInit {
                   repoUrl,
                   branch: config.branch,
                   buildType,
-                  dockerfilePath: buildType === 'dockerfile' ? config.dockerfilePath || 'Dockerfile' : undefined,
+                  dockerfilePath:
+                    buildType === 'dockerfile' ? config.dockerfilePath || 'Dockerfile' : undefined,
                   rootDirectory: config.rootDirectory,
                   installCommand: config.installCommand,
                   buildCommand: config.buildCommand,
@@ -344,10 +348,10 @@ export class TemplatesService implements OnModuleInit {
                   autoDeployBranch: config.autoDeployBranch,
                   templateInstanceId: instance.id,
                   cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                  memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+                  memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
                 },
                 clerkId,
-                userData,
+                userData
               );
             } else {
               const deployData: any = {
@@ -360,24 +364,24 @@ export class TemplatesService implements OnModuleInit {
                 exposePublic: config.exposePublic ?? false,
                 templateInstanceId: instance.id,
                 cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
-                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
               };
 
               deployment = await this.deployments.createDeployment(
                 projectId,
                 deployData,
                 clerkId,
-                userData,
+                userData
               );
             }
 
             const services = await this.prisma.service.findMany({
-              where: { deploymentId: deployment.id },
+              where: { deploymentId: deployment.id }
             });
 
             context.resources[resource.name] = {
               id: deployment.id,
-              serviceName: services[0]?.name || `${config.name}-svc`,
+              serviceName: services[0]?.name || `${config.name}-svc`
             };
             break;
           }
@@ -387,8 +391,8 @@ export class TemplatesService implements OnModuleInit {
               {
                 path: config.path || '/',
                 serviceName: config.serviceName,
-                servicePort: config.servicePort || 80,
-              },
+                servicePort: config.servicePort || 80
+              }
             ];
 
             await this.ingress.createProjectIngress(
@@ -398,20 +402,20 @@ export class TemplatesService implements OnModuleInit {
                 tlsEnabled: config.tlsEnabled !== false,
                 routes,
                 basicAuth: config.basicAuth,
-                templateInstanceId: instance.id,
+                templateInstanceId: instance.id
               },
               clerkId,
-              userData,
+              userData
             );
 
             const linkedIngress = await this.prisma.ingress.findFirst({
               where: { projectId, templateInstanceId: instance.id, host: config.host },
-              select: { id: true },
+              select: { id: true }
             });
 
             context.resources[resource.name] = {
               id: linkedIngress?.id,
-              host: config.host,
+              host: config.host
             };
             break;
           }
@@ -422,27 +426,29 @@ export class TemplatesService implements OnModuleInit {
 
       await this.prisma.templateInstance.update({
         where: { id: instance.id },
-        data: { status: 'active' },
+        data: { status: 'active' }
       });
 
       return this.getTemplateInstance(instance.id, clerkId, userData);
     } catch (e) {
-      await this.prisma.templateInstance.update({
-        where: { id: instance.id },
-        data: { status: 'failed' },
-      }).catch(() => { /* ignore */ });
+      await this.prisma.templateInstance
+        .update({
+          where: { id: instance.id },
+          data: { status: 'failed' }
+        })
+        .catch(() => {
+          /* ignore */
+        });
 
       try {
         await this.deleteTemplateInstance(instance.id, clerkId, userData);
       } catch (rollbackErr: any) {
         this.logger.error(
-          `Rollback of failed template instance ${instance.id} incomplete: ${rollbackErr?.message}`,
+          `Rollback of failed template instance ${instance.id} incomplete: ${rollbackErr?.message}`
         );
       }
 
-      throw new BadRequestException(
-        `Template deployment failed: ${e.message}`,
-      );
+      throw new BadRequestException(`Template deployment failed: ${e.message}`);
     }
   }
 
@@ -450,7 +456,7 @@ export class TemplatesService implements OnModuleInit {
     const userId = await this.resolveUserId(clerkId, userData);
     const instance = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
-      select: { id: true, name: true, projectId: true },
+      select: { id: true, name: true, projectId: true }
     });
     if (!instance) throw new NotFoundException('Template instance not found');
     await this.authz.requireProjectEdit(instance.projectId, userId, 'rename template instances');
@@ -462,7 +468,7 @@ export class TemplatesService implements OnModuleInit {
     if (trimmed !== instance.name) {
       await this.prisma.templateInstance.update({
         where: { id: instanceId },
-        data: { name: trimmed },
+        data: { name: trimmed }
       });
     }
 
@@ -473,7 +479,7 @@ export class TemplatesService implements OnModuleInit {
     const userId = await this.resolveUserId(clerkId, userData);
     const owner = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
-      select: { projectId: true },
+      select: { projectId: true }
     });
     if (!owner) throw new NotFoundException('Template instance not found');
     await this.authz.requireProjectView(owner.projectId, userId);
@@ -486,34 +492,34 @@ export class TemplatesService implements OnModuleInit {
             name: true,
             displayName: true,
             icon: true,
-            category: true,
-          },
+            category: true
+          }
         },
         deployments: {
           select: {
             id: true,
             name: true,
             status: true,
-            image: true,
-          },
+            image: true
+          }
         },
         databases: {
           select: {
             id: true,
             name: true,
             status: true,
-            dbName: true,
-          },
+            dbName: true
+          }
         },
         ingresses: {
           select: {
             id: true,
             name: true,
             host: true,
-            path: true,
-          },
-        },
-      },
+            path: true
+          }
+        }
+      }
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
@@ -532,14 +538,14 @@ export class TemplatesService implements OnModuleInit {
             name: true,
             displayName: true,
             icon: true,
-            category: true,
-          },
+            category: true
+          }
         },
         deployments: { select: { id: true } },
         databases: { select: { id: true } },
-        ingresses: { select: { id: true } },
+        ingresses: { select: { id: true } }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -552,15 +558,15 @@ export class TemplatesService implements OnModuleInit {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    },
+    }
   ) {
     const instance = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
       include: {
         deployments: { select: { id: true } },
         databases: { select: { id: true } },
-        ingresses: { select: { id: true, projectId: true } },
-      },
+        ingresses: { select: { id: true, projectId: true } }
+      }
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
@@ -570,7 +576,7 @@ export class TemplatesService implements OnModuleInit {
 
     await this.prisma.templateInstance.update({
       where: { id: instanceId },
-      data: { status: 'deleting' },
+      data: { status: 'deleting' }
     });
 
     const errors: string[] = [];
@@ -578,12 +584,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete ingresses first
     for (const ingress of instance.ingresses) {
       try {
-        await this.ingress.deleteProjectIngress(
-          ingress.projectId,
-          ingress.id,
-          clerkId,
-          userData,
-        );
+        await this.ingress.deleteProjectIngress(ingress.projectId, ingress.id, clerkId, userData);
       } catch (e) {
         errors.push(`Failed to delete ingress ${ingress.id}: ${e.message}`);
       }
@@ -592,11 +593,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete deployments
     for (const deployment of instance.deployments) {
       try {
-        await this.deployments.deleteDeployment(
-          deployment.id,
-          clerkId,
-          userData,
-        );
+        await this.deployments.deleteDeployment(deployment.id, clerkId, userData);
       } catch (e) {
         errors.push(`Failed to delete deployment ${deployment.id}: ${e.message}`);
       }
@@ -605,11 +602,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete databases
     for (const database of instance.databases) {
       try {
-        await this.databases.deleteDatabase(
-          database.id,
-          clerkId,
-          userData,
-        );
+        await this.databases.deleteDatabase(database.id, clerkId, userData);
       } catch (e) {
         errors.push(`Failed to delete database ${database.id}: ${e.message}`);
       }
@@ -619,11 +612,9 @@ export class TemplatesService implements OnModuleInit {
       this.logger.warn(`Template instance ${instanceId} cleanup had errors: ${errors.join('; ')}`);
       await this.prisma.templateInstance.update({
         where: { id: instanceId },
-        data: { status: 'failed' },
+        data: { status: 'failed' }
       });
-      throw new BadRequestException(
-        `Template instance cleanup failed: ${errors.join('; ')}`,
-      );
+      throw new BadRequestException(`Template instance cleanup failed: ${errors.join('; ')}`);
     }
 
     await this.prisma.templateInstance.delete({ where: { id: instanceId } });

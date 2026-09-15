@@ -87,9 +87,8 @@ import { ApplyModule } from './apply/apply.module';
     ForumModule,
     SandboxesModule,
     SshIdentitiesModule,
-    MirrorModule,
+    MirrorModule
   ],
-  providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }]
 })
 export class AppModule {}
-

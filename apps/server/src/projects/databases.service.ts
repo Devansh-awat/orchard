@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
@@ -28,7 +28,17 @@ import { buildPlacement } from '../kubernetes/kubernetes.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { BackupSyncService } from './backup-sync.service';
-import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
+import {
+  formatSlug,
+  redactDatabaseForViewer,
+  stripR2ProxyCreds,
+  truncateK8sName,
+  parseStorageSize,
+  formatBytes,
+  toQuartzCron,
+  DEFAULT_BACKUP_CRON,
+  GIB
+} from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
 
 /** The org fields that locate a managed database's backups in R2. */
@@ -72,7 +82,7 @@ export class DatabasesService {
     private readonly nodesService: NodesService,
     private readonly backupSync: BackupSyncService,
     private readonly notifications: NotificationsService,
-    private readonly instanceConfig: InstanceConfigService,
+    private readonly instanceConfig: InstanceConfigService
   ) {}
 
   // Resolve a database cluster's placement: org hostname allow/deny + assigned
@@ -81,7 +91,7 @@ export class DatabasesService {
   private async resolveDatabasePlacement(
     organizationId: string,
     nodePoolId: string | null | undefined,
-    placementOverride: unknown,
+    placementOverride: unknown
   ) {
     const org = await this.nodesService.getPlacementForOrg(organizationId);
     const pool = await this.nodesService.resolvePool(nodePoolId ?? null);
@@ -90,7 +100,7 @@ export class DatabasesService {
       allowedNodes: org.allowedNodes,
       deniedNodes: org.deniedNodes,
       pool,
-      override,
+      override
     });
   }
 
@@ -127,9 +137,7 @@ export class DatabasesService {
       throw new BadRequestException('Replicas must be a whole number of at least 1');
     }
     if (n > this.maxReplicas) {
-      throw new BadRequestException(
-        `Replicas cannot exceed ${this.maxReplicas} on this instance`,
-      );
+      throw new BadRequestException(`Replicas cannot exceed ${this.maxReplicas} on this instance`);
     }
     return n;
   }
@@ -142,23 +150,28 @@ export class DatabasesService {
    * land in the tenant's namespace.
    */
   private async buildBackupR2Config(
-    org: {
-      backupR2Endpoint: string | null;
-      backupR2Bucket: string | null;
-      backupR2Region: string | null;
-      backupR2AccessKey: string | null;
-      backupR2SecretKey: string | null;
-    } | null | undefined,
+    org:
+      | {
+          backupR2Endpoint: string | null;
+          backupR2Bucket: string | null;
+          backupR2Region: string | null;
+          backupR2AccessKey: string | null;
+          backupR2SecretKey: string | null;
+        }
+      | null
+      | undefined,
     namespace: string,
-    clusterName: string,
+    clusterName: string
   ): Promise<{
-    r2: {
-      endpoint: string;
-      bucket: string;
-      region: string;
-      accessKey: string;
-      secretKey: string;
-    } | undefined;
+    r2:
+      | {
+          endpoint: string;
+          bucket: string;
+          region: string;
+          accessKey: string;
+          secretKey: string;
+        }
+      | undefined;
     r2ProxyAccessKey: string | undefined;
     r2ProxySecret: string | undefined;
   }> {
@@ -177,7 +190,7 @@ export class DatabasesService {
         accessKey: minted.accessKey,
         secret: minted.secret,
         bucket: org.backupR2Bucket,
-        prefix: `${namespace}/${clusterName}/`,
+        prefix: `${namespace}/${clusterName}/`
       });
       return {
         r2: {
@@ -185,10 +198,10 @@ export class DatabasesService {
           bucket: org.backupR2Bucket,
           region: org.backupR2Region || 'auto',
           accessKey: minted.accessKey,
-          secretKey: minted.secret,
+          secretKey: minted.secret
         },
         r2ProxyAccessKey: minted.accessKey,
-        r2ProxySecret: minted.secret,
+        r2ProxySecret: minted.secret
       };
     }
 
@@ -198,10 +211,10 @@ export class DatabasesService {
         bucket: org.backupR2Bucket,
         region: org.backupR2Region || 'auto',
         accessKey: org.backupR2AccessKey,
-        secretKey: org.backupR2SecretKey,
+        secretKey: org.backupR2SecretKey
       },
       r2ProxyAccessKey: undefined,
-      r2ProxySecret: undefined,
+      r2ProxySecret: undefined
     };
   }
 
@@ -213,9 +226,7 @@ export class DatabasesService {
     database: string;
     sslMode?: string;
   }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number }> {
-    const ssl = src.sslMode && src.sslMode !== 'disable'
-      ? { rejectUnauthorized: false }
-      : false;
+    const ssl = src.sslMode && src.sslMode !== 'disable' ? { rejectUnauthorized: false } : false;
     const client = new Client({
       host: src.host,
       port: src.port || 5432,
@@ -225,7 +236,7 @@ export class DatabasesService {
       ssl,
       connectionTimeoutMillis: 8000,
       statement_timeout: 5000,
-      query_timeout: 5000,
+      query_timeout: 5000
     });
     try {
       try {
@@ -237,19 +248,27 @@ export class DatabasesService {
           throw new BadRequestException(`Source database host not found: ${src.host}`);
         }
         if (code === 'ECONNREFUSED') {
-          throw new BadRequestException(`Source database refused connection at ${src.host}:${src.port || 5432}`);
+          throw new BadRequestException(
+            `Source database refused connection at ${src.host}:${src.port || 5432}`
+          );
         }
         if (code === 'ETIMEDOUT' || /timeout/i.test(msg)) {
-          throw new BadRequestException(`Timed out connecting to source database at ${src.host}:${src.port || 5432}`);
+          throw new BadRequestException(
+            `Timed out connecting to source database at ${src.host}:${src.port || 5432}`
+          );
         }
         if (code === '28P01' || code === '28000') {
-          throw new BadRequestException('Source database rejected credentials (wrong user or password)');
+          throw new BadRequestException(
+            'Source database rejected credentials (wrong user or password)'
+          );
         }
         if (code === '3D000') {
           throw new BadRequestException(`Source database "${src.database}" does not exist`);
         }
         if (/self.signed|self-signed|certificate/i.test(msg)) {
-          throw new BadRequestException(`Source database TLS error: ${msg}. Try appending ?sslmode=require to the URL.`);
+          throw new BadRequestException(
+            `Source database TLS error: ${msg}. Try appending ?sslmode=require to the URL.`
+          );
         }
         throw new BadRequestException(`Cannot reach source database: ${msg}`);
       }
@@ -259,7 +278,9 @@ export class DatabasesService {
         const r = await client.query('SHOW server_version_num');
         versionNum = Number(r.rows?.[0]?.server_version_num);
       } catch (e: any) {
-        throw new BadRequestException(`Failed to query source database version: ${e?.message || e}`);
+        throw new BadRequestException(
+          `Failed to query source database version: ${e?.message || e}`
+        );
       }
       if (!versionNum || Number.isNaN(versionNum)) {
         throw new BadRequestException('Could not determine source PostgreSQL version');
@@ -267,7 +288,7 @@ export class DatabasesService {
       const sourceMajor = Math.floor(versionNum / 10000);
       if (sourceMajor > this.MAX_PG_MAJOR) {
         throw new BadRequestException(
-          `Source PostgreSQL major version (${sourceMajor}) is newer than the newest version the platform supports (${this.MAX_PG_MAJOR}); import is not supported yet.`,
+          `Source PostgreSQL major version (${sourceMajor}) is newer than the newest version the platform supports (${this.MAX_PG_MAJOR}); import is not supported yet.`
         );
       }
 
@@ -282,7 +303,11 @@ export class DatabasesService {
       }
       return { sourceSizeBytes, sourceMajor };
     } finally {
-      try { await client.end(); } catch { /* ignore */ }
+      try {
+        await client.end();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -321,7 +346,7 @@ export class DatabasesService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { organization: true },
+      include: { organization: true }
     });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
 
@@ -351,38 +376,44 @@ export class DatabasesService {
 
     // Check uniqueness in our records (now per environment)
     const existing = await this.prisma.database.findFirst({
-      where: { environmentId: dbEnv?.id ?? undefined, projectId, name: nameInput },
+      where: { environmentId: dbEnv?.id ?? undefined, projectId, name: nameInput }
     });
-    if (existing) throw new BadRequestException('A database with this name already exists in this environment');
+    if (existing)
+      throw new BadRequestException('A database with this name already exists in this environment');
 
     const dbNameExists = await this.prisma.database.findUnique({
-      where: { dbName },
+      where: { dbName }
     });
-    if (dbNameExists) throw new BadRequestException('A database with this identifier already exists');
+    if (dbNameExists)
+      throw new BadRequestException('A database with this identifier already exists');
 
     // New databases get a dedicated CNPG Cluster in the project namespace.
     // K8s resource name must match DNS-1123 (lowercase, hyphens, ≤53 chars to leave room for suffixes).
     const clusterName = `pg-${formatSlug(nameInput).substring(0, 48)}`.replace(/^-+|-+$/g, '');
     const namespace = project.namespace;
 
-    const org = await this.prisma.organization.findUnique({ where: { id: project.organizationId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: project.organizationId }
+    });
     const { r2, r2ProxyAccessKey, r2ProxySecret } = await this.buildBackupR2Config(
       org,
       namespace,
-      clusterName,
+      clusterName
     );
 
     const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
     const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
 
-    let importFrom: {
-      host: string;
-      port?: number;
-      user: string;
-      password: string;
-      database: string;
-      sslMode?: string;
-    } | undefined;
+    let importFrom:
+      | {
+          host: string;
+          port?: number;
+          user: string;
+          password: string;
+          database: string;
+          sslMode?: string;
+        }
+      | undefined;
     const restoreUrlRaw = typeof data.restoreFromUrl === 'string' ? data.restoreFromUrl.trim() : '';
     if (restoreUrlRaw) {
       try {
@@ -400,7 +431,7 @@ export class DatabasesService {
           user: decodeURIComponent(u.username),
           password: decodeURIComponent(u.password || ''),
           database: sourceDb,
-          sslMode: u.searchParams.get('sslmode') || undefined,
+          sslMode: u.searchParams.get('sslmode') || undefined
         };
       } catch (e: any) {
         throw new BadRequestException(`Invalid restore URL: ${e?.message || 'parse error'}`);
@@ -412,7 +443,7 @@ export class DatabasesService {
       const requested = Number(data.pgMajor);
       if (!Number.isInteger(requested) || requested < 13 || requested > this.MAX_PG_MAJOR) {
         throw new BadRequestException(
-          `Unsupported PostgreSQL version. Choose a major between 13 and ${this.MAX_PG_MAJOR}.`,
+          `Unsupported PostgreSQL version. Choose a major between 13 and ${this.MAX_PG_MAJOR}.`
         );
       }
       pgMajor = requested;
@@ -428,7 +459,7 @@ export class DatabasesService {
         if (storageBytes != null && storageBytes < requiredBytes) {
           const suggestedGi = Math.max(1, Math.ceil(requiredBytes / GIB));
           throw new BadRequestException(
-            `The source database is ${formatBytes(sourceSizeBytes)}, and the import needs room for both the dump and the restored data on the same volume. Choose at least ${suggestedGi}Gi of storage.`,
+            `The source database is ${formatBytes(sourceSizeBytes)}, and the import needs room for both the dump and the restored data on the same volume. Choose at least ${suggestedGi}Gi of storage.`
           );
         }
       }
@@ -436,14 +467,18 @@ export class DatabasesService {
 
     const replicas = this.resolveReplicas(data.replicas);
 
-    const dbResources = await this.quotasService.resolvePodResources(projectId, {
-      cpuRequestMilli: data.cpuRequestMilli ?? null,
-      memoryRequestBytes: data.memoryRequestBytes ?? null,
-    }, 'postgres');
+    const dbResources = await this.quotasService.resolvePodResources(
+      projectId,
+      {
+        cpuRequestMilli: data.cpuRequestMilli ?? null,
+        memoryRequestBytes: data.memoryRequestBytes ?? null
+      },
+      'postgres'
+    );
     const provisionResources = importFrom
       ? {
           cpuMilli: Math.max(dbResources.cpuMilli, this.IMPORT_BOOST_CPU_MILLI),
-          memoryBytes: Math.max(dbResources.memoryBytes, this.IMPORT_BOOST_MEMORY_BYTES),
+          memoryBytes: Math.max(dbResources.memoryBytes, this.IMPORT_BOOST_MEMORY_BYTES)
         }
       : { cpuMilli: dbResources.cpuMilli, memoryBytes: dbResources.memoryBytes };
     const importBoosted =
@@ -454,7 +489,7 @@ export class DatabasesService {
     // bills three times over against the org cap and the owner's allowance.
     const provisionTotal = {
       cpuMilli: provisionResources.cpuMilli * replicas,
-      memoryBytes: provisionResources.memoryBytes * replicas,
+      memoryBytes: provisionResources.memoryBytes * replicas
     };
 
     try {
@@ -462,12 +497,12 @@ export class DatabasesService {
       await this.quotasService.enforceMemberAllowanceForNewPod(
         project.organizationId,
         project.ownerId,
-        provisionTotal,
+        provisionTotal
       );
     } catch (e: any) {
       if (importBoosted) {
         throw new BadRequestException(
-          `Importing a database temporarily provisions it with ${this.IMPORT_BOOST_CPU_MILLI}m CPU / ${formatBytes(this.IMPORT_BOOST_MEMORY_BYTES)} memory while the migration runs (it scales back down afterwards), and your quota can't fit that right now. ${e?.message || ''}`.trim(),
+          `Importing a database temporarily provisions it with ${this.IMPORT_BOOST_CPU_MILLI}m CPU / ${formatBytes(this.IMPORT_BOOST_MEMORY_BYTES)} memory while the migration runs (it scales back down afterwards), and your quota can't fit that right now. ${e?.message || ''}`.trim()
         );
       }
       throw e;
@@ -479,12 +514,12 @@ export class DatabasesService {
     await this.nodesService.assertPoolAssignable({
       nodePoolId: data.nodePoolId,
       placementOverride: data.placementOverride,
-      userId: user.id,
+      userId: user.id
     });
     const dbPlacement = await this.resolveDatabasePlacement(
       project.organizationId,
       data.nodePoolId ?? null,
-      data.placementOverride ?? null,
+      data.placementOverride ?? null
     );
 
     let host: string;
@@ -502,12 +537,16 @@ export class DatabasesService {
         instances: replicas,
         placement: dbPlacement,
         importFrom,
-        imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`,
+        imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`
       }));
     } catch (e) {
       if (r2ProxyAccessKey) {
-        try { await this.r2Proxy.removeBinding(r2ProxyAccessKey); } catch (cleanupErr: any) {
-          console.warn(`[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createCnpgCluster failure: ${cleanupErr?.message}`);
+        try {
+          await this.r2Proxy.removeBinding(r2ProxyAccessKey);
+        } catch (cleanupErr: any) {
+          console.warn(
+            `[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createCnpgCluster failure: ${cleanupErr?.message}`
+          );
         }
       }
       throw e;
@@ -531,7 +570,8 @@ export class DatabasesService {
           storageSize,
           replicas,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
-          memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+          memoryRequestBytes:
+            data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
           importBoosted,
           host,
           port,
@@ -539,23 +579,41 @@ export class DatabasesService {
           templateInstanceId: data.templateInstanceId ?? null,
           backupScheduleCron: r2 ? DEFAULT_BACKUP_CRON : null,
           nodePoolId: data.nodePoolId ?? null,
-          placementOverride: (data.placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
+          placementOverride: (data.placementOverride ?? undefined) as
+            | Prisma.InputJsonValue
+            | undefined,
           r2ProxyAccessKey: r2ProxyAccessKey ?? null,
-          r2ProxySecret: r2ProxySecret ?? null,
+          r2ProxySecret: r2ProxySecret ?? null
         },
         include: {
           creator: {
-            select: { id: true, email: true, username: true, firstName: true, lastName: true },
-          },
-        },
+            select: { id: true, email: true, username: true, firstName: true, lastName: true }
+          }
+        }
       });
     } catch (e) {
-      try { await this.k8sCnpg.deleteScheduledBackup(namespace, clusterName); } catch { /* ignore */ }
-      try { await this.k8sNetwork.unexposeCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
-      try { await this.k8sCnpg.deleteCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
+      try {
+        await this.k8sCnpg.deleteScheduledBackup(namespace, clusterName);
+      } catch {
+        /* ignore */
+      }
+      try {
+        await this.k8sNetwork.unexposeCnpgCluster(namespace, clusterName);
+      } catch {
+        /* ignore */
+      }
+      try {
+        await this.k8sCnpg.deleteCnpgCluster(namespace, clusterName);
+      } catch {
+        /* ignore */
+      }
       if (r2ProxyAccessKey) {
-        try { await this.r2Proxy.removeBinding(r2ProxyAccessKey); } catch (cleanupErr: any) {
-          console.warn(`[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createDatabase rollback: ${cleanupErr?.message}`);
+        try {
+          await this.r2Proxy.removeBinding(r2ProxyAccessKey);
+        } catch (cleanupErr: any) {
+          console.warn(
+            `[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createDatabase rollback: ${cleanupErr?.message}`
+          );
         }
       }
       throw e;
@@ -565,13 +623,13 @@ export class DatabasesService {
     // fired against a primary that has not come up yet just fails. The first
     // scheduled run is well inside the retention window.
     if (r2) {
-      this.k8sCnpg.upsertScheduledBackup(
-        namespace,
-        clusterName,
-        toQuartzCron(DEFAULT_BACKUP_CRON),
-      ).catch((e) => {
-        this.logger.warn(`[DB/backup] default schedule for ${namespace}/${clusterName} failed: ${k8sErrorMessage(e)}`);
-      });
+      this.k8sCnpg
+        .upsertScheduledBackup(namespace, clusterName, toQuartzCron(DEFAULT_BACKUP_CRON))
+        .catch((e) => {
+          this.logger.warn(
+            `[DB/backup] default schedule for ${namespace}/${clusterName} failed: ${k8sErrorMessage(e)}`
+          );
+        });
     }
 
     void this.audit.log({
@@ -583,7 +641,7 @@ export class DatabasesService {
       targetType: 'database',
       targetId: database.id,
       targetLabel: database.name,
-      metadata: { mode: 'cnpg', storageSize, replicas },
+      metadata: { mode: 'cnpg', storageSize, replicas }
     });
 
     return stripR2ProxyCreds(database as any);
@@ -595,9 +653,9 @@ export class DatabasesService {
       include: {
         project: { include: { organization: true } },
         creator: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true },
-        },
-      },
+          select: { id: true, email: true, username: true, firstName: true, lastName: true }
+        }
+      }
     });
 
     if (!database) throw new NotFoundException('Database not found');
@@ -627,65 +685,92 @@ export class DatabasesService {
             lastTerminationReason: true,
             lastExitCode: true,
             lastTerminatedAt: true,
-            updatedAt: true,
-          },
+            updatedAt: true
+          }
         })
         .catch(() => []);
       liveStatus = await this.k8sCnpg.getCnpgClusterStatus(
         database.namespace,
         database.clusterName,
         database.dbName,
-        mirrored.length > 0 ? mirrored : null,
+        mirrored.length > 0 ? mirrored : null
       );
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
-        pods = (podList?.pods || []).filter((p: any) =>
-          p.labels?.['cnpg.io/cluster'] === database.clusterName,
+        pods = (podList?.pods || []).filter(
+          (p: any) => p.labels?.['cnpg.io/cluster'] === database.clusterName
         );
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       // Reconcile stored status with live cluster state.
       // 'restarting' flips to 'ready' once the new pod becomes ready — same path
       // as initial provisioning, just from a different starting state.
       if (liveStatus.ready && database.status !== 'ready' && database.status !== 'restoring') {
         try {
-          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+          await this.prisma.database.update({
+            where: { id: database.id },
+            data: { status: 'ready' }
+          });
           database.status = 'ready';
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       } else if (!liveStatus.exists && database.status !== 'error') {
         try {
-          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+          await this.prisma.database.update({
+            where: { id: database.id },
+            data: { status: 'error' }
+          });
           database.status = 'error';
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     } else if (database.mode === 'container' && database.namespace && database.containerName) {
       liveStatus = await this.k8sCnpg.getPostgresContainerStatus(
         database.namespace,
         database.containerName,
         database.dbName,
-        database.dbUser,
+        database.dbUser
       );
       try {
         const podData = await this.k8sWorkload.getDeploymentPods(
           database.containerName,
-          database.namespace,
+          database.namespace
         );
         pods = podData?.pods || [];
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else {
       liveStatus = await this.k8sCnpg.getPostgresDatabaseStatus(database.dbName);
     }
 
-    const org = await this.prisma.organization.findUnique({ where: { id: database.project.organizationId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: database.project.organizationId }
+    });
     const backupsEnabled = Boolean(
       (database.mode === 'cnpg' || database.mode === 'container') &&
-      org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey
+      org?.backupR2Endpoint &&
+      org?.backupR2Bucket &&
+      org?.backupR2AccessKey &&
+      org?.backupR2SecretKey
     );
 
     let publicHostname: string | null = null;
     let publicConnectionString: string | null = null;
-    if (database.publicEnabled && database.publicIp && database.publicPort && database.mode === 'cnpg' && database.clusterName && database.namespace) {
-      publicHostname = this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName) || null;
+    if (
+      database.publicEnabled &&
+      database.publicIp &&
+      database.publicPort &&
+      database.mode === 'cnpg' &&
+      database.clusterName &&
+      database.namespace
+    ) {
+      publicHostname =
+        this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName) || null;
       publicConnectionString = publicHostname
         ? `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
         : `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}?sslmode=require`;
@@ -693,7 +778,9 @@ export class DatabasesService {
         // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
         try {
           await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -715,7 +802,7 @@ export class DatabasesService {
       publicConnectionString,
       liveStatus,
       backupsEnabled,
-      pods,
+      pods
     };
     if (!canEdit) {
       return redactDatabaseForViewer(result);
@@ -735,10 +822,16 @@ export class DatabasesService {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       select: {
-        id: true, mode: true, namespace: true, clusterName: true,
-        containerName: true, dbName: true, dbUser: true, status: true,
-        projectId: true,
-      },
+        id: true,
+        mode: true,
+        namespace: true,
+        clusterName: true,
+        containerName: true,
+        dbName: true,
+        dbUser: true,
+        status: true,
+        projectId: true
+      }
     });
     if (!database) throw new NotFoundException('Database not found');
     if (userId) {
@@ -749,38 +842,56 @@ export class DatabasesService {
     let pods: any[] = [];
     let status = database.status;
     if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName, database.dbName);
+      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(
+        database.namespace,
+        database.clusterName,
+        database.dbName
+      );
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
-        pods = (podList?.pods || []).filter((p: any) =>
-          p.labels?.['cnpg.io/cluster'] === database.clusterName,
+        pods = (podList?.pods || []).filter(
+          (p: any) => p.labels?.['cnpg.io/cluster'] === database.clusterName
         );
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       if (liveStatus.ready && status !== 'ready' && status !== 'restoring') {
         try {
-          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+          await this.prisma.database.update({
+            where: { id: database.id },
+            data: { status: 'ready' }
+          });
           status = 'ready';
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       } else if (!liveStatus.exists && status !== 'error') {
         try {
-          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+          await this.prisma.database.update({
+            where: { id: database.id },
+            data: { status: 'error' }
+          });
           status = 'error';
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     } else if (database.mode === 'container' && database.namespace && database.containerName) {
       liveStatus = await this.k8sCnpg.getPostgresContainerStatus(
         database.namespace,
         database.containerName,
         database.dbName,
-        database.dbUser,
+        database.dbUser
       );
       try {
         const podData = await this.k8sWorkload.getDeploymentPods(
           database.containerName,
-          database.namespace,
+          database.namespace
         );
         pods = podData?.pods || [];
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else {
       liveStatus = await this.k8sCnpg.getPostgresDatabaseStatus(database.dbName);
     }
@@ -790,7 +901,7 @@ export class DatabasesService {
 
   async getDatabaseProvisioning(databaseId: string, userId?: string) {
     const database = await this.prisma.database.findUnique({
-      where: { id: databaseId },
+      where: { id: databaseId }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -809,28 +920,38 @@ export class DatabasesService {
         failed: database.status === 'error',
         hasImport: false,
         steps: [],
-        events: [],
+        events: []
       };
     }
 
     const k = await this.k8sCnpg.getCnpgProvisioningStatus(
       database.namespace,
       database.clusterName,
-      { fetchImportLogs: true },
+      { fetchImportLogs: true }
     );
 
     // Mirror the reconciliation that getDatabase() performs so polling this
     // endpoint alone is enough to flip 'provisioning' → 'ready' once CNPG is up.
     if (k.ready && database.status !== 'ready' && database.status !== 'restoring') {
       try {
-        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+        await this.prisma.database.update({
+          where: { id: database.id },
+          data: { status: 'ready' }
+        });
         database.status = 'ready';
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else if (!k.exists && database.status !== 'error' && database.status !== 'provisioning') {
       try {
-        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+        await this.prisma.database.update({
+          where: { id: database.id },
+          data: { status: 'error' }
+        });
         database.status = 'error';
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     const podWaiting = k.instancePod?.waiting;
@@ -847,7 +968,7 @@ export class DatabasesService {
       id: 'cluster',
       label: 'Cluster resource created',
       description: 'Registering the Postgres cluster with Kubernetes.',
-      status: clusterStatus,
+      status: clusterStatus
     });
 
     let storageStatus: ProvisioningStepStatus = 'pending';
@@ -859,7 +980,7 @@ export class DatabasesService {
       label: 'Storage volume attached',
       description: 'Provisioning and binding the PersistentVolumeClaim.',
       status: storageStatus,
-      detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined,
+      detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined
     });
 
     let podScheduledStatus: ProvisioningStepStatus = 'pending';
@@ -871,7 +992,7 @@ export class DatabasesService {
       label: 'Pod scheduled to a node',
       description: 'Kubernetes is placing the Postgres pod onto a worker.',
       status: podScheduledStatus,
-      detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined,
+      detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined
     });
 
     let podRunningStatus: ProvisioningStepStatus = 'pending';
@@ -885,8 +1006,8 @@ export class DatabasesService {
       description: 'Pulling the Postgres image and starting the container.',
       status: podRunningStatus,
       detail: podWaiting
-        ? `${podWaiting.reason}${podWaiting.message ? `: ${  podWaiting.message}` : ''}`
-        : undefined,
+        ? `${podWaiting.reason}${podWaiting.message ? `: ${podWaiting.message}` : ''}`
+        : undefined
     });
 
     if (k.hasImport) {
@@ -902,7 +1023,7 @@ export class DatabasesService {
           importStatus === 'error' && k.importError
             ? k.importError
             : 'CloudNativePG is dumping the source DB and restoring into this cluster.',
-        status: importStatus,
+        status: importStatus
       });
     }
 
@@ -914,7 +1035,7 @@ export class DatabasesService {
       id: 'ready',
       label: 'Database accepting connections',
       description: 'Bootstrap is complete and the cluster is healthy.',
-      status: readyStatus,
+      status: readyStatus
     });
 
     // Promote the first non-done step to "running" if everything before it is
@@ -950,7 +1071,7 @@ export class DatabasesService {
       conditions: k.conditions,
       events: k.events,
       pod: k.instancePod,
-      importPod: k.importPod,
+      importPod: k.importPod
     };
   }
 
@@ -963,10 +1084,10 @@ export class DatabasesService {
       where: { projectId },
       include: {
         creator: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true },
-        },
+          select: { id: true, email: true, username: true, firstName: true, lastName: true }
+        }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
     // Lightweight liveStatus enrichment so the list view can surface OOM/crash
@@ -978,10 +1099,12 @@ export class DatabasesService {
           try {
             const ls = await this.k8sCnpg.getCnpgClusterStatus(d.namespace, d.clusterName);
             return { ...d, liveStatus: ls };
-          } catch { return d; }
+          } catch {
+            return d;
+          }
         }
         return d;
-      }),
+      })
     );
 
     if (!canEdit) {
@@ -1036,7 +1159,7 @@ export class DatabasesService {
         endpoint,
         region: org?.backupR2Region || 'auto',
         credentials: { accessKeyId, secretAccessKey },
-        forcePathStyle: true,
+        forcePathStyle: true
       });
 
       try {
@@ -1044,11 +1167,13 @@ export class DatabasesService {
         let deleted = 0;
         do {
           const listed = await s3.send(
-            new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+            new ListObjectsV2Command({
+              Bucket: bucket,
+              Prefix: prefix,
+              ContinuationToken: continuationToken
+            })
           );
-          const keys = (listed.Contents ?? [])
-            .map((o) => o.Key)
-            .filter((k): k is string => !!k);
+          const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => !!k);
           for (const Key of keys) {
             await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key }));
             deleted += 1;
@@ -1056,14 +1181,16 @@ export class DatabasesService {
           continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
         } while (continuationToken);
         if (deleted > 0) {
-          this.logger.log(`[R2] Purged ${deleted} orphaned backup object(s) under ${bucket}/${prefix}`);
+          this.logger.log(
+            `[R2] Purged ${deleted} orphaned backup object(s) under ${bucket}/${prefix}`
+          );
         }
       } finally {
         s3.destroy();
       }
     } catch (e: any) {
       this.logger.warn(
-        `[R2] Failed to purge backup objects for ${database.namespace}/${database.clusterName}: ${e?.message ?? e}`,
+        `[R2] Failed to purge backup objects for ${database.namespace}/${database.clusterName}: ${e?.message ?? e}`
       );
     }
   }
@@ -1079,11 +1206,11 @@ export class DatabasesService {
    */
   async repointProjectBackupsToOrg(projectId: string, destOrgId: string): Promise<void> {
     const destOrg = (await this.prisma.organization.findUnique({
-      where: { id: destOrgId },
+      where: { id: destOrgId }
     })) as OrgR2 | null;
     const databases = await this.prisma.database.findMany({
       where: { projectId },
-      select: { id: true, mode: true, namespace: true, clusterName: true, r2ProxyAccessKey: true },
+      select: { id: true, mode: true, namespace: true, clusterName: true, r2ProxyAccessKey: true }
     });
     for (const db of databases) {
       if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) continue;
@@ -1091,7 +1218,7 @@ export class DatabasesService {
         await this.repointDatabaseBackups(db, destOrg);
       } catch (e: any) {
         this.logger.error(
-          `[DB/move] backup re-point failed for ${db.namespace}/${db.clusterName}: ${e?.message ?? e}`,
+          `[DB/move] backup re-point failed for ${db.namespace}/${db.clusterName}: ${e?.message ?? e}`
         );
       }
     }
@@ -1104,15 +1231,15 @@ export class DatabasesService {
       clusterName: string | null;
       r2ProxyAccessKey: string | null;
     },
-    destOrg: OrgR2 | null,
+    destOrg: OrgR2 | null
   ): Promise<void> {
     if (!db.namespace || !db.clusterName) return;
     const previousProxyKey = db.r2ProxyAccessKey;
     const destHasR2 = Boolean(
       destOrg?.backupR2Endpoint &&
-        destOrg?.backupR2Bucket &&
-        destOrg?.backupR2AccessKey &&
-        destOrg?.backupR2SecretKey,
+      destOrg?.backupR2Bucket &&
+      destOrg?.backupR2AccessKey &&
+      destOrg?.backupR2SecretKey
     );
 
     if (!destHasR2) {
@@ -1122,35 +1249,38 @@ export class DatabasesService {
       if (await this.k8sCnpg.isCnpgBackupConfigured(db.namespace, db.clusterName)) {
         await this.k8sCnpg.disableCnpgBackup(db.namespace, db.clusterName);
         this.logger.log(
-          `[DB/move] paused backups for ${db.namespace}/${db.clusterName}: destination org has no R2`,
+          `[DB/move] paused backups for ${db.namespace}/${db.clusterName}: destination org has no R2`
         );
       }
       if (this.r2Proxy.isEnabled() && previousProxyKey) {
         await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
         await this.prisma.database.update({
           where: { id: db.id },
-          data: { r2ProxyAccessKey: null, r2ProxySecret: null },
+          data: { r2ProxyAccessKey: null, r2ProxySecret: null }
         });
       }
       return;
     }
 
-    const { r2: destR2, r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret } =
-      await this.buildBackupR2Config(destOrg, db.namespace, db.clusterName);
+    const {
+      r2: destR2,
+      r2ProxyAccessKey: destProxyKey,
+      r2ProxySecret: destProxySecret
+    } = await this.buildBackupR2Config(destOrg, db.namespace, db.clusterName);
     if (!destR2) return;
 
     await this.k8sCnpg.enableCnpgBackup(db.namespace, db.clusterName, destR2);
     if (destProxyKey) {
       await this.prisma.database.update({
         where: { id: db.id },
-        data: { r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret },
+        data: { r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret }
       });
       if (this.r2Proxy.isEnabled() && previousProxyKey && previousProxyKey !== destProxyKey) {
         await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
       }
     }
     this.logger.log(
-      `[DB/move] re-pointed backups for ${db.namespace}/${db.clusterName} to ${destR2.bucket}`,
+      `[DB/move] re-pointed backups for ${db.namespace}/${db.clusterName} to ${destR2.bucket}`
     );
   }
 
@@ -1170,15 +1300,23 @@ export class DatabasesService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } },
+      include: { project: { include: { organization: true } } }
     });
     if (!database) throw new NotFoundException('Database not found');
 
     await this.authz.requireProjectEdit(database.project.id, user.id, 'delete databases');
 
     if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-      try { await this.k8sCnpg.deleteScheduledBackup(database.namespace, database.clusterName); } catch { /* ignore */ }
-      try { await this.k8sNetwork.unexposeCnpgCluster(database.namespace, database.clusterName); } catch { /* ignore */ }
+      try {
+        await this.k8sCnpg.deleteScheduledBackup(database.namespace, database.clusterName);
+      } catch {
+        /* ignore */
+      }
+      try {
+        await this.k8sNetwork.unexposeCnpgCluster(database.namespace, database.clusterName);
+      } catch {
+        /* ignore */
+      }
       await this.k8sCnpg.deleteCnpgCluster(database.namespace, database.clusterName);
     } else if (database.mode === 'container' && database.namespace && database.containerName) {
       await this.k8sCnpg.deletePostgresContainer(database.namespace, database.containerName);
@@ -1192,7 +1330,9 @@ export class DatabasesService {
       try {
         await this.r2Proxy.removeBinding(database.r2ProxyAccessKey);
       } catch (e: any) {
-        console.warn(`[R2Proxy] Failed to remove binding ${database.r2ProxyAccessKey} during deleteDatabase: ${e?.message}`);
+        console.warn(
+          `[R2Proxy] Failed to remove binding ${database.r2ProxyAccessKey} during deleteDatabase: ${e?.message}`
+        );
       }
     }
 
@@ -1203,7 +1343,9 @@ export class DatabasesService {
 
     this.notifications
       .purgeScope('database', databaseId)
-      .catch((err) => console.error(`[Projects] Failed to purge notification scope for ${databaseId}:`, err));
+      .catch((err) =>
+        console.error(`[Projects] Failed to purge notification scope for ${databaseId}:`, err)
+      );
 
     void this.audit.log({
       action: 'database.deleted',
@@ -1213,21 +1355,25 @@ export class DatabasesService {
       projectId: database.projectId,
       targetType: 'database',
       targetId: databaseId,
-      targetLabel: database.name,
+      targetLabel: database.name
     });
 
     return { success: true, message: `Database "${database.name}" deleted` };
   }
 
   async stopDatabase(databaseId: string, clerkId: string, userData?: any) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Stop and start require a CNPG-backed database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, true);
     await this.prisma.database.update({
       where: { id: databaseId },
-      data: { status: 'stopped' },
+      data: { status: 'stopped' }
     });
     void this.audit.log({
       action: 'database.stopped',
@@ -1237,20 +1383,24 @@ export class DatabasesService {
       projectId: database.projectId,
       targetType: 'database',
       targetId: databaseId,
-      targetLabel: database.name,
+      targetLabel: database.name
     });
     return { success: true };
   }
 
   async startDatabase(databaseId: string, clerkId: string, userData?: any) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Stop and start require a CNPG-backed database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, false);
     await this.prisma.database.update({
       where: { id: databaseId },
-      data: { status: 'restarting' },
+      data: { status: 'restarting' }
     });
     void this.audit.log({
       action: 'database.started',
@@ -1260,7 +1410,7 @@ export class DatabasesService {
       projectId: database.projectId,
       targetType: 'database',
       targetId: databaseId,
-      targetLabel: database.name,
+      targetLabel: database.name
     });
     return { success: true };
   }
@@ -1278,15 +1428,19 @@ export class DatabasesService {
     databaseId: string,
     replicas: number,
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Replicas require a CNPG-backed database');
     }
     if (database.importBoosted) {
       throw new BadRequestException(
-        'Replicas cannot be changed while the initial import is running. Try again once provisioning completes.',
+        'Replicas cannot be changed while the initial import is running. Try again once provisioning completes.'
       );
     }
 
@@ -1298,35 +1452,36 @@ export class DatabasesService {
 
     const delta = desired - current;
     if (delta > 0) {
-      const perInstance = await this.quotasService.resolvePodResources(database.projectId, {
-        cpuRequestMilli: database.cpuRequestMilli ?? null,
-        memoryRequestBytes:
-          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
-      }, 'postgres');
+      const perInstance = await this.quotasService.resolvePodResources(
+        database.projectId,
+        {
+          cpuRequestMilli: database.cpuRequestMilli ?? null,
+          memoryRequestBytes:
+            database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null
+        },
+        'postgres'
+      );
       const requested = {
         cpuMilli: perInstance.cpuMilli * delta,
-        memoryBytes: perInstance.memoryBytes * delta,
+        memoryBytes: perInstance.memoryBytes * delta
       };
-      await this.quotasService.enforceOrgCapForNewPod(
-        database.project.organizationId,
-        requested,
-      );
+      await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, requested);
       await this.quotasService.enforceMemberAllowanceForNewPod(
         database.project.organizationId,
         database.project.ownerId,
-        requested,
+        requested
       );
     }
 
     await this.k8sCnpg.updateCnpgClusterInstances(
       database.namespace,
       database.clusterName,
-      desired,
+      desired
     );
 
     const updated = await this.prisma.database.update({
       where: { id: databaseId },
-      data: { replicas: desired },
+      data: { replicas: desired }
     });
 
     void this.audit.log({
@@ -1338,21 +1493,25 @@ export class DatabasesService {
       targetType: 'database',
       targetId: databaseId,
       targetLabel: database.name,
-      metadata: { replicas: [current, desired] },
+      metadata: { replicas: [current, desired] }
     });
 
     return stripR2ProxyCreds(updated as any);
   }
 
   async restartDatabase(databaseId: string, clerkId: string, userData?: any) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Restart requires a CNPG-backed database');
     }
     await this.k8sCnpg.rolloutRestartCnpgCluster(database.namespace, database.clusterName);
     await this.prisma.database.update({
       where: { id: databaseId },
-      data: { status: 'restarting' },
+      data: { status: 'restarting' }
     });
     void this.audit.log({
       action: 'database.restarted',
@@ -1362,7 +1521,7 @@ export class DatabasesService {
       projectId: database.projectId,
       targetType: 'database',
       targetId: databaseId,
-      targetLabel: database.name,
+      targetLabel: database.name
     });
     return { success: true };
   }
@@ -1384,7 +1543,7 @@ export class DatabasesService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } },
+      include: { project: { include: { organization: true } } }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -1400,17 +1559,19 @@ export class DatabasesService {
           projectId: database.projectId,
           environmentId: database.environmentId,
           name: trimmed,
-          id: { not: databaseId },
-        },
+          id: { not: databaseId }
+        }
       });
       if (existing) {
-        throw new BadRequestException('A database with this name already exists in this environment');
+        throw new BadRequestException(
+          'A database with this name already exists in this environment'
+        );
       }
     }
 
     const updated = await this.prisma.database.update({
       where: { id: databaseId },
-      data: { name: trimmed },
+      data: { name: trimmed }
     });
 
     void this.audit.log({
@@ -1422,7 +1583,7 @@ export class DatabasesService {
       targetType: 'database',
       targetId: databaseId,
       targetLabel: trimmed,
-      metadata: { name: [database.name, trimmed] },
+      metadata: { name: [database.name, trimmed] }
     });
 
     return updated;
@@ -1432,7 +1593,12 @@ export class DatabasesService {
 
   private async getOrgR2Config(organizationId: string) {
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
-    if (!org?.backupR2Endpoint || !org?.backupR2Bucket || !org?.backupR2AccessKey || !org?.backupR2SecretKey) {
+    if (
+      !org?.backupR2Endpoint ||
+      !org?.backupR2Bucket ||
+      !org?.backupR2AccessKey ||
+      !org?.backupR2SecretKey
+    ) {
       throw new BadRequestException('R2 backup storage is not configured for this organization');
     }
     return org;
@@ -1464,7 +1630,7 @@ export class DatabasesService {
     const { r2, r2ProxyAccessKey, r2ProxySecret } = await this.buildBackupR2Config(
       org,
       database.namespace,
-      database.clusterName,
+      database.clusterName
     );
     if (!r2) {
       throw new BadRequestException('R2 backup storage is not configured for this organization');
@@ -1483,30 +1649,41 @@ export class DatabasesService {
       const previous = database.r2ProxyAccessKey;
       await this.prisma.database.update({
         where: { id: database.id },
-        data: { r2ProxyAccessKey, r2ProxySecret },
+        data: { r2ProxyAccessKey, r2ProxySecret }
       });
       if (previous && previous !== r2ProxyAccessKey) {
         await this.r2Proxy.removeBinding(previous).catch(() => {});
       }
     }
 
-    this.logger.log(`[DB/backup] enabled WAL archiving for ${database.namespace}/${database.clusterName}`);
+    this.logger.log(
+      `[DB/backup] enabled WAL archiving for ${database.namespace}/${database.clusterName}`
+    );
     return true;
   }
 
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
+    const { database } = await this.access.assertDatabaseEditorOrViewer(
+      databaseId,
+      clerkId,
+      userData,
+      { allowViewer: true }
+    );
 
     const anyNewlyCompleted = await this.backupSync
       .reconcileDatabase(database, { ingest: true })
       .catch(() => false);
     if (anyNewlyCompleted) {
-      await this.backupSync.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+      await this.backupSync.pruneOldBackups({
+        id: database.id,
+        namespace: database.namespace,
+        clusterName: database.clusterName
+      });
     }
 
     return this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -1516,16 +1693,26 @@ export class DatabasesService {
     clerkId: string,
     userData?: any
   ) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg') {
-      throw new BadRequestException('Backups are only supported for CNPG-backed databases. Recreate this database to enable backups.');
+      throw new BadRequestException(
+        'Backups are only supported for CNPG-backed databases. Recreate this database to enable backups.'
+      );
     }
     if (!database.namespace || !database.clusterName) {
       throw new BadRequestException('Database is missing cluster metadata');
     }
     await this.ensureBackupsConfigured(database);
 
-    await this.backupSync.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+    await this.backupSync.pruneOldBackups({
+      id: database.id,
+      namespace: database.namespace,
+      clusterName: database.clusterName
+    });
 
     const backupName = truncateK8sName(
       (data.label || `backup-${new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()}`)
@@ -1534,7 +1721,7 @@ export class DatabasesService {
         .replace(/[^a-z0-9-]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-+/, ''),
-      63,
+      63
     );
 
     const record = await this.prisma.databaseBackup.create({
@@ -1544,8 +1731,8 @@ export class DatabasesService {
         backupName,
         type: 'full',
         status: 'running',
-        createdBy: user.id,
-      },
+        createdBy: user.id
+      }
     });
 
     try {
@@ -1553,7 +1740,11 @@ export class DatabasesService {
     } catch (e: any) {
       await this.prisma.databaseBackup.update({
         where: { id: record.id },
-        data: { status: 'failed', completedAt: new Date(), errorMessage: String(e?.message || e).substring(0, 2000) },
+        data: {
+          status: 'failed',
+          completedAt: new Date(),
+          errorMessage: String(e?.message || e).substring(0, 2000)
+        }
       });
       throw new BadRequestException(`Failed to start backup: ${e?.message || e}`);
     }
@@ -1567,7 +1758,7 @@ export class DatabasesService {
       targetType: 'database_backup',
       targetId: record.id,
       targetLabel: backupName,
-      metadata: { database: database.name },
+      metadata: { database: database.name }
     });
 
     return record;
@@ -1586,7 +1777,12 @@ export class DatabasesService {
   }
 
   async getBackupSchedule(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
+    const { database } = await this.access.assertDatabaseEditorOrViewer(
+      databaseId,
+      clerkId,
+      userData,
+      { allowViewer: true }
+    );
     return { cron: database.backupScheduleCron || null };
   }
 
@@ -1594,7 +1790,7 @@ export class DatabasesService {
     databaseId: string,
     data: { cron: string },
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -1602,7 +1798,9 @@ export class DatabasesService {
     }
     const cron = (data.cron || '').trim();
     if (!this.isValidCron(cron)) {
-      throw new BadRequestException('Invalid cron expression. Expected 5 or 6 space-separated fields.');
+      throw new BadRequestException(
+        'Invalid cron expression. Expected 5 or 6 space-separated fields.'
+      );
     }
 
     // Turning archiving on and waiting until 3am for the first base backup
@@ -1612,11 +1810,11 @@ export class DatabasesService {
 
     const quartz = toQuartzCron(cron);
     await this.k8sCnpg.upsertScheduledBackup(database.namespace, database.clusterName, quartz, {
-      immediate: justEnabled,
+      immediate: justEnabled
     });
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { backupScheduleCron: cron },
+      data: { backupScheduleCron: cron }
     });
     return { cron };
   }
@@ -1641,7 +1839,7 @@ export class DatabasesService {
     }
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { backupScheduleCron: null },
+      data: { backupScheduleCron: null }
     });
     return { success: true };
   }
@@ -1652,7 +1850,11 @@ export class DatabasesService {
     clerkId: string,
     userData?: any
   ) {
-    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
     if (database.mode !== 'cnpg') {
       throw new BadRequestException('Restore is only supported for CNPG-backed databases');
     }
@@ -1664,13 +1866,17 @@ export class DatabasesService {
     const org = await this.getOrgR2Config(database.project.organizationId);
 
     const backup = await this.prisma.databaseBackup.findUnique({ where: { id: backupId } });
-    if (!backup || backup.databaseId !== database.id) throw new NotFoundException('Backup not found');
+    if (!backup || backup.databaseId !== database.id)
+      throw new NotFoundException('Backup not found');
     if (backup.status !== 'completed') throw new BadRequestException('Backup is not completed yet');
 
     const oldClusterName = database.clusterName;
     const oldR2ProxyAccessKey = database.r2ProxyAccessKey;
 
-    await this.prisma.database.update({ where: { id: database.id }, data: { status: 'restoring' } });
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { status: 'restoring' }
+    });
 
     void this.audit.log({
       action: 'database.backup.restored',
@@ -1681,7 +1887,7 @@ export class DatabasesService {
       targetType: 'database',
       targetId: database.id,
       targetLabel: database.name,
-      metadata: { backupId, backupName: backup.backupName },
+      metadata: { backupId, backupName: backup.backupName }
     });
 
     // Predetermine the restore cluster name so we can mint a r2-proxy binding
@@ -1692,21 +1898,27 @@ export class DatabasesService {
     const restoreR2 = await this.buildBackupR2Config(
       org,
       database.namespace!,
-      predictedNewClusterName,
+      predictedNewClusterName
     );
     // The restore cluster used to be built with no resource block at all, which
     // left it on the namespace LimitRange default and gave the tuning below
     // nothing to derive from. Size it like the database it is replacing.
-    const restoreResources = await this.quotasService.resolvePodResources(database.projectId, {
-      cpuRequestMilli: database.cpuRequestMilli ?? null,
-      memoryRequestBytes:
-        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
-    }, 'postgres');
+    const restoreResources = await this.quotasService.resolvePodResources(
+      database.projectId,
+      {
+        cpuRequestMilli: database.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null
+      },
+      'postgres'
+    );
 
     (async () => {
       try {
         const { newClusterName, host, port } = await this.k8sCnpg.restoreCnpgCluster(
-          database.namespace!, oldClusterName, backup.backupName,
+          database.namespace!,
+          oldClusterName,
+          backup.backupName,
           {
             dbName: database.dbName,
             dbUser: database.dbUser,
@@ -1719,17 +1931,25 @@ export class DatabasesService {
             instances: database.replicas ?? 1,
             resources: restoreResources,
             backupCompression: database.backupCompression,
-            imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`,
-          },
+            imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`
+          }
         );
 
         // Wait for the new cluster to come up healthy before cutting over.
         const deadline = Date.now() + 10 * 60 * 1000;
         let healthy = false;
         while (Date.now() < deadline) {
-          await new Promise((r) => { setTimeout(r, 5000); });
-          const status = await this.k8sCnpg.getCnpgClusterStatus(database.namespace!, newClusterName);
-          if (status.exists && status.ready) { healthy = true; break; }
+          await new Promise((r) => {
+            setTimeout(r, 5000);
+          });
+          const status = await this.k8sCnpg.getCnpgClusterStatus(
+            database.namespace!,
+            newClusterName
+          );
+          if (status.exists && status.ready) {
+            healthy = true;
+            break;
+          }
         }
         if (!healthy) {
           throw new Error('Restore cluster did not become healthy within timeout');
@@ -1743,8 +1963,8 @@ export class DatabasesService {
             port,
             status: 'ready',
             r2ProxyAccessKey: restoreR2.r2ProxyAccessKey ?? null,
-            r2ProxySecret: restoreR2.r2ProxySecret ?? null,
-          },
+            r2ProxySecret: restoreR2.r2ProxySecret ?? null
+          }
         });
 
         try {
@@ -1755,22 +1975,37 @@ export class DatabasesService {
 
         // Old cluster is gone — its proxy binding is no longer needed.
         if (oldR2ProxyAccessKey && oldR2ProxyAccessKey !== restoreR2.r2ProxyAccessKey) {
-          try { await this.r2Proxy.removeBinding(oldR2ProxyAccessKey); } catch (cleanupErr: any) {
-            console.warn(`[R2Proxy] Failed to remove old binding ${oldR2ProxyAccessKey} after restore: ${cleanupErr?.message}`);
+          try {
+            await this.r2Proxy.removeBinding(oldR2ProxyAccessKey);
+          } catch (cleanupErr: any) {
+            console.warn(
+              `[R2Proxy] Failed to remove old binding ${oldR2ProxyAccessKey} after restore: ${cleanupErr?.message}`
+            );
           }
         }
       } catch (e: any) {
         console.error(`[DB] Restore failed: ${e?.message}`);
         if (restoreR2.r2ProxyAccessKey) {
-          try { await this.r2Proxy.removeBinding(restoreR2.r2ProxyAccessKey); } catch (cleanupErr: any) {
-            console.warn(`[R2Proxy] Failed to remove new binding ${restoreR2.r2ProxyAccessKey} after restore failure: ${cleanupErr?.message}`);
+          try {
+            await this.r2Proxy.removeBinding(restoreR2.r2ProxyAccessKey);
+          } catch (cleanupErr: any) {
+            console.warn(
+              `[R2Proxy] Failed to remove new binding ${restoreR2.r2ProxyAccessKey} after restore failure: ${cleanupErr?.message}`
+            );
           }
         }
-        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+        await this.prisma.database.update({
+          where: { id: database.id },
+          data: { status: 'error' }
+        });
       }
     })();
 
-    return { success: true, message: 'Restore initiated — a new cluster will be provisioned from the backup and cut over when ready.' };
+    return {
+      success: true,
+      message:
+        'Restore initiated — a new cluster will be provisioned from the backup and cut over when ready.'
+    };
   }
 
   // ── Extensions ──
@@ -1790,7 +2025,9 @@ export class DatabasesService {
     const cached = this.queryStatsCache.get(databaseId);
     if (cached && Date.now() - cached.at < this.QUERY_STATS_TTL_MS) return cached.data;
     const data = await this.k8sCnpg.getQueryStats(
-      database.namespace, database.clusterName, database.dbName,
+      database.namespace,
+      database.clusterName,
+      database.dbName
     );
     this.queryStatsCache.set(databaseId, { at: Date.now(), data });
     return data;
@@ -1802,23 +2039,32 @@ export class DatabasesService {
       throw new BadRequestException('Query statistics require a CNPG-backed database');
     }
     const result = await this.k8sCnpg.resetQueryStats(
-      database.namespace, database.clusterName, database.dbName,
+      database.namespace,
+      database.clusterName,
+      database.dbName
     );
     this.queryStatsCache.delete(databaseId);
     return result;
   }
 
   async listDatabaseExtensions(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
+    const { database } = await this.access.assertDatabaseEditorOrViewer(
+      databaseId,
+      clerkId,
+      userData,
+      { allowViewer: true }
+    );
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       return { extensions: [], sharedPreloadLibraries: [] };
     }
     const extensions = await this.k8sCnpg.listCnpgExtensions(
-      database.namespace, database.clusterName, database.dbName,
+      database.namespace,
+      database.clusterName,
+      database.dbName
     );
     return {
       extensions,
-      sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
+      sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || []
     };
   }
 
@@ -1826,7 +2072,7 @@ export class DatabasesService {
     databaseId: string,
     data: { name: string; addToPreload?: boolean },
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -1843,18 +2089,33 @@ export class DatabasesService {
     // want to hand them a code-exec primitive on a platform-managed
     // database — fix the blast radius with an explicit allow-list.
     const ALLOWED_EXTENSIONS = new Set<string>([
-      'pgvector', 'vector',
-      'citext', 'hstore', 'ltree', 'pg_trgm', 'unaccent', 'btree_gin', 'btree_gist',
-      'uuid-ossp', 'pgcrypto',
-      'tablefunc', 'fuzzystrmatch', 'pg_stat_statements',
-      'postgis', 'postgis_topology', 'postgis_raster',
+      'pgvector',
+      'vector',
+      'citext',
+      'hstore',
+      'ltree',
+      'pg_trgm',
+      'unaccent',
+      'btree_gin',
+      'btree_gist',
+      'uuid-ossp',
+      'pgcrypto',
+      'tablefunc',
+      'fuzzystrmatch',
+      'pg_stat_statements',
+      'postgis',
+      'postgis_topology',
+      'postgis_raster',
       'plpgsql',
-      'intarray', 'isn', 'cube', 'earthdistance',
-      'timescaledb',
+      'intarray',
+      'isn',
+      'cube',
+      'earthdistance',
+      'timescaledb'
     ]);
     if (!ALLOWED_EXTENSIONS.has(data.name)) {
       throw new BadRequestException(
-        `Extension "${data.name}" is not allowed. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}`,
+        `Extension "${data.name}" is not allowed. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}`
       );
     }
 
@@ -1864,20 +2125,24 @@ export class DatabasesService {
       if (!existing.includes(data.name)) {
         existing.push(data.name);
         await this.k8sCnpg.updateCnpgParameters(
-          database.namespace, database.clusterName,
+          database.namespace,
+          database.clusterName,
           (database.pgParameters as Record<string, string> | null) || {},
-          existing,
+          existing
         );
         await this.prisma.database.update({
           where: { id: database.id },
-          data: { sharedPreloadLibs: existing },
+          data: { sharedPreloadLibs: existing }
         });
         preloadAdded = true;
       }
     }
 
     const result = await this.k8sCnpg.installCnpgExtension(
-      database.namespace, database.clusterName, database.dbName, data.name,
+      database.namespace,
+      database.clusterName,
+      database.dbName,
+      data.name
     );
     if (!result.success) {
       return { success: false, output: result.output, preloadAdded };
@@ -1889,7 +2154,7 @@ export class DatabasesService {
     databaseId: string,
     data: { name: string; removeFromPreload?: boolean },
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -1898,19 +2163,25 @@ export class DatabasesService {
     if (!data.name) throw new BadRequestException('name is required');
 
     const result = await this.k8sCnpg.uninstallCnpgExtension(
-      database.namespace, database.clusterName, database.dbName, data.name,
+      database.namespace,
+      database.clusterName,
+      database.dbName,
+      data.name
     );
 
     if (data.removeFromPreload) {
-      const existing = ((database.sharedPreloadLibs as string[] | null) || []).filter((x) => x !== data.name);
+      const existing = ((database.sharedPreloadLibs as string[] | null) || []).filter(
+        (x) => x !== data.name
+      );
       await this.k8sCnpg.updateCnpgParameters(
-        database.namespace, database.clusterName,
+        database.namespace,
+        database.clusterName,
         (database.pgParameters as Record<string, string> | null) || {},
-        existing,
+        existing
       );
       await this.prisma.database.update({
         where: { id: database.id },
-        data: { sharedPreloadLibs: existing },
+        data: { sharedPreloadLibs: existing }
       });
     }
 
@@ -1920,7 +2191,12 @@ export class DatabasesService {
   // ── Settings ──
 
   async getDatabaseSettings(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
+    const { database } = await this.access.assertDatabaseEditorOrViewer(
+      databaseId,
+      clerkId,
+      userData,
+      { allowViewer: true }
+    );
     if (database.mode !== 'cnpg') {
       return { parameters: {}, sharedPreloadLibraries: [] };
     }
@@ -1932,7 +2208,7 @@ export class DatabasesService {
       backupCompression: database.backupCompression,
       // Recomputed on read, not stored, so a value that only became dangerous
       // because the memory limit shrank still shows up without anyone re-saving.
-      advisories: await this.tuningAdvisoriesFor(database),
+      advisories: await this.tuningAdvisoriesFor(database)
     };
   }
 
@@ -1943,17 +2219,21 @@ export class DatabasesService {
     pgParameters: unknown;
     backupCompression: string | null;
   }) {
-    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
-      cpuRequestMilli: database.cpuRequestMilli ?? null,
-      memoryRequestBytes:
-        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
-    }, 'postgres');
+    const resolved = await this.quotasService.resolvePodResources(
+      database.projectId,
+      {
+        cpuRequestMilli: database.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null
+      },
+      'postgres'
+    );
     return deriveDbTuning({
       memoryLimitBytes: resolved.memoryBytes,
       overrides: {
         sharedBuffers: (database.pgParameters as Record<string, string> | null)?.shared_buffers,
-        backupCompression: database.backupCompression,
-      },
+        backupCompression: database.backupCompression
+      }
     }).advisories;
   }
 
@@ -1961,7 +2241,7 @@ export class DatabasesService {
     databaseId: string,
     data: { parameters: Record<string, string>; backupCompression?: string | null },
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
     const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -1998,19 +2278,25 @@ export class DatabasesService {
     if (data.backupCompression !== undefined) {
       const c = String(data.backupCompression ?? '').trim();
       if (c && c !== 'gzip' && c !== 'none') {
-        throw new BadRequestException('backupCompression must be "gzip", "none", or null for automatic');
+        throw new BadRequestException(
+          'backupCompression must be "gzip", "none", or null for automatic'
+        );
       }
       backupCompression = c || null;
     }
 
-    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
-      cpuRequestMilli: database.cpuRequestMilli ?? null,
-      memoryRequestBytes:
-        database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null,
-    }, 'postgres');
+    const resolved = await this.quotasService.resolvePodResources(
+      database.projectId,
+      {
+        cpuRequestMilli: database.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          database.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null
+      },
+      'postgres'
+    );
     const tuning = deriveDbTuning({
       memoryLimitBytes: resolved.memoryBytes,
-      overrides: { sharedBuffers: sanitized.shared_buffers, backupCompression },
+      overrides: { sharedBuffers: sanitized.shared_buffers, backupCompression }
     });
 
     // The k8s call below is a JSON merge patch, so dropping shared_buffers from
@@ -2023,23 +2309,28 @@ export class DatabasesService {
       database.namespace,
       database.clusterName,
       { ...sanitized, shared_buffers: tuning.sharedBuffers },
-      existingPreload,
+      existingPreload
     );
     if (backupCompression !== database.backupCompression) {
-      await this.k8sCnpg.applyCnpgDerivedTuning(
-        database.namespace, database.clusterName, tuning,
-      ).catch((e: any) => {
-        console.warn(`[DB/tuning] Failed to apply compression on ${database.clusterName}: ${e?.message ?? e}`);
-      });
+      await this.k8sCnpg
+        .applyCnpgDerivedTuning(database.namespace, database.clusterName, tuning)
+        .catch((e: any) => {
+          console.warn(
+            `[DB/tuning] Failed to apply compression on ${database.clusterName}: ${e?.message ?? e}`
+          );
+        });
     }
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { pgParameters: sanitized, backupCompression },
+      data: { pgParameters: sanitized, backupCompression }
     });
 
     // Advisories, never rejections: the value above was applied exactly as given.
     return {
-      success: true, parameters: sanitized, backupCompression, advisories: tuning.advisories,
+      success: true,
+      parameters: sanitized,
+      backupCompression,
+      advisories: tuning.advisories
     };
   }
 
@@ -2052,9 +2343,11 @@ export class DatabasesService {
   private async pickFreePublicPort(ip: string): Promise<number> {
     const dbPortsRaw = await this.prisma.database.findMany({
       where: { publicIp: ip, publicPort: { not: null } },
-      select: { publicPort: true },
+      select: { publicPort: true }
     });
-    const dbPorts = new Set(dbPortsRaw.map((r) => r.publicPort).filter((n): n is number => typeof n === 'number'));
+    const dbPorts = new Set(
+      dbPortsRaw.map((r) => r.publicPort).filter((n): n is number => typeof n === 'number')
+    );
 
     let livePorts = new Set<number>();
     try {
@@ -2064,7 +2357,9 @@ export class DatabasesService {
     }
 
     for (let i = 0; i < 200; i++) {
-      const port = Math.floor(Math.random() * (this.PUBLIC_PORT_MAX - this.PUBLIC_PORT_MIN + 1)) + this.PUBLIC_PORT_MIN;
+      const port =
+        Math.floor(Math.random() * (this.PUBLIC_PORT_MAX - this.PUBLIC_PORT_MIN + 1)) +
+        this.PUBLIC_PORT_MIN;
       if (dbPorts.has(port) || livePorts.has(port)) continue;
       return port;
     }
@@ -2077,10 +2372,14 @@ export class DatabasesService {
       throw new BadRequestException('Public exposure requires a CNPG-backed database');
     }
 
-    const org = await this.prisma.organization.findUnique({ where: { id: database.project.organizationId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: database.project.organizationId }
+    });
     const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {
-      throw new BadRequestException('No public database IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.');
+      throw new BadRequestException(
+        'No public database IP is configured. Set one in organization settings, or ask an instance admin to set an instance-wide default.'
+      );
     }
 
     if (database.publicEnabled && database.publicIp === ip && database.publicPort) {
@@ -2088,25 +2387,29 @@ export class DatabasesService {
         enabled: true,
         host: database.publicIp,
         port: database.publicPort,
-        connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}`,
+        connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}`
       };
     }
 
-    const port = database.publicIp === ip && database.publicPort
-      ? database.publicPort
-      : await this.pickFreePublicPort(ip);
+    const port =
+      database.publicIp === ip && database.publicPort
+        ? database.publicPort
+        : await this.pickFreePublicPort(ip);
 
     await this.k8sNetwork.exposeCnpgClusterPublic({
       namespace: database.namespace,
       clusterName: database.clusterName,
       loadBalancerIp: ip,
-      port,
+      port
     });
 
     // Punch a hole in the namespace's default-deny-all NetworkPolicy so external
     // clients can actually reach port 5432 on the primary pod.
     try {
-      await this.k8sNetwork.upsertPublicDatabaseNetworkPolicy(database.namespace, database.clusterName);
+      await this.k8sNetwork.upsertPublicDatabaseNetworkPolicy(
+        database.namespace,
+        database.clusterName
+      );
     } catch (e: any) {
       console.error(`[DB/public] Failed to create ingress NetworkPolicy: ${e?.message}`);
     }
@@ -2118,7 +2421,11 @@ export class DatabasesService {
     if (hostname) {
       try {
         await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
-        await this.k8sCnpg.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname, legacyHostname].filter(Boolean));
+        await this.k8sCnpg.patchCnpgClusterTls(
+          database.namespace,
+          database.clusterName,
+          [hostname, legacyHostname].filter(Boolean)
+        );
       } catch (e: any) {
         console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
       }
@@ -2126,7 +2433,7 @@ export class DatabasesService {
 
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { publicEnabled: true, publicIp: ip, publicPort: port },
+      data: { publicEnabled: true, publicIp: ip, publicPort: port }
     });
 
     return {
@@ -2134,7 +2441,7 @@ export class DatabasesService {
       host: hostname,
       ip,
       port,
-      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`,
+      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
     };
   }
 
@@ -2155,7 +2462,7 @@ export class DatabasesService {
     }
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { publicEnabled: false, publicIp: null, publicPort: null },
+      data: { publicEnabled: false, publicIp: null, publicPort: null }
     });
     return { enabled: false };
   }
@@ -2169,6 +2476,9 @@ export class DatabasesService {
     log_min_duration_statement: { kind: 'int', min: -1, max: 600000 },
     statement_timeout: { kind: 'int', min: 0, max: 3600000 },
     idle_in_transaction_session_timeout: { kind: 'int', min: 0, max: 3600000 },
-    synchronous_commit: { kind: 'string', enum: ['on', 'off', 'local', 'remote_write', 'remote_apply'] },
+    synchronous_commit: {
+      kind: 'string',
+      enum: ['on', 'off', 'local', 'remote_write', 'remote_apply']
+    }
   };
 }

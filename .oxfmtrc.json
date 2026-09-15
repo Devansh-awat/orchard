@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "singleQuote": true,
+  "trailingComma": "none",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/.svelte-kit/**",
+    "**/.astro/**",
+    "**/static/**",
+    "apps/docs/public/**",
+    "apps/docs/openapi.generated.json",
+    "apps/docs/src/content/docs/reference/**",
+    "apps/server/prisma/migrations/**",
+    "CHANGELOG.md",
+    "**/CLAUDE.md",
+    "**/*.generated.ts",
+    "**/*.generated.json",
+    "packages/contracts/openapi.json",
+    "**/*.astro",
+    "infra/**",
+    ".github/**",
+    "apps/cli/**",
+    "apps/gateway/**",
+    "apps/r2-proxy/**"
+  ],
+  "overrides": [
+    {
+      "files": ["apps/frontend/**", "apps/landing/**"],
+      "options": {
+        "useTabs": true,
+        "svelte": true
+      }
+    }
+  ]
+}

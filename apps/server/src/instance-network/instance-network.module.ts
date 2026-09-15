@@ -9,6 +9,6 @@ import { InstanceNetworkController } from './instance-network.controller';
 @Module({
   controllers: [InstanceNetworkController],
   providers: [DnsCheckService, CloudflareTunnelService],
-  exports: [DnsCheckService, CloudflareTunnelService],
+  exports: [DnsCheckService, CloudflareTunnelService]
 })
 export class InstanceNetworkModule {}

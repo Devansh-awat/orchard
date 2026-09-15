@@ -46,7 +46,11 @@ export function parseScimQuery(q: Record<string, any>): ScimQuery {
 // in a JSON body wrapped in the SearchRequest schema.
 export function parseScimSearchBody(body: any): ScimQuery {
   if (Object(body) !== body || Array.isArray(body)) {
-    throw ScimError(400, 'invalidSyntax', 'Expected search request body to be a single complex value');
+    throw ScimError(
+      400,
+      'invalidSyntax',
+      'Expected search request body to be a single complex value'
+    );
   }
   return parseScimQuery(body);
 }

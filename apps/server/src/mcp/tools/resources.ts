@@ -8,18 +8,19 @@ export function registerResourceTools(server: McpServer, client: OrchardClient) 
   server.registerTool(
     'create_project',
     {
-      description: 'Create a new project in an organization. A project groups deployments, databases, and networking.',
+      description:
+        'Create a new project in an organization. A project groups deployments, databases, and networking.',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         organizationId: z.string().describe('Organization UUID to create the project in'),
         name: z.string().describe('Project name'),
-        description: z.string().optional().describe('Project description'),
-      },
+        description: z.string().optional().describe('Project description')
+      }
     },
     async ({ organizationId, name, description }) => {
       const project = await client.post('/projects', { organizationId, name, description });
       return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -31,11 +32,27 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().optional().describe('New project name'),
-        description: z.string().nullable().optional().describe('New project description (pass null to clear)'),
-        repositoryUrl: z.string().nullable().optional().describe('New repository URL (pass null to clear)'),
-        icon: z.string().nullable().optional().describe('New icon (emoji or image URL — pass null to clear)'),
-        backgroundImage: z.string().nullable().optional().describe('New background image URL (pass null to clear)'),
-      },
+        description: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('New project description (pass null to clear)'),
+        repositoryUrl: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('New repository URL (pass null to clear)'),
+        icon: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('New icon (emoji or image URL — pass null to clear)'),
+        backgroundImage: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('New background image URL (pass null to clear)')
+      }
     },
     async ({ projectId, name, description, repositoryUrl, icon, backgroundImage }) => {
       const body: Record<string, any> = {};
@@ -45,11 +62,13 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
       if (icon !== undefined) body.icon = icon;
       if (backgroundImage !== undefined) body.backgroundImage = backgroundImage;
       if (Object.keys(body).length === 0) {
-        throw new Error('At least one field (name, description, repositoryUrl, icon, backgroundImage) must be provided');
+        throw new Error(
+          'At least one field (name, description, repositoryUrl, icon, backgroundImage) must be provided'
+        );
       }
       const project = await client.patch(`/projects/${projectId}`, body);
       return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
-    },
+    }
   );
 
   // ── Databases ─────────────────────────────────────────────────────
@@ -77,7 +96,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
           .string()
           .optional()
           .describe(
-            'Optional postgres:// or postgresql:// URL to migrate data from on first boot (e.g. postgres://user:pass@host:5432/dbname?sslmode=require).',
+            'Optional postgres:// or postgresql:// URL to migrate data from on first boot (e.g. postgres://user:pass@host:5432/dbname?sslmode=require).'
           ),
         cpuRequestMilli: z
           .number()
@@ -97,11 +116,19 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
           .positive()
           .optional()
           .describe(
-            'Total PostgreSQL instances: 1 primary plus (replicas - 1) read replicas. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.',
-          ),
-      },
+            'Total PostgreSQL instances: 1 primary plus (replicas - 1) read replicas. Defaults to 1. Each instance is a full pod with its own volume and counts against quota, so a value of 3 costs three times the CPU/memory of a single instance. Call get_database_limits for the ceiling on this instance.'
+          )
+      }
     },
-    async ({ projectId, name, storageSize, restoreFromUrl, cpuRequestMilli, memoryRequestBytes, replicas }) => {
+    async ({
+      projectId,
+      name,
+      storageSize,
+      restoreFromUrl,
+      cpuRequestMilli,
+      memoryRequestBytes,
+      replicas
+    }) => {
       const body: Record<string, unknown> = { name };
       if (storageSize) body.storageSize = storageSize;
       if (restoreFromUrl) body.restoreFromUrl = restoreFromUrl;
@@ -110,22 +137,23 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       if (replicas != null) body.replicas = replicas;
       const database = await client.post(`/projects/${projectId}/databases`, body);
       return { content: [{ type: 'text', text: JSON.stringify(database, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'list_database_backups',
     {
-      description: 'List all backups for a database. Each backup has an id, label, type, status, sizeBytes, and timestamps.',
+      description:
+        'List all backups for a database. Each backup has an id, label, type, status, sizeBytes, and timestamps.',
       annotations: { readOnlyHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const backups = await client.get(`/databases/${databaseId}/backups`);
       return { content: [{ type: 'text', text: JSON.stringify(backups, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -140,8 +168,8 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
         type: z
           .enum(['full', 'diff', 'incr'])
           .optional()
-          .describe('Backup type. Defaults to "full".'),
-      },
+          .describe('Backup type. Defaults to "full".')
+      }
     },
     async ({ databaseId, label, type }) => {
       const body: Record<string, unknown> = {};
@@ -149,7 +177,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       if (type) body.type = type;
       const backup = await client.post(`/databases/${databaseId}/backups`, body);
       return { content: [{ type: 'text', text: JSON.stringify(backup, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -158,13 +186,13 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       description: `Expose a database publicly on a shared organization IP with a unique port and TLS via Let's Encrypt. Returns the public host, port, and connection string.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/public`, {});
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -189,8 +217,8 @@ Pass null for either field to clear it and fall back to the default.`,
           .positive()
           .nullable()
           .optional()
-          .describe('New memory request in bytes, or null to clear.'),
-      },
+          .describe('New memory request in bytes, or null to clear.')
+      }
     },
     async ({ databaseId, cpuRequestMilli, memoryRequestBytes }) => {
       const body: Record<string, unknown> = {};
@@ -198,7 +226,7 @@ Pass null for either field to clear it and fall back to the default.`,
       if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
       const result = await client.patch(`/databases/${databaseId}/resources`, body);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -207,12 +235,12 @@ Pass null for either field to clear it and fall back to the default.`,
       description:
         'Instance-wide limits for managed databases, currently just maxReplicas — the largest number of PostgreSQL instances a single cluster may run on this Orchard instance. Self-hosters can change it, so read it rather than assuming the default of 5.',
       annotations: { readOnlyHint: true },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const limits = await client.get('/databases/limits');
       return { content: [{ type: 'text', text: JSON.stringify(limits, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -228,13 +256,13 @@ Scaling up is not instant — a new replica has to clone the primary before it r
           .number()
           .int()
           .positive()
-          .describe('Total instance count, at least 1. The ceiling comes from get_database_limits.'),
-      },
+          .describe('Total instance count, at least 1. The ceiling comes from get_database_limits.')
+      }
     },
     async ({ databaseId, replicas }) => {
       const result = await client.patch(`/databases/${databaseId}/replicas`, { replicas });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -248,13 +276,15 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
         storageSize: z
           .string()
           .regex(/^\d+(Mi|Gi|Ti)$/)
-          .describe('New volume size as a Kubernetes quantity, e.g. "10Gi". Must be larger than the current size.'),
-      },
+          .describe(
+            'New volume size as a Kubernetes quantity, e.g. "10Gi". Must be larger than the current size.'
+          )
+      }
     },
     async ({ databaseId, storageSize }) => {
       const result = await client.patch(`/databases/${databaseId}/storage`, { storageSize });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -264,13 +294,13 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
         'List PostgreSQL extensions available on the database and which are currently installed. Also returns the current shared_preload_libraries.',
       annotations: { readOnlyHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/extensions`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -280,20 +310,24 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),
-        name: z.string().describe('Extension name (e.g. "pgcrypto", "uuid-ossp", "pg_stat_statements")'),
+        name: z
+          .string()
+          .describe('Extension name (e.g. "pgcrypto", "uuid-ossp", "pg_stat_statements")'),
         addToPreload: z
           .boolean()
           .optional()
-          .describe('Add to shared_preload_libraries. Required for some extensions; causes a database restart.'),
-      },
+          .describe(
+            'Add to shared_preload_libraries. Required for some extensions; causes a database restart.'
+          )
+      }
     },
     async ({ databaseId, name, addToPreload }) => {
       const result = await client.post(`/databases/${databaseId}/extensions`, {
         name,
-        ...(addToPreload != null && { addToPreload }),
+        ...(addToPreload != null && { addToPreload })
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -307,16 +341,16 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
         removeFromPreload: z
           .boolean()
           .optional()
-          .describe('Also remove from shared_preload_libraries. Causes a database restart.'),
-      },
+          .describe('Also remove from shared_preload_libraries. Causes a database restart.')
+      }
     },
     async ({ databaseId, name, removeFromPreload }) => {
       const qs = removeFromPreload ? '?removeFromPreload=true' : '';
       const result = await client.delete(
-        `/databases/${databaseId}/extensions/${encodeURIComponent(name)}${qs}`,
+        `/databases/${databaseId}/extensions/${encodeURIComponent(name)}${qs}`
       );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -327,13 +361,13 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
 \`parameters\` contains ONLY what the user has explicitly set. A key that is absent is sized automatically from the database's memory limit, so an absent shared_buffers is not "unset", it is managed. \`advisories\` lists settings that were accepted but look dangerous at the current memory limit; check it when diagnosing an OOMKilled database.`,
       annotations: { readOnlyHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/settings`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -351,39 +385,40 @@ Values are applied exactly as given and are never clamped, but a dangerous one c
         parameters: z
           .record(z.string(), z.string())
           .describe(
-            'Parameter map, e.g. { "max_connections": "200", "work_mem": "16MB", "log_min_duration_statement": "1000" }',
+            'Parameter map, e.g. { "max_connections": "200", "work_mem": "16MB", "log_min_duration_statement": "1000" }'
           ),
         backupCompression: z
           .enum(['gzip', 'none'])
           .nullable()
           .optional()
           .describe(
-            'Compression for the base backup. Omit or null to pick it from the memory limit, which is almost always what you want: gzip on a small database can OOMKill it mid-backup.',
-          ),
-      },
+            'Compression for the base backup. Omit or null to pick it from the memory limit, which is almost always what you want: gzip on a small database can OOMKill it mid-backup.'
+          )
+      }
     },
     async ({ databaseId, parameters, backupCompression }) => {
       const result = await client.patch(`/databases/${databaseId}/settings`, {
         parameters,
-        ...(backupCompression !== undefined ? { backupCompression } : {}),
+        ...(backupCompression !== undefined ? { backupCompression } : {})
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_database_backup_schedule',
     {
-      description: 'Read the current automated backup schedule (cron expression) for a database, or null if none is configured.',
+      description:
+        'Read the current automated backup schedule (cron expression) for a database, or null if none is configured.',
       annotations: { readOnlyHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/backup-schedule`);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -398,28 +433,29 @@ Common values:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),
-        cron: z.string().describe('5-field cron expression in UTC'),
-      },
+        cron: z.string().describe('5-field cron expression in UTC')
+      }
     },
     async ({ databaseId, cron }) => {
       const result = await client.put(`/databases/${databaseId}/backup-schedule`, { cron });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'clear_database_backup_schedule',
     {
-      description: 'Disable automated backups for a database (clears the cron schedule). Existing backups are kept.',
+      description:
+        'Disable automated backups for a database (clears the cron schedule). Existing backups are kept.',
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       await client.delete(`/databases/${databaseId}/backup-schedule`);
       return { content: [{ type: 'text', text: 'Backup schedule cleared.' }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -429,13 +465,13 @@ Common values:
         'Stop exposing a database publicly. Clients connected via the public endpoint will be disconnected. The internal cluster connection still works.',
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       await client.delete(`/databases/${databaseId}/public`);
       return { content: [{ type: 'text', text: 'Public access disabled.' }] };
-    },
+    }
   );
 
   // ── Templates ─────────────────────────────────────────────────────
@@ -443,32 +479,34 @@ Common values:
   server.registerTool(
     'create_template',
     {
-      description: 'Create a custom template from a YAML definition. Use get_template_yaml_guide to see the full format specification.',
+      description:
+        'Create a custom template from a YAML definition. Use get_template_yaml_guide to see the full format specification.',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        yaml: z.string().describe('The full YAML template definition following the leaf/v1 format'),
-      },
+        yaml: z.string().describe('The full YAML template definition following the leaf/v1 format')
+      }
     },
     async ({ yaml }) => {
       const template = await client.post('/templates', { yaml });
       return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'update_template',
     {
-      description: 'Update an existing custom template with a new YAML definition. Built-in templates cannot be updated.',
+      description:
+        'Update an existing custom template with a new YAML definition. Built-in templates cannot be updated.',
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         templateId: z.string().describe('The template UUID to update'),
-        yaml: z.string().describe('The updated YAML template definition'),
-      },
+        yaml: z.string().describe('The updated YAML template definition')
+      }
     },
     async ({ templateId, yaml }) => {
       const template = await client.put(`/templates/${templateId}`, { yaml });
       return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -486,15 +524,19 @@ The template engine will validate parameters and create resources in order, wiri
       inputSchema: {
         projectId: z.string().describe('The project UUID to deploy the template into'),
         templateId: z.string().describe('The template UUID to deploy'),
-        parameters: z.record(z.string(), z.any()).describe('Parameter values as a JSON object, e.g. { "appName": "my-app", "image": "nginx:latest", "port": 3000 }'),
-      },
+        parameters: z
+          .record(z.string(), z.any())
+          .describe(
+            'Parameter values as a JSON object, e.g. { "appName": "my-app", "image": "nginx:latest", "port": 3000 }'
+          )
+      }
     },
     async ({ projectId, templateId, parameters }) => {
       const instance = await client.post(`/projects/${projectId}/template-instances`, {
         templateId,
-        parameters,
+        parameters
       });
       return { content: [{ type: 'text', text: JSON.stringify(instance, null, 2) }] };
-    },
+    }
   );
 }

@@ -14,8 +14,18 @@ export function parseCpu(value: string): number {
 
 const MEM_UNITS: Record<string, number> = {
   '': 1,
-  K: 1e3, M: 1e6, G: 1e9, T: 1e12, P: 1e15, E: 1e18,
-  Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, Pi: 1024 ** 5, Ei: 1024 ** 6,
+  K: 1e3,
+  M: 1e6,
+  G: 1e9,
+  T: 1e12,
+  P: 1e15,
+  E: 1e18,
+  Ki: 1024,
+  Mi: 1024 ** 2,
+  Gi: 1024 ** 3,
+  Ti: 1024 ** 4,
+  Pi: 1024 ** 5,
+  Ei: 1024 ** 6
 };
 
 export function parseMemory(value: string): number {
@@ -80,10 +90,11 @@ export function formatMemoryBytes(bytes: number): string {
     ['Ti', 1024 ** 4],
     ['Gi', 1024 ** 3],
     ['Mi', 1024 ** 2],
-    ['Ki', 1024],
+    ['Ki', 1024]
   ] as const;
   for (const [u, m] of units) {
-    if (bytes >= (m as number)) return `${(bytes / (m as number)).toFixed(2).replace(/\.?0+$/, '')} ${u}`;
+    if (bytes >= (m as number))
+      return `${(bytes / (m as number)).toFixed(2).replace(/\.?0+$/, '')} ${u}`;
   }
   return `${bytes} B`;
 }

@@ -40,13 +40,13 @@ export class SandboxWorkspaceService {
 
   constructor(
     private readonly k8s: SandboxK8sService,
-    private readonly kubernetes: KubernetesService,
+    private readonly kubernetes: KubernetesService
   ) {}
 
   async proxyOpencode(
     sandbox: { id: string; podName: string; status: string },
     req: Request,
-    res: Response,
+    res: Response
   ): Promise<void> {
     if (sandbox.status !== 'running') {
       res.status(400).json({ message: 'Sandbox is not running' });
@@ -80,11 +80,11 @@ export class SandboxWorkspaceService {
             ...(payload
               ? {
                   'content-type': 'application/json',
-                  'content-length': Buffer.byteLength(payload),
+                  'content-length': Buffer.byteLength(payload)
                 }
-              : {}),
+              : {})
           },
-          timeout: PROXY_TIMEOUT_MS,
+          timeout: PROXY_TIMEOUT_MS
         },
         (proxyRes) => {
           res.status(proxyRes.statusCode || 502);
@@ -99,12 +99,13 @@ export class SandboxWorkspaceService {
             res.end();
             resolve();
           });
-        },
+        }
       );
       proxyReq.on('timeout', () => proxyReq.destroy(new Error('opencode proxy timeout')));
       proxyReq.on('error', (e) => {
         this.logger.warn(`opencode proxy failed for ${sandbox.id}: ${e.message}`);
-        if (!res.headersSent) res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
+        if (!res.headersSent)
+          res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
         else res.end();
         resolve();
       });
@@ -114,10 +115,7 @@ export class SandboxWorkspaceService {
     });
   }
 
-  resolveWorkdir(
-    sandbox: { repoUrl: string | null },
-    repo: string | undefined,
-  ): string {
+  resolveWorkdir(sandbox: { repoUrl: string | null }, repo: string | undefined): string {
     if (repo) {
       if (typeof repo !== 'string' || !REPO_RE.test(repo) || repo.includes('..')) {
         throw new BadRequestException('Invalid repo name');
@@ -130,7 +128,7 @@ export class SandboxWorkspaceService {
   private async run(
     sandbox: { id: string; status: string; repoUrl: string | null },
     script: string,
-    repo?: string,
+    repo?: string
   ): Promise<{ stdout: string; ok: boolean }> {
     if (sandbox.status !== 'running') {
       throw new BadRequestException('Sandbox is not running');
@@ -141,7 +139,7 @@ export class SandboxWorkspaceService {
       '-l',
       'dev',
       '-c',
-      `cd '${dir}' 2>/dev/null || exit 3; ${script}`,
+      `cd '${dir}' 2>/dev/null || exit 3; ${script}`
     ]);
   }
 
@@ -169,7 +167,7 @@ export class SandboxWorkspaceService {
     message: string,
     files: string[] | undefined,
     author: { name: string; email: string },
-    opts: { amend?: boolean; signoff?: boolean; trackedOnly?: boolean } = {},
+    opts: { amend?: boolean; signoff?: boolean; trackedOnly?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     if (!opts.amend && (!message?.trim() || message.length > 2000)) {
       throw new BadRequestException('A commit message is required');
@@ -182,7 +180,7 @@ export class SandboxWorkspaceService {
     const flags = [
       opts.amend ? '--amend' : '',
       opts.signoff ? '--signoff' : '',
-      message?.trim() ? `-m ${this.q(message)}` : '--no-edit',
+      message?.trim() ? `-m ${this.q(message)}` : '--no-edit'
     ]
       .filter(Boolean)
       .join(' ');
@@ -193,16 +191,20 @@ export class SandboxWorkspaceService {
 
   async gitUncommit(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    repo: string,
+    repo: string
   ): Promise<{ ok: boolean; output: string }> {
-    const result = await this.run(sandbox, 'git reset --soft HEAD~1 2>&1 && git log -1 --oneline 2>&1', repo);
+    const result = await this.run(
+      sandbox,
+      'git reset --soft HEAD~1 2>&1 && git log -1 --oneline 2>&1',
+      repo
+    );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
   async gitPush(
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
-    opts: { force?: boolean } = {},
+    opts: { force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.force ? ' --force-with-lease' : '';
     const result = await this.run(sandbox, `git push${flags} origin HEAD 2>&1`, repo);
@@ -211,7 +213,7 @@ export class SandboxWorkspaceService {
 
   async gitFetch(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    repo: string,
+    repo: string
   ): Promise<{ ok: boolean; output: string }> {
     const result = await this.run(sandbox, 'git fetch --all --prune 2>&1', repo);
     return { ok: result.ok, output: result.stdout.slice(-2000) || 'up to date' };
@@ -220,7 +222,7 @@ export class SandboxWorkspaceService {
   async gitPull(
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
-    opts: { rebase?: boolean } = {},
+    opts: { rebase?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.rebase ? ' --rebase' : '';
     const result = await this.run(sandbox, `git pull${flags} 2>&1`, repo);
@@ -229,7 +231,7 @@ export class SandboxWorkspaceService {
 
   async gitBranches(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    repo: string,
+    repo: string
   ): Promise<{
     current: string | null;
     local: Array<{ name: string; upstream: string | null; ahead: number; behind: number }>;
@@ -240,7 +242,7 @@ export class SandboxWorkspaceService {
       "echo '@@local@@'",
       "git for-each-ref --format='%(refname:short)|%(upstream:short)|%(upstream:track)' refs/heads",
       "echo '@@remote@@'",
-      "git for-each-ref --format='%(refname:short)' refs/remotes",
+      "git for-each-ref --format='%(refname:short)' refs/remotes"
     ].join('\n');
     const result = await this.run(sandbox, script, repo);
     const [head = '', rest = ''] = result.stdout.split('@@local@@');
@@ -266,7 +268,7 @@ export class SandboxWorkspaceService {
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
     branch: string,
-    opts: { create?: boolean; from?: string } = {},
+    opts: { create?: boolean; from?: string } = {}
   ): Promise<{ ok: boolean; output: string }> {
     this.validateBranch(branch);
     const from = opts.from ? ` ${this.q(this.validateBranch(opts.from))}` : '';
@@ -281,7 +283,7 @@ export class SandboxWorkspaceService {
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
     branch: string,
-    opts: { remote?: boolean; force?: boolean } = {},
+    opts: { remote?: boolean; force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     this.validateBranch(branch);
     const script = opts.remote
@@ -295,7 +297,7 @@ export class SandboxWorkspaceService {
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
     githubToken: string | null,
-    body: { title?: string; body?: string; base?: string },
+    body: { title?: string; body?: string; base?: string }
   ): Promise<{ url: string }> {
     if (!body.title?.trim()) throw new BadRequestException('A PR title is required');
     if (!githubToken) {
@@ -303,10 +305,13 @@ export class SandboxWorkspaceService {
     }
     const info = await this.run(
       sandbox,
-      "git remote get-url origin; git rev-parse --abbrev-ref HEAD",
-      repo,
+      'git remote get-url origin; git rev-parse --abbrev-ref HEAD',
+      repo
     );
-    const [remoteUrl, branch] = info.stdout.trim().split('\n').map((l) => l.trim());
+    const [remoteUrl, branch] = info.stdout
+      .trim()
+      .split('\n')
+      .map((l) => l.trim());
     const match = remoteUrl?.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
     if (!match || !branch) {
       throw new BadRequestException('Could not determine the GitHub repository or branch');
@@ -316,7 +321,7 @@ export class SandboxWorkspaceService {
       authorization: `Bearer ${githubToken}`,
       accept: 'application/vnd.github+json',
       'content-type': 'application/json',
-      'user-agent': 'orchard-greenhouse',
+      'user-agent': 'orchard-greenhouse'
     };
     let base = body.base;
     if (!base) {
@@ -330,13 +335,13 @@ export class SandboxWorkspaceService {
         title: body.title,
         head: branch,
         base: base || 'main',
-        ...(body.body ? { body: body.body } : {}),
-      }),
+        ...(body.body ? { body: body.body } : {})
+      })
     });
     const pr = (await prRes.json()) as any;
     if (!prRes.ok) {
       throw new BadRequestException(
-        pr?.errors?.[0]?.message || pr?.message || 'GitHub rejected the pull request',
+        pr?.errors?.[0]?.message || pr?.message || 'GitHub rejected the pull request'
       );
     }
     return { url: pr.html_url };
@@ -345,19 +350,15 @@ export class SandboxWorkspaceService {
   async readFile(
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string | undefined,
-    file: string,
+    file: string
   ): Promise<{ content: string; truncated: boolean }> {
     this.validateFile(file);
-    const result = await this.run(
-      sandbox,
-      `head -c 512001 -- ${this.q(file)} | base64 -w0`,
-      repo,
-    );
+    const result = await this.run(sandbox, `head -c 512001 -- ${this.q(file)} | base64 -w0`, repo);
     if (!result.ok) throw new BadRequestException('Could not read that file');
     const content = Buffer.from(result.stdout.trim(), 'base64').toString('utf8');
     return {
       content: content.slice(0, 512000),
-      truncated: content.length > 512000,
+      truncated: content.length > 512000
     };
   }
 
@@ -365,7 +366,7 @@ export class SandboxWorkspaceService {
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string | undefined,
     file: string,
-    content: string,
+    content: string
   ): Promise<{ ok: boolean }> {
     this.validateFile(file);
     if (typeof content !== 'string' || content.length > 512000) {
@@ -375,7 +376,7 @@ export class SandboxWorkspaceService {
     const result = await this.run(
       sandbox,
       `mkdir -p "$(dirname ${this.q(file)})"; printf '%s' ${this.q(b64)} | base64 -d > ${this.q(file)}`,
-      repo,
+      repo
     );
     if (!result.ok) throw new BadRequestException('Could not write that file');
     return { ok: true };
@@ -393,7 +394,7 @@ export class SandboxWorkspaceService {
       storage: 'Preparing persistent storage',
       account: 'Creating your user account',
       services: 'Starting SSH and the agent server',
-      ready: 'Ready',
+      ready: 'Ready'
     };
     if (sandbox.status !== 'running') {
       return { phase: sandbox.status, ready: false, label: 'Sandbox is not running' };
@@ -403,7 +404,7 @@ export class SandboxWorkspaceService {
       const result = await this.k8s.execCapture(
         sandbox.id,
         ['/bin/sh', '-c', `cat ${SANDBOX_PHASE_FILE} 2>/dev/null`],
-        8000,
+        8000
       );
       const value = result.stdout.trim();
       if (value) phase = value;
@@ -428,7 +429,7 @@ export class SandboxWorkspaceService {
       '  b=$(git -C "$r" rev-parse --abbrev-ref HEAD 2>/dev/null)',
       '  n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l)',
       '  echo "${r##*/}|$b|$n"',
-      'done',
+      'done'
     ].join('\n');
     const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
     const repos: SandboxRepo[] = [];
@@ -438,7 +439,7 @@ export class SandboxWorkspaceService {
       repos.push({
         name: parts[0],
         branch: parts[1] || null,
-        dirtyFiles: Number(parts[2]) || 0,
+        dirtyFiles: Number(parts[2]) || 0
       });
     }
     return { repos };
@@ -446,7 +447,7 @@ export class SandboxWorkspaceService {
 
   async addRepo(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    repoUrl: string,
+    repoUrl: string
   ): Promise<{ name: string }> {
     if (sandbox.status !== 'running') {
       throw new BadRequestException('Sandbox is not running');
@@ -460,7 +461,12 @@ export class SandboxWorkspaceService {
     if (parsed.protocol !== 'https:') {
       throw new BadRequestException('repoUrl must be an https URL');
     }
-    const name = parsed.pathname.replace(/\.git$/, '').split('/').filter(Boolean).pop() || '';
+    const name =
+      parsed.pathname
+        .replace(/\.git$/, '')
+        .split('/')
+        .filter(Boolean)
+        .pop() || '';
     if (!REPO_RE.test(name)) {
       throw new BadRequestException('Could not derive a repo directory name from that URL');
     }
@@ -468,7 +474,7 @@ export class SandboxWorkspaceService {
     const script = [
       `[ -e '${target}' ] && exit 4`,
       `nohup git clone '${parsed.href}' '${target}' >> /persist/home/.clone.log 2>&1 &`,
-      'exit 0',
+      'exit 0'
     ].join('\n');
     const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
     if (!result.ok) {
@@ -483,7 +489,7 @@ export class SandboxWorkspaceService {
     res: Response,
     suffix: string,
     query: string,
-    payload: string | null,
+    payload: string | null
   ): Promise<void> {
     if (!this.kubernetes.kc) {
       res.status(502).json({ message: 'Kubernetes is not configured' });
@@ -551,7 +557,7 @@ export class SandboxWorkspaceService {
         null,
         null,
         false,
-        () => finish(),
+        () => finish()
       );
     } catch (e: any) {
       this.logger.warn(`opencode exec proxy failed for ${sandbox.id}: ${e?.message}`);
@@ -561,14 +567,14 @@ export class SandboxWorkspaceService {
 
   async changes(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    repo?: string,
+    repo?: string
   ): Promise<SandboxChanges> {
     const script = [
       'git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 3',
       'echo "@@branch@@$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"',
       'git status --porcelain',
       'echo "@@numstat@@"',
-      'git diff --numstat HEAD 2>/dev/null',
+      'git diff --numstat HEAD 2>/dev/null'
     ].join('; ');
     const result = await this.run(sandbox, script, repo);
     if (!result.ok && !result.stdout.includes('@@branch@@')) {
@@ -581,7 +587,7 @@ export class SandboxWorkspaceService {
       if (!m) continue;
       counts.set(m[3], {
         additions: m[1] === '-' ? null : Number(m[1]),
-        deletions: m[2] === '-' ? null : Number(m[2]),
+        deletions: m[2] === '-' ? null : Number(m[2])
       });
     }
     let branch: string | null = null;
@@ -601,7 +607,7 @@ export class SandboxWorkspaceService {
         path,
         status,
         additions: c?.additions ?? null,
-        deletions: c?.deletions ?? null,
+        deletions: c?.deletions ?? null
       });
     }
     return { isRepo: true, branch, files };
@@ -610,7 +616,7 @@ export class SandboxWorkspaceService {
   async diff(
     sandbox: { id: string; status: string; repoUrl: string | null },
     file: string | undefined,
-    repo?: string,
+    repo?: string
   ): Promise<{ diff: string; truncated: boolean }> {
     let script: string;
     if (file) {
@@ -619,7 +625,7 @@ export class SandboxWorkspaceService {
       }
       script = [
         `git diff HEAD -- '${file}'`,
-        `if git status --porcelain -- '${file}' | grep -q '^??'; then git diff --no-index -- /dev/null '${file}' || true; fi`,
+        `if git status --porcelain -- '${file}' | grep -q '^??'; then git diff --no-index -- /dev/null '${file}' || true; fi`
       ].join('; ');
     } else {
       script = 'git diff HEAD';
@@ -628,7 +634,7 @@ export class SandboxWorkspaceService {
     const truncated = result.stdout.length > MAX_DIFF_BYTES;
     return {
       diff: truncated ? result.stdout.slice(0, MAX_DIFF_BYTES) : result.stdout,
-      truncated,
+      truncated
     };
   }
 }

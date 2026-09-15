@@ -4,7 +4,8 @@
 
 - Never add comments to code. No inline comments, no block comments, no doc comments. Write the code so it reads on its own.
 - Use pnpm, never bun or npm.
-- Don't run `tsc`/`svelte-check`; they're slow and have pre-existing noise. Use `pnpm lint` and targeted builds instead.
+- Don't run `tsc`/`svelte-check`; they're slow and have pre-existing noise. Use `pnpm lint` (oxlint) and targeted builds instead.
+- Format with `pnpm format` (oxfmt). Do not use eslint or prettier.
 
 ## Repo map
 

@@ -38,7 +38,7 @@ export class CloudflareTunnelService {
 
   constructor(
     private readonly config: InstanceConfigService,
-    private readonly dns: DnsCheckService,
+    private readonly dns: DnsCheckService
   ) {}
 
   private creds() {
@@ -46,7 +46,7 @@ export class CloudflareTunnelService {
       apiToken: this.config.value(TUNNEL, 'apiToken') || '',
       accountId: this.config.value(TUNNEL, 'accountId') || '',
       tunnelId: this.config.value(TUNNEL, 'tunnelId') || '',
-      zoneId: this.config.value(TUNNEL, 'zoneId') || '',
+      zoneId: this.config.value(TUNNEL, 'zoneId') || ''
     };
   }
 
@@ -61,7 +61,7 @@ export class CloudflareTunnelService {
   private async call<T>(
     token: string,
     path: string,
-    init: { method?: string; body?: unknown } = {},
+    init: { method?: string; body?: unknown } = {}
   ): Promise<T> {
     let response: Response;
     try {
@@ -69,20 +69,23 @@ export class CloudflareTunnelService {
         method: init.method || 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(15_000)
       });
     } catch (e: any) {
       throw new BadRequestException(`Could not reach Cloudflare: ${e?.message || e}`);
     }
 
-    const payload = await response.json().catch(() => null) as any;
+    const payload = (await response.json().catch(() => null)) as any;
     if (!response.ok || !payload?.success) {
-      const detail = payload?.errors?.map((e: any) => e.message).filter(Boolean).join('; ');
+      const detail = payload?.errors
+        ?.map((e: any) => e.message)
+        .filter(Boolean)
+        .join('; ');
       throw new BadRequestException(
-        detail || `Cloudflare rejected the request (HTTP ${response.status})`,
+        detail || `Cloudflare rejected the request (HTTP ${response.status})`
       );
     }
     return payload.result as T;
@@ -91,7 +94,7 @@ export class CloudflareTunnelService {
   private async ingressRules(token: string, accountId: string, tunnelId: string) {
     const result = await this.call<{ config?: { ingress?: IngressRule[] } }>(
       token,
-      `/accounts/${accountId}/cfd_tunnel/${tunnelId}/configurations`,
+      `/accounts/${accountId}/cfd_tunnel/${tunnelId}/configurations`
     );
     return result?.config?.ingress ?? [];
   }
@@ -104,7 +107,7 @@ export class CloudflareTunnelService {
       tunnelName: null,
       canEditDns: false,
       routes: hostnames.map((h) => ({ ...h, routed: false, service: null })),
-      otherHostnames: [],
+      otherHostnames: []
     };
 
     if (!this.isConfigured()) return empty;
@@ -113,12 +116,10 @@ export class CloudflareTunnelService {
     try {
       const tunnel = await this.call<{ name?: string }>(
         apiToken,
-        `/accounts/${accountId}/cfd_tunnel/${tunnelId}`,
+        `/accounts/${accountId}/cfd_tunnel/${tunnelId}`
       );
       const rules = await this.ingressRules(apiToken, accountId, tunnelId);
-      const byHost = new Map(
-        rules.filter((r) => r.hostname).map((r) => [r.hostname as string, r]),
-      );
+      const byHost = new Map(rules.filter((r) => r.hostname).map((r) => [r.hostname as string, r]));
 
       return {
         configured: true,
@@ -133,7 +134,7 @@ export class CloudflareTunnelService {
         otherHostnames: rules
           .map((r) => r.hostname)
           .filter((h): h is string => Boolean(h))
-          .filter((h) => !hostnames.some((e) => e.record === h || e.probe === h)),
+          .filter((h) => !hostnames.some((e) => e.record === h || e.probe === h))
       };
     } catch (e: any) {
       return { ...empty, configured: true, error: e?.message || 'Cloudflare request failed' };
@@ -168,12 +169,12 @@ export class CloudflareTunnelService {
     }
     const ingress = [
       ...specific,
-      ...(fallback.length ? fallback : [{ service: 'http_status:404' }]),
+      ...(fallback.length ? fallback : [{ service: 'http_status:404' }])
     ];
 
     await this.call(apiToken, `/accounts/${accountId}/cfd_tunnel/${tunnelId}/configurations`, {
       method: 'PUT',
-      body: { config: { ingress } },
+      body: { config: { ingress } }
     });
 
     if (zoneId) await this.ensureDnsRecord(apiToken, zoneId, tunnelId, record);
@@ -185,12 +186,12 @@ export class CloudflareTunnelService {
     token: string,
     zoneId: string,
     tunnelId: string,
-    record: string,
+    record: string
   ): Promise<void> {
     const content = `${tunnelId}.cfargotunnel.com`;
     const existing = await this.call<{ id: string; type: string; content: string }[]>(
       token,
-      `/zones/${zoneId}/dns_records?name=${encodeURIComponent(record)}`,
+      `/zones/${zoneId}/dns_records?name=${encodeURIComponent(record)}`
     );
 
     const match = existing.find((r) => r.type === 'CNAME' && r.content === content);
@@ -202,7 +203,7 @@ export class CloudflareTunnelService {
     if (stale) {
       await this.call(token, `/zones/${zoneId}/dns_records/${stale.id}`, {
         method: 'PUT',
-        body,
+        body
       });
       return;
     }

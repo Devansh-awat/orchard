@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Query, Param, Req, Body, Delete, HttpException, HttpStatus, Res, Headers, RawBodyRequest } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  Req,
+  Body,
+  Delete,
+  HttpException,
+  HttpStatus,
+  Res,
+  Headers,
+  RawBodyRequest
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { GitHubService, GitHubBranch, GitHubContent } from './github.service';
@@ -18,7 +32,11 @@ function isSafeRedirect(redirect?: string): redirect is string {
 }
 
 /** Recover the session token and optional return path from the OAuth state param. */
-function parseLinkState(state?: string): { stateToken?: string; returnPath?: string; nonce?: string } {
+function parseLinkState(state?: string): {
+  stateToken?: string;
+  returnPath?: string;
+  nonce?: string;
+} {
   if (!state) return {};
   try {
     const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
@@ -26,7 +44,7 @@ function parseLinkState(state?: string): { stateToken?: string; returnPath?: str
       return {
         stateToken: parsed.t,
         returnPath: isSafeRedirect(parsed.r) ? parsed.r : undefined,
-        nonce: typeof parsed.n === 'string' ? parsed.n : undefined,
+        nonce: typeof parsed.n === 'string' ? parsed.n : undefined
       };
     }
   } catch {
@@ -56,7 +74,7 @@ export class GitHubController {
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
     private readonly deployments: DeploymentsService,
-    private readonly githubAppConfig: GithubAppConfigService,
+    private readonly githubAppConfig: GithubAppConfigService
   ) {}
 
   /**
@@ -78,7 +96,7 @@ export class GitHubController {
     if (!isPublic) {
       throw new HttpException(
         'You do not have access to this repository on GitHub. Connect your GitHub account or check the repository URL.',
-        HttpStatus.FORBIDDEN,
+        HttpStatus.FORBIDDEN
       );
     }
 
@@ -101,13 +119,17 @@ export class GitHubController {
     const token = req.cookies?.session_token;
 
     if (!token) {
-      return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
+      return res.redirect(
+        `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
+      );
     }
 
     try {
       await this.githubService.verifySessionToken(token);
     } catch {
-      return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
+      return res.redirect(
+        `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
+      );
     }
 
     const clientId = this.githubService.getOAuthClientId();
@@ -117,7 +139,7 @@ export class GitHubController {
       // rather than anything Orchard can explain.
       const back = isSafeRedirect(redirect) ? redirect : '/user/settings';
       const message = encodeURIComponent(
-        'This instance has no GitHub App yet, so there is nothing to connect to. A superadmin creates one in setup.',
+        'This instance has no GitHub App yet, so there is nothing to connect to. A superadmin creates one in setup.'
       );
       return res.redirect(`${frontendUrl}${back}${back.includes('?') ? '&' : '?'}error=${message}`);
     }
@@ -130,9 +152,9 @@ export class GitHubController {
     const nonce = crypto.randomBytes(32).toString('hex');
     setGithubOauthStateCookie(res, nonce);
     const safeRedirect = isSafeRedirect(redirect) ? redirect : undefined;
-    const state = Buffer.from(
-      JSON.stringify({ t: token, r: safeRedirect, n: nonce }),
-    ).toString('base64url');
+    const state = Buffer.from(JSON.stringify({ t: token, r: safeRedirect, n: nonce })).toString(
+      'base64url'
+    );
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
     return res.redirect(authUrl);
@@ -145,16 +167,18 @@ export class GitHubController {
     @Query('error') error: string,
     @Query('state') state: string,
     @Req() req: any,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    
+
     if (error) {
       return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent(error)}`);
     }
 
     if (!code) {
-      return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('No authorization code provided')}`);
+      return res.redirect(
+        `${frontendUrl}/user/settings?error=${encodeURIComponent('No authorization code provided')}`
+      );
     }
 
     try {
@@ -165,7 +189,9 @@ export class GitHubController {
       const cookieNonce = req.cookies?.github_oauth_state;
       clearGithubOauthStateCookie(res);
       if (!csrfNonceMatches(nonce, cookieNonce)) {
-        return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('This GitHub link request could not be verified. Please try connecting again.')}`);
+        return res.redirect(
+          `${frontendUrl}/user/settings?error=${encodeURIComponent('This GitHub link request could not be verified. Please try connecting again.')}`
+        );
       }
 
       // Prefer the cookie, fall back to the token from state when the browser
@@ -173,7 +199,9 @@ export class GitHubController {
       const token = req.cookies?.session_token || stateToken;
 
       if (!token) {
-        return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
+        return res.redirect(
+          `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
+        );
       }
 
       const payload = await this.githubService.verifySessionToken(token);
@@ -182,7 +210,9 @@ export class GitHubController {
         : await this.usersService.findById(payload.sub);
 
       if (!user) {
-        return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
+        return res.redirect(
+          `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
+        );
       }
 
       await this.githubService.linkGitHubAccount(user.id, code);
@@ -209,7 +239,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -229,7 +259,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -248,7 +278,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -261,7 +291,13 @@ export class GitHubController {
     const appConfigured = this.githubAppConfig.isConfigured();
 
     if (!user.githubId) {
-      return { linked: false, username: null, tokenExpired: false, installations: [], appConfigured };
+      return {
+        linked: false,
+        username: null,
+        tokenExpired: false,
+        installations: [],
+        appConfigured
+      };
     }
 
     const token = await this.githubService.getValidUserToken(user.id);
@@ -271,7 +307,7 @@ export class GitHubController {
         username: user.githubUsername,
         tokenExpired: true,
         installations: [],
-        appConfigured,
+        appConfigured
       };
     }
 
@@ -281,14 +317,14 @@ export class GitHubController {
       linked: true,
       username: user.githubUsername,
       tokenExpired: false,
-      installations: installations.map(inst => ({
+      installations: installations.map((inst) => ({
         id: inst.id,
         installationId: inst.installationId.toString(),
         accountLogin: inst.accountLogin,
         accountType: inst.accountType,
-        repositorySelection: inst.repositorySelection,
+        repositorySelection: inst.repositorySelection
       })),
-      appConfigured,
+      appConfigured
     };
   }
 
@@ -298,7 +334,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -309,12 +345,13 @@ export class GitHubController {
     if (!user.githubAccessToken) {
       throw new HttpException(
         'Connect your GitHub account to view deployable repositories. We use it to verify which repos you have access to.',
-        HttpStatus.BAD_REQUEST,
+        HttpStatus.BAD_REQUEST
       );
     }
 
     // Prefer App installation repos (intersected with user-accessible), fall back to OAuth listing.
-    const { repos, installations, hasInstallations } = await this.githubService.getAllUserRepositories(user.id);
+    const { repos, installations, hasInstallations } =
+      await this.githubService.getAllUserRepositories(user.id);
 
     if (hasInstallations) {
       return { repositories: repos, installations, source: 'app' };
@@ -325,7 +362,7 @@ export class GitHubController {
     if (!userToken) {
       throw new HttpException(
         'Your GitHub session expired. Please reconnect your GitHub account.',
-        HttpStatus.UNAUTHORIZED,
+        HttpStatus.UNAUTHORIZED
       );
     }
     const oauthRepos = await this.githubService.getUserRepositories(userToken, maxPages);
@@ -342,7 +379,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -365,7 +402,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -389,7 +426,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -412,7 +449,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -436,7 +473,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -459,12 +496,16 @@ export class GitHubController {
     @Param('repo') repo: string,
     @Query('dockerfilePath') dockerfilePath: string,
     @Query('branch') branch?: string
-  ): Promise<{ exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] }> {
+  ): Promise<{
+    exposedPorts: number[];
+    envVars: { key: string; value: string }[];
+    stages: string[];
+  }> {
     const externalAuthId = req.user.externalAuthId || req.user.sub;
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -509,22 +550,20 @@ export class GitHubController {
     // Handle different event types
     if (event === 'installation' || event === 'installation_repositories') {
       // Handle app installation events
-      await this.githubService.handleInstallationEvent(
-        body.action,
-        body.installation,
-        body.sender
-      );
+      await this.githubService.handleInstallationEvent(body.action, body.installation, body.sender);
       this.githubService.clearUserInstallationsCache();
       if (event === 'installation_repositories') {
         await this.githubService.applyInstallationReposEvent(
           BigInt(body.installation.id),
           body.repositories_added ?? [],
-          body.repositories_removed ?? [],
+          body.repositories_removed ?? []
         );
       } else if (body.action === 'created') {
         void this.githubService
           .syncInstallationReposById(BigInt(body.installation.id))
-          .catch((e) => console.error('[GitHub App] mirror seed on install failed:', e?.message ?? e));
+          .catch((e) =>
+            console.error('[GitHub App] mirror seed on install failed:', e?.message ?? e)
+          );
       }
       return { received: true, action: 'processed', event };
     }
@@ -540,7 +579,7 @@ export class GitHubController {
         BigInt(body.installation.id),
         body.action,
         body.repository,
-        renamedFrom,
+        renamedFrom
       );
       return { received: true, action: 'processed', event };
     }
@@ -574,7 +613,9 @@ export class GitHubController {
         return { received: true, action: 'ignored', reason: 'missing installation context' };
       }
 
-      console.log(`[GitHub App] Push to ${repoFullName}:${pushedBranch} - ${commitSha?.substring(0, 7)}`);
+      console.log(
+        `[GitHub App] Push to ${repoFullName}:${pushedBranch} - ${commitSha?.substring(0, 7)}`
+      );
       void this.githubService
         .touchRepoPush(BigInt(senderInstallationId), body.repository)
         .catch(() => {});
@@ -587,11 +628,11 @@ export class GitHubController {
       const candidates = await this.githubService.findAutoDeployTargets(
         installationIdBig,
         body.repository?.id ? BigInt(body.repository.id) : null,
-        repoFullName,
+        repoFullName
       );
 
       const deployments = candidates.filter((deployment) =>
-        autoDeployMatchesBranch(deployment, pushedBranch),
+        autoDeployMatchesBranch(deployment, pushedBranch)
       );
 
       if (deployments.length === 0) {
@@ -614,16 +655,20 @@ export class GitHubController {
           installationIdBig,
           repoFullName,
           body.before,
-          commitSha,
+          commitSha
         );
         // An unknown answer matches everything, so a compare GitHub could not
         // give us builds the deployment rather than dropping its push.
-        watched = watched.concat(partitionByWatchPaths(fromPayload.unmatched, comparedFiles).watched);
+        watched = watched.concat(
+          partitionByWatchPaths(fromPayload.unmatched, comparedFiles).watched
+        );
       }
 
       const skippedByPaths = deployments.length - watched.length;
       if (skippedByPaths > 0) {
-        console.log(`[GitHub App] ${skippedByPaths} deployment(s) skipped, no watched paths changed`);
+        console.log(
+          `[GitHub App] ${skippedByPaths} deployment(s) skipped, no watched paths changed`
+        );
       }
 
       if (watched.length === 0) {
@@ -631,7 +676,7 @@ export class GitHubController {
           received: true,
           action: 'ignored',
           reason: `no watched paths changed for ${repoFullName}:${pushedBranch}`,
-          skipped: skippedByPaths,
+          skipped: skippedByPaths
         };
       }
 
@@ -640,27 +685,29 @@ export class GitHubController {
       // Trigger rebuilds for all matching deployments
       const results = await Promise.allSettled(
         watched.map(async (deployment) => {
-          console.log(`[GitHub App] Auto-deploying ${deployment.name} from commit ${commitSha?.substring(0, 7)}`);
+          console.log(
+            `[GitHub App] Auto-deploying ${deployment.name} from commit ${commitSha?.substring(0, 7)}`
+          );
           await this.deployments.triggerAutoDeploy(
             deployment.id,
             commitSha,
             commitMessage,
             commitAuthorName,
-            commitAuthorUsername,
+            commitAuthorUsername
           );
           return deployment.name;
         })
       );
 
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      const successful = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
 
       results.forEach((result, index) => {
         if (result.status !== 'rejected') return;
         const name = watched[index]?.name ?? watched[index]?.id;
         const reason = (result.reason as Error)?.message ?? result.reason;
         console.error(
-          `[GitHub App] Auto-deploy of ${name} for ${repoFullName}@${commitSha?.substring(0, 7)} was dropped: ${reason}`,
+          `[GitHub App] Auto-deploy of ${name} for ${repoFullName}@${commitSha?.substring(0, 7)} was dropped: ${reason}`
         );
       });
 
@@ -673,8 +720,8 @@ export class GitHubController {
           total: deployments.length,
           triggered: successful,
           failed,
-          skipped: skippedByPaths,
-        },
+          skipped: skippedByPaths
+        }
       };
     }
 
@@ -698,7 +745,7 @@ export class GitHubController {
     const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
       email: req.user.email,
       firstName: req.user.firstName,
-      lastName: req.user.lastName,
+      lastName: req.user.lastName
     });
 
     if (!user) {
@@ -708,12 +755,10 @@ export class GitHubController {
     const installations = await this.githubService.getUserInstallations(user.id);
 
     // Convert BigInt to string for JSON serialization
-    return installations.map(inst => ({
+    return installations.map((inst) => ({
       ...inst,
       installationId: inst.installationId.toString(),
-      accountId: inst.accountId.toString(),
+      accountId: inst.accountId.toString()
     }));
   }
-
 }
-

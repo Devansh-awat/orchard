@@ -50,7 +50,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly logCapture: PodLogCaptureService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   onModuleDestroy() {
@@ -163,7 +163,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       type: 'pod.changed',
       id: ctx.deploymentId,
       projectId: ctx.projectId,
-      payload,
+      payload
     });
   }
 
@@ -175,11 +175,12 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     return {
       name,
       status: computePodStatus(pod),
-      ready: pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
+      ready:
+        pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
       restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
       lastTermination: term?.reason
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
-        : null,
+        : null
     };
   }
 
@@ -187,7 +188,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
   private async syncPod(
     type: MirrorEventType,
     deploymentId: string,
-    pod: k8s.V1Pod,
+    pod: k8s.V1Pod
   ): Promise<boolean> {
     const name = pod.metadata?.name;
     if (!name) return false;
@@ -198,7 +199,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     // never changes again sit missing from this table indefinitely.
     const existing = await this.prisma.pod.findUnique({
       where: { deploymentId_name: { deploymentId, name } },
-      select: { status: true },
+      select: { status: true }
     });
 
     if (type === 'delete') {
@@ -222,13 +223,13 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       ready,
       lastTerminationReason: term?.reason ?? null,
       lastExitCode: term?.exitCode ?? null,
-      lastTerminatedAt: term?.finishedAt ?? null,
+      lastTerminatedAt: term?.finishedAt ?? null
     };
 
     await this.prisma.pod.upsert({
       where: { deploymentId_name: { deploymentId, name } },
       create: { deploymentId, name, ...data },
-      update: data,
+      update: data
     });
 
     if (existing && existing.status === status) return false;
@@ -238,7 +239,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       existing?.status ?? null,
       status,
       term?.reason ?? null,
-      term?.exitCode ?? null,
+      term?.exitCode ?? null
     );
     return true;
   }
@@ -249,7 +250,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     fromStatus: string | null,
     toStatus: string,
     reason: string | null,
-    exitCode: number | null,
+    exitCode: number | null
   ) {
     await this.prisma.podTransition
       .create({ data: { deploymentId, podName, fromStatus, toStatus, reason, exitCode } })
@@ -267,12 +268,12 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     try {
       const [crashing, total] = await this.prisma.$transaction([
         this.prisma.pod.count({ where: { deploymentId, status: 'crashing' } }),
-        this.prisma.pod.count({ where: { deploymentId } }),
+        this.prisma.pod.count({ where: { deploymentId } })
       ]);
       await this.applyCrashState(deploymentId, crashing, total);
     } catch (err) {
       this.logger.warn(
-        `reconcileCrashState(${deploymentId}) failed: ${(err as Error)?.message ?? err}`,
+        `reconcileCrashState(${deploymentId}) failed: ${(err as Error)?.message ?? err}`
       );
     }
   }
@@ -280,7 +281,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
   private async applyCrashState(
     deploymentId: string,
     crashingPods: number,
-    totalPods: number,
+    totalPods: number
   ): Promise<void> {
     const state = await this.prisma.deploymentCrashState.findUnique({ where: { deploymentId } });
     const now = new Date();
@@ -290,14 +291,14 @@ export class PodMirrorConsumer implements OnModuleDestroy {
         await this.prisma.deploymentCrashState.upsert({
           where: { deploymentId },
           create: { deploymentId, crashingSince: now, healthySince: null, notifiedAt: null },
-          update: { crashingSince: now, healthySince: null, notifiedAt: null },
+          update: { crashingSince: now, healthySince: null, notifiedAt: null }
         });
         return;
       }
       if (state.healthySince) {
         await this.prisma.deploymentCrashState.updateMany({
           where: { deploymentId },
-          data: { healthySince: null },
+          data: { healthySince: null }
         });
       }
       if (state.notifiedAt) return;
@@ -307,13 +308,13 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       // the sweeper can't both send it.
       const claimed = await this.prisma.deploymentCrashState.updateMany({
         where: { deploymentId, notifiedAt: null },
-        data: { notifiedAt: now },
+        data: { notifiedAt: now }
       });
       if (claimed.count === 0) return;
 
       const pod = await this.prisma.pod.findFirst({
         where: { deploymentId, status: 'crashing' },
-        select: { lastTerminationReason: true, lastExitCode: true },
+        select: { lastTerminationReason: true, lastExitCode: true }
       });
       const detail = pod?.lastTerminationReason
         ? `${pod.lastTerminationReason}${pod.lastExitCode != null ? ` (exit code ${pod.lastExitCode})` : ''}`
@@ -327,7 +328,7 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     if (!state.healthySince) {
       await this.prisma.deploymentCrashState.updateMany({
         where: { deploymentId },
-        data: { healthySince: now, crashingSince: state.notifiedAt ? state.crashingSince : null },
+        data: { healthySince: now, crashingSince: state.notifiedAt ? state.crashingSince : null }
       });
       return;
     }
@@ -336,13 +337,13 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     if (!state.notifiedAt) {
       // The crash cleared before it was ever announced — drop the episode.
       await this.prisma.deploymentCrashState.deleteMany({
-        where: { deploymentId, notifiedAt: null },
+        where: { deploymentId, notifiedAt: null }
       });
       return;
     }
 
     const claimed = await this.prisma.deploymentCrashState.deleteMany({
-      where: { deploymentId, notifiedAt: { not: null } },
+      where: { deploymentId, notifiedAt: { not: null } }
     });
     if (claimed.count === 0) return;
     // No pods at all means the app was scaled down or torn down, not recovered.
@@ -363,12 +364,12 @@ export class PodMirrorConsumer implements OnModuleDestroy {
         this.prisma.pod.findMany({
           where: { status: 'crashing' },
           select: { deploymentId: true },
-          distinct: ['deploymentId'],
-        }),
+          distinct: ['deploymentId']
+        })
       ]);
       const ids = new Set([
         ...tracked.map((t) => t.deploymentId),
-        ...crashing.map((c) => c.deploymentId),
+        ...crashing.map((c) => c.deploymentId)
       ]);
       for (const id of ids) {
         await this.reconcileCrashState(id);
@@ -391,8 +392,8 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       select: {
         id: true,
         projectId: true,
-        project: { select: { organizationId: true } },
-      },
+        project: { select: { organizationId: true } }
+      }
     });
     const ctx: Ctx | null = dep
       ? { deploymentId: dep.id, orgId: dep.project.organizationId, projectId: dep.projectId }

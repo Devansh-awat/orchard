@@ -125,7 +125,7 @@ export function cacheEvictInitContainer(opts: CacheEvictOptions) {
     volumeMounts: [{ name: opts.volumeName ?? 'buildkit-cache', mountPath: '/cache' }],
     resources: {
       requests: { cpu: '50m', memory: '64Mi' },
-      limits: { cpu: '500m', memory: '256Mi' },
-    },
+      limits: { cpu: '500m', memory: '256Mi' }
+    }
   };
 }

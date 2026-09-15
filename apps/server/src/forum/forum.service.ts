@@ -3,11 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
+  OnModuleInit
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../organizations/storage.service';
-import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
+import { objectStorage } from '../instance-config/object-storage';
 
 export const THREAD_STATUSES = [
   'open',
@@ -15,7 +15,7 @@ export const THREAD_STATUSES = [
   'will-fix',
   'in-progress',
   'fixed',
-  'wont-fix',
+  'wont-fix'
 ] as const;
 export type ThreadStatus = (typeof THREAD_STATUSES)[number];
 
@@ -41,8 +41,20 @@ function cleanImages(images: unknown): string[] {
 }
 
 const DEFAULT_CATEGORIES = [
-  { slug: 'bugs', name: 'Bugs', emoji: '', description: 'Something is broken or behaving wrong', sortOrder: 0 },
-  { slug: 'features', name: 'Feature requests', emoji: '', description: 'Something Orchard should do', sortOrder: 1 },
+  {
+    slug: 'bugs',
+    name: 'Bugs',
+    emoji: '',
+    description: 'Something is broken or behaving wrong',
+    sortOrder: 0
+  },
+  {
+    slug: 'features',
+    name: 'Feature requests',
+    emoji: '',
+    description: 'Something Orchard should do',
+    sortOrder: 1
+  }
 ];
 
 export const THREAD_SCOPES = ['platform', 'cli', 'mcp', 'other'] as const;
@@ -54,7 +66,7 @@ const AUTHOR_SELECT = { id: true, username: true, imageUrl: true } as const;
 export class ForumService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
+    private readonly storage: StorageService
   ) {}
 
   async onModuleInit() {
@@ -69,7 +81,7 @@ export class ForumService implements OnModuleInit {
   async listCategories() {
     const cats = await this.prisma.forumCategory.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { threads: true } } },
+      include: { _count: { select: { threads: true } } }
     });
     return cats.map((c) => ({
       id: c.id,
@@ -77,7 +89,7 @@ export class ForumService implements OnModuleInit {
       name: c.name,
       emoji: c.emoji,
       description: c.description,
-      threadCount: c._count.threads,
+      threadCount: c._count.threads
     }));
   }
 
@@ -95,7 +107,7 @@ export class ForumService implements OnModuleInit {
         : {}),
       ...(opts.scope && THREAD_SCOPES.includes(opts.scope as ThreadScope)
         ? { scope: opts.scope }
-        : {}),
+        : {})
     };
     const threads = await this.prisma.forumThread.findMany({
       where,
@@ -108,8 +120,8 @@ export class ForumService implements OnModuleInit {
         author: { select: AUTHOR_SELECT },
         category: { select: { slug: true, name: true, emoji: true } },
         _count: { select: { replies: true, votes: true } },
-        votes: { where: { userId: opts.userId }, select: { userId: true } },
-      },
+        votes: { where: { userId: opts.userId }, select: { userId: true } }
+      }
     });
     return threads.map((t) => this.shapeThread(t));
   }
@@ -124,9 +136,9 @@ export class ForumService implements OnModuleInit {
         votes: { where: { userId }, select: { userId: true } },
         replies: {
           orderBy: { createdAt: 'asc' },
-          include: { author: { select: AUTHOR_SELECT } },
-        },
-      },
+          include: { author: { select: AUTHOR_SELECT } }
+        }
+      }
     });
     if (!t) throw new NotFoundException('Thread not found');
     return {
@@ -137,14 +149,14 @@ export class ForumService implements OnModuleInit {
         body: r.body,
         images: r.images,
         createdAt: r.createdAt,
-        author: r.author,
-      })),
+        author: r.author
+      }))
     };
   }
 
   async createThread(
     userId: string,
-    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] },
+    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] }
   ) {
     const title = body.title?.trim() ?? '';
     const text = body.body?.trim() ?? '';
@@ -159,7 +171,7 @@ export class ForumService implements OnModuleInit {
       throw new BadRequestException('Invalid scope');
     }
     const category = await this.prisma.forumCategory.findUnique({
-      where: { slug: body.categorySlug },
+      where: { slug: body.categorySlug }
     });
     if (!category) throw new BadRequestException('Unknown category');
     const created = await this.prisma.forumThread.create({
@@ -169,8 +181,8 @@ export class ForumService implements OnModuleInit {
         title,
         body: text,
         scope,
-        images: cleanImages(body.images),
-      },
+        images: cleanImages(body.images)
+      }
     });
     return this.getThread(created.id, userId);
   }
@@ -185,25 +197,25 @@ export class ForumService implements OnModuleInit {
     if (thread.locked) throw new BadRequestException('Thread is locked');
     const reply = await this.prisma.forumReply.create({
       data: { threadId, authorId: userId, body, images: cleanImages(images) },
-      include: { author: { select: AUTHOR_SELECT } },
+      include: { author: { select: AUTHOR_SELECT } }
     });
     await this.prisma.forumThread.update({
       where: { id: threadId },
-      data: { lastActivityAt: new Date() },
+      data: { lastActivityAt: new Date() }
     });
     return {
       id: reply.id,
       body: reply.body,
       images: reply.images,
       createdAt: reply.createdAt,
-      author: reply.author,
+      author: reply.author
     };
   }
 
   async deleteThread(threadId: string, userId: string, isAdmin: boolean) {
     const thread = await this.prisma.forumThread.findUnique({
       where: { id: threadId },
-      select: { id: true, authorId: true, images: true, replies: { select: { images: true } } },
+      select: { id: true, authorId: true, images: true, replies: { select: { images: true } } }
     });
     if (!thread) throw new NotFoundException('Thread not found');
     if (!isAdmin && thread.authorId !== userId) {
@@ -211,7 +223,7 @@ export class ForumService implements OnModuleInit {
     }
     const base = forumImageBase();
     const images = [...thread.images, ...thread.replies.flatMap((r) => r.images)].filter((u) =>
-      u.startsWith(base),
+      u.startsWith(base)
     );
     await this.prisma.forumThread.delete({ where: { id: threadId } });
     for (const url of images) {
@@ -223,7 +235,7 @@ export class ForumService implements OnModuleInit {
   async deleteReply(replyId: string, userId: string, isAdmin: boolean) {
     const reply = await this.prisma.forumReply.findUnique({
       where: { id: replyId },
-      select: { id: true, authorId: true, images: true },
+      select: { id: true, authorId: true, images: true }
     });
     if (!reply) throw new NotFoundException('Reply not found');
     if (!isAdmin && reply.authorId !== userId) {
@@ -250,9 +262,7 @@ export class ForumService implements OnModuleInit {
     const thread = await this.prisma.forumThread.findUnique({ where: { id: threadId } });
     if (!thread) throw new NotFoundException('Thread not found');
     if (on) {
-      await this.prisma.forumVote
-        .create({ data: { threadId, userId } })
-        .catch(() => {});
+      await this.prisma.forumVote.create({ data: { threadId, userId } }).catch(() => {});
     } else {
       await this.prisma.forumVote
         .delete({ where: { threadId_userId: { threadId, userId } } })
@@ -306,7 +316,7 @@ export class ForumService implements OnModuleInit {
       category: t.category,
       replyCount: t._count.replies,
       votes: t._count.votes,
-      myVote: t.votes.length > 0,
+      myVote: t.votes.length > 0
     };
   }
 }

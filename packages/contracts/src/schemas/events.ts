@@ -12,7 +12,7 @@ const orgEventType = z.enum([
   'job.changed',
   'jobrun.changed',
   'environment.changed',
-  'sharedvars.changed',
+  'sharedvars.changed'
 ]);
 
 export const jobRunChangedPayload = z
@@ -21,7 +21,7 @@ export const jobRunChangedPayload = z
     runId: z.string(),
     number: z.number().int(),
     status: z.string(),
-    currentStepOrder: z.number().int().nullable(),
+    currentStepOrder: z.number().int().nullable()
   })
   .passthrough()
   .describe('Payload for jobrun.changed events');
@@ -30,9 +30,7 @@ export const deploymentMetricsPayload = z
   .object({
     totalCpuUsage: z.number().describe('Total CPU usage across pods, millicores'),
     totalMemoryUsage: z.number().describe('Total memory usage across pods, bytes'),
-    pods: z.record(
-      z.object({ cpuUsage: z.number(), memoryUsage: z.number() }).passthrough(),
-    ),
+    pods: z.record(z.object({ cpuUsage: z.number(), memoryUsage: z.number() }).passthrough())
   })
   .passthrough()
   .describe('Payload for deployment.metrics events, keyed by pod name');
@@ -45,7 +43,7 @@ export const orgEvent = z
       .string()
       .optional()
       .describe(
-        'The changed entity id (deployment, database, job, run, environment, ...); the affected user id for membership.changed',
+        'The changed entity id (deployment, database, job, run, environment, ...); the affected user id for membership.changed'
       ),
     projectId: z.string().optional(),
     ts: z.number().describe('Emit time, Unix epoch milliseconds'),
@@ -53,15 +51,15 @@ export const orgEvent = z
       .union([jobRunChangedPayload, deploymentMetricsPayload, z.unknown()])
       .optional()
       .describe(
-        'Event-specific payload: structured for jobrun.changed and deployment.metrics, informer-derived data for pod.changed and database.changed, absent otherwise',
-      ),
+        'Event-specific payload: structured for jobrun.changed and deployment.metrics, informer-derived data for pod.changed and database.changed, absent otherwise'
+      )
   })
   .passthrough();
 
 export const heartbeatEvent = z
   .object({
     type: z.literal('heartbeat'),
-    ts: z.number(),
+    ts: z.number()
   })
   .passthrough()
   .describe('Keepalive sent every 25s so proxies do not kill the stream');
@@ -74,7 +72,7 @@ export const terminalClientResizeFrame = z
   .object({
     type: z.literal('resize'),
     cols: z.number().int(),
-    rows: z.number().int(),
+    rows: z.number().int()
   })
   .passthrough()
   .describe('Terminal resize notification (JSON text frame, handled client-side)');
@@ -86,13 +84,13 @@ export const terminalClientInputFrame = z
 export const terminalClientFrame = z
   .union([terminalClientResizeFrame, terminalClientInputFrame])
   .describe(
-    'Client-to-server frame on ws(s)://host/apiv1/pods/:podName/exec?namespace=...&container=... (session cookie or Bearer API token with the exec scope; project edit access required)',
+    'Client-to-server frame on ws(s)://host/apiv1/pods/:podName/exec?namespace=...&container=... (session cookie or Bearer API token with the exec scope; project edit access required)'
   );
 
 export const terminalServerFrame = z
   .string()
   .describe(
-    'Server-to-client frame: raw stdout/stderr bytes (binary), or a text notice before close. Close codes: 1000 shell exited, 4401 access revoked mid-session, 1011 exec error',
+    'Server-to-client frame: raw stdout/stderr bytes (binary), or a text notice before close. Close codes: 1000 shell exited, 4401 access revoked mid-session, 1011 exec error'
   );
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
@@ -104,10 +102,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .string()
         .optional()
         .describe(
-          'Resume after this event id (Redis stream id); the Last-Event-ID header takes precedence',
-        ),
+          'Resume after this event id (Redis stream id); the Last-Event-ID header takes precedence'
+        )
     }),
-    response: orgEventStreamMessage,
+    response: orgEventStreamMessage
   },
   'POST /pods/:podName/exec': {
     summary: 'Run a one-shot command in a pod (synchronous, non-streaming)',
@@ -129,7 +127,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           .number()
           .int()
           .optional()
-          .describe('Timeout in milliseconds, clamped to 1000..300000 (default 60000)'),
+          .describe('Timeout in milliseconds, clamped to 1000..300000 (default 60000)')
       })
       .passthrough(),
     response: z
@@ -137,8 +135,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         stdout: z.string(),
         stderr: z.string(),
         success: z.boolean(),
-        container: z.string().describe('The container the command ran in'),
+        container: z.string().describe('The container the command ran in')
       })
-      .passthrough(),
-  },
+      .passthrough()
+  }
 };

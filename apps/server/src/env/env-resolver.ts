@@ -71,7 +71,7 @@ export function resolveSharedValues(shared: EnvVar[]): {
  */
 export function resolveEnvVars(
   rawVars: EnvVar[],
-  shared: EnvVar[],
+  shared: EnvVar[]
 ): { resolved: EnvVar[]; errors: ResolveError[] } {
   const { values, secretKeys, errors: sharedErrors } = resolveSharedValues(shared);
   const errors: ResolveError[] = [...sharedErrors];

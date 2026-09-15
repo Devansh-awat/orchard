@@ -166,8 +166,7 @@
 							name="description"
 							rows="2"
 							class="oh-textarea"
-							bind:value={editingDescription}
-						></textarea>
+							bind:value={editingDescription}></textarea>
 					</div>
 					<div class="oh-edit-actions">
 						<Button variant="secondary" size="sm" onclick={onCancelEditing}>Cancel</Button>

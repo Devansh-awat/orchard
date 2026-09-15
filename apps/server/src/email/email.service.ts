@@ -88,8 +88,8 @@ export class EmailService {
       secure: this.config.value(EMAIL, 'secure') === 'true',
       auth: {
         user: this.config.value(EMAIL, 'user') ?? undefined,
-        pass: this.config.value(EMAIL, 'pass') ?? undefined,
-      },
+        pass: this.config.value(EMAIL, 'pass') ?? undefined
+      }
     });
   }
 
@@ -121,12 +121,15 @@ export class EmailService {
 
   private async renderTemplate(
     templateName: string,
-    variables: Record<string, string>,
+    variables: Record<string, string>
   ): Promise<string> {
     const templatePath = path.join(this.templatesDir, `${templateName}.mjml`);
     let mjmlContent = fs.readFileSync(templatePath, 'utf-8');
 
-    const assetBaseUrl = (process.env.EMAIL_ASSET_BASE_URL || 'https://orchard.my').replace(/\/$/, '');
+    const assetBaseUrl = (process.env.EMAIL_ASSET_BASE_URL || 'https://orchard.my').replace(
+      /\/$/,
+      ''
+    );
     mjmlContent = mjmlContent.replaceAll('{{assetBaseUrl}}', assetBaseUrl);
 
     for (const [key, value] of Object.entries(variables)) {
@@ -151,14 +154,14 @@ export class EmailService {
       body: data.body,
       contextLine: data.contextLine,
       ctaUrl: data.ctaUrl,
-      frontendUrl: this.frontendUrl,
+      frontendUrl: this.frontendUrl
     });
 
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipients.join(', '),
       subject: data.subject,
-      html,
+      html
     };
 
     try {
@@ -170,13 +173,9 @@ export class EmailService {
     }
   }
 
-  async sendOrganizationInviteEmail(
-    data: OrganizationInviteEmailData,
-  ): Promise<boolean> {
+  async sendOrganizationInviteEmail(data: OrganizationInviteEmailData): Promise<boolean> {
     if (!this.isConfigured()) {
-      console.warn(
-        'Email service not configured. Skipping organization invite email.',
-      );
+      console.warn('Email service not configured. Skipping organization invite email.');
       return false;
     }
 
@@ -187,20 +186,24 @@ export class EmailService {
       inviterName: data.inviterName,
       role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
       loginUrl: data.loginUrl,
-      frontendUrl: this.frontendUrl,
+      frontendUrl: this.frontendUrl
     });
 
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipientEmail,
       subject: `You've been invited to join ${data.organizationName} on Orchard`,
-      html,
+      html
     };
-    console.log(`[EmailService] Sending organization invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`);
+    console.log(
+      `[EmailService] Sending organization invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`
+    );
 
     try {
       const info = await this.transporter!.sendMail(mailOptions);
-      console.log(`[EmailService] Organization invite email sent successfully messageId=${info.messageId} response="${info.response}"`);
+      console.log(
+        `[EmailService] Organization invite email sent successfully messageId=${info.messageId} response="${info.response}"`
+      );
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send organization invite email:', error);
@@ -208,13 +211,9 @@ export class EmailService {
     }
   }
 
-  async sendProjectInviteEmail(
-    data: ProjectInviteEmailData,
-  ): Promise<boolean> {
+  async sendProjectInviteEmail(data: ProjectInviteEmailData): Promise<boolean> {
     if (!this.isConfigured()) {
-      console.warn(
-        'Email service not configured. Skipping project invite email.',
-      );
+      console.warn('Email service not configured. Skipping project invite email.');
       return false;
     }
 
@@ -226,20 +225,24 @@ export class EmailService {
       inviterName: data.inviterName,
       role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
       loginUrl: data.loginUrl,
-      frontendUrl: this.frontendUrl,
+      frontendUrl: this.frontendUrl
     });
 
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipientEmail,
       subject: `You've been invited to ${data.projectName} on Orchard`,
-      html,
+      html
     };
-    console.log(`[EmailService] Sending project invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`);
+    console.log(
+      `[EmailService] Sending project invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`
+    );
 
     try {
       const info = await this.transporter!.sendMail(mailOptions);
-      console.log(`[EmailService] Project invite email sent successfully messageId=${info.messageId} response="${info.response}"`);
+      console.log(
+        `[EmailService] Project invite email sent successfully messageId=${info.messageId} response="${info.response}"`
+      );
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send project invite email:', error);
@@ -247,13 +250,9 @@ export class EmailService {
     }
   }
 
-  async sendWorkspaceInviteEmail(
-    data: WorkspaceInviteEmailData,
-  ): Promise<boolean> {
+  async sendWorkspaceInviteEmail(data: WorkspaceInviteEmailData): Promise<boolean> {
     if (!this.isConfigured()) {
-      console.warn(
-        'Email service not configured. Skipping workspace invite email.',
-      );
+      console.warn('Email service not configured. Skipping workspace invite email.');
       return false;
     }
 
@@ -265,20 +264,24 @@ export class EmailService {
       inviterName: data.inviterName,
       role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
       inviteUrl: data.inviteUrl,
-      frontendUrl: this.frontendUrl,
+      frontendUrl: this.frontendUrl
     });
 
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipientEmail,
       subject: `You've been invited to ${data.workspaceName}`,
-      html,
+      html
     };
-    console.log(`[EmailService] Sending workspace invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`);
+    console.log(
+      `[EmailService] Sending workspace invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`
+    );
 
     try {
       const info = await this.transporter!.sendMail(mailOptions);
-      console.log(`[EmailService] Workspace invite email sent successfully messageId=${info.messageId} response="${info.response}"`);
+      console.log(
+        `[EmailService] Workspace invite email sent successfully messageId=${info.messageId} response="${info.response}"`
+      );
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send workspace invite email:', error);
@@ -297,20 +300,24 @@ export class EmailService {
       recipientEmail: data.recipientEmail,
       otpCode: data.otpCode,
       expiryMinutes: String(data.expiryMinutes),
-      frontendUrl: this.frontendUrl,
+      frontendUrl: this.frontendUrl
     });
 
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipientEmail,
       subject: `Your Orchard verification code: ${data.otpCode}`,
-      html,
+      html
     };
-    console.log(`[EmailService] Sending OTP email to=${data.recipientEmail} from=${mailOptions.from}`);
+    console.log(
+      `[EmailService] Sending OTP email to=${data.recipientEmail} from=${mailOptions.from}`
+    );
 
     try {
       const info = await this.transporter!.sendMail(mailOptions);
-      console.log(`[EmailService] OTP email sent successfully messageId=${info.messageId} response="${info.response}"`);
+      console.log(
+        `[EmailService] OTP email sent successfully messageId=${info.messageId} response="${info.response}"`
+      );
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send OTP email:', error);

@@ -25,7 +25,7 @@ export class K8sNodeInformerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly leader: LeaderElectionService,
-    private readonly nodes: NodesService,
+    private readonly nodes: NodesService
   ) {}
 
   async onModuleInit() {
@@ -46,7 +46,7 @@ export class K8sNodeInformerService implements OnModuleInit, OnModuleDestroy {
     });
     this.informer.on('error', (err) => {
       this.logger.warn(
-        `node informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`,
+        `node informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`
       );
       this.scheduleRestart();
     });

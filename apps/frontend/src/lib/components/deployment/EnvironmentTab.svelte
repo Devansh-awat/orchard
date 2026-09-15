@@ -170,8 +170,7 @@
 				bind:value={envRawText}
 				placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
 				class="env-raw-textarea"
-				onfocus={() => (isEditing = true)}
-			></textarea>
+				onfocus={() => (isEditing = true)}></textarea>
 		{/if}
 	</div>
 	<div class="env-footer">

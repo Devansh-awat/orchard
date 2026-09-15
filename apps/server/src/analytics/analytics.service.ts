@@ -31,7 +31,7 @@ export class AnalyticsService implements OnModuleDestroy {
     this.client = new PostHog(key, {
       host: process.env.POSTHOG_HOST || 'https://at.leafd.dev',
       flushAt: 20,
-      flushInterval: 10_000,
+      flushInterval: 10_000
     });
   }
 
@@ -71,14 +71,14 @@ export class AnalyticsService implements OnModuleDestroy {
     error: unknown,
     distinctId: string,
     properties?: AnalyticsProps,
-    groups?: Record<string, string>,
+    groups?: Record<string, string>
   ): void {
     if (!this.client) return;
     const err = error instanceof Error ? error : new Error(String(error));
     try {
       this.client.captureException(err, distinctId, {
         ...(properties ?? {}),
-        ...(groups ? { $groups: groups } : {}),
+        ...(groups ? { $groups: groups } : {})
       });
     } catch (e) {
       this.logger.warn(`captureException failed: ${(e as Error).message}`);
@@ -92,7 +92,7 @@ export class AnalyticsService implements OnModuleDestroy {
   async isFeatureEnabled(
     key: string,
     distinctId: string,
-    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> },
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> }
   ): Promise<boolean> {
     if (!this.client) return false;
     try {
@@ -111,7 +111,7 @@ export class AnalyticsService implements OnModuleDestroy {
   async getFeatureFlag(
     key: string,
     distinctId: string,
-    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> },
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> }
   ): Promise<string | boolean | undefined> {
     if (!this.client) return undefined;
     try {

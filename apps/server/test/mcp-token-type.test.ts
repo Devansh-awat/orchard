@@ -18,11 +18,15 @@ test('MCP access tokens are stamped type=mcp', async () => {
     name: 'Someone',
     externalAuthId: 'ext-1',
     authMethod: 'otp',
-    sessionId: 'session-1',
+    sessionId: 'session-1'
   });
 
   const claims = decodeJwt(token);
-  assert.equal(claims.type, 'mcp', 'SuperAdminGuard rejects on this claim; without it the token is a first-party session');
+  assert.equal(
+    claims.type,
+    'mcp',
+    'SuperAdminGuard rejects on this claim; without it the token is a first-party session'
+  );
   assert.equal(claims.sessionId, 'session-1');
   assert.equal(claims.sub, 'user-1');
 });

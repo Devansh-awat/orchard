@@ -9,7 +9,7 @@ import {
   HttpStatus,
   BadRequestException,
   ForbiddenException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Public, Auth } from './decorators';
@@ -23,7 +23,12 @@ export class ProtectionController {
   @Get('check')
   async check(@Request() req, @Res() res: Response) {
     const host = (req.headers[':authority'] || req.headers['host'] || '').toString().toLowerCase();
-    const originalPath = (req.headers['x-original-url'] || req.headers[':path'] || req.url || '/').toString();
+    const originalPath = (
+      req.headers['x-original-url'] ||
+      req.headers[':path'] ||
+      req.url ||
+      '/'
+    ).toString();
     const cookieHeader = req.headers['cookie']?.toString();
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
     const authorizationHeader = req.headers['authorization']?.toString();
@@ -33,7 +38,7 @@ export class ProtectionController {
       originalPath,
       cookieHeader,
       bypassHeader,
-      authorizationHeader,
+      authorizationHeader
     );
 
     if (decision.allow) {
@@ -59,10 +64,7 @@ export class ProtectionController {
 
   @Auth()
   @Post('exchange/orchard')
-  async exchangeOrchard(
-    @Request() req,
-    @Body() body: { ingressId: string; returnTo: string },
-  ) {
+  async exchangeOrchard(@Request() req, @Body() body: { ingressId: string; returnTo: string }) {
     if (!body.ingressId || !body.returnTo) {
       throw new BadRequestException('ingressId and returnTo required');
     }
@@ -79,9 +81,7 @@ export class ProtectionController {
 
   @Public()
   @Post('exchange/password')
-  async exchangePassword(
-    @Body() body: { ingressId: string; password: string; returnTo: string },
-  ) {
+  async exchangePassword(@Body() body: { ingressId: string; password: string; returnTo: string }) {
     if (!body.ingressId || !body.password || !body.returnTo) {
       throw new BadRequestException('ingressId, password, and returnTo required');
     }

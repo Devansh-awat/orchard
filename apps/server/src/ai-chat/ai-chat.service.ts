@@ -43,18 +43,15 @@ export interface ChatActingUser {
 export class AiChatService {
   private readonly logger = new Logger(AiChatService.name);
 
-  async *streamChat(
-    messages: ChatMessage[],
-    actingUser: ChatActingUser,
-  ): AsyncGenerator<string> {
+  async *streamChat(messages: ChatMessage[], actingUser: ChatActingUser): AsyncGenerator<string> {
     if (!API_KEY) {
-      yield `${JSON.stringify({ type: 'error', error: 'AI chat is not configured (missing API key)' })  }\n`;
+      yield `${JSON.stringify({ type: 'error', error: 'AI chat is not configured (missing API key)' })}\n`;
       return;
     }
 
     const openai = new OpenAI({
       apiKey: API_KEY,
-      baseURL: API_BASE_URL,
+      baseURL: API_BASE_URL
     });
 
     const apiBase = `http://localhost:${process.env.PORT || 3001}/apiv1`;
@@ -64,9 +61,9 @@ export class AiChatService {
         method,
         headers: {
           Authorization: `Bearer ${actingUser.token}`,
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: body ? JSON.stringify(body) : undefined,
+        body: body ? JSON.stringify(body) : undefined
       });
       if (!res.ok) {
         const text = await res.text();
@@ -86,7 +83,7 @@ export class AiChatService {
 
     const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
     ];
 
     let rounds = 0;
@@ -98,7 +95,7 @@ export class AiChatService {
         max_tokens: 4096,
         tools: TOOLS_OPENAI,
         messages: openaiMessages,
-        stream: true,
+        stream: true
       });
 
       let assistantContent = '';
@@ -110,7 +107,7 @@ export class AiChatService {
 
         if (delta.content) {
           assistantContent += delta.content;
-          yield `${JSON.stringify({ type: 'text', text: delta.content })  }\n`;
+          yield `${JSON.stringify({ type: 'text', text: delta.content })}\n`;
         }
 
         if (delta.tool_calls) {
@@ -122,7 +119,7 @@ export class AiChatService {
               toolCalls.set(tc.index, {
                 id: tc.id || '',
                 name: tc.function?.name || '',
-                arguments: tc.function?.arguments || '',
+                arguments: tc.function?.arguments || ''
               });
             }
           }
@@ -140,14 +137,14 @@ export class AiChatService {
         tool_calls: [...toolCalls.values()].map((tc) => ({
           id: tc.id,
           type: 'function' as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
+          function: { name: tc.name, arguments: tc.arguments }
+        }))
       };
       openaiMessages.push(assistantMsg);
 
       // Execute each tool call
       for (const tc of toolCalls.values()) {
-        yield `${JSON.stringify({ type: 'tool_call', name: tc.name, input: tc.arguments })  }\n`;
+        yield `${JSON.stringify({ type: 'tool_call', name: tc.name, input: tc.arguments })}\n`;
 
         let parsed: Record<string, any>;
         try {
@@ -161,25 +158,29 @@ export class AiChatService {
           openaiMessages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: result,
+            content: result
           });
           // Send parsed data to frontend for rich rendering
           let data: any;
-          try { data = JSON.parse(result); } catch { data = null; }
-          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: true, data })  }\n`;
+          try {
+            data = JSON.parse(result);
+          } catch {
+            data = null;
+          }
+          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: true, data })}\n`;
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           this.logger.warn(`Tool ${tc.name} failed: ${errMsg}`);
           openaiMessages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: JSON.stringify({ error: errMsg }),
+            content: JSON.stringify({ error: errMsg })
           });
-          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: false, error: errMsg })  }\n`;
+          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: false, error: errMsg })}\n`;
         }
       }
     }
 
-    yield `${JSON.stringify({ type: 'done' })  }\n`;
+    yield `${JSON.stringify({ type: 'done' })}\n`;
   }
 }

@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  Request,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Request } from '@nestjs/common';
 import { SsoService, ProviderInput } from './sso.service';
 import { SsoLoginService } from './sso-login.service';
 import { publicPresets } from './presets';
@@ -25,7 +16,7 @@ import { publicPresets } from './presets';
 export class SsoInstanceController {
   constructor(
     private readonly sso: SsoService,
-    private readonly login: SsoLoginService,
+    private readonly login: SsoLoginService
   ) {}
 
   private actor(req: any) {
@@ -36,13 +27,13 @@ export class SsoInstanceController {
   async overview() {
     const [providers, organizations] = await Promise.all([
       this.sso.listProviders(null),
-      this.sso.getPlatformStatuses(),
+      this.sso.getPlatformStatuses()
     ]);
     return {
       providers,
       organizations,
       presets: publicPresets(),
-      envProvider: this.sso.envProvider(),
+      envProvider: this.sso.envProvider()
     };
   }
 
@@ -65,7 +56,7 @@ export class SsoInstanceController {
   updateProvider(
     @Param('providerId') providerId: string,
     @Body() body: ProviderInput,
-    @Request() req,
+    @Request() req
   ) {
     return this.sso.updateProvider(providerId, null, body, this.actor(req));
   }
@@ -90,7 +81,7 @@ export class SsoInstanceController {
   setPlatformEnabled(
     @Param('organizationId') organizationId: string,
     @Body('platformEnabled') platformEnabled: boolean,
-    @Request() req,
+    @Request() req
   ) {
     return this.sso.setPlatformEnabled(organizationId, Boolean(platformEnabled), this.actor(req));
   }

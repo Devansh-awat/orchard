@@ -18,10 +18,15 @@ let installationRowId = '';
 
 /** Constructed by hand: the reconcile paths only need prisma, and leadership is assumed. */
 function newService(): GitHubService {
-  return new GitHubService(prisma as never, {} as never, {} as never, {
-    isLeader: () => true,
-    onAcquired: () => {},
-  } as never);
+  return new GitHubService(
+    prisma as never,
+    {} as never,
+    {} as never,
+    {
+      isLeader: () => true,
+      onAcquired: () => {}
+    } as never
+  );
 }
 
 async function makeDeployment(over: {
@@ -40,15 +45,15 @@ async function makeDeployment(over: {
       githubInstallationId: over.githubInstallationId ?? INSTALLATION_ID,
       githubRepoId: over.githubRepoId ?? null,
       name: over.name,
-      githubRepo: over.githubRepo,
-    },
+      githubRepo: over.githubRepo
+    }
   });
 }
 
 async function reload(id: string) {
   return prisma.deployment.findUniqueOrThrow({
     where: { id },
-    select: { githubRepo: true, githubRepoId: true },
+    select: { githubRepo: true, githubRepoId: true }
   });
 }
 
@@ -56,7 +61,7 @@ async function cleanup() {
   const org = await prisma.organization.findUnique({ where: { slug: SLUG } });
   if (org) await prisma.organization.delete({ where: { id: org.id } });
   await prisma.gitHubAppInstallation.deleteMany({
-    where: { installationId: { in: [INSTALLATION_ID, OTHER_INSTALLATION_ID] } },
+    where: { installationId: { in: [INSTALLATION_ID, OTHER_INSTALLATION_ID] } }
   });
 }
 
@@ -64,7 +69,7 @@ before(async () => {
   await cleanup();
   const org = await prisma.organization.create({ data: { name: 'Repo Link Org', slug: SLUG } });
   const project = await prisma.project.create({
-    data: { organizationId: org.id, name: 'repolink', slug: 'repolink', namespace: NS },
+    data: { organizationId: org.id, name: 'repolink', slug: 'repolink', namespace: NS }
   });
   projectId = project.id;
   const inst = await prisma.gitHubAppInstallation.create({
@@ -72,8 +77,8 @@ before(async () => {
       installationId: INSTALLATION_ID,
       accountLogin: 'hackclub',
       accountId: 1n,
-      accountType: 'Organization',
-    },
+      accountType: 'Organization'
+    }
   });
   installationRowId = inst.id;
 });
@@ -94,12 +99,15 @@ test('a push matches a deployment by repository id, whatever the repo is called 
   const dep = await makeDeployment({
     name: 'renamed-under-us',
     githubRepo: `https://github.com/${OLD_NAME}`,
-    githubRepoId: REPO_ID,
+    githubRepoId: REPO_ID
   });
 
   const matched = await newService().findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME);
 
-  assert.deepEqual(matched.map((d) => d.id), [dep.id]);
+  assert.deepEqual(
+    matched.map((d) => d.id),
+    [dep.id]
+  );
   // and the row is brought up to date on the way past
   assert.equal((await reload(dep.id)).githubRepo, `https://github.com/${NEW_NAME}`);
 });
@@ -107,12 +115,15 @@ test('a push matches a deployment by repository id, whatever the repo is called 
 test('a push still matches an unlinked row by url, and records the id for next time', async () => {
   const dep = await makeDeployment({
     name: 'legacy-row',
-    githubRepo: `https://github.com/${NEW_NAME}`,
+    githubRepo: `https://github.com/${NEW_NAME}`
   });
 
   const matched = await newService().findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME);
 
-  assert.deepEqual(matched.map((d) => d.id), [dep.id]);
+  assert.deepEqual(
+    matched.map((d) => d.id),
+    [dep.id]
+  );
   assert.equal((await reload(dep.id)).githubRepoId, REPO_ID);
 });
 
@@ -120,7 +131,7 @@ test('adoption leaves a legacy .git suffix alone', async () => {
   const dep = await makeDeployment({
     name: 'dot-git-row',
     githubRepo: `https://github.com/${OLD_NAME}.git`,
-    githubRepoId: REPO_ID,
+    githubRepoId: REPO_ID
   });
 
   await newService().findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME);
@@ -132,13 +143,13 @@ test('a repository id from another installation claims nothing', async () => {
   await makeDeployment({
     name: 'someone-elses',
     githubRepo: `https://github.com/${NEW_NAME}`,
-    githubRepoId: REPO_ID,
+    githubRepoId: REPO_ID
   });
 
   const matched = await newService().findAutoDeployTargets(
     OTHER_INSTALLATION_ID,
     REPO_ID,
-    NEW_NAME,
+    NEW_NAME
   );
 
   assert.deepEqual(matched, []);
@@ -149,20 +160,26 @@ test('a disabled deployment is never a target', async () => {
     name: 'auto-deploy-off',
     githubRepo: `https://github.com/${NEW_NAME}`,
     githubRepoId: REPO_ID,
-    autoDeployEnabled: false,
+    autoDeployEnabled: false
   });
 
-  assert.deepEqual(await newService().findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME), []);
+  assert.deepEqual(
+    await newService().findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME),
+    []
+  );
 });
 
 test('a rename event relinks rows that predate the repository id', async () => {
-  const dep = await makeDeployment({ name: 'pre-id', githubRepo: `https://github.com/${OLD_NAME}` });
+  const dep = await makeDeployment({
+    name: 'pre-id',
+    githubRepo: `https://github.com/${OLD_NAME}`
+  });
 
   await newService().applyRepositoryEvent(
     INSTALLATION_ID,
     'renamed',
     { id: Number(REPO_ID), full_name: NEW_NAME, private: false, default_branch: 'main' },
-    OLD_NAME,
+    OLD_NAME
   );
 
   const row = await reload(dep.id);
@@ -171,9 +188,12 @@ test('a rename event relinks rows that predate the repository id', async () => {
 });
 
 test('the reconciler links a row from the installation mirror without asking github', async () => {
-  const dep = await makeDeployment({ name: 'mirrored', githubRepo: `https://github.com/${NEW_NAME}` });
+  const dep = await makeDeployment({
+    name: 'mirrored',
+    githubRepo: `https://github.com/${NEW_NAME}`
+  });
   await prisma.gitHubRepoMirror.create({
-    data: { appInstallationId: installationRowId, githubRepoId: REPO_ID, fullName: NEW_NAME },
+    data: { appInstallationId: installationRowId, githubRepoId: REPO_ID, fullName: NEW_NAME }
   });
 
   const service = newService();
@@ -188,7 +208,10 @@ test('the reconciler links a row from the installation mirror without asking git
 test('the reconciler recovers a row whose repo was renamed before anyone was watching', async () => {
   // Exactly the reported failure: nothing in Orchard knows the new name, the
   // mirror only holds it under the new one, and the row is still on the old.
-  const dep = await makeDeployment({ name: 'drifted', githubRepo: `https://github.com/${OLD_NAME}` });
+  const dep = await makeDeployment({
+    name: 'drifted',
+    githubRepo: `https://github.com/${OLD_NAME}`
+  });
 
   const service = newService();
   (service as any).getOrRefreshInstallationToken = async () => 'token';
@@ -198,7 +221,7 @@ test('the reconciler recovers a row whose repo was renamed before anyone was wat
     asked.push(String(url));
     return {
       ok: true,
-      json: async () => ({ id: Number(REPO_ID), full_name: NEW_NAME }),
+      json: async () => ({ id: Number(REPO_ID), full_name: NEW_NAME })
     };
   }) as never;
 
@@ -215,7 +238,10 @@ test('the reconciler recovers a row whose repo was renamed before anyone was wat
 
   // Which is the point: the next push now finds it.
   const matched = await service.findAutoDeployTargets(INSTALLATION_ID, REPO_ID, NEW_NAME);
-  assert.deepEqual(matched.map((d) => d.id), [dep.id]);
+  assert.deepEqual(
+    matched.map((d) => d.id),
+    [dep.id]
+  );
 });
 
 test('one lookup serves every deployment built from the same repo', async () => {

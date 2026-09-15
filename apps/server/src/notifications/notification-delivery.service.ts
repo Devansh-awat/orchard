@@ -77,7 +77,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     private readonly prisma: PrismaService,
     private readonly transport: NotificationTransport,
     private readonly limiter: NotificationRateLimiter,
-    private readonly email: EmailService,
+    private readonly email: EmailService
   ) {}
 
   onModuleInit() {
@@ -89,7 +89,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     this.reclaimTimer.unref?.();
     this.healthTimer = setInterval(() => {
       this.sweepDeadChannels().catch((e) =>
-        this.logger.warn(`channel health sweep failed: ${e?.message ?? e}`),
+        this.logger.warn(`channel health sweep failed: ${e?.message ?? e}`)
       );
     }, HEALTH_SWEEP_MS);
     this.healthTimer.unref?.();
@@ -132,7 +132,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
         else groups.set(d.destinationKey, [d]);
       }
       await Promise.allSettled(
-        [...groups.entries()].map(([key, batch]) => this.processGroup(key, batch)),
+        [...groups.entries()].map(([key, batch]) => this.processGroup(key, batch))
       );
       if (claimed.length < CLAIM_BATCH) return;
     }
@@ -200,7 +200,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
         destinationKey,
         d.event,
         d.targetId,
-        REPEAT_COOLDOWN_MS,
+        REPEAT_COOLDOWN_MS
       );
       if (suppressed) await this.markAll([d], 'suppressed', 'Repeat of a recent alert');
       else fresh.push(d);
@@ -233,8 +233,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           coalescedInto: carrier.id,
           lockedBy: null,
           lockedAt: null,
-          deliveredAt: new Date(),
-        },
+          deliveredAt: new Date()
+        }
       });
       return;
     }
@@ -242,7 +242,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     // schedule rather than being written off with it.
     await this.prisma.notificationDelivery.updateMany({
       where: { id: { in: rest.map((d) => d.id) } },
-      data: { status: 'pending', lockedBy: null, lockedAt: null },
+      data: { status: 'pending', lockedBy: null, lockedAt: null }
     });
   }
 
@@ -251,7 +251,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     destination: ResolvedDestination,
     outcome: SendOutcome,
     coalescedCount?: number,
-    durationMs?: number,
+    durationMs?: number
   ) {
     const attempts = delivery.attempts + 1;
     const now = new Date();
@@ -269,8 +269,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           firstAttemptAt: delivery.attempts === 0 ? now : undefined,
           coalescedCount: coalescedCount ?? null,
           lockedBy: null,
-          lockedAt: null,
-        },
+          lockedAt: null
+        }
       });
       await this.onSuccess(delivery);
       return;
@@ -289,8 +289,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
         firstAttemptAt: delivery.attempts === 0 ? now : undefined,
         nextAttemptAt: exhausted ? now : new Date(Date.now() + delay),
         lockedBy: null,
-        lockedAt: null,
-      },
+        lockedAt: null
+      }
     });
     await this.onFailure(delivery, outcome, destination);
   }
@@ -300,14 +300,14 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       consecutiveFailures: 0,
       circuitOpenUntil: null,
       lastSuccessAt: new Date(),
-      lastError: null,
+      lastError: null
     };
     if (delivery.channelId) {
       await this.prisma.notificationChannel.update({ where: { id: delivery.channelId }, data });
     } else if (delivery.userDestId) {
       await this.prisma.userNotificationDestination.update({
         where: { id: delivery.userDestId },
-        data,
+        data
       });
     }
   }
@@ -317,7 +317,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
   private async onFailure(
     delivery: ClaimedDelivery,
     outcome: SendOutcome,
-    destination: ResolvedDestination,
+    destination: ResolvedDestination
   ) {
     const failures = await this.bumpFailures(delivery, outcome.error ?? 'Delivery failed');
     if (failures < BREAKER_THRESHOLD) return;
@@ -326,16 +326,16 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     if (delivery.channelId) {
       await this.prisma.notificationChannel.update({
         where: { id: delivery.channelId },
-        data: { circuitOpenUntil: openUntil },
+        data: { circuitOpenUntil: openUntil }
       });
     } else if (delivery.userDestId) {
       await this.prisma.userNotificationDestination.update({
         where: { id: delivery.userDestId },
-        data: { circuitOpenUntil: openUntil },
+        data: { circuitOpenUntil: openUntil }
       });
     }
     this.logger.warn(
-      `${destination.target.label} has failed ${failures} times in a row; pausing until ${openUntil.toISOString()}`,
+      `${destination.target.label} has failed ${failures} times in a row; pausing until ${openUntil.toISOString()}`
     );
   }
 
@@ -343,13 +343,13 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
     const data = {
       consecutiveFailures: { increment: 1 },
       lastErrorAt: new Date(),
-      lastError: error.slice(0, 2000),
+      lastError: error.slice(0, 2000)
     };
     if (delivery.channelId) {
       const row = await this.prisma.notificationChannel.update({
         where: { id: delivery.channelId },
         data,
-        select: { consecutiveFailures: true },
+        select: { consecutiveFailures: true }
       });
       return row.consecutiveFailures;
     }
@@ -357,7 +357,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       const row = await this.prisma.userNotificationDestination.update({
         where: { id: delivery.userDestId },
         data,
-        select: { consecutiveFailures: true },
+        select: { consecutiveFailures: true }
       });
       return row.consecutiveFailures;
     }
@@ -375,8 +375,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           config: true,
           enabled: true,
           circuitOpenUntil: true,
-          organizationId: true,
-        },
+          organizationId: true
+        }
       });
       if (!channel) return null;
       return {
@@ -387,8 +387,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           type: channel.type,
           config: (channel.config ?? {}) as any,
           label: `channel "${channel.name}"`,
-          organizationId: channel.organizationId,
-        },
+          organizationId: channel.organizationId
+        }
       };
     }
     if (delivery.userDestId) {
@@ -400,8 +400,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           config: true,
           enabled: true,
           circuitOpenUntil: true,
-          user: { select: { email: true, username: true } },
-        },
+          user: { select: { email: true, username: true } }
+        }
       });
       if (!dest) return null;
       const config = (dest.config ?? {}) as { url?: string };
@@ -414,8 +414,8 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
           // A personal email destination always resolves to the account's own
           // address, so it can never be pointed at somebody else.
           config: dest.type === 'email' ? { recipients: [dest.user.email] } : { url: config.url },
-          label: `${dest.type} for ${dest.user.username}`,
-        },
+          label: `${dest.type} for ${dest.user.username}`
+        }
       };
     }
     return null;
@@ -424,14 +424,14 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
   private async park(batch: ClaimedDelivery[], until: Date) {
     await this.prisma.notificationDelivery.updateMany({
       where: { id: { in: batch.map((d) => d.id) } },
-      data: { status: 'pending', nextAttemptAt: until, lockedBy: null, lockedAt: null },
+      data: { status: 'pending', nextAttemptAt: until, lockedBy: null, lockedAt: null }
     });
   }
 
   private async markAll(batch: ClaimedDelivery[], status: string, error: string) {
     await this.prisma.notificationDelivery.updateMany({
       where: { id: { in: batch.map((d) => d.id) } },
-      data: { status, error, lockedBy: null, lockedAt: null },
+      data: { status, error, lockedBy: null, lockedAt: null }
     });
   }
 
@@ -445,23 +445,23 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
         autoDisabledAt: null,
         consecutiveFailures: { gte: BREAKER_THRESHOLD },
         lastErrorAt: { lt: cutoff },
-        OR: [{ lastSuccessAt: null }, { lastSuccessAt: { lt: cutoff } }],
+        OR: [{ lastSuccessAt: null }, { lastSuccessAt: { lt: cutoff } }]
       },
       select: { id: true, name: true, organizationId: true, lastError: true, lastErrorAt: true },
-      take: 20,
+      take: 20
     });
 
     for (const channel of dead) {
       await this.prisma.notificationChannel.update({
         where: { id: channel.id },
-        data: { enabled: false, autoDisabledAt: new Date() },
+        data: { enabled: false, autoDisabledAt: new Date() }
       });
       await this.prisma.notificationDelivery.updateMany({
         where: { channelId: channel.id, status: 'pending' },
-        data: { status: 'dropped', error: 'Channel auto-disabled after 24h of failures' },
+        data: { status: 'dropped', error: 'Channel auto-disabled after 24h of failures' }
       });
       await this.notifyAdminsOfDeadChannel(channel).catch((e) =>
-        this.logger.warn(`could not warn admins about channel ${channel.id}: ${e?.message ?? e}`),
+        this.logger.warn(`could not warn admins about channel ${channel.id}: ${e?.message ?? e}`)
       );
       this.logger.warn(`auto-disabled notification channel ${channel.id} (${channel.name})`);
     }
@@ -476,13 +476,13 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
   }) {
     const admins = await this.prisma.organizationMember.findMany({
       where: { organizationId: channel.organizationId, role: { in: ['owner', 'admin'] } },
-      select: { user: { select: { email: true } } },
+      select: { user: { select: { email: true } } }
     });
     const recipients = admins.map((a) => a.user.email).filter(Boolean);
     if (recipients.length === 0) return;
     const org = await this.prisma.organization.findUnique({
       where: { id: channel.organizationId },
-      select: { slug: true },
+      select: { slug: true }
     });
     await this.email.sendNotificationEmail({
       recipients,
@@ -490,7 +490,7 @@ export class NotificationDeliveryService implements OnModuleInit, OnModuleDestro
       title: `Notifications to "${channel.name}" have been turned off`,
       body: `Orchard could not reach this channel for 24 hours, so it has been disabled to stop the retries piling up. Last error: ${channel.lastError ?? 'unknown'}. Fix the webhook and re-enable the channel, then use Replay to send anything you missed.`,
       contextLine: channel.lastErrorAt ? `Failing since ${channel.lastErrorAt.toISOString()}` : '',
-      ctaUrl: org ? `${this.frontendUrl}/${org.slug}/settings` : this.frontendUrl,
+      ctaUrl: org ? `${this.frontendUrl}/${org.slug}/settings` : this.frontendUrl
     });
   }
 }

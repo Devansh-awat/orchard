@@ -10,6 +10,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [PrismaModule, KubernetesModule, UsersModule, AuthModule],
   controllers: [TailscaleController],
   providers: [TailscaleService],
-  exports: [TailscaleService],
+  exports: [TailscaleService]
 })
 export class TailscaleModule {}

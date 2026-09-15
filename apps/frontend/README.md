@@ -18,7 +18,7 @@ Frontend-only commands:
 ```bash
 pnpm --filter frontend dev              # vite on :3000
 pnpm --filter frontend build
-pnpm --filter frontend exec prettier --write .
+pnpm --filter frontend format
 pnpm --filter frontend check:design     # design-system guardrails
 ```
 

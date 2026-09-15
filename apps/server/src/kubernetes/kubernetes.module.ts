@@ -12,7 +12,21 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Module({
   imports: [AuthModule, PrismaModule],
   controllers: [KubernetesController],
-  providers: [KubernetesService, K8sCnpgService, K8sWorkloadService, K8sNetworkService, K8sNamespaceService, R2ProxyService],
-  exports: [KubernetesService, K8sCnpgService, K8sWorkloadService, K8sNetworkService, K8sNamespaceService, R2ProxyService],
+  providers: [
+    KubernetesService,
+    K8sCnpgService,
+    K8sWorkloadService,
+    K8sNetworkService,
+    K8sNamespaceService,
+    R2ProxyService
+  ],
+  exports: [
+    KubernetesService,
+    K8sCnpgService,
+    K8sWorkloadService,
+    K8sNetworkService,
+    K8sNamespaceService,
+    R2ProxyService
+  ]
 })
 export class KubernetesModule {}

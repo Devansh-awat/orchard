@@ -79,7 +79,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly jobConsumer: JobMirrorConsumer,
     private readonly workloadConsumer: WorkloadMirrorConsumer,
     private readonly sandboxConsumer: SandboxMirrorConsumer,
-    private readonly sandboxK8s: SandboxK8sService,
+    private readonly sandboxK8s: SandboxK8sService
   ) {}
 
   async onModuleInit() {
@@ -100,7 +100,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       workloads: this.workloadConsumer,
       sandboxes: this.sandboxConsumer,
       sandboxScope: await this.resolveSandboxScope(),
-      namespaceRefs: (ns) => this.resolveNamespaceRefs(ns),
+      namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
 
     for (const def of defs) {
@@ -108,15 +108,15 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         def,
         elector: this.lease.register(def.lease, {
           autoStart: false,
-          shouldAcquire: () => this.canAcquireMore(),
+          shouldAcquire: () => this.canAcquireMore()
         }),
         informers: [],
         activity: {
           lastListAt: null,
           lastEventAt: null,
           resourceVersion: null,
-          unhealthy: new Map(),
-        },
+          unhealthy: new Map()
+        }
       };
       runtime.elector.on('acquired', () => {
         void this.startShard(runtime);
@@ -149,10 +149,12 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       }, RETENTION_INTERVAL_MS),
       setInterval(() => {
         void this.sweepCrashStates();
-      }, CRASH_SWEEP_INTERVAL_MS),
+      }, CRASH_SWEEP_INTERVAL_MS)
     ];
     for (const t of this.timers) t.unref?.();
-    this.logger.log(`mirror initialized with ${defs.length} shards (${this.lease.replicaIdentity})`);
+    this.logger.log(
+      `mirror initialized with ${defs.length} shards (${this.lease.replicaIdentity})`
+    );
   }
 
   async onModuleDestroy() {
@@ -173,7 +175,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         SELECT count(*)::bigint AS count
         FROM "k8s_objects"
         WHERE "derived_version" IS DISTINCT FROM "resource_version"
-      `,
+      `
     ]);
     const now = Date.now();
     const shards: ShardHealth[] = [];
@@ -198,7 +200,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         // it is written on a timer regardless of whether the watch works. A
         // shard is stale when nobody holds it, when the holder stopped
         // heartbeating, or when the holder says its watch is down.
-        stale: !row.holder || now - row.updatedAt.getTime() > STALE_MS || !row.healthy,
+        stale: !row.holder || now - row.updatedAt.getTime() > STALE_MS || !row.healthy
       });
     }
     for (const runtime of this.shards.values()) {
@@ -212,7 +214,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
           resyncRepairs: 0,
           healthy: false,
           lastError: null,
-          stale: true,
+          stale: true
         });
       }
     }
@@ -229,22 +231,20 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     if (repairs > 0) {
       await this.prisma.k8sMirrorHeartbeat.updateMany({
         where: { shard: name },
-        data: { resyncRepairs: { increment: repairs }, lastResyncAt: new Date() },
+        data: { resyncRepairs: { increment: repairs }, lastResyncAt: new Date() }
       });
       this.logger.warn(`resync repaired ${repairs} objects in shard ${name}`);
     } else {
       await this.prisma.k8sMirrorHeartbeat.updateMany({
         where: { shard: name },
-        data: { lastResyncAt: new Date() },
+        data: { lastResyncAt: new Date() }
       });
     }
     return repairs;
   }
 
   heldShards(): string[] {
-    return [...this.shards.values()]
-      .filter((r) => r.elector.isHolder())
-      .map((r) => r.def.name);
+    return [...this.shards.values()].filter((r) => r.elector.isHolder()).map((r) => r.def.name);
   }
 
   private canAcquireMore(): boolean {
@@ -270,8 +270,8 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
             if (healthy) runtime.activity.unhealthy.delete(config.kind);
             else runtime.activity.unhealthy.set(config.kind, error ?? 'watch down');
             void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
-          },
-        }),
+          }
+        })
     );
     await this.writeHeartbeat(runtime, this.lease.replicaIdentity);
     for (const informer of runtime.informers) {
@@ -279,9 +279,12 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`shard ${runtime.def.name} informer start failed: ${err?.message ?? err}`);
       });
     }
-    runtime.resyncTimer = setInterval(() => {
-      void this.resyncShard(runtime.def.name);
-    }, RESYNC_INTERVAL_MS + Math.floor(Math.random() * 60_000));
+    runtime.resyncTimer = setInterval(
+      () => {
+        void this.resyncShard(runtime.def.name);
+      },
+      RESYNC_INTERVAL_MS + Math.floor(Math.random() * 60_000)
+    );
     runtime.resyncTimer.unref?.();
   }
 
@@ -300,7 +303,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       await this.prisma.k8sMirrorHeartbeat
         .updateMany({
           where: { shard: runtime.def.name, holder: this.lease.replicaIdentity },
-          data: { holder: null },
+          data: { holder: null }
         })
         .catch(() => {});
     }
@@ -313,7 +316,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       .upsert({
         where: { shard },
         create: { shard, holder: this.lease.replicaIdentity },
-        update: { holder: this.lease.replicaIdentity },
+        update: { holder: this.lease.replicaIdentity }
       })
       .catch(() => {});
   }
@@ -323,7 +326,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       const cutoff = new Date(Date.now() - PRESENCE_FRESH_MS);
       const rows = await this.prisma.k8sMirrorHeartbeat.findMany({
         where: { shard: { startsWith: PRESENCE_PREFIX }, updatedAt: { gte: cutoff } },
-        select: { shard: true },
+        select: { shard: true }
       });
       const others = rows.map((r) => r.shard.slice(PRESENCE_PREFIX.length));
       this.presentReplicas = new Set([...others, this.lease.replicaIdentity]).size;
@@ -340,7 +343,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     const excess = held.length - cap;
     if (excess <= 0) return;
     this.logger.log(
-      `holding ${held.length}/${this.shards.size} shards with ${this.presentReplicas} replicas present; resigning ${excess}`,
+      `holding ${held.length}/${this.shards.size} shards with ${this.presentReplicas} replicas present; resigning ${excess}`
     );
     for (const runtime of held.slice(-excess)) {
       await runtime.elector.resign().catch(() => {});
@@ -362,13 +365,19 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       lastEventAt: runtime.activity.lastEventAt,
       resourceVersion: runtime.activity.resourceVersion,
       healthy: failures.length === 0,
-      lastError: failures.length === 0 ? null : failures.map(([k, e]) => `${k}: ${e}`).join('; ').slice(0, 300),
+      lastError:
+        failures.length === 0
+          ? null
+          : failures
+              .map(([k, e]) => `${k}: ${e}`)
+              .join('; ')
+              .slice(0, 300)
     };
     await this.prisma.k8sMirrorHeartbeat
       .upsert({
         where: { shard: runtime.def.name },
         create: { shard: runtime.def.name, ...data },
-        update: data,
+        update: data
       })
       .catch(() => {});
   }
@@ -384,7 +393,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         this.orgEvents.emitLocal({
           organizationId: orgId,
           type: 'engine.changed',
-          payload: { stale },
+          payload: { stale }
         });
       }
     } catch {}
@@ -407,7 +416,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
     await this.prisma.k8sMirrorHeartbeat
       .deleteMany({
-        where: { shard: { startsWith: PRESENCE_PREFIX }, updatedAt: { lt: presenceCutoff } },
+        where: { shard: { startsWith: PRESENCE_PREFIX }, updatedAt: { lt: presenceCutoff } }
       })
       .catch(() => {});
   }
@@ -421,7 +430,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     try {
       return {
         namespace: this.sandboxK8s.namespace,
-        instanceId: await this.sandboxK8s.instanceId(),
+        instanceId: await this.sandboxK8s.instanceId()
       };
     } catch (e: any) {
       this.logger.warn(`sandbox mirror shard disabled: ${e?.message}`);
@@ -438,7 +447,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     // as long afterwards as none of its objects changed.
     const project = await this.prisma.project.findFirst({
       where: { namespace },
-      select: { id: true },
+      select: { id: true }
     });
     const refs: MirrorRefs = project ? { projectId: project.id } : {};
     this.nsRefCache.set(namespace, { refs, exp: Date.now() + NS_REF_TTL_MS });

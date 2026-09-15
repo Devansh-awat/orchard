@@ -13,7 +13,6 @@ import { ProjectsModule } from '../projects/projects.module';
   imports: [PrismaModule, UsersModule, AuthModule, forwardRef(() => ProjectsModule)],
   controllers: [GitHubController, GithubAppSetupController],
   providers: [GitHubService, GithubAppConfigService, GithubAppSetupService],
-  exports: [GitHubService, GithubAppConfigService],
+  exports: [GitHubService, GithubAppConfigService]
 })
 export class GitHubModule {}
-

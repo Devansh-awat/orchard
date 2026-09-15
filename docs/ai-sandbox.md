@@ -140,24 +140,23 @@ clone`/`push` against their repos works without setup. An optional
 ## API
 
 All routes are user-scoped: you see and touch only your own sandboxes
-(superadmins excepted). Disabled feature or foreign sandbox both read as
-404.
+(superadmins excepted). Disabled feature or foreign sandbox both read as 404.
 
-| Route | Scope | Notes |
-| --- | --- | --- |
-| `POST /sandboxes` | deploy | create; optional name, repoUrl, sshIdentityId, setupScript |
-| `GET /sandboxes` | read | returns `{ sandboxes, maxSandboxes }` |
-| `GET /sandboxes/:id` | read | |
-| `PATCH /sandboxes/:id` | deploy | rename, switch SSH identity, edit setup script |
-| `POST /sandboxes/:id/start` | deploy | resume a suspended sandbox |
-| `POST /sandboxes/:id/stop` | deploy | suspend; home volume persists |
-| `DELETE /sandboxes/:id` | deploy | removes CR, secret, and volumes |
-| `GET /sandboxes/:id/ssh` | exec | websocket upgrade; raw SSH bytes |
-| `POST /sandboxes/:id/chat` | exec | Cloud Code: SSE stream of the in-sandbox claude agent |
-| `GET /sandboxes/:id/changes` | exec | git status and diffstat, scoped with `?repo=` |
-| `GET /sandboxes/:id/diff` | exec | git diff, whole tree or one file via `?file=`, scoped with `?repo=` |
-| `GET /sandboxes/:id/repos` | exec | list git repositories cloned into the sandbox |
-| `POST /sandboxes/:id/repos` | deploy | clone another repository into the sandbox |
+| Route                        | Scope  | Notes                                                               |
+| ---------------------------- | ------ | ------------------------------------------------------------------- |
+| `POST /sandboxes`            | deploy | create; optional name, repoUrl, sshIdentityId, setupScript          |
+| `GET /sandboxes`             | read   | returns `{ sandboxes, maxSandboxes }`                               |
+| `GET /sandboxes/:id`         | read   |                                                                     |
+| `PATCH /sandboxes/:id`       | deploy | rename, switch SSH identity, edit setup script                      |
+| `POST /sandboxes/:id/start`  | deploy | resume a suspended sandbox                                          |
+| `POST /sandboxes/:id/stop`   | deploy | suspend; home volume persists                                       |
+| `DELETE /sandboxes/:id`      | deploy | removes CR, secret, and volumes                                     |
+| `GET /sandboxes/:id/ssh`     | exec   | websocket upgrade; raw SSH bytes                                    |
+| `POST /sandboxes/:id/chat`   | exec   | Cloud Code: SSE stream of the in-sandbox claude agent               |
+| `GET /sandboxes/:id/changes` | exec   | git status and diffstat, scoped with `?repo=`                       |
+| `GET /sandboxes/:id/diff`    | exec   | git diff, whole tree or one file via `?file=`, scoped with `?repo=` |
+| `GET /sandboxes/:id/repos`   | exec   | list git repositories cloned into the sandbox                       |
+| `POST /sandboxes/:id/repos`  | deploy | clone another repository into the sandbox                           |
 
 A sandbox is a computer, not a repo checkout: clone as many repositories into it as you like (each lands in `/persist/home/<name>` on the persistent volume) and point the agent's working directory at any of them per message.
 | `GET /sandboxes/credentials` | read | `{ claude: boolean, openai: boolean }` |

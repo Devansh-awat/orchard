@@ -52,7 +52,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['clientId', 'clientSecret'],
     docsUrl: 'https://console.cloud.google.com/apis/credentials',
-    hint: 'Create an OAuth 2.0 Web application credential and paste the client id and secret.',
+    hint: 'Create an OAuth 2.0 Web application credential and paste the client id and secret.'
   },
   {
     id: 'microsoft',
@@ -64,7 +64,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['tenant', 'clientId', 'clientSecret'],
     docsUrl: 'https://entra.microsoft.com',
-    hint: 'Use your directory (tenant) ID, or "organizations" to accept any work account.',
+    hint: 'Use your directory (tenant) ID, or "organizations" to accept any work account.'
   },
   {
     id: 'github',
@@ -78,7 +78,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'read:user user:email',
     fields: ['clientId', 'clientSecret'],
     docsUrl: 'https://github.com/settings/developers',
-    hint: 'GitHub has no OIDC discovery, so we read the primary verified email from its API.',
+    hint: 'GitHub has no OIDC discovery, so we read the primary verified email from its API.'
   },
   {
     id: 'gitlab',
@@ -90,7 +90,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['clientId', 'clientSecret', 'issuerUrl'],
     docsUrl: 'https://docs.gitlab.com/ee/integration/openid_connect_provider.html',
-    hint: 'Self-managed GitLab works too, point the issuer at your own instance.',
+    hint: 'Self-managed GitLab works too, point the issuer at your own instance.'
   },
   {
     id: 'okta',
@@ -102,7 +102,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['domain', 'clientId', 'clientSecret'],
     docsUrl: 'https://developer.okta.com/docs/guides/find-your-domain/',
-    hint: 'Your Okta domain looks like acme.okta.com.',
+    hint: 'Your Okta domain looks like acme.okta.com.'
   },
   {
     id: 'auth0',
@@ -113,7 +113,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     issuerTemplate: 'https://{domain}/',
     scopes: 'openid email profile',
     fields: ['domain', 'clientId', 'clientSecret'],
-    docsUrl: 'https://auth0.com/docs/get-started/applications',
+    docsUrl: 'https://auth0.com/docs/get-started/applications'
   },
   {
     id: 'keycloak',
@@ -125,7 +125,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     scopes: 'openid email profile',
     fields: ['domain', 'tenant', 'clientId', 'clientSecret'],
     docsUrl: 'https://www.keycloak.org/docs/latest/server_admin/',
-    hint: 'Domain is the Keycloak host, tenant is the realm name.',
+    hint: 'Domain is the Keycloak host, tenant is the realm name.'
   },
   {
     id: 'authentik',
@@ -136,7 +136,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     issuerTemplate: 'https://{domain}/application/o/{tenant}/',
     scopes: 'openid email profile',
     fields: ['domain', 'tenant', 'clientId', 'clientSecret'],
-    hint: 'Tenant is the application slug you gave the provider in Authentik.',
+    hint: 'Tenant is the application slug you gave the provider in Authentik.'
   },
   {
     id: 'onelogin',
@@ -146,7 +146,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with OneLogin',
     issuerTemplate: 'https://{domain}/oidc/2',
     scopes: 'openid email profile',
-    fields: ['domain', 'clientId', 'clientSecret'],
+    fields: ['domain', 'clientId', 'clientSecret']
   },
   {
     id: 'jumpcloud',
@@ -156,7 +156,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with JumpCloud',
     issuerUrl: 'https://oauth.id.jumpcloud.com/',
     scopes: 'openid email profile',
-    fields: ['clientId', 'clientSecret'],
+    fields: ['clientId', 'clientSecret']
   },
   {
     id: 'generic',
@@ -166,7 +166,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with SSO',
     scopes: 'openid email profile',
     fields: ['issuerUrl', 'clientId', 'clientSecret', 'scopes'],
-    hint: 'Any spec-compliant IdP that publishes /.well-known/openid-configuration.',
+    hint: 'Any spec-compliant IdP that publishes /.well-known/openid-configuration.'
   },
   {
     id: 'saml',
@@ -176,8 +176,8 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     buttonLabel: 'Continue with SSO',
     scopes: '',
     fields: ['samlMetadataUrl', 'samlEntryPoint', 'samlIdpEntityId', 'samlCertificate'],
-    hint: 'Upload the IdP metadata URL, or paste the sign-in URL and signing certificate.',
-  },
+    hint: 'Upload the IdP metadata URL, or paste the sign-in URL and signing certificate.'
+  }
 ];
 
 export function findPreset(id: string | null | undefined): ProviderPreset | null {
@@ -201,7 +201,7 @@ function boundedInput(value: string | null | undefined): string {
 /** Fill a preset's issuer template from the tenant/domain the admin typed. */
 export function resolveIssuerUrl(
   preset: ProviderPreset | null,
-  input: { issuerUrl?: string | null; tenant?: string | null; domain?: string | null },
+  input: { issuerUrl?: string | null; tenant?: string | null; domain?: string | null }
 ): string | null {
   const issuerUrl = boundedInput(input.issuerUrl);
   if (issuerUrl) return stripTrailingSlashes(issuerUrl) || null;
@@ -232,6 +232,6 @@ export function publicPresets() {
     issuerUrl: p.issuerUrl ?? null,
     issuerTemplate: p.issuerTemplate ?? null,
     docsUrl: p.docsUrl ?? null,
-    hint: p.hint ?? null,
+    hint: p.hint ?? null
   }));
 }

@@ -22,7 +22,7 @@ class FakeSettings {
 
 const fakeCrypto = {
   encrypt: (v: string) => `enc:${v}`,
-  decrypt: (v: string) => (v.startsWith('enc:') ? v.slice(4) : v),
+  decrypt: (v: string) => (v.startsWith('enc:') ? v.slice(4) : v)
 };
 
 function build() {
@@ -76,7 +76,7 @@ test('a locked field is refused rather than quietly dropped', async () => {
   await withEnv({ SMTP_HOST: 'env.example.com' }, async () => {
     await assert.rejects(
       () => service.save(EMAIL, { host: 'attempted.example.com', user: 'someone' }),
-      /SMTP_HOST/,
+      /SMTP_HOST/
     );
   });
 });
@@ -147,7 +147,7 @@ test('saving object storage reaches the readers that cannot inject the service',
       await service.save(STORAGE, { accountId: 'acct123' });
       assert.equal(objectStorage().endpoint, 'https://acct123.r2.cloudflarestorage.com');
       assert.equal(objectStorage().publicUrl, 'https://pub-acct123.r2.dev');
-    },
+    }
   );
 });
 
@@ -170,7 +170,7 @@ test('required fields decide whether a section counts as configured', async () =
       assert.equal(service.isConfigured(STORAGE), false);
       await service.save(STORAGE, { secretAccessKey: 'c' });
       assert.equal(service.isConfigured(STORAGE), true);
-    },
+    }
   );
 });
 
@@ -180,7 +180,7 @@ test('wildcard domains parse from stored config when no variable is set', async 
     await service.save(WILDCARD, { domains: 'apps.example.com=wildcard-tls' });
     const { platformWildcardDomains } = await import('../src/projects/projects.utils');
     assert.deepEqual(platformWildcardDomains(), [
-      { suffix: '.apps.example.com', secret: 'wildcard-tls' },
+      { suffix: '.apps.example.com', secret: 'wildcard-tls' }
     ]);
   });
 });
@@ -192,7 +192,7 @@ test('an ingress holding its own certificate moves onto a newly added wildcard',
     const { desiredWildcardTls } = await import('../src/projects/projects.utils');
     assert.deepEqual(
       desiredWildcardTls('app.apps.example.com', 'leaf-cert-abc', 'letsencrypt-prod'),
-      { secretName: 'wildcard-tls', clusterIssuer: null },
+      { secretName: 'wildcard-tls', clusterIssuer: null }
     );
   });
 });
@@ -204,7 +204,7 @@ test('an ingress already on the wildcard is left alone', async () => {
     const { desiredWildcardTls } = await import('../src/projects/projects.utils');
     assert.equal(
       desiredWildcardTls('app.apps.example.com', 'wildcard-tls', 'letsencrypt-prod'),
-      null,
+      null
     );
   });
 });
@@ -226,7 +226,7 @@ test('removing the wildcard gives its ingresses a certificate of their own again
     const { desiredWildcardTls } = await import('../src/projects/projects.utils');
     assert.deepEqual(
       desiredWildcardTls('app.apps.example.com', 'wildcard-tls', 'letsencrypt-prod'),
-      { secretName: null, clusterIssuer: 'letsencrypt-prod' },
+      { secretName: null, clusterIssuer: 'letsencrypt-prod' }
     );
   });
 });
@@ -250,7 +250,7 @@ test('the environment locks the instance public IP the same as every other field
   await withEnv({ PUBLIC_EXPOSURE_IP: '198.51.100.7' }, async () => {
     await assert.rejects(
       () => service.save(NETWORK, { publicIp: '203.0.113.10' }),
-      /PUBLIC_EXPOSURE_IP/,
+      /PUBLIC_EXPOSURE_IP/
     );
     assert.equal(service.defaultPublicIp(), '198.51.100.7');
     assert.deepEqual(service.lockedFields(NETWORK), ['publicIp']);

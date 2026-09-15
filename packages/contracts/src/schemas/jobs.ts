@@ -11,7 +11,7 @@ const runStatus = z.enum([
   'failed',
   'canceled',
   'skipped',
-  'timed_out',
+  'timed_out'
 ]);
 const runTrigger = z.enum(['manual', 'api', 'cron']);
 
@@ -21,7 +21,7 @@ const stepInput = z
   .object({
     name: z.string().max(255).optional().describe('Step display name'),
     type: stepType.describe(
-      "script = inline script in a curated runtime; app = command in an existing deployment's image+env; image = arbitrary container image",
+      "script = inline script in a curated runtime; app = command in an existing deployment's image+env; image = arbitrary container image"
     ),
     script: z.string().max(65536).optional().describe('Script source (script type)'),
     scriptRuntime: scriptRuntime.optional().describe('Script runtime (script type)'),
@@ -34,7 +34,7 @@ const stepInput = z
       .string()
       .optional()
       .describe(
-        'Shell command; required for app steps, optional for image steps (defaults to the image entrypoint)',
+        'Shell command; required for app steps, optional for image steps (defaults to the image entrypoint)'
       ),
     envVars: z
       .array(envVar)
@@ -59,7 +59,7 @@ const stepInput = z
     memoryRequestBytes: z
       .union([z.string(), z.number()])
       .optional()
-      .describe('Memory request in bytes'),
+      .describe('Memory request in bytes')
   })
   .passthrough();
 
@@ -75,7 +75,7 @@ const jobCreateRequest = z
     concurrencyPolicy: concurrencyPolicy
       .optional()
       .describe(
-        'forbid (default) skips a scheduled fire while a run is active; allow runs them in parallel',
+        'forbid (default) skips a scheduled fire while a run is active; allow runs them in parallel'
       ),
     enabled: z.boolean().optional().describe('false creates the job with a paused schedule'),
     runTimeoutSeconds: z
@@ -85,7 +85,7 @@ const jobCreateRequest = z
       .max(21600)
       .optional()
       .describe('Whole-run timeout in seconds (default 21600)'),
-    steps: z.array(stepInput).min(1).max(10).describe('Ordered pipeline steps'),
+    steps: z.array(stepInput).min(1).max(10).describe('Ordered pipeline steps')
   })
   .passthrough();
 
@@ -97,17 +97,19 @@ const jobPatchRequest = z
       .string()
       .nullable()
       .optional()
-      .describe('New 5-field cron (UTC unless timeZone is set), or null to make the job manual-only'),
+      .describe(
+        'New 5-field cron (UTC unless timeZone is set), or null to make the job manual-only'
+      ),
     timeZone: z.string().nullable().optional(),
     concurrencyPolicy: concurrencyPolicy.optional(),
     enabled: z.boolean().optional().describe('false pauses the schedule, true resumes it'),
-    runTimeoutSeconds: z.number().int().min(60).max(21600).nullable().optional(),
+    runTimeoutSeconds: z.number().int().min(60).max(21600).nullable().optional()
   })
   .passthrough();
 
 const replaceStepsRequest = z
   .object({
-    steps: z.array(stepInput).min(1).max(10).describe('The new ordered step list'),
+    steps: z.array(stepInput).min(1).max(10).describe('The new ordered step list')
   })
   .passthrough();
 
@@ -119,7 +121,7 @@ const lastRunBrief = z
     trigger: runTrigger,
     startedAt: z.string().nullable(),
     finishedAt: z.string().nullable(),
-    createdAt: z.string(),
+    createdAt: z.string()
   })
   .passthrough();
 
@@ -129,7 +131,7 @@ const recentRunBrief = z
     number: z.number().int(),
     status: runStatus,
     startedAt: z.string().nullable(),
-    finishedAt: z.string().nullable(),
+    finishedAt: z.string().nullable()
   })
   .passthrough();
 
@@ -141,21 +143,22 @@ const jobSummary = z
     projectId: z.string(),
     projectName: z.string().optional(),
     projectSlug: z.string().optional(),
-    organizationId: z.string().optional().describe('Present on detail responses, absent on list responses'),
+    organizationId: z
+      .string()
+      .optional()
+      .describe('Present on detail responses, absent on list responses'),
     scheduleCron: z.string().nullable(),
     timeZone: z.string().nullable(),
     enabled: z.boolean(),
     concurrencyPolicy,
     runTimeoutSeconds: z.number().int(),
     stepCount: z.number().int().optional(),
-    stepSummaries: z
-      .array(z.object({ name: z.string(), type: stepType }).passthrough())
-      .optional(),
+    stepSummaries: z.array(z.object({ name: z.string(), type: stepType }).passthrough()).optional(),
     lastRun: lastRunBrief.nullable(),
     recentRuns: z.array(recentRunBrief),
     nextRunAt: z.string().nullable(),
     createdAt: z.string(),
-    updatedAt: z.string(),
+    updatedAt: z.string()
   })
   .passthrough();
 
@@ -175,7 +178,7 @@ const stepDetail = z
     // BigInt column; the server serializes it to a string
     memoryRequestBytes: z.union([z.string(), z.number()]).nullable(),
     timeoutSeconds: z.number().int(),
-    retries: z.number().int(),
+    retries: z.number().int()
   })
   .passthrough();
 
@@ -194,7 +197,7 @@ const runStep = z
     reason: z.string().nullable().optional(),
     logsTruncated: z.boolean().optional(),
     startedAt: z.string().nullable().optional(),
-    finishedAt: z.string().nullable().optional(),
+    finishedAt: z.string().nullable().optional()
   })
   .passthrough();
 
@@ -216,14 +219,14 @@ const runDetail = z
       .object({ id: z.string(), username: z.string(), name: z.string() })
       .passthrough()
       .nullable(),
-    steps: z.array(runStep).optional(),
+    steps: z.array(runStep).optional()
   })
   .passthrough();
 
 const runsPage = z
   .object({
     runs: z.array(runDetail),
-    nextCursor: z.string().nullable(),
+    nextCursor: z.string().nullable()
   })
   .passthrough();
 
@@ -231,69 +234,69 @@ const stepLogs = z
   .object({
     logs: z.string(),
     truncated: z.boolean(),
-    live: z.boolean().describe('true when the step is running and this is a live tail'),
+    live: z.boolean().describe('true when the step is running and this is a live tail')
   })
   .passthrough();
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /organizations/:orgId/jobs': {
     summary: 'List jobs across an organization',
-    response: z.array(jobSummary),
+    response: z.array(jobSummary)
   },
   'GET /projects/:projectId/jobs': {
     summary: 'List jobs in a project',
-    response: z.array(jobSummary),
+    response: z.array(jobSummary)
   },
   'POST /projects/:projectId/jobs': {
     summary: 'Create a job (ordered pipeline of steps, cron and/or on demand)',
     request: jobCreateRequest,
-    response: jobDetail,
+    response: jobDetail
   },
   'GET /jobs/:id': {
     summary: "Get a job's full definition including its ordered steps",
-    response: jobDetail,
+    response: jobDetail
   },
   'PATCH /jobs/:id': {
     summary: "Update a job's name, description, schedule, concurrency policy, or enabled state",
     request: jobPatchRequest,
-    response: jobDetail,
+    response: jobDetail
   },
   'PUT /jobs/:id/steps': {
     summary: "Replace a job's entire ordered step list",
     request: replaceStepsRequest,
-    response: jobDetail,
+    response: jobDetail
   },
   'DELETE /jobs/:id': {
     summary: 'Delete a job, its schedule, and its run history',
-    response: z.object({ success: z.boolean() }).passthrough(),
+    response: z.object({ success: z.boolean() }).passthrough()
   },
   'POST /jobs/:id/runs': {
     summary: 'Trigger a job run now (409 if a run is active and the policy is forbid)',
     request: z
       .object({
-        allowConcurrent: z.boolean().optional().describe('Start even if another run is active'),
+        allowConcurrent: z.boolean().optional().describe('Start even if another run is active')
       })
       .passthrough(),
-    response: runDetail,
+    response: runDetail
   },
   'GET /jobs/:id/runs': {
     summary: "List a job's run history, newest first (cursor-paginated)",
     request: z.object({
       cursor: z.string().optional().describe('Pagination cursor from a previous call'),
-      limit: z.number().int().min(1).max(100).optional().describe('Page size (default 25)'),
+      limit: z.number().int().min(1).max(100).optional().describe('Page size (default 25)')
     }),
-    response: runsPage,
+    response: runsPage
   },
   'GET /job-runs/:runId': {
     summary: "Get a run's detail: status, trigger, timing, and per-step results",
-    response: runDetail,
+    response: runDetail
   },
   'POST /job-runs/:runId/cancel': {
     summary: 'Cancel an in-progress run; remaining steps are skipped',
-    response: runDetail,
+    response: runDetail
   },
   'GET /job-runs/:runId/steps/:order/logs': {
     summary: 'Get the logs of one step of a run (live tail while running)',
-    response: stepLogs,
-  },
+    response: stepLogs
+  }
 };

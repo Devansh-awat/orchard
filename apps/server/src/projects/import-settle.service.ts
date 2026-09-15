@@ -16,7 +16,7 @@ export class ImportSettleService {
     private readonly k8sCnpg: K8sCnpgService,
     private readonly leader: LeaderElectionService,
     @Inject(forwardRef(() => QuotasService))
-    private readonly quotas: QuotasService,
+    private readonly quotas: QuotasService
   ) {}
 
   @Interval(30_000)
@@ -32,9 +32,9 @@ export class ImportSettleService {
           clusterName: true,
           projectId: true,
           cpuRequestMilli: true,
-          memoryRequestBytes: true,
+          memoryRequestBytes: true
         },
-        take: 20,
+        take: 20
       });
       for (const db of boosted) {
         if (!db.namespace || !db.clusterName) continue;
@@ -45,17 +45,22 @@ export class ImportSettleService {
             continue;
           }
           if (!status.ready) continue;
-          const requested = await this.quotas.resolvePodResources(db.projectId, {
-            cpuRequestMilli: db.cpuRequestMilli,
-            memoryRequestBytes: db.memoryRequestBytes != null ? Number(db.memoryRequestBytes) : null,
-          }, 'postgres');
+          const requested = await this.quotas.resolvePodResources(
+            db.projectId,
+            {
+              cpuRequestMilli: db.cpuRequestMilli,
+              memoryRequestBytes:
+                db.memoryRequestBytes != null ? Number(db.memoryRequestBytes) : null
+            },
+            'postgres'
+          );
           await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, {
             cpuMilli: requested.cpuMilli,
-            memoryBytes: requested.memoryBytes,
+            memoryBytes: requested.memoryBytes
           });
           await this.clearFlag(db.id);
           this.logger.log(
-            `settled import boost for database ${db.id} back to ${requested.cpuMilli}m / ${requested.memoryBytes} bytes`,
+            `settled import boost for database ${db.id} back to ${requested.cpuMilli}m / ${requested.memoryBytes} bytes`
           );
         } catch (e: any) {
           this.logger.warn(`import settle failed for database ${db.id}: ${e?.message ?? e}`);
@@ -69,7 +74,7 @@ export class ImportSettleService {
   private async clearFlag(databaseId: string) {
     await this.prisma.database.updateMany({
       where: { id: databaseId, importBoosted: true },
-      data: { importBoosted: false },
+      data: { importBoosted: false }
     });
   }
 }

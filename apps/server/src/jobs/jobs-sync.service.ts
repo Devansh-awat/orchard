@@ -8,7 +8,7 @@ import {
   JobsOrchestratorService,
   RunContext,
   LABEL_JOB_ID,
-  runScriptsConfigMapName,
+  runScriptsConfigMapName
 } from './jobs-orchestrator.service';
 import { JobMirrorConsumer, jobTerminalOutcome } from '../mirror/consumers/job-mirror.consumer';
 import { RUN_ACTIVE_STATUSES } from './jobs.service';
@@ -29,7 +29,7 @@ export class JobsSyncService {
     private readonly kubernetes: KubernetesService,
     private readonly leader: LeaderElectionService,
     private readonly orchestrator: JobsOrchestratorService,
-    private readonly informer: JobMirrorConsumer,
+    private readonly informer: JobMirrorConsumer
   ) {}
 
   private batchApi() {
@@ -69,10 +69,10 @@ export class JobsSyncService {
           select: {
             id: true,
             runTimeoutSeconds: true,
-            project: { select: { id: true, namespace: true, organizationId: true } },
-          },
-        },
-      },
+            project: { select: { id: true, namespace: true, organizationId: true } }
+          }
+        }
+      }
     });
 
     const batch = this.batchApi();
@@ -83,12 +83,14 @@ export class JobsSyncService {
         jobId: run.job.id,
         projectId: run.job.project.id,
         organizationId: run.job.project.organizationId,
-        namespace: run.job.project.namespace,
+        namespace: run.job.project.namespace
       };
 
       const startedAt = run.startedAt ?? run.createdAt;
       if (now - startedAt.getTime() > run.job.runTimeoutSeconds * 1000) {
-        this.logger.warn(`Run ${run.id} exceeded ${run.job.runTimeoutSeconds}s wall clock; timing out`);
+        this.logger.warn(
+          `Run ${run.id} exceeded ${run.job.runTimeoutSeconds}s wall clock; timing out`
+        );
         for (const step of run.steps) {
           if (step.status === 'running' && step.k8sJobName) {
             await this.orchestrator.deleteK8sJob(ctx.namespace, step.k8sJobName);
@@ -96,9 +98,14 @@ export class JobsSyncService {
         }
         await this.prisma.jobRunStep.updateMany({
           where: { runId: run.id, status: { in: ['pending', 'running'] } },
-          data: { status: 'skipped', finishedAt: new Date() },
+          data: { status: 'skipped', finishedAt: new Date() }
         });
-        await this.orchestrator.finishRun(ctx, run.id, 'timed_out', 'Run exceeded its total timeout');
+        await this.orchestrator.finishRun(
+          ctx,
+          run.id,
+          'timed_out',
+          'Run exceeded its total timeout'
+        );
         continue;
       }
 
@@ -107,7 +114,7 @@ export class JobsSyncService {
         if (now - run.createdAt.getTime() > NEVER_STARTED_GRACE_MS) {
           await this.prisma.jobRunStep.updateMany({
             where: { runId: run.id, status: 'pending' },
-            data: { status: 'skipped' },
+            data: { status: 'skipped' }
           });
           await this.orchestrator.finishRun(ctx, run.id, 'failed', 'Run never started');
         }
@@ -131,23 +138,27 @@ export class JobsSyncService {
         const stepStarted = current.startedAt ?? run.createdAt;
         if (now - stepStarted.getTime() > MISSING_JOB_GRACE_MS) {
           await this.prisma.jobRunStep.updateMany({
-            where: { runId: run.id, stepOrder: current.stepOrder, status: { in: ['pending', 'running'] } },
+            where: {
+              runId: run.id,
+              stepOrder: current.stepOrder,
+              status: { in: ['pending', 'running'] }
+            },
             data: {
               status: 'failed',
               reason: 'JobMissing (logs unavailable)',
-              finishedAt: new Date(),
-            },
+              finishedAt: new Date()
+            }
           });
           await this.prisma.jobRunStep.updateMany({
             where: { runId: run.id, stepOrder: { gt: current.stepOrder }, status: 'pending' },
-            data: { status: 'skipped' },
+            data: { status: 'skipped' }
           });
           await this.orchestrator.finishRun(
             ctx,
             run.id,
             'failed',
             `Step ${current.stepOrder}: Kubernetes job disappeared before completion`,
-            current.stepOrder,
+            current.stepOrder
           );
         }
         continue;
@@ -160,7 +171,7 @@ export class JobsSyncService {
           run.id,
           current.stepOrder,
           { succeeded: outcome.succeeded, reason: outcome.reason },
-          k8sJob,
+          k8sJob
         );
         continue;
       }
@@ -175,12 +186,16 @@ export class JobsSyncService {
         if (failure) {
           await this.orchestrator.deleteK8sJob(ctx.namespace, current.k8sJobName);
           await this.prisma.jobRunStep.updateMany({
-            where: { runId: run.id, stepOrder: current.stepOrder, status: { in: ['pending', 'running'] } },
-            data: { status: 'failed', reason: 'QuotaExceeded', finishedAt: new Date() },
+            where: {
+              runId: run.id,
+              stepOrder: current.stepOrder,
+              status: { in: ['pending', 'running'] }
+            },
+            data: { status: 'failed', reason: 'QuotaExceeded', finishedAt: new Date() }
           });
           await this.prisma.jobRunStep.updateMany({
             where: { runId: run.id, stepOrder: { gt: current.stepOrder }, status: 'pending' },
-            data: { status: 'skipped' },
+            data: { status: 'skipped' }
           });
           await this.orchestrator.finishRun(ctx, run.id, 'failed', failure, current.stepOrder);
         }
@@ -195,10 +210,10 @@ export class JobsSyncService {
         undefined,
         undefined,
         undefined,
-        `involvedObject.name=${jobName},involvedObject.kind=Job,reason=FailedCreate`,
+        `involvedObject.name=${jobName},involvedObject.kind=Job,reason=FailedCreate`
       );
       const item = (events.body.items ?? []).find((e) =>
-        /exceeded quota|forbidden/i.test(e.message ?? ''),
+        /exceeded quota|forbidden/i.test(e.message ?? '')
       );
       return item?.message ? `Pod creation failed: ${item.message.slice(0, 500)}` : null;
     } catch {
@@ -210,7 +225,12 @@ export class JobsSyncService {
     const batch = this.batchApi();
     let items: k8s.V1Job[] = [];
     try {
-      const res = await batch.listJobForAllNamespaces(undefined, undefined, undefined, LABEL_JOB_ID);
+      const res = await batch.listJobForAllNamespaces(
+        undefined,
+        undefined,
+        undefined,
+        LABEL_JOB_ID
+      );
       items = res.body.items ?? [];
     } catch (err: any) {
       this.logger.warn(`listJobForAllNamespaces failed: ${err?.message}`);
@@ -222,7 +242,7 @@ export class JobsSyncService {
       if (!uid) continue;
       const mapped = await this.prisma.jobRunStep.findUnique({
         where: { k8sJobUid: uid },
-        select: { id: true },
+        select: { id: true }
       });
       if (mapped) continue;
 
@@ -246,7 +266,7 @@ export class JobsSyncService {
   private async resyncCronJobs() {
     const jobs = await this.prisma.job.findMany({
       where: { OR: [{ scheduleCron: { not: null } }, { cronJobName: { not: null } }] },
-      select: { id: true },
+      select: { id: true }
     });
     for (const job of jobs) {
       await this.orchestrator
@@ -260,7 +280,12 @@ export class JobsSyncService {
     const core = this.coreApi();
     let items: k8s.V1Job[] = [];
     try {
-      const res = await batch.listJobForAllNamespaces(undefined, undefined, undefined, LABEL_JOB_ID);
+      const res = await batch.listJobForAllNamespaces(
+        undefined,
+        undefined,
+        undefined,
+        LABEL_JOB_ID
+      );
       items = res.body.items ?? [];
     } catch {
       return;
@@ -277,8 +302,8 @@ export class JobsSyncService {
         where: { k8sJobUid: uid },
         select: {
           status: true,
-          run: { select: { id: true, status: true } },
-        },
+          run: { select: { id: true, status: true } }
+        }
       });
       if (!step) continue;
       if (RUN_ACTIVE_STATUSES.includes(step.run.status as any)) continue;

@@ -624,8 +624,7 @@
 				bind:value={createDescription}
 				rows="3"
 				placeholder="A brief description..."
-				class="input w-full"
-			></textarea>
+				class="input w-full"></textarea>
 		</Field>
 		<Field label="Image URL (optional)" for="create-org-image-url">
 			<Input

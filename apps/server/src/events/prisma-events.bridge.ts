@@ -18,7 +18,7 @@ const WATCHED_MODELS = [
   'buildRun',
   'project',
   'ingress',
-  'organizationMember',
+  'organizationMember'
 ] as const;
 
 const WRITE_OPS = new Set([
@@ -30,7 +30,7 @@ const WRITE_OPS = new Set([
   'updateManyAndReturn',
   'upsert',
   'delete',
-  'deleteMany',
+  'deleteMany'
 ]);
 
 @Injectable()
@@ -41,29 +41,26 @@ export class PrismaEventsBridge implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly membershipCache: MembershipCacheService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   onModuleInit() {
-    const self = this;
     const extended = this.prisma.$extends({
       query: {
         $allModels: {
-          async $allOperations({ args, model, operation, query }) {
+          $allOperations: async ({ args, model, operation, query }) => {
             const result = await query(args);
             if (WRITE_OPS.has(operation)) {
-              self
-                .handle({ model, action: operation, args }, result)
-                .catch((err) =>
-                  self.logger.warn(
-                    `event bridge failed for ${model}.${operation}: ${err?.message ?? err}`,
-                  ),
-                );
+              this.handle({ model, action: operation, args }, result).catch((err) =>
+                this.logger.warn(
+                  `event bridge failed for ${model}.${operation}: ${err?.message ?? err}`
+                )
+              );
             }
             return result;
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
     // Replace per-model accessors on the original PrismaService instance so that
@@ -74,7 +71,7 @@ export class PrismaEventsBridge implements OnModuleInit {
       Object.defineProperty(this.prisma, m, {
         value,
         configurable: true,
-        writable: true,
+        writable: true
       });
     }
   }
@@ -105,11 +102,13 @@ export class PrismaEventsBridge implements OnModuleInit {
     }
   }
 
-  private async resolveOrgIdFromDeployment(deploymentId?: string): Promise<{ orgId: string; projectId: string } | null> {
+  private async resolveOrgIdFromDeployment(
+    deploymentId?: string
+  ): Promise<{ orgId: string; projectId: string } | null> {
     if (!deploymentId) return null;
     const dep = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { projectId: true, project: { select: { organizationId: true } } },
+      select: { projectId: true, project: { select: { organizationId: true } } }
     });
     if (!dep) return null;
     return { orgId: dep.project.organizationId, projectId: dep.projectId };
@@ -119,7 +118,7 @@ export class PrismaEventsBridge implements OnModuleInit {
     if (!projectId) return null;
     const p = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { organizationId: true },
+      select: { organizationId: true }
     });
     return p?.organizationId ?? null;
   }
@@ -137,11 +136,14 @@ export class PrismaEventsBridge implements OnModuleInit {
     const type: OrgEventType = isBuild ? 'build.changed' : 'deployment.changed';
     this.orgEvents.emit({ organizationId: ctx.orgId, type, id, projectId: ctx.projectId });
 
-    const buildStatus = typeof data.buildStatus === 'string' ? data.buildStatus : data.buildStatus?.set;
+    const buildStatus =
+      typeof data.buildStatus === 'string' ? data.buildStatus : data.buildStatus?.set;
     if (buildStatus === 'succeeded' || buildStatus === 'failed') {
       this.notifications
         .notifyDeploy(id!, buildStatus)
-        .catch((err) => this.logger.warn(`deploy notification failed for ${id}: ${err?.message ?? err}`));
+        .catch((err) =>
+          this.logger.warn(`deploy notification failed for ${id}: ${err?.message ?? err}`)
+        );
     }
   }
 
@@ -150,30 +152,31 @@ export class PrismaEventsBridge implements OnModuleInit {
     if (!id) return;
     const db = await this.prisma.database.findUnique({
       where: { id },
-      select: { projectId: true, project: { select: { organizationId: true } } },
+      select: { projectId: true, project: { select: { organizationId: true } } }
     });
     if (!db) return;
     this.orgEvents.emit({
       organizationId: db.project.organizationId,
       type: 'database.changed',
       id,
-      projectId: db.projectId,
+      projectId: db.projectId
     });
   }
 
   private async emitForDatabaseBackup(params: any, result: any) {
-    const databaseId = result?.databaseId ?? params?.args?.data?.databaseId ?? params?.args?.where?.databaseId;
+    const databaseId =
+      result?.databaseId ?? params?.args?.data?.databaseId ?? params?.args?.where?.databaseId;
     if (!databaseId) return;
     const db = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      select: { projectId: true, project: { select: { organizationId: true } } },
+      select: { projectId: true, project: { select: { organizationId: true } } }
     });
     if (!db) return;
     this.orgEvents.emit({
       organizationId: db.project.organizationId,
       type: 'database.changed',
       id: databaseId,
-      projectId: db.projectId,
+      projectId: db.projectId
     });
   }
 
@@ -185,7 +188,7 @@ export class PrismaEventsBridge implements OnModuleInit {
       organizationId: ctx.orgId,
       type: 'build.changed',
       id: deploymentId,
-      projectId: ctx.projectId,
+      projectId: ctx.projectId
     });
   }
 
@@ -194,15 +197,13 @@ export class PrismaEventsBridge implements OnModuleInit {
     // where-clause (coalesce updateMany filters by deploymentId). A claim
     // (update by id) has none of those, so fall back to looking the run up.
     let deploymentId =
-      result?.deploymentId ??
-      params?.args?.data?.deploymentId ??
-      params?.args?.where?.deploymentId;
+      result?.deploymentId ?? params?.args?.data?.deploymentId ?? params?.args?.where?.deploymentId;
     if (!deploymentId) {
       const id = result?.id ?? params?.args?.where?.id;
       if (id) {
         const br = await this.prisma.buildRun.findUnique({
           where: { id },
-          select: { deploymentId: true },
+          select: { deploymentId: true }
         });
         deploymentId = br?.deploymentId;
       }
@@ -213,7 +214,7 @@ export class PrismaEventsBridge implements OnModuleInit {
       organizationId: ctx.orgId,
       type: 'build.changed',
       id: deploymentId,
-      projectId: ctx.projectId,
+      projectId: ctx.projectId
     });
   }
 
@@ -232,20 +233,24 @@ export class PrismaEventsBridge implements OnModuleInit {
       organizationId: ctx.orgId,
       type: 'deployment.changed',
       id: deploymentId,
-      projectId: ctx.projectId,
+      projectId: ctx.projectId
     });
   }
 
   private async emitForMembership(params: any, result: any) {
     // Invalidate membership cache for affected user(s)
     const userId = result?.userId ?? params?.args?.where?.userId ?? params?.args?.data?.userId;
-    const orgId = result?.organizationId ?? params?.args?.where?.organizationId ?? params?.args?.data?.organizationId;
+    const orgId =
+      result?.organizationId ??
+      params?.args?.where?.organizationId ??
+      params?.args?.data?.organizationId;
     // `userId` here is the internal UUID (OrganizationMember.userId FK), but cache
     // keys can be the JWT sub (= HackClub ID for OAuth users). Use the internal-id
     // walker so HackClub-ID-keyed entries get dropped too.
     if (userId) this.membershipCache.invalidateInternalUserId(userId);
     else if (orgId) this.membershipCache.invalidateOrg(orgId);
     else this.membershipCache.invalidateAll();
-    if (orgId) this.orgEvents.emit({ organizationId: orgId, type: 'membership.changed', id: userId });
+    if (orgId)
+      this.orgEvents.emit({ organizationId: orgId, type: 'membership.changed', id: userId });
   }
 }

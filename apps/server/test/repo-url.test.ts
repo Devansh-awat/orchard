@@ -17,7 +17,7 @@ const REJECTED = [
   'https://user:pass@github.com/o/r',
   'not a url',
   '',
-  '-upload-pack=id',
+  '-upload-pack=id'
 ];
 
 for (const bad of REJECTED) {
@@ -31,7 +31,7 @@ const ACCEPTED = [
   'https://github.com/hackclub/orchard.git',
   'https://gitlab.com/group/sub/project',
   'https://git.example.internal:8443/team/repo',
-  'https://codeberg.org/some-user/some_repo',
+  'https://codeberg.org/some-user/some_repo'
 ];
 
 test('parseRepoUrl accepts ordinary https repos, including self-hosted', () => {
@@ -57,7 +57,10 @@ test('the GitHub token is attached only when the host really is github.com', () 
   const token = 'ghs_secret';
 
   const real = parseRepoUrl('https://github.com/o/r')!;
-  assert.equal(withGitHubCredentials(real, token), `https://x-access-token:${token}@github.com/o/r`);
+  assert.equal(
+    withGitHubCredentials(real, token),
+    `https://x-access-token:${token}@github.com/o/r`
+  );
   for (const impostor of ['https://github.com.evil.com/o/r', 'https://evil.com/github.com/o/r']) {
     const url = parseRepoUrl(impostor)!;
     const out = withGitHubCredentials(url, token);

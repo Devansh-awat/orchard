@@ -5,9 +5,9 @@ metadata:
   displayName: WordPress
   description: Full WordPress CMS with a PostgreSQL database and public ingress. Ready to use out of the box.
   icon: wordpress
-  version: "1.0.0"
+  version: '1.0.0'
   category: cms
-  tags: ["blog", "cms", "php", "wordpress"]
+  tags: ['blog', 'cms', 'php', 'wordpress']
 
 parameters:
   - name: appName
@@ -17,14 +17,14 @@ parameters:
     default: wordpress
     required: true
     validation:
-      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
       message: Must be lowercase alphanumeric with hyphens, 3-60 chars
 
   - name: wordpressImage
     displayName: WordPress Image
     description: Docker image for WordPress
     type: string
-    default: "wordpress:6-apache"
+    default: 'wordpress:6-apache'
 
   - name: replicas
     displayName: Replicas
@@ -40,7 +40,7 @@ parameters:
     description: Public domain for your WordPress site
     type: string
     required: true
-    placeholder: "blog.example.com"
+    placeholder: 'blog.example.com'
 
   - name: enableTls
     displayName: Enable HTTPS
@@ -52,14 +52,14 @@ resources:
   - name: db
     type: database
     config:
-      name: "{{ params.appName }}-db"
+      name: '{{ params.appName }}-db'
 
   - name: app
     type: deployment
     config:
-      name: "{{ params.appName }}"
-      image: "{{ params.wordpressImage }}"
-      replicas: "{{ params.replicas }}"
+      name: '{{ params.appName }}'
+      image: '{{ params.wordpressImage }}'
+      replicas: '{{ params.replicas }}'
       ports:
         - name: http
           containerPort: 80
@@ -67,20 +67,20 @@ resources:
           protocol: TCP
       env:
         - key: WORDPRESS_DB_HOST
-          value: "{{ resources.db.host }}"
+          value: '{{ resources.db.host }}'
         - key: WORDPRESS_DB_NAME
-          value: "{{ resources.db.dbName }}"
+          value: '{{ resources.db.dbName }}'
         - key: WORDPRESS_DB_USER
-          value: "{{ resources.db.dbUser }}"
+          value: '{{ resources.db.dbUser }}'
         - key: WORDPRESS_DB_PASSWORD
-          value: "{{ resources.db.dbPassword }}"
+          value: '{{ resources.db.dbPassword }}'
 
   - name: ingress
     type: ingress
     config:
-      host: "{{ params.domain }}"
-      tlsEnabled: "{{ params.enableTls }}"
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
       routes:
         - path: /
-          serviceName: "{{ resources.app.serviceName }}"
+          serviceName: '{{ resources.app.serviceName }}'
           servicePort: 80

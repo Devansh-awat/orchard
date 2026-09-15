@@ -31,7 +31,7 @@ export interface EnvVarWrite {
 
 export function applyEnvKeepRules(
   input: EnvVarWrite[],
-  before: Map<string, StoredEnvVar>,
+  before: Map<string, StoredEnvVar>
 ): StoredEnvVar[] {
   return input
     .filter((entry) => entry && typeof entry.key === 'string')
@@ -43,15 +43,13 @@ export function applyEnvKeepRules(
       const keeps = entry.value === undefined || entry.value === null || blankKeepsSecret;
 
       if (keeps && existing?.secret && !secret) {
-        throw new BadRequestException(
-          `Cannot un-mark ${key} as secret without providing a value`,
-        );
+        throw new BadRequestException(`Cannot un-mark ${key} as secret without providing a value`);
       }
 
       return {
         key,
         value: keeps ? (existing?.value ?? '') : String(entry.value),
-        secret,
+        secret
       };
     })
     .filter((entry) => entry.key.length > 0);

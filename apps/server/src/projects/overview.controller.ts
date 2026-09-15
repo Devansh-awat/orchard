@@ -16,12 +16,12 @@ export class OverviewController {
   async getOrgBuilds(
     @Param('orgSlug') orgSlug: string,
     @Query('scope') scope: string,
-    @Request() req,
+    @Request() req
   ) {
     return this.projectsService.getOrgBuildsBySlug(
       req.user.sub,
       orgSlug,
-      scope === 'all' ? 'all' : 'mine',
+      scope === 'all' ? 'all' : 'mine'
     );
   }
 }

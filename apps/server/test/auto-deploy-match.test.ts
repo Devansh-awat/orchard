@@ -6,7 +6,7 @@ import {
   autoDeployTargetBranch,
   canonicalRepoUrl,
   pushCommitSha,
-  repoUrlVariants,
+  repoUrlVariants
 } from '../src/github/auto-deploy-match';
 
 const pinned = { autoDeployBranch: 'main', githubBranch: 'main' };
@@ -33,11 +33,11 @@ test('a pinned deployment never decides for one that inherits its branch', () =>
   const repo = [pinned, inherited, otherBranch, unlinked];
   assert.deepEqual(
     repo.filter((deployment) => autoDeployMatchesBranch(deployment, 'main')),
-    [pinned, inherited],
+    [pinned, inherited]
   );
   assert.deepEqual(
     repo.filter((deployment) => autoDeployMatchesBranch(deployment, 'staging')),
-    [otherBranch],
+    [otherBranch]
   );
 });
 
@@ -64,18 +64,18 @@ test('a deleted flag beats a sha that still looks real', () => {
 test('both stored spellings of a repo url are matched', () => {
   assert.deepEqual(repoUrlVariants('hackclub/orchard'), [
     'https://github.com/hackclub/orchard',
-    'https://github.com/hackclub/orchard.git',
+    'https://github.com/hackclub/orchard.git'
   ]);
 });
 
 test('rewriting a url keeps the suffix convention the row already had', () => {
   assert.equal(
     canonicalRepoUrl('https://github.com/hackclub/old', 'hackclub/new'),
-    'https://github.com/hackclub/new',
+    'https://github.com/hackclub/new'
   );
   assert.equal(
     canonicalRepoUrl('https://github.com/hackclub/old.git', 'hackclub/new'),
-    'https://github.com/hackclub/new.git',
+    'https://github.com/hackclub/new.git'
   );
   assert.equal(canonicalRepoUrl(null, 'hackclub/new'), 'https://github.com/hackclub/new');
 });

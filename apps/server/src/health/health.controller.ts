@@ -4,9 +4,7 @@ import { join } from 'path';
 import { readFileSync } from 'fs';
 import { Public } from '../auth/decorators';
 
-const { version } = JSON.parse(
-  readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'),
-);
+const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 @SkipThrottle()
 @Controller()
@@ -17,4 +15,3 @@ export class HealthController {
     return { status: 'ok', message: 'Server is running', version };
   }
 }
-

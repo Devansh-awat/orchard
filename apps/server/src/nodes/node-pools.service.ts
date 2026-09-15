@@ -27,15 +27,21 @@ function slugify(name: string): string {
 // Validate a nodeSelector as an array of k8s matchExpressions.
 function validateNodeSelector(raw: unknown): Prisma.InputJsonValue {
   if (raw == null) return [];
-  if (!Array.isArray(raw)) throw new BadRequestException('nodeSelector must be an array of match expressions');
+  if (!Array.isArray(raw))
+    throw new BadRequestException('nodeSelector must be an array of match expressions');
   for (const expr of raw) {
-    if (!expr || typeof expr !== 'object') throw new BadRequestException('Invalid nodeSelector expression');
+    if (!expr || typeof expr !== 'object')
+      throw new BadRequestException('Invalid nodeSelector expression');
     const e = expr as Record<string, unknown>;
-    if (typeof e.key !== 'string' || !e.key) throw new BadRequestException('nodeSelector expression needs a key');
+    if (typeof e.key !== 'string' || !e.key)
+      throw new BadRequestException('nodeSelector expression needs a key');
     if (typeof e.operator !== 'string' || !SELECTOR_OPERATORS.has(e.operator)) {
-      throw new BadRequestException(`nodeSelector operator must be one of ${[...SELECTOR_OPERATORS].join(', ')}`);
+      throw new BadRequestException(
+        `nodeSelector operator must be one of ${[...SELECTOR_OPERATORS].join(', ')}`
+      );
     }
-    if (e.values != null && !Array.isArray(e.values)) throw new BadRequestException('nodeSelector values must be an array');
+    if (e.values != null && !Array.isArray(e.values))
+      throw new BadRequestException('nodeSelector values must be an array');
   }
   return raw as Prisma.InputJsonValue;
 }
@@ -47,13 +53,19 @@ function validateTolerations(raw: unknown): Prisma.InputJsonValue {
   for (const tol of raw) {
     if (!tol || typeof tol !== 'object') throw new BadRequestException('Invalid toleration');
     const t = tol as Record<string, unknown>;
-    if (t.operator != null && (typeof t.operator !== 'string' || !TOLERATION_OPERATORS.has(t.operator))) {
+    if (
+      t.operator != null &&
+      (typeof t.operator !== 'string' || !TOLERATION_OPERATORS.has(t.operator))
+    ) {
       throw new BadRequestException('toleration operator must be Exists or Equal');
     }
     if (t.effect != null && (typeof t.effect !== 'string' || !TAINT_EFFECTS.has(t.effect))) {
-      throw new BadRequestException(`toleration effect must be one of ${[...TAINT_EFFECTS].join(', ')}`);
+      throw new BadRequestException(
+        `toleration effect must be one of ${[...TAINT_EFFECTS].join(', ')}`
+      );
     }
-    if (t.key != null && typeof t.key !== 'string') throw new BadRequestException('toleration key must be a string');
+    if (t.key != null && typeof t.key !== 'string')
+      throw new BadRequestException('toleration key must be a string');
   }
   return raw as Prisma.InputJsonValue;
 }
@@ -66,7 +78,7 @@ export class NodePoolsService {
   async list() {
     return this.prisma.nodePool.findMany({
       orderBy: { name: 'asc' },
-      include: { _count: { select: { deployments: true, jobs: true, databases: true } } },
+      include: { _count: { select: { deployments: true, jobs: true, databases: true } } }
     });
   }
 
@@ -76,14 +88,14 @@ export class NodePoolsService {
     return this.prisma.nodePool.findMany({
       where: { userSelectable: true },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, slug: true, description: true },
+      select: { id: true, name: true, slug: true, description: true }
     });
   }
 
   async get(id: string) {
     const pool = await this.prisma.nodePool.findUnique({
       where: { id },
-      include: { _count: { select: { deployments: true, jobs: true, databases: true } } },
+      include: { _count: { select: { deployments: true, jobs: true, databases: true } } }
     });
     if (!pool) throw new NotFoundException('Node pool not found');
     return pool;
@@ -104,8 +116,8 @@ export class NodePoolsService {
         nodeSelector: validateNodeSelector(input.nodeSelector),
         tolerations: validateTolerations(input.tolerations),
         affinityMode: input.affinityMode ?? 'preferred',
-        userSelectable: input.userSelectable ?? false,
-      },
+        userSelectable: input.userSelectable ?? false
+      }
     });
   }
 
@@ -119,7 +131,8 @@ export class NodePoolsService {
       data.name = name;
     }
     if (input.description !== undefined) data.description = input.description;
-    if (input.nodeSelector !== undefined) data.nodeSelector = validateNodeSelector(input.nodeSelector);
+    if (input.nodeSelector !== undefined)
+      data.nodeSelector = validateNodeSelector(input.nodeSelector);
     if (input.tolerations !== undefined) data.tolerations = validateTolerations(input.tolerations);
     if (input.affinityMode !== undefined) data.affinityMode = input.affinityMode;
     if (input.userSelectable !== undefined) data.userSelectable = input.userSelectable;

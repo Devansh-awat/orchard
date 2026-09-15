@@ -6,6 +6,6 @@ import { InstanceConfigController } from './instance-config.controller';
 @Module({
   controllers: [InstanceConfigController],
   providers: [InstanceConfigService],
-  exports: [InstanceConfigService],
+  exports: [InstanceConfigService]
 })
 export class InstanceConfigModule {}

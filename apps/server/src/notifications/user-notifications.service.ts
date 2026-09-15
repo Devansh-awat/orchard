@@ -12,7 +12,7 @@ import {
   SETTING_SCOPE_TYPES,
   SETTING_VALUES,
   SettingValue,
-  USER_DESTINATION_TYPES,
+  USER_DESTINATION_TYPES
 } from './notification-events';
 
 const MAX_WEBHOOK_DESTINATIONS = 3;
@@ -35,25 +35,32 @@ export class UserNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly transport: NotificationTransport,
-    private readonly rules: NotificationRulesService,
+    private readonly rules: NotificationRulesService
   ) {}
 
   async getSettings(userId: string) {
     const rows = await this.prisma.userNotificationSetting.findMany({
       where: { userId },
-      orderBy: [{ scopeType: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ scopeType: 'asc' }, { createdAt: 'asc' }]
     });
 
     const global: Record<string, SettingValue> = {};
     for (const category of NOTIFICATION_CATEGORIES) global[category] = DEFAULT_SETTING_VALUE;
-    const overrides = new Map<string, { scopeType: string; scopeId: string; values: Record<string, SettingValue> }>();
+    const overrides = new Map<
+      string,
+      { scopeType: string; scopeId: string; values: Record<string, SettingValue> }
+    >();
     for (const row of rows) {
       if (row.scopeType === 'global') {
         global[row.category] = row.value as SettingValue;
         continue;
       }
       const key = `${row.scopeType}:${row.scopeId}`;
-      const entry = overrides.get(key) ?? { scopeType: row.scopeType, scopeId: row.scopeId, values: {} };
+      const entry = overrides.get(key) ?? {
+        scopeType: row.scopeType,
+        scopeId: row.scopeId,
+        values: {}
+      };
       entry.values[row.category] = row.value as SettingValue;
       overrides.set(key, entry);
     }
@@ -61,18 +68,23 @@ export class UserNotificationsService {
     return {
       global,
       defaultValue: DEFAULT_SETTING_VALUE,
-      overrides: await this.labelOverrides([...overrides.values()]),
+      overrides: await this.labelOverrides([...overrides.values()])
     };
   }
 
   // Resolves what a user would actually get at one scope, and where that answer
   // came from. The UI shows the inherited default next to the control so nobody
   // has to guess whether they are looking at their own choice or a fallback.
-  async getScopeSettings(userId: string, organizationId: string, scopeType: string, scopeId: string) {
+  async getScopeSettings(
+    userId: string,
+    organizationId: string,
+    scopeType: string,
+    scopeId: string
+  ) {
     const scope = await this.rules.resolveScope(organizationId, scopeType, scopeId);
     const chain: { scopeType: string; scopeId: string }[] = [
       { scopeType: 'global', scopeId: GLOBAL_SCOPE_ID },
-      { scopeType: 'org', scopeId: organizationId },
+      { scopeType: 'org', scopeId: organizationId }
     ];
     if (scope.projectId) chain.push({ scopeType: 'project', scopeId: scope.projectId });
     if (scope.scopeType !== 'project' && scope.scopeId) {
@@ -80,7 +92,7 @@ export class UserNotificationsService {
     }
 
     const rows = await this.prisma.userNotificationSetting.findMany({
-      where: { userId, OR: chain.map((c) => ({ scopeType: c.scopeType, scopeId: c.scopeId })) },
+      where: { userId, OR: chain.map((c) => ({ scopeType: c.scopeType, scopeId: c.scopeId })) }
     });
 
     const rank: Record<string, number> = { global: 0, org: 1, project: 2 };
@@ -89,29 +101,41 @@ export class UserNotificationsService {
       let best: { value: SettingValue; source: string; rank: number } = {
         value: DEFAULT_SETTING_VALUE,
         source: 'default',
-        rank: -1,
+        rank: -1
       };
       for (const row of rows) {
         if (row.category !== category) continue;
         const r = rank[row.scopeType] ?? 3;
-        if (r > best.rank) best = { value: row.value as SettingValue, source: row.scopeType, rank: r };
+        if (r > best.rank)
+          best = { value: row.value as SettingValue, source: row.scopeType, rank: r };
       }
       out[category] = {
         value: best.value,
         source: best.source,
-        own: best.source === scope.scopeType,
+        own: best.source === scope.scopeType
       };
     }
     return { scope, categories: out };
   }
 
-  async setSettings(userId: string, scopeType: string, scopeId: string | null, input: SettingsInput, organizationId?: string) {
+  async setSettings(
+    userId: string,
+    scopeType: string,
+    scopeId: string | null,
+    input: SettingsInput,
+    organizationId?: string
+  ) {
     if (!(SETTING_SCOPE_TYPES as readonly string[]).includes(scopeType)) {
       throw new BadRequestException(`Scope must be one of: ${SETTING_SCOPE_TYPES.join(', ')}`);
     }
     if (scopeType !== 'global') {
-      if (!organizationId) throw new BadRequestException('An organization is required for scoped settings');
-      await this.rules.resolveScope(organizationId, scopeType === 'org' ? 'org' : scopeType, scopeId);
+      if (!organizationId)
+        throw new BadRequestException('An organization is required for scoped settings');
+      await this.rules.resolveScope(
+        organizationId,
+        scopeType === 'org' ? 'org' : scopeType,
+        scopeId
+      );
     }
     const values = input.values ?? {};
     const writes: { category: NotificationCategory; value: SettingValue | null }[] = [];
@@ -140,7 +164,7 @@ export class UserNotificationsService {
     for (const write of writes) {
       if (write.value === null) {
         await this.prisma.userNotificationSetting.deleteMany({
-          where: { userId, scopeType, scopeId: resolvedScopeId, category: write.category },
+          where: { userId, scopeType, scopeId: resolvedScopeId, category: write.category }
         });
         continue;
       }
@@ -150,11 +174,17 @@ export class UserNotificationsService {
             userId,
             scopeType,
             scopeId: resolvedScopeId,
-            category: write.category,
-          },
+            category: write.category
+          }
         },
-        create: { userId, scopeType, scopeId: resolvedScopeId, category: write.category, value: write.value },
-        update: { value: write.value },
+        create: {
+          userId,
+          scopeType,
+          scopeId: resolvedScopeId,
+          category: write.category,
+          value: write.value
+        },
+        update: { value: write.value }
       });
     }
     return scopeType === 'global' ? this.getSettings(userId) : { success: true };
@@ -168,7 +198,7 @@ export class UserNotificationsService {
       throw new BadRequestException('Set your defaults instead of clearing them');
     }
     const { count } = await this.prisma.userNotificationSetting.deleteMany({
-      where: { userId, scopeType, scopeId },
+      where: { userId, scopeType, scopeId }
     });
     return { cleared: count };
   }
@@ -188,12 +218,12 @@ export class UserNotificationsService {
         lastSuccessAt: true,
         lastErrorAt: true,
         lastError: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
     return rows.map((row) => ({
       ...row,
-      config: row.type === 'email' ? {} : { urlConfigured: Boolean((row.config as any)?.url) },
+      config: row.type === 'email' ? {} : { urlConfigured: Boolean((row.config as any)?.url) }
     }));
   }
 
@@ -204,20 +234,20 @@ export class UserNotificationsService {
   async ensureEmailDestination(userId: string, enabled = false) {
     const existing = await this.prisma.userNotificationDestination.findFirst({
       where: { userId, type: 'email' },
-      select: { id: true },
+      select: { id: true }
     });
     if (existing) {
       if (enabled) {
         await this.prisma.userNotificationDestination.update({
           where: { id: existing.id },
-          data: { enabled: true, consecutiveFailures: 0, circuitOpenUntil: null, lastError: null },
+          data: { enabled: true, consecutiveFailures: 0, circuitOpenUntil: null, lastError: null }
         });
       }
       return existing.id;
     }
     const created = await this.prisma.userNotificationDestination.create({
       data: { userId, type: 'email', config: {}, enabled },
-      select: { id: true },
+      select: { id: true }
     });
     return created.id;
   }
@@ -238,14 +268,16 @@ export class UserNotificationsService {
     await assertSafeWebhookUrl(url);
 
     const count = await this.prisma.userNotificationDestination.count({
-      where: { userId, type: { in: ['slack', 'discord'] } },
+      where: { userId, type: { in: ['slack', 'discord'] } }
     });
     if (count >= MAX_WEBHOOK_DESTINATIONS) {
-      throw new BadRequestException(`You can have at most ${MAX_WEBHOOK_DESTINATIONS} personal webhooks`);
+      throw new BadRequestException(
+        `You can have at most ${MAX_WEBHOOK_DESTINATIONS} personal webhooks`
+      );
     }
     const created = await this.prisma.userNotificationDestination.create({
       data: { userId, type, config: { url }, enabled: true },
-      select: { id: true, type: true, enabled: true, createdAt: true },
+      select: { id: true, type: true, enabled: true, createdAt: true }
     });
     return created;
   }
@@ -253,14 +285,14 @@ export class UserNotificationsService {
   async setDestinationEnabled(userId: string, destinationId: string, enabled: boolean) {
     const dest = await this.prisma.userNotificationDestination.findFirst({
       where: { id: destinationId, userId },
-      select: { id: true },
+      select: { id: true }
     });
     if (!dest) throw new NotFoundException('Destination not found');
     await this.prisma.userNotificationDestination.update({
       where: { id: destinationId },
       data: enabled
         ? { enabled: true, consecutiveFailures: 0, circuitOpenUntil: null, lastError: null }
-        : { enabled: false },
+        : { enabled: false }
     });
     return { success: true };
   }
@@ -268,7 +300,7 @@ export class UserNotificationsService {
   async deleteDestination(userId: string, destinationId: string) {
     const dest = await this.prisma.userNotificationDestination.findFirst({
       where: { id: destinationId, userId },
-      select: { id: true, type: true },
+      select: { id: true, type: true }
     });
     if (!dest) throw new NotFoundException('Destination not found');
     if (dest.type === 'email') {
@@ -281,14 +313,19 @@ export class UserNotificationsService {
   async testDestination(userId: string, destinationId: string) {
     const dest = await this.prisma.userNotificationDestination.findFirst({
       where: { id: destinationId, userId },
-      select: { id: true, type: true, config: true, user: { select: { email: true, username: true } } },
+      select: {
+        id: true,
+        type: true,
+        config: true,
+        user: { select: { email: true, username: true } }
+      }
     });
     if (!dest) throw new NotFoundException('Destination not found');
     const message: NotificationMessage = {
       event: 'deploy.succeeded',
       title: 'Test notification from Orchard',
       body: 'Your personal notifications are wired up correctly.',
-      url: this.frontendUrl,
+      url: this.frontendUrl
     };
     const outcome = await this.transport.send(
       {
@@ -297,9 +334,9 @@ export class UserNotificationsService {
           dest.type === 'email'
             ? { recipients: [dest.user.email] }
             : { url: (dest.config as any)?.url },
-        label: `${dest.type} for ${dest.user.username}`,
+        label: `${dest.type} for ${dest.user.username}`
       },
-      [message],
+      [message]
     );
     return outcome.ok ? { success: true } : { success: false, error: outcome.error };
   }
@@ -307,7 +344,7 @@ export class UserNotificationsService {
   // The overrides list is the allowlist made visible. Names come from the
   // referenced rows so a stale override reads as "deleted" rather than a uuid.
   private async labelOverrides(
-    entries: { scopeType: string; scopeId: string; values: Record<string, SettingValue> }[],
+    entries: { scopeType: string; scopeId: string; values: Record<string, SettingValue> }[]
   ) {
     const byType = (type: string) =>
       entries.filter((e) => e.scopeType === type && e.scopeId).map((e) => e.scopeId);
@@ -315,27 +352,43 @@ export class UserNotificationsService {
     const [projects, deployments, databases, jobs, orgs] = await Promise.all([
       this.prisma.project.findMany({
         where: { id: { in: byType('project') } },
-        select: { id: true, name: true, organization: { select: { slug: true } } },
+        select: { id: true, name: true, organization: { select: { slug: true } } }
       }),
       this.prisma.deployment.findMany({
         where: { id: { in: byType('deployment') } },
-        select: { id: true, name: true, displayName: true, project: { select: { name: true, organization: { select: { slug: true } } } } },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          project: { select: { name: true, organization: { select: { slug: true } } } }
+        }
       }),
       this.prisma.database.findMany({
         where: { id: { in: byType('database') } },
-        select: { id: true, name: true, project: { select: { name: true, organization: { select: { slug: true } } } } },
+        select: {
+          id: true,
+          name: true,
+          project: { select: { name: true, organization: { select: { slug: true } } } }
+        }
       }),
       this.prisma.job.findMany({
         where: { id: { in: byType('job') } },
-        select: { id: true, name: true, project: { select: { name: true, organization: { select: { slug: true } } } } },
+        select: {
+          id: true,
+          name: true,
+          project: { select: { name: true, organization: { select: { slug: true } } } }
+        }
       }),
       this.prisma.organization.findMany({
         where: { id: { in: byType('org') } },
-        select: { id: true, name: true, slug: true },
-      }),
+        select: { id: true, name: true, slug: true }
+      })
     ]);
 
-    const labels = new Map<string, { label: string; context: string | null; orgSlug: string | null }>();
+    const labels = new Map<
+      string,
+      { label: string; context: string | null; orgSlug: string | null }
+    >();
     for (const p of projects) {
       labels.set(`project:${p.id}`, { label: p.name, context: null, orgSlug: p.organization.slug });
     }
@@ -343,21 +396,21 @@ export class UserNotificationsService {
       labels.set(`deployment:${d.id}`, {
         label: d.displayName || d.name,
         context: d.project.name,
-        orgSlug: d.project.organization.slug,
+        orgSlug: d.project.organization.slug
       });
     }
     for (const d of databases) {
       labels.set(`database:${d.id}`, {
         label: d.name,
         context: d.project.name,
-        orgSlug: d.project.organization.slug,
+        orgSlug: d.project.organization.slug
       });
     }
     for (const j of jobs) {
       labels.set(`job:${j.id}`, {
         label: j.name,
         context: j.project.name,
-        orgSlug: j.project.organization.slug,
+        orgSlug: j.project.organization.slug
       });
     }
     for (const o of orgs) {
@@ -371,7 +424,7 @@ export class UserNotificationsService {
         label: meta?.label ?? '(deleted)',
         context: meta?.context ?? null,
         orgSlug: meta?.orgSlug ?? null,
-        missing: !meta,
+        missing: !meta
       };
     });
   }

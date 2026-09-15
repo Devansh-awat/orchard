@@ -16,8 +16,8 @@ import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
     PodMirrorConsumer,
     CnpgMirrorConsumer,
     WorkloadMirrorConsumer,
-    SandboxMirrorConsumer,
+    SandboxMirrorConsumer
   ],
-  controllers: [MirrorHealthController],
+  controllers: [MirrorHealthController]
 })
 export class MirrorModule {}

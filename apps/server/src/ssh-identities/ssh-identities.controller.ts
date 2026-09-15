@@ -7,7 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Req,
+  Req
 } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
@@ -20,14 +20,17 @@ export class SshIdentitiesController {
   constructor(
     private readonly identities: SshIdentitiesService,
     private readonly usersService: UsersService,
-    private readonly analytics: AnalyticsService,
+    private readonly analytics: AnalyticsService
   ) {}
 
   private async userId(req: any): Promise<string> {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
-      email: req.user.email,
+      email: req.user.email
     });
-    if (this.analytics.configured && !(await this.analytics.isFeatureEnabled('greenhouse', user.id))) {
+    if (
+      this.analytics.configured &&
+      !(await this.analytics.isFeatureEnabled('greenhouse', user.id))
+    ) {
       throw new NotFoundException('Sandbox feature is not enabled for your account');
     }
     return user.id;

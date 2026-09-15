@@ -73,8 +73,8 @@
 							{#if kind === 'cmd'}
 								<span class="text-primary-300">$</span>
 								<span>{text}</span>{#if i === shown.length - 1 && !done}<span class="caret"
-									>&nbsp;</span
-								>{/if}
+										>&nbsp;</span
+									>{/if}
 							{:else if kind === 'ok'}
 								<span class="text-emerald-400">✓</span> <span>{text}</span>
 							{:else if kind === 'dim'}

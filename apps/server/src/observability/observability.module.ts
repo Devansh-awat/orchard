@@ -11,6 +11,6 @@ import { EventsModule } from '../events/events.module';
   imports: [PrismaModule, KubernetesModule, ProjectsModule, EventsModule],
   providers: [ObservabilityService, ErrorIngestService],
   controllers: [ObservabilityController],
-  exports: [ObservabilityService, ErrorIngestService],
+  exports: [ObservabilityService, ErrorIngestService]
 })
 export class ObservabilityModule {}

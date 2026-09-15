@@ -44,9 +44,10 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
 
     const cookies = parseCookies(req.headers.cookie || '');
     const authHeader = req.headers['authorization'];
-    const bearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : undefined;
+    const bearer =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : undefined;
     const token = cookies['session_token'] || bearer;
     if (!token) return reject(401, 'Unauthorized');
 
@@ -69,10 +70,10 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
             ...(typeof payload.sub === 'string' && payload.sub.includes('-')
               ? [{ id: payload.sub as string }]
               : []),
-            ...(externalAuthId ? [{ externalAuthId }] : []),
-          ],
+            ...(externalAuthId ? [{ externalAuthId }] : [])
+          ]
         },
-        select: { id: true, email: true },
+        select: { id: true, email: true }
       });
       if (!dbUser) return reject(401, 'Unauthorized');
       userId = dbUser.id;
@@ -81,7 +82,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
       if (!token.startsWith('orch_')) return reject(401, 'Unauthorized');
       const apiToken = await prisma.apiToken.findUnique({
         where: { tokenHash: hashApiToken(token) },
-        include: { user: { select: { id: true, email: true } } },
+        include: { user: { select: { id: true, email: true } } }
       });
       if (!apiToken) return reject(401, 'Unauthorized');
       if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
@@ -105,13 +106,13 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     const authorize = async (): Promise<{ ok: boolean; podName?: string }> => {
       const row = await prisma.sandbox.findUnique({
         where: { id: sandboxId },
-        select: { userId: true, status: true, podName: true },
+        select: { userId: true, status: true, podName: true }
       });
       if (!row) return { ok: false };
       if (row.userId !== userId) {
         const actor = await prisma.user.findUnique({
           where: { id: userId },
-          select: { isSuperAdmin: true },
+          select: { isSuperAdmin: true }
         });
         if (!actor?.isSuperAdmin) return { ok: false };
       }
@@ -140,7 +141,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
         actorEmail: actorEmail ?? null,
         targetType: 'sandbox',
         targetId: sandboxId,
-        metadata: { podName: authzResult.podName ?? null },
+        metadata: { podName: authzResult.podName ?? null }
       })
       .catch(() => {});
 
@@ -174,7 +175,7 @@ function attachLifecycle(
   sandboxId: string,
   prisma: PrismaService,
   recheckAuth: () => Promise<boolean>,
-  teardown: () => void,
+  teardown: () => void
 ) {
   const touch = () => {
     prisma.sandbox
@@ -205,7 +206,7 @@ function handleShellSession(
   sandboxK8s: SandboxK8sService,
   sandboxId: string,
   prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>,
+  recheckAuth: () => Promise<boolean>
 ) {
   void (async () => {
     if (!kubernetes.kc) {
@@ -255,7 +256,7 @@ function handleShellSession(
           '-c',
           'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
             'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
-            'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev',
+            'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev'
         ],
         stdout,
         stderr,
@@ -265,7 +266,7 @@ function handleShellSession(
           if (ws.readyState === WebSocket.OPEN) {
             ws.close(1000, status.status === 'Success' ? 'exited' : 'shell closed');
           }
-        },
+        }
       );
     } catch (e: any) {
       if (ws.readyState === WebSocket.OPEN) {
@@ -281,7 +282,7 @@ function handleDirectTunnel(
   podIp: string,
   sandboxId: string,
   prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>,
+  recheckAuth: () => Promise<boolean>
 ) {
   const socket = net.connect(22, podIp);
   socket.setNoDelay(true);
@@ -336,7 +337,7 @@ function handlePortForwardTunnel(
   sandboxK8s: SandboxK8sService,
   sandboxId: string,
   prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>,
+  recheckAuth: () => Promise<boolean>
 ) {
   void (async () => {
     if (!kubernetes.kc) {

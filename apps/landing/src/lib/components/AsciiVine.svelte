@@ -47,9 +47,9 @@
 		}
 	};
 
-	function mulberry32(a: number) {
+	function mulberry32(seed: number) {
+		let a = seed | 0;
 		return () => {
-			a |= 0;
 			a = (a + 0x6d2b79f5) | 0;
 			let t = Math.imul(a ^ (a >>> 15), 1 | a);
 			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
@@ -122,15 +122,16 @@
 
 			const branch = (at: number, heading: number, steps: number) => {
 				let { x, y } = stem[at];
+				let dir = heading;
 				const cells: Cell[] = [];
 				segments.push({ cells, startAt: at, depth: 1 });
 				const curl = (rng() - 0.5) * 0.22;
 				for (let i = 0; i < steps; i++) {
-					heading += curl + (rng() - 0.5) * 0.09;
-					x += Math.cos(heading) * STEP;
-					y += Math.sin(heading) * STEP;
+					dir += curl + (rng() - 0.5) * 0.09;
+					x += Math.cos(dir) * STEP;
+					y += Math.sin(dir) * STEP;
 					if (x < CELL || x > w - CELL || y < CELL || y > h - CELL) break;
-					cells.push({ x, y, ch: charFor(heading) });
+					cells.push({ x, y, ch: charFor(dir) });
 				}
 				totalGrow = Math.max(totalGrow, at + cells.length);
 				const tip = cells[cells.length - 1];

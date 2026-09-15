@@ -9,7 +9,7 @@ export function autoDeployTargetBranch(deployment: AutoDeployBranchTarget): stri
 
 export function autoDeployMatchesBranch(
   deployment: AutoDeployBranchTarget,
-  pushedBranch: string,
+  pushedBranch: string
 ): boolean {
   const target = autoDeployTargetBranch(deployment);
   return !!target && target === pushedBranch;

@@ -3,7 +3,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
@@ -14,11 +14,24 @@ import { OrgEventsService } from '../events/org-events.service';
 import { formatSlug } from './projects.utils';
 
 const RESERVED_NAMESPACES = new Set<string>([
-  'kube-system', 'kube-public', 'kube-node-lease', 'default',
-  'orchard', 'orchard-builders', 'orchard-r2-proxy',
-  'harbor', 'postgresql', 'network', 'longhorn-system',
-  'flux-system', 'monitoring', 'cert-manager',
-  ...(process.env.RESERVED_NAMESPACES_EXTRA || '').split(',').map((ns) => ns.trim()).filter(Boolean),
+  'kube-system',
+  'kube-public',
+  'kube-node-lease',
+  'default',
+  'orchard',
+  'orchard-builders',
+  'orchard-r2-proxy',
+  'harbor',
+  'postgresql',
+  'network',
+  'longhorn-system',
+  'flux-system',
+  'monitoring',
+  'cert-manager',
+  ...(process.env.RESERVED_NAMESPACES_EXTRA || '')
+    .split(',')
+    .map((ns) => ns.trim())
+    .filter(Boolean)
 ]);
 
 @Injectable()
@@ -31,14 +44,14 @@ export class EnvironmentsService {
     private readonly tailscale: TailscaleService,
     private readonly quotas: QuotasService,
     private readonly audit: AuditService,
-    private readonly orgEvents: OrgEventsService,
+    private readonly orgEvents: OrgEventsService
   ) {}
 
   async listEnvironments(projectId: string) {
     return this.prisma.environment.findMany({
       where: { projectId },
       orderBy: [{ isProduction: 'desc' }, { createdAt: 'asc' }],
-      include: { _count: { select: { deployments: true, databases: true, ingresses: true } } },
+      include: { _count: { select: { deployments: true, databases: true, ingresses: true } } }
     });
   }
 
@@ -58,7 +71,7 @@ export class EnvironmentsService {
     }
     const def = await this.prisma.environment.findFirst({
       where: { projectId, isDefault: true },
-      orderBy: { isProduction: 'desc' },
+      orderBy: { isProduction: 'desc' }
     });
     if (def) return def;
     // Legacy safety: a project with no environment row yet — synthesize the
@@ -73,12 +86,12 @@ export class EnvironmentsService {
    */
   async ensureDefaultEnvironment(projectId: string) {
     const existing = await this.prisma.environment.findFirst({
-      where: { projectId, isDefault: true },
+      where: { projectId, isDefault: true }
     });
     if (existing) return existing;
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, namespace: true },
+      select: { id: true, namespace: true }
     });
     if (!project) throw new NotFoundException('Project not found');
     return this.prisma.environment.create({
@@ -88,8 +101,8 @@ export class EnvironmentsService {
         slug: 'production',
         namespace: project.namespace,
         isDefault: true,
-        isProduction: true,
-      },
+        isProduction: true
+      }
     });
   }
 
@@ -110,7 +123,7 @@ export class EnvironmentsService {
     while (true) {
       const [envUse, projUse] = await Promise.all([
         this.prisma.environment.findFirst({ where: { namespace }, select: { id: true } }),
-        this.prisma.project.findFirst({ where: { namespace }, select: { id: true } }),
+        this.prisma.project.findFirst({ where: { namespace }, select: { id: true } })
       ]);
       if (!envUse && !projUse) return namespace;
       attempt += 1;
@@ -121,11 +134,16 @@ export class EnvironmentsService {
   async createEnvironment(
     projectId: string,
     input: { name: string; slug?: string },
-    userId: string,
+    userId: string
   ) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, slug: true, organizationId: true, organization: { select: { slug: true } } },
+      select: {
+        id: true,
+        slug: true,
+        organizationId: true,
+        organization: { select: { slug: true } }
+      }
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -136,11 +154,15 @@ export class EnvironmentsService {
 
     const slugClash = await this.prisma.environment.findUnique({
       where: { projectId_slug: { projectId, slug } },
-      select: { id: true },
+      select: { id: true }
     });
     if (slugClash) throw new ConflictException(`An environment "${slug}" already exists`);
 
-    const namespace = await this.deconflictNamespace([project.organization.slug, project.slug, slug]);
+    const namespace = await this.deconflictNamespace([
+      project.organization.slug,
+      project.slug,
+      slug
+    ]);
 
     const nsResult = await this.k8sNamespace.createNamespace(namespace);
     if (!nsResult.created) {
@@ -150,16 +172,16 @@ export class EnvironmentsService {
     let env;
     try {
       env = await this.prisma.environment.create({
-        data: { projectId, name, slug, namespace, isDefault: false, isProduction: false },
+        data: { projectId, name, slug, namespace, isDefault: false, isProduction: false }
       });
     } catch (err) {
       await this.k8sNamespace.deleteNamespace(namespace).catch(() => {});
       throw err;
     }
 
-    await this.quotas.applyProjectQuota(projectId).catch((e) =>
-      this.logger.warn(`applyProjectQuota after env create failed: ${e?.message}`),
-    );
+    await this.quotas
+      .applyProjectQuota(projectId)
+      .catch((e) => this.logger.warn(`applyProjectQuota after env create failed: ${e?.message}`));
 
     this.emitChanged(project.organizationId, projectId, env.id);
     void this.audit.log({
@@ -170,7 +192,7 @@ export class EnvironmentsService {
       targetType: 'environment',
       targetId: env.id,
       targetLabel: env.name,
-      metadata: { slug: env.slug, namespace: env.namespace },
+      metadata: { slug: env.slug, namespace: env.namespace }
     });
     return env;
   }
@@ -181,7 +203,7 @@ export class EnvironmentsService {
     if (!trimmed) throw new BadRequestException('Environment name is required');
     const updated = await this.prisma.environment.update({
       where: { id: environmentId },
-      data: { name: trimmed },
+      data: { name: trimmed }
     });
     this.emitChanged(env.project.organizationId, env.projectId, env.id);
     void this.audit.log({
@@ -191,7 +213,7 @@ export class EnvironmentsService {
       projectId: env.projectId,
       targetType: 'environment',
       targetId: env.id,
-      targetLabel: trimmed,
+      targetLabel: trimmed
     });
     return updated;
   }
@@ -201,9 +223,9 @@ export class EnvironmentsService {
     await this.prisma.$transaction([
       this.prisma.environment.updateMany({
         where: { projectId: env.projectId, isDefault: true },
-        data: { isDefault: false },
+        data: { isDefault: false }
       }),
-      this.prisma.environment.update({ where: { id: environmentId }, data: { isDefault: true } }),
+      this.prisma.environment.update({ where: { id: environmentId }, data: { isDefault: true } })
     ]);
     this.emitChanged(env.project.organizationId, env.projectId, env.id);
     void this.audit.log({
@@ -213,7 +235,7 @@ export class EnvironmentsService {
       projectId: env.projectId,
       targetType: 'environment',
       targetId: env.id,
-      targetLabel: env.name,
+      targetLabel: env.name
     });
     return this.prisma.environment.findUnique({ where: { id: environmentId } });
   }
@@ -229,9 +251,9 @@ export class EnvironmentsService {
     }
 
     await this.tailscale.cleanupNamespace(env.namespace).catch(() => {});
-    await this.k8sNamespace.deleteNamespace(env.namespace).catch((e) =>
-      this.logger.warn(`deleteNamespace(${env.namespace}) failed: ${e?.message}`),
-    );
+    await this.k8sNamespace
+      .deleteNamespace(env.namespace)
+      .catch((e) => this.logger.warn(`deleteNamespace(${env.namespace}) failed: ${e?.message}`));
     await this.prisma.environment.delete({ where: { id: environmentId } });
 
     this.emitChanged(env.project.organizationId, env.projectId, env.id);
@@ -243,7 +265,7 @@ export class EnvironmentsService {
       targetType: 'environment',
       targetId: env.id,
       targetLabel: env.name,
-      metadata: { slug: env.slug, namespace: env.namespace },
+      metadata: { slug: env.slug, namespace: env.namespace }
     });
     return { success: true };
   }
@@ -251,7 +273,7 @@ export class EnvironmentsService {
   async projectIdForEnv(environmentId: string): Promise<string> {
     const env = await this.prisma.environment.findUnique({
       where: { id: environmentId },
-      select: { projectId: true },
+      select: { projectId: true }
     });
     if (!env) throw new NotFoundException('Environment not found');
     return env.projectId;
@@ -260,7 +282,7 @@ export class EnvironmentsService {
   private async getEnvOrThrow(environmentId: string) {
     const env = await this.prisma.environment.findUnique({
       where: { id: environmentId },
-      include: { project: { select: { id: true, organizationId: true } } },
+      include: { project: { select: { id: true, organizationId: true } } }
     });
     if (!env) throw new NotFoundException('Environment not found');
     return env;
@@ -271,7 +293,7 @@ export class EnvironmentsService {
       organizationId,
       type: 'environment.changed',
       id: environmentId,
-      projectId,
+      projectId
     });
   }
 }

@@ -15,4 +15,3 @@ import { TailscaleModule } from '../tailscale/tailscale.module';
   exports: [OrganizationsService, StorageService]
 })
 export class OrganizationsModule {}
-

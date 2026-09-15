@@ -13,7 +13,7 @@ export function hashScimToken(plaintext: string): string {
 export class ScimTokensService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
   async create(organizationId: string, actorUserId: string, name: string, expiresAt?: Date) {
@@ -46,8 +46,8 @@ export class ScimTokensService {
         name: cleanName,
         tokenHash,
         createdBy: actorUserId,
-        expiresAt: resolvedExpiresAt,
-      },
+        expiresAt: resolvedExpiresAt
+      }
     });
 
     void this.audit.log({
@@ -57,7 +57,7 @@ export class ScimTokensService {
       targetType: 'scim_token',
       targetId: row.id,
       targetLabel: cleanName,
-      metadata: { expiresAt: resolvedExpiresAt.toISOString() },
+      metadata: { expiresAt: resolvedExpiresAt.toISOString() }
     });
 
     return {
@@ -65,7 +65,7 @@ export class ScimTokensService {
       name: row.name,
       token,
       createdAt: row.createdAt,
-      expiresAt: row.expiresAt,
+      expiresAt: row.expiresAt
     };
   }
 
@@ -77,15 +77,15 @@ export class ScimTokensService {
         name: true,
         lastUsedAt: true,
         expiresAt: true,
-        createdAt: true,
+        createdAt: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
   async revoke(organizationId: string, actorUserId: string, tokenId: string) {
     const token = await this.prisma.scimToken.findFirst({
-      where: { id: tokenId, organizationId },
+      where: { id: tokenId, organizationId }
     });
     if (!token) {
       return null;
@@ -99,7 +99,7 @@ export class ScimTokensService {
       organizationId,
       targetType: 'scim_token',
       targetId: tokenId,
-      targetLabel: token.name,
+      targetLabel: token.name
     });
 
     return true;
@@ -114,7 +114,7 @@ export class ScimTokensService {
     const tokenHash = hashScimToken(plaintext);
     const row = await this.prisma.scimToken.findUnique({
       where: { tokenHash },
-      select: { id: true, organizationId: true, expiresAt: true },
+      select: { id: true, organizationId: true, expiresAt: true }
     });
     if (!row) {
       return null;

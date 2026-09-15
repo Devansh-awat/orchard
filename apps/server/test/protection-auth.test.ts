@@ -5,7 +5,7 @@ import { SignJWT } from 'jose';
 process.env.JWT_SECRET = 'protection-auth-test-secret';
 process.env.FRONTEND_URL = 'https://orchard.test';
 
-// eslint-disable-next-line import-x/first
+// oxlint-disable-next-line import/first
 import { ProtectionService } from '../src/auth/protection.service';
 
 // Everything a user's private app is worth sits behind checkProtection. These
@@ -40,11 +40,15 @@ function protectedRow(over: Record<string, unknown> = {}) {
     host: HOST,
     project: { organizationId: 'o1', name: 'Proj' },
     service: { name: 'app', port: 3000 },
-    ...over,
+    ...over
   };
 }
 
-async function sign(type: string, ingressId: string, opts: { exp?: string; secret?: Uint8Array } = {}) {
+async function sign(
+  type: string,
+  ingressId: string,
+  opts: { exp?: string; secret?: Uint8Array } = {}
+) {
   return new SignJWT({ type, ingressId })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user-1')
@@ -65,20 +69,32 @@ test('no credentials never reaches the app', async () => {
 
 test('a valid cookie for this ingress is allowed', async () => {
   const svc = buildService(protectedRow());
-  const d = await svc.checkProtection(HOST, '/secret', cookie(await sign('protection', ING)), undefined);
+  const d = await svc.checkProtection(
+    HOST,
+    '/secret',
+    cookie(await sign('protection', ING)),
+    undefined
+  );
   assert.equal(d.allow, true);
 });
 
 test('a cookie minted for a DIFFERENT ingress is rejected', async () => {
   // Otherwise one protected site becomes a skeleton key for every other one.
   const svc = buildService(protectedRow());
-  const d = await svc.checkProtection(HOST, '/secret', cookie(await sign('protection', OTHER)), undefined);
+  const d = await svc.checkProtection(
+    HOST,
+    '/secret',
+    cookie(await sign('protection', OTHER)),
+    undefined
+  );
   assert.equal(d.allow, false);
 });
 
 test('a cookie signed with a different secret is rejected', async () => {
   const svc = buildService(protectedRow());
-  const forged = await sign('protection', ING, { secret: new TextEncoder().encode('not-the-secret') });
+  const forged = await sign('protection', ING, {
+    secret: new TextEncoder().encode('not-the-secret')
+  });
   const d = await svc.checkProtection(HOST, '/secret', cookie(forged), undefined);
   assert.equal(d.allow, false);
 });
@@ -94,7 +110,12 @@ test('a short-lived exchange token cannot be replayed as a session cookie', asyn
   // The exchange token is handed out in a URL and lives 5 minutes; the session
   // cookie lives 7 days. Confusing the two would upgrade a link into a session.
   const svc = buildService(protectedRow());
-  const d = await svc.checkProtection(HOST, '/secret', cookie(await sign('protection_exchange', ING)), undefined);
+  const d = await svc.checkProtection(
+    HOST,
+    '/secret',
+    cookie(await sign('protection_exchange', ING)),
+    undefined
+  );
   assert.equal(d.allow, false);
 });
 
@@ -109,7 +130,12 @@ test('garbage in the cookie is rejected, not thrown', async () => {
 test('a valid exchange token sets a cookie and redirects, it does not allow the request', async () => {
   const svc = buildService(protectedRow());
   const token = await sign('protection_exchange', ING);
-  const d = await svc.checkProtection(HOST, `/secret?__orchard_token=${encodeURIComponent(token)}`, undefined, undefined);
+  const d = await svc.checkProtection(
+    HOST,
+    `/secret?__orchard_token=${encodeURIComponent(token)}`,
+    undefined,
+    undefined
+  );
   assert.equal(d.allow, false);
   assert.equal(d.status, 302);
   assert.match(d.headers!['set-cookie'], /^_orchard_protection=/);
@@ -122,7 +148,12 @@ test('a valid exchange token sets a cookie and redirects, it does not allow the 
 test('an exchange token for another ingress issues no cookie', async () => {
   const svc = buildService(protectedRow());
   const token = await sign('protection_exchange', OTHER);
-  const d = await svc.checkProtection(HOST, `/x?__orchard_token=${encodeURIComponent(token)}`, undefined, undefined);
+  const d = await svc.checkProtection(
+    HOST,
+    `/x?__orchard_token=${encodeURIComponent(token)}`,
+    undefined,
+    undefined
+  );
   assert.equal(d.allow, false);
   assert.equal(d.headers?.['set-cookie'], undefined);
 });
@@ -134,7 +165,7 @@ test('the bypass secret allows only on an exact match', async () => {
     assert.equal(
       (await svc.checkProtection(HOST, '/', undefined, wrong)).allow,
       false,
-      `bypass ${JSON.stringify(wrong)} must not allow`,
+      `bypass ${JSON.stringify(wrong)} must not allow`
     );
   }
 });
@@ -147,7 +178,9 @@ test('a bypass header cannot open an ingress that has no bypass secret', async (
 });
 
 test('password mode sends the user to the password form', async () => {
-  const svc = buildService(protectedRow({ protectionMode: 'password', protectionPasswordHash: '$2b$10$x' }));
+  const svc = buildService(
+    protectedRow({ protectionMode: 'password', protectionPasswordHash: '$2b$10$x' })
+  );
   const d = await svc.checkProtection(HOST, '/', undefined, undefined);
   assert.equal(d.allow, false);
   assert.match(d.headers!.location, /mode=password/);
@@ -178,13 +211,13 @@ test('returnTo may not leave the ingress host', async () => {
     'https://evil.test/',
     `https://${HOST}.evil.test/`,
     `https://evil.test/?x=${HOST}`,
-    // eslint-disable-next-line no-script-url
+    // oxlint-disable-next-line no-script-url
     'javascript:alert(1)',
-    '//evil.test',
+    '//evil.test'
   ]) {
     await assert.rejects(
       () => svc.validateReturnTo(ING, evil),
-      `returnTo ${evil} must be rejected`,
+      `returnTo ${evil} must be rejected`
     );
   }
 });
@@ -216,9 +249,14 @@ test('handleProxyRequest does not serve the upstream for an unknown host', async
   // is what keeps an unknown host from reaching an app.
   const svc = buildService(null);
   let proxied = false;
-  (svc as any).proxyToUpstream = async () => { proxied = true; };
+  (svc as any).proxyToUpstream = async () => {
+    proxied = true;
+  };
   const res: any = { status: () => res, send: () => res, setHeader: () => {} };
-  const handled = await svc.handleProxyRequest({ hostname: 'nope.test', headers: {}, url: '/' } as any, res);
+  const handled = await svc.handleProxyRequest(
+    { hostname: 'nope.test', headers: {}, url: '/' } as any,
+    res
+  );
   assert.equal(handled, false);
   assert.equal(proxied, false);
 });
@@ -226,16 +264,25 @@ test('handleProxyRequest does not serve the upstream for an unknown host', async
 test('a protected host is never proxied upstream without a decision', async () => {
   const svc = buildService(protectedRow());
   let proxied = false;
-  (svc as any).proxyToUpstream = async () => { proxied = true; };
+  (svc as any).proxyToUpstream = async () => {
+    proxied = true;
+  };
   const sent: any = {};
   const res: any = {
-    status(s: number) { sent.status = s; return res; },
-    send() { return res; },
-    setHeader(k: string, v: string) { (sent.headers ??= {})[k] = v; },
+    status(s: number) {
+      sent.status = s;
+      return res;
+    },
+    send() {
+      return res;
+    },
+    setHeader(k: string, v: string) {
+      (sent.headers ??= {})[k] = v;
+    }
   };
   const handled = await svc.handleProxyRequest(
     { hostname: HOST, headers: {}, url: '/secret', originalUrl: '/secret' } as any,
-    res,
+    res
   );
   assert.equal(handled, true);
   assert.equal(proxied, false, 'an unauthenticated request must never reach the upstream');
@@ -245,7 +292,12 @@ test('a protected host is never proxied upstream without a decision', async () =
 test('a protected host with a valid cookie is proxied upstream', async () => {
   const svc = buildService(protectedRow());
   let target: string | null = null;
-  (svc as any).proxyToUpstream = async (_r: unknown, _s: unknown, hostname: string, port: number) => {
+  (svc as any).proxyToUpstream = async (
+    _r: unknown,
+    _s: unknown,
+    hostname: string,
+    port: number
+  ) => {
     target = `${hostname}:${port}`;
   };
   const res: any = { status: () => res, send: () => res, setHeader: () => {} };
@@ -254,9 +306,9 @@ test('a protected host with a valid cookie is proxied upstream', async () => {
       hostname: HOST,
       headers: { cookie: cookie(await sign('protection', ING)) },
       url: '/secret',
-      originalUrl: '/secret',
+      originalUrl: '/secret'
     } as any,
-    res,
+    res
   );
   assert.equal(handled, true);
   assert.equal(target, 'app.ns.svc.cluster.local:3000');
@@ -283,25 +335,32 @@ test('a second lookup returning nothing cannot slip past the wall', async () => 
       findFirst: async () => {
         calls += 1;
         return calls === 1 ? protectedRow() : null;
-      },
-    },
+      }
+    }
   };
   // A cache that forgets immediately, so both lookups reach the database.
   (svc as any).ingressCache = { get: () => undefined, set: () => {} };
   (svc as any).negativeCache = { get: () => undefined, set: () => {} };
 
   let proxied = false;
-  (svc as any).proxyToUpstream = async () => { proxied = true; };
+  (svc as any).proxyToUpstream = async () => {
+    proxied = true;
+  };
   const sent: any = {};
   const res: any = {
-    status(code: number) { sent.status = code; return res; },
-    send() { return res; },
-    setHeader() {},
+    status(code: number) {
+      sent.status = code;
+      return res;
+    },
+    send() {
+      return res;
+    },
+    setHeader() {}
   };
 
   const handled = await svc.handleProxyRequest(
     { hostname: HOST, headers: {}, url: '/secret', originalUrl: '/secret' } as any,
-    res,
+    res
   );
   assert.equal(calls, 2, 'both lookups should have hit the database');
   assert.equal(handled, true);
@@ -322,7 +381,7 @@ function basicRow(over: Record<string, unknown> = {}) {
     protectionMode: 'basic',
     protectionUsername: 'alice',
     protectionPasswordHash: BCRYPT_HASH,
-    ...over,
+    ...over
   });
 }
 
@@ -336,13 +395,21 @@ test('basic auth challenges an anonymous request instead of redirecting', async 
   assert.equal(decision.allow, false);
   assert.equal(decision.status, 401, 'must be a challenge, not a 302 to the control plane');
   assert.match(String(decision.headers?.['www-authenticate']), /^Basic realm=/);
-  assert.equal(decision.headers?.location, undefined, 'basic auth must not bounce to the login page');
+  assert.equal(
+    decision.headers?.location,
+    undefined,
+    'basic auth must not bounce to the login page'
+  );
 });
 
 test('basic auth accepts the right credentials', async () => {
   const svc = buildService(basicRow());
   const decision = await svc.checkProtection(
-    HOST, '/secret', undefined, undefined, basicHeader('alice', BCRYPT_SECRET),
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', BCRYPT_SECRET)
   );
   assert.equal(decision.allow, true);
 });
@@ -354,7 +421,7 @@ test('basic auth rejects a wrong password, a wrong username, and junk', async ()
     basicHeader('mallory', BCRYPT_SECRET),
     'Basic not-base64-at-all!!',
     'Bearer sometoken',
-    basicHeader('alice', ''),
+    basicHeader('alice', '')
   ]) {
     const decision = await svc.checkProtection(HOST, '/secret', undefined, undefined, header);
     assert.equal(decision.allow, false, `should have rejected: ${header}`);
@@ -367,19 +434,24 @@ test('a password with a colon in it still works', async () => {
   const hash = '$2b$10$DbTeC24OQkP3Ysp0LFTApOQ4piHinEiPwR5Bc4TbZYbNxa7OgTQBi';
   const svc = buildService(basicRow({ protectionPasswordHash: hash }));
   const decision = await svc.checkProtection(
-    HOST, '/secret', undefined, undefined, basicHeader('alice', 'a:b:c'),
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', 'a:b:c')
   );
   assert.equal(decision.allow, true);
 });
 
 test('a basic-auth row that lost its credentials fails closed', async () => {
-  for (const broken of [
-    { protectionUsername: null },
-    { protectionPasswordHash: null },
-  ]) {
+  for (const broken of [{ protectionUsername: null }, { protectionPasswordHash: null }]) {
     const svc = buildService(basicRow(broken));
     const decision = await svc.checkProtection(
-      HOST, '/secret', undefined, undefined, basicHeader('alice', BCRYPT_SECRET),
+      HOST,
+      '/secret',
+      undefined,
+      undefined,
+      basicHeader('alice', BCRYPT_SECRET)
     );
     assert.equal(decision.allow, false, `should fail closed for ${JSON.stringify(broken)}`);
     assert.equal(decision.status, 401);
@@ -397,18 +469,30 @@ test('a protection cookie does not open a basic-auth host', async () => {
     .setExpirationTime('7d')
     .sign(SECRET);
   const decision = await svc.checkProtection(
-    HOST, '/secret', `_orchard_protection=${cookie}`, undefined, undefined,
+    HOST,
+    '/secret',
+    `_orchard_protection=${cookie}`,
+    undefined,
+    undefined
   );
   assert.equal(decision.allow, false);
   assert.equal(decision.status, 401);
 });
 
 test('bypass paths and the bypass secret still work under basic auth', async () => {
-  const svc = buildService(basicRow({
-    protectionBypassPaths: ['/webhooks'],
-    protectionBypassSecret: 'sekrit',
-  }));
-  const viaPath = await svc.checkProtection(HOST, '/webhooks/github', undefined, undefined, undefined);
+  const svc = buildService(
+    basicRow({
+      protectionBypassPaths: ['/webhooks'],
+      protectionBypassSecret: 'sekrit'
+    })
+  );
+  const viaPath = await svc.checkProtection(
+    HOST,
+    '/webhooks/github',
+    undefined,
+    undefined,
+    undefined
+  );
   assert.equal(viaPath.allow, true);
   const viaSecret = await svc.checkProtection(HOST, '/secret', undefined, 'sekrit', undefined);
   assert.equal(viaSecret.allow, true);
@@ -417,17 +501,31 @@ test('bypass paths and the bypass secret still work under basic auth', async () 
 test('handleProxyRequest forwards the Authorization header to the check', async () => {
   const svc = buildService(basicRow());
   let proxied = false;
-  (svc as any).proxyToUpstream = async () => { proxied = true; };
-  const res: any = { status() { return res; }, send() { return res; }, setHeader() {} };
+  (svc as any).proxyToUpstream = async () => {
+    proxied = true;
+  };
+  const res: any = {
+    status() {
+      return res;
+    },
+    send() {
+      return res;
+    },
+    setHeader() {}
+  };
 
   await svc.handleProxyRequest(
     {
       hostname: HOST,
       headers: { authorization: basicHeader('alice', BCRYPT_SECRET) },
       url: '/secret',
-      originalUrl: '/secret',
+      originalUrl: '/secret'
     } as any,
-    res,
+    res
   );
-  assert.equal(proxied, true, 'correct credentials on the real request path must reach the upstream');
+  assert.equal(
+    proxied,
+    true,
+    'correct credentials on the real request path must reach the upstream'
+  );
 });

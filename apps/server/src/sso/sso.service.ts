@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client';
 import { generateServiceProviderMetadata } from '@node-saml/node-saml';
@@ -76,9 +76,10 @@ export class SsoService {
     private readonly prisma: PrismaService,
     private readonly crypto: SsoCryptoService,
     private readonly audit: AuditService,
-    private readonly domains: OrgDomainsService,
+    private readonly domains: OrgDomainsService
   ) {
-    this.backendUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+    this.backendUrl =
+      process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   }
 
@@ -96,7 +97,9 @@ export class SsoService {
 
   /** SP entity id / SAML audience. Stable per provider. */
   entityId(provider: Pick<IdentityProvider, 'id' | 'organizationId' | 'samlIssuer'>): string {
-    return provider.samlIssuer || `orchard-sso-${provider.organizationId ?? 'instance'}-${provider.id}`;
+    return (
+      provider.samlIssuer || `orchard-sso-${provider.organizationId ?? 'instance'}-${provider.id}`
+    );
   }
 
   orgLoginUrl(slug: string): string {
@@ -106,7 +109,7 @@ export class SsoService {
   async loginUrlForOrg(organizationId: string): Promise<string | null> {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { slug: true },
+      select: { slug: true }
     });
     return org ? this.orgLoginUrl(org.slug) : null;
   }
@@ -123,8 +126,11 @@ export class SsoService {
       where: { slug: slug.toLowerCase() },
       include: {
         ssoSettings: true,
-        identityProviders: { where: { enabled: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
-      },
+        identityProviders: {
+          where: { enabled: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
+        }
+      }
     });
 
     if (!org) return null;
@@ -145,9 +151,9 @@ export class SsoService {
         primaryColor: settings.loginPrimaryColor,
         bgColor: settings.loginBgColor,
         welcomeText: settings.loginWelcomeText,
-        tagline: settings.loginTagline,
+        tagline: settings.loginTagline
       },
-      providers: providers.map((p) => this.publicProvider(p)),
+      providers: providers.map((p) => this.publicProvider(p))
     };
   }
 
@@ -160,7 +166,7 @@ export class SsoService {
     const label = subdomain.toLowerCase();
     const org = await this.prisma.organization.findFirst({
       where: { subdomain: label },
-      select: { slug: true },
+      select: { slug: true }
     });
     return this.getOrgLoginContext(org?.slug ?? label);
   }
@@ -169,7 +175,7 @@ export class SsoService {
   async getOrgLoginContextById(organizationId: string) {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { slug: true },
+      select: { slug: true }
     });
     if (!org) return null;
     return this.getOrgLoginContext(org.slug);
@@ -186,7 +192,7 @@ export class SsoService {
   async getInstanceProviders() {
     const providers = await this.prisma.identityProvider.findMany({
       where: { organizationId: null, enabled: true },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
     });
     const configured = providers.filter((p) => this.isUsable(p)).map((p) => this.publicProvider(p));
     const env = this.envProvider();
@@ -208,7 +214,7 @@ export class SsoService {
       label: `Continue with ${name}`,
       iconUrl: null,
       startUrl: '/apiv1/auth/login',
-      source: 'env' as const,
+      source: 'env' as const
     };
   }
 
@@ -229,12 +235,12 @@ export class SsoService {
 
     const settings = await this.prisma.orgSsoSettings.findFirst({
       where: { organizationId: owner, enabled: true, platformEnabled: true },
-      include: { organization: { select: { slug: true, name: true, avatarUrl: true } } },
+      include: { organization: { select: { slug: true, name: true, avatarUrl: true } } }
     });
     if (!settings) return null;
 
     const providerCount = await this.prisma.identityProvider.count({
-      where: { organizationId: settings.organizationId, enabled: true },
+      where: { organizationId: settings.organizationId, enabled: true }
     });
     if (providerCount === 0) return null;
 
@@ -243,7 +249,7 @@ export class SsoService {
       name: settings.organization.name,
       avatarUrl: settings.organization.avatarUrl,
       enforced: settings.enforced,
-      loginUrl: `/${settings.organization.slug}/login`,
+      loginUrl: `/${settings.organization.slug}/login`
     };
   }
 
@@ -273,7 +279,7 @@ export class SsoService {
       label: p.buttonLabel || preset?.buttonLabel || `Continue with ${p.name}`,
       iconUrl: p.iconUrl,
       startUrl: `/apiv1/sso/start/${p.id}`,
-      source: 'database' as const,
+      source: 'database' as const
     };
   }
 
@@ -312,7 +318,10 @@ export class SsoService {
       updatedAt: p.updatedAt,
       callbackUrl: this.callbackUrl(p),
       entityId: this.entityId(p),
-      metadataUrl: p.protocol === SsoProtocol.saml ? `${this.backendUrl}/apiv1/sso/providers/${p.id}/metadata` : null,
+      metadataUrl:
+        p.protocol === SsoProtocol.saml
+          ? `${this.backendUrl}/apiv1/sso/providers/${p.id}/metadata`
+          : null
     };
   }
 
@@ -322,7 +331,7 @@ export class SsoService {
     return this.prisma.identityProvider
       .findMany({
         where: { organizationId },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
       })
       .then((rows) => rows.map((r) => this.adminProvider(r)));
   }
@@ -385,23 +394,31 @@ export class SsoService {
         const a = Number(v4[1]);
         const b = Number(v4[2]);
         return (
-          a === 0 || a === 10 || a === 127 || (a === 169 && b === 254)
-          || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+          a === 0 ||
+          a === 10 ||
+          a === 127 ||
+          (a === 169 && b === 254) ||
+          (a === 172 && b >= 16 && b <= 31) ||
+          (a === 192 && b === 168)
         );
       })();
     const privateV6 =
-      host.includes(':')
-      && (host === '::1' || host === '::' || host.startsWith('fc') || host.startsWith('fd')
-        || host.startsWith('fe80') || host.startsWith('::ffff:'));
+      host.includes(':') &&
+      (host === '::1' ||
+        host === '::' ||
+        host.startsWith('fc') ||
+        host.startsWith('fd') ||
+        host.startsWith('fe80') ||
+        host.startsWith('::ffff:'));
 
     if (
-      blockedHosts.has(host)
-      || blockedSuffixes.some((s) => host.endsWith(s))
-      || privateV4
-      || privateV6
+      blockedHosts.has(host) ||
+      blockedSuffixes.some((s) => host.endsWith(s)) ||
+      privateV4 ||
+      privateV6
     ) {
       throw new BadRequestException(
-        `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`,
+        `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`
       );
     }
   }
@@ -419,7 +436,7 @@ export class SsoService {
     const base = this.slugify(desired) || 'sso';
     let candidate = RESERVED_PROVIDER_SLUGS.has(base) ? `${base}-sso` : base;
     let n = 2;
-     
+
     while (await this.slugTaken(organizationId, candidate, ignoreId)) {
       candidate = `${base}-${n}`;
       n += 1;
@@ -430,7 +447,7 @@ export class SsoService {
   private async slugTaken(organizationId: string | null, slug: string, ignoreId?: string) {
     const hit = await this.prisma.identityProvider.findFirst({
       where: { organizationId, slug, ...(ignoreId ? { NOT: { id: ignoreId } } : {}) },
-      select: { id: true },
+      select: { id: true }
     });
     return Boolean(hit);
   }
@@ -443,7 +460,7 @@ export class SsoService {
   private async buildProviderData(
     input: ProviderInput,
     existing: IdentityProvider | null,
-    organizationId: string | null,
+    organizationId: string | null
   ) {
     const presetId = input.preset ?? existing?.preset ?? 'generic';
     const preset = findPreset(presetId);
@@ -466,12 +483,12 @@ export class SsoService {
       allowedDomains: (input.allowedDomains ?? existing?.allowedDomains ?? [])
         .map((d) => d.toLowerCase().trim().replace(/^@/, ''))
         .filter(Boolean),
-      requireVerifiedEmail: input.requireVerifiedEmail ?? existing?.requireVerifiedEmail ?? true,
+      requireVerifiedEmail: input.requireVerifiedEmail ?? existing?.requireVerifiedEmail ?? true
     };
 
     if (protocol === SsoProtocol.saml) {
       let entryPoint = input.samlEntryPoint ?? existing?.samlEntryPoint ?? null;
-      let certificate = isMask(input.samlCertificate) ? null : input.samlCertificate ?? null;
+      let certificate = isMask(input.samlCertificate) ? null : (input.samlCertificate ?? null);
       let idpEntityId = input.samlIdpEntityId ?? existing?.samlIdpEntityId ?? null;
       const metadataUrl = input.samlMetadataUrl ?? existing?.samlMetadataUrl ?? null;
 
@@ -483,7 +500,9 @@ export class SsoService {
       }
 
       if (!entryPoint) {
-        throw new BadRequestException('SAML needs a sign-in URL, or a metadata URL we can read one from');
+        throw new BadRequestException(
+          'SAML needs a sign-in URL, or a metadata URL we can read one from'
+        );
       }
       if (!certificate && !existing?.samlCertificate) {
         throw new BadRequestException('SAML needs the IdP signing certificate');
@@ -493,13 +512,17 @@ export class SsoService {
       data.samlMetadataUrl = metadataUrl;
       data.samlIdpEntityId = idpEntityId;
       data.samlIssuer = input.samlIssuer ?? existing?.samlIssuer ?? null;
-      if (certificate) data.samlCertificate = this.crypto.encrypt(this.normalizeCertificate(certificate));
+      if (certificate)
+        data.samlCertificate = this.crypto.encrypt(this.normalizeCertificate(certificate));
     } else {
-      const issuerUrl = resolveIssuerUrl(preset, {
-        issuerUrl: input.issuerUrl ?? (input.tenant || input.domain ? null : existing?.issuerUrl),
-        tenant: input.tenant,
-        domain: input.domain,
-      }) ?? existing?.issuerUrl ?? null;
+      const issuerUrl =
+        resolveIssuerUrl(preset, {
+          issuerUrl: input.issuerUrl ?? (input.tenant || input.domain ? null : existing?.issuerUrl),
+          tenant: input.tenant,
+          domain: input.domain
+        }) ??
+        existing?.issuerUrl ??
+        null;
 
       const clientId = (input.clientId ?? existing?.clientId ?? '').trim();
       if (!clientId) throw new BadRequestException('Client ID is required');
@@ -511,12 +534,18 @@ export class SsoService {
       data.issuerUrl = issuerUrl;
       data.clientId = clientId;
       data.scopes = input.scopes ?? existing?.scopes ?? preset.scopes;
-      data.authorizationUrl = input.authorizationUrl ?? existing?.authorizationUrl ?? preset.authorizationUrl ?? null;
+      data.authorizationUrl =
+        input.authorizationUrl ?? existing?.authorizationUrl ?? preset.authorizationUrl ?? null;
       data.tokenUrl = input.tokenUrl ?? existing?.tokenUrl ?? preset.tokenUrl ?? null;
       data.userinfoUrl = input.userinfoUrl ?? existing?.userinfoUrl ?? preset.userinfoUrl ?? null;
 
-      if (protocol === SsoProtocol.oauth2 && !(data.authorizationUrl && data.tokenUrl && data.userinfoUrl)) {
-        throw new BadRequestException('OAuth2 providers need authorization, token, and userinfo URLs');
+      if (
+        protocol === SsoProtocol.oauth2 &&
+        !(data.authorizationUrl && data.tokenUrl && data.userinfoUrl)
+      ) {
+        throw new BadRequestException(
+          'OAuth2 providers need authorization, token, and userinfo URLs'
+        );
       }
 
       // Every one of these is fetched server-side (discovery, token exchange,
@@ -532,7 +561,9 @@ export class SsoService {
       } else if (!existing?.clientSecret && protocol === SsoProtocol.oidc) {
         // Public clients are legitimate (PKCE, no secret), so this is allowed —
         // but it is worth a log line when an admin probably just forgot.
-        this.logger.warn(`Identity provider "${name}" saved without a client secret (org ${organizationId ?? 'instance'})`);
+        this.logger.warn(
+          `Identity provider "${name}" saved without a client secret (org ${organizationId ?? 'instance'})`
+        );
       }
     }
 
@@ -542,13 +573,13 @@ export class SsoService {
   async createProvider(
     organizationId: string | null,
     input: ProviderInput,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const data = await this.buildProviderData(input, null, organizationId);
     const slug = await this.uniqueSlug(organizationId, input.slug || (data.name as string));
 
     const created = await this.prisma.identityProvider.create({
-      data: { ...(data as any), organizationId, slug },
+      data: { ...(data as any), organizationId, slug }
     });
 
     void this.audit.log({
@@ -559,7 +590,11 @@ export class SsoService {
       targetType: 'sso_provider',
       targetId: created.id,
       targetLabel: created.name,
-      metadata: { protocol: created.protocol, preset: created.preset, scope: organizationId ? 'organization' : 'instance' },
+      metadata: {
+        protocol: created.protocol,
+        preset: created.preset,
+        scope: organizationId ? 'organization' : 'instance'
+      }
     });
 
     return this.adminProvider(created);
@@ -569,7 +604,7 @@ export class SsoService {
     id: string,
     organizationId: string | null,
     input: ProviderInput,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const existing = await this.requireProvider(id, organizationId);
     const data = await this.buildProviderData(input, existing, organizationId);
@@ -581,7 +616,7 @@ export class SsoService {
 
     const updated = await this.prisma.identityProvider.update({
       where: { id },
-      data: { ...(data as any), slug },
+      data: { ...(data as any), slug }
     });
 
     void this.audit.log({
@@ -592,7 +627,7 @@ export class SsoService {
       targetType: 'sso_provider',
       targetId: updated.id,
       targetLabel: updated.name,
-      metadata: { enabled: updated.enabled, protocol: updated.protocol },
+      metadata: { enabled: updated.enabled, protocol: updated.protocol }
     });
 
     return this.adminProvider(updated);
@@ -601,7 +636,7 @@ export class SsoService {
   async deleteProvider(
     id: string,
     organizationId: string | null,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const existing = await this.requireProvider(id, organizationId);
     await this.prisma.identityProvider.delete({ where: { id } });
@@ -613,7 +648,7 @@ export class SsoService {
       organizationId: organizationId ?? undefined,
       targetType: 'sso_provider',
       targetId: id,
-      targetLabel: existing.name,
+      targetLabel: existing.name
     });
 
     return { success: true };
@@ -633,27 +668,31 @@ export class SsoService {
       loginPrimaryColor: null,
       loginBgColor: null,
       loginWelcomeText: null,
-      loginTagline: null,
+      loginTagline: null
     };
   }
 
   async updateSettings(
     organizationId: string,
     input: SettingsInput,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const current = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
 
     if (input.enabled && !(current?.platformEnabled ?? false)) {
-      throw new ConflictException('SSO is disabled for this organization by the platform administrator');
+      throw new ConflictException(
+        'SSO is disabled for this organization by the platform administrator'
+      );
     }
 
     if (input.enabled) {
       const usable = await this.prisma.identityProvider.count({
-        where: { organizationId, enabled: true },
+        where: { organizationId, enabled: true }
       });
       if (usable === 0) {
-        throw new BadRequestException('Add and enable at least one identity provider before turning SSO on');
+        throw new BadRequestException(
+          'Add and enable at least one identity provider before turning SSO on'
+        );
       }
     }
 
@@ -668,13 +707,13 @@ export class SsoService {
       loginPrimaryColor: hexColor(input.loginPrimaryColor ?? current?.loginPrimaryColor ?? null),
       loginBgColor: hexColor(input.loginBgColor ?? current?.loginBgColor ?? null),
       loginWelcomeText: input.loginWelcomeText ?? current?.loginWelcomeText ?? null,
-      loginTagline: input.loginTagline ?? current?.loginTagline ?? null,
+      loginTagline: input.loginTagline ?? current?.loginTagline ?? null
     };
 
     const saved = await this.prisma.orgSsoSettings.upsert({
       where: { organizationId },
       create: { organizationId, ...data },
-      update: data,
+      update: data
     });
 
     if (current?.enabled !== saved.enabled || current?.enforced !== saved.enforced) {
@@ -685,7 +724,7 @@ export class SsoService {
         organizationId,
         targetType: 'organization',
         targetId: organizationId,
-        metadata: { enabled: saved.enabled, enforced: saved.enforced },
+        metadata: { enabled: saved.enabled, enforced: saved.enforced }
       });
     }
 
@@ -696,18 +735,20 @@ export class SsoService {
   async setPlatformEnabled(
     organizationId: string,
     platformEnabled: boolean,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { id: true },
+      select: { id: true }
     });
     if (!org) throw new NotFoundException('Organization not found');
 
     const saved = await this.prisma.orgSsoSettings.upsert({
       where: { organizationId },
       create: { organizationId, platformEnabled, enabled: false },
-      update: platformEnabled ? { platformEnabled } : { platformEnabled, enabled: false, enforced: false },
+      update: platformEnabled
+        ? { platformEnabled }
+        : { platformEnabled, enabled: false, enforced: false }
     });
 
     void this.audit.log({
@@ -717,7 +758,7 @@ export class SsoService {
       organizationId,
       targetType: 'organization',
       targetId: organizationId,
-      metadata: { platformEnabled },
+      metadata: { platformEnabled }
     });
 
     return saved;
@@ -735,9 +776,9 @@ export class SsoService {
         name: true,
         slug: true,
         ssoSettings: true,
-        _count: { select: { identityProviders: true, domains: true } },
+        _count: { select: { identityProviders: true, domains: true } }
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: 'asc' }
     });
 
     return orgs.map((org) => ({
@@ -749,7 +790,7 @@ export class SsoService {
       enforced: org.ssoSettings?.enforced ?? false,
       providerCount: org._count.identityProviders,
       domainCount: org._count.domains,
-      loginUrl: this.orgLoginUrl(org.slug),
+      loginUrl: this.orgLoginUrl(org.slug)
     }));
   }
 
@@ -780,7 +821,7 @@ export class SsoService {
       xml = await res.text();
     } catch (err) {
       throw new BadRequestException(
-        `Could not read IdP metadata: ${err instanceof Error ? err.message : 'request failed'}`,
+        `Could not read IdP metadata: ${err instanceof Error ? err.message : 'request failed'}`
       );
     }
     return this.parseIdpMetadata(xml);
@@ -793,13 +834,18 @@ export class SsoService {
     const pick = (binding: string) =>
       ssoServices.find((tag) => tag.includes(binding))?.match(/Location="([^"]+)"/i)?.[1] ?? null;
     const entryPoint =
-      pick('HTTP-Redirect') ?? pick('HTTP-POST') ?? ssoServices[0]?.match(/Location="([^"]+)"/i)?.[1] ?? null;
+      pick('HTTP-Redirect') ??
+      pick('HTTP-POST') ??
+      ssoServices[0]?.match(/Location="([^"]+)"/i)?.[1] ??
+      null;
 
-    const signingBlock = /<[^>]*KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/[^>]*KeyDescriptor>/i.exec(xml);
+    const signingBlock =
+      /<[^>]*KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/[^>]*KeyDescriptor>/i.exec(xml);
     const certSource = signingBlock?.[1] ?? xml;
-    const certificate = /<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i
-      .exec(certSource)?.[1]
-      ?.replace(/\s+/g, '') ?? null;
+    const certificate =
+      /<[^>]*X509Certificate[^>]*>([\s\S]*?)<\/[^>]*X509Certificate>/i
+        .exec(certSource)?.[1]
+        ?.replace(/\s+/g, '') ?? null;
 
     if (!entryPoint && !certificate) {
       throw new BadRequestException('That URL did not look like SAML IdP metadata');
@@ -817,8 +863,7 @@ export class SsoService {
       issuer: this.entityId(provider),
       callbackUrl: this.callbackUrl(provider),
       wantAssertionsSigned: true,
-      identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress'
     });
   }
-
 }

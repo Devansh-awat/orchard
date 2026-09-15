@@ -8,7 +8,7 @@ export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/issuer',
   'acme.cert-manager.io/http01-edit-in-place',
   'ingress.cilium.io/force-https',
-  'orchard.my/basic-auth',
+  'orchard.my/basic-auth'
 ]);
 
 // A resolved node pool: the label selector to match, tolerations to inject so
@@ -70,7 +70,7 @@ export function buildPlacement(input: PlacementInput): ResolvedPlacement {
     nodeAffinity = {};
     if (requiredExprs.length > 0) {
       nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution = {
-        nodeSelectorTerms: [{ matchExpressions: requiredExprs }],
+        nodeSelectorTerms: [{ matchExpressions: requiredExprs }]
       };
     }
     if (preferred.length > 0) {
@@ -89,14 +89,14 @@ export function buildPlacement(input: PlacementInput): ResolvedPlacement {
   const tolerations = [...(pool?.tolerations ?? []), ...(override?.tolerations ?? [])];
   return {
     affinity,
-    tolerations: tolerations.length > 0 ? tolerations : undefined,
+    tolerations: tolerations.length > 0 ? tolerations : undefined
   };
 }
 
 // Back-compat shim: org hostname allow/deny only (no pool/override).
 export function buildNodeAffinity(
   allowedNodes: string[] | null | undefined,
-  deniedNodes: string[] | undefined,
+  deniedNodes: string[] | undefined
 ): k8s.V1Affinity | null {
   return buildPlacement({ allowedNodes, deniedNodes }).affinity ?? null;
 }
@@ -255,36 +255,44 @@ export class KubernetesService {
       if (process.env.KUBECONFIG_BASE64) {
         console.log('[K8s] Loading kubeconfig from base64 encoded string');
         let base64Value = process.env.KUBECONFIG_BASE64.trim();
-        
-        while ((base64Value.startsWith('"') && base64Value.endsWith('"')) || 
-               (base64Value.startsWith("'") && base64Value.endsWith("'"))) {
+
+        while (
+          (base64Value.startsWith('"') && base64Value.endsWith('"')) ||
+          (base64Value.startsWith("'") && base64Value.endsWith("'"))
+        ) {
           base64Value = base64Value.slice(1, -1).trim();
         }
-        
+
         if (!base64Value) {
           throw new Error('KUBECONFIG_BASE64 is empty after removing quotes');
         }
-        
+
         console.log('[K8s] Base64 kubeconfig length:', base64Value.length, 'characters');
-        
+
         try {
           const decoded = Buffer.from(base64Value, 'base64').toString('utf-8');
           if (!decoded || decoded.trim().length === 0) {
             throw new Error('Decoded kubeconfig is empty');
           }
-          console.log('[K8s] Successfully decoded kubeconfig, decoded length:', decoded.length, 'characters');
+          console.log(
+            '[K8s] Successfully decoded kubeconfig, decoded length:',
+            decoded.length,
+            'characters'
+          );
           this.kc.loadFromString(decoded);
         } catch (decodeError) {
           throw new Error(`Failed to decode base64 kubeconfig: ${decodeError.message}`);
         }
       } else if (process.env.KUBECONFIG_PATH) {
         let configPath = process.env.KUBECONFIG_PATH.trim();
-        
-        while ((configPath.startsWith('"') && configPath.endsWith('"')) || 
-               (configPath.startsWith("'") && configPath.endsWith("'"))) {
+
+        while (
+          (configPath.startsWith('"') && configPath.endsWith('"')) ||
+          (configPath.startsWith("'") && configPath.endsWith("'"))
+        ) {
           configPath = configPath.slice(1, -1).trim();
         }
-        
+
         if (!configPath.includes('/') && !configPath.includes('\\') && configPath.length > 100) {
           console.log('[K8s] Detected base64 string in KUBECONFIG_PATH, decoding...');
           console.log('[K8s] Base64 kubeconfig length:', configPath.length, 'characters');
@@ -294,13 +302,20 @@ export class KubernetesService {
               throw new Error('Decoded kubeconfig is empty');
             }
             if (decoded.includes('apiVersion:') || decoded.includes('kind: Config')) {
-              console.log('[K8s] Successfully decoded kubeconfig from KUBECONFIG_PATH, decoded length:', decoded.length, 'characters');
+              console.log(
+                '[K8s] Successfully decoded kubeconfig from KUBECONFIG_PATH, decoded length:',
+                decoded.length,
+                'characters'
+              );
               this.kc.loadFromString(decoded);
             } else {
               throw new Error('Decoded string does not appear to be a valid kubeconfig');
             }
           } catch (decodeError) {
-            console.warn('[K8s] Failed to decode as base64, trying as file path:', decodeError.message);
+            console.warn(
+              '[K8s] Failed to decode as base64, trying as file path:',
+              decodeError.message
+            );
             console.log('[K8s] Loading kubeconfig from file:', configPath);
             this.kc.loadFromFile(configPath);
           }
@@ -316,7 +331,9 @@ export class KubernetesService {
       console.log('[K8s] Current context:', this.kc.getCurrentContext());
     } catch (error) {
       console.error('[K8s] Error loading kubeconfig:', error.message);
-      console.warn('[K8s] Make sure KUBECONFIG_BASE64, KUBECONFIG_PATH is set or ~/.kube/config exists');
+      console.warn(
+        '[K8s] Make sure KUBECONFIG_BASE64, KUBECONFIG_PATH is set or ~/.kube/config exists'
+      );
       this.kc = null;
     }
   }
@@ -367,18 +384,19 @@ export class KubernetesService {
       const present = (groups.body.groups || []).some((group) => group.name === 'cilium.io');
       if (!present) return false;
 
-      const review = await this.kc!.makeApiClient(k8s.AuthorizationV1Api)
-        .createSelfSubjectAccessReview({
-          apiVersion: 'authorization.k8s.io/v1',
-          kind: 'SelfSubjectAccessReview',
-          spec: {
-            resourceAttributes: {
-              group: 'cilium.io',
-              resource: 'ciliumenvoyconfigs',
-              verb: 'create',
-            },
-          },
-        });
+      const review = await this.kc!.makeApiClient(
+        k8s.AuthorizationV1Api
+      ).createSelfSubjectAccessReview({
+        apiVersion: 'authorization.k8s.io/v1',
+        kind: 'SelfSubjectAccessReview',
+        spec: {
+          resourceAttributes: {
+            group: 'cilium.io',
+            resource: 'ciliumenvoyconfigs',
+            verb: 'create'
+          }
+        }
+      });
       return review.body.status?.allowed === true;
     } catch (error) {
       console.warn('[K8s] Cilium capability probe failed:', error.message);
@@ -444,7 +462,7 @@ export class KubernetesService {
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
     return res.body;
   }
@@ -512,21 +530,20 @@ export class KubernetesService {
         name: cleanName,
         namespace: cleanNamespace,
         labels: {
-          'app.kubernetes.io/managed-by': 'orchard',
-        },
+          'app.kubernetes.io/managed-by': 'orchard'
+        }
       },
       spec: {
         accessModes: ['ReadWriteOnce'],
         storageClassName: process.env.K8S_STORAGE_CLASS || 'longhorn',
         resources: {
           requests: {
-            storage: storageSize,
-          },
-        },
-      },
+            storage: storageSize
+          }
+        }
+      }
     };
 
     await coreApi.createNamespacedPersistentVolumeClaim(cleanNamespace, pvc);
   }
-
 }

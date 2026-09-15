@@ -56,14 +56,16 @@ export function coerceDockerfileHealthCheck(value: unknown): DockerfileHealthChe
   if (command.some((arg) => typeof arg !== 'string')) return null;
 
   const positive = (input: unknown) =>
-    typeof input === 'number' && Number.isFinite(input) && input > 0 ? Math.round(input) : undefined;
+    typeof input === 'number' && Number.isFinite(input) && input > 0
+      ? Math.round(input)
+      : undefined;
 
   return {
     command: command as string[],
     interval: positive(record.interval),
     timeout: positive(record.timeout),
     retries: positive(record.retries),
-    startPeriod: positive(record.startPeriod),
+    startPeriod: positive(record.startPeriod)
   };
 }
 
@@ -98,7 +100,7 @@ export function resolveHealthCheck(stored: StoredHealthCheck): ResolvedHealthChe
       interval,
       timeout,
       retries,
-      startupFailureThreshold: Math.max(1, Math.ceil(startPeriod / interval) + retries),
+      startupFailureThreshold: Math.max(1, Math.ceil(startPeriod / interval) + retries)
     };
   }
 
@@ -116,6 +118,6 @@ export function resolveHealthCheck(stored: StoredHealthCheck): ResolvedHealthChe
     interval: stored.healthCheckInterval,
     timeout: stored.healthCheckTimeout,
     retries: stored.healthCheckRetries,
-    startupFailureThreshold: stored.startupFailureThreshold,
+    startupFailureThreshold: stored.startupFailureThreshold
   };
 }

@@ -26,7 +26,7 @@ export function initDatadog(): void {
     // Event loop lag, heap, GC pauses → service Runtime Metrics tab.
     runtimeMetrics: true,
     // Continuous Profiler: wall/CPU/heap profiles via @datadog/pprof.
-    profiling: process.env.DD_PROFILING_ENABLED !== 'false',
+    profiling: process.env.DD_PROFILING_ENABLED !== 'false'
   });
 }
 
@@ -80,8 +80,8 @@ export function startBuildTrace(meta: {
       'build.type': meta.buildType ?? 'dockerfile',
       'build.trigger': meta.triggerType ?? 'manual',
       'build.triggered_by': meta.triggeredById,
-      'build.is_rebuild': !!meta.isRebuild,
-    },
+      'build.is_rebuild': !!meta.isRebuild
+    }
   });
 
   let finished = false;
@@ -106,7 +106,9 @@ export function startBuildTrace(meta: {
         if (tags) span.addTags(tags as Record<string, string>);
         span.setTag('build.outcome', 'succeeded');
         span.finish();
-      } catch { /* telemetry must never break builds */ }
+      } catch {
+        /* telemetry must never break builds */
+      }
     },
     /** Mark the pipeline failed; classifies user-vs-system from the error. */
     finishFailure(error: unknown, step?: string) {
@@ -119,8 +121,10 @@ export function startBuildTrace(meta: {
         span.setTag('build.failed_step', step ?? 'unknown');
         span.setTag('build.error_domain', classifyBuildError(err.message, step));
         span.finish();
-      } catch { /* telemetry must never break builds */ }
-    },
+      } catch {
+        /* telemetry must never break builds */
+      }
+    }
   };
 }
 
@@ -131,15 +135,15 @@ export function startBuildTrace(meta: {
  */
 export function startPhaseSpan(
   name: string,
-  tags?: Record<string, string | number | boolean | undefined>,
+  tags?: Record<string, string | number | boolean | undefined>
 ) {
   const span = tracer.startSpan(name, {
     childOf: tracer.scope().active() ?? undefined,
     tags: {
       'service.name': 'orchard-builds',
       'resource.name': name,
-      ...tags,
-    },
+      ...tags
+    }
   });
   let finished = false;
   return {
@@ -149,8 +153,10 @@ export function startPhaseSpan(
       try {
         if (extra) span.addTags(extra as Record<string, string>);
         span.finish();
-      } catch { /* telemetry must never break builds */ }
-    },
+      } catch {
+        /* telemetry must never break builds */
+      }
+    }
   };
 }
 
@@ -163,7 +169,7 @@ export function recordPhaseSpan(
   name: string,
   startMs: number,
   endMs: number,
-  tags?: Record<string, string | number | boolean | undefined>,
+  tags?: Record<string, string | number | boolean | undefined>
 ): void {
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
   try {
@@ -173,11 +179,13 @@ export function recordPhaseSpan(
       tags: {
         'service.name': 'orchard-builds',
         'resource.name': name,
-        ...tags,
-      },
+        ...tags
+      }
     });
     span.finish(endMs);
-  } catch { /* telemetry must never break builds */ }
+  } catch {
+    /* telemetry must never break builds */
+  }
 }
 
 export type BuildOutcomeSource = 'watch' | 'resume' | 'recovery' | 'queue';
@@ -218,17 +226,23 @@ export function recordBuildOutcome(meta: {
       `reason:${reason}`,
       `last_phase:${lastPhase}`,
       `build_type:${meta.buildType ?? 'dockerfile'}`,
-      `suppressed:${!!meta.suppressed}`,
+      `suppressed:${!!meta.suppressed}`
     ];
-    const statsd = (tracer as unknown as { dogstatsd?: {
-      increment(name: string, value?: number, tags?: string[]): void;
-      distribution(name: string, value: number, tags?: string[]): void;
-    } }).dogstatsd;
+    const statsd = (
+      tracer as unknown as {
+        dogstatsd?: {
+          increment(name: string, value?: number, tags?: string[]): void;
+          distribution(name: string, value: number, tags?: string[]): void;
+        };
+      }
+    ).dogstatsd;
     statsd?.increment('orchard.build.outcome', 1, metricTags);
     if (typeof meta.durationMs === 'number' && Number.isFinite(meta.durationMs)) {
       statsd?.distribution('orchard.build.duration_ms', meta.durationMs, metricTags);
     }
-  } catch { /* telemetry must never break builds */ }
+  } catch {
+    /* telemetry must never break builds */
+  }
 
   try {
     const span = tracer.startSpan('build.outcome', {
@@ -248,14 +262,19 @@ export function recordBuildOutcome(meta: {
         'build.job_name': meta.jobName,
         'build.type': meta.buildType,
         'build.duration_ms': meta.durationMs,
-        'build.detail': meta.detail?.slice(0, 4000),
-      },
+        'build.detail': meta.detail?.slice(0, 4000)
+      }
     });
     if (meta.outcome !== 'succeeded' && !meta.suppressed) {
-      span.setTag('error', new Error(meta.detail?.slice(0, 500) || `build ${meta.outcome}: ${reason}`));
+      span.setTag(
+        'error',
+        new Error(meta.detail?.slice(0, 500) || `build ${meta.outcome}: ${reason}`)
+      );
     }
     span.finish();
-  } catch { /* telemetry must never break builds */ }
+  } catch {
+    /* telemetry must never break builds */
+  }
 }
 
 /**
@@ -267,10 +286,7 @@ export function markSpanError(exception: unknown): void {
   try {
     const span = tracer.scope().active();
     if (!span) return;
-    span.setTag(
-      'error',
-      exception instanceof Error ? exception : new Error(String(exception)),
-    );
+    span.setTag('error', exception instanceof Error ? exception : new Error(String(exception)));
   } catch {
     /* never let telemetry break request handling */
   }

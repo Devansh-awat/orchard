@@ -8,7 +8,7 @@ import { CloudflareTunnelService } from './cloudflare-tunnel.service';
 export class InstanceNetworkController {
   constructor(
     private readonly dns: DnsCheckService,
-    private readonly tunnel: CloudflareTunnelService,
+    private readonly tunnel: CloudflareTunnelService
   ) {}
 
   @Get('dns')

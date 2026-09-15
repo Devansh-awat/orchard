@@ -42,13 +42,13 @@ test('normalizeRootDirectory still normalizes the shapes callers rely on', () =>
 test('resolveIssuerUrl still trims trailing slashes and strips the scheme', () => {
   assert.equal(
     resolveIssuerUrl(null, { issuerUrl: 'https://idp.example.com/auth///' }),
-    'https://idp.example.com/auth',
+    'https://idp.example.com/auth'
   );
   assert.equal(
     resolveIssuerUrl({ id: 'x', issuerTemplate: 'https://{domain}/x' } as never, {
-      domain: 'https://acme.com/',
+      domain: 'https://acme.com/'
     }),
-    'https://acme.com/x',
+    'https://acme.com/x'
   );
 });
 
@@ -60,7 +60,7 @@ test('a repo or file name arriving as an array is rejected, not coerced', async 
   // guard used to pass for a single-element array whose content held '..'.
   assert.throws(
     () => svc.resolveWorkdir({ repoUrl: null }, ['a/../../etc'] as never),
-    /Invalid repo name/,
+    /Invalid repo name/
   );
   assert.equal(svc.resolveWorkdir({ repoUrl: null }, 'myrepo'), '/persist/home/myrepo');
 });

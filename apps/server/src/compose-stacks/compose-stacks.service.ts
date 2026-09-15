@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import * as yaml from 'js-yaml';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,7 +56,7 @@ const MEMORY_UNITS: Record<string, number> = {
   g: 1000 ** 3,
   gb: 1000 ** 3,
   gi: 1024 ** 3,
-  gib: 1024 ** 3,
+  gib: 1024 ** 3
 };
 
 interface PreservedEnv {
@@ -76,7 +76,7 @@ export class ComposeStacksService {
     private readonly environments: EnvironmentsService,
     private readonly authz: AuthorizationService,
     private readonly usersService: UsersService,
-    private readonly github: GitHubService,
+    private readonly github: GitHubService
   ) {}
 
   private async resolveUserId(clerkId: string, userData?: UserData): Promise<string> {
@@ -124,10 +124,9 @@ export class ComposeStacksService {
     return {
       // Orchard's cpuRequestMilli/memoryRequestBytes are the pod's ceiling, so
       // compose `limits` wins; `reservations` only fills in what limits omits.
-      cpuRequestMilli:
-        this.parseComposeCpu(limits.cpus) ?? this.parseComposeCpu(reservations.cpus),
+      cpuRequestMilli: this.parseComposeCpu(limits.cpus) ?? this.parseComposeCpu(reservations.cpus),
       memoryRequestBytes:
-        this.parseComposeMemory(limits.memory) ?? this.parseComposeMemory(reservations.memory),
+        this.parseComposeMemory(limits.memory) ?? this.parseComposeMemory(reservations.memory)
     };
   }
 
@@ -151,7 +150,9 @@ export class ComposeStacksService {
     const out: ParsedComposeService[] = [];
     for (const [name, svc] of Object.entries(services)) {
       if (!svc?.image && !svc?.build) {
-        throw new BadRequestException(`Service "${name}" must have either \`image:\` or \`build:\``);
+        throw new BadRequestException(
+          `Service "${name}" must have either \`image:\` or \`build:\``
+        );
       }
 
       const ports: ParsedComposeService['ports'] = [];
@@ -164,7 +165,7 @@ export class ComposeStacksService {
           ports.push({
             containerPort,
             servicePort: Number.isFinite(servicePort) ? servicePort : containerPort,
-            protocol: 'TCP',
+            protocol: 'TCP'
           });
         }
       }
@@ -194,7 +195,7 @@ export class ComposeStacksService {
           name: src,
           type: 'pvc',
           mountPath: dst,
-          storageSize: top?.driver_opts?.size ?? '1Gi',
+          storageSize: top?.driver_opts?.size ?? '1Gi'
         });
       }
 
@@ -204,14 +205,14 @@ export class ComposeStacksService {
         build: svc?.build
           ? {
               context: typeof svc.build === 'string' ? svc.build : svc.build?.context,
-              dockerfile: typeof svc.build === 'object' ? svc.build?.dockerfile : undefined,
+              dockerfile: typeof svc.build === 'object' ? svc.build?.dockerfile : undefined
             }
           : undefined,
         ports,
         env,
         volumes,
         replicas: typeof svc?.deploy?.replicas === 'number' ? svc.deploy.replicas : 1,
-        ...this.parseComposeResources(svc),
+        ...this.parseComposeResources(svc)
       });
     }
     return out;
@@ -221,7 +222,7 @@ export class ComposeStacksService {
     userId: string,
     repoUrl: string,
     branch: string,
-    composePath: string,
+    composePath: string
   ): Promise<{ composeYaml: string; installationId: bigint | null }> {
     const parsed = this.github.parseRepoUrl(repoUrl);
     if (!parsed) throw new BadRequestException('Could not parse repository URL');
@@ -231,7 +232,7 @@ export class ComposeStacksService {
       const isPublic = await this.github.isRepoPublic(parsed.owner, parsed.repo);
       if (!isPublic) {
         throw new ForbiddenException(
-          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.',
+          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
         );
       }
     }
@@ -239,17 +240,23 @@ export class ComposeStacksService {
     const token = await this.github.resolveRepoToken(userId, parsed.owner, parsed.repo);
     if (!token) {
       throw new BadRequestException(
-        'No GitHub access for this repo. Connect your GitHub account or install the GitHub App.',
+        'No GitHub access for this repo. Connect your GitHub account or install the GitHub App.'
       );
     }
-    const composeYaml = await this.github.getFileContent(token, parsed.owner, parsed.repo, composePath, branch);
+    const composeYaml = await this.github.getFileContent(
+      token,
+      parsed.owner,
+      parsed.repo,
+      composePath,
+      branch
+    );
 
     // Best-effort: capture an installation id we can use for webhook matching.
     let installationId: bigint | null = null;
     try {
       const installations = await this.prisma.gitHubAppInstallation.findMany({
         where: { userId },
-        select: { installationId: true },
+        select: { installationId: true }
       });
       // Heuristic: assume the user's first installation owns the repo. If we get
       // it wrong, webhooks still won't trigger; the user can repick.
@@ -267,7 +274,7 @@ export class ComposeStacksService {
     projectId: string,
     body: CreateFromGithubBody,
     clerkId: string,
-    userData?: UserData,
+    userData?: UserData
   ) {
     const userId = await this.resolveUserId(clerkId, userData);
     await this.authz.requireProjectEdit(projectId, userId, 'create a compose stack');
@@ -275,7 +282,9 @@ export class ComposeStacksService {
     const name = this.formatStackName(String(body.name || '').trim());
     if (!name) throw new BadRequestException('Stack name is required');
 
-    const repoUrl = String(body.repoUrl || '').trim().replace(/\.git$/, '');
+    const repoUrl = String(body.repoUrl || '')
+      .trim()
+      .replace(/\.git$/, '');
     const branch = String(body.branch || 'main').trim();
     const composePath = String(body.composePath || 'docker-compose.yml').trim();
     const autoDeployEnabled = Boolean(body.autoDeployEnabled);
@@ -288,7 +297,7 @@ export class ComposeStacksService {
     const environment = await this.environments.resolveEnvironment(projectId, body.environmentId);
 
     const existing = await this.prisma.composeStack.findUnique({
-      where: { projectId_name: { projectId, name } },
+      where: { projectId_name: { projectId, name } }
     });
     if (existing) {
       throw new BadRequestException('A compose stack with this name already exists in the project');
@@ -298,7 +307,7 @@ export class ComposeStacksService {
       userId,
       repoUrl,
       branch,
-      composePath,
+      composePath
     );
 
     const services = this.parseCompose(composeYaml);
@@ -317,15 +326,15 @@ export class ComposeStacksService {
         autoDeployEnabled,
         autoDeployBranch: autoDeployEnabled ? branch : null,
         buildStatus: services.some((s) => s.build) ? 'building' : 'none',
-        createdBy: userId,
-      },
+        createdBy: userId
+      }
     });
 
     try {
       await this.deployChildren(stack.id, services, clerkId, userData);
       await this.prisma.composeStack.update({
         where: { id: stack.id },
-        data: { status: 'active', lastError: null },
+        data: { status: 'active', lastError: null }
       });
       return this.getComposeStack(stack.id, clerkId, userData);
     } catch (e: any) {
@@ -348,7 +357,7 @@ export class ComposeStacksService {
   // stored value is ciphertext that only the secret flag knows how to read.
   private mergeComposeEnv(
     composeEnv: { key: string; value: string }[],
-    preserved?: PreservedEnv[],
+    preserved?: PreservedEnv[]
   ): PreservedEnv[] {
     const merged = new Map<string, PreservedEnv>();
     for (const e of preserved ?? []) merged.set(e.key, e);
@@ -361,7 +370,7 @@ export class ComposeStacksService {
     services: ParsedComposeService[],
     clerkId: string,
     userData?: UserData,
-    preservedEnv?: Map<string, PreservedEnv[]>,
+    preservedEnv?: Map<string, PreservedEnv[]>
   ) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack disappeared');
@@ -392,7 +401,7 @@ export class ComposeStacksService {
               type: v.type,
               mountPath: v.mountPath,
               pvcName: v.name,
-              storageSize: v.storageSize,
+              storageSize: v.storageSize
             })),
             cpuRequestMilli: svc.cpuRequestMilli ?? null,
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
@@ -400,10 +409,10 @@ export class ComposeStacksService {
             composeServiceName: svc.name,
             environmentId: stack.environmentId ?? undefined,
             autoDeployEnabled: stack.autoDeployEnabled,
-            autoDeployBranch: stack.autoDeployBranch ?? stack.githubBranch ?? undefined,
+            autoDeployBranch: stack.autoDeployBranch ?? stack.githubBranch ?? undefined
           },
           clerkId,
-          userData,
+          userData
         );
       } else if (svc.image) {
         await this.deployments.createDeployment(
@@ -419,16 +428,16 @@ export class ComposeStacksService {
               type: v.type,
               mountPath: v.mountPath,
               pvcName: v.name,
-              storageSize: v.storageSize,
+              storageSize: v.storageSize
             })),
             cpuRequestMilli: svc.cpuRequestMilli ?? null,
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
-            environmentId: stack.environmentId ?? undefined,
+            environmentId: stack.environmentId ?? undefined
           },
           clerkId,
-          userData,
+          userData
         );
       }
     }
@@ -452,14 +461,14 @@ export class ComposeStacksService {
 
     await this.prisma.composeStack.update({
       where: { id: stackId },
-      data: { status: 'updating' },
+      data: { status: 'updating' }
     });
 
     const { composeYaml } = await this.fetchComposeFromGithub(
       userId,
       stack.githubRepo,
       stack.githubBranch ?? 'main',
-      stack.composePath ?? 'docker-compose.yml',
+      stack.composePath ?? 'docker-compose.yml'
     );
 
     let services: ParsedComposeService[];
@@ -468,7 +477,7 @@ export class ComposeStacksService {
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { status: 'failed', lastError: e.message },
+        data: { status: 'failed', lastError: e.message }
       });
       throw e;
     }
@@ -477,8 +486,8 @@ export class ComposeStacksService {
       where: { composeStackId: stackId },
       select: {
         composeServiceName: true,
-        envVars: { select: { key: true, value: true, secret: true } },
-      },
+        envVars: { select: { key: true, value: true, secret: true } }
+      }
     });
     const preservedEnv = new Map<string, PreservedEnv[]>();
     for (const child of existingChildren) {
@@ -490,38 +499,33 @@ export class ComposeStacksService {
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { status: 'failed', lastError: `Teardown failed: ${e.message}` },
+        data: { status: 'failed', lastError: `Teardown failed: ${e.message}` }
       });
       throw new BadRequestException(`Redeploy failed during teardown: ${e.message}`);
     }
 
     await this.prisma.composeStack.update({
       where: { id: stackId },
-      data: { composeYaml, status: 'deploying' },
+      data: { composeYaml, status: 'deploying' }
     });
 
     try {
       await this.deployChildren(stackId, services, clerkId, userData, preservedEnv);
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { status: 'active', lastError: null },
+        data: { status: 'active', lastError: null }
       });
       return this.getComposeStack(stackId, clerkId, userData);
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { status: 'failed', lastError: e.message },
+        data: { status: 'failed', lastError: e.message }
       });
       throw new BadRequestException(`Compose stack redeploy failed: ${e.message}`);
     }
   }
 
-  async setAutoDeploy(
-    stackId: string,
-    enabled: boolean,
-    clerkId: string,
-    userData?: UserData,
-  ) {
+  async setAutoDeploy(stackId: string, enabled: boolean, clerkId: string, userData?: UserData) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack not found');
     const userId = await this.resolveUserId(clerkId, userData);
@@ -532,8 +536,8 @@ export class ComposeStacksService {
       where: { id: stackId },
       data: {
         autoDeployEnabled: enabled,
-        autoDeployBranch: enabled ? branch : null,
-      },
+        autoDeployBranch: enabled ? branch : null
+      }
     });
 
     // Mirror the toggle to every child deployment that came from GitHub. The
@@ -542,19 +546,14 @@ export class ComposeStacksService {
       where: { composeStackId: stackId, githubRepo: { not: null } },
       data: {
         autoDeployEnabled: enabled,
-        autoDeployBranch: enabled ? branch : null,
-      },
+        autoDeployBranch: enabled ? branch : null
+      }
     });
 
     return this.getComposeStack(stackId, clerkId, userData);
   }
 
-  async renameComposeStack(
-    stackId: string,
-    name: string,
-    clerkId: string,
-    userData?: UserData,
-  ) {
+  async renameComposeStack(stackId: string, name: string, clerkId: string, userData?: UserData) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack not found');
     const userId = await this.resolveUserId(clerkId, userData);
@@ -566,14 +565,16 @@ export class ComposeStacksService {
 
     if (trimmed !== stack.name) {
       const existing = await this.prisma.composeStack.findFirst({
-        where: { projectId: stack.projectId, name: trimmed, id: { not: stackId } },
+        where: { projectId: stack.projectId, name: trimmed, id: { not: stackId } }
       });
       if (existing) {
-        throw new BadRequestException('A compose stack with this name already exists in this project');
+        throw new BadRequestException(
+          'A compose stack with this name already exists in this project'
+        );
       }
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { name: trimmed },
+        data: { name: trimmed }
       });
     }
 
@@ -595,10 +596,10 @@ export class ComposeStacksService {
             buildStatus: true,
             buildStep: true,
             composeServiceName: true,
-            createdAt: true,
-          },
-        },
-      },
+            createdAt: true
+          }
+        }
+      }
     });
     if (!stack) throw new NotFoundException('Compose stack not found');
     await this.authz.requireProjectView(stack.projectId, userId);
@@ -613,9 +614,9 @@ export class ComposeStacksService {
       orderBy: { createdAt: 'desc' },
       include: {
         deployments: {
-          select: { id: true, name: true, status: true, composeServiceName: true },
-        },
-      },
+          select: { id: true, name: true, status: true, composeServiceName: true }
+        }
+      }
     });
   }
 
@@ -627,7 +628,7 @@ export class ComposeStacksService {
 
     await this.prisma.composeStack.update({
       where: { id: stackId },
-      data: { status: 'deleting' },
+      data: { status: 'deleting' }
     });
 
     try {
@@ -635,7 +636,7 @@ export class ComposeStacksService {
     } catch (e: any) {
       await this.prisma.composeStack.update({
         where: { id: stackId },
-        data: { status: 'failed', lastError: `Delete failed: ${e.message}` },
+        data: { status: 'failed', lastError: `Delete failed: ${e.message}` }
       });
       throw new BadRequestException(`Compose stack delete failed: ${e.message}`);
     }
@@ -647,12 +648,14 @@ export class ComposeStacksService {
   private async deleteChildDeployments(stackId: string, clerkId: string, userData?: UserData) {
     const deployments = await this.prisma.deployment.findMany({
       where: { composeStackId: stackId },
-      select: { id: true },
+      select: { id: true }
     });
     const errors: string[] = [];
     for (const d of deployments) {
       try {
-        await this.deployments.deleteDeployment(d.id, clerkId, userData, { fromComposeStack: true });
+        await this.deployments.deleteDeployment(d.id, clerkId, userData, {
+          fromComposeStack: true
+        });
       } catch (e: any) {
         errors.push(`deployment ${d.id}: ${e.message}`);
       }

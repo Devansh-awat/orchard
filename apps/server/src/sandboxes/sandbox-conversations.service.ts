@@ -22,7 +22,7 @@ export function toConversationDto(row: SandboxConversation): ConversationDto {
     repo: row.repo,
     hasSession: !!row.claudeSessionId,
     createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    updatedAt: row.updatedAt
   };
 }
 
@@ -31,25 +31,25 @@ export class SandboxConversationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8s: SandboxK8sService,
-    private readonly workspace: SandboxWorkspaceService,
+    private readonly workspace: SandboxWorkspaceService
   ) {}
 
   async list(sandboxId: string): Promise<ConversationDto[]> {
     const rows = await this.prisma.sandboxConversation.findMany({
       where: { sandboxId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'asc' }
     });
     return rows.map(toConversationDto);
   }
 
   async create(
     sandbox: { id: string; repoUrl: string | null },
-    body: { title?: string; repo?: string | null },
+    body: { title?: string; repo?: string | null }
   ): Promise<ConversationDto> {
     const title = (body.title || 'New conversation').trim().slice(0, 120);
     const repo = body.repo ? this.validateRepo(body.repo) : null;
     const row = await this.prisma.sandboxConversation.create({
-      data: { sandboxId: sandbox.id, title, repo },
+      data: { sandboxId: sandbox.id, title, repo }
     });
     return toConversationDto(row);
   }
@@ -63,7 +63,7 @@ export class SandboxConversationsService {
 
   async getOwned(sandboxId: string, conversationId: string): Promise<SandboxConversation> {
     const row = await this.prisma.sandboxConversation.findUnique({
-      where: { id: conversationId },
+      where: { id: conversationId }
     });
     if (!row || row.sandboxId !== sandboxId) {
       throw new NotFoundException('Conversation not found');
@@ -74,7 +74,7 @@ export class SandboxConversationsService {
   async update(
     sandboxId: string,
     conversationId: string,
-    body: { title?: string; repo?: string | null },
+    body: { title?: string; repo?: string | null }
   ): Promise<ConversationDto> {
     const row = await this.getOwned(sandboxId, conversationId);
     const data: { title?: string; repo?: string | null } = {};
@@ -86,14 +86,14 @@ export class SandboxConversationsService {
     if (body.repo !== undefined) {
       if (row.claudeSessionId) {
         throw new BadRequestException(
-          'This conversation already has a session; its working directory cannot change',
+          'This conversation already has a session; its working directory cannot change'
         );
       }
       data.repo = body.repo ? this.validateRepo(body.repo) : null;
     }
     const updated = await this.prisma.sandboxConversation.update({
       where: { id: row.id },
-      data,
+      data
     });
     return toConversationDto(updated);
   }
@@ -105,7 +105,7 @@ export class SandboxConversationsService {
 
   async history(
     sandbox: { id: string; status: string; repoUrl: string | null },
-    conversationId: string,
+    conversationId: string
   ): Promise<{ events: unknown[]; truncated: boolean }> {
     const row = await this.getOwned(sandbox.id, conversationId);
     if (!row.claudeSessionId) return { events: [], truncated: false };
@@ -121,7 +121,7 @@ export class SandboxConversationsService {
         '-l',
         'dev',
         '-c',
-        `tail -c ${MAX_HISTORY_BYTES + 1} '${path}' 2>/dev/null`,
+        `tail -c ${MAX_HISTORY_BYTES + 1} '${path}' 2>/dev/null`
       ]);
       stdout = result.stdout;
     } catch {

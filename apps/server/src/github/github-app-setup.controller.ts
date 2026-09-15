@@ -8,7 +8,7 @@ import { GithubAppConfigService } from './github-app-config.service';
 export class GithubAppSetupController {
   constructor(
     private readonly setup: GithubAppSetupService,
-    private readonly config: GithubAppConfigService,
+    private readonly config: GithubAppConfigService
   ) {}
 
   @Get('status')
@@ -20,7 +20,7 @@ export class GithubAppSetupController {
       appId: c.appId,
       lockedFields: this.config.lockedFields(),
       installUrl: this.setup.installUrl(),
-      callbackUrl: this.config.callbackUrl(),
+      callbackUrl: this.config.callbackUrl()
     };
   }
 
@@ -28,7 +28,7 @@ export class GithubAppSetupController {
   manifest(@Body() body: { organization?: string; returnTo?: string }) {
     return this.setup.startManifestFlow(
       body?.organization?.trim() || undefined,
-      body?.returnTo?.trim() || undefined,
+      body?.returnTo?.trim() || undefined
     );
   }
 
@@ -40,11 +40,7 @@ export class GithubAppSetupController {
 
   @Public()
   @Get('callback')
-  async callback(
-    @Query('code') code: string,
-    @Query('state') state: string,
-    @Res() res: Response,
-  ) {
+  async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
     const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     let returnTo: string | undefined;
     try {

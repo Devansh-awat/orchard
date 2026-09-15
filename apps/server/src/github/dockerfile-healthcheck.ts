@@ -54,11 +54,11 @@ function parseDuration(value: string): number | undefined {
   const scale: Record<string, number> = {
     ns: 1e-9,
     us: 1e-6,
-    'µs': 1e-6,
+    µs: 1e-6,
     ms: 1e-3,
     s: 1,
     m: 60,
-    h: 3600,
+    h: 3600
   };
 
   let seconds = 0;
@@ -117,13 +117,13 @@ function stageName(fromArgs: string): { name: string; parent: string } {
   const parent = parts.find((part) => !part.startsWith('--')) ?? '';
   return {
     name: asIndex > 0 ? (parts[asIndex + 1] ?? DEFAULT_STAGE).toLowerCase() : DEFAULT_STAGE,
-    parent: parent.toLowerCase(),
+    parent: parent.toLowerCase()
   };
 }
 
 export function parseDockerfileHealthCheck(
   dockerfileContent: string,
-  target?: string | null,
+  target?: string | null
 ): DockerfileHealthCheck | null {
   const byStage = new Map<string, DockerfileHealthCheck | null>();
   let current: DockerfileHealthCheck | null = null;

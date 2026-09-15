@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, Req, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Req,
+  NotFoundException
+} from '@nestjs/common';
 import { Request } from 'express';
 import { Auth } from './decorators';
 import { ApiTokensService } from './api-tokens.service';
@@ -11,7 +21,12 @@ export class ApiTokensController {
   @Post()
   async create(
     @Req() req: Request,
-    @Body() body: { name: string; expiresAt?: string; scopes?: string[]; restrictedProjectIds?: string[] },
+    @Body() body: {
+      name: string;
+      expiresAt?: string;
+      scopes?: string[];
+      restrictedProjectIds?: string[];
+    }
   ) {
     const userId = req['auth'].userId;
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
@@ -20,7 +35,7 @@ export class ApiTokensController {
       body.name,
       expiresAt,
       body.scopes,
-      body.restrictedProjectIds,
+      body.restrictedProjectIds
     );
   }
 
@@ -33,11 +48,7 @@ export class ApiTokensController {
 
   @Auth()
   @Patch(':id')
-  async rename(
-    @Req() req: Request,
-    @Param('id') id: string,
-    @Body() body: { name?: string },
-  ) {
+  async rename(@Req() req: Request, @Param('id') id: string, @Body() body: { name?: string }) {
     const userId = req['auth'].userId;
     const result = await this.apiTokensService.rename(userId, id, body?.name ?? '');
     if (!result) {

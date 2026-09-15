@@ -14,7 +14,7 @@ import {
   mergeMap,
   takeWhile,
   bufferTime,
-  finalize,
+  finalize
 } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
@@ -46,7 +46,10 @@ interface RuntimeLogMessage {
 
 const MAX_RUNTIME_STREAMS_PER_KEY = 5;
 
-export interface SeriesPoint { x: number; y: number }
+export interface SeriesPoint {
+  x: number;
+  y: number;
+}
 
 export interface HttpMetricsSeries {
   requestRate: SeriesPoint[];
@@ -122,7 +125,7 @@ export class ObservabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly orgEvents: OrgEventsService,
+    private readonly orgEvents: OrgEventsService
   ) {}
 
   /**
@@ -138,7 +141,12 @@ export class ObservabilityService {
 
     const readDelta = async (): Promise<BuildLogMessage[]> => {
       const rows = await this.prisma.$queryRaw<
-        { chunk: string | null; total: number | null; build_status: string; build_step: string | null }[]
+        {
+          chunk: string | null;
+          total: number | null;
+          build_status: string;
+          build_step: string | null;
+        }[]
       >`
         SELECT substring(build_logs from ${offset + 1}) AS chunk,
                length(build_logs) AS total,
@@ -169,7 +177,7 @@ export class ObservabilityService {
       const active = ['building', 'pending', 'queued', 'scheduled'].includes(row.build_status);
       if (!active) {
         events.push({
-          data: { done: true, status: row.build_status, step: row.build_step },
+          data: { done: true, status: row.build_status, step: row.build_step }
         });
       }
       return events;
@@ -178,21 +186,19 @@ export class ObservabilityService {
     const triggers$ = merge(
       of(0),
       this.orgEvents.forDeployment('build.changed', deploymentId),
-      interval(5000),
+      interval(5000)
     );
 
     const logs$ = triggers$.pipe(
       concatMap(() => from(readDelta())),
-      mergeMap((events) => from(events)),
+      mergeMap((events) => from(events))
     );
 
     const heartbeat$ = interval(25_000).pipe(
-      map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as BuildLogMessage),
+      map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as BuildLogMessage)
     );
 
-    return merge(logs$, heartbeat$).pipe(
-      takeWhile((ev) => !(ev.data as any)?.done, true),
-    );
+    return merge(logs$, heartbeat$).pipe(takeWhile((ev) => !(ev.data as any)?.done, true));
   }
 
   private readonly activeRuntimeStreams = new Map<string, number>();
@@ -211,7 +217,7 @@ export class ObservabilityService {
     deploymentId: string,
     userId: string,
     tailLines: number,
-    sinceTime?: string,
+    sinceTime?: string
   ): Observable<RuntimeLogMessage> {
     return defer(() => {
       const key = `${userId}:${deploymentId}`;
@@ -263,7 +269,7 @@ export class ObservabilityService {
             setTimeout(() => {
               if (!closed) attach(podName, lastTs || undefined, container);
             }, 1000);
-          },
+          }
         );
         aborts.set(podName, abort);
       };
@@ -271,7 +277,7 @@ export class ObservabilityService {
       const reconcile = async () => {
         const pods = await this.prisma.pod.findMany({
           where: { deploymentId },
-          select: { name: true },
+          select: { name: true }
         });
         const names = new Set(pods.map((p) => p.name));
         for (const name of names) {
@@ -292,7 +298,7 @@ export class ObservabilityService {
       (async () => {
         const dep = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { namespace: true },
+          select: { namespace: true }
         });
         if (!dep) {
           meta$.next({ data: { done: true, status: 'deleted' } });
@@ -311,15 +317,13 @@ export class ObservabilityService {
       const batched$ = lines$.pipe(
         bufferTime(100),
         filter((batch) => batch.length > 0),
-        map(
-          (batch): RuntimeLogMessage => ({
-            id: batch[batch.length - 1].ts || undefined,
-            data: { lines: batch },
-          }),
-        ),
+        map((batch): RuntimeLogMessage => ({
+          id: batch[batch.length - 1].ts || undefined,
+          data: { lines: batch }
+        }))
       );
       const heartbeat$ = interval(25_000).pipe(
-        map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as RuntimeLogMessage),
+        map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as RuntimeLogMessage)
       );
 
       return merge(batched$, meta$, heartbeat$).pipe(
@@ -332,7 +336,7 @@ export class ObservabilityService {
           const n = (this.activeRuntimeStreams.get(key) ?? 1) - 1;
           if (n <= 0) this.activeRuntimeStreams.delete(key);
           else this.activeRuntimeStreams.set(key, n);
-        }),
+        })
       );
     });
   }
@@ -340,7 +344,7 @@ export class ObservabilityService {
   async getCapabilities(deploymentId: string): Promise<Capabilities> {
     const [ingressCount, runtime] = await Promise.all([
       this.prisma.ingress.count({ where: { deploymentId } }),
-      this.detectRuntime(deploymentId).catch(() => null),
+      this.detectRuntime(deploymentId).catch(() => null)
     ]);
 
     return {
@@ -349,7 +353,7 @@ export class ObservabilityService {
       httpMetrics: ingressCount > 0,
       customMetrics: false,
       traces: false,
-      runtime,
+      runtime
     };
   }
 
@@ -357,7 +361,7 @@ export class ObservabilityService {
     deploymentId: string,
     startMs: number,
     endMs: number,
-    stepMs: number,
+    stepMs: number
   ): Promise<HttpMetricsSeries> {
     const selector = await this.buildHaproxySelector(deploymentId);
     if (!selector) {
@@ -375,14 +379,14 @@ export class ObservabilityService {
       requestRate: `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
       errorRate: `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`,
       latencyAvg: `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
-      latencyMax: `max(haproxy_backend_max_response_time_seconds{${selector}}) * 1000`,
+      latencyMax: `max(haproxy_backend_max_response_time_seconds{${selector}}) * 1000`
     };
 
     const [requestRate, errorRate, latencyAvg, latencyMax] = await Promise.all([
       this.queryRange(queries.requestRate, startSec, endSec, stepSec),
       this.queryRange(queries.errorRate, startSec, endSec, stepSec),
       this.queryRange(queries.latencyAvg, startSec, endSec, stepSec),
-      this.queryRange(queries.latencyMax, startSec, endSec, stepSec),
+      this.queryRange(queries.latencyMax, startSec, endSec, stepSec)
     ]);
 
     return { requestRate, errorRate, latencyAvg, latencyMax };
@@ -392,16 +396,16 @@ export class ObservabilityService {
     deploymentId: string,
     tailLines = 200,
     level?: string,
-    search?: string,
+    search?: string
   ): Promise<{ entries: LogEntry[] }> {
     const deployment = await this.prisma.deployment.findUniqueOrThrow({
       where: { id: deploymentId },
-      select: { name: true, namespace: true },
+      select: { name: true, namespace: true }
     });
 
     const pods = await this.prisma.pod.findMany({
       where: { deploymentId },
-      select: { name: true },
+      select: { name: true }
     });
 
     const allEntries: LogEntry[] = [];
@@ -410,12 +414,25 @@ export class ObservabilityService {
       try {
         let result;
         try {
-          result = await this.k8sWorkload.getPodLogs(pod.name, deployment.namespace, undefined, tailLines);
+          result = await this.k8sWorkload.getPodLogs(
+            pod.name,
+            deployment.namespace,
+            undefined,
+            tailLines
+          );
         } catch (firstErr: any) {
-          const resp = typeof firstErr?.getResponse === 'function' ? firstErr.getResponse() : firstErr?.response;
+          const resp =
+            typeof firstErr?.getResponse === 'function'
+              ? firstErr.getResponse()
+              : firstErr?.response;
           const containers: string[] | undefined = resp?.availableContainers;
           if (containers?.length) {
-            result = await this.k8sWorkload.getPodLogs(pod.name, deployment.namespace, containers[0], tailLines);
+            result = await this.k8sWorkload.getPodLogs(
+              pod.name,
+              deployment.namespace,
+              containers[0],
+              tailLines
+            );
           } else {
             throw firstErr;
           }
@@ -453,13 +470,13 @@ export class ObservabilityService {
         createdAt: true,
         cpuRequestMilli: true,
         memoryRequestBytes: true,
-        replicas: true,
-      },
+        replicas: true
+      }
     });
 
     const pods = await this.prisma.pod.findMany({
       where: { deploymentId },
-      select: { restartCount: true, status: true },
+      select: { restartCount: true, status: true }
     });
 
     const activePods = pods.filter((p) => {
@@ -473,11 +490,11 @@ export class ObservabilityService {
 
     const [cpuMilli, memBytes] = await Promise.all([
       this.queryInstant(
-        `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[60s])) * 1000`,
+        `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[60s])) * 1000`
       ),
       this.queryInstant(
-        `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`,
-      ),
+        `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`
+      )
     ]);
 
     const totalCpuRequest = (deployment.cpuRequestMilli ?? 0) * (deployment.replicas ?? 1);
@@ -500,14 +517,12 @@ export class ObservabilityService {
 
       [httpRequestRate, httpErrorRate, httpAvgLatency] = await Promise.all([
         this.queryInstant(
-          `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
+          `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`
         ),
         this.queryInstant(
-          `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`,
+          `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`
         ),
-        this.queryInstant(
-          `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
-        ),
+        this.queryInstant(`max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`)
       ]);
     }
 
@@ -519,7 +534,7 @@ export class ObservabilityService {
       memoryPercent,
       httpRequestRate,
       httpErrorRate,
-      httpAvgLatency,
+      httpAvgLatency
     };
   }
 
@@ -531,8 +546,8 @@ export class ObservabilityService {
         buildLogs: true,
         image: true,
         dockerfilePath: true,
-        envVars: { select: { key: true, value: true } },
-      },
+        envVars: { select: { key: true, value: true } }
+      }
     });
 
     const fromBuildLogs = detectFromBuildLogs(deployment.buildLogs);
@@ -552,14 +567,11 @@ export class ObservabilityService {
       framework: null,
       version: null,
       confidence: 'low',
-      detectedFrom: 'build_logs',
+      detectedFrom: 'build_logs'
     };
   }
 
-  async getErrors(
-    deploymentId: string,
-    timeWindowMinutes = 60,
-  ): Promise<{ errors: ErrorGroup[] }> {
+  async getErrors(deploymentId: string, timeWindowMinutes = 60): Promise<{ errors: ErrorGroup[] }> {
     const tailLines = Math.min(20000, timeWindowMinutes * 50);
     const { entries } = await this.getStructuredLogs(deploymentId, tailLines);
 
@@ -582,9 +594,7 @@ export class ObservabilityService {
 
     for (const entry of windowEntries) {
       const isError =
-        entry.level === 'ERROR' ||
-        entry.level === 'FATAL' ||
-        hasStackTraceStart(entry.raw);
+        entry.level === 'ERROR' || entry.level === 'FATAL' || hasStackTraceStart(entry.raw);
 
       if (!isError) continue;
 
@@ -600,7 +610,7 @@ export class ObservabilityService {
         timestamp: entry.timestamp,
         type,
         message: errMsg,
-        stackTrace,
+        stackTrace
       });
     }
 
@@ -628,7 +638,7 @@ export class ObservabilityService {
       group.entries.push({
         timestamp: err.timestamp,
         message: err.message,
-        stackTrace: err.stackTrace,
+        stackTrace: err.stackTrace
       });
     }
 
@@ -662,7 +672,7 @@ export class ObservabilityService {
         firstSeen,
         lastSeen,
         samples,
-        trend,
+        trend
       });
     }
 
@@ -679,16 +689,16 @@ export class ObservabilityService {
     const [deployment, services, ingresses] = await Promise.all([
       this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { namespace: true },
+        select: { namespace: true }
       }),
       this.prisma.service.findMany({
         where: { deploymentId },
-        select: { name: true },
+        select: { name: true }
       }),
       this.prisma.ingress.findMany({
         where: { deploymentId },
-        select: { service: { select: { name: true } } },
-      }),
+        select: { service: { select: { name: true } } }
+      })
     ]);
 
     if (!deployment?.namespace) return null;
@@ -728,13 +738,13 @@ export class ObservabilityService {
     promql: string,
     startSec: number,
     endSec: number,
-    stepSec: number,
+    stepSec: number
   ): Promise<SeriesPoint[]> {
     const params = new URLSearchParams({
       query: promql,
       start: String(startSec),
       end: String(endSec),
-      step: String(stepSec),
+      step: String(stepSec)
     });
     const url = `${this.vmBase}/api/v1/query_range?${params}`;
     try {
@@ -763,7 +773,7 @@ export class ObservabilityService {
 // logs are requested with timestamps=true.
 const K8S_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s(.*)$/s;
 // ANSI SGR/color escape sequences (\x1b[..m) and other CSI codes.
-// eslint-disable-next-line no-control-regex
+// oxlint-disable-next-line no-control-regex
 const ANSI_RE = /\[[0-9;]*[A-Za-z]/g;
 const INLINE_LEVEL_RE = /^\[?(DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|TRACE)\]?\b/i;
 
@@ -774,7 +784,12 @@ function stripAnsi(s: string): string {
 // `raw` keeps the original line (k8s timestamp + ANSI) so the frontend can
 // render it in colour through ansiToHtml; `clean` is timestamp/ANSI-stripped
 // and drives grouping, level detection, and search.
-interface RawLine { ts?: string; tsMs: number; raw: string; clean: string }
+interface RawLine {
+  ts?: string;
+  tsMs: number;
+  raw: string;
+  clean: string;
+}
 
 function splitLine(raw: string): RawLine {
   const m = K8S_TS_RE.exec(raw);
@@ -795,9 +810,10 @@ function isContinuation(line: RawLine, groupStartMs: number): boolean {
   if (/^\s/.test(c)) return true;
   if (/^(at\s|\.{3}\s*\d+\s+more\b|Caused by:|goroutine\s|File ")/.test(c)) return true;
   if (/^[}\])]/.test(c)) return true;
-  const closeBy = Number.isNaN(line.tsMs) || Number.isNaN(groupStartMs)
-    ? false
-    : Math.abs(line.tsMs - groupStartMs) <= 5;
+  const closeBy =
+    Number.isNaN(line.tsMs) || Number.isNaN(groupStartMs)
+      ? false
+      : Math.abs(line.tsMs - groupStartMs) <= 5;
   if (closeBy && /^[\w.$#-]+:\s/.test(c)) return true;
   return false;
 }
@@ -836,14 +852,27 @@ function buildEntry(header: RawLine, lines: RawLine[]): LogEntry {
           const level = obj.level ?? obj.severity ?? obj.lvl ?? obj.log_level;
           const message = obj.msg ?? obj.message ?? obj.text ?? trimmed;
           const timestamp = obj.timestamp ?? obj.time ?? obj.ts ?? obj['@timestamp'] ?? header.ts;
-          const { level: _l, severity: _s, lvl: _v, log_level: _ll, msg: _m, message: _ms, text: _t, timestamp: _ts, time: _ti, ts: _tss, '@timestamp': _at, ...metadata } = obj;
+          const {
+            level: _l,
+            severity: _s,
+            lvl: _v,
+            log_level: _ll,
+            msg: _m,
+            message: _ms,
+            text: _t,
+            timestamp: _ts,
+            time: _ti,
+            ts: _tss,
+            '@timestamp': _at,
+            ...metadata
+          } = obj;
           return {
             timestamp: timestamp != null ? String(timestamp) : undefined,
             level: level != null ? normalizeLevel(String(level)) : undefined,
             message: String(message),
             lines: [String(message)],
             raw: String(message),
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
           };
         }
       } catch {}
@@ -858,14 +887,17 @@ function buildEntry(header: RawLine, lines: RawLine[]): LogEntry {
     // Original ts+ANSI lines for colourised rendering on the client.
     lines: lines.map((l) => l.raw),
     // Cleaned text for client-side search.
-    raw: cleanLines.join('\n'),
+    raw: cleanLines.join('\n')
   };
 }
 
 function detectLevel(header: string, lines: string[]): string | undefined {
   const m = INLINE_LEVEL_RE.exec(header.trim());
   if (m) return normalizeLevel(m[1]);
-  if (lines.some((l) => hasStackTraceStart(l)) || /\b(error|exception|unhandled|fatal|panic|failed)\b/i.test(header)) {
+  if (
+    lines.some((l) => hasStackTraceStart(l)) ||
+    /\b(error|exception|unhandled|fatal|panic|failed)\b/i.test(header)
+  ) {
     return 'ERROR';
   }
   if (/\bwarn(ing)?\b/i.test(header)) return 'WARN';
@@ -912,7 +944,7 @@ const LANGUAGE_PATTERNS: { re: RegExp; language: string; framework?: string }[] 
   { re: /\bdetected[:\s]+\.?net\b/i, language: 'dotnet' },
   { re: /\bdetected[:\s]+rust\b/i, language: 'rust' },
   { re: /\bdetected[:\s]+php\b/i, language: 'php' },
-  { re: /\bdetected[:\s]+elixir\b/i, language: 'elixir' },
+  { re: /\bdetected[:\s]+elixir\b/i, language: 'elixir' }
 ];
 
 const INSTALL_PATTERNS: { re: RegExp; language: string }[] = [
@@ -924,7 +956,7 @@ const INSTALL_PATTERNS: { re: RegExp; language: string }[] = [
   { re: /installing dependencies with mix\b/i, language: 'elixir' },
   { re: /\bgo build\b/i, language: 'go' },
   { re: /\bmaven\b|\bgradle\b/i, language: 'java' },
-  { re: /\bdotnet\s+(build|restore)\b/i, language: 'dotnet' },
+  { re: /\bdotnet\s+(build|restore)\b/i, language: 'dotnet' }
 ];
 
 const VERSION_RE = /(\d+\.\d+(?:\.\d+)?)/;
@@ -942,7 +974,7 @@ function detectFromBuildLogs(buildLogs: string | null): DetectedRuntime | null {
           framework: pat.framework ?? null,
           version: versionMatch?.[1] ?? null,
           confidence: 'high',
-          detectedFrom: 'build_logs',
+          detectedFrom: 'build_logs'
         };
       }
     }
@@ -957,7 +989,7 @@ function detectFromBuildLogs(buildLogs: string | null): DetectedRuntime | null {
           framework: null,
           version: versionMatch?.[1] ?? null,
           confidence: 'medium',
-          detectedFrom: 'build_logs',
+          detectedFrom: 'build_logs'
         };
       }
     }
@@ -984,7 +1016,7 @@ const FROM_IMAGE_MAP: { re: RegExp; language: string }[] = [
   { re: /^php(?=[:\-@])/, language: 'php' },
   { re: /^elixir(?=[:\-@])/, language: 'elixir' },
   { re: /^nginx(?=[:\-@])/, language: 'node' },
-  { re: /^httpd(?=[:\-@])/, language: 'node' },
+  { re: /^httpd(?=[:\-@])/, language: 'node' }
 ];
 
 const DOCKER_FRAMEWORK_PATTERNS: Record<string, { re: RegExp; framework: string }[]> = {
@@ -995,31 +1027,28 @@ const DOCKER_FRAMEWORK_PATTERNS: Record<string, { re: RegExp; framework: string 
     { re: /\bastro\s+build\b/i, framework: 'astro' },
     { re: /\bsvelte-kit\b|@sveltejs\b/i, framework: 'sveltekit' },
     { re: /\bfastify\b/i, framework: 'fastify' },
-    { re: /\bexpress\b/i, framework: 'express' },
+    { re: /\bexpress\b/i, framework: 'express' }
   ],
   python: [
     { re: /\bdjango\b|\bmanage\.py\b|\bgunicorn\b.*\bwsgi\b/i, framework: 'django' },
     { re: /\bfastapi\b|\buvicorn\b/i, framework: 'fastapi' },
-    { re: /\bflask\b/i, framework: 'flask' },
+    { re: /\bflask\b/i, framework: 'flask' }
   ],
-  ruby: [
-    { re: /\brails\b|\brake\b|\bpuma\b/i, framework: 'rails' },
-  ],
+  ruby: [{ re: /\brails\b|\brake\b|\bpuma\b/i, framework: 'rails' }],
   go: [
     { re: /\bgin-gonic\b/i, framework: 'gin' },
     { re: /\blabstack\/echo\b/i, framework: 'echo' },
-    { re: /\bgofiber\/fiber\b/i, framework: 'fiber' },
+    { re: /\bgofiber\/fiber\b/i, framework: 'fiber' }
   ],
-  java: [
-    { re: /\bspring\b/i, framework: 'spring' },
-  ],
-  php: [
-    { re: /\blaravel\b|\bartisan\b/i, framework: 'laravel' },
-  ],
+  java: [{ re: /\bspring\b/i, framework: 'spring' }],
+  php: [{ re: /\blaravel\b|\bartisan\b/i, framework: 'laravel' }]
 };
 
 const DOCKER_COPY_LANGUAGE: { re: RegExp; language: string }[] = [
-  { re: /\bCOPY\b.*\b(?:package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)\b/i, language: 'node' },
+  {
+    re: /\bCOPY\b.*\b(?:package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)\b/i,
+    language: 'node'
+  },
   { re: /\bCOPY\b.*\b(?:requirements\.txt|Pipfile|pyproject\.toml)\b/i, language: 'python' },
   { re: /\bCOPY\b.*\b(?:go\.mod|go\.sum)\b/i, language: 'go' },
   { re: /\bCOPY\b.*\bGemfile\b/i, language: 'ruby' },
@@ -1027,7 +1056,7 @@ const DOCKER_COPY_LANGUAGE: { re: RegExp; language: string }[] = [
   { re: /\bCOPY\b.*\bcomposer\.json\b/i, language: 'php' },
   { re: /\bCOPY\b.*\bmix\.exs\b/i, language: 'elixir' },
   { re: /\bCOPY\b.*\b(?:pom\.xml|build\.gradle)\b/i, language: 'java' },
-  { re: /\bCOPY\b.*\b(?:\.csproj|\.sln)\b/i, language: 'dotnet' },
+  { re: /\bCOPY\b.*\b(?:\.csproj|\.sln)\b/i, language: 'dotnet' }
 ];
 
 const DOCKER_RUN_LANGUAGE: { re: RegExp; language: string }[] = [
@@ -1039,7 +1068,7 @@ const DOCKER_RUN_LANGUAGE: { re: RegExp; language: string }[] = [
   { re: /\bRUN\b.*\bcomposer\s+install\b/i, language: 'php' },
   { re: /\bRUN\b.*\bmix\s+deps\.get\b/i, language: 'elixir' },
   { re: /\bRUN\b.*\b(?:mvn\b|gradle\b|\.\/gradlew\b)/i, language: 'java' },
-  { re: /\bRUN\b.*\bdotnet\s+(?:restore|build)\b/i, language: 'dotnet' },
+  { re: /\bRUN\b.*\bdotnet\s+(?:restore|build)\b/i, language: 'dotnet' }
 ];
 
 const FROM_VERSION_RE = /[:@](\d+(?:\.\d+(?:\.\d+)?)?)(?=-[a-zA-Z]|@|$)/;
@@ -1132,7 +1161,7 @@ function detectFromDockerBuildLogs(buildLogs: string): DetectedRuntime | null {
       framework: null,
       version: null,
       confidence: 'medium',
-      detectedFrom: 'build_logs',
+      detectedFrom: 'build_logs'
     };
   }
 
@@ -1155,7 +1184,7 @@ function detectFromDockerBuildLogs(buildLogs: string): DetectedRuntime | null {
     framework,
     version,
     confidence: framework ? 'high' : 'medium',
-    detectedFrom: 'build_logs',
+    detectedFrom: 'build_logs'
   };
 }
 
@@ -1174,12 +1203,10 @@ const ENV_RULES: {
   { test: (k) => k === 'GOPATH', language: 'go' },
   { test: (k) => k === 'MIX_ENV', language: 'elixir' },
   { test: (k) => k.startsWith('ASPNETCORE_'), language: 'dotnet' },
-  { test: (k) => k === 'NODE_ENV', language: 'node' },
+  { test: (k) => k === 'NODE_ENV', language: 'node' }
 ];
 
-function detectFromEnvVars(
-  envVars: { key: string; value: string }[],
-): DetectedRuntime | null {
+function detectFromEnvVars(envVars: { key: string; value: string }[]): DetectedRuntime | null {
   for (const env of envVars) {
     for (const rule of ENV_RULES) {
       if (rule.test(env.key)) {
@@ -1188,7 +1215,7 @@ function detectFromEnvVars(
           framework: rule.framework ?? null,
           version: null,
           confidence: rule.framework ? 'medium' : 'low',
-          detectedFrom: 'env_vars',
+          detectedFrom: 'env_vars'
         };
       }
     }
@@ -1207,7 +1234,7 @@ const IMAGE_PATTERNS: { re: RegExp; language: string }[] = [
   { re: /\baspnet[:-]/, language: 'dotnet' },
   { re: /\brust[:-]/, language: 'rust' },
   { re: /\bphp[:-]/, language: 'php' },
-  { re: /\belixir[:-]/, language: 'elixir' },
+  { re: /\belixir[:-]/, language: 'elixir' }
 ];
 
 function detectFromImage(image: string | null): DetectedRuntime | null {
@@ -1222,7 +1249,7 @@ function detectFromImage(image: string | null): DetectedRuntime | null {
         framework: null,
         version: versionMatch?.[1] ?? null,
         confidence: 'medium',
-        detectedFrom: 'image',
+        detectedFrom: 'image'
       };
     }
   }
@@ -1236,7 +1263,7 @@ function detectFromImage(image: string | null): DetectedRuntime | null {
         framework: null,
         version: versionMatch?.[1] ?? null,
         confidence: 'low',
-        detectedFrom: 'image',
+        detectedFrom: 'image'
       };
     }
   }
@@ -1253,7 +1280,7 @@ const DOCKERFILE_PATH_PATTERNS: { re: RegExp; language: string }[] = [
   { re: /\.dotnet/i, language: 'dotnet' },
   { re: /\.rust/i, language: 'rust' },
   { re: /\.php/i, language: 'php' },
-  { re: /\.elixir/i, language: 'elixir' },
+  { re: /\.elixir/i, language: 'elixir' }
 ];
 
 function detectFromDockerfilePath(path: string | null): DetectedRuntime | null {
@@ -1266,7 +1293,7 @@ function detectFromDockerfilePath(path: string | null): DetectedRuntime | null {
         framework: null,
         version: null,
         confidence: 'low',
-        detectedFrom: 'dockerfile',
+        detectedFrom: 'dockerfile'
       };
     }
   }

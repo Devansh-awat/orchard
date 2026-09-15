@@ -8,14 +8,14 @@ import { Auth } from '../auth/decorators';
 export class MetricsController {
   constructor(
     private readonly metrics: MetricsService,
-    private readonly orgs: OrganizationsService,
+    private readonly orgs: OrganizationsService
   ) {}
 
   @Get('provisioning')
   async getProvisioning(
     @Param('orgId') orgId: string,
     @Query('range') rangeRaw: string | undefined,
-    @Req() req: any,
+    @Req() req: any
   ) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
     const rangeSeconds = parseRange(rangeRaw) ?? 24 * 3600;

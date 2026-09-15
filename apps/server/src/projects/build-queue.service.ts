@@ -19,7 +19,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly workerId = `${hostname()}-${process.pid}`;
   private readonly maxConcurrent = Math.max(
     1,
-    parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15,
+    parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15
   );
 
   // Super builds run on Depot's machines, so they don't compete for the local
@@ -28,7 +28,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   // left over the BuildKit pool rather than being unbounded.
   private readonly maxConcurrentDepot = Math.max(
     1,
-    parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '4', 10) || 4,
+    parseInt(process.env.MAX_CONCURRENT_DEPOT_BUILDS || '4', 10) || 4
   );
   private readonly LOCK_KEY = 528491;
   private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';
@@ -41,12 +41,14 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly moduleRef: ModuleRef,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   onModuleInit() {
     if (this.workerDisabled) {
-      this.logger.log('BUILD_WORKER_DISABLED=true; this instance will enqueue builds but never claim or run them');
+      this.logger.log(
+        'BUILD_WORKER_DISABLED=true; this instance will enqueue builds but never claim or run them'
+      );
       return;
     }
     this.heartbeatInterval = setInterval(() => {
@@ -94,7 +96,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
 
       const stale = await tx.buildRun.findMany({
         where: { deploymentId: opts.deploymentId, status: 'scheduled' },
-        select: { commitSha: true },
+        select: { commitSha: true }
       });
 
       await tx.buildRun.updateMany({
@@ -104,8 +106,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           detail: opts.commitSha
             ? `Superseded by ${opts.commitSha.substring(0, 7)}`
             : 'Superseded by a newer build',
-          finishedAt: new Date(),
-        },
+          finishedAt: new Date()
+        }
       });
 
       const dep = await tx.deployment.findUnique({
@@ -116,28 +118,26 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           name: true,
           githubRepo: true,
           githubInstallationId: true,
-          project: { select: { organization: { select: { slug: true } } } },
-        },
+          project: { select: { organization: { select: { slug: true } } } }
+        }
       });
       const buildingForDep = await tx.buildRun.count({
-        where: { deploymentId: opts.deploymentId, status: 'building' },
+        where: { deploymentId: opts.deploymentId, status: 'building' }
       });
       const usesDepot = dep?.buildWithDepot === true;
       const buildingInPool = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: usesDepot } },
+        where: { status: 'building', deployment: { buildWithDepot: usesDepot } }
       });
       const limit = usesDepot ? this.maxConcurrentDepot : this.maxConcurrent;
       const startNow =
-        buildingForDep === 0 &&
-        dep?.buildStatus !== 'building' &&
-        buildingInPool < limit;
+        buildingForDep === 0 && dep?.buildStatus !== 'building' && buildingInPool < limit;
 
       // Counted here rather than after the fact so the caller can say why a
       // build has not started. Without it a queued rebuild is indistinguishable
       // from one that silently did nothing, which is what it looked like to
       // every API client.
       const waiting = await tx.buildRun.count({
-        where: { status: 'scheduled', deployment: { buildWithDepot: usesDepot } },
+        where: { status: 'scheduled', deployment: { buildWithDepot: usesDepot } }
       });
 
       const now = new Date();
@@ -154,22 +154,22 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           triggeredById: opts.triggeredById ?? null,
           workerId: startNow ? this.workerId : null,
           startedAt: startNow ? now : null,
-          heartbeatAt: startNow ? now : null,
-        },
+          heartbeatAt: startNow ? now : null
+        }
       });
       const queue: QueueSnapshot = {
         running: buildingInPool,
         limit,
         waiting: startNow ? waiting : waiting + 1,
         blockedByOwnBuild: buildingForDep > 0 || dep?.buildStatus === 'building',
-        pool: usesDepot ? 'depot' : 'cluster',
+        pool: usesDepot ? 'depot' : 'cluster'
       };
       return { startNow, runId: run.id, superseded: stale, deployment: dep, queue };
     }, this.txOpts);
 
     if (enqueued.superseded.length > 0) {
       void this.announceSuperseded(enqueued.superseded, enqueued.deployment, opts).catch((e) =>
-        this.logger.warn(`superseded announce failed: ${e?.message ?? e}`),
+        this.logger.warn(`superseded announce failed: ${e?.message ?? e}`)
       );
     }
 
@@ -184,7 +184,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       githubInstallationId: bigint | null;
       project: { organization: { slug: string } | null } | null;
     } | null,
-    opts: { deploymentId: string; commitSha?: string | null },
+    opts: { deploymentId: string; commitSha?: string | null }
   ): Promise<void> {
     if (!deployment?.githubRepo || !deployment.githubInstallationId) return;
     const github = this.moduleRef.get(GitHubService, { strict: false });
@@ -213,13 +213,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           externalId: opts.deploymentId,
           output: {
             title: 'Rolled into a newer build',
-            summary: `\`${deployment.name}\` was still waiting for a build slot when ${newer} took over. That build deploys this commit's code too.`,
-          },
+            summary: `\`${deployment.name}\` was still waiting for a build slot when ${newer} took over. That build deploys this commit's code too.`
+          }
         })
         .catch((e: any) =>
           this.logger.warn(
-            `superseded check run for ${sha.substring(0, 7)} failed: ${e?.message ?? e}`,
-          ),
+            `superseded check run for ${sha.substring(0, 7)} failed: ${e?.message ?? e}`
+          )
         );
     }
   }
@@ -229,7 +229,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   // conclude them if the owning process dies before the finalizers run.
   async attachGitHubContext(
     deploymentId: string,
-    ctx: { checkRunId: number; installationId: bigint; repoFullName: string },
+    ctx: { checkRunId: number; installationId: bigint; repoFullName: string }
   ): Promise<void> {
     await this.prisma.buildRun
       .updateMany({
@@ -237,8 +237,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         data: {
           checkRunId: BigInt(ctx.checkRunId),
           githubInstallationId: ctx.installationId,
-          repoFullName: ctx.repoFullName,
-        },
+          repoFullName: ctx.repoFullName
+        }
       })
       .catch(() => {});
   }
@@ -247,7 +247,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.buildRun
       .updateMany({
         where: { deploymentId, status: 'building' },
-        data: { workerId: this.workerId, heartbeatAt: new Date() },
+        data: { workerId: this.workerId, heartbeatAt: new Date() }
       })
       .catch(() => {});
   }
@@ -255,7 +255,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private async heartbeat(): Promise<void> {
     await this.prisma.buildRun.updateMany({
       where: { workerId: this.workerId, status: 'building' },
-      data: { heartbeatAt: new Date() },
+      data: { heartbeatAt: new Date() }
     });
   }
 
@@ -279,8 +279,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         triggeredById: opts.triggeredById ?? null,
         workerId: this.workerId,
         startedAt: now,
-        heartbeatAt: now,
-      },
+        heartbeatAt: now
+      }
     });
   }
 
@@ -288,7 +288,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     try {
       const dep = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { buildStatus: true },
+        select: { buildStatus: true }
       });
       const ok = dep?.buildStatus === 'succeeded';
       await this.prisma.$executeRaw`
@@ -332,7 +332,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       });
       if (!run) break;
       this.execute(run).catch((e) =>
-        this.logger.error(`execute run ${run.id} failed: ${e?.message ?? e}`),
+        this.logger.error(`execute run ${run.id} failed: ${e?.message ?? e}`)
       );
     }
   }
@@ -344,10 +344,10 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       `;
       if (!locked) return null;
       const buildingLocal = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: false } },
+        where: { status: 'building', deployment: { buildWithDepot: false } }
       });
       const buildingDepot = await tx.buildRun.count({
-        where: { status: 'building', deployment: { buildWithDepot: true } },
+        where: { status: 'building', deployment: { buildWithDepot: true } }
       });
       const localOpen = buildingLocal < this.maxConcurrent;
       const depotOpen = buildingDepot < this.maxConcurrentDepot;
@@ -382,7 +382,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
       return tx.buildRun.update({
         where: { id },
-        data: { status: 'building', workerId: this.workerId, startedAt: now, heartbeatAt: now },
+        data: { status: 'building', workerId: this.workerId, startedAt: now, heartbeatAt: now }
       });
     }, this.txOpts);
   }
@@ -399,7 +399,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         (err) => {
           clearTimeout(timer);
           reject(err);
-        },
+        }
       );
     });
   }
@@ -419,7 +419,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       await this.withTimeout(
         deployments.runQueuedBuild(run),
         4 * 60_000,
-        'Build did not start within 4 minutes',
+        'Build did not start within 4 minutes'
       );
     } catch (e) {
       const detail = (e as Error)?.message ?? 'Build failed to start';
@@ -431,15 +431,15 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
             status: 'failed',
             finishedAt: new Date(),
             detail,
-            workerId: null,
-          },
+            workerId: null
+          }
         })
         .catch(() => ({ count: 0 }));
       if (claimed.count > 0) {
         await this.prisma.deployment
           .updateMany({
             where: { id: run.deploymentId, buildStatus: 'building' },
-            data: { buildStatus: 'failed', buildError: detail, status: 'running' },
+            data: { buildStatus: 'failed', buildError: detail, status: 'running' }
           })
           .catch(() => {});
         const fullRun = await this.prisma.buildRun
@@ -449,13 +449,15 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
               deploymentId: true,
               checkRunId: true,
               githubInstallationId: true,
-              repoFullName: true,
-            },
+              repoFullName: true
+            }
           })
           .catch(() => null);
         if (fullRun) {
           await this.closeGitHubArtifacts(fullRun, detail).catch((err) =>
-            this.logger.warn(`failed to close github artifacts for run ${run.id}: ${err?.message ?? err}`),
+            this.logger.warn(
+              `failed to close github artifacts for run ${run.id}: ${err?.message ?? err}`
+            )
           );
         }
       }
@@ -474,8 +476,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         workerId: true,
         checkRunId: true,
         githubInstallationId: true,
-        repoFullName: true,
-      },
+        repoFullName: true
+      }
     });
     if (building.length === 0) return;
     const STUCK_MS = 45 * 60 * 1000;
@@ -483,7 +485,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     for (const run of building) {
       const dep = await this.prisma.deployment.findUnique({
         where: { id: run.deploymentId },
-        select: { buildStatus: true },
+        select: { buildStatus: true }
       });
       if (!dep || dep.buildStatus === 'succeeded' || dep.buildStatus === 'failed') {
         await this.prisma.buildRun.updateMany({
@@ -491,8 +493,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           data: {
             status: dep?.buildStatus === 'succeeded' ? 'succeeded' : 'failed',
             finishedAt: new Date(),
-            workerId: null,
-          },
+            workerId: null
+          }
         });
         continue;
       }
@@ -518,10 +520,10 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       if (claimed === 0) continue;
       await this.prisma.deployment.updateMany({
         where: { id: run.deploymentId, buildStatus: 'building' },
-        data: { buildStatus: 'failed', buildError: detail, status: 'running' },
+        data: { buildStatus: 'failed', buildError: detail, status: 'running' }
       });
       await this.closeGitHubArtifacts(run, detail).catch((e) =>
-        this.logger.warn(`failed to close github artifacts for run ${run.id}: ${e?.message ?? e}`),
+        this.logger.warn(`failed to close github artifacts for run ${run.id}: ${e?.message ?? e}`)
       );
       this.logger.warn(`reclaimed run ${run.id} (${detail})`);
     }
@@ -534,7 +536,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       githubInstallationId: bigint | null;
       repoFullName: string | null;
     },
-    detail: string,
+    detail: string
   ) {
     if (!run.githubInstallationId || !run.repoFullName) return;
     const [owner, repo] = run.repoFullName.split('/');
@@ -547,17 +549,17 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           conclusion: 'cancelled',
           output: {
             title: 'Build interrupted',
-            summary: detail,
-          },
+            summary: detail
+          }
         })
         .catch((e: any) => this.logger.warn(`check run close failed: ${e?.message ?? e}`));
     }
     const marker = await this.prisma.gitHubDeployment.findFirst({
       where: {
         deploymentId: run.deploymentId,
-        status: { in: ['pending', 'in_progress'] },
+        status: { in: ['pending', 'in_progress'] }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
     if (marker) {
       await github
@@ -567,7 +569,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           marker.repo,
           Number(marker.githubDeploymentId),
           'error',
-          { description: detail, logUrl: marker.logUrl ?? undefined },
+          { description: detail, logUrl: marker.logUrl ?? undefined }
         )
         .catch((e: any) => this.logger.warn(`deployment marker close failed: ${e?.message ?? e}`));
       await this.prisma.gitHubDeployment

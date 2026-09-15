@@ -4,7 +4,9 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-  Logger, OnModuleInit } from '@nestjs/common';
+  Logger,
+  OnModuleInit
+} from '@nestjs/common';
 import * as dns from 'dns';
 import { promisify } from 'util';
 import { randomUUID, randomBytes, createHash } from 'crypto';
@@ -27,7 +29,7 @@ import {
   truncateK8sName,
   platformWildcardDomains,
   desiredWildcardTls,
-  OWN_CERT_PREFIX,
+  OWN_CERT_PREFIX
 } from './projects.utils';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
 import { INGRESS } from '../instance-config/instance-config.sections';
@@ -79,7 +81,7 @@ export class IngressService implements OnModuleInit {
     @Inject(forwardRef(() => ProjectsService))
     private readonly projects: ProjectsService,
     private readonly faviconService: FaviconService,
-    private readonly instanceConfig: InstanceConfigService,
+    private readonly instanceConfig: InstanceConfigService
   ) {}
 
   /**
@@ -94,7 +96,6 @@ export class IngressService implements OnModuleInit {
    * that is still correct is left alone, so this is safe to run on every boot.
    */
   async reconcileWildcardTls(): Promise<{ checked: number; repointed: number }> {
-    const wildcards = platformWildcardDomains();
     const ingresses = await this.prisma.ingress.findMany({
       select: {
         id: true,
@@ -103,8 +104,8 @@ export class IngressService implements OnModuleInit {
         host: true,
         tlsSecretName: true,
         tlsHosts: true,
-        clusterIssuer: true,
-      },
+        clusterIssuer: true
+      }
     });
 
     let repointed = 0;
@@ -112,11 +113,7 @@ export class IngressService implements OnModuleInit {
     for (const ingress of ingresses) {
       if (!ingress.tlsSecretName) continue;
 
-      const decision = desiredWildcardTls(
-        ingress.host,
-        ingress.tlsSecretName,
-        CERT_CLUSTER_ISSUER,
-      );
+      const decision = desiredWildcardTls(ingress.host, ingress.tlsSecretName, CERT_CLUSTER_ISSUER);
       if (!decision) continue;
 
       const nextSecret = decision.secretName ?? `${OWN_CERT_PREFIX}${randomUUID()}`;
@@ -128,14 +125,14 @@ export class IngressService implements OnModuleInit {
           ingress.namespace,
           ingress.name,
           { secretName: nextSecret, hosts },
-          nextIssuer,
+          nextIssuer
         );
       } catch (e: any) {
         // A missing Ingress is not a failure worth aborting the sweep for: the
         // row outlives the object during teardown.
         if (e?.response?.statusCode !== 404) {
           this.logger.warn(
-            `could not repoint TLS for ${ingress.namespace}/${ingress.name}: ${e?.message}`,
+            `could not repoint TLS for ${ingress.namespace}/${ingress.name}: ${e?.message}`
           );
         }
         continue;
@@ -143,15 +140,13 @@ export class IngressService implements OnModuleInit {
 
       await this.prisma.ingress.update({
         where: { id: ingress.id },
-        data: { tlsSecretName: nextSecret, clusterIssuer: nextIssuer },
+        data: { tlsSecretName: nextSecret, clusterIssuer: nextIssuer }
       });
       repointed += 1;
     }
 
     if (repointed) {
-      this.logger.log(
-        `repointed ${repointed} ingress(es) after a wildcard configuration change`,
-      );
+      this.logger.log(`repointed ${repointed} ingress(es) after a wildcard configuration change`);
     }
     return { checked: ingresses.length, repointed };
   }
@@ -182,21 +177,21 @@ export class IngressService implements OnModuleInit {
     // DNS oracle for arbitrary internet domains.
     const genericFailure = {
       valid: false,
-      message: 'DNS records do not point to the configured target.',
+      message: 'DNS records do not point to the configured target.'
     };
 
     if (!domainToCheck) {
       return { valid: false, message: 'Domain is required' };
     }
 
-    if (appDomain && domainToCheck.endsWith(`.${  appDomain}`)) {
+    if (appDomain && domainToCheck.endsWith(`.${appDomain}`)) {
       return { valid: true, message: 'Auto-generated domain is ready to use' };
     }
 
     if (!expectedCname) {
       return {
         valid: false,
-        message: 'This instance has no custom-domain CNAME target configured (INGRESS_CNAME).',
+        message: 'This instance has no custom-domain CNAME target configured (INGRESS_CNAME).'
       };
     }
 
@@ -207,7 +202,10 @@ export class IngressService implements OnModuleInit {
       const normalizedExpected = expectedCname.toLowerCase().replace(/\.$/, '');
       const hasValidCname = records.some((record) => {
         const normalizedRecord = record.toLowerCase().replace(/\.$/, '');
-        return normalizedRecord === normalizedExpected || normalizedRecord.endsWith(`.${  normalizedExpected}`);
+        return (
+          normalizedRecord === normalizedExpected ||
+          normalizedRecord.endsWith(`.${normalizedExpected}`)
+        );
       });
 
       if (hasValidCname) {
@@ -257,16 +255,16 @@ export class IngressService implements OnModuleInit {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
-        ingresses: true,
-      },
+        ingresses: true
+      }
     });
 
     if (!deployment) {
@@ -275,7 +273,9 @@ export class IngressService implements OnModuleInit {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
-    const rawHost = String(data.host || '').trim().toLowerCase();
+    const rawHost = String(data.host || '')
+      .trim()
+      .toLowerCase();
 
     if (!rawHost) {
       throw new BadRequestException('Host is required');
@@ -285,7 +285,8 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('Host exceeds maximum length');
     }
 
-    const hostPattern = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+    const hostPattern =
+      /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
@@ -305,7 +306,7 @@ export class IngressService implements OnModuleInit {
 
     return this.createDeploymentIngressCore(deployment, rawHost, data, {
       id: user.id,
-      email: user.email,
+      email: user.email
     });
   }
 
@@ -335,7 +336,7 @@ export class IngressService implements OnModuleInit {
     opts?: {
       isAutoGenerated?: boolean;
       protectionMode?: IngressProtectionMode;
-    },
+    }
   ) {
     const routesInput = Array.isArray(data.routes) ? data.routes : [];
 
@@ -354,7 +355,10 @@ export class IngressService implements OnModuleInit {
       if (!path) path = '/';
       if (!path.startsWith('/')) path = `/${path}`;
       requestedServiceName = String(data.serviceName || '').trim();
-      requestedPort = data.servicePort !== undefined && data.servicePort !== null ? Number(data.servicePort) : null;
+      requestedPort =
+        data.servicePort !== undefined && data.servicePort !== null
+          ? Number(data.servicePort)
+          : null;
     }
 
     if (path.length > 255) {
@@ -390,9 +394,7 @@ export class IngressService implements OnModuleInit {
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const annotationsInput =
-      data.annotations && typeof data.annotations === 'object'
-        ? data.annotations
-        : {};
+      data.annotations && typeof data.annotations === 'object' ? data.annotations : {};
 
     const sanitizedAnnotations: Record<string, string> = {};
 
@@ -432,13 +434,11 @@ export class IngressService implements OnModuleInit {
     // stacking a second challenge on top of it helps nobody.
     if (basicAuthPlan.via === 'proxy' && protectionMode !== 'none') {
       throw new BadRequestException(
-        'This domain already uses Orchard protection; basic auth cannot be layered on top of it.',
+        'This domain already uses Orchard protection; basic auth cannot be layered on top of it.'
       );
     }
 
-    const services = Array.isArray(deployment.services)
-      ? deployment.services
-      : [];
+    const services = Array.isArray(deployment.services) ? deployment.services : [];
 
     if (services.length === 0) {
       throw new BadRequestException('Deployment has no services to attach');
@@ -462,9 +462,7 @@ export class IngressService implements OnModuleInit {
     if (!targetService) {
       if (requestedPort !== null) {
         targetService = services.find((service) => {
-          const ports = Array.isArray((service as any).ports)
-            ? (service as any).ports
-            : [];
+          const ports = Array.isArray((service as any).ports) ? (service as any).ports : [];
           if (ports.some((port) => port.port === requestedPort)) {
             return true;
           }
@@ -484,25 +482,20 @@ export class IngressService implements OnModuleInit {
       ? (targetService as any).ports
       : [];
 
-    let selectedPort = null as
-      | {
-          port: number;
-          targetPort: number;
-        }
-      | null;
+    let selectedPort = null as {
+      port: number;
+      targetPort: number;
+    } | null;
 
     if (requestedPort !== null) {
-      selectedPort =
-        servicePorts.find((port) => Number(port.port) === requestedPort) ||
-        null;
+      selectedPort = servicePorts.find((port) => Number(port.port) === requestedPort) || null;
       if (!selectedPort && Number(targetService.port) === requestedPort) {
         selectedPort = {
           port: Number(targetService.port),
           targetPort:
-            targetService.targetPort !== null &&
-            targetService.targetPort !== undefined
+            targetService.targetPort !== null && targetService.targetPort !== undefined
               ? Number(targetService.targetPort)
-              : Number(targetService.port),
+              : Number(targetService.port)
         };
       }
     }
@@ -513,19 +506,17 @@ export class IngressService implements OnModuleInit {
         selectedPort = {
           port: Number(firstPort.port),
           targetPort:
-            firstPort.targetPort !== null &&
-            firstPort.targetPort !== undefined
+            firstPort.targetPort !== null && firstPort.targetPort !== undefined
               ? Number(firstPort.targetPort)
-              : Number(firstPort.port),
+              : Number(firstPort.port)
         };
       } else {
         selectedPort = {
           port: Number(targetService.port),
           targetPort:
-            targetService.targetPort !== null &&
-            targetService.targetPort !== undefined
+            targetService.targetPort !== null && targetService.targetPort !== undefined
               ? Number(targetService.targetPort)
-              : Number(targetService.port),
+              : Number(targetService.port)
         };
       }
     }
@@ -544,10 +535,7 @@ export class IngressService implements OnModuleInit {
       .map((segment) => formatSlug(segment))
       .filter((segment) => segment.length > 0)
       .join('-');
-    const pathSlug =
-      path !== '/'
-        ? formatSlug(path.replace(/\//g, '-'))
-        : '';
+    const pathSlug = path !== '/' ? formatSlug(path.replace(/\//g, '-')) : '';
 
     const nameSource = [deployment.name, hostSlug, pathSlug]
       .filter((segment) => segment.length > 0)
@@ -570,8 +558,8 @@ export class IngressService implements OnModuleInit {
       const existing = await this.prisma.ingress.findFirst({
         where: {
           namespace: deployment.namespace,
-          name: ingressName,
-        },
+          name: ingressName
+        }
       });
 
       if (!existing) {
@@ -603,17 +591,14 @@ export class IngressService implements OnModuleInit {
       ingressClassName,
       entrypoints,
       annotations: sanitizedAnnotations,
-      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined,
+      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined
     });
 
-    const statusRecord = Array.isArray(
-      ingressResult.status?.loadBalancer?.ingress
-    )
+    const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
       ? ingressResult.status?.loadBalancer?.ingress?.[0] || null
       : null;
 
-    const statusAddress =
-      statusRecord?.ip || statusRecord?.hostname || null;
+    const statusAddress = statusRecord?.ip || statusRecord?.hostname || null;
 
     const annotationsPayload =
       Object.keys(sanitizedAnnotations).length > 0
@@ -639,17 +624,21 @@ export class IngressService implements OnModuleInit {
         statusAddress,
         protectionMode,
         protectionBypassSecret,
-        isAutoGenerated: opts?.isAutoGenerated ?? false,
-      },
+        isAutoGenerated: opts?.isAutoGenerated ?? false
+      }
     });
 
     if (basicAuthPlan.via === 'proxy') {
       try {
         await this.enableProxyBasicAuth(deployment.namespace, ingressName, basicAuthPlan);
       } catch (error) {
-        try { await this.k8sNetwork.deleteIngress(deployment.namespace, ingressName); } catch { /* ignore */ }
+        try {
+          await this.k8sNetwork.deleteIngress(deployment.namespace, ingressName);
+        } catch {
+          /* ignore */
+        }
         await this.prisma.ingress.deleteMany({
-          where: { namespace: deployment.namespace, name: ingressName },
+          where: { namespace: deployment.namespace, name: ingressName }
         });
         throw error;
       }
@@ -659,16 +648,19 @@ export class IngressService implements OnModuleInit {
       // Reconciler re-applies protection every 10 minutes, so a failure here
       // only delays the auth wall — it must not fail ingress creation.
       try {
-        const result = await this.k8sNetwork.enableProtectionProxy(deployment.namespace, ingressName);
+        const result = await this.k8sNetwork.enableProtectionProxy(
+          deployment.namespace,
+          ingressName
+        );
         if (result !== 'applied') {
           this.logger.error(
-            `Protection proxy not applied to ${deployment.namespace}/${ingressName} (${result}); `
-            + 'the reconciler will retry within 10 minutes',
+            `Protection proxy not applied to ${deployment.namespace}/${ingressName} (${result}); ` +
+              'the reconciler will retry within 10 minutes'
           );
         }
       } catch (error) {
         this.logger.error(
-          `Failed to enable protection proxy for ${deployment.namespace}/${ingressName}: ${error.message}`,
+          `Failed to enable protection proxy for ${deployment.namespace}/${ingressName}: ${error.message}`
         );
       }
     }
@@ -677,8 +669,8 @@ export class IngressService implements OnModuleInit {
       await this.prisma.service.update({
         where: { id: targetService.id },
         data: {
-          domain: rawHost,
-        },
+          domain: rawHost
+        }
       });
     }
 
@@ -688,21 +680,21 @@ export class IngressService implements OnModuleInit {
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     this.warmFavicon(rawHost);
@@ -721,8 +713,8 @@ export class IngressService implements OnModuleInit {
         path,
         tls: tlsEnabled,
         service: targetService.name,
-        ...(opts?.isAutoGenerated ? { auto: true, protection: protectionMode } : {}),
-      },
+        ...(opts?.isAutoGenerated ? { auto: true, protection: protectionMode } : {})
+      }
     });
 
     return this.deployments.addInternalUrlsToDeployment(result);
@@ -745,7 +737,7 @@ export class IngressService implements OnModuleInit {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    },
+    }
   ) {
     // No app domain configured means no URL can be generated at all. That used
     // to return null and get logged as a warning nobody sees, so a deployment
@@ -753,7 +745,7 @@ export class IngressService implements OnModuleInit {
     const wildcard = platformWildcardDomains()[0];
     if (!wildcard) {
       this.logger.warn(
-        `No app domain configured (APP_DOMAIN / PLATFORM_WILDCARD_DOMAINS), so ${deploymentId} gets no generated URL`,
+        `No app domain configured (APP_DOMAIN / PLATFORM_WILDCARD_DOMAINS), so ${deploymentId} gets no generated URL`
       );
       return null;
     }
@@ -766,8 +758,8 @@ export class IngressService implements OnModuleInit {
       include: {
         project: { include: { organization: true } },
         services: { include: { ports: true } },
-        ingresses: true,
-      },
+        ingresses: true
+      }
     });
 
     if (!deployment) return null;
@@ -780,7 +772,7 @@ export class IngressService implements OnModuleInit {
     const nameLabel = truncateK8sName(formatSlug(deployment.name), 40);
     const projectLabel = truncateK8sName(
       formatSlug(deployment.project.slug || deployment.project.name),
-      10,
+      10
     );
 
     let lastError: unknown = null;
@@ -798,7 +790,7 @@ export class IngressService implements OnModuleInit {
           host,
           {},
           { id: user.id, email: user.email },
-          { isAutoGenerated: true, protectionMode: 'orchard' },
+          { isAutoGenerated: true, protectionMode: 'orchard' }
         );
         if (result) {
           (result as any).url = `https://${host}`;
@@ -812,7 +804,7 @@ export class IngressService implements OnModuleInit {
     }
 
     this.logger.warn(
-      `Failed to create auto ingress for deployment ${deployment.id}: ${(lastError as any)?.message}`,
+      `Failed to create auto ingress for deployment ${deployment.id}: ${(lastError as any)?.message}`
     );
     return null;
   }
@@ -844,8 +836,8 @@ export class IngressService implements OnModuleInit {
       include: {
         project: { include: { organization: true } },
         services: { include: { ports: true } },
-        ingresses: true,
-      },
+        ingresses: true
+      }
     });
 
     if (!deployment) {
@@ -867,7 +859,12 @@ export class IngressService implements OnModuleInit {
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number }[] = [];
+    const pathBackends: {
+      path: string;
+      pathType: string;
+      serviceName: string;
+      servicePort: number;
+    }[] = [];
 
     for (const route of data.routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -896,8 +893,12 @@ export class IngressService implements OnModuleInit {
         throw new BadRequestException(`Invalid service port for ${route.serviceName}`);
       }
 
-      const servicePorts = Array.isArray((targetService as any).ports) ? (targetService as any).ports : [];
-      const hasPort = servicePorts.some((p: any) => Number(p.port) === port) || Number(targetService.port) === port;
+      const servicePorts = Array.isArray((targetService as any).ports)
+        ? (targetService as any).ports
+        : [];
+      const hasPort =
+        servicePorts.some((p: any) => Number(p.port) === port) ||
+        Number(targetService.port) === port;
       if (!hasPort) {
         throw new BadRequestException(`Port ${port} not found on service ${route.serviceName}`);
       }
@@ -906,7 +907,7 @@ export class IngressService implements OnModuleInit {
         path,
         pathType: 'Prefix',
         serviceName: targetService.name,
-        servicePort: port,
+        servicePort: port
       });
     }
 
@@ -948,7 +949,7 @@ export class IngressService implements OnModuleInit {
 
     while (true) {
       const existing = await this.prisma.ingress.findFirst({
-        where: { namespace: deployment.namespace, name: ingressName },
+        where: { namespace: deployment.namespace, name: ingressName }
       });
       if (!existing) break;
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
@@ -971,7 +972,7 @@ export class IngressService implements OnModuleInit {
       ingressClassName: TENANT_INGRESS_CLASS,
       entrypoints,
       annotations: sanitizedAnnotations,
-      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined,
+      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined
     });
 
     const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
@@ -997,18 +998,25 @@ export class IngressService implements OnModuleInit {
         ingressClass: TENANT_INGRESS_CLASS,
         entrypoints,
         clusterIssuer,
-        annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
-        statusAddress,
-      },
+        annotations:
+          Object.keys(sanitizedAnnotations).length > 0
+            ? (sanitizedAnnotations as Prisma.JsonObject)
+            : undefined,
+        statusAddress
+      }
     });
 
     if (basicAuthPlan.via === 'proxy') {
       try {
         await this.enableProxyBasicAuth(deployment.namespace, ingressName, basicAuthPlan);
       } catch (error) {
-        try { await this.k8sNetwork.deleteIngress(deployment.namespace, ingressName); } catch { /* ignore */ }
+        try {
+          await this.k8sNetwork.deleteIngress(deployment.namespace, ingressName);
+        } catch {
+          /* ignore */
+        }
         await this.prisma.ingress.deleteMany({
-          where: { namespace: deployment.namespace, name: ingressName },
+          where: { namespace: deployment.namespace, name: ingressName }
         });
         throw error;
       }
@@ -1017,7 +1025,7 @@ export class IngressService implements OnModuleInit {
     if (!firstService.domain) {
       await this.prisma.service.update({
         where: { id: firstService.id },
-        data: { domain: rawHost },
+        data: { domain: rawHost }
       });
     }
 
@@ -1028,8 +1036,8 @@ export class IngressService implements OnModuleInit {
         pods: true,
         services: { include: { ports: true } },
         envVars: true,
-        ingresses: { include: { service: true } },
-      },
+        ingresses: { include: { service: true } }
+      }
     });
 
     this.warmFavicon(rawHost);
@@ -1043,7 +1051,7 @@ export class IngressService implements OnModuleInit {
       deploymentId: deployment.id,
       targetType: 'ingress',
       targetLabel: rawHost,
-      metadata: { host: rawHost, routes: data.routes.map((r) => r.path).join(','), tls: tlsEnabled },
+      metadata: { host: rawHost, routes: data.routes.map((r) => r.path).join(','), tls: tlsEnabled }
     });
 
     return this.deployments.addInternalUrlsToDeployment(result);
@@ -1083,10 +1091,10 @@ export class IngressService implements OnModuleInit {
         deployments: {
           include: {
             services: { include: { ports: true } },
-            ingresses: true,
-          },
-        },
-      },
+            ingresses: true
+          }
+        }
+      }
     });
 
     if (!project) {
@@ -1095,14 +1103,17 @@ export class IngressService implements OnModuleInit {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'manage ingress resources');
 
-    const rawHost = String(data.host || '').trim().toLowerCase();
+    const rawHost = String(data.host || '')
+      .trim()
+      .toLowerCase();
     if (!rawHost) {
       throw new BadRequestException('Host is required');
     }
     if (rawHost.length > 253) {
       throw new BadRequestException('Host exceeds maximum length');
     }
-    const hostPattern = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+    const hostPattern =
+      /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
     }
@@ -1112,7 +1123,9 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('At least one route is required');
     }
 
-    const allServices = project.deployments.flatMap((d) => (d.services ?? []).map((s) => ({ ...s, deploymentId: d.id })));
+    const allServices = project.deployments.flatMap((d) =>
+      (d.services ?? []).map((s) => ({ ...s, deploymentId: d.id }))
+    );
     const allIngresses = project.deployments.flatMap((d) => d.ingresses ?? []);
 
     if (allServices.length === 0) {
@@ -1120,7 +1133,14 @@ export class IngressService implements OnModuleInit {
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }[] = [];
+    const pathBackends: {
+      path: string;
+      pathType: string;
+      serviceName: string;
+      servicePort: number;
+      serviceId: string;
+      deploymentId: string;
+    }[] = [];
 
     for (const route of routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -1134,7 +1154,9 @@ export class IngressService implements OnModuleInit {
         throw new BadRequestException(`Path ${path} contains invalid characters`);
       }
 
-      const targetService = allServices.find((s) => s.name === String(route.serviceName || '').trim());
+      const targetService = allServices.find(
+        (s) => s.name === String(route.serviceName || '').trim()
+      );
       if (!targetService) {
         throw new BadRequestException(`Service ${route.serviceName} not found in project`);
       }
@@ -1144,8 +1166,12 @@ export class IngressService implements OnModuleInit {
         throw new BadRequestException(`Invalid service port for ${route.serviceName}`);
       }
 
-      const servicePorts = Array.isArray((targetService as any).ports) ? (targetService as any).ports : [];
-      const hasPort = servicePorts.some((p: any) => Number(p.port) === port) || Number(targetService.port) === port;
+      const servicePorts = Array.isArray((targetService as any).ports)
+        ? (targetService as any).ports
+        : [];
+      const hasPort =
+        servicePorts.some((p: any) => Number(p.port) === port) ||
+        Number(targetService.port) === port;
       if (!hasPort) {
         throw new BadRequestException(`Port ${port} not found on service ${route.serviceName}`);
       }
@@ -1156,7 +1182,7 @@ export class IngressService implements OnModuleInit {
         serviceName: targetService.name,
         servicePort: port,
         serviceId: targetService.id,
-        deploymentId: (targetService as any).deploymentId,
+        deploymentId: (targetService as any).deploymentId
       });
     }
 
@@ -1164,17 +1190,18 @@ export class IngressService implements OnModuleInit {
     const mergeTarget = existingForHost[0] ?? null;
 
     if (mergeTarget) {
-      const k8sIngress = await this.k8sNetwork.readIngress(
-        mergeTarget.namespace,
-        mergeTarget.name
-      );
-      const existingPaths: { path: string; pathType: string; serviceName: string; servicePort: number }[] =
-        (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? []).map((p: any) => ({
-          path: p.path || '/',
-          pathType: p.pathType || 'Prefix',
-          serviceName: p.backend?.service?.name || '',
-          servicePort: p.backend?.service?.port?.number || 0,
-        }));
+      const k8sIngress = await this.k8sNetwork.readIngress(mergeTarget.namespace, mergeTarget.name);
+      const existingPaths: {
+        path: string;
+        pathType: string;
+        serviceName: string;
+        servicePort: number;
+      }[] = (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? []).map((p: any) => ({
+        path: p.path || '/',
+        pathType: p.pathType || 'Prefix',
+        serviceName: p.backend?.service?.name || '',
+        servicePort: p.backend?.service?.port?.number || 0
+      }));
 
       // Check for path collisions. A path that exists in k8s but has no
       // matching DB row is an orphan (e.g. from a previous failed create) and
@@ -1195,14 +1222,17 @@ export class IngressService implements OnModuleInit {
       const mergedPaths = [
         ...existingPaths.filter((ep) => !replacedPaths.has(ep.path)),
         ...pathBackends.map((pb) => ({
-        path: pb.path,
-        pathType: pb.pathType,
-        serviceName: pb.serviceName,
-        servicePort: pb.servicePort,
-      }))].sort((a, b) => b.path.length - a.path.length);
+          path: pb.path,
+          pathType: pb.pathType,
+          serviceName: pb.serviceName,
+          servicePort: pb.servicePort
+        }))
+      ].sort((a, b) => b.path.length - a.path.length);
 
       const existingAnnotations = (mergeTarget.annotations as Record<string, string> | null) ?? {};
-      const existingEntrypoints = Array.isArray(mergeTarget.entrypoints) ? mergeTarget.entrypoints : [];
+      const existingEntrypoints = Array.isArray(mergeTarget.entrypoints)
+        ? mergeTarget.entrypoints
+        : [];
       const mergedTlsEnabled = !!mergeTarget.tlsSecretName;
 
       await this.k8sNetwork.updateIngress({
@@ -1214,7 +1244,7 @@ export class IngressService implements OnModuleInit {
         tlsHosts: mergeTarget.tlsHosts ?? (mergedTlsEnabled ? [rawHost] : []),
         ingressClassName: TENANT_INGRESS_CLASS,
         entrypoints: existingEntrypoints,
-        annotations: existingAnnotations,
+        annotations: existingAnnotations
       });
 
       for (const pb of pathBackends) {
@@ -1233,19 +1263,20 @@ export class IngressService implements OnModuleInit {
             ingressClass: TENANT_INGRESS_CLASS,
             entrypoints: existingEntrypoints,
             clusterIssuer: mergeTarget.clusterIssuer,
-            annotations: Object.keys(existingAnnotations).length > 0
-              ? (existingAnnotations as Prisma.JsonObject)
-              : undefined,
+            annotations:
+              Object.keys(existingAnnotations).length > 0
+                ? (existingAnnotations as Prisma.JsonObject)
+                : undefined,
             statusAddress: mergeTarget.statusAddress,
-            templateInstanceId: data.templateInstanceId ?? null,
-          },
+            templateInstanceId: data.templateInstanceId ?? null
+          }
         });
 
         const svc = allServices.find((s) => s.id === pb.serviceId);
         if (svc && !svc.domain) {
           await this.prisma.service.update({
             where: { id: pb.serviceId },
-            data: { domain: rawHost },
+            data: { domain: rawHost }
           });
         }
       }
@@ -1260,7 +1291,11 @@ export class IngressService implements OnModuleInit {
         projectId,
         targetType: 'ingress',
         targetLabel: rawHost,
-        metadata: { host: rawHost, addedPaths: pathBackends.map((p) => p.path).join(','), scope: 'project_merge' },
+        metadata: {
+          host: rawHost,
+          addedPaths: pathBackends.map((p) => p.path).join(','),
+          scope: 'project_merge'
+        }
       });
 
       return this.projects.getProject(projectId, clerkId, userData);
@@ -1297,7 +1332,7 @@ export class IngressService implements OnModuleInit {
 
     while (true) {
       const existing = await this.prisma.ingress.findFirst({
-        where: { namespace: project.namespace, name: ingressName },
+        where: { namespace: project.namespace, name: ingressName }
       });
       if (!existing) break;
       ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
@@ -1314,13 +1349,18 @@ export class IngressService implements OnModuleInit {
       namespace: project.namespace,
       name: ingressName,
       host: rawHost,
-      paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
+      paths: pathBackends.map((pb) => ({
+        path: pb.path,
+        pathType: pb.pathType,
+        serviceName: pb.serviceName,
+        servicePort: pb.servicePort
+      })),
       tlsSecretName: tlsSecretName || undefined,
       tlsHosts,
       ingressClassName: TENANT_INGRESS_CLASS,
       entrypoints,
       annotations: sanitizedAnnotations,
-      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined,
+      basicAuth: basicAuthPlan.via === 'cilium' ? data.basicAuth : undefined
     });
 
     const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
@@ -1345,17 +1385,20 @@ export class IngressService implements OnModuleInit {
             ingressClass: TENANT_INGRESS_CLASS,
             entrypoints,
             clusterIssuer,
-            annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
+            annotations:
+              Object.keys(sanitizedAnnotations).length > 0
+                ? (sanitizedAnnotations as Prisma.JsonObject)
+                : undefined,
             statusAddress,
-            templateInstanceId: data.templateInstanceId ?? null,
-          },
+            templateInstanceId: data.templateInstanceId ?? null
+          }
         });
 
         const svc = allServices.find((s) => s.id === pb.serviceId);
         if (svc && !svc.domain) {
           await this.prisma.service.update({
             where: { id: pb.serviceId },
-            data: { domain: rawHost },
+            data: { domain: rawHost }
           });
         }
       }
@@ -1364,9 +1407,13 @@ export class IngressService implements OnModuleInit {
         await this.enableProxyBasicAuth(project.namespace, ingressName, basicAuthPlan);
       }
     } catch (e) {
-      try { await this.k8sNetwork.deleteIngress(project.namespace, ingressName); } catch { /* ignore */ }
+      try {
+        await this.k8sNetwork.deleteIngress(project.namespace, ingressName);
+      } catch {
+        /* ignore */
+      }
       await this.prisma.ingress.deleteMany({
-        where: { namespace: project.namespace, name: ingressName },
+        where: { namespace: project.namespace, name: ingressName }
       });
       throw e;
     }
@@ -1381,7 +1428,12 @@ export class IngressService implements OnModuleInit {
       projectId,
       targetType: 'ingress',
       targetLabel: rawHost,
-      metadata: { host: rawHost, routes: pathBackends.map((p) => p.path).join(','), tls: tlsEnabled, scope: 'project' },
+      metadata: {
+        host: rawHost,
+        routes: pathBackends.map((p) => p.path).join(','),
+        tls: tlsEnabled,
+        scope: 'project'
+      }
     });
 
     return this.projects.getProject(projectId, clerkId, userData);
@@ -1411,21 +1463,25 @@ export class IngressService implements OnModuleInit {
             organization: true,
             deployments: {
               include: {
-                services: { include: { ports: true } },
-              },
-            },
-          },
+                services: { include: { ports: true } }
+              }
+            }
+          }
         },
         deployment: true,
-        service: true,
-      },
+        service: true
+      }
     });
 
     if (!ingress) {
       throw new NotFoundException(`Ingress ${ingressId} not found`);
     }
 
-    await this.access.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
+    await this.access.assertProjectAccess(
+      ingress.project.id,
+      user.id,
+      ingress.project.organizationId
+    );
 
     // Read the actual K8s ingress to get all routes
     let k8sRoutes: { path: string; serviceName: string; servicePort: number }[] = [];
@@ -1436,22 +1492,24 @@ export class IngressService implements OnModuleInit {
         k8sRoutes = rules[0].http.paths.map((p: any) => ({
           path: p.path || '/',
           serviceName: p.backend?.service?.name || '',
-          servicePort: p.backend?.service?.port?.number || 0,
+          servicePort: p.backend?.service?.port?.number || 0
         }));
       }
     } catch {
-      k8sRoutes = [{
-        path: ingress.path,
-        serviceName: ingress.service?.name || '',
-        servicePort: ingress.service?.port || 0,
-      }];
+      k8sRoutes = [
+        {
+          path: ingress.path,
+          serviceName: ingress.service?.name || '',
+          servicePort: ingress.service?.port || 0
+        }
+      ];
     }
 
     return {
       ...scrubIngress(ingress),
       tlsEnabled: !!ingress.tlsSecretName,
       address: ingress.statusAddress,
-      routes: k8sRoutes,
+      routes: k8sRoutes
     };
   }
 
@@ -1480,13 +1538,13 @@ export class IngressService implements OnModuleInit {
             organization: true,
             deployments: {
               include: {
-                services: { include: { ports: true } },
-              },
-            },
-          },
+                services: { include: { ports: true } }
+              }
+            }
+          }
         },
-        service: true,
-      },
+        service: true
+      }
     });
 
     if (!ingress || !ingress.project) {
@@ -1494,7 +1552,11 @@ export class IngressService implements OnModuleInit {
     }
 
     try {
-      await this.access.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
+      await this.access.assertProjectAccess(
+        ingress.project.id,
+        user.id,
+        ingress.project.organizationId
+      );
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw new NotFoundException('Ingress not found');
@@ -1511,23 +1573,27 @@ export class IngressService implements OnModuleInit {
         k8sRoutes = rules[0].http.paths.map((p: any) => ({
           path: p.path || '/',
           serviceName: p.backend?.service?.name || '',
-          servicePort: p.backend?.service?.port?.number || 0,
+          servicePort: p.backend?.service?.port?.number || 0
         }));
       }
     } catch (error) {
       // If we can't read K8s, fall back to DB record
-      k8sRoutes = [{
-        path: ingress.path,
-        serviceName: ingress.service?.name || '',
-        servicePort: ingress.service?.port || 0,
-      }];
+      k8sRoutes = [
+        {
+          path: ingress.path,
+          serviceName: ingress.service?.name || '',
+          servicePort: ingress.service?.port || 0
+        }
+      ];
     }
 
     // Two enforcement points, one answer: the annotation marks the Cilium
     // Envoy filter, `basic` marks the protection proxy doing the same job.
-    const hasBasicAuth = ingress.protectionMode === 'basic'
-      || (typeof ingress.annotations === 'object' && ingress.annotations !== null
-        && (ingress.annotations as any)['orchard.my/basic-auth'] === 'true');
+    const hasBasicAuth =
+      ingress.protectionMode === 'basic' ||
+      (typeof ingress.annotations === 'object' &&
+        ingress.annotations !== null &&
+        (ingress.annotations as any)['orchard.my/basic-auth'] === 'true');
 
     return {
       id: ingress.id,
@@ -1541,7 +1607,7 @@ export class IngressService implements OnModuleInit {
       protectionBypassSecret:
         ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
       protectionBypassPaths: ingress.protectionBypassPaths ?? [],
-      project: ingress.project,
+      project: ingress.project
     };
   }
 
@@ -1581,12 +1647,12 @@ export class IngressService implements OnModuleInit {
             deployments: {
               include: {
                 services: { include: { ports: true } },
-                ingresses: true,
-              },
-            },
-          },
-        },
-      },
+                ingresses: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!ingress || !ingress.project) {
@@ -1597,14 +1663,17 @@ export class IngressService implements OnModuleInit {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'manage ingress resources');
 
-    const rawHost = String(data.host || '').trim().toLowerCase();
+    const rawHost = String(data.host || '')
+      .trim()
+      .toLowerCase();
     if (!rawHost) {
       throw new BadRequestException('Host is required');
     }
     if (rawHost.length > 253) {
       throw new BadRequestException('Host exceeds maximum length');
     }
-    const hostPattern = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+    const hostPattern =
+      /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
     }
@@ -1614,14 +1683,23 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('At least one route is required');
     }
 
-    const allServices = project.deployments.flatMap((d) => (d.services ?? []).map((s) => ({ ...s, deploymentId: d.id })));
+    const allServices = project.deployments.flatMap((d) =>
+      (d.services ?? []).map((s) => ({ ...s, deploymentId: d.id }))
+    );
 
     if (allServices.length === 0) {
       throw new BadRequestException('Project has no services');
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }[] = [];
+    const pathBackends: {
+      path: string;
+      pathType: string;
+      serviceName: string;
+      servicePort: number;
+      serviceId: string;
+      deploymentId: string;
+    }[] = [];
 
     for (const route of routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -1635,7 +1713,9 @@ export class IngressService implements OnModuleInit {
         throw new BadRequestException(`Path ${path} contains invalid characters`);
       }
 
-      const targetService = allServices.find((s) => s.name === String(route.serviceName || '').trim());
+      const targetService = allServices.find(
+        (s) => s.name === String(route.serviceName || '').trim()
+      );
       if (!targetService) {
         throw new BadRequestException(`Service ${route.serviceName} not found in project`);
       }
@@ -1645,8 +1725,12 @@ export class IngressService implements OnModuleInit {
         throw new BadRequestException(`Invalid service port for ${route.serviceName}`);
       }
 
-      const servicePorts = Array.isArray((targetService as any).ports) ? (targetService as any).ports : [];
-      const hasPort = servicePorts.some((p: any) => Number(p.port) === port) || Number(targetService.port) === port;
+      const servicePorts = Array.isArray((targetService as any).ports)
+        ? (targetService as any).ports
+        : [];
+      const hasPort =
+        servicePorts.some((p: any) => Number(p.port) === port) ||
+        Number(targetService.port) === port;
       if (!hasPort) {
         throw new BadRequestException(`Port ${port} not found on service ${route.serviceName}`);
       }
@@ -1657,7 +1741,7 @@ export class IngressService implements OnModuleInit {
         serviceName: targetService.name,
         servicePort: port,
         serviceId: targetService.id,
-        deploymentId: (targetService as any).deploymentId,
+        deploymentId: (targetService as any).deploymentId
       });
     }
 
@@ -1700,13 +1784,18 @@ export class IngressService implements OnModuleInit {
         namespace: ingress.namespace,
         name: ingress.name,
         host: rawHost,
-        paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
+        paths: pathBackends.map((pb) => ({
+          path: pb.path,
+          pathType: pb.pathType,
+          serviceName: pb.serviceName,
+          servicePort: pb.servicePort
+        })),
         tlsSecretName: tlsSecretName || undefined,
         tlsHosts,
         ingressClassName: TENANT_INGRESS_CLASS,
         entrypoints,
         annotations: sanitizedAnnotations,
-        basicAuth,
+        basicAuth
       });
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -1719,7 +1808,7 @@ export class IngressService implements OnModuleInit {
 
     await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth, {
       serviceName: firstRoute.serviceName,
-      servicePort: firstRoute.servicePort,
+      servicePort: firstRoute.servicePort
     });
 
     await this.prisma.ingress.update({
@@ -1733,8 +1822,11 @@ export class IngressService implements OnModuleInit {
         tlsHosts,
         entrypoints,
         clusterIssuer,
-        annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
-      },
+        annotations:
+          Object.keys(sanitizedAnnotations).length > 0
+            ? (sanitizedAnnotations as Prisma.JsonObject)
+            : undefined
+      }
     });
 
     for (const pb of pathBackends) {
@@ -1742,7 +1834,7 @@ export class IngressService implements OnModuleInit {
       if (svc && !svc.domain) {
         await this.prisma.service.update({
           where: { id: pb.serviceId },
-          data: { domain: rawHost },
+          data: { domain: rawHost }
         });
       }
     }
@@ -1761,8 +1853,8 @@ export class IngressService implements OnModuleInit {
       metadata: {
         host: [ingress.host, rawHost],
         path: [ingress.path, pathBackends[0]?.path ?? null],
-        tls: [Boolean(ingress.tlsSecretName), tlsEnabled],
-      },
+        tls: [Boolean(ingress.tlsSecretName), tlsEnabled]
+      }
     });
 
     return this.projects.getProject(projectId, clerkId, userData);
@@ -1793,19 +1885,23 @@ export class IngressService implements OnModuleInit {
           include: {
             project: {
               include: {
-                organization: true,
-              },
-            },
-          },
-        },
-      },
+                organization: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!ingress || !ingress.deployment) {
       throw new NotFoundException('Ingress not found');
     }
 
-    await this.authz.requireProjectEdit(ingress.deployment.project.id, user.id, 'manage ingress resources');
+    await this.authz.requireProjectEdit(
+      ingress.deployment.project.id,
+      user.id,
+      'manage ingress resources'
+    );
 
     try {
       await this.k8sNetwork.deleteIngress(ingress.namespace, ingress.name);
@@ -1816,7 +1912,7 @@ export class IngressService implements OnModuleInit {
     }
 
     await this.prisma.ingress.delete({
-      where: { id: ingressId },
+      where: { id: ingressId }
     });
 
     const result = await this.prisma.deployment.findUnique({
@@ -1824,22 +1920,22 @@ export class IngressService implements OnModuleInit {
       include: {
         project: {
           include: {
-            organization: true,
-          },
+            organization: true
+          }
         },
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
-        },
-      },
+            service: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -1851,7 +1947,7 @@ export class IngressService implements OnModuleInit {
       deploymentId,
       targetType: 'ingress',
       targetId: ingressId,
-      targetLabel: ingress.host + ingress.path,
+      targetLabel: ingress.host + ingress.path
     });
 
     return this.deployments.addInternalUrlsToDeployment(result);
@@ -1880,10 +1976,10 @@ export class IngressService implements OnModuleInit {
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     if (!ingress || !ingress.project) {
@@ -1896,28 +1992,24 @@ export class IngressService implements OnModuleInit {
       where: {
         namespace: ingress.namespace,
         name: ingress.name,
-        id: { not: ingress.id },
-      },
+        id: { not: ingress.id }
+      }
     });
 
     if (siblings.length > 0) {
       try {
-        const k8sIngress = await this.k8sNetwork.readIngress(
-          ingress.namespace,
-          ingress.name
-        );
+        const k8sIngress = await this.k8sNetwork.readIngress(ingress.namespace, ingress.name);
         const remainingPaths = (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? [])
           .filter((p: any) => (p.path || '/') !== ingress.path)
           .map((p: any) => ({
             path: p.path || '/',
             pathType: p.pathType || 'Prefix',
             serviceName: p.backend?.service?.name || '',
-            servicePort: p.backend?.service?.port?.number || 0,
+            servicePort: p.backend?.service?.port?.number || 0
           }));
 
         if (remainingPaths.length > 0) {
-          const existingAnnotations =
-            (ingress.annotations as Record<string, string> | null) ?? {};
+          const existingAnnotations = (ingress.annotations as Record<string, string> | null) ?? {};
           const existingEntrypoints = Array.isArray(ingress.entrypoints) ? ingress.entrypoints : [];
 
           await this.k8sNetwork.updateIngress({
@@ -1929,7 +2021,7 @@ export class IngressService implements OnModuleInit {
             tlsHosts: ingress.tlsHosts ?? [],
             ingressClassName: TENANT_INGRESS_CLASS,
             entrypoints: existingEntrypoints,
-            annotations: existingAnnotations,
+            annotations: existingAnnotations
           });
         }
       } catch (error) {
@@ -1948,7 +2040,7 @@ export class IngressService implements OnModuleInit {
     }
 
     await this.prisma.ingress.delete({
-      where: { id: ingressId },
+      where: { id: ingressId }
     });
 
     void this.audit.log({
@@ -1960,7 +2052,7 @@ export class IngressService implements OnModuleInit {
       targetType: 'ingress',
       targetId: ingressId,
       targetLabel: ingress.host + ingress.path,
-      metadata: { scope: 'project' },
+      metadata: { scope: 'project' }
     });
 
     return { success: true };
@@ -2004,18 +2096,18 @@ export class IngressService implements OnModuleInit {
           include: {
             project: {
               include: {
-                organization: true,
-              },
+                organization: true
+              }
             },
             services: {
               include: {
-                ports: true,
-              },
+                ports: true
+              }
             },
-            ingresses: true,
-          },
-        },
-      },
+            ingresses: true
+          }
+        }
+      }
     });
 
     if (!ingress || !ingress.deployment) {
@@ -2026,7 +2118,9 @@ export class IngressService implements OnModuleInit {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
-    const rawHost = String(data.host || '').trim().toLowerCase();
+    const rawHost = String(data.host || '')
+      .trim()
+      .toLowerCase();
 
     if (!rawHost) {
       throw new BadRequestException('Host is required');
@@ -2036,7 +2130,8 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('Host exceeds maximum length');
     }
 
-    const hostPattern = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+    const hostPattern =
+      /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
@@ -2088,9 +2183,7 @@ export class IngressService implements OnModuleInit {
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const annotationsInput =
-      data.annotations && typeof data.annotations === 'object'
-        ? data.annotations
-        : {};
+      data.annotations && typeof data.annotations === 'object' ? data.annotations : {};
 
     const sanitizedAnnotations: Record<string, string> = {};
 
@@ -2116,9 +2209,7 @@ export class IngressService implements OnModuleInit {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
     }
 
-    const services = Array.isArray(deployment.services)
-      ? deployment.services
-      : [];
+    const services = Array.isArray(deployment.services) ? deployment.services : [];
 
     if (services.length === 0) {
       throw new BadRequestException('Deployment has no services to attach');
@@ -2126,9 +2217,7 @@ export class IngressService implements OnModuleInit {
 
     const requestedServiceName = String(data.serviceName || '').trim();
     const requestedPort =
-      data.servicePort !== undefined && data.servicePort !== null
-        ? Number(data.servicePort)
-        : null;
+      data.servicePort !== undefined && data.servicePort !== null ? Number(data.servicePort) : null;
 
     if (requestedPort !== null) {
       if (!Number.isInteger(requestedPort) || requestedPort <= 0) {
@@ -2148,9 +2237,7 @@ export class IngressService implements OnModuleInit {
     if (!targetService) {
       if (requestedPort !== null) {
         targetService = services.find((service) => {
-          const ports = Array.isArray((service as any).ports)
-            ? (service as any).ports
-            : [];
+          const ports = Array.isArray((service as any).ports) ? (service as any).ports : [];
           if (ports.some((port) => port.port === requestedPort)) {
             return true;
           }
@@ -2172,25 +2259,20 @@ export class IngressService implements OnModuleInit {
       ? (targetService as any).ports
       : [];
 
-    let selectedPort = null as
-      | {
-          port: number;
-          targetPort: number;
-        }
-      | null;
+    let selectedPort = null as {
+      port: number;
+      targetPort: number;
+    } | null;
 
     if (requestedPort !== null) {
-      selectedPort =
-        servicePorts.find((port) => Number(port.port) === requestedPort) ||
-        null;
+      selectedPort = servicePorts.find((port) => Number(port.port) === requestedPort) || null;
       if (!selectedPort && Number(targetService.port) === requestedPort) {
         selectedPort = {
           port: Number(targetService.port),
           targetPort:
-            targetService.targetPort !== null &&
-            targetService.targetPort !== undefined
+            targetService.targetPort !== null && targetService.targetPort !== undefined
               ? Number(targetService.targetPort)
-              : Number(targetService.port),
+              : Number(targetService.port)
         };
       }
     }
@@ -2201,19 +2283,17 @@ export class IngressService implements OnModuleInit {
         selectedPort = {
           port: Number(firstPort.port),
           targetPort:
-            firstPort.targetPort !== null &&
-            firstPort.targetPort !== undefined
+            firstPort.targetPort !== null && firstPort.targetPort !== undefined
               ? Number(firstPort.targetPort)
-              : Number(firstPort.port),
+              : Number(firstPort.port)
         };
       } else {
         selectedPort = {
           port: Number(targetService.port),
           targetPort:
-            targetService.targetPort !== null &&
-            targetService.targetPort !== undefined
+            targetService.targetPort !== null && targetService.targetPort !== undefined
               ? Number(targetService.targetPort)
-              : Number(targetService.port),
+              : Number(targetService.port)
         };
       }
     }
@@ -2254,7 +2334,7 @@ export class IngressService implements OnModuleInit {
         ingressClassName,
         entrypoints,
         annotations: sanitizedAnnotations,
-        basicAuth: basicAuthConfig as any,
+        basicAuth: basicAuthConfig as any
       });
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -2265,7 +2345,7 @@ export class IngressService implements OnModuleInit {
 
     await this.syncBasicAuthOnUpdate(ingress, basicAuthPlan, clearBasicAuth, {
       serviceName: targetService.name,
-      servicePort: selectedPort.port,
+      servicePort: selectedPort.port
     });
 
     const annotationsPayload =
@@ -2283,16 +2363,16 @@ export class IngressService implements OnModuleInit {
         tlsHosts,
         entrypoints,
         clusterIssuer,
-        annotations: annotationsPayload,
-      },
+        annotations: annotationsPayload
+      }
     });
 
     if (!targetService.domain) {
       await this.prisma.service.update({
         where: { id: targetService.id },
         data: {
-          domain: rawHost,
-        },
+          domain: rawHost
+        }
       });
     }
 
@@ -2302,21 +2382,21 @@ export class IngressService implements OnModuleInit {
         pods: true,
         services: {
           include: {
-            ports: true,
-          },
+            ports: true
+          }
         },
         envVars: true,
         ingresses: {
           include: {
-            service: true,
-          },
+            service: true
+          }
         },
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
 
     this.warmFavicon(rawHost);
@@ -2331,7 +2411,7 @@ export class IngressService implements OnModuleInit {
       targetType: 'ingress',
       targetId: ingressId,
       targetLabel: rawHost,
-      metadata: { host: [ingress.host, rawHost], path: [ingress.path, path] },
+      metadata: { host: [ingress.host, rawHost], path: [ingress.path, path] }
     });
 
     return this.deployments.addInternalUrlsToDeployment(result);
@@ -2347,7 +2427,7 @@ export class IngressService implements OnModuleInit {
    */
   private async planBasicAuth(
     basicAuth: { enabled?: boolean; username?: string; password?: string } | undefined,
-    context: 'create' | 'update' = 'create',
+    context: 'create' | 'update' = 'create'
   ): Promise<BasicAuthPlan> {
     if (!basicAuth?.enabled) return { via: 'none' };
 
@@ -2385,13 +2465,13 @@ export class IngressService implements OnModuleInit {
   private async enableProxyBasicAuth(
     namespace: string,
     ingressName: string,
-    plan: { username: string; passwordHash: string },
+    plan: { username: string; passwordHash: string }
   ): Promise<void> {
     const result = await this.k8sNetwork.enableProtectionProxy(namespace, ingressName);
     if (result !== 'applied') {
       throw new BadRequestException(
-        'Could not put this domain behind basic auth, so it would be served without a password. '
-        + 'Nothing was created; try again in a moment.',
+        'Could not put this domain behind basic auth, so it would be served without a password. ' +
+          'Nothing was created; try again in a moment.'
       );
     }
 
@@ -2401,8 +2481,8 @@ export class IngressService implements OnModuleInit {
         protectionMode: 'basic',
         protectionUsername: plan.username,
         protectionPasswordHash: plan.passwordHash,
-        protectionBypassSecret: randomBytes(32).toString('hex'),
-      },
+        protectionBypassSecret: randomBytes(32).toString('hex')
+      }
     });
   }
 
@@ -2417,7 +2497,7 @@ export class IngressService implements OnModuleInit {
     ingress: { id: string; namespace: string; name: string; protectionMode: IngressProtectionMode },
     plan: BasicAuthPlan,
     disableRequested: boolean,
-    upstream: { serviceName: string; servicePort: number } | null,
+    upstream: { serviceName: string; servicePort: number } | null
   ): Promise<void> {
     if (plan.via === 'proxy') {
       await this.enableProxyBasicAuth(ingress.namespace, ingress.name, plan);
@@ -2430,7 +2510,7 @@ export class IngressService implements OnModuleInit {
           ingress.namespace,
           ingress.name,
           upstream.serviceName,
-          upstream.servicePort,
+          upstream.servicePort
         );
       }
       await this.prisma.ingress.update({
@@ -2439,8 +2519,8 @@ export class IngressService implements OnModuleInit {
           protectionMode: 'none',
           protectionUsername: null,
           protectionPasswordHash: null,
-          protectionBypassSecret: null,
-        },
+          protectionBypassSecret: null
+        }
       });
       return;
     }
@@ -2452,13 +2532,13 @@ export class IngressService implements OnModuleInit {
 
     if (ingress.protectionMode === 'basic') {
       throw new BadRequestException(
-        'The ingress was updated but could not be put back behind basic auth, so it is currently '
-        + 'served without a password. Retry the update, or the reconciler will restore it within 10 minutes.',
+        'The ingress was updated but could not be put back behind basic auth, so it is currently ' +
+          'served without a password. Retry the update, or the reconciler will restore it within 10 minutes.'
       );
     }
     this.logger.error(
-      `Protection proxy not re-applied to ${ingress.namespace}/${ingress.name} after update (${result}); `
-      + 'the reconciler will retry within 10 minutes',
+      `Protection proxy not re-applied to ${ingress.namespace}/${ingress.name} after update (${result}); ` +
+        'the reconciler will retry within 10 minutes'
     );
   }
 
@@ -2469,14 +2549,14 @@ export class IngressService implements OnModuleInit {
     mode: IngressProtectionMode,
     password?: string,
     bypassPaths?: string[],
-    username?: string,
+    username?: string
   ) {
     await this.authz.requireProjectEdit(projectId, userId, 'manage ingress protection');
 
     if (mode === 'orchard' && !ORCHARD_LOGIN_PROTECTION_ENABLED) {
       throw new BadRequestException(
-        '"Sign in with Orchard" protection is disabled on this instance. '
-        + 'Use basic auth or a shared password instead, or set protection.orchardLogin=true in the chart.',
+        '"Sign in with Orchard" protection is disabled on this instance. ' +
+          'Use basic auth or a shared password instead, or set protection.orchardLogin=true in the chart.'
       );
     }
 
@@ -2484,8 +2564,8 @@ export class IngressService implements OnModuleInit {
       where: { id: ingressId, projectId },
       include: {
         service: { include: { ports: true } },
-        project: { include: { organization: true } },
-      },
+        project: { include: { organization: true } }
+      }
     });
 
     if (!ingress) throw new NotFoundException('Ingress not found');
@@ -2538,7 +2618,7 @@ export class IngressService implements OnModuleInit {
         const normalized = normalizeBypassPath(raw);
         if (!normalized) {
           throw new BadRequestException(
-            `Invalid bypass path: ${String(raw)}. Paths must start with / and cannot be / itself.`,
+            `Invalid bypass path: ${String(raw)}. Paths must start with / and cannot be / itself.`
           );
         }
         seen.add(normalized);
@@ -2557,7 +2637,7 @@ export class IngressService implements OnModuleInit {
           ingress.namespace,
           ingress.name,
           serviceName,
-          Number(servicePort),
+          Number(servicePort)
         );
       }
     }
@@ -2569,8 +2649,8 @@ export class IngressService implements OnModuleInit {
         // outcome worth failing the request over. The 10-minute reconciler
         // would eventually fix it, but the user should not be told it is done.
         throw new BadRequestException(
-          'Could not put this domain behind the auth wall, so it is still served directly. '
-          + 'The protection setting was not saved; try again in a moment.',
+          'Could not put this domain behind the auth wall, so it is still served directly. ' +
+            'The protection setting was not saved; try again in a moment.'
         );
       }
     }
@@ -2590,8 +2670,8 @@ export class IngressService implements OnModuleInit {
         protectionPasswordHash,
         protectionBypassSecret,
         protectionBypassPaths: normalizedBypassPaths,
-        annotations: annotations as Prisma.JsonObject,
-      },
+        annotations: annotations as Prisma.JsonObject
+      }
     });
 
     void this.audit.log({
@@ -2602,13 +2682,13 @@ export class IngressService implements OnModuleInit {
       targetType: 'ingress',
       targetId: ingressId,
       targetLabel: ingress.host,
-      metadata: { mode },
+      metadata: { mode }
     });
 
     return {
       protectionMode: mode,
       protectionBypassSecret: willProtect ? protectionBypassSecret : null,
-      protectionBypassPaths: normalizedBypassPaths,
+      protectionBypassPaths: normalizedBypassPaths
     };
   }
 
@@ -2620,8 +2700,8 @@ export class IngressService implements OnModuleInit {
       select: {
         protectionMode: true,
         protectionUsername: true,
-        protectionBypassSecret: true,
-      },
+        protectionBypassSecret: true
+      }
     });
 
     if (!ingress) throw new NotFoundException('Ingress not found');
@@ -2629,7 +2709,8 @@ export class IngressService implements OnModuleInit {
     return {
       protectionMode: ingress.protectionMode,
       protectionUsername: ingress.protectionMode === 'basic' ? ingress.protectionUsername : null,
-      protectionBypassSecret: ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
+      protectionBypassSecret:
+        ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null
     };
   }
 }

@@ -17,17 +17,17 @@ chart with dev values.
 
 ## Cluster prerequisites
 
-| Component | Needed for | Notes |
-|---|---|---|
-| [CloudNativePG](https://cloudnative-pg.io) operator | Control-plane DB and every user database | The chart only creates `Cluster` resources |
-| [Traefik](https://traefik.io) with Gateway API support | Control-plane ingress (`IngressRoute`) and user app routing (`HTTPRoute` via a shared `Gateway`) | Gateway API CRDs must be installed |
-| [cert-manager](https://cert-manager.io) | TLS certificates | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
-| A default StorageClass | Postgres volumes, buildkit cache, Redis, metrics | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default |
-| An OCI registry (e.g. [Harbor](https://goharbor.io)) | Where built user images are pushed and pulled from | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env |
-| An ingress controller for tenant ingresses | Custom-domain ingresses for user apps | Class name via `tenant.ingressClass` (default `haproxy`) |
-| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io)) | Public database exposure and TCP/UDP passthrough | Only if you enable those features |
-| gVisor / Kata RuntimeClasses | Sandboxed tenant/builder pods | Optional; Talos-specific setup in `values.yaml` |
-| Datadog agent | APM/tracing | Optional; `datadog.enabled: false` turns it all off |
+| Component                                              | Needed for                                                                                       | Notes                                                                                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| [CloudNativePG](https://cloudnative-pg.io) operator    | Control-plane DB and every user database                                                         | The chart only creates `Cluster` resources                                                                                  |
+| [Traefik](https://traefik.io) with Gateway API support | Control-plane ingress (`IngressRoute`) and user app routing (`HTTPRoute` via a shared `Gateway`) | Gateway API CRDs must be installed                                                                                          |
+| [cert-manager](https://cert-manager.io)                | TLS certificates                                                                                 | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
+| A default StorageClass                                 | Postgres volumes, buildkit cache, Redis, metrics                                                 | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default                                 |
+| An OCI registry (e.g. [Harbor](https://goharbor.io))   | Where built user images are pushed and pulled from                                               | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env                               |
+| An ingress controller for tenant ingresses             | Custom-domain ingresses for user apps                                                            | Class name via `tenant.ingressClass` (default `haproxy`)                                                                    |
+| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io))   | Public database exposure and TCP/UDP passthrough                                                 | Only if you enable those features                                                                                           |
+| gVisor / Kata RuntimeClasses                           | Sandboxed tenant/builder pods                                                                    | Optional; Talos-specific setup in `values.yaml`                                                                             |
+| Datadog agent                                          | APM/tracing                                                                                      | Optional; `datadog.enabled: false` turns it all off                                                                         |
 
 ## ServiceAccount permissions
 
@@ -38,7 +38,7 @@ Because tenant namespaces are created at runtime, the write grants can't be
 namespaced Roles and are cluster-scoped: namespaces, pods (plus `exec` for the
 web terminal), Deployments, Services, Ingresses, PVCs, NetworkPolicies, Jobs,
 CronJobs, EndpointSlices, CNPG Clusters, and read/patch on nodes for the node
-informer. Secrets and configmaps are deliberately *not* granted cluster-wide —
+informer. Secrets and configmaps are deliberately _not_ granted cluster-wide —
 the server holds `escalate`/`bind` so it can bootstrap a narrow per-namespace
 secrets Role when it creates a tenant namespace, without ever holding
 cluster-wide secrets access itself.
@@ -143,7 +143,7 @@ gateway:
   http:
     appDomain: apps.example.com
 tenant:
-  storageClass: ""            # empty = cluster default
+  storageClass: '' # empty = cluster default
   ingressClass: nginx
   certClusterIssuer: letsencrypt-prod
 signupMode: invite_only
@@ -162,7 +162,10 @@ server:
     - { name: INGRESS_CNAME, value: ingress.example.com }
     - { name: FRONTEND_URL, value: https://orchard.example.com }
     - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: orchard-secrets, key: jwt } } }
-    - { name: SECRETS_ENCRYPTION_KEY, valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } } }
+    - {
+        name: SECRETS_ENCRYPTION_KEY,
+        valueFrom: { secretKeyRef: { name: orchard-secrets, key: enc } }
+      }
 ```
 
 Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
@@ -264,15 +267,15 @@ edits and run `orchardctl update` once at the end.
 
 The ones worth knowing:
 
-| Path | What it does |
-|---|---|
-| `signupMode` | `open` / `invite_only` / `closed` |
+| Path                         | What it does                                       |
+| ---------------------------- | -------------------------------------------------- |
+| `signupMode`                 | `open` / `invite_only` / `closed`                  |
 | `ingress.tls.issuerRef.name` | ClusterIssuer for the Orchard UI's own certificate |
-| `tenant.certClusterIssuer` | ClusterIssuer for user app certificates |
-| `metrics.enabled` | the built-in VictoriaMetrics stack |
-| `cilium.enabled` | Cilium-backed tenant policy and Envoy basic auth |
-| `protection.orchardLogin` | offer "sign in with Orchard" on tenant hosts |
-| `server.replicas` | control-plane API pods |
+| `tenant.certClusterIssuer`   | ClusterIssuer for user app certificates            |
+| `metrics.enabled`            | the built-in VictoriaMetrics stack                 |
+| `cilium.enabled`             | Cilium-backed tenant policy and Envoy basic auth   |
+| `protection.orchardLogin`    | offer "sign in with Orchard" on tenant hosts       |
+| `server.replicas`            | control-plane API pods                             |
 
 `orchardctl update` restarts each deployment whose image tag is a moving one
 (`latest`, which is what the installer writes). Helm alone would not: the tag
@@ -310,14 +313,14 @@ login page into public registration.
 The installer puts these on the host. They operate **this machine's** install
 through helm and kubectl.
 
-| Command | Does | Root |
-|---|---|---|
-| `orchardctl update` | `helm upgrade` to the latest chart and images | yes |
-| `orchardctl config <get\|set\|unset\|list\|edit>` | read and change chart values | yes |
-| `orchardctl claim` | mint a link to claim the instance and sign in | yes |
-| `orchardctl logs [service]` | follow logs, default `server` | no |
-| `orchardctl status` | control-plane pods | no |
-| `orchardctl sync` | refresh these commands from the deployed image | yes |
+| Command                                           | Does                                           | Root |
+| ------------------------------------------------- | ---------------------------------------------- | ---- |
+| `orchardctl update`                               | `helm upgrade` to the latest chart and images  | yes  |
+| `orchardctl config <get\|set\|unset\|list\|edit>` | read and change chart values                   | yes  |
+| `orchardctl claim`                                | mint a link to claim the instance and sign in  | yes  |
+| `orchardctl logs [service]`                       | follow logs, default `server`                  | no   |
+| `orchardctl status`                               | control-plane pods                             | no   |
+| `orchardctl sync`                                 | refresh these commands from the deployed image | yes  |
 
 `update`, `config` and `claim` need root: the values file is mode 0600, so
 without it helm fails with `open /etc/orchard/values.yaml: permission denied`.
@@ -328,12 +331,12 @@ timer calls `orchard-update` directly.
 **`orchardctl` is not the `orchard` CLI.** They're different tools with
 different jobs, which is why the operator one carries the `ctl` suffix:
 
-|  | `orchard` | `orchardctl` |
-|---|---|---|
-| Who | anyone with an account | whoever runs the server |
-| Talks to | any instance's HTTP API | this host's helm release and cluster |
-| Does | deploy apps, tail builds, manage env and domains | upgrade, edit values, claim, inspect pods |
-| Installed by | you, per workstation | `install.sh`, on the host |
+|              | `orchard`                                        | `orchardctl`                              |
+| ------------ | ------------------------------------------------ | ----------------------------------------- |
+| Who          | anyone with an account                           | whoever runs the server                   |
+| Talks to     | any instance's HTTP API                          | this host's helm release and cluster      |
+| Does         | deploy apps, tail builds, manage env and domains | upgrade, edit values, claim, inspect pods |
+| Installed by | you, per workstation                             | `install.sh`, on the host                 |
 
 ### Keeping the host commands current
 
@@ -429,7 +432,7 @@ one replica each, the control plane requests roughly 1 GiB of memory.
 
 The bundled metrics stack (VictoriaMetrics, vmagent, kube-state-metrics,
 node-exporter) is the single largest idle cost, and VictoriaMetrics sizes its
-cache as a share of its memory *limit*, so it grows to fill whatever it is
+cache as a share of its memory _limit_, so it grows to fill whatever it is
 given. On a small cluster:
 
 ```yaml
@@ -539,12 +542,12 @@ credentials, and the certificate lands directly in the namespace that uses it.
 
 The ceiling is Let's Encrypt's issuance limits:
 
-| Limit | Value |
-|---|---|
-| Certificates per registered domain | 50 per 7 days, refilling 1 per 202 minutes |
-| Duplicate certificates (identical name set) | 5 per 7 days, no overrides |
-| New orders per account | 300 per 3 hours |
-| Failed validations | 5 per identifier per hour |
+| Limit                                       | Value                                      |
+| ------------------------------------------- | ------------------------------------------ |
+| Certificates per registered domain          | 50 per 7 days, refilling 1 per 202 minutes |
+| Duplicate certificates (identical name set) | 5 per 7 days, no overrides                 |
+| New orders per account                      | 300 per 3 hours                            |
+| Failed validations                          | 5 per identifier per hour                  |
 
 Two things to know about that first row. It refills continuously rather than
 resetting weekly, so the sustained rate is roughly 7 new URLs a day with a burst
@@ -597,7 +600,7 @@ certificates:
   issuer: { name: letsencrypt-dns01, kind: ClusterIssuer }
   copyToTenants: true
 tenant:
-  wildcardDomains: ".apps.example.com=wildcard-apps-example-com-tls"
+  wildcardDomains: '.apps.example.com=wildcard-apps-example-com-tls'
 ```
 
 **3. Understand `copyToTenants`.** A wildcard is issued once, into
@@ -625,11 +628,11 @@ wildcard rather than anything about that host.
 Orchard can put an auth wall in front of a tenant host. Three modes, and only
 one of them needs anything from the cluster:
 
-| mode | what a visitor sees | requirements |
-|---|---|---|
-| `basic` | the browser's username/password dialog (HTTP Basic, RFC 7617) | none |
-| `password` | an Orchard-hosted page asking for one shared password | none |
-| `orchard` | "sign in with Orchard", and they must be a member of the project | `protection.orchardLogin: true` |
+| mode       | what a visitor sees                                              | requirements                    |
+| ---------- | ---------------------------------------------------------------- | ------------------------------- |
+| `basic`    | the browser's username/password dialog (HTTP Basic, RFC 7617)    | none                            |
+| `password` | an Orchard-hosted page asking for one shared password            | none                            |
+| `orchard`  | "sign in with Orchard", and they must be a member of the project | `protection.orchardLogin: true` |
 
 Set them with `PUT /apiv1/projects/:id/ingresses/:ingressId/protection`, body
 `{ mode, username?, password?, bypassPaths? }`. `username` is only read for
@@ -679,7 +682,7 @@ protection:
   orchardLogin: true
 ```
 
-The flag gates *choosing* the mode, not enforcing it. Turning it off does not
+The flag gates _choosing_ the mode, not enforcing it. Turning it off does not
 drop the wall on hosts that already use it, so an upgrade cannot silently
 publish something that was private.
 
@@ -702,7 +705,7 @@ kubectl -n <tenant-namespace> create secret generic my-app-basic-auth --from-fil
 ```yaml
 nginx.ingress.kubernetes.io/auth-type: basic
 nginx.ingress.kubernetes.io/auth-secret: my-app-basic-auth
-nginx.ingress.kubernetes.io/auth-realm: "Restricted"
+nginx.ingress.kubernetes.io/auth-realm: 'Restricted'
 ```
 
 HAProxy uses `haproxy.org/auth-secret`; Traefik wants a `basicAuth` Middleware
@@ -711,7 +714,6 @@ through the ingress's `annotations` field. Orchard only forwards annotation
 keys on its allowlist (`ALLOWED_INGRESS_ANNOTATION_KEYS` in
 `apps/server/src/kubernetes/kubernetes.service.ts`), and none of the ones above
 are on it yet, so add the ones you need there first.
-
 
 ## What is not included
 

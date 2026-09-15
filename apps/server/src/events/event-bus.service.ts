@@ -84,7 +84,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
         String(MAXLEN),
         '*',
         'data',
-        JSON.stringify(event),
+        JSON.stringify(event)
       );
     } catch (e) {
       this.logger.warn(`xadd failed: ${(e as Error).message}`);
@@ -100,7 +100,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
         `(${fromId}`,
         '+',
         'COUNT',
-        REPLAY_LIMIT,
+        REPLAY_LIMIT
       )) as [string, string[]][];
       const out: BusEntry[] = [];
       for (const [id, fields] of rows) {
@@ -117,13 +117,9 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
   private async consumeLoop() {
     while (this.running && this.sub) {
       try {
-        const res = (await this.sub.xread(
-          'BLOCK',
-          5000,
-          'STREAMS',
-          STREAM_KEY,
-          this.lastId,
-        )) as [string, [string, string[]][]][] | null;
+        const res = (await this.sub.xread('BLOCK', 5000, 'STREAMS', STREAM_KEY, this.lastId)) as
+          | [string, [string, string[]][]][]
+          | null;
         if (!res) continue;
         for (const [, entries] of res) {
           for (const [id, fields] of entries) {
@@ -135,7 +131,9 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
       } catch (e) {
         if (!this.running) break;
         this.logger.warn(`xread error: ${(e as Error).message}; retrying`);
-        await new Promise((r) => { setTimeout(r, 1000); });
+        await new Promise((r) => {
+          setTimeout(r, 1000);
+        });
       }
     }
   }

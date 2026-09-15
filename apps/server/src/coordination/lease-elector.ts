@@ -152,7 +152,7 @@ export class LeaseElector extends EventEmitter implements Elector {
           leaseDurationSeconds: this.leaseDurationSeconds,
           acquireTime: new k8s.V1MicroTime(),
           renewTime: new k8s.V1MicroTime(),
-          leaseTransitions: (lease.spec?.leaseTransitions ?? 0) + 1,
+          leaseTransitions: (lease.spec?.leaseTransitions ?? 0) + 1
         };
         await this.api.replaceNamespacedLease(this.name, this.namespace, lease);
         this.onRenewed(true);
@@ -168,9 +168,7 @@ export class LeaseElector extends EventEmitter implements Elector {
         return;
       }
       this.renewFailures += 1;
-      this.logger.warn(
-        `lease tick failed (${this.renewFailures}): ${(error as Error).message}`,
-      );
+      this.logger.warn(`lease tick failed (${this.renewFailures}): ${(error as Error).message}`);
       if (this.holding && this.renewFailures >= 2) this.setHolding(false);
     }
   }
@@ -195,8 +193,8 @@ export class LeaseElector extends EventEmitter implements Elector {
         leaseDurationSeconds: this.leaseDurationSeconds,
         acquireTime: new k8s.V1MicroTime(),
         renewTime: new k8s.V1MicroTime(),
-        leaseTransitions: 0,
-      },
+        leaseTransitions: 0
+      }
     });
   }
 

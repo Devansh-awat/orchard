@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailAvatarService } from './email-avatar.service';
@@ -33,7 +38,10 @@ export function sanitizeUsername(raw: string): string {
 // called from updateProfile + admin updateUser to drop stale entries on edits.
 const USER_CACHE_TTL_MS = 10_000;
 const USER_CACHE_MAX = 5_000;
-interface CachedUser { value: any; expiresAt: number }
+interface CachedUser {
+  value: any;
+  expiresAt: number;
+}
 
 @Injectable()
 export class UsersService {
@@ -42,7 +50,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly emailAvatar: EmailAvatarService,
+    private readonly emailAvatar: EmailAvatarService
   ) {}
 
   private cacheGet(key: string): any | null {
@@ -64,7 +72,9 @@ export class UsersService {
     this.userCache.set(key, { value, expiresAt: Date.now() + USER_CACHE_TTL_MS });
   }
 
-  invalidateUserCache(user: { id?: string; externalAuthId?: string | null; email?: string | null } | null | undefined) {
+  invalidateUserCache(
+    user: { id?: string; externalAuthId?: string | null; email?: string | null } | null | undefined
+  ) {
     if (!user) return;
     if (user.id) this.userCache.delete(user.id);
     if (user.externalAuthId) this.userCache.delete(user.externalAuthId);
@@ -85,7 +95,7 @@ export class UsersService {
         if (user.externalAuthId && user.externalAuthId !== hackClubUser.id) {
           // Email row is already linked to a different Hack Club identity.
           throw new ConflictException(
-            'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.',
+            'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.'
           );
         }
         const previous = user;
@@ -95,10 +105,8 @@ export class UsersService {
             externalAuthId: hackClubUser.id,
             // Hack Club is the identity provider asserting this address, so
             // treat it as verified. Don't clobber an existing verification.
-            ...(user.emailVerified
-              ? {}
-              : { emailVerified: true, emailVerifiedAt: new Date() }),
-          },
+            ...(user.emailVerified ? {} : { emailVerified: true, emailVerifiedAt: new Date() })
+          }
         });
         this.invalidateUserCache(previous);
         this.invalidateUserCache(user);
@@ -126,7 +134,7 @@ export class UsersService {
             // Hack Club OAuth asserts the email; mark it verified so the user
             // can accept org invitations without a separate email flow.
             emailVerified: true,
-            emailVerifiedAt: new Date(),
+            emailVerifiedAt: new Date()
           }
         });
         void this.audit.log({
@@ -135,7 +143,7 @@ export class UsersService {
           actorEmail: user.email,
           targetType: 'user',
           targetId: user.id,
-          metadata: { signup_method: 'hackclub_oauth' },
+          metadata: { signup_method: 'hackclub_oauth' }
         });
       }
     } else {
@@ -147,9 +155,7 @@ export class UsersService {
           email: hackClubUser.email,
           // Backfill verification for existing Hack Club OAuth users created
           // before email was auto-verified.
-          ...(user.emailVerified
-            ? {}
-            : { emailVerified: true, emailVerifiedAt: new Date() }),
+          ...(user.emailVerified ? {} : { emailVerified: true, emailVerifiedAt: new Date() })
         }
       });
     }
@@ -196,7 +202,7 @@ export class UsersService {
       email: user.email,
       imageUrl: user.imageUrl ?? null,
       imageSource: user.imageSource ?? null,
-      avatarCheckedAt: user.avatarCheckedAt ?? null,
+      avatarCheckedAt: user.avatarCheckedAt ?? null
     });
     if (resolved && resolved !== user.imageUrl) this.invalidateUserCache(user);
     return resolved;
@@ -211,23 +217,30 @@ export class UsersService {
   }
 
   async findByIdOrExternalAuthId(identifier: string) {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (uuidRegex.test(identifier)) {
       return this.findById(identifier);
-    } 
-      return this.findByExternalAuthId(identifier);
-    
+    }
+    return this.findByExternalAuthId(identifier);
   }
 
-  async findOrCreateByClerkId(identifier: string, userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }) {
+  async findOrCreateByClerkId(
+    identifier: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
     let user = await this.findByIdOrExternalAuthId(identifier);
 
     if (!user && userData?.email) {
       // Try to find by email first
       user = await this.prisma.user.findUnique({
-        where: { email: userData.email },
+        where: { email: userData.email }
       });
 
       const uuidRegex =
@@ -253,8 +266,8 @@ export class UsersService {
             // Provenance matters even on this legacy path: an imageUrl with no
             // source recorded looks 'never resolved' to the email-avatar lookup,
             // which would then feel free to overwrite it.
-            ...(userData.imageUrl && { imageUrl: userData.imageUrl, imageSource: 'upload' }),
-          },
+            ...(userData.imageUrl && { imageUrl: userData.imageUrl, imageSource: 'upload' })
+          }
         });
         this.invalidateUserCache(previous);
         this.invalidateUserCache(user);
@@ -265,9 +278,7 @@ export class UsersService {
         if (identifierIsUuid) return null;
 
         // Create a new user with the (presumably-real) Hack Club identifier.
-        const baseUsername = sanitizeUsername(
-          userData.username || userData.email.split('@')[0],
-        );
+        const baseUsername = sanitizeUsername(userData.username || userData.email.split('@')[0]);
         let username = baseUsername;
         let counter = 1;
 
@@ -284,8 +295,8 @@ export class UsersService {
             firstName: userData.firstName || null,
             lastName: userData.lastName || null,
             imageUrl: userData.imageUrl || null,
-            ...(userData.imageUrl ? { imageSource: 'upload' } : {}),
-          },
+            ...(userData.imageUrl ? { imageSource: 'upload' } : {})
+          }
         });
         void this.audit.log({
           action: 'user.signed_up',
@@ -293,7 +304,7 @@ export class UsersService {
           actorEmail: user.email,
           targetType: 'user',
           targetId: user.id,
-          metadata: { signup_method: 'clerk_id' },
+          metadata: { signup_method: 'clerk_id' }
         });
       }
     }
@@ -301,12 +312,22 @@ export class UsersService {
     return user;
   }
 
-  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null; imageSource?: string | null }) {
+  async updateProfile(
+    userId: string,
+    data: {
+      firstName?: string | null;
+      lastName?: string | null;
+      username?: string;
+      setupCompleted?: boolean;
+      imageUrl?: string | null;
+      imageSource?: string | null;
+    }
+  ) {
     // If username is being updated, check format and uniqueness
     if (data.username !== undefined) {
       if (!/^[a-zA-Z0-9_-]{1,39}$/.test(data.username)) {
         throw new BadRequestException(
-          'Username may only contain letters, numbers, underscores, and hyphens (max 39 characters)',
+          'Username may only contain letters, numbers, underscores, and hyphens (max 39 characters)'
         );
       }
       const existingUser = await this.prisma.user.findUnique({
@@ -325,7 +346,7 @@ export class UsersService {
         ...(data.username !== undefined && { username: data.username }),
         ...(data.setupCompleted !== undefined && { setupCompleted: data.setupCompleted }),
         ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
-        ...(data.imageSource !== undefined && { imageSource: data.imageSource }),
+        ...(data.imageSource !== undefined && { imageSource: data.imageSource })
       },
       select: {
         id: true,
@@ -337,7 +358,7 @@ export class UsersService {
         imageSource: true,
         externalAuthId: true,
         setupCompleted: true,
-        seenUpdates: true,
+        seenUpdates: true
       }
     });
     this.invalidateUserCache(updated);
@@ -351,7 +372,7 @@ export class UsersService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, externalAuthId: true, seenUpdates: true },
+      select: { id: true, email: true, externalAuthId: true, seenUpdates: true }
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -364,10 +385,9 @@ export class UsersService {
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { seenUpdates: next },
-      select: { seenUpdates: true },
+      select: { seenUpdates: true }
     });
     this.invalidateUserCache(user);
     return { seenUpdates: updated.seenUpdates };
   }
 }
-

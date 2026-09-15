@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  BadRequestException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, BadRequestException, Optional } from '@nestjs/common';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
@@ -22,7 +16,7 @@ import {
   ClaimRecord,
   hashClaimToken,
   claimUrl,
-  recoveryState,
+  recoveryState
 } from './setup-token';
 
 export { SUPERADMIN_CLAIM_KEY };
@@ -92,7 +86,7 @@ export class SetupService implements OnModuleInit {
     private readonly githubApp: GithubAppConfigService,
     private readonly config: InstanceConfigService,
     private readonly dns: DnsCheckService,
-    @Optional() private readonly network?: K8sNetworkService,
+    @Optional() private readonly network?: K8sNetworkService
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -135,7 +129,9 @@ export class SetupService implements OnModuleInit {
 
     const existing = await this.readClaim();
     if (existing && !SetupService.expired(existing)) {
-      this.logger.warn('This instance still has no superadmin. Redeem the claim token already issued, or restart the server to mint a new one.');
+      this.logger.warn(
+        'This instance still has no superadmin. Redeem the claim token already issued, or restart the server to mint a new one.'
+      );
       return;
     }
 
@@ -147,12 +143,14 @@ export class SetupService implements OnModuleInit {
     const token = randomBytes(32).toString('base64url');
     const record: ClaimRecord = {
       hash: hashClaimToken(token),
-      expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString(),
+      expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString()
     };
 
     if (existing) {
       await this.settings.set(SUPERADMIN_CLAIM_KEY, JSON.stringify(record));
-    } else if (!(await this.settings.createIfAbsent(SUPERADMIN_CLAIM_KEY, JSON.stringify(record)))) {
+    } else if (
+      !(await this.settings.createIfAbsent(SUPERADMIN_CLAIM_KEY, JSON.stringify(record)))
+    ) {
       return;
     }
 
@@ -165,8 +163,8 @@ export class SetupService implements OnModuleInit {
         `    ${claimUrl(token)}`,
         '',
         '  Lost it? Run `orchard-claim` on the host for a fresh one.',
-        '',
-      ].join('\n'),
+        ''
+      ].join('\n')
     );
   }
 
@@ -181,7 +179,7 @@ export class SetupService implements OnModuleInit {
   async getSetupState(userId: string): Promise<SetupState> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, setupSkipped: true },
+      select: { id: true, email: true, setupSkipped: true }
     });
     if (!user) throw new BadRequestException('Unknown user');
 
@@ -195,8 +193,8 @@ export class SetupService implements OnModuleInit {
       this.prisma.passkey.count({ where: { userId } }),
       this.prisma.organization.findMany({
         where: { members: { some: { userId } } },
-        select: { name: true },
-      }),
+        select: { name: true }
+      })
     ]);
     const orgs = named.length;
 
@@ -215,8 +213,8 @@ export class SetupService implements OnModuleInit {
         id: 'organization',
         done: orgs > 0 && !named.some((org) => org.name === defaultOrgName(user.email ?? '')),
         skipped: skipped.has('organization'),
-        required: false,
-      },
+        required: false
+      }
     ];
 
     // An org is required, not merely a step: skipping the organization step is
@@ -253,7 +251,11 @@ export class SetupService implements OnModuleInit {
     if (!namespace || !this.network) return { state: 'unknown', host, message: null };
 
     const cached = this.certCache;
-    if (cached && cached.key === `${namespace}/${wildcard.secret}` && cached.at > Date.now() - CERT_TTL_MS) {
+    if (
+      cached &&
+      cached.key === `${namespace}/${wildcard.secret}` &&
+      cached.at > Date.now() - CERT_TTL_MS
+    ) {
       return cached.value;
     }
 
@@ -261,7 +263,7 @@ export class SetupService implements OnModuleInit {
     const value: SetupCertificate = {
       state: status.state,
       message: status.message ?? null,
-      host,
+      host
     };
     this.certCache = { key: `${namespace}/${wildcard.secret}`, at: Date.now(), value };
     return value;
@@ -277,7 +279,7 @@ export class SetupService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { setupSkipped: true },
+      select: { setupSkipped: true }
     });
     const next = Array.from(new Set([...(user?.setupSkipped ?? []), step]));
     await this.prisma.user.update({ where: { id: userId }, data: { setupSkipped: next } });
@@ -295,8 +297,9 @@ export class SetupService implements OnModuleInit {
    */
   async getChecklist(): Promise<ChecklistItem[]> {
     const smtp = this.config.isConfigured(EMAIL);
-    const oidc = envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET')
-      || envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
+    const oidc =
+      envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET') ||
+      envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
 
     const wildcardConfigured = platformWildcardDomains().some((w) => !!w.secret);
     const cert = wildcardConfigured
@@ -323,7 +326,7 @@ export class SetupService implements OnModuleInit {
         detail: 'Deploy private repos and rebuild automatically when you push.',
         done: this.githubApp.isConfigured(),
         severity: 'normal',
-        href: '/setup/github',
+        href: '/setup/github'
       },
       {
         id: 'backups',
@@ -332,7 +335,7 @@ export class SetupService implements OnModuleInit {
           'Managed databases have no backups at all until object storage is configured, so a deleted database cannot be recovered.',
         done: this.config.isConfigured(STORAGE),
         severity: 'warning',
-        href: '/admin/instance',
+        href: '/admin/instance'
       },
       {
         id: 'smtp',
@@ -341,7 +344,7 @@ export class SetupService implements OnModuleInit {
           'Needed to email invitations and sign-in codes. Without it, invites still work as copyable links.',
         done: smtp,
         severity: 'normal',
-        href: '/admin/instance',
+        href: '/admin/instance'
       },
       {
         id: 'oidc',
@@ -349,7 +352,7 @@ export class SetupService implements OnModuleInit {
         detail: 'Let people sign in with your existing SSO instead of a code or passkey.',
         done: oidc,
         severity: 'normal',
-        href: '/admin/sso',
+        href: '/admin/sso'
       },
       {
         id: 'ingress-cname',
@@ -358,7 +361,7 @@ export class SetupService implements OnModuleInit {
           'The hostname users point custom domains at. Without it, custom-domain DNS validation is skipped.',
         done: this.config.isConfigured(INGRESS),
         severity: 'normal',
-        href: '/admin/instance',
+        href: '/admin/instance'
       },
       {
         id: 'dns',
@@ -369,7 +372,7 @@ export class SetupService implements OnModuleInit {
         // than no item at all.
         done: dnsOutstanding.length === 0,
         severity: dnsOutstanding.length > 0 ? 'warning' : 'normal',
-        href: '/admin/networking',
+        href: '/admin/networking'
       },
       {
         id: 'wildcard-tls',
@@ -377,8 +380,8 @@ export class SetupService implements OnModuleInit {
         detail: wildcardDetail,
         done: wildcardConfigured && cert.state === 'ready',
         severity: cert.state === 'failed' || cert.state === 'rateLimited' ? 'warning' : 'normal',
-        href: '/admin/instance',
-      },
+        href: '/admin/instance'
+      }
     ];
   }
 
@@ -389,7 +392,9 @@ export class SetupService implements OnModuleInit {
     if (outstanding === 0) {
       return 'Every hostname this instance serves resolves here.';
     }
-    const names = DnsCheckService.outstanding(dns).map((r) => r.record).join(', ');
+    const names = DnsCheckService.outstanding(dns)
+      .map((r) => r.record)
+      .join(', ');
     return `${names} does not point here yet. Certificates cannot issue for a hostname that does not resolve.`;
   }
 
@@ -433,7 +438,9 @@ export class SetupService implements OnModuleInit {
     const claim = await this.readClaim();
     if (!claim) throw new BadRequestException('This instance has already been claimed');
     if (SetupService.expired(claim)) {
-      throw new BadRequestException('That claim token has expired. Run `orchard-claim` to mint a new one.');
+      throw new BadRequestException(
+        'That claim token has expired. Run `orchard-claim` to mint a new one.'
+      );
     }
 
     const a = Buffer.from(hashClaimToken(supplied), 'hex');
@@ -448,13 +455,14 @@ export class SetupService implements OnModuleInit {
 
     await this.prisma.$transaction(async (tx) => {
       const deleted = await tx.instanceSetting.deleteMany({ where: { key: SUPERADMIN_CLAIM_KEY } });
-      if (deleted.count === 0) throw new BadRequestException('This instance has already been claimed');
+      if (deleted.count === 0)
+        throw new BadRequestException('This instance has already been claimed');
       await tx.user.update({ where: { id: userId }, data: { isSuperAdmin: true } });
     });
 
     const claimed = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true }
     });
     if (claimed?.email) await this.ensureOrganizationFor(userId, claimed.email);
 
@@ -473,7 +481,16 @@ export class SetupService implements OnModuleInit {
    * this grants nothing to anyone who didn't already have the box. The
    * single-use delete inside the transaction is what stops it being replayed.
    */
-  async bootstrap(token: string, email: string): Promise<{ id: string; email: string; username: string; firstName: string | null; lastName: string | null }> {
+  async bootstrap(
+    token: string,
+    email: string
+  ): Promise<{
+    id: string;
+    email: string;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+  }> {
     // Validated in here rather than by the caller: this is the one path that
     // grants superadmin without a session, so it must not be possible to reach
     // the grant by forgetting a check at the controller.
@@ -489,7 +506,8 @@ export class SetupService implements OnModuleInit {
 
     await this.prisma.$transaction(async (tx) => {
       const deleted = await tx.instanceSetting.deleteMany({ where: { key: SUPERADMIN_CLAIM_KEY } });
-      if (deleted.count === 0) throw new BadRequestException('This instance has already been claimed');
+      if (deleted.count === 0)
+        throw new BadRequestException('This instance has already been claimed');
       await tx.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
     });
 
@@ -549,7 +567,7 @@ export class SetupService implements OnModuleInit {
     // Not emailVerified: nothing has proven this address, the token proved the
     // host. Verification happens the first time email actually works.
     return this.prisma.user.create({
-      data: { email: normalizedEmail, username },
+      data: { email: normalizedEmail, username }
     });
   }
 }

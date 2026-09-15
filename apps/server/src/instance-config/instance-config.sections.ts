@@ -17,7 +17,7 @@ const section = (
   key: string,
   fields: ConfigField[],
   required: string[],
-  validate?: (values: Record<string, string | null>) => void,
+  validate?: (values: Record<string, string | null>) => void
 ): ConfigSection => ({ id, key, fields, required, validate });
 
 const IPV4 = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -35,9 +35,9 @@ export const STORAGE = section(
     { name: 'bucketName', env: 'R2_BUCKET_NAME' },
     { name: 'endpoint', env: 'R2_ENDPOINT' },
     { name: 'publicUrl', env: 'R2_PUBLIC_URL' },
-    { name: 'buildContextBucket', env: 'R2_BUILD_CONTEXT_BUCKET' },
+    { name: 'buildContextBucket', env: 'R2_BUILD_CONTEXT_BUCKET' }
   ],
-  ['accessKeyId', 'secretAccessKey', 'bucketName'],
+  ['accessKeyId', 'secretAccessKey', 'bucketName']
 );
 
 export const EMAIL = section(
@@ -50,16 +50,16 @@ export const EMAIL = section(
     { name: 'pass', env: 'SMTP_PASS', secret: true },
     { name: 'secure', env: 'SMTP_SECURE' },
     { name: 'from', env: 'SMTP_FROM' },
-    { name: 'fromName', env: 'SMTP_FROM_NAME' },
+    { name: 'fromName', env: 'SMTP_FROM_NAME' }
   ],
-  ['host'],
+  ['host']
 );
 
 export const INGRESS = section(
   'ingress',
   'ingress',
   [{ name: 'cname', env: 'INGRESS_CNAME' }],
-  ['cname'],
+  ['cname']
 );
 
 export const WILDCARD = section(
@@ -68,9 +68,9 @@ export const WILDCARD = section(
   [
     { name: 'domains', env: 'PLATFORM_WILDCARD_DOMAINS' },
     { name: 'appDomain', env: 'APP_DOMAIN' },
-    { name: 'sourceNamespace', env: 'WILDCARD_TLS_SOURCE_NAMESPACE' },
+    { name: 'sourceNamespace', env: 'WILDCARD_TLS_SOURCE_NAMESPACE' }
   ],
-  ['domains'],
+  ['domains']
 );
 
 /**
@@ -90,7 +90,7 @@ export const NETWORK = section(
     if (ip && !isIpAddress(ip)) {
       throw new Error('publicIp must be a valid IPv4 or IPv6 address');
     }
-  },
+  }
 );
 
 /**
@@ -108,9 +108,9 @@ export const TUNNEL = section(
     { name: 'apiToken', env: 'CLOUDFLARE_API_TOKEN', secret: true },
     { name: 'accountId', env: 'CLOUDFLARE_ACCOUNT_ID' },
     { name: 'tunnelId', env: 'CLOUDFLARE_TUNNEL_ID' },
-    { name: 'zoneId', env: 'CLOUDFLARE_ZONE_ID' },
+    { name: 'zoneId', env: 'CLOUDFLARE_ZONE_ID' }
   ],
-  ['apiToken', 'accountId', 'tunnelId'],
+  ['apiToken', 'accountId', 'tunnelId']
 );
 
 export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD, NETWORK, TUNNEL];

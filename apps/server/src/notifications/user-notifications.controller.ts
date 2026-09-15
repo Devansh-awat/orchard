@@ -8,10 +8,14 @@ import {
   Body,
   Query,
   Request,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { UserNotificationsService, DestinationInput, SettingsInput } from './user-notifications.service';
+import {
+  UserNotificationsService,
+  DestinationInput,
+  SettingsInput
+} from './user-notifications.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { Auth } from '../auth/decorators';
@@ -25,13 +29,13 @@ export class UserNotificationsController {
   constructor(
     private readonly notifications: UserNotificationsService,
     private readonly usersService: UsersService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   private async currentUser(req: any) {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
-      username: req.user.username,
+      username: req.user.username
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
@@ -54,7 +58,7 @@ export class UserNotificationsController {
     @Param('scopeType') scopeType: string,
     @Param('scopeId') scopeId: string,
     @Query('organizationId') organizationId: string,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.currentUser(req);
     await this.authz.requireOrgMember(organizationId, user.id);
@@ -66,7 +70,7 @@ export class UserNotificationsController {
     @Param('scopeType') scopeType: string,
     @Param('scopeId') scopeId: string,
     @Body() body: SettingsInput & { organizationId?: string },
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.currentUser(req);
     const organizationId = body?.organizationId ?? '';
@@ -78,7 +82,7 @@ export class UserNotificationsController {
   async clearScopeSettings(
     @Param('scopeType') scopeType: string,
     @Param('scopeId') scopeId: string,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.currentUser(req);
     return this.notifications.clearScopeSettings(user.id, scopeType, scopeId);
@@ -100,10 +104,14 @@ export class UserNotificationsController {
   async setDestinationEnabled(
     @Param('destinationId') destinationId: string,
     @Body() body: { enabled?: boolean },
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.currentUser(req);
-    return this.notifications.setDestinationEnabled(user.id, destinationId, body?.enabled !== false);
+    return this.notifications.setDestinationEnabled(
+      user.id,
+      destinationId,
+      body?.enabled !== false
+    );
   }
 
   @Delete('notification-destinations/:destinationId')

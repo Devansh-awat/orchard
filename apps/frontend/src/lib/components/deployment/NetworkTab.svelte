@@ -606,8 +606,7 @@
 											class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
 											rows="3"
 											placeholder={'/api\n/webhooks/stripe'}
-											bind:value={protectionBypassPaths}
-										></textarea>
+											bind:value={protectionBypassPaths}></textarea>
 										<p class="text-xs mt-1 text-muted">
 											One per line. These paths and everything under them skip the login wall, so
 											APIs and webhooks keep working. Matching is on whole segments, so

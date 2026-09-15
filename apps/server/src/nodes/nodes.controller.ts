@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
 import { NodesService } from './nodes.service';
 
 @Controller('admin')
@@ -37,7 +29,7 @@ export class NodesController {
       notes?: string | null;
       cpuCapacity?: string | null;
       memoryCapacity?: string | null;
-    },
+    }
   ) {
     return this.nodes.updateNode(id, body);
   }
@@ -45,18 +37,18 @@ export class NodesController {
   @Patch('nodes/:id/taints')
   async setTaints(
     @Param('id') id: string,
-    @Body() body: { taints: { key: string; value?: string | null; effect: string }[] },
+    @Body() body: { taints: { key: string; value?: string | null; effect: string }[] }
   ) {
     return this.nodes.setNodeTaints(
       id,
-      (body.taints ?? []).map((t) => ({ key: t.key, value: t.value ?? null, effect: t.effect })),
+      (body.taints ?? []).map((t) => ({ key: t.key, value: t.value ?? null, effect: t.effect }))
     );
   }
 
   @Patch('nodes/:id/labels')
   async setLabels(
     @Param('id') id: string,
-    @Body() body: { labels: Record<string, string | null> },
+    @Body() body: { labels: Record<string, string | null> }
   ) {
     return this.nodes.setNodeLabels(id, body.labels ?? {});
   }
@@ -71,7 +63,7 @@ export class NodesController {
       cpuLimit?: string | null;
       memoryLimit?: string | null;
       maxServices?: number | null;
-    },
+    }
   ) {
     return this.nodes.upsertAssignment(id, orgId, body);
   }

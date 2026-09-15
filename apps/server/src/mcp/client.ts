@@ -38,20 +38,16 @@ export class OrchardClient {
 
     if (!this.token) {
       throw new Error(
-        'No credential available: set MCP_SERVICE_TOKEN (with acting user) or ORCHARD_API_TOKEN, or pass a token to the constructor',
+        'No credential available: set MCP_SERVICE_TOKEN (with acting user) or ORCHARD_API_TOKEN, or pass a token to the constructor'
       );
     }
   }
 
-  private async request<T = any>(
-    method: string,
-    path: string,
-    body?: any,
-  ): Promise<T> {
+  private async request<T = any>(method: string, path: string, body?: any): Promise<T> {
     const url = `${this.baseUrl}/apiv1${path}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json'
     };
 
     if (this.usesServiceToken && this.actingUser) {
@@ -68,7 +64,7 @@ export class OrchardClient {
     const res = await fetch(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? JSON.stringify(body) : undefined
     });
 
     if (!res.ok) {

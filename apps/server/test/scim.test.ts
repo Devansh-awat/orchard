@@ -31,7 +31,7 @@ test('a filter alone is accepted, without attributes tagging along', () => {
 test('passing undefined-valued keys is what SCIMMY rejects', () => {
   assert.throws(
     () => new SCIMMY.Resources.User({ filter: undefined, attributes: undefined } as any),
-    (err: any) => err.name === 'SCIMError' && err.status === 400,
+    (err: any) => err.name === 'SCIMError' && err.status === 400
   );
 });
 
@@ -39,7 +39,7 @@ test('pagination params are coerced to integers and bad ones are rejected', () =
   assert.deepEqual(parseScimQuery({ startIndex: '1', count: '20' }), { startIndex: 1, count: 20 });
   assert.throws(
     () => parseScimQuery({ count: 'lots' }),
-    (err: any) => err.name === 'SCIMError' && err.status === 400,
+    (err: any) => err.name === 'SCIMError' && err.status === 400
   );
 });
 
@@ -58,7 +58,7 @@ test('scim+json request bodies are parsed', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/Users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/scim+json' },
-      body: JSON.stringify({ userName: 'hopper@example.com' }),
+      body: JSON.stringify({ userName: 'hopper@example.com' })
     });
     assert.deepEqual(await res.json(), { userName: 'hopper@example.com' });
   } finally {
@@ -74,7 +74,8 @@ function makeDb() {
   const members: any[] = [];
   const tombstones: any[] = [];
 
-  const hydrate = (row: any) => (row ? { ...row, user: users.find((u) => u.id === row.userId) } : row);
+  const hydrate = (row: any) =>
+    row ? { ...row, user: users.find((u) => u.id === row.userId) } : row;
   const matches = (row: any, where: any) =>
     Object.entries(where ?? {}).every(([k, v]) => {
       if (k === 'organizationId_userId') {
@@ -118,15 +119,18 @@ function makeDb() {
         if (matches(rows[i], where)) rows.splice(i, 1);
       }
       return { count: 0 };
-    },
+    }
   });
 
   const db: any = {
     user: {
       ...collection(users, () => ({ id: randomUUID(), firstName: null, lastName: null })),
       findUnique: async ({ where }: any) =>
-        users.find((u) => (where.email ? u.email === where.email : u.id === where.id)
-          || (where.username && u.username === where.username)) ?? null,
+        users.find(
+          (u) =>
+            (where.email ? u.email === where.email : u.id === where.id) ||
+            (where.username && u.username === where.username)
+        ) ?? null
     },
     organizationMember: {
       ...collection(members, () => ({
@@ -139,9 +143,9 @@ function makeDb() {
         scimGivenName: null,
         scimFamilyName: null,
         scimDisplayName: null,
-        scimManaged: false,
+        scimManaged: false
       })),
-      count: async ({ where }: any) => members.filter((m) => matches(m, where)).length,
+      count: async ({ where }: any) => members.filter((m) => matches(m, where)).length
     },
     scimDeprovisionedMember: collection(tombstones, () => ({
       id: randomUUID(),
@@ -152,8 +156,8 @@ function makeDb() {
       userName: null,
       givenName: null,
       familyName: null,
-      displayName: null,
-    })),
+      displayName: null
+    }))
   };
   db.$transaction = async (fn: any) => fn(db);
   return { db, members, tombstones, users };
@@ -169,7 +173,7 @@ function makeService() {
 
 const patchOp = (value: any) => ({
   schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
-  Operations: [{ op: 'replace', value }],
+  Operations: [{ op: 'replace', value }]
 });
 
 const ENTERPRISE = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
@@ -178,8 +182,12 @@ test('provisioning, deactivating and reactivating keeps one stable resource id',
   const { service, members, tombstones } = makeService();
 
   const created: any = await service.createUser(
-    { schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'ada@example.com', externalId: 'idp-1' },
-    ctx,
+    {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+      userName: 'ada@example.com',
+      externalId: 'idp-1'
+    },
+    ctx
   );
   assert.equal(created.active, true);
   assert.equal(created.userName, 'ada@example.com');
@@ -220,7 +228,7 @@ test('deactivating twice is a no-op rather than an error', async () => {
   const again: any = await service.replaceUser(
     created.id,
     { userName: 'grace@example.com', active: false },
-    ctx,
+    ctx
   );
   assert.equal(again.active, false);
   assert.equal(again.id, created.id);
@@ -234,7 +242,7 @@ test('an attribute write on a deactivated user does not restore access', async (
   const updated: any = await service.replaceUser(
     created.id,
     { userName: 'alan@example.com', name: { givenName: 'Alan' } },
-    ctx,
+    ctx
   );
   assert.equal(updated.active, false, 'a PUT without active must not reactivate');
   assert.equal(updated.name.givenName, 'Alan');
@@ -247,7 +255,7 @@ test('creating an already-provisioned user is a 409 uniqueness conflict', async 
 
   await assert.rejects(
     () => service.createUser({ userName: 'linus@example.com' }, ctx),
-    (err: any) => err.name === 'SCIMError' && err.status === 409 && err.scimType === 'uniqueness',
+    (err: any) => err.name === 'SCIMError' && err.status === 409 && err.scimType === 'uniqueness'
   );
 });
 
@@ -272,7 +280,7 @@ test('DELETE clears the membership and the tombstone for good', async () => {
 
   await assert.rejects(
     () => service.getUser(created.id, {}, ctx),
-    (err: any) => err.name === 'SCIMError' && err.status === 404,
+    (err: any) => err.name === 'SCIMError' && err.status === 404
   );
 });
 
@@ -282,7 +290,7 @@ test('a user can be provisioned straight in as an admin via roles', async () => 
   const { service, members } = makeService();
   const created: any = await service.createUser(
     { userName: 'ada@example.com', roles: [{ value: 'admin', primary: true }] },
-    ctx,
+    ctx
   );
   assert.equal(created.roles[0].value, 'admin');
   assert.equal(created.userType, 'admin');
@@ -300,7 +308,7 @@ test('an unknown role is rejected rather than silently downgraded', async () => 
   const { service } = makeService();
   await assert.rejects(
     () => service.createUser({ userName: 'x@example.com', userType: 'superuser' }, ctx),
-    (err: any) => err.name === 'SCIMError' && err.status === 400 && err.scimType === 'invalidValue',
+    (err: any) => err.name === 'SCIMError' && err.status === 400 && err.scimType === 'invalidValue'
   );
 });
 
@@ -317,7 +325,7 @@ test('a role change on an existing user is applied', async () => {
   const promoted: any = await service.patchUser(
     created.id,
     patchOp({ roles: [{ value: 'admin', primary: true }] }),
-    ctx,
+    ctx
   );
   assert.equal(promoted.roles[0].value, 'admin');
   assert.equal(members[0].role, 'admin');
@@ -330,14 +338,14 @@ test('a role change lands whether the patch is pathed or not', async () => {
   for (const operation of [
     { op: 'replace', value: { roles: [{ value: 'admin', primary: true }] } },
     { op: 'replace', path: 'roles', value: [{ value: 'admin', primary: true }] },
-    { op: 'replace', value: { userType: 'admin' } },
+    { op: 'replace', value: { userType: 'admin' } }
   ]) {
     const { service, members } = makeService();
     const created: any = await service.createUser({ userName: 'linus@example.com' }, ctx);
     const promoted: any = await service.patchUser(
       created.id,
       { schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'], Operations: [operation] },
-      ctx,
+      ctx
     );
     assert.equal(members[0].role, 'admin', `role not applied for ${JSON.stringify(operation)}`);
     assert.equal(promoted.roles[0].value, 'admin');
@@ -347,7 +355,10 @@ test('a role change lands whether the patch is pathed or not', async () => {
 
 test('a write that omits roles leaves the role alone', async () => {
   const { service, members } = makeService();
-  const created: any = await service.createUser({ userName: 'edsger@example.com', userType: 'admin' }, ctx);
+  const created: any = await service.createUser(
+    { userName: 'edsger@example.com', userType: 'admin' },
+    ctx
+  );
 
   await service.replaceUser(created.id, { userName: 'edsger@example.com' }, ctx);
   assert.equal(members[0].role, 'admin', 'an omitted role must not demote to member');
@@ -355,11 +366,20 @@ test('a write that omits roles leaves the role alone', async () => {
 
 test('the last owner cannot be demoted, deactivated or deleted', async () => {
   const { service } = makeService();
-  const owner: any = await service.createUser({ userName: 'boss@example.com', userType: 'owner' }, ctx);
+  const owner: any = await service.createUser(
+    { userName: 'boss@example.com', userType: 'owner' },
+    ctx
+  );
 
   const lastOwner = (err: any) => err.name === 'SCIMError' && err.status === 400;
-  await assert.rejects(() => service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx), lastOwner);
-  await assert.rejects(() => service.patchUser(owner.id, patchOp({ active: false }), ctx), lastOwner);
+  await assert.rejects(
+    () => service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx),
+    lastOwner
+  );
+  await assert.rejects(
+    () => service.patchUser(owner.id, patchOp({ active: false }), ctx),
+    lastOwner
+  );
   await assert.rejects(() => service.deleteUser(owner.id, ctx), lastOwner);
 
   // With a second owner in place the guard lifts.
@@ -377,7 +397,7 @@ test('an update never writes to the shared user account', async () => {
   const { service, users } = makeService();
   const created: any = await service.createUser(
     { userName: 'grace@example.com', name: { givenName: 'Grace', familyName: 'Hopper' } },
-    ctx,
+    ctx
   );
   const account = { ...users[0] };
 
@@ -386,9 +406,9 @@ test('an update never writes to the shared user account', async () => {
     {
       userName: 'grace.hopper@newcorp.com',
       name: { givenName: 'Rear Admiral', familyName: 'Hopper' },
-      displayName: 'Amazing Grace',
+      displayName: 'Amazing Grace'
     },
-    ctx,
+    ctx
   );
 
   assert.deepEqual(users[0], account, 'the users row must be untouched by a SCIM update');
@@ -398,13 +418,13 @@ test('the per-org profile is what SCIM reads back', async () => {
   const { service } = makeService();
   const created: any = await service.createUser(
     { userName: 'katherine@example.com', name: { givenName: 'Katherine' } },
-    ctx,
+    ctx
   );
 
   const renamed: any = await service.replaceUser(
     created.id,
     { userName: 'kj@nasa.gov', name: { givenName: 'K', familyName: 'Johnson' }, displayName: 'KJ' },
-    ctx,
+    ctx
   );
   assert.equal(renamed.userName, 'kj@nasa.gov');
   assert.equal(renamed.name.givenName, 'K');
@@ -425,9 +445,9 @@ test('PUT clears the attributes it omits', async () => {
       externalId: 'idp-1',
       name: { givenName: 'Ada', familyName: 'Lovelace' },
       displayName: 'Ada L',
-      [ENTERPRISE]: { department: 'Analytical Engines' },
+      [ENTERPRISE]: { department: 'Analytical Engines' }
     },
-    ctx,
+    ctx
   );
   assert.equal(created.name.familyName, 'Lovelace');
 
@@ -445,7 +465,7 @@ test('an existing account joining a second org is linked, not rewritten', async 
   const { service, users } = makeService();
   await service.createUser(
     { userName: 'shared@example.com', name: { givenName: 'Real', familyName: 'Name' } },
-    ctx,
+    ctx
   );
   const account = { ...users[0] };
 
@@ -453,19 +473,19 @@ test('an existing account joining a second org is linked, not rewritten', async 
   const otherOrg = { organizationId: '22222222-2222-4222-8222-222222222222' };
   const linked: any = await service.createUser(
     { userName: 'shared@example.com', name: { givenName: 'Contractor' } },
-    otherOrg,
+    otherOrg
   );
 
   assert.equal(users.length, 1, 'the same account must be reused');
   assert.deepEqual(users[0], account, 'the second org must not rewrite the account');
-  assert.equal(linked.name.givenName, 'Contractor', "but it does get its own view");
+  assert.equal(linked.name.givenName, 'Contractor', 'but it does get its own view');
 });
 
 test('a brand-new account is seeded from the provisioning payload', async () => {
   const { service, users } = makeService();
   await service.createUser(
     { userName: 'newbie@example.com', name: { givenName: 'New', familyName: 'Bie' } },
-    ctx,
+    ctx
   );
   assert.equal(users[0].firstName, 'New');
   assert.equal(users[0].lastName, 'Bie');
@@ -475,9 +495,18 @@ test('a membership added in-app reads through to the account', async () => {
   const { service, users, members } = makeService();
   users.push({ id: 'u-1', email: 'inapp@example.com', firstName: 'In', lastName: 'App' });
   members.push({
-    id: 'm-1', organizationId: ORG, userId: 'u-1', role: 'admin', addedAt: new Date(),
-    scimManaged: false, scimExternalId: null, scimUserName: null,
-    scimGivenName: null, scimFamilyName: null, scimDisplayName: null, scimEnterprise: null,
+    id: 'm-1',
+    organizationId: ORG,
+    userId: 'u-1',
+    role: 'admin',
+    addedAt: new Date(),
+    scimManaged: false,
+    scimExternalId: null,
+    scimUserName: null,
+    scimGivenName: null,
+    scimFamilyName: null,
+    scimDisplayName: null,
+    scimEnterprise: null
   });
 
   const read: any = await service.getUser('m-1', {}, ctx);
@@ -493,9 +522,9 @@ test('enterprise extension attributes round-trip', async () => {
   const created: any = await service.createUser(
     {
       userName: 'katherine@example.com',
-      [ENTERPRISE]: { department: 'Flight Research', employeeNumber: '1953' },
+      [ENTERPRISE]: { department: 'Flight Research', employeeNumber: '1953' }
     },
-    ctx,
+    ctx
   );
   assert.equal(created[ENTERPRISE].department, 'Flight Research');
 
@@ -509,7 +538,7 @@ test('the enterprise extension is declared on the User schema', async () => {
   const resourceTypes: any = await service.resourceTypes('User');
   assert.ok(
     resourceTypes.schemaExtensions?.some((e: any) => e.schema === ENTERPRISE),
-    'ResourceTypes must advertise the enterprise extension',
+    'ResourceTypes must advertise the enterprise extension'
   );
 });
 
@@ -520,7 +549,7 @@ test('a filtered list finds the user by userName', async () => {
 
   const found: any = await service.listUsers(
     parseScimQuery({ filter: 'userName eq "dorothy@example.com"' }),
-    ctx,
+    ctx
   );
   assert.equal(found.Resources.length, 1);
   assert.equal(found.Resources[0].userName, 'dorothy@example.com');
@@ -542,8 +571,8 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
     controllers: [ScimController],
     providers: [
       { provide: ScimService, useValue: {} },
-      { provide: ScimTokensService, useValue: {} },
-    ],
+      { provide: ScimTokensService, useValue: {} }
+    ]
   })
   class TestScimModule {}
 
@@ -570,7 +599,7 @@ test('the SCIM catch-all registers behind every real endpoint', async () => {
       '/apiv1/scim/v2/ResourceTypes',
       '/apiv1/scim/v2/ResourceTypes/:id',
       '/apiv1/scim/v2/Schemas',
-      '/apiv1/scim/v2/Schemas/:id',
+      '/apiv1/scim/v2/Schemas/:id'
     ]) {
       const at = paths.indexOf(route);
       assert.ok(at >= 0, `${route} must be registered`);

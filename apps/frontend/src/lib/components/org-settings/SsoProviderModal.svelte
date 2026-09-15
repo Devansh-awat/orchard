@@ -197,8 +197,7 @@
 						bind:value={draft.samlCertificate}
 						placeholder={editing?.samlCertificate
 							? 'Stored. Leave blank to keep it.'
-							: 'Paste the X.509 certificate, or leave blank to read it from metadata'}
-					></textarea>
+							: 'Paste the X.509 certificate, or leave blank to read it from metadata'}></textarea>
 				</Field>
 			{/if}
 		</div>

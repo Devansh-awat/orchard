@@ -10,18 +10,18 @@ export class VanityDomainController {
   constructor(
     private readonly vanity: VanityDomainService,
     private readonly authz: AuthorizationService,
-    private readonly users: UsersService,
+    private readonly users: UsersService
   ) {}
 
   @Patch(':id/subdomain')
   async setSubdomain(
     @Param('id') organizationId: string,
     @Body('subdomain') subdomain: string | null,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.users.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
-      username: req.user.username,
+      username: req.user.username
     });
     if (!user) throw new NotFoundException('User not found');
     await this.authz.requireOrgOwner(organizationId, user.id);

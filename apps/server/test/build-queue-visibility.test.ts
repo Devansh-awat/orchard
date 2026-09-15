@@ -22,7 +22,7 @@ const full: QueueSnapshot = {
   limit: 2,
   waiting: 1,
   blockedByOwnBuild: false,
-  pool: 'cluster',
+  pool: 'cluster'
 };
 
 // The bug this exists for: a queued rebuild returned the unchanged deployment,

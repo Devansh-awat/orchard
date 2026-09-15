@@ -21,7 +21,7 @@
 const SANDBOX_START_FAULTS = [
   /failed to get thread ids from hypervisor/i,
   /failed to create shim task/i,
-  /failed to create containerd task/i,
+  /failed to create containerd task/i
 ];
 
 export function isSandboxStartFault(message: string): boolean {

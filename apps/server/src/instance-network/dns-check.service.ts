@@ -52,7 +52,7 @@ export class DnsCheckService {
     return expectedHostnames({
       frontendUrl: process.env.FRONTEND_URL || null,
       appDomain: this.appDomain(),
-      mcpUrl: this.mcpUrl(),
+      mcpUrl: this.mcpUrl()
     });
   }
 
@@ -92,9 +92,10 @@ export class DnsCheckService {
 
       if (!addresses.length) {
         verdict = 'missing';
-        message = error === 'ENOTFOUND' || error === 'ENODATA'
-          ? 'No record found. Add it at your DNS provider.'
-          : `Could not be resolved (${error}).`;
+        message =
+          error === 'ENOTFOUND' || error === 'ENODATA'
+            ? 'No record found. Add it at your DNS provider.'
+            : `Could not be resolved (${error}).`;
         if (host.role === 'apps') {
           message = 'No wildcard record found, so generated app URLs will not resolve.';
         }
@@ -107,7 +108,8 @@ export class DnsCheckService {
         // calling that broken would put a permanent red badge on instances
         // that are working perfectly well.
         verdict = 'different';
-        message = 'Resolves to a different address than the dashboard. Expected behind a proxy or CDN, worth a look otherwise.';
+        message =
+          'Resolves to a different address than the dashboard. Expected behind a proxy or CDN, worth a look otherwise.';
       }
 
       return {
@@ -115,7 +117,7 @@ export class DnsCheckService {
         verdict,
         addresses,
         expected: host.role === 'platform' ? [] : reference,
-        message,
+        message
       };
     });
 

@@ -17,7 +17,7 @@ import {
   apiThrottlerLimit,
   bearerApiToken,
   API_TOKEN_RATE_LIMIT,
-  IP_RATE_LIMIT,
+  IP_RATE_LIMIT
 } from '../src/auth/api-throttler.guard';
 
 const PAT = 'orch_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -30,11 +30,7 @@ function makeRequest(authorization?: unknown, ip = '203.0.113.7'): Record<string
 }
 
 function makeGuard(): ApiThrottlerGuard {
-  return new ApiThrottlerGuard(
-    [{ ttl: 60000, limit: IP_RATE_LIMIT }] as any,
-    {} as any,
-    {} as any,
-  );
+  return new ApiThrottlerGuard([{ ttl: 60000, limit: IP_RATE_LIMIT }] as any, {} as any, {} as any);
 }
 
 function getTracker(guard: ApiThrottlerGuard, req: Record<string, any>): Promise<string> {
@@ -44,7 +40,7 @@ function getTracker(guard: ApiThrottlerGuard, req: Record<string, any>): Promise
 function httpContext(req: Record<string, any>) {
   return {
     getType: () => 'http',
-    switchToHttp: () => ({ getRequest: () => req }),
+    switchToHttp: () => ({ getRequest: () => req })
   } as any;
 }
 
@@ -79,7 +75,7 @@ test('non-PAT requests keep the IP tracker', async () => {
   assert.equal(await getTracker(guard, makeRequest(undefined, '198.51.100.1')), '198.51.100.1');
   assert.equal(
     await getTracker(guard, makeRequest('Bearer eyJhbGciOiJIUzI1NiJ9.e30.x', '198.51.100.1')),
-    '198.51.100.1',
+    '198.51.100.1'
   );
 });
 

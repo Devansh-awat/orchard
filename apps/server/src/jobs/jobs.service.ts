@@ -2,7 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { CronTime } from 'cron';
 import { Prisma } from '@prisma/client';
@@ -20,7 +20,7 @@ export const RUN_TERMINAL_STATUSES = [
   'failed',
   'canceled',
   'skipped',
-  'timed_out',
+  'timed_out'
 ] as const;
 
 export type RunStatus =
@@ -102,15 +102,17 @@ export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly notifications: NotificationsService,
+    private readonly notifications: NotificationsService
   ) {}
 
   async getJobOrThrow(jobId: string) {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
       include: {
-        project: { select: { id: true, name: true, slug: true, namespace: true, organizationId: true } },
-      },
+        project: {
+          select: { id: true, name: true, slug: true, namespace: true, organizationId: true }
+        }
+      }
     });
     if (!job) throw new NotFoundException(`Job ${jobId} not found`);
     return job;
@@ -122,10 +124,12 @@ export class JobsService {
       include: {
         job: {
           include: {
-            project: { select: { id: true, name: true, slug: true, namespace: true, organizationId: true } },
-          },
-        },
-      },
+            project: {
+              select: { id: true, name: true, slug: true, namespace: true, organizationId: true }
+            }
+          }
+        }
+      }
     });
     if (!run) throw new NotFoundException(`Run ${runId} not found`);
     return run;
@@ -141,8 +145,8 @@ export class JobsService {
       trigger: true,
       startedAt: true,
       finishedAt: true,
-      createdAt: true,
-    },
+      createdAt: true
+    }
   };
 
   async listOrgJobs(organizationId: string, projectFilter: any) {
@@ -150,10 +154,13 @@ export class JobsService {
       where: { project: { ...projectFilter, organizationId } },
       include: {
         project: { select: { id: true, name: true, slug: true } },
-        steps: { orderBy: { stepOrder: 'asc' }, select: { id: true, name: true, type: true, stepOrder: true } },
-        runs: this.listRunsInclude,
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          select: { id: true, name: true, type: true, stepOrder: true }
+        },
+        runs: this.listRunsInclude
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
     return jobs.map((job) => this.serializeJob(job));
   }
@@ -163,10 +170,13 @@ export class JobsService {
       where: { projectId },
       include: {
         project: { select: { id: true, name: true, slug: true } },
-        steps: { orderBy: { stepOrder: 'asc' }, select: { id: true, name: true, type: true, stepOrder: true } },
-        runs: this.listRunsInclude,
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          select: { id: true, name: true, type: true, stepOrder: true }
+        },
+        runs: this.listRunsInclude
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
     return jobs.map((job) => this.serializeJob(job));
   }
@@ -187,22 +197,22 @@ export class JobsService {
             trigger: true,
             startedAt: true,
             finishedAt: true,
-            createdAt: true,
-          },
-        },
-      },
+            createdAt: true
+          }
+        }
+      }
     });
     if (!job) throw new NotFoundException(`Job ${jobId} not found`);
     return {
       ...this.serializeJob(job),
-      steps: job.steps.map((s) => this.serializeStep(s)),
+      steps: job.steps.map((s) => this.serializeStep(s))
     };
   }
 
   async createJob(projectId: string, input: JobInput, userId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, organizationId: true, namespace: true },
+      select: { id: true, organizationId: true, namespace: true }
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -211,12 +221,12 @@ export class JobsService {
 
     const defaultEnv = await this.prisma.environment.findFirst({
       where: { projectId, isDefault: true },
-      select: { id: true },
+      select: { id: true }
     });
 
     const existing = await this.prisma.job.findFirst({
       where: { projectId, name: data.name },
-      select: { id: true },
+      select: { id: true }
     });
     if (existing) {
       throw new ConflictException(`A job named "${data.name}" already exists in this project`);
@@ -234,14 +244,16 @@ export class JobsService {
         concurrencyPolicy: data.concurrencyPolicy ?? 'forbid',
         runTimeoutSeconds: data.runTimeoutSeconds ?? MAX_RUN_TIMEOUT,
         nodePoolId: input.nodePoolId ?? null,
-        placementOverride: (input.placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
+        placementOverride: (input.placementOverride ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
         createdBy: userId,
-        steps: { create: steps },
+        steps: { create: steps }
       },
       include: {
         project: { select: { id: true, name: true, slug: true, organizationId: true } },
-        steps: { orderBy: { stepOrder: 'asc' } },
-      },
+        steps: { orderBy: { stepOrder: 'asc' } }
+      }
     });
 
     this.emitJobChanged(job.project.organizationId, job.id, projectId);
@@ -250,12 +262,16 @@ export class JobsService {
 
   async updateJob(jobId: string, input: JobPatchInput) {
     const job = await this.getJobOrThrow(jobId);
-    const data = await this.validateJobInput({ ...input, name: input.name ?? job.name, steps: [] }, job.projectId, true);
+    const data = await this.validateJobInput(
+      { ...input, name: input.name ?? job.name, steps: [] },
+      job.projectId,
+      true
+    );
 
     if (input.name !== undefined && data.name !== job.name) {
       const clash = await this.prisma.job.findFirst({
         where: { projectId: job.projectId, name: data.name },
-        select: { id: true },
+        select: { id: true }
       });
       if (clash) {
         throw new ConflictException(`A job named "${data.name}" already exists in this project`);
@@ -270,21 +286,32 @@ export class JobsService {
         ...(input.scheduleCron !== undefined ? { scheduleCron: data.scheduleCron } : {}),
         ...(input.timeZone !== undefined ? { timeZone: data.timeZone } : {}),
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-        ...(input.concurrencyPolicy !== undefined ? { concurrencyPolicy: input.concurrencyPolicy } : {}),
-        ...(input.runTimeoutSeconds !== undefined ? { runTimeoutSeconds: data.runTimeoutSeconds ?? MAX_RUN_TIMEOUT } : {}),
+        ...(input.concurrencyPolicy !== undefined
+          ? { concurrencyPolicy: input.concurrencyPolicy }
+          : {}),
+        ...(input.runTimeoutSeconds !== undefined
+          ? { runTimeoutSeconds: data.runTimeoutSeconds ?? MAX_RUN_TIMEOUT }
+          : {}),
         ...(input.nodePoolId !== undefined ? { nodePoolId: input.nodePoolId ?? null } : {}),
         ...(input.placementOverride !== undefined
-          ? { placementOverride: (input.placementOverride ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull }
-          : {}),
+          ? {
+              placementOverride: (input.placementOverride ?? Prisma.DbNull) as
+                | Prisma.InputJsonValue
+                | typeof Prisma.DbNull
+            }
+          : {})
       },
       include: {
         project: { select: { id: true, name: true, slug: true, organizationId: true } },
-        steps: { orderBy: { stepOrder: 'asc' } },
-      },
+        steps: { orderBy: { stepOrder: 'asc' } }
+      }
     });
 
     this.emitJobChanged(updated.project.organizationId, jobId, job.projectId);
-    return { ...this.serializeJob(updated), steps: updated.steps.map((s) => this.serializeStep(s)) };
+    return {
+      ...this.serializeJob(updated),
+      steps: updated.steps.map((s) => this.serializeStep(s))
+    };
   }
 
   async replaceSteps(jobId: string, stepInputs: JobStepInput[]) {
@@ -298,13 +325,16 @@ export class JobsService {
         data: { steps: { create: steps } },
         include: {
           project: { select: { id: true, name: true, slug: true, organizationId: true } },
-          steps: { orderBy: { stepOrder: 'asc' } },
-        },
+          steps: { orderBy: { stepOrder: 'asc' } }
+        }
       });
     });
 
     this.emitJobChanged(updated.project.organizationId, jobId, job.projectId);
-    return { ...this.serializeJob(updated), steps: updated.steps.map((s) => this.serializeStep(s)) };
+    return {
+      ...this.serializeJob(updated),
+      steps: updated.steps.map((s) => this.serializeStep(s))
+    };
   }
 
   async deleteJob(jobId: string) {
@@ -312,7 +342,9 @@ export class JobsService {
     await this.prisma.job.delete({ where: { id: jobId } });
     this.notifications
       .purgeScope('job', jobId)
-      .catch((err) => console.error(`[Jobs] Failed to purge notification scope for ${jobId}:`, err));
+      .catch((err) =>
+        console.error(`[Jobs] Failed to purge notification scope for ${jobId}:`, err)
+      );
     this.emitJobChanged(job.project.organizationId, jobId, job.projectId);
     return job;
   }
@@ -326,14 +358,17 @@ export class JobsService {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         triggerer: { select: { id: true, username: true, firstName: true, lastName: true } },
-        steps: { orderBy: { stepOrder: 'asc' }, select: { stepOrder: true, name: true, status: true } },
-      },
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          select: { stepOrder: true, name: true, status: true }
+        }
+      }
     });
     const hasMore = runs.length > take;
     const page = hasMore ? runs.slice(0, take) : runs;
     return {
       runs: page.map((r) => this.serializeRun(r)),
-      nextCursor: hasMore ? page[page.length - 1].id : null,
+      nextCursor: hasMore ? page[page.length - 1].id : null
     };
   }
 
@@ -357,10 +392,10 @@ export class JobsService {
             reason: true,
             logsTruncated: true,
             startedAt: true,
-            finishedAt: true,
-          },
-        },
-      },
+            finishedAt: true
+          }
+        }
+      }
     });
     if (!run) throw new NotFoundException(`Run ${runId} not found`);
     return this.serializeRun(run);
@@ -369,7 +404,7 @@ export class JobsService {
   async getRunStepLogs(runId: string, stepOrder: number) {
     const step = await this.prisma.jobRunStep.findUnique({
       where: { runId_stepOrder: { runId, stepOrder } },
-      select: { logs: true, logsTruncated: true, status: true, k8sJobName: true },
+      select: { logs: true, logsTruncated: true, status: true, k8sJobName: true }
     });
     if (!step) throw new NotFoundException('Step not found');
     return step;
@@ -400,7 +435,7 @@ export class JobsService {
             trigger: lastRun.trigger,
             startedAt: lastRun.startedAt,
             finishedAt: lastRun.finishedAt,
-            createdAt: lastRun.createdAt,
+            createdAt: lastRun.createdAt
           }
         : null,
       recentRuns: (job.runs ?? []).map((r: any) => ({
@@ -408,12 +443,12 @@ export class JobsService {
         number: r.number,
         status: r.status,
         startedAt: r.startedAt,
-        finishedAt: r.finishedAt,
+        finishedAt: r.finishedAt
       })),
       nextRunAt:
         job.enabled && job.scheduleCron ? nextCronRun(job.scheduleCron, job.timeZone) : null,
       createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
+      updatedAt: job.updatedAt
     };
   }
 
@@ -430,9 +465,10 @@ export class JobsService {
       scriptRuntime: step.scriptRuntime,
       envVars: step.envVars ?? [],
       cpuRequestMilli: step.cpuRequestMilli,
-      memoryRequestBytes: step.memoryRequestBytes != null ? step.memoryRequestBytes.toString() : null,
+      memoryRequestBytes:
+        step.memoryRequestBytes != null ? step.memoryRequestBytes.toString() : null,
       timeoutSeconds: step.timeoutSeconds,
-      retries: step.retries,
+      retries: step.retries
     };
   }
 
@@ -454,7 +490,9 @@ export class JobsService {
         ? {
             id: run.triggerer.id,
             username: run.triggerer.username,
-            name: [run.triggerer.firstName, run.triggerer.lastName].filter(Boolean).join(' ') || run.triggerer.username,
+            name:
+              [run.triggerer.firstName, run.triggerer.lastName].filter(Boolean).join(' ') ||
+              run.triggerer.username
           }
         : null,
       steps: run.steps?.map((s: any) => ({
@@ -469,8 +507,8 @@ export class JobsService {
         reason: s.reason,
         logsTruncated: s.logsTruncated,
         startedAt: s.startedAt,
-        finishedAt: s.finishedAt,
-      })),
+        finishedAt: s.finishedAt
+      }))
     };
   }
 
@@ -479,7 +517,7 @@ export class JobsService {
       organizationId,
       type: 'job.changed',
       id: jobId,
-      projectId,
+      projectId
     });
   }
 
@@ -487,7 +525,7 @@ export class JobsService {
     organizationId: string,
     projectId: string,
     jobId: string,
-    run: { id: string; number: number; status: string; currentStepOrder?: number | null },
+    run: { id: string; number: number; status: string; currentStepOrder?: number | null }
   ) {
     this.orgEvents.emit({
       organizationId,
@@ -499,12 +537,16 @@ export class JobsService {
         runId: run.id,
         number: run.number,
         status: run.status,
-        currentStepOrder: run.currentStepOrder ?? null,
-      },
+        currentStepOrder: run.currentStepOrder ?? null
+      }
     });
   }
 
-  private async validateJobInput(input: JobInput | (JobPatchInput & { name: string; steps: JobStepInput[] }), projectId: string, isPatch = false) {
+  private async validateJobInput(
+    input: JobInput | (JobPatchInput & { name: string; steps: JobStepInput[] }),
+    projectId: string,
+    isPatch = false
+  ) {
     const name = String(input.name ?? '').trim();
     if (!isPatch || input.name !== undefined) {
       if (!name) throw new BadRequestException('Job name is required');
@@ -516,7 +558,7 @@ export class JobsService {
       scheduleCron = String(input.scheduleCron).trim();
       if (!isValidK8sCron(scheduleCron)) {
         throw new BadRequestException(
-          'Invalid cron expression. Use 5 fields: minute hour day-of-month month day-of-week',
+          'Invalid cron expression. Use 5 fields: minute hour day-of-month month day-of-week'
         );
       }
     }
@@ -530,15 +572,24 @@ export class JobsService {
       }
     }
 
-    if (input.concurrencyPolicy !== undefined && !['allow', 'forbid'].includes(input.concurrencyPolicy)) {
+    if (
+      input.concurrencyPolicy !== undefined &&
+      !['allow', 'forbid'].includes(input.concurrencyPolicy)
+    ) {
       throw new BadRequestException('concurrencyPolicy must be "allow" or "forbid"');
     }
 
     let runTimeoutSeconds: number | null = null;
     if (input.runTimeoutSeconds != null) {
       runTimeoutSeconds = Math.floor(Number(input.runTimeoutSeconds));
-      if (!Number.isFinite(runTimeoutSeconds) || runTimeoutSeconds < MIN_RUN_TIMEOUT || runTimeoutSeconds > MAX_RUN_TIMEOUT) {
-        throw new BadRequestException(`runTimeoutSeconds must be between ${MIN_RUN_TIMEOUT} and ${MAX_RUN_TIMEOUT}`);
+      if (
+        !Number.isFinite(runTimeoutSeconds) ||
+        runTimeoutSeconds < MIN_RUN_TIMEOUT ||
+        runTimeoutSeconds > MAX_RUN_TIMEOUT
+      ) {
+        throw new BadRequestException(
+          `runTimeoutSeconds must be between ${MIN_RUN_TIMEOUT} and ${MAX_RUN_TIMEOUT}`
+        );
       }
     }
 
@@ -549,7 +600,7 @@ export class JobsService {
       timeZone,
       enabled: input.enabled,
       concurrencyPolicy: input.concurrencyPolicy,
-      runTimeoutSeconds,
+      runTimeoutSeconds
     };
   }
 
@@ -567,7 +618,7 @@ export class JobsService {
     const deployments = deploymentIds.length
       ? await this.prisma.deployment.findMany({
           where: { id: { in: deploymentIds }, projectId },
-          select: { id: true },
+          select: { id: true }
         })
       : [];
     const validDeployments = new Set(deployments.map((d) => d.id));
@@ -592,11 +643,12 @@ export class JobsService {
         }
       }
 
-      let timeoutSeconds = raw.timeoutSeconds != null ? Math.floor(Number(raw.timeoutSeconds)) : 1800;
+      let timeoutSeconds =
+        raw.timeoutSeconds != null ? Math.floor(Number(raw.timeoutSeconds)) : 1800;
       if (!Number.isFinite(timeoutSeconds)) timeoutSeconds = 1800;
       if (timeoutSeconds < MIN_STEP_TIMEOUT || timeoutSeconds > MAX_STEP_TIMEOUT) {
         throw new BadRequestException(
-          `Step ${order}: timeout must be between ${MIN_STEP_TIMEOUT} and ${MAX_STEP_TIMEOUT} seconds`,
+          `Step ${order}: timeout must be between ${MIN_STEP_TIMEOUT} and ${MAX_STEP_TIMEOUT} seconds`
         );
       }
 
@@ -610,7 +662,9 @@ export class JobsService {
       if (raw.cpuRequestMilli != null) {
         cpuRequestMilli = Math.floor(Number(raw.cpuRequestMilli));
         if (!Number.isFinite(cpuRequestMilli) || cpuRequestMilli < 50 || cpuRequestMilli > 8000) {
-          throw new BadRequestException(`Step ${order}: cpuRequestMilli must be between 50 and 8000`);
+          throw new BadRequestException(
+            `Step ${order}: cpuRequestMilli must be between 50 and 8000`
+          );
         }
       }
 
@@ -621,14 +675,18 @@ export class JobsService {
         } catch {
           throw new BadRequestException(`Step ${order}: invalid memoryRequestBytes`);
         }
-        if (memoryRequestBytes < 64n * 1024n * 1024n || memoryRequestBytes > 16n * 1024n * 1024n * 1024n) {
+        if (
+          memoryRequestBytes < 64n * 1024n * 1024n ||
+          memoryRequestBytes > 16n * 1024n * 1024n * 1024n
+        ) {
           throw new BadRequestException(`Step ${order}: memory must be between 64Mi and 16Gi`);
         }
       }
 
-      const command = raw.command != null && String(raw.command).trim() !== ''
-        ? { shell: String(raw.command).trim() }
-        : null;
+      const command =
+        raw.command != null && String(raw.command).trim() !== ''
+          ? { shell: String(raw.command).trim() }
+          : null;
       if (command && command.shell.length > 4096) {
         throw new BadRequestException(`Step ${order}: command is too long`);
       }
@@ -641,7 +699,7 @@ export class JobsService {
         cpuRequestMilli,
         memoryRequestBytes,
         timeoutSeconds,
-        retries,
+        retries
       };
 
       if (raw.type === 'script') {
@@ -652,7 +710,9 @@ export class JobsService {
         }
         const runtime = raw.scriptRuntime as ScriptRuntime;
         if (!SCRIPT_RUNTIMES.includes(runtime)) {
-          throw new BadRequestException(`Step ${order}: scriptRuntime must be one of ${SCRIPT_RUNTIMES.join(', ')}`);
+          throw new BadRequestException(
+            `Step ${order}: scriptRuntime must be one of ${SCRIPT_RUNTIMES.join(', ')}`
+          );
         }
         return { ...base, script, scriptRuntime: runtime };
       }

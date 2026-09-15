@@ -42,7 +42,7 @@ export class MembershipCacheService {
     if (cached) return cached;
     const user = await this.prisma.user.findFirst({
       where: { externalAuthId: sub },
-      select: { id: true },
+      select: { id: true }
     });
     if (!user) return null;
     this.subToInternal.set(sub, user.id);
@@ -77,7 +77,7 @@ export class MembershipCacheService {
         }
         const memberships = await this.prisma.organizationMember.findMany({
           where: { userId: internalId },
-          select: { organizationId: true, role: true },
+          select: { organizationId: true, role: true }
         });
         // Only cache non-empty results. Caching empty poisoned every membership
         // check for this user for 30s whenever a transient blip (a stray

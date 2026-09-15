@@ -6,7 +6,7 @@ import {
   railpackConfigOverride,
   normalizeRootDirectory,
   parseRailpackInfo,
-  RAILPACK_INFO_MARKER,
+  RAILPACK_INFO_MARKER
 } from '../src/docker/build-config';
 
 test('unset build settings emit no overrides so Railpack detection wins', () => {
@@ -16,9 +16,9 @@ test('unset build settings emit no overrides so Railpack detection wins', () => 
       installCommand: null,
       buildCommand: null,
       startCommand: null,
-      outputDirectory: null,
+      outputDirectory: null
     }),
-    {},
+    {}
   );
 });
 
@@ -27,7 +27,7 @@ test('blank strings are treated as unset, not as an empty command', () => {
   // not "run the empty string as the build command".
   assert.deepEqual(
     railpackOverrideEnv({ buildCommand: '   ', installCommand: '', outputDirectory: '  ' }),
-    {},
+    {}
   );
 });
 
@@ -37,14 +37,14 @@ test('each setting maps to the RAILPACK_* variable railpack actually reads', () 
       installCommand: 'pnpm install --frozen-lockfile',
       buildCommand: 'pnpm build',
       startCommand: 'node server.js',
-      outputDirectory: 'dist',
+      outputDirectory: 'dist'
     }),
     {
       RAILPACK_INSTALL_CMD: 'pnpm install --frozen-lockfile',
       RAILPACK_BUILD_CMD: 'pnpm build',
       RAILPACK_START_CMD: 'node server.js',
-      RAILPACK_SPA_OUTPUT_DIR: 'dist',
-    },
+      RAILPACK_SPA_OUTPUT_DIR: 'dist'
+    }
   );
 });
 
@@ -84,7 +84,7 @@ test('normalizeRootDirectory rejects traversal, absolute paths and injection', (
     'apps/$(whoami)',
     'apps//web',
     'apps/web`id`',
-    "apps/web'",
+    "apps/web'"
   ]) {
     assert.equal(normalizeRootDirectory(bad), null, `expected ${bad} to be rejected`);
   }
@@ -105,8 +105,8 @@ test('railpack info reveals a detected SPA', () => {
       railpackVersion: 'v0.33.0',
       detectedProviders: ['node'],
       metadata: { nodeRuntime: 'vite', nodePackageManager: 'pnpm', nodeIsSPA: 'true' },
-      success: true,
-    }),
+      success: true
+    })
   )!;
   assert.equal(detection.framework, 'vite');
   assert.equal(detection.isStatic, true);
@@ -119,15 +119,17 @@ test('a server-rendered node app is not reported as static', () => {
   const detection = parseRailpackInfo(
     infoLine({
       detectedProviders: ['node'],
-      metadata: { nodeRuntime: 'next', nodeIsSPA: 'false' },
-    }),
+      metadata: { nodeRuntime: 'next', nodeIsSPA: 'false' }
+    })
   )!;
   assert.equal(detection.framework, 'next');
   assert.equal(detection.isStatic, false);
 });
 
 test('the staticfile provider counts as static even without node metadata', () => {
-  const detection = parseRailpackInfo(infoLine({ detectedProviders: ['staticfile'], metadata: {} }))!;
+  const detection = parseRailpackInfo(
+    infoLine({ detectedProviders: ['staticfile'], metadata: {} })
+  )!;
   assert.equal(detection.isStatic, true);
   assert.equal(detection.framework, 'staticfile');
 });
@@ -149,8 +151,9 @@ test('logs without a marker, or with a truncated one, yield no detection', () =>
 
 test('the last marker wins when a log contains several', () => {
   // Retried builds can append a second prepare run to the same log.
-  const logs = infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'vite' } })
-    + infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'next' } });
+  const logs =
+    infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'vite' } }) +
+    infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'next' } });
   assert.equal(parseRailpackInfo(logs)!.framework, 'next');
 });
 
@@ -166,25 +169,25 @@ test('commands become a config file so the UI outranks a repo railpack.json', ()
     railpackConfigOverride({
       RAILPACK_INSTALL_CMD: 'pnpm install',
       RAILPACK_BUILD_CMD: 'pnpm build',
-      RAILPACK_START_CMD: 'node build',
+      RAILPACK_START_CMD: 'node build'
     }),
     {
       steps: {
         install: {
           commands: [
             { src: '.', dest: '.' },
-            { cmd: "sh -c 'pnpm install'", customName: 'pnpm install' },
-          ],
+            { cmd: "sh -c 'pnpm install'", customName: 'pnpm install' }
+          ]
         },
         build: {
           commands: [
             { src: '.', dest: '.' },
-            { cmd: "sh -c 'pnpm build'", customName: 'pnpm build' },
-          ],
-        },
+            { cmd: "sh -c 'pnpm build'", customName: 'pnpm build' }
+          ]
+        }
       },
-      deploy: { startCommand: 'node build' },
-    },
+      deploy: { startCommand: 'node build' }
+    }
   );
 });
 
@@ -198,10 +201,9 @@ test('a command containing a colon stays an object, not a prefixed string', () =
 });
 
 test('a start command alone does not invent empty build steps', () => {
-  assert.deepEqual(
-    railpackConfigOverride({ RAILPACK_START_CMD: 'node build' }),
-    { deploy: { startCommand: 'node build' } },
-  );
+  assert.deepEqual(railpackConfigOverride({ RAILPACK_START_CMD: 'node build' }), {
+    deploy: { startCommand: 'node build' }
+  });
 });
 
 test('without an isolation runtime, scratch is disk-backed so builds are not capped by node RAM', () => {

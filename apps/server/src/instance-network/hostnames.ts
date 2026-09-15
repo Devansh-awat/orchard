@@ -47,7 +47,7 @@ export function expectedHostnames(input: {
       record: platform,
       probe: platform,
       label: 'Dashboard',
-      detail: 'Where people sign in. Everything else is checked against this one.',
+      detail: 'Where people sign in. Everything else is checked against this one.'
     });
   }
 
@@ -58,7 +58,7 @@ export function expectedHostnames(input: {
       record: `*.${apps}`,
       probe: `${WILDCARD_PROBE_LABEL}.${apps}`,
       label: 'Deployed apps',
-      detail: 'A wildcard, so every generated app URL resolves without its own record.',
+      detail: 'A wildcard, so every generated app URL resolves without its own record.'
     });
   }
 
@@ -69,7 +69,7 @@ export function expectedHostnames(input: {
       record: mcp,
       probe: mcp,
       label: 'MCP endpoint',
-      detail: 'Where AI agents connect. Its certificate cannot issue until this resolves.',
+      detail: 'Where AI agents connect. Its certificate cannot issue until this resolves.'
     });
   }
 

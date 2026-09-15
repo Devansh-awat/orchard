@@ -12,6 +12,6 @@ import { ScimTokensController } from './scim-tokens.controller';
   imports: [PrismaModule, AuditModule, AuthModule],
   controllers: [ScimController, ScimTokensController],
   providers: [ScimService, ScimTokensService, ScimAuthGuard],
-  exports: [ScimTokensService],
+  exports: [ScimTokensService]
 })
 export class ScimModule {}

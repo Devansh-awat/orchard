@@ -94,7 +94,7 @@
 										? 'neutral'
 										: 'info'}">{line.level}</span
 						>{/if}
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html line.html}
+					{@html line.html}
 				</span>
 			{/each}
 		</div>

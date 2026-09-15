@@ -1,13 +1,15 @@
 import {
-  BadRequestException, ConflictException, Injectable, Logger, OnModuleInit,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  OnModuleInit
 } from '@nestjs/common';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { setWildcardOverride } from '../projects/projects.utils';
 import { setObjectStorageOverride } from './object-storage';
-import {
-  ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD,
-} from './instance-config.sections';
+import { ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD } from './instance-config.sections';
 
 export type ConfigValues = Record<string, string | null>;
 
@@ -45,7 +47,7 @@ export class InstanceConfigService implements OnModuleInit {
 
   constructor(
     private readonly settings: InstanceSettingsService,
-    private readonly crypto: SecretCryptoService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -99,10 +101,7 @@ export class InstanceConfigService implements OnModuleInit {
 
     // projects.utils cannot inject this service without recreating a circular
     // import, so it is pushed the values instead.
-    setWildcardOverride(
-      next.get(WILDCARD.id)?.domains ?? null,
-      this.settingsAppDomain(next),
-    );
+    setWildcardOverride(next.get(WILDCARD.id)?.domains ?? null, this.settingsAppDomain(next));
     setObjectStorageOverride(next.get(STORAGE.id) ?? {});
   }
 
@@ -118,9 +117,7 @@ export class InstanceConfigService implements OnModuleInit {
   value(section: ConfigSection, name: string): string | null {
     const field = section.fields.find((f) => f.name === name);
     if (!field) return null;
-    return (
-      InstanceConfigService.env(field.env) ?? this.stored.get(section.id)?.[name] ?? null
-    );
+    return InstanceConfigService.env(field.env) ?? this.stored.get(section.id)?.[name] ?? null;
   }
 
   all(section: ConfigSection): ConfigValues {
@@ -159,7 +156,7 @@ export class InstanceConfigService implements OnModuleInit {
       configured: this.isConfigured(section),
       values,
       lockedFields: this.lockedFields(section),
-      secretFields,
+      secretFields
     };
   }
 
@@ -185,12 +182,11 @@ export class InstanceConfigService implements OnModuleInit {
       if (locked.has(field.name)) {
         const pinned = InstanceConfigService.env(field.env) ?? '';
         const proposed = incoming === undefined ? null : String(incoming).trim();
-        const changes = proposed !== null
-          && proposed !== pinned
-          && !(field.secret && proposed === '');
+        const changes =
+          proposed !== null && proposed !== pinned && !(field.secret && proposed === '');
         if (changes) {
           throw new ConflictException(
-            `${field.name} is set by the ${field.env} environment variable and cannot be changed here`,
+            `${field.name} is set by the ${field.env} environment variable and cannot be changed here`
           );
         }
         if (current[field.name]) next[field.name] = current[field.name];

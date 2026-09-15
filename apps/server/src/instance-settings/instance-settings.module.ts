@@ -12,6 +12,6 @@ import { InstanceFeaturesController } from './instance-features.controller';
   imports: [PrismaModule],
   controllers: [InstanceSettingsController, InstanceFeaturesController],
   providers: [InstanceSettingsService],
-  exports: [InstanceSettingsService],
+  exports: [InstanceSettingsService]
 })
 export class InstanceSettingsModule {}

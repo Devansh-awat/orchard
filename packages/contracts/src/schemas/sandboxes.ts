@@ -8,7 +8,7 @@ const sandboxStatus = z.enum([
   'stopping',
   'stopped',
   'deleting',
-  'error',
+  'error'
 ]);
 
 const sandboxName = z
@@ -31,18 +31,18 @@ const sandbox = z.object({
     .object({
       id: z.string().uuid(),
       username: z.string().nullable(),
-      email: z.string().nullable(),
+      email: z.string().nullable()
     })
     .nullable()
     .describe('Populated when listing an organization as an owner or admin'),
   createdAt: z.string(),
   updatedAt: z.string(),
-  lastActiveAt: z.string().nullable(),
+  lastActiveAt: z.string().nullable()
 });
 
 const credentialPresence = z.object({
   claude: z.boolean().describe('Whether a Claude Code OAuth token is stored'),
-  openai: z.boolean().describe('Whether an OpenAI/Codex token is stored'),
+  openai: z.boolean().describe('Whether an OpenAI/Codex token is stored')
 });
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
@@ -50,76 +50,84 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary:
       'List your sandboxes; with ?organizationId= org owners and admins see every sandbox in that organization',
     response: z.object({ sandboxes: z.array(sandbox), maxSandboxes: z.number().int() }),
-    scope: 'read',
+    scope: 'read'
   },
   'POST /sandboxes': {
     summary: 'Create an isolated cloud dev sandbox (Kata VM, internet egress only)',
     request: z.object({
       name: sandboxName.optional().describe('Defaults to "sandbox" (or a suffixed variant)'),
-      repoUrl: z.string().url().optional().describe('https git URL cloned into the sandbox on boot'),
+      repoUrl: z
+        .string()
+        .url()
+        .optional()
+        .describe('https git URL cloned into the sandbox on boot'),
       organizationId: z
         .string()
         .uuid()
         .optional()
-        .describe('Owning organization; required when you belong to more than one. Guests cannot create sandboxes.'),
+        .describe(
+          'Owning organization; required when you belong to more than one. Guests cannot create sandboxes.'
+        ),
       sshIdentityId: z
         .string()
         .uuid()
         .optional()
-        .describe('SSH identity to attach; defaults to your only identity when you have exactly one'),
+        .describe(
+          'SSH identity to attach; defaults to your only identity when you have exactly one'
+        ),
       setupScript: z
         .string()
         .max(65536)
         .nullable()
         .optional()
-        .describe('Shell script run once as the dev user on first boot (logged to ~/.setup.log)'),
+        .describe('Shell script run once as the dev user on first boot (logged to ~/.setup.log)')
     }),
     response: sandbox,
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'GET /sandboxes/credentials': {
     summary: 'Check which agent credentials are configured (presence only, never values)',
     response: credentialPresence,
-    scope: 'read',
+    scope: 'read'
   },
   'PUT /sandboxes/credentials': {
     summary: 'Store or clear agent subscription tokens (encrypted at rest), null clears',
     request: z.object({
       claudeToken: z.string().max(8192).nullable().optional(),
-      openaiToken: z.string().max(8192).nullable().optional(),
+      openaiToken: z.string().max(8192).nullable().optional()
     }),
     response: credentialPresence,
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'GET /sandboxes/:id': {
     summary: 'Get a sandbox',
     response: sandbox,
-    scope: 'read',
+    scope: 'read'
   },
   'PATCH /sandboxes/:id': {
-    summary: "Rename a sandbox or replace its SSH public key set",
+    summary: 'Rename a sandbox or replace its SSH public key set',
     request: z.object({
       name: sandboxName.optional(),
       sshIdentityId: z.string().uuid().optional(),
-      setupScript: z.string().max(65536).nullable().optional(),
+      setupScript: z.string().max(65536).nullable().optional()
     }),
     response: sandbox,
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'POST /sandboxes/:id/start': {
     summary: 'Resume a stopped sandbox (workspace and host key persist)',
     response: sandbox,
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'POST /sandboxes/:id/stop': {
     summary: 'Suspend a running sandbox (workspace and host key persist)',
     response: sandbox,
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'DELETE /sandboxes/:id': {
     summary: 'Delete a sandbox and its persistent workspace',
     response: z.object({ success: z.boolean() }),
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'POST /sandboxes/:id/git/commit': {
     summary: 'Stage and commit inside a sandbox repo (all changes, or listed files)',
@@ -129,34 +137,34 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       files: z.array(z.string()).optional(),
       amend: z.boolean().optional(),
       signoff: z.boolean().optional(),
-      trackedOnly: z.boolean().optional().describe('Stage tracked files only (git add -u)'),
+      trackedOnly: z.boolean().optional().describe('Stage tracked files only (git add -u)')
     }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/push': {
     summary: 'Push the current branch to origin (force uses --force-with-lease)',
     request: z.object({ repo: z.string(), force: z.boolean().optional() }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/fetch': {
     summary: 'Fetch all remotes and prune deleted branches',
     request: z.object({ repo: z.string() }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/pull': {
     summary: 'Pull the current branch, optionally with rebase',
     request: z.object({ repo: z.string(), rebase: z.boolean().optional() }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/uncommit': {
     summary: 'Soft reset the last commit, keeping its changes staged',
     request: z.object({ repo: z.string() }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/git/branches': {
     summary: 'List local branches with tracking info and remote branches',
@@ -167,12 +175,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           name: z.string(),
           upstream: z.string().nullable(),
           ahead: z.number().int(),
-          behind: z.number().int(),
-        }),
+          behind: z.number().int()
+        })
       ),
-      remote: z.array(z.string()),
+      remote: z.array(z.string())
     }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/checkout': {
     summary: 'Switch branches, or create one with create:true (optionally from a base ref)',
@@ -180,10 +188,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       repo: z.string(),
       branch: z.string(),
       create: z.boolean().optional(),
-      from: z.string().optional(),
+      from: z.string().optional()
     }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/branch/delete': {
     summary: 'Delete a local branch, or a remote branch with remote:true',
@@ -191,10 +199,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       repo: z.string(),
       branch: z.string(),
       remote: z.boolean().optional(),
-      force: z.boolean().optional(),
+      force: z.boolean().optional()
     }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/git/pr': {
     summary: 'Open a GitHub pull request from the current branch of a sandbox repo',
@@ -202,34 +210,34 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       repo: z.string(),
       title: z.string().min(1).max(300),
       body: z.string().max(20000).optional(),
-      base: z.string().max(200).optional(),
+      base: z.string().max(200).optional()
     }),
     response: z.object({ url: z.string() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/file': {
     summary: 'Read a file from the sandbox workspace (?path= and optional ?repo=)',
     response: z.object({ content: z.string(), truncated: z.boolean() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'PUT /sandboxes/:id/file': {
     summary: 'Write a file in the sandbox workspace',
     request: z.object({
       repo: z.string().optional(),
       path: z.string(),
-      content: z.string().max(512000),
+      content: z.string().max(512000)
     }),
     response: z.object({ ok: z.boolean() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/boot': {
     summary: 'Boot progress of a starting sandbox, for a setup progress indicator',
     response: z.object({
       phase: z.string(),
       ready: z.boolean(),
-      label: z.string(),
+      label: z.string()
     }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/repos': {
     summary: 'List git repositories cloned into the sandbox (one sandbox holds many repos)',
@@ -238,17 +246,17 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         z.object({
           name: z.string(),
           branch: z.string().nullable(),
-          dirtyFiles: z.number().int(),
-        }),
-      ),
+          dirtyFiles: z.number().int()
+        })
+      )
     }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/repos': {
     summary: 'Clone another repository into the sandbox (background, uses your GitHub token)',
     request: z.object({ repoUrl: z.string().url() }),
     response: z.object({ name: z.string() }),
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'GET /sandboxes/:id/changes': {
     summary: 'Git working-tree changes inside the sandbox workspace',
@@ -260,16 +268,16 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           path: z.string(),
           status: z.string(),
           additions: z.number().int().nullable(),
-          deletions: z.number().int().nullable(),
-        }),
-      ),
+          deletions: z.number().int().nullable()
+        })
+      )
     }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/diff': {
     summary: 'Git diff inside the sandbox workspace, whole tree or one file via ?file=',
     response: z.object({ diff: z.string(), truncated: z.boolean() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'POST /sandboxes/:id/chat': {
     summary:
@@ -277,9 +285,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({
       message: z.string().min(1).max(32768),
       conversationId: z.string().uuid().optional(),
-      repo: z.string().optional().describe('Working directory repo for a new conversation'),
+      repo: z.string().optional().describe('Working directory repo for a new conversation')
     }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/conversations': {
     summary: 'List conversations (metadata only; transcripts live on the sandbox disk)',
@@ -291,41 +299,41 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           repo: z.string().nullable(),
           hasSession: z.boolean(),
           createdAt: z.string(),
-          updatedAt: z.string(),
-        }),
-      ),
+          updatedAt: z.string()
+        })
+      )
     }),
-    scope: 'read',
+    scope: 'read'
   },
   'POST /sandboxes/:id/conversations': {
     summary: 'Create a conversation with an optional working-directory repo',
     request: z.object({
       title: z.string().max(120).optional(),
-      repo: z.string().nullable().optional(),
+      repo: z.string().nullable().optional()
     }),
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'PATCH /sandboxes/:id/conversations/:cid': {
     summary: 'Rename a conversation (repo changeable only before its first message)',
     request: z.object({
       title: z.string().max(120).optional(),
-      repo: z.string().nullable().optional(),
+      repo: z.string().nullable().optional()
     }),
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'DELETE /sandboxes/:id/conversations/:cid': {
     summary: 'Delete a conversation record (the session file stays on the sandbox disk)',
     response: z.object({ success: z.boolean() }),
-    scope: 'deploy',
+    scope: 'deploy'
   },
   'GET /sandboxes/:id/conversations/:cid/history': {
     summary: 'Replay a conversation transcript from the claude session file on the sandbox disk',
     response: z.object({ events: z.array(z.unknown()), truncated: z.boolean() }),
-    scope: 'exec',
+    scope: 'exec'
   },
   'GET /sandboxes/:id/ssh': {
     summary:
       'WebSocket tunnel to the sandbox sshd (binary frames carry raw TCP bytes; used by orchard sandbox ssh/proxy)',
-    scope: 'exec',
-  },
+    scope: 'exec'
+  }
 };

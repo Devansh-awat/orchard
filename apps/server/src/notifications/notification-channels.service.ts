@@ -48,7 +48,7 @@ export class NotificationChannelsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly transport: NotificationTransport,
-    private readonly delivery: NotificationDeliveryService,
+    private readonly delivery: NotificationDeliveryService
   ) {}
 
   async listChannels(organizationId: string) {
@@ -59,10 +59,10 @@ export class NotificationChannelsService {
         deliveries: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { status: true, error: true, event: true, createdAt: true },
+          select: { status: true, error: true, event: true, createdAt: true }
         },
-        _count: { select: { rules: true } },
-      },
+        _count: { select: { rules: true } }
+      }
     });
     const labels = await this.scopeLabels(channels);
     return channels.map(({ deliveries, _count, ...ch }) => ({
@@ -70,7 +70,7 @@ export class NotificationChannelsService {
       ruleCount: _count.rules,
       health: healthOf(ch),
       lastDelivery: deliveries[0] ?? null,
-      scopeLabel: labels.get(`${ch.scopeType}:${ch.scopeId ?? ''}`) ?? null,
+      scopeLabel: labels.get(`${ch.scopeType}:${ch.scopeId ?? ''}`) ?? null
     }));
   }
 
@@ -83,15 +83,27 @@ export class NotificationChannelsService {
       if (row.scopeType === 'org' || !row.scopeId) continue;
       idsByType.set(row.scopeType, [...(idsByType.get(row.scopeType) ?? []), row.scopeId]);
     }
-    const finders: Record<string, (ids: string[]) => Promise<{ id: string; name: string; displayName?: string | null }[]>> = {
-      project: (ids) => this.prisma.project.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    const finders: Record<
+      string,
+      (ids: string[]) => Promise<{ id: string; name: string; displayName?: string | null }[]>
+    > = {
+      project: (ids) =>
+        this.prisma.project.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true }
+        }),
       deployment: (ids) =>
         this.prisma.deployment.findMany({
           where: { id: { in: ids } },
-          select: { id: true, name: true, displayName: true },
+          select: { id: true, name: true, displayName: true }
         }),
-      database: (ids) => this.prisma.database.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
-      job: (ids) => this.prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+      database: (ids) =>
+        this.prisma.database.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true }
+        }),
+      job: (ids) =>
+        this.prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
     };
     const labels = new Map<string, string>();
     for (const [scopeType, ids] of idsByType) {
@@ -111,7 +123,7 @@ export class NotificationChannelsService {
     const channels = await this.prisma.notificationChannel.findMany({
       where: {
         organizationId,
-        OR: scopeChain(scope).map((link) => ({ scopeType: link.scopeType, scopeId: link.scopeId })),
+        OR: scopeChain(scope).map((link) => ({ scopeType: link.scopeType, scopeId: link.scopeId }))
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -124,23 +136,30 @@ export class NotificationChannelsService {
         autoDisabledAt: true,
         circuitOpenUntil: true,
         consecutiveFailures: true,
-        lastErrorAt: true,
-      },
+        lastErrorAt: true
+      }
     });
-    return channels.map(({ autoDisabledAt, circuitOpenUntil, consecutiveFailures, lastErrorAt, ...ch }) => ({
-      ...ch,
-      own: ownsChannel(scope, ch),
-      health: healthOf({
-        enabled: ch.enabled,
-        autoDisabledAt,
-        circuitOpenUntil,
-        consecutiveFailures,
-        lastErrorAt,
-      }),
-    }));
+    return channels.map(
+      ({ autoDisabledAt, circuitOpenUntil, consecutiveFailures, lastErrorAt, ...ch }) => ({
+        ...ch,
+        own: ownsChannel(scope, ch),
+        health: healthOf({
+          enabled: ch.enabled,
+          autoDisabledAt,
+          circuitOpenUntil,
+          consecutiveFailures,
+          lastErrorAt
+        })
+      })
+    );
   }
 
-  async createChannel(organizationId: string, input: ChannelInput, actor: Actor, scope: ResolvedScope) {
+  async createChannel(
+    organizationId: string,
+    input: ChannelInput,
+    actor: Actor,
+    scope: ResolvedScope
+  ) {
     await this.assertRoom(organizationId, scope);
     const data = await this.validateInput(organizationId, input, scope, { isCreate: true });
     let webhookSecret: string | undefined;
@@ -154,8 +173,8 @@ export class NotificationChannelsService {
         scopeType: scope.scopeType,
         scopeId: scope.scopeId,
         createdById: actor.id,
-        ...data,
-      } as any,
+        ...data
+      } as any
     });
     void this.audit.log({
       action: 'notification_channel.created',
@@ -165,7 +184,7 @@ export class NotificationChannelsService {
       targetType: 'notification_channel',
       targetId: channel.id,
       targetLabel: channel.name,
-      metadata: { type: channel.type, scopeType: scope.scopeType, scopeId: scope.scopeId },
+      metadata: { type: channel.type, scopeType: scope.scopeType, scopeId: scope.scopeId }
     });
     return { ...sanitizeChannel(channel), ...(webhookSecret ? { webhookSecret } : {}) };
   }
@@ -176,21 +195,21 @@ export class NotificationChannelsService {
   private async assertRoom(organizationId: string, scope: ResolvedScope) {
     if (scope.scopeType === 'org') {
       const existing = await this.prisma.notificationChannel.count({
-        where: { organizationId, scopeType: 'org' },
+        where: { organizationId, scopeType: 'org' }
       });
       if (existing >= MAX_CHANNELS_PER_ORG) {
         throw new BadRequestException(
-          `Organizations are limited to ${MAX_CHANNELS_PER_ORG} notification channels`,
+          `Organizations are limited to ${MAX_CHANNELS_PER_ORG} notification channels`
         );
       }
       return;
     }
     const existing = await this.prisma.notificationChannel.count({
-      where: { organizationId, scopeType: scope.scopeType, scopeId: scope.scopeId },
+      where: { organizationId, scopeType: scope.scopeType, scopeId: scope.scopeId }
     });
     if (existing >= MAX_CHANNELS_PER_SCOPE) {
       throw new BadRequestException(
-        `A ${scope.scopeType} is limited to ${MAX_CHANNELS_PER_SCOPE} notification channels`,
+        `A ${scope.scopeType} is limited to ${MAX_CHANNELS_PER_SCOPE} notification channels`
       );
     }
   }
@@ -198,7 +217,7 @@ export class NotificationChannelsService {
   async findChannelScope(organizationId: string, channelId: string) {
     const channel = await this.prisma.notificationChannel.findFirst({
       where: { id: channelId, organizationId },
-      select: { id: true, scopeType: true, scopeId: true },
+      select: { id: true, scopeType: true, scopeId: true }
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     return channel;
@@ -209,17 +228,17 @@ export class NotificationChannelsService {
     channelId: string,
     input: ChannelInput,
     actor: Actor,
-    scope: ResolvedScope,
+    scope: ResolvedScope
   ) {
     const existing = await this.prisma.notificationChannel.findFirst({
-      where: { id: channelId, organizationId },
+      where: { id: channelId, organizationId }
     });
     if (!existing) throw new NotFoundException('Notification channel not found');
     const data = await this.validateInput(
       organizationId,
       { ...input, type: existing.type },
       scope,
-      { isCreate: false, existingConfig: (existing.config ?? {}) as ChannelConfig },
+      { isCreate: false, existingConfig: (existing.config ?? {}) as ChannelConfig }
     );
     // Re-enabling by hand is the operator saying the endpoint is fixed, so give
     // the breaker a clean slate instead of making them wait out the old window.
@@ -228,12 +247,12 @@ export class NotificationChannelsService {
         consecutiveFailures: 0,
         circuitOpenUntil: null,
         autoDisabledAt: null,
-        lastError: null,
+        lastError: null
       });
     }
     const channel = await this.prisma.notificationChannel.update({
       where: { id: channelId },
-      data: data as any,
+      data: data as any
     });
     void this.audit.log({
       action: 'notification_channel.updated',
@@ -243,14 +262,14 @@ export class NotificationChannelsService {
       targetType: 'notification_channel',
       targetId: channel.id,
       targetLabel: channel.name,
-      metadata: { type: channel.type },
+      metadata: { type: channel.type }
     });
     return sanitizeChannel(channel);
   }
 
   async deleteChannel(organizationId: string, channelId: string, actor: Actor) {
     const existing = await this.prisma.notificationChannel.findFirst({
-      where: { id: channelId, organizationId },
+      where: { id: channelId, organizationId }
     });
     if (!existing) throw new NotFoundException('Notification channel not found');
     await this.prisma.notificationChannel.delete({ where: { id: channelId } });
@@ -262,7 +281,7 @@ export class NotificationChannelsService {
       targetType: 'notification_channel',
       targetId: existing.id,
       targetLabel: existing.name,
-      metadata: { type: existing.type },
+      metadata: { type: existing.type }
     });
     return { success: true };
   }
@@ -270,7 +289,7 @@ export class NotificationChannelsService {
   async listDeliveries(organizationId: string, channelId: string) {
     const channel = await this.prisma.notificationChannel.findFirst({
       where: { id: channelId, organizationId },
-      select: { id: true },
+      select: { id: true }
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     return this.prisma.notificationDelivery.findMany({
@@ -287,30 +306,30 @@ export class NotificationChannelsService {
         nextAttemptAt: true,
         deliveredAt: true,
         coalescedCount: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
   }
 
   async testChannel(organizationId: string, channelId: string) {
     const channel = await this.prisma.notificationChannel.findFirst({
-      where: { id: channelId, organizationId },
+      where: { id: channelId, organizationId }
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     const message: NotificationMessage = {
       event: 'deploy.succeeded',
       title: 'Test notification from Orchard',
       body: `Channel "${channel.name}" is wired up correctly.`,
-      url: this.frontendUrl,
+      url: this.frontendUrl
     };
     const outcome = await this.transport.send(
       {
         type: channel.type,
         config: (channel.config ?? {}) as ChannelConfig,
         label: `channel "${channel.name}"`,
-        organizationId,
+        organizationId
       },
-      [message],
+      [message]
     );
     return outcome.ok ? { success: true } : { success: false, error: outcome.error };
   }
@@ -321,7 +340,7 @@ export class NotificationChannelsService {
   async replay(organizationId: string, channelId: string, sinceHours: number, actor: Actor) {
     const channel = await this.prisma.notificationChannel.findFirst({
       where: { id: channelId, organizationId },
-      select: { id: true, name: true, enabled: true },
+      select: { id: true, name: true, enabled: true }
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     if (!channel.enabled) {
@@ -334,9 +353,11 @@ export class NotificationChannelsService {
     // do-over, not a way to route around the rules.
     const rules = await this.prisma.notificationRule.findMany({
       where: { channelId, enabled: true, mode: 'deliver' },
-      select: { events: true },
+      select: { events: true }
     });
-    const wanted = new Set(rules.flatMap((r) => (Array.isArray(r.events) ? (r.events as string[]) : [])));
+    const wanted = new Set(
+      rules.flatMap((r) => (Array.isArray(r.events) ? (r.events as string[]) : []))
+    );
     if (wanted.size === 0) {
       return { queued: 0, message: 'This channel has no rules, so there is nothing to replay' };
     }
@@ -345,7 +366,7 @@ export class NotificationChannelsService {
       where: { organizationId, occurredAt: { gte: since }, event: { in: [...wanted] } },
       orderBy: { occurredAt: 'asc' },
       take: MAX_REPLAY_EVENTS,
-      select: { id: true, event: true, payload: true },
+      select: { id: true, event: true, payload: true }
     });
 
     const stamp = Date.now();
@@ -373,7 +394,7 @@ export class NotificationChannelsService {
       targetType: 'notification_channel',
       targetId: channelId,
       targetLabel: channel.name,
-      metadata: { hours, queued },
+      metadata: { hours, queued }
     });
     if (queued > 0) this.delivery.kick();
     return {
@@ -382,7 +403,7 @@ export class NotificationChannelsService {
       message:
         events.length === MAX_REPLAY_EVENTS
           ? `Queued the most recent ${MAX_REPLAY_EVENTS} events; narrow the window to replay the rest`
-          : undefined,
+          : undefined
     };
   }
 
@@ -390,7 +411,7 @@ export class NotificationChannelsService {
     organizationId: string,
     input: ChannelInput,
     scope: ResolvedScope,
-    opts: { isCreate: boolean; existingConfig?: ChannelConfig },
+    opts: { isCreate: boolean; existingConfig?: ChannelConfig }
   ) {
     const { isCreate, existingConfig } = opts;
     const out: Record<string, unknown> = {};
@@ -406,7 +427,7 @@ export class NotificationChannelsService {
     const type = input.type as (typeof NOTIFICATION_CHANNEL_TYPES)[number];
     if (!NOTIFICATION_CHANNEL_TYPES.includes(type)) {
       throw new BadRequestException(
-        `Channel type must be one of: ${NOTIFICATION_CHANNEL_TYPES.join(', ')}`,
+        `Channel type must be one of: ${NOTIFICATION_CHANNEL_TYPES.join(', ')}`
       );
     }
     if (isCreate) out.type = type;
@@ -415,7 +436,11 @@ export class NotificationChannelsService {
       const config = input.config ?? {};
       if (type === 'email') {
         const recipients = Array.isArray(config.recipients)
-          ? [...new Set(config.recipients.map((r) => String(r).trim().toLowerCase()).filter(Boolean))]
+          ? [
+              ...new Set(
+                config.recipients.map((r) => String(r).trim().toLowerCase()).filter(Boolean)
+              )
+            ]
           : [];
         if (recipients.length === 0 || recipients.length > MAX_EMAIL_RECIPIENTS) {
           throw new BadRequestException(`Provide 1-${MAX_EMAIL_RECIPIENTS} recipient emails`);
@@ -428,7 +453,7 @@ export class NotificationChannelsService {
           const audience =
             scope.scopeType === 'org' ? 'this organization' : `the ${scope.scopeType}'s project`;
           throw new BadRequestException(
-            `Recipients must be members of ${audience}: ${outside.join(', ')}`,
+            `Recipients must be members of ${audience}: ${outside.join(', ')}`
           );
         }
         out.config = { recipients };
@@ -441,7 +466,7 @@ export class NotificationChannelsService {
           await assertSafeWebhookUrl(url);
           out.config = {
             url,
-            ...(existingConfig?.secret ? { secret: existingConfig.secret } : {}),
+            ...(existingConfig?.secret ? { secret: existingConfig.secret } : {})
           };
         }
       }
@@ -457,12 +482,12 @@ export class NotificationChannelsService {
   // to put yourself in front of every inbox in the organization.
   private async allowedRecipients(
     organizationId: string,
-    scope: ResolvedScope,
+    scope: ResolvedScope
   ): Promise<Set<string>> {
     if (scope.scopeType === 'org' || !scope.projectId) {
       const members = await this.prisma.organizationMember.findMany({
         where: { organizationId },
-        select: { user: { select: { email: true } } },
+        select: { user: { select: { email: true } } }
       });
       return new Set(members.map((m) => m.user.email?.toLowerCase()).filter(Boolean) as string[]);
     }
@@ -471,13 +496,13 @@ export class NotificationChannelsService {
       select: {
         owner: { select: { email: true } },
         creator: { select: { email: true } },
-        members: { select: { user: { select: { email: true } } } },
-      },
+        members: { select: { user: { select: { email: true } } } }
+      }
     });
     const emails = [
       project?.owner?.email,
       project?.creator?.email,
-      ...(project?.members ?? []).map((m) => m.user.email),
+      ...(project?.members ?? []).map((m) => m.user.email)
     ];
     return new Set(emails.filter(Boolean).map((e) => (e as string).toLowerCase()));
   }
@@ -493,8 +518,8 @@ export function sanitizeChannel<T extends { type: string; config: unknown }>(cha
     config: {
       urlConfigured: Boolean(config.url),
       urlPreview: config.url ? previewUrl(config.url) : null,
-      ...(channel.type === 'webhook' ? { secretConfigured: Boolean(config.secret) } : {}),
-    },
+      ...(channel.type === 'webhook' ? { secretConfigured: Boolean(config.secret) } : {})
+    }
   };
 }
 
@@ -504,11 +529,19 @@ function healthOf(channel: {
   circuitOpenUntil: Date | null;
   consecutiveFailures: number;
   lastErrorAt: Date | null;
-}): { state: 'healthy' | 'failing' | 'paused' | 'auto_disabled' | 'disabled'; until?: Date; since?: Date } {
+}): {
+  state: 'healthy' | 'failing' | 'paused' | 'auto_disabled' | 'disabled';
+  until?: Date;
+  since?: Date;
+} {
   if (channel.autoDisabledAt) return { state: 'auto_disabled', since: channel.autoDisabledAt };
   if (!channel.enabled) return { state: 'disabled' };
   if (channel.circuitOpenUntil && channel.circuitOpenUntil.getTime() > Date.now()) {
-    return { state: 'paused', until: channel.circuitOpenUntil, since: channel.lastErrorAt ?? undefined };
+    return {
+      state: 'paused',
+      until: channel.circuitOpenUntil,
+      since: channel.lastErrorAt ?? undefined
+    };
   }
   if (channel.consecutiveFailures > 0) {
     return { state: 'failing', since: channel.lastErrorAt ?? undefined };

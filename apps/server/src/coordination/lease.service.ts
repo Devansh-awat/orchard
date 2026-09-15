@@ -42,7 +42,7 @@ export class LeaseService implements OnApplicationShutdown {
       renewIntervalMs?: number;
       autoStart?: boolean;
       shouldAcquire?: () => boolean;
-    },
+    }
   ): Elector {
     const existing = this.electors.get(name);
     if (existing) return existing;
@@ -51,7 +51,7 @@ export class LeaseService implements OnApplicationShutdown {
       const holder = process.env.NODE_ENV !== 'production';
       if (!holder) {
         this.logger.error(
-          `lease ${name} cannot be held (no ${!this.kubernetes.kc ? 'kubeconfig' : 'control namespace — set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments'}); leader-only work is disabled on this replica`,
+          `lease ${name} cannot be held (no ${!this.kubernetes.kc ? 'kubeconfig' : 'control namespace — set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments'}); leader-only work is disabled on this replica`
         );
       } else {
         this.logger.log(`lease ${name}: out-of-cluster dev mode, acting as sole holder`);
@@ -64,7 +64,7 @@ export class LeaseService implements OnApplicationShutdown {
         identity: this.identity,
         leaseDurationSeconds: opts?.leaseDurationSeconds,
         renewIntervalMs: opts?.renewIntervalMs,
-        shouldAcquire: opts?.shouldAcquire,
+        shouldAcquire: opts?.shouldAcquire
       });
     }
     this.electors.set(name, elector);

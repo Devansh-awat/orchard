@@ -6,12 +6,12 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import {
   KubernetesService,
   buildPlacement,
-  ResolvedPlacement,
+  ResolvedPlacement
 } from '../kubernetes/kubernetes.service';
 import {
   isTrustedImage,
   trustedSecurityContext,
-  hardenedSecurityContext,
+  hardenedSecurityContext
 } from '../kubernetes/trusted-images';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from '../kubernetes/quantity';
 import { QuotasService } from '../quotas/quotas.service';
@@ -75,14 +75,14 @@ export class JobsOrchestratorService {
     private readonly notifications: NotificationsService,
     private readonly nodes: NodesService,
     private readonly jobsService: JobsService,
-    private readonly crypto: SecretCryptoService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   // Resolve a job's step-pod scheduling: org hostname allow/deny + assigned
   // node pool + superadmin raw override, merged into affinity + tolerations.
   private async resolveJobPlacement(
     job: { nodePoolId?: string | null; placementOverride?: unknown },
-    organizationId: string,
+    organizationId: string
   ): Promise<ResolvedPlacement> {
     const org = await this.nodes.getPlacementForOrg(organizationId);
     const pool = await this.nodes.resolvePool(job.nodePoolId ?? null);
@@ -91,7 +91,7 @@ export class JobsOrchestratorService {
       allowedNodes: org.allowedNodes,
       deniedNodes: org.deniedNodes,
       pool,
-      override,
+      override
     });
   }
 
@@ -116,8 +116,8 @@ export class JobsOrchestratorService {
       where: { id: jobId },
       include: {
         steps: { orderBy: { stepOrder: 'asc' } },
-        project: { select: { id: true } },
-      },
+        project: { select: { id: true } }
+      }
     });
     const resolved: ResolvedStep[] = [];
     for (const step of job.steps) {
@@ -129,8 +129,7 @@ export class JobsOrchestratorService {
   private async resolveStep(step: any, projectId: string): Promise<ResolvedStep> {
     const resources = await this.quotas.resolvePodResources(projectId, {
       cpuRequestMilli: step.cpuRequestMilli,
-      memoryRequestBytes:
-        step.memoryRequestBytes != null ? Number(step.memoryRequestBytes) : null,
+      memoryRequestBytes: step.memoryRequestBytes != null ? Number(step.memoryRequestBytes) : null
     });
 
     const base = {
@@ -140,7 +139,7 @@ export class JobsOrchestratorService {
       cpuMilli: resources.cpuMilli,
       memoryBytes: resources.memoryBytes,
       timeoutSeconds: step.timeoutSeconds,
-      retries: step.retries,
+      retries: step.retries
     };
 
     if (step.type === 'script') {
@@ -152,7 +151,7 @@ export class JobsOrchestratorService {
         image: spec.image,
         script: step.script,
         scriptRuntime: runtime,
-        scriptFile: scriptFileName(runtime, step.stepOrder),
+        scriptFile: scriptFileName(runtime, step.stepOrder)
       };
     }
 
@@ -161,7 +160,7 @@ export class JobsOrchestratorService {
         ...base,
         type: 'image',
         image: step.image,
-        shell: (step.command as any)?.shell ?? null,
+        shell: (step.command as any)?.shell ?? null
       };
     }
 
@@ -171,18 +170,18 @@ export class JobsOrchestratorService {
           select: {
             id: true,
             image: true,
-            envVars: { select: { key: true, value: true, secret: true } },
-          },
+            envVars: { select: { key: true, value: true, secret: true } }
+          }
         })
       : null;
     if (!deployment) {
       throw new BadRequestException(
-        `Step ${step.stepOrder} (${step.name}): the referenced app no longer exists`,
+        `Step ${step.stepOrder} (${step.name}): the referenced app no longer exists`
       );
     }
     if (!deployment.image) {
       throw new BadRequestException(
-        `Step ${step.stepOrder} (${step.name}): the referenced app has no built image yet`,
+        `Step ${step.stepOrder} (${step.name}): the referenced app has no built image yet`
       );
     }
 
@@ -197,7 +196,7 @@ export class JobsOrchestratorService {
       type: 'app',
       image: deployment.image,
       shell: (step.command as any)?.shell ?? null,
-      envVars: Array.from(merged, ([key, value]) => ({ key, value })),
+      envVars: Array.from(merged, ([key, value]) => ({ key, value }))
     };
   }
 
@@ -211,13 +210,13 @@ export class JobsOrchestratorService {
       runId?: string;
       runNumber?: number;
       scriptsConfigMap?: string;
-    } = {},
+    } = {}
   ): k8s.V1Job {
     const labels: Record<string, string> = {
       'app.kubernetes.io/managed-by': JOB_MANAGED_BY,
       [LABEL_JOB_ID]: ctx.jobId,
       [LABEL_PROJECT_ID]: ctx.projectId,
-      [LABEL_STEP_ORDER]: String(step.stepOrder),
+      [LABEL_STEP_ORDER]: String(step.stepOrder)
     };
     if (opts.runId) labels[LABEL_RUN_ID] = opts.runId;
 
@@ -228,7 +227,7 @@ export class JobsOrchestratorService {
       ...(opts.runNumber != null
         ? [{ name: 'ORCHARD_RUN_NUMBER', value: String(opts.runNumber) }]
         : []),
-      ...step.envVars.map((e) => ({ name: e.key, value: e.value })),
+      ...step.envVars.map((e) => ({ name: e.key, value: e.value }))
     ];
 
     let command: string[] | undefined;
@@ -240,17 +239,17 @@ export class JobsOrchestratorService {
       command = [...spec.interpreter, `${SCRIPTS_MOUNT_PATH}/${step.scriptFile}`];
       volumeMounts.push(
         { name: 'scripts', mountPath: SCRIPTS_MOUNT_PATH, readOnly: true },
-        { name: 'workspace', mountPath: '/workspace' },
+        { name: 'workspace', mountPath: '/workspace' }
       );
       volumes.push(
         {
           name: 'scripts',
           configMap: {
             name: opts.scriptsConfigMap ?? jobScriptsConfigMapName(ctx.jobId),
-            defaultMode: 0o555,
-          },
+            defaultMode: 0o555
+          }
         },
-        { name: 'workspace', emptyDir: {} },
+        { name: 'workspace', emptyDir: {} }
       );
     } else if (step.shell) {
       command = ['/bin/sh', '-c', step.shell];
@@ -264,7 +263,7 @@ export class JobsOrchestratorService {
     return {
       metadata: {
         name: opts.name,
-        labels,
+        labels
       },
       spec: {
         backoffLimit: step.retries,
@@ -275,9 +274,7 @@ export class JobsOrchestratorService {
           spec: {
             restartPolicy: 'Never',
             automountServiceAccountToken: false,
-            runtimeClassName: trusted
-              ? undefined
-              : process.env.TENANT_RUNTIME_CLASS || undefined,
+            runtimeClassName: trusted ? undefined : process.env.TENANT_RUNTIME_CLASS || undefined,
             affinity: ctx.placement?.affinity,
             tolerations: ctx.placement?.tolerations,
             containers: [
@@ -291,17 +288,15 @@ export class JobsOrchestratorService {
                 volumeMounts: volumeMounts.length ? volumeMounts : undefined,
                 resources: {
                   requests: { cpu: cpuReqStr, memory: memStr },
-                  limits: { cpu: cpuStr, memory: memStr },
+                  limits: { cpu: cpuStr, memory: memStr }
                 },
-                securityContext: trusted
-                  ? trustedSecurityContext()
-                  : hardenedSecurityContext(),
-              },
+                securityContext: trusted ? trustedSecurityContext() : hardenedSecurityContext()
+              }
             ],
-            volumes: volumes.length ? volumes : undefined,
-          },
-        },
-      },
+            volumes: volumes.length ? volumes : undefined
+          }
+        }
+      }
     };
   }
 
@@ -309,13 +304,13 @@ export class JobsOrchestratorService {
     name: string,
     namespace: string,
     steps: ResolvedStep[],
-    labels: Record<string, string>,
+    labels: Record<string, string>
   ): k8s.V1ConfigMap | null {
     const scriptSteps = steps.filter((s) => s.type === 'script' && s.script && s.scriptFile);
     if (scriptSteps.length === 0) return null;
     return {
       metadata: { name, namespace, labels },
-      data: Object.fromEntries(scriptSteps.map((s) => [s.scriptFile!, s.script!])),
+      data: Object.fromEntries(scriptSteps.map((s) => [s.scriptFile!, s.script!]))
     };
   }
 
@@ -326,8 +321,8 @@ export class JobsOrchestratorService {
       where: { id: jobId },
       include: {
         steps: { orderBy: { stepOrder: 'asc' } },
-        project: { select: { id: true, namespace: true, organizationId: true } },
-      },
+        project: { select: { id: true, namespace: true, organizationId: true } }
+      }
     });
     if (!job) return;
 
@@ -339,13 +334,13 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace,
-      placement: await this.resolveJobPlacement(job, job.project.organizationId),
+      placement: await this.resolveJobPlacement(job, job.project.organizationId)
     };
 
     const labels = {
       'app.kubernetes.io/managed-by': JOB_MANAGED_BY,
       [LABEL_JOB_ID]: job.id,
-      [LABEL_PROJECT_ID]: job.project.id,
+      [LABEL_PROJECT_ID]: job.project.id
     };
 
     const resolved: ResolvedStep[] = [];
@@ -365,7 +360,7 @@ export class JobsOrchestratorService {
 
     const firstStep = resolved[0];
     const template = this.buildStepJobManifest(ctx, firstStep, {
-      scriptsConfigMap: jobScriptsConfigMapName(job.id),
+      scriptsConfigMap: jobScriptsConfigMapName(job.id)
     });
 
     const desired: k8s.V1CronJob = {
@@ -373,7 +368,7 @@ export class JobsOrchestratorService {
         name,
         namespace,
         labels,
-        annotations: {},
+        annotations: {}
       },
       spec: {
         schedule: job.scheduleCron,
@@ -385,9 +380,9 @@ export class JobsOrchestratorService {
         failedJobsHistoryLimit: 3,
         jobTemplate: {
           metadata: { labels: template.metadata!.labels },
-          spec: template.spec,
-        },
-      },
+          spec: template.spec
+        }
+      }
     };
 
     const hash = createHash('sha256').update(JSON.stringify(desired)).digest('hex');
@@ -417,7 +412,7 @@ export class JobsOrchestratorService {
   private async syncJobScriptsConfigMap(
     ctx: RunContext,
     resolved: ResolvedStep[],
-    labels: Record<string, string>,
+    labels: Record<string, string>
   ) {
     const core = this.coreApi();
     const name = jobScriptsConfigMapName(ctx.jobId);
@@ -453,14 +448,14 @@ export class JobsOrchestratorService {
 
   async triggerRun(
     jobId: string,
-    opts: { trigger: 'manual' | 'api'; triggeredBy?: string | null; allowConcurrent?: boolean },
+    opts: { trigger: 'manual' | 'api'; triggeredBy?: string | null; allowConcurrent?: boolean }
   ) {
     const job = await this.prisma.job.findUniqueOrThrow({
       where: { id: jobId },
       include: {
         steps: { orderBy: { stepOrder: 'asc' } },
-        project: { select: { id: true, namespace: true, organizationId: true } },
-      },
+        project: { select: { id: true, namespace: true, organizationId: true } }
+      }
     });
     if (job.steps.length === 0) {
       throw new BadRequestException('This job has no steps');
@@ -469,7 +464,7 @@ export class JobsOrchestratorService {
     if (job.concurrencyPolicy === 'forbid' && !opts.allowConcurrent) {
       const active = await this.prisma.jobRun.findFirst({
         where: { jobId, status: { in: [...RUN_ACTIVE_STATUSES] } },
-        select: { id: true },
+        select: { id: true }
       });
       if (active) return null;
     }
@@ -479,7 +474,7 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace: job.project.namespace,
-      placement: await this.resolveJobPlacement(job, job.project.organizationId),
+      placement: await this.resolveJobPlacement(job, job.project.organizationId)
     };
 
     const resolved: ResolvedStep[] = [];
@@ -490,7 +485,7 @@ export class JobsOrchestratorService {
     const run = await this.createRunRecordSafe(job, resolved, {
       trigger: opts.trigger,
       triggeredBy: opts.triggeredBy ?? null,
-      status: 'pending',
+      status: 'pending'
     });
     if (!run) {
       throw new BadRequestException('Failed to create run record');
@@ -503,8 +498,8 @@ export class JobsOrchestratorService {
       where: { id: run.id },
       include: {
         triggerer: { select: { id: true, username: true, firstName: true, lastName: true } },
-        steps: { orderBy: { stepOrder: 'asc' } },
-      },
+        steps: { orderBy: { stepOrder: 'asc' } }
+      }
     });
     this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, job.id, fresh);
     return this.jobsService.serializeRun(fresh);
@@ -516,7 +511,7 @@ export class JobsOrchestratorService {
       'app.kubernetes.io/managed-by': JOB_MANAGED_BY,
       [LABEL_JOB_ID]: ctx.jobId,
       [LABEL_PROJECT_ID]: ctx.projectId,
-      [LABEL_RUN_ID]: runId,
+      [LABEL_RUN_ID]: runId
     };
     const desired = this.buildScriptsConfigMap(name, ctx.namespace, steps, labels);
     if (!desired) return;
@@ -530,7 +525,7 @@ export class JobsOrchestratorService {
   async launchStep(ctx: RunContext, runId: string, stepOrder: number): Promise<void> {
     const run = await this.prisma.jobRun.findUniqueOrThrow({
       where: { id: runId },
-      select: { id: true, number: true, status: true, stepsSnapshot: true },
+      select: { id: true, number: true, status: true, stepsSnapshot: true }
     });
     const snapshot = run.stepsSnapshot as unknown as ResolvedStep[];
     const step = snapshot.find((s) => s.stepOrder === stepOrder);
@@ -544,7 +539,7 @@ export class JobsOrchestratorService {
       name,
       runId,
       runNumber: run.number,
-      scriptsConfigMap: runScriptsConfigMapName(runId),
+      scriptsConfigMap: runScriptsConfigMapName(runId)
     });
 
     const now = new Date();
@@ -556,18 +551,22 @@ export class JobsOrchestratorService {
           k8sJobName: name,
           k8sJobUid: created.body.metadata?.uid ?? undefined,
           status: 'running',
-          startedAt: now,
-        },
+          startedAt: now
+        }
       });
     } catch (err: any) {
       const code = err?.statusCode ?? err?.response?.statusCode;
       if (code === 409) {
         this.logger.warn(`Step job ${name} already exists; treating as launched`);
       } else {
-        const message = err?.response?.body?.message || err?.body?.message || err?.message || 'Failed to create job';
+        const message =
+          err?.response?.body?.message ||
+          err?.body?.message ||
+          err?.message ||
+          'Failed to create job';
         await this.prisma.jobRunStep.update({
           where: { runId_stepOrder: { runId, stepOrder } },
-          data: { status: 'failed', reason: 'CreateFailed', finishedAt: now },
+          data: { status: 'failed', reason: 'CreateFailed', finishedAt: now }
         });
         await this.finishRun(ctx, runId, 'failed', message, stepOrder);
         return;
@@ -579,8 +578,8 @@ export class JobsOrchestratorService {
       data: {
         status: 'running',
         currentStepOrder: stepOrder,
-        ...(stepOrder === 1 ? { startedAt: now } : {}),
-      },
+        ...(stepOrder === 1 ? { startedAt: now } : {})
+      }
     });
     const fresh = await this.prisma.jobRun.findUniqueOrThrow({ where: { id: runId } });
     this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, ctx.jobId, fresh);
@@ -597,7 +596,7 @@ export class JobsOrchestratorService {
 
     const existing = await this.prisma.jobRunStep.findUnique({
       where: { k8sJobUid: uid },
-      select: { id: true },
+      select: { id: true }
     });
     if (existing) return;
 
@@ -605,8 +604,8 @@ export class JobsOrchestratorService {
       where: { id: jobId },
       include: {
         steps: { orderBy: { stepOrder: 'asc' } },
-        project: { select: { id: true, namespace: true, organizationId: true } },
-      },
+        project: { select: { id: true, namespace: true, organizationId: true } }
+      }
     });
     if (!job || job.steps.length === 0) {
       await this.deleteK8sJob(namespace, k8sName);
@@ -618,7 +617,7 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace: job.project.namespace,
-      placement: await this.resolveJobPlacement(job, job.project.organizationId),
+      placement: await this.resolveJobPlacement(job, job.project.organizationId)
     };
 
     const scheduledForRaw =
@@ -628,7 +627,7 @@ export class JobsOrchestratorService {
     if (job.concurrencyPolicy === 'forbid') {
       const active = await this.prisma.jobRun.findFirst({
         where: { jobId, status: { in: [...RUN_ACTIVE_STATUSES] } },
-        select: { id: true },
+        select: { id: true }
       });
       if (active) {
         await this.deleteK8sJob(namespace, k8sName);
@@ -638,7 +637,7 @@ export class JobsOrchestratorService {
           status: 'skipped',
           scheduledFor,
           finishedAt: new Date(),
-          errorMessage: 'Skipped: a previous run was still in progress',
+          errorMessage: 'Skipped: a previous run was still in progress'
         });
         if (skipped) {
           this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, job.id, skipped);
@@ -661,7 +660,7 @@ export class JobsOrchestratorService {
         status: 'failed',
         scheduledFor,
         finishedAt: new Date(),
-        errorMessage: err?.message || 'Failed to resolve job steps',
+        errorMessage: err?.message || 'Failed to resolve job steps'
       });
       if (failed) {
         this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, job.id, failed);
@@ -687,7 +686,7 @@ export class JobsOrchestratorService {
       triggeredBy: null,
       status: 'running',
       scheduledFor,
-      startedAt,
+      startedAt
     });
     if (!run) return;
 
@@ -698,8 +697,8 @@ export class JobsOrchestratorService {
           k8sJobName: k8sName,
           k8sJobUid: uid,
           status: 'running',
-          startedAt,
-        },
+          startedAt
+        }
       });
     } catch (err: any) {
       if (err?.code === 'P2002') {
@@ -711,11 +710,11 @@ export class JobsOrchestratorService {
 
     await this.prisma.jobRun.update({
       where: { id: run.id },
-      data: { currentStepOrder: resolved[0].stepOrder },
+      data: { currentStepOrder: resolved[0].stepOrder }
     });
 
     await this.ensureRunScriptsConfigMap(ctx, run.id, resolved).catch((err) =>
-      this.logger.warn(`run scripts configmap failed for ${run.id}: ${err?.message}`),
+      this.logger.warn(`run scripts configmap failed for ${run.id}: ${err?.message}`)
     );
 
     try {
@@ -727,7 +726,7 @@ export class JobsOrchestratorService {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } } as any,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } } as any
       );
     } catch (err: any) {
       this.logger.warn(`Failed to label cron job ${k8sName} with run id: ${err?.message}`);
@@ -748,13 +747,13 @@ export class JobsOrchestratorService {
       startedAt?: Date | null;
       finishedAt?: Date | null;
       errorMessage?: string | null;
-    },
+    }
   ) {
     try {
       const bumped = await this.prisma.job.update({
         where: { id: job.id },
         data: { runCounter: { increment: 1 } },
-        select: { runCounter: true },
+        select: { runCounter: true }
       });
       const snapshot = resolved.map((s) => ({ ...s, memoryBytes: Number(s.memoryBytes) }));
       return await this.prisma.jobRun.create({
@@ -776,10 +775,13 @@ export class JobsOrchestratorService {
               type: s.type,
               resolvedImage: s.image,
               command: s.shell ? { shell: s.shell } : undefined,
-              status: opts.status === 'running' && s.stepOrder === resolved[0]?.stepOrder ? 'running' : 'pending',
-            })),
-          },
-        },
+              status:
+                opts.status === 'running' && s.stepOrder === resolved[0]?.stepOrder
+                  ? 'running'
+                  : 'pending'
+            }))
+          }
+        }
       });
     } catch (err: any) {
       this.logger.warn(`createRunRecord failed for job ${job.id}: ${err?.message}`);
@@ -789,7 +791,15 @@ export class JobsOrchestratorService {
 
   async deleteK8sJob(namespace: string, name: string): Promise<void> {
     await this.batchApi()
-      .deleteNamespacedJob(name, namespace, undefined, undefined, undefined, undefined, 'Background')
+      .deleteNamespacedJob(
+        name,
+        namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'Background'
+      )
       .catch(() => {});
   }
 
@@ -800,12 +810,12 @@ export class JobsOrchestratorService {
     runId: string,
     stepOrder: number,
     outcome: { succeeded: boolean; reason?: string | null },
-    k8sJob?: k8s.V1Job,
+    k8sJob?: k8s.V1Job
   ): Promise<void> {
     const jobName = stepJobNameFor(runId, stepOrder);
     const { logs, truncated, exitCode } = await this.captureStepLogs(
       ctx.namespace,
-      k8sJob?.metadata?.name ?? jobName,
+      k8sJob?.metadata?.name ?? jobName
     );
 
     let stepStatus = 'failed';
@@ -820,14 +830,14 @@ export class JobsOrchestratorService {
         exitCode,
         logs,
         logsTruncated: truncated,
-        finishedAt: new Date(),
-      },
+        finishedAt: new Date()
+      }
     });
     if (claimed.count === 0) return;
 
     const run = await this.prisma.jobRun.findUnique({
       where: { id: runId },
-      select: { id: true, number: true, status: true, stepsSnapshot: true },
+      select: { id: true, number: true, status: true, stepsSnapshot: true }
     });
     if (!run || !RUN_ACTIVE_STATUSES.includes(run.status as any)) return;
 
@@ -837,7 +847,7 @@ export class JobsOrchestratorService {
     if (!outcome.succeeded) {
       await this.prisma.jobRunStep.updateMany({
         where: { runId, stepOrder: { gt: stepOrder }, status: 'pending' },
-        data: { status: 'skipped' },
+        data: { status: 'skipped' }
       });
       const runStatus = stepStatus === 'timed_out' ? 'timed_out' : 'failed';
       await this.finishRun(
@@ -845,7 +855,7 @@ export class JobsOrchestratorService {
         runId,
         runStatus,
         outcome.reason ? `Step ${stepOrder} failed: ${outcome.reason}` : `Step ${stepOrder} failed`,
-        stepOrder,
+        stepOrder
       );
       return;
     }
@@ -866,7 +876,7 @@ export class JobsOrchestratorService {
     runId: string,
     status: 'succeeded' | 'failed' | 'canceled' | 'timed_out',
     errorMessage: string | null,
-    failedStepOrder?: number,
+    failedStepOrder?: number
   ): Promise<void> {
     const claimed = await this.prisma.jobRun.updateMany({
       where: { id: runId, status: { in: ['pending', 'running'] } },
@@ -874,8 +884,8 @@ export class JobsOrchestratorService {
         status,
         errorMessage,
         finishedAt: new Date(),
-        currentStepOrder: failedStepOrder ?? null,
-      },
+        currentStepOrder: failedStepOrder ?? null
+      }
     });
     if (claimed.count === 0) return;
 
@@ -892,7 +902,7 @@ export class JobsOrchestratorService {
 
   async captureStepLogs(
     namespace: string,
-    jobName: string,
+    jobName: string
   ): Promise<{ logs: string | null; truncated: boolean; exitCode: number | null }> {
     try {
       const core = this.coreApi();
@@ -902,14 +912,18 @@ export class JobsOrchestratorService {
         undefined,
         undefined,
         undefined,
-        `job-name=${jobName}`,
+        `job-name=${jobName}`
       );
       const items = pods.body.items ?? [];
       if (items.length === 0) return { logs: null, truncated: false, exitCode: null };
 
       items.sort((a, b) => {
-        const ta = a.metadata?.creationTimestamp ? new Date(a.metadata.creationTimestamp).getTime() : 0;
-        const tb = b.metadata?.creationTimestamp ? new Date(b.metadata.creationTimestamp).getTime() : 0;
+        const ta = a.metadata?.creationTimestamp
+          ? new Date(a.metadata.creationTimestamp).getTime()
+          : 0;
+        const tb = b.metadata?.creationTimestamp
+          ? new Date(b.metadata.creationTimestamp).getTime()
+          : 0;
         return ta - tb;
       });
 
@@ -918,8 +932,9 @@ export class JobsOrchestratorService {
       for (const pod of items) {
         const podName = pod.metadata?.name;
         if (!podName) continue;
-        const term = pod.status?.containerStatuses?.[0]?.state?.terminated
-          ?? pod.status?.containerStatuses?.[0]?.lastState?.terminated;
+        const term =
+          pod.status?.containerStatuses?.[0]?.state?.terminated ??
+          pod.status?.containerStatuses?.[0]?.lastState?.terminated;
         if (term?.exitCode != null) exitCode = term.exitCode;
         try {
           const res = await core.readNamespacedPodLog(
@@ -928,7 +943,7 @@ export class JobsOrchestratorService {
             'step',
             undefined,
             undefined,
-            MAX_LOG_BYTES,
+            MAX_LOG_BYTES
           );
           const text = typeof res.body === 'string' ? res.body : String(res.body ?? '');
           if (items.length > 1) {
@@ -961,13 +976,17 @@ export class JobsOrchestratorService {
       undefined,
       undefined,
       undefined,
-      `job-name=${jobName}`,
+      `job-name=${jobName}`
     );
     const items = pods.body.items ?? [];
     if (items.length === 0) return null;
     items.sort((a, b) => {
-      const ta = a.metadata?.creationTimestamp ? new Date(a.metadata.creationTimestamp).getTime() : 0;
-      const tb = b.metadata?.creationTimestamp ? new Date(b.metadata.creationTimestamp).getTime() : 0;
+      const ta = a.metadata?.creationTimestamp
+        ? new Date(a.metadata.creationTimestamp).getTime()
+        : 0;
+      const tb = b.metadata?.creationTimestamp
+        ? new Date(b.metadata.creationTimestamp).getTime()
+        : 0;
       return tb - ta;
     });
     const pod = items[0];
@@ -979,7 +998,7 @@ export class JobsOrchestratorService {
         'step',
         undefined,
         undefined,
-        MAX_LOG_BYTES,
+        MAX_LOG_BYTES
       );
       return typeof res.body === 'string' ? res.body : String(res.body ?? '');
     } catch {
@@ -995,18 +1014,18 @@ export class JobsOrchestratorService {
       include: {
         job: {
           include: {
-            project: { select: { id: true, namespace: true, organizationId: true } },
-          },
+            project: { select: { id: true, namespace: true, organizationId: true } }
+          }
         },
-        steps: { orderBy: { stepOrder: 'asc' } },
-      },
+        steps: { orderBy: { stepOrder: 'asc' } }
+      }
     });
     const ctx: RunContext = {
       jobId: run.jobId,
       projectId: run.job.project.id,
       organizationId: run.job.project.organizationId,
       namespace: run.job.project.namespace,
-      placement: await this.resolveJobPlacement(run.job, run.job.project.organizationId),
+      placement: await this.resolveJobPlacement(run.job, run.job.project.organizationId)
     };
 
     if (!RUN_ACTIVE_STATUSES.includes(run.status as any)) {
@@ -1015,7 +1034,7 @@ export class JobsOrchestratorService {
 
     const claimed = await this.prisma.jobRun.updateMany({
       where: { id: runId, status: { in: ['pending', 'running'] } },
-      data: { status: 'canceled', finishedAt: new Date() },
+      data: { status: 'canceled', finishedAt: new Date() }
     });
     if (claimed.count > 0) {
       const batch = this.batchApi();
@@ -1029,18 +1048,18 @@ export class JobsOrchestratorService {
               undefined,
               undefined,
               undefined,
-              'Background',
+              'Background'
             )
             .catch(() => {});
           await this.prisma.jobRunStep.update({
             where: { id: step.id },
-            data: { status: 'canceled', finishedAt: new Date() },
+            data: { status: 'canceled', finishedAt: new Date() }
           });
         }
       }
       await this.prisma.jobRunStep.updateMany({
         where: { runId, status: 'pending' },
-        data: { status: 'skipped' },
+        data: { status: 'skipped' }
       });
       const fresh = await this.prisma.jobRun.findUniqueOrThrow({ where: { id: runId } });
       this.jobsService.emitRunChanged(ctx.organizationId, ctx.projectId, ctx.jobId, fresh);
@@ -1067,7 +1086,7 @@ export class JobsOrchestratorService {
         undefined,
         undefined,
         undefined,
-        `${LABEL_JOB_ID}=${job.id}`,
+        `${LABEL_JOB_ID}=${job.id}`
       );
       for (const item of jobs.body.items ?? []) {
         if (!item.metadata?.name) continue;
@@ -1079,7 +1098,7 @@ export class JobsOrchestratorService {
             undefined,
             undefined,
             undefined,
-            'Background',
+            'Background'
           )
           .catch(() => {});
       }
@@ -1094,7 +1113,7 @@ export class JobsOrchestratorService {
         undefined,
         undefined,
         undefined,
-        `${LABEL_JOB_ID}=${job.id}`,
+        `${LABEL_JOB_ID}=${job.id}`
       );
       for (const cm of cms.body.items ?? []) {
         if (!cm.metadata?.name) continue;

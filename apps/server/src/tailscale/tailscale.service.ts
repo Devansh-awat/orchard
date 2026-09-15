@@ -8,7 +8,7 @@ export class TailscaleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
-    private readonly k8sWorkload: K8sWorkloadService,
+    private readonly k8sWorkload: K8sWorkloadService
   ) {}
 
   /**
@@ -17,25 +17,27 @@ export class TailscaleService {
    */
   async linkAccount(userId: string, authKey: string): Promise<{ tailnet: string }> {
     if (!authKey.startsWith('tskey-auth-')) {
-      throw new BadRequestException('Invalid key. Please provide a Tailscale auth key (starts with tskey-auth-).');
+      throw new BadRequestException(
+        'Invalid key. Please provide a Tailscale auth key (starts with tskey-auth-).'
+      );
     }
 
     // We can't easily discover the tailnet from an auth key without registering a device,
     // so we store it and resolve the tailnet when the first sidecar comes online.
     // For display, extract the key ID portion.
-    const keyId = `${authKey.slice(0, 20)  }...`;
+    const keyId = `${authKey.slice(0, 20)}...`;
 
     await this.prisma.tailscaleConnection.upsert({
       where: { userId },
       create: {
         userId,
         accessToken: authKey,
-        tailnet: keyId,
+        tailnet: keyId
       },
       update: {
         accessToken: authKey,
-        tailnet: keyId,
-      },
+        tailnet: keyId
+      }
     });
 
     return { tailnet: keyId };
@@ -45,7 +47,7 @@ export class TailscaleService {
     // Remove all Tailscale sidecars for deployments this user exposed
     const exposedDeployments = await this.prisma.deployment.findMany({
       where: { tailscaleExposedBy: userId, tailscaleExposed: true },
-      include: { services: true },
+      include: { services: true }
     });
 
     for (const deployment of exposedDeployments) {
@@ -61,18 +63,18 @@ export class TailscaleService {
       data: {
         tailscaleExposed: false,
         tailscaleHostname: null,
-        tailscaleExposedBy: null,
-      },
+        tailscaleExposedBy: null
+      }
     });
 
     await this.prisma.tailscaleConnection.deleteMany({
-      where: { userId },
+      where: { userId }
     });
   }
 
   async getStatus(userId: string): Promise<{ linked: boolean; tailnet?: string }> {
     const connection = await this.prisma.tailscaleConnection.findUnique({
-      where: { userId },
+      where: { userId }
     });
 
     if (!connection) {
@@ -81,13 +83,15 @@ export class TailscaleService {
 
     return {
       linked: true,
-      tailnet: connection.tailnet,
+      tailnet: connection.tailnet
     };
   }
 
-  async getDeploymentTailscaleStatus(deploymentId: string): Promise<{ exposed: boolean; ip: string | null; dns: string | null; hostname: string | null }> {
+  async getDeploymentTailscaleStatus(
+    deploymentId: string
+  ): Promise<{ exposed: boolean; ip: string | null; dns: string | null; hostname: string | null }> {
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     if (!deployment || !deployment.tailscaleExposed) {
@@ -100,27 +104,29 @@ export class TailscaleService {
       exposed: true,
       ip: status.ip,
       dns: status.dns,
-      hostname: deployment.tailscaleHostname,
+      hostname: deployment.tailscaleHostname
     };
   }
 
   async exposeDeployment(deploymentId: string, userId: string): Promise<{ hostname: string }> {
     const connection = await this.prisma.tailscaleConnection.findUnique({
-      where: { userId },
+      where: { userId }
     });
 
     if (!connection) {
-      throw new BadRequestException('Tailscale account not connected. Connect it in your user settings first.');
+      throw new BadRequestException(
+        'Tailscale account not connected. Connect it in your user settings first.'
+      );
     }
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
         project: {
-          include: { organization: true },
+          include: { organization: true }
         },
-        services: true,
-      },
+        services: true
+      }
     });
 
     if (!deployment) {
@@ -136,7 +142,7 @@ export class TailscaleService {
     const servicePorts = deployment.services.map((svc) => ({
       port: svc.port,
       targetPort: svc.targetPort,
-      protocol: svc.protocol,
+      protocol: svc.protocol
     }));
 
     // Pass the user's auth key directly to the sidecar — it registers itself on their tailnet
@@ -145,7 +151,7 @@ export class TailscaleService {
       deployment.name,
       connection.accessToken,
       hostname,
-      servicePorts,
+      servicePorts
     );
 
     await this.prisma.deployment.update({
@@ -153,8 +159,8 @@ export class TailscaleService {
       data: {
         tailscaleExposed: true,
         tailscaleHostname: hostname,
-        tailscaleExposedBy: userId,
-      },
+        tailscaleExposedBy: userId
+      }
     });
 
     return { hostname };
@@ -162,7 +168,7 @@ export class TailscaleService {
 
   async unexposeDeployment(deploymentId: string, _userId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
+      where: { id: deploymentId }
     });
 
     if (!deployment) {
@@ -180,14 +186,14 @@ export class TailscaleService {
       data: {
         tailscaleExposed: false,
         tailscaleHostname: null,
-        tailscaleExposedBy: null,
-      },
+        tailscaleExposedBy: null
+      }
     });
   }
 
   async cleanupNamespace(namespace: string): Promise<void> {
     const deployments = await this.prisma.deployment.findMany({
-      where: { namespace, tailscaleExposed: true },
+      where: { namespace, tailscaleExposed: true }
     });
 
     for (const deployment of deployments) {
@@ -203,12 +209,17 @@ export class TailscaleService {
       data: {
         tailscaleExposed: false,
         tailscaleHostname: null,
-        tailscaleExposedBy: null,
-      },
+        tailscaleExposedBy: null
+      }
     });
   }
 
-  async cleanupDeployment(deployment: { id: string; name: string; namespace: string; tailscaleExposed: boolean }): Promise<void> {
+  async cleanupDeployment(deployment: {
+    id: string;
+    name: string;
+    namespace: string;
+    tailscaleExposed: boolean;
+  }): Promise<void> {
     if (!deployment.tailscaleExposed) return;
 
     try {

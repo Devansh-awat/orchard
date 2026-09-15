@@ -8,14 +8,15 @@ import {
   KubernetesService,
   CreateDeploymentOptions,
   DeploymentPortInput,
-  UpdateDeploymentEnvOptions, buildPlacement
+  UpdateDeploymentEnvOptions,
+  buildPlacement
 } from './kubernetes.service';
 import { K8sNamespaceService } from './k8s-namespace.service';
 import {
   sanitizePortEntries,
   mapServicePorts,
   snapshotPublicPortState,
-  publicPortKey,
+  publicPortKey
 } from './port-utils';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
@@ -23,7 +24,7 @@ import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-pat
 import {
   disruptionBudgetActive,
   disruptionBudgetManifest,
-  normalizeMinAvailable,
+  normalizeMinAvailable
 } from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
@@ -39,10 +40,7 @@ import { isPullAuthEnvKey } from '../env/reserved-env';
  * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
  * below so the bodies stay byte-identical.
  */
-function probeExecCommand(
-  command?: string | null,
-  execCommand?: string[] | null,
-): string[] {
+function probeExecCommand(command?: string | null, execCommand?: string[] | null): string[] {
   if (execCommand && execCommand.length > 0) return execCommand;
   if (command) return command.split(' ');
   return ['/bin/sh', '-c', 'exit 0'];
@@ -62,7 +60,10 @@ function probeSignature(probe: k8s.V1Probe | null | undefined): string {
   return [target, probe.periodSeconds, probe.timeoutSeconds, probe.failureThreshold].join('|');
 }
 
-function probesEqual(a: k8s.V1Probe | null | undefined, b: k8s.V1Probe | null | undefined): boolean {
+function probesEqual(
+  a: k8s.V1Probe | null | undefined,
+  b: k8s.V1Probe | null | undefined
+): boolean {
   return probeSignature(a) === probeSignature(b);
 }
 
@@ -81,7 +82,7 @@ export class K8sWorkloadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
-    private readonly namespaces: K8sNamespaceService,
+    private readonly namespaces: K8sNamespaceService
   ) {}
 
   private get kc(): k8s.KubeConfig | null {
@@ -103,7 +104,7 @@ export class K8sWorkloadService {
   async updateDeploymentResources(
     namespace: string,
     deploymentName: string,
-    resources: { cpuMilli: number; memoryBytes: number },
+    resources: { cpuMilli: number; memoryBytes: number }
   ) {
     this.ensureKubeConfig();
     if (!this.kc) return;
@@ -126,13 +127,13 @@ export class K8sWorkloadService {
                 name: containerName,
                 resources: {
                   requests: { cpu: cpuReqStr, memory: memStr },
-                  limits: { cpu: cpuStr, memory: memStr },
-                },
-              },
-            ],
-          },
-        },
-      },
+                  limits: { cpu: cpuStr, memory: memStr }
+                }
+              }
+            ]
+          }
+        }
+      }
     };
     await appsApi.patchNamespacedDeployment(
       deploymentName,
@@ -143,14 +144,11 @@ export class K8sWorkloadService {
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
     );
   }
 
-  async removeDeploymentResources(
-    namespace: string,
-    deploymentName: string,
-  ) {
+  async removeDeploymentResources(namespace: string, deploymentName: string) {
     this.ensureKubeConfig();
     if (!this.kc) return;
     const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -169,13 +167,13 @@ export class K8sWorkloadService {
                 name: containerName,
                 resources: {
                   requests: {},
-                  limits: {},
-                },
-              },
-            ],
-          },
-        },
-      },
+                  limits: {}
+                }
+              }
+            ]
+          }
+        }
+      }
     };
     await appsApi.patchNamespacedDeployment(
       deploymentName,
@@ -186,26 +184,26 @@ export class K8sWorkloadService {
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
     );
   }
 
   async listPods(namespace = 'midnight-staging') {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
-    
+
     if (!cleanNamespace || cleanNamespace.length === 0) {
       throw new BadRequestException('Namespace parameter is required');
     }
-    
+
     console.log('[API] Fetching pods from namespace:', cleanNamespace);
-    
+
     try {
       const api = this.kc.makeApiClient(k8s.CoreV1Api);
       const podList = await api.listNamespacedPod(cleanNamespace);
-      
-      const pods = podList.body.items.map(pod => ({
+
+      const pods = podList.body.items.map((pod) => ({
         name: pod.metadata.name,
         namespace: pod.metadata.namespace,
         status: pod.status.phase,
@@ -213,7 +211,7 @@ export class K8sWorkloadService {
         hostIP: pod.status.hostIP,
         startTime: pod.status.startTime,
         conditions: pod.status.conditions,
-        containerStatuses: pod.status.containerStatuses?.map(container => ({
+        containerStatuses: pod.status.containerStatuses?.map((container) => ({
           name: container.name,
           ready: container.ready,
           restartCount: container.restartCount,
@@ -231,7 +229,7 @@ export class K8sWorkloadService {
       };
     } catch (error) {
       console.error('Error fetching pods:', error);
-      
+
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to fetch pods from Kubernetes',
@@ -239,7 +237,7 @@ export class K8sWorkloadService {
           details: error.response.body
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to fetch pods',
         message: error.message
@@ -249,14 +247,17 @@ export class K8sWorkloadService {
 
   async getKubernetesDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
-    
+
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
-      const k8sDeployment = await appsApi.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
-      
+      const k8sDeployment = await appsApi.readNamespacedDeployment(
+        cleanDeploymentName,
+        cleanNamespace
+      );
+
       return {
         name: k8sDeployment.body.metadata.name,
         namespace: k8sDeployment.body.metadata.namespace,
@@ -264,16 +265,16 @@ export class K8sWorkloadService {
           replicas: k8sDeployment.body.spec.replicas,
           availableReplicas: k8sDeployment.body.status.availableReplicas ?? 0,
           readyReplicas: k8sDeployment.body.status.readyReplicas ?? 0,
-          updatedReplicas: k8sDeployment.body.status.updatedReplicas ?? 0,
+          updatedReplicas: k8sDeployment.body.status.updatedReplicas ?? 0
         }
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {
         return null;
       }
-      
+
       console.error('Error fetching deployment:', error);
-      
+
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to fetch deployment from Kubernetes',
@@ -281,7 +282,7 @@ export class K8sWorkloadService {
           details: error.response.body
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to fetch deployment',
         message: error.message
@@ -294,24 +295,24 @@ export class K8sWorkloadService {
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanPodName = String(podName).trim();
-    
+
     console.log('[API] Fetching pod:', cleanPodName, 'from namespace:', cleanNamespace);
-    
+
     try {
       const api = this.kc.makeApiClient(k8s.CoreV1Api);
       const pod = await api.readNamespacedPod(cleanPodName, cleanNamespace);
-      
+
       return pod.body;
     } catch (error) {
       console.error('Error fetching pod:', error);
-      
+
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Pod not found',
           message: `Pod ${cleanPodName} not found in namespace ${cleanNamespace}`
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to fetch pod',
         message: error.message
@@ -333,37 +334,52 @@ export class K8sWorkloadService {
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Pod not found',
-          message: `Pod ${cleanPodName} not found in namespace ${cleanNamespace}`,
+          message: `Pod ${cleanPodName} not found in namespace ${cleanNamespace}`
         });
       }
       throw new BadRequestException({
         error: 'Failed to delete pod',
-        message: error.message,
+        message: error.message
       });
     }
   }
 
-  async getPodLogs(podName: string, namespace = 'midnight-staging', containerName?: string, tailLines = 100, previous = false, sinceSeconds?: number, sinceTime?: string) {
+  async getPodLogs(
+    podName: string,
+    namespace = 'midnight-staging',
+    containerName?: string,
+    tailLines = 100,
+    previous = false,
+    sinceSeconds?: number,
+    sinceTime?: string
+  ) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanPodName = String(podName).trim();
     const cleanContainerName = containerName ? String(containerName).trim() : '';
-    
-    console.log('[API] Fetching logs for pod:', cleanPodName, 'container:', cleanContainerName || '(default)', 'from namespace:', cleanNamespace);
-    
+
+    console.log(
+      '[API] Fetching logs for pod:',
+      cleanPodName,
+      'container:',
+      cleanContainerName || '(default)',
+      'from namespace:',
+      cleanNamespace
+    );
+
     try {
       const api = this.kc.makeApiClient(k8s.CoreV1Api);
       const pod = await api.readNamespacedPod(cleanPodName, cleanNamespace);
-      const containers = pod.body.spec?.containers?.map(c => c.name) || [];
-      
+      const containers = pod.body.spec?.containers?.map((c) => c.name) || [];
+
       if (containers.length === 0) {
         throw new BadRequestException({
           error: 'No containers found',
           message: `Pod "${cleanPodName}" has no containers`
         });
       }
-      
+
       if (!cleanContainerName && containers.length > 1) {
         throw new BadRequestException({
           error: 'Container name required',
@@ -371,9 +387,9 @@ export class K8sWorkloadService {
           availableContainers: containers
         });
       }
-      
+
       const targetContainer = cleanContainerName || containers[0];
-      
+
       if (cleanContainerName && !containers.includes(cleanContainerName)) {
         throw new BadRequestException({
           error: 'Container not found',
@@ -381,25 +397,34 @@ export class K8sWorkloadService {
           availableContainers: containers
         });
       }
-      
+
       console.log('[API] Fetching logs for container:', targetContainer);
-      
+
       try {
         const logs = sinceTime
-          ? await this.readPodLogSinceTime(cleanPodName, cleanNamespace, targetContainer, sinceTime, tailLines, previous)
-          : (await api.readNamespacedPodLog(
+          ? await this.readPodLogSinceTime(
               cleanPodName,
               cleanNamespace,
               targetContainer,
-              false,
-              false,
-              undefined,
-              undefined,
-              previous,
-              sinceSeconds,
+              sinceTime,
               tailLines,
-              true
-            )).body;
+              previous
+            )
+          : (
+              await api.readNamespacedPodLog(
+                cleanPodName,
+                cleanNamespace,
+                targetContainer,
+                false,
+                false,
+                undefined,
+                undefined,
+                previous,
+                sinceSeconds,
+                tailLines,
+                true
+              )
+            ).body;
 
         return {
           podName: cleanPodName,
@@ -409,7 +434,7 @@ export class K8sWorkloadService {
           tailLines,
           previous,
           sinceSeconds,
-          sinceTime,
+          sinceTime
         };
       } catch (logError) {
         const statusCode = logError.response?.statusCode;
@@ -456,11 +481,12 @@ export class K8sWorkloadService {
 
         throw new BadRequestException({
           error: 'Failed to fetch logs',
-          message: logError.response?.body?.message || logError.message || 'Error occurred in log request',
+          message:
+            logError.response?.body?.message || logError.message || 'Error occurred in log request',
           availableContainers: containers,
           targetContainer,
           podStatus: pod.body.status?.phase,
-          containerStatuses: pod.body.status?.containerStatuses?.map(cs => ({
+          containerStatuses: pod.body.status?.containerStatuses?.map((cs) => ({
             name: cs.name,
             ready: cs.ready,
             state: Object.keys(cs.state || {})[0],
@@ -473,7 +499,7 @@ export class K8sWorkloadService {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
-      
+
       const statusCode = (error as any)?.response?.statusCode;
       if (statusCode !== 404) {
         console.error('Error fetching logs:', error);
@@ -490,18 +516,32 @@ export class K8sWorkloadService {
   // server directly with the kubeconfig's TLS/auth applied. Errors are shaped
   // like the generated client's ({ response: { statusCode, body } }) so the
   // caller's error handling works unchanged.
-  private async readPodLogSinceTime(podName: string, namespace: string, container: string, sinceTime: string, tailLines: number, previous: boolean): Promise<string> {
+  private async readPodLogSinceTime(
+    podName: string,
+    namespace: string,
+    container: string,
+    sinceTime: string,
+    tailLines: number,
+    previous: boolean
+  ): Promise<string> {
     const cluster = this.kc.getCurrentCluster();
     if (!cluster) {
       throw new BadRequestException({
         error: 'Failed to fetch logs',
-        message: 'No current cluster in kubeconfig',
+        message: 'No current cluster in kubeconfig'
       });
     }
 
-    const params = new URLSearchParams({ container, sinceTime, timestamps: 'true', tailLines: String(tailLines) });
+    const params = new URLSearchParams({
+      container,
+      sinceTime,
+      timestamps: 'true',
+      tailLines: String(tailLines)
+    });
     if (previous) params.set('previous', 'true');
-    const url = new URL(`${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`);
+    const url = new URL(
+      `${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`
+    );
 
     const opts: https.RequestOptions = { method: 'GET' };
     await this.kc.applyToHTTPSOptions(opts);
@@ -510,14 +550,25 @@ export class K8sWorkloadService {
       const req = https.request(url, opts, (res) => {
         let body = '';
         res.setEncoding('utf8');
-        res.on('data', (chunk) => { body += chunk; });
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
         res.on('end', () => {
           if (res.statusCode >= 400) {
             let parsed: any;
-            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
-            reject(Object.assign(new Error(parsed?.message || `Log request failed with status ${res.statusCode}`), {
-              response: { statusCode: res.statusCode, body: parsed },
-            }));
+            try {
+              parsed = JSON.parse(body);
+            } catch {
+              parsed = { message: body };
+            }
+            reject(
+              Object.assign(
+                new Error(parsed?.message || `Log request failed with status ${res.statusCode}`),
+                {
+                  response: { statusCode: res.statusCode, body: parsed }
+                }
+              )
+            );
             return;
           }
           resolve(body);
@@ -548,7 +599,7 @@ export class K8sWorkloadService {
     container: string | undefined,
     opts: { sinceTime?: string; tailLines?: number },
     onLine: (line: string) => void,
-    onEnd: (err?: Error) => void,
+    onEnd: (err?: Error) => void
   ): () => void {
     this.ensureKubeConfig();
     const cluster = this.kc.getCurrentCluster();
@@ -562,7 +613,7 @@ export class K8sWorkloadService {
     if (opts.sinceTime) params.set('sinceTime', opts.sinceTime);
     else if (opts.tailLines !== undefined) params.set('tailLines', String(opts.tailLines));
     const url = new URL(
-      `${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`,
+      `${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`
     );
 
     let ended = false;
@@ -580,13 +631,24 @@ export class K8sWorkloadService {
         if ((res.statusCode ?? 500) >= 400) {
           let body = '';
           res.setEncoding('utf8');
-          res.on('data', (c) => { body += c; });
+          res.on('data', (c) => {
+            body += c;
+          });
           res.on('end', () => {
             let parsed: any;
-            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
-            finish(Object.assign(new Error(parsed?.message || `Log stream failed with status ${res.statusCode}`), {
-              response: { statusCode: res.statusCode, body: parsed },
-            }));
+            try {
+              parsed = JSON.parse(body);
+            } catch {
+              parsed = { message: body };
+            }
+            finish(
+              Object.assign(
+                new Error(parsed?.message || `Log stream failed with status ${res.statusCode}`),
+                {
+                  response: { statusCode: res.statusCode, body: parsed }
+                }
+              )
+            );
           });
           return;
         }
@@ -613,23 +675,27 @@ export class K8sWorkloadService {
     start().catch((err) => finish(err as Error));
 
     return () => {
-      try { req?.destroy(); } catch { /* already gone */ }
+      try {
+        req?.destroy();
+      } catch {
+        /* already gone */
+      }
       finish();
     };
   }
 
   async listDeployments(namespace = 'midnight-staging') {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
-    
+
     console.log('[API] Fetching deployments from namespace:', cleanNamespace);
-    
+
     try {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
       const deploymentList = await api.listNamespacedDeployment(cleanNamespace);
-      
-      const deployments = deploymentList.body.items.map(deployment => ({
+
+      const deployments = deploymentList.body.items.map((deployment) => ({
         name: deployment.metadata.name,
         namespace: deployment.metadata.namespace,
         replicas: deployment.spec.replicas,
@@ -637,7 +703,7 @@ export class K8sWorkloadService {
         readyReplicas: deployment.status.readyReplicas,
         image: deployment.spec.template.spec.containers[0]?.image,
         labels: deployment.metadata.labels,
-        createdAt: deployment.metadata.creationTimestamp,
+        createdAt: deployment.metadata.creationTimestamp
       }));
 
       return {
@@ -647,7 +713,7 @@ export class K8sWorkloadService {
       };
     } catch (error) {
       console.error('Error fetching deployments:', error);
-      
+
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to fetch deployments from Kubernetes',
@@ -655,7 +721,7 @@ export class K8sWorkloadService {
           details: error.response.body
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to fetch deployments',
         message: error.message
@@ -689,7 +755,7 @@ export class K8sWorkloadService {
     // via secretKeyRef into a per-deployment Secret.
     const { envList, secretData } = this.buildEnvAndSecret(cleanName, options.env, {
       HOST: '0.0.0.0',
-      FORCE_COLOR: '1',
+      FORCE_COLOR: '1'
     });
     if (secretData) {
       await this.upsertEnvSecret(cleanNamespace, cleanName, secretData);
@@ -726,12 +792,12 @@ export class K8sWorkloadService {
       const volumeMounts: k8s.V1VolumeMount[] = volumes.map((vol) => ({
         name: vol.name,
         mountPath: vol.mountPath,
-        readOnly: Boolean(vol.readOnly),
+        readOnly: Boolean(vol.readOnly)
       }));
 
       const k8sVolumes: k8s.V1Volume[] = volumes.map((vol) => {
         const volume: k8s.V1Volume = {
-          name: vol.name,
+          name: vol.name
         };
 
         if (vol.type === 'hostPath') {
@@ -743,7 +809,7 @@ export class K8sWorkloadService {
 
         if (vol.type === 'pvc') {
           volume.persistentVolumeClaim = {
-            claimName: resolvePvcClaimName(vol),
+            claimName: resolvePvcClaimName(vol)
           };
         } else {
           volume.emptyDir = {};
@@ -777,7 +843,7 @@ export class K8sWorkloadService {
         // entrypoints can perform a root→service-user drop (Redis, etc).
         securityContext: isTrustedImage(cleanImage)
           ? trustedSecurityContext()
-          : hardenedSecurityContext(),
+          : hardenedSecurityContext()
       };
 
       // Burstable QoS: memory requests == limits, CPU requests a fraction of
@@ -788,7 +854,7 @@ export class K8sWorkloadService {
         const memStr = memoryBytesToK8s(options.resources.memoryBytes);
         container.resources = {
           requests: { cpu: cpuReqStr, memory: memStr },
-          limits: { cpu: cpuStr, memory: memStr },
+          limits: { cpu: cpuStr, memory: memStr }
         };
       }
 
@@ -799,7 +865,7 @@ export class K8sWorkloadService {
           const probe: k8s.V1Probe = {
             periodSeconds: hc.interval,
             timeoutSeconds: hc.timeout,
-            failureThreshold: failureThreshold ?? hc.retries,
+            failureThreshold: failureThreshold ?? hc.retries
           };
           if (hc.type === 'http') {
             probe.httpGet = { path: hc.path || '/', port: hc.port || 80 };
@@ -819,7 +885,7 @@ export class K8sWorkloadService {
         allowedNodes: options.allowedNodes,
         deniedNodes: options.deniedNodes,
         pool: options.pool,
-        override: options.placementOverride,
+        override: options.placementOverride
       });
       const affinity = placement.affinity ?? null;
 
@@ -828,10 +894,13 @@ export class K8sWorkloadService {
       // old pod to release the volume. Force Recreate whenever a PVC is in
       // the volume list, regardless of caller's preference.
       const hasPvcVolume = (options.volumes ?? []).some((v) => v.type === 'pvc');
-      const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
-      const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
-        ? { type: 'Recreate' }
-        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+      const effectiveStrategy = hasPvcVolume
+        ? 'recreate'
+        : (options.deployStrategy ?? 'rollingUpdate');
+      const strategy: k8s.V1DeploymentStrategy =
+        effectiveStrategy === 'recreate'
+          ? { type: 'Recreate' }
+          : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
@@ -864,11 +933,11 @@ export class K8sWorkloadService {
               // their entrypoints rely on (e.g. Redis's root→redis drop).
               runtimeClassName: isTrustedImage(cleanImage)
                 ? undefined
-                : (process.env.TENANT_RUNTIME_CLASS || undefined),
+                : process.env.TENANT_RUNTIME_CLASS || undefined,
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,
-              tolerations: placement.tolerations,
+              tolerations: placement.tolerations
             }
           }
         }
@@ -925,11 +994,12 @@ export class K8sWorkloadService {
             });
             sanitizedPorts = sanitizedPorts.map((port) => {
               const nodePort =
-                nodePortMap.get(port.name) || nodePortMap.get(`${port.servicePort}-${port.protocol}`);
+                nodePortMap.get(port.name) ||
+                nodePortMap.get(`${port.servicePort}-${port.protocol}`);
               if (nodePort) {
                 return {
                   ...port,
-                  nodePort,
+                  nodePort
                 };
               }
               return port;
@@ -989,9 +1059,12 @@ export class K8sWorkloadService {
       name: cleanName,
       namespace: cleanNamespace,
       minAvailable: options.pdbMinAvailable ?? 1,
-      replicas,
+      replicas
     }).catch((error) => {
-      console.error(`[K8s] Failed to apply PodDisruptionBudget for ${cleanName}:`, error?.message ?? error);
+      console.error(
+        `[K8s] Failed to apply PodDisruptionBudget for ${cleanName}:`,
+        error?.message ?? error
+      );
     });
 
     return {
@@ -1052,7 +1125,7 @@ export class K8sWorkloadService {
     const manifest = disruptionBudgetManifest({
       name: cleanName,
       namespace: cleanNamespace,
-      minAvailable,
+      minAvailable
     });
     await k8s.KubernetesObjectApi.makeApiClient(this.kc).patch(
       manifest,
@@ -1060,7 +1133,7 @@ export class K8sWorkloadService {
       undefined,
       'orchard',
       true,
-      { headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML } },
+      { headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML } }
     );
 
     return { applied: true, minAvailable };
@@ -1075,7 +1148,7 @@ export class K8sWorkloadService {
   private buildEnvAndSecret(
     deploymentName: string,
     env: { key: string; value: string; secret?: boolean }[] | undefined,
-    extras: Record<string, string> = {},
+    extras: Record<string, string> = {}
   ): { envList: k8s.V1EnvVar[]; secretData: Record<string, string> | null } {
     const secretName = `${deploymentName}-env`;
     const normal = new Map<string, string>();
@@ -1096,8 +1169,8 @@ export class K8sWorkloadService {
       ...Array.from(normal, ([name, value]) => ({ name, value })),
       ...Array.from(secret.keys(), (name) => ({
         name,
-        valueFrom: { secretKeyRef: { name: secretName, key: name } },
-      })),
+        valueFrom: { secretKeyRef: { name: secretName, key: name } }
+      }))
     ];
     return { envList, secretData: secret.size > 0 ? Object.fromEntries(secret) : null };
   }
@@ -1111,23 +1184,26 @@ export class K8sWorkloadService {
   private async upsertEnvSecret(
     namespace: string,
     deploymentName: string,
-    secretData: Record<string, string> | null,
+    secretData: Record<string, string> | null
   ): Promise<boolean> {
     const name = `${deploymentName}-env`;
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
     if (!secretData) {
-      return coreApi.deleteNamespacedSecret(name, namespace).then(() => true).catch(() => false);
+      return coreApi
+        .deleteNamespacedSecret(name, namespace)
+        .then(() => true)
+        .catch(() => false);
     }
     const body: k8s.V1Secret = {
       metadata: {
         name,
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
-          'app.kubernetes.io/name': deploymentName,
-        },
+          'app.kubernetes.io/name': deploymentName
+        }
       },
       type: 'Opaque',
-      stringData: secretData,
+      stringData: secretData
     };
     try {
       return await this.writeEnvSecret(coreApi, namespace, name, body, secretData);
@@ -1135,7 +1211,7 @@ export class K8sWorkloadService {
       const code = err?.statusCode ?? err?.response?.statusCode;
       if (code !== 403) throw err;
       this.logger.warn(
-        `[K8s] Namespace ${namespace} is missing the tenant secrets Role; bootstrapping it and retrying`,
+        `[K8s] Namespace ${namespace} is missing the tenant secrets Role; bootstrapping it and retrying`
       );
       await this.namespaces.bootstrapTenantSecretsRbac(namespace);
       return this.writeEnvSecret(coreApi, namespace, name, body, secretData);
@@ -1147,7 +1223,7 @@ export class K8sWorkloadService {
     namespace: string,
     name: string,
     body: k8s.V1Secret,
-    secretData: Record<string, string>,
+    secretData: Record<string, string>
   ): Promise<boolean> {
     try {
       const existing = await coreApi.readNamespacedSecret(name, namespace);
@@ -1180,7 +1256,7 @@ export class K8sWorkloadService {
 
     const { envList, secretData } = this.buildEnvAndSecret(cleanName, options.env, {
       HOST: '0.0.0.0',
-      FORCE_COLOR: '1',
+      FORCE_COLOR: '1'
     });
     // Upsert (or clear) the per-deployment env Secret before patching so the
     // secretKeyRef entries resolve. An empty secret set removes the Secret.
@@ -1216,7 +1292,7 @@ export class K8sWorkloadService {
           deployment: cleanName,
           namespace: cleanNamespace,
           env: envList,
-          unchanged: true,
+          unchanged: true
         };
       }
 
@@ -1226,7 +1302,7 @@ export class K8sWorkloadService {
         containerIndex,
         env: envList,
         stamp: new Date().toISOString(),
-        templateMetadata: existing.body.spec?.template?.metadata,
+        templateMetadata: existing.body.spec?.template?.metadata
       });
 
       await appsApi.patchNamespacedDeployment(
@@ -1319,21 +1395,21 @@ export class K8sWorkloadService {
           const probe: k8s.V1Probe = {
             periodSeconds: options.interval,
             timeoutSeconds: options.timeout,
-            failureThreshold: failureThreshold ?? options.retries,
+            failureThreshold: failureThreshold ?? options.retries
           };
 
           if (options.type === 'http') {
             probe.httpGet = {
               path: options.path || '/',
-              port: options.port || 80,
+              port: options.port || 80
             };
           } else if (options.type === 'tcp') {
             probe.tcpSocket = {
-              port: options.port || 80,
+              port: options.port || 80
             };
           } else if (options.type === 'exec') {
             probe.exec = {
-              command: probeExecCommand(options.command, options.execCommand),
+              command: probeExecCommand(options.command, options.execCommand)
             };
           }
 
@@ -1355,15 +1431,16 @@ export class K8sWorkloadService {
       // server restarts the pods. Callers re-apply on every rebuild to heal
       // drift, and the common case is no drift at all.
       const live = containers[0];
-      const unchanged = probesEqual(live.livenessProbe, livenessProbe)
-        && probesEqual(live.readinessProbe, readinessProbe)
-        && probesEqual(live.startupProbe, startupProbe);
+      const unchanged =
+        probesEqual(live.livenessProbe, livenessProbe) &&
+        probesEqual(live.readinessProbe, readinessProbe) &&
+        probesEqual(live.startupProbe, startupProbe);
 
       if (unchanged) {
         return {
           success: true,
           deployment: cleanName,
-          namespace: cleanNamespace,
+          namespace: cleanNamespace
         };
       }
 
@@ -1381,7 +1458,7 @@ export class K8sWorkloadService {
                   name: containerName,
                   livenessProbe,
                   readinessProbe,
-                  startupProbe,
+                  startupProbe
                 }
               ]
             }
@@ -1406,7 +1483,7 @@ export class K8sWorkloadService {
       return {
         success: true,
         deployment: cleanName,
-        namespace: cleanNamespace,
+        namespace: cleanNamespace
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -1422,7 +1499,7 @@ export class K8sWorkloadService {
 
       throw new BadRequestException({
         error: 'Failed to update deployment health check',
-        message: error.response?.body?.message || error.message,
+        message: error.response?.body?.message || error.message
       });
     }
   }
@@ -1437,7 +1514,7 @@ export class K8sWorkloadService {
    */
   async getDeploymentVolumeSignature(
     deploymentName: string,
-    namespace: string,
+    namespace: string
   ): Promise<string | null> {
     this.ensureKubeConfig();
 
@@ -1459,7 +1536,7 @@ export class K8sWorkloadService {
             vol.name,
             claim ? `pvc:${claim}` : 'emptyDir',
             mount?.mountPath ?? '',
-            mount?.readOnly ? 'ro' : 'rw',
+            mount?.readOnly ? 'ro' : 'rw'
           ].join('|');
         })
         .sort()
@@ -1478,15 +1555,17 @@ export class K8sWorkloadService {
       mountPath: string;
       pvcName?: string | null;
       readOnly?: boolean;
-    }[],
+    }[]
   ): string {
     return (volumes ?? [])
-      .map((vol) => [
-        vol.name,
-        vol.type === 'pvc' ? `pvc:${vol.pvcName?.trim() || vol.name}` : 'emptyDir',
-        vol.mountPath,
-        vol.readOnly ? 'ro' : 'rw',
-      ].join('|'))
+      .map((vol) =>
+        [
+          vol.name,
+          vol.type === 'pvc' ? `pvc:${vol.pvcName?.trim() || vol.name}` : 'emptyDir',
+          vol.mountPath,
+          vol.readOnly ? 'ro' : 'rw'
+        ].join('|')
+      )
       .sort()
       .join(',');
   }
@@ -1530,7 +1609,7 @@ export class K8sWorkloadService {
         } catch (error) {
           throw new BadRequestException({
             error: 'Failed to create volume',
-            message: error.response?.body?.message || error.message,
+            message: error.response?.body?.message || error.message
           });
         }
       }
@@ -1539,12 +1618,12 @@ export class K8sWorkloadService {
     const volumeMounts: k8s.V1VolumeMount[] = volumesList.map((vol) => ({
       name: vol.name,
       mountPath: vol.mountPath,
-      readOnly: Boolean(vol.readOnly),
+      readOnly: Boolean(vol.readOnly)
     }));
 
     const k8sVolumes: k8s.V1Volume[] = volumesList.map((vol) => {
       const volume: k8s.V1Volume = {
-        name: vol.name,
+        name: vol.name
       };
 
       if (vol.type === 'hostPath') {
@@ -1553,7 +1632,7 @@ export class K8sWorkloadService {
 
       if (vol.type === 'pvc') {
         volume.persistentVolumeClaim = {
-          claimName: resolvePvcClaimName(vol),
+          claimName: resolvePvcClaimName(vol)
         };
       } else {
         volume.emptyDir = {};
@@ -1581,10 +1660,13 @@ export class K8sWorkloadService {
       // Force Recreate when a PVC is in the new volume set; otherwise honour
       // whatever the caller passed (or fall back to RollingUpdate).
       const hasPvcVolume = volumesList.some((v) => v.type === 'pvc');
-      const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
-      const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
-        ? { type: 'Recreate', rollingUpdate: null as any }
-        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+      const effectiveStrategy = hasPvcVolume
+        ? 'recreate'
+        : (options.deployStrategy ?? 'rollingUpdate');
+      const strategy: k8s.V1DeploymentStrategy =
+        effectiveStrategy === 'recreate'
+          ? { type: 'Recreate', rollingUpdate: null as any }
+          : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
       const patch = {
         spec: {
@@ -1627,7 +1709,7 @@ export class K8sWorkloadService {
         deployment: cleanName,
         namespace: cleanNamespace,
         volumes: volumesList,
-        deployStrategy: effectiveStrategy,
+        deployStrategy: effectiveStrategy
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -1655,7 +1737,6 @@ export class K8sWorkloadService {
       });
     }
   }
-
 
   async deleteDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
@@ -1704,46 +1785,46 @@ export class K8sWorkloadService {
       return {
         success: true,
         deployment: cleanName,
-        namespace: cleanNamespace,
+        namespace: cleanNamespace
       };
     } catch (error) {
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to delete deployment',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to delete deployment',
-        message: error.message,
+        message: error.message
       });
     }
   }
 
   async syncNamespaceToDatabase(namespace: string) {
     this.ensureKubeConfig();
-    
+
     console.log('[Sync] Syncing namespace to database:', namespace);
-    
+
     const project = await this.prisma.project.findFirst({
       where: { namespace }
     });
-    
+
     if (!project) {
       throw new NotFoundException({
         error: 'Project not found',
         message: `No project found with namespace ${namespace}`
       });
     }
-    
+
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
       const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-      
+
       const deploymentList = await appsApi.listNamespacedDeployment(namespace);
-      
+
       for (const k8sDeployment of deploymentList.body.items) {
         const deploymentName = k8sDeployment.metadata.name;
         const image = k8sDeployment.spec.template.spec.containers[0]?.image;
@@ -1765,18 +1846,18 @@ export class K8sWorkloadService {
         }
 
         const existingRecord = await this.prisma.deployment.findFirst({
-          where: { projectId: project.id, name: deploymentName },
+          where: { projectId: project.id, name: deploymentName }
         });
         let deploymentRecord;
         if (existingRecord) {
           deploymentRecord = await this.prisma.deployment.update({
             where: { id: existingRecord.id },
-            data: { namespace, image, replicas, status },
+            data: { namespace, image, replicas, status }
           });
         } else {
           const defaultEnv = await this.prisma.environment.findFirst({
             where: { projectId: project.id, isDefault: true },
-            select: { id: true },
+            select: { id: true }
           });
           deploymentRecord = await this.prisma.deployment.create({
             data: {
@@ -1786,11 +1867,11 @@ export class K8sWorkloadService {
               namespace,
               image,
               replicas,
-              status,
-            },
+              status
+            }
           });
         }
-        
+
         // Env belongs to the deployment record, never to the live pod spec, so
         // this only seeds a Deployment we have just adopted from outside
         // Orchard. Reading it back for a record we already own would rewrite the
@@ -1805,7 +1886,7 @@ export class K8sWorkloadService {
             .map((envVar) => ({
               deploymentId: deploymentRecord.id,
               key: String(envVar.name),
-              value: String(envVar.value),
+              value: String(envVar.value)
             }));
           if (adopted.length > 0) {
             await this.prisma.deploymentEnvVar.createMany({ data: adopted, skipDuplicates: true });
@@ -1815,7 +1896,7 @@ export class K8sWorkloadService {
             this.logger.warn(
               `[Sync] ${deploymentName}: ${referenced.length} env var(s) resolve through valueFrom and were not imported: ${referenced
                 .map((envVar) => envVar.name)
-                .join(', ')}`,
+                .join(', ')}`
             );
           }
         }
@@ -1844,7 +1925,7 @@ export class K8sWorkloadService {
                 nodePort:
                   typeof servicePort.nodePort === 'number' && Number.isInteger(servicePort.nodePort)
                     ? servicePort.nodePort
-                    : undefined,
+                    : undefined
               };
             }
 
@@ -1883,7 +1964,7 @@ export class K8sWorkloadService {
               nodePort:
                 typeof servicePort.nodePort === 'number' && Number.isInteger(servicePort.nodePort)
                   ? servicePort.nodePort
-                  : undefined,
+                  : undefined
             };
           });
 
@@ -1893,8 +1974,8 @@ export class K8sWorkloadService {
             where: {
               deploymentId_name: {
                 deploymentId: deploymentRecord.id,
-                name: deploymentName,
-              },
+                name: deploymentName
+              }
             },
             update: {
               port: sanitizedServicePorts[0].servicePort,
@@ -1906,7 +1987,7 @@ export class K8sWorkloadService {
                 sanitizedServicePorts[0].nodePort !== undefined &&
                 sanitizedServicePorts[0].nodePort !== null
                   ? sanitizedServicePorts[0].nodePort
-                  : null,
+                  : null
             },
             create: {
               deploymentId: deploymentRecord.id,
@@ -1920,19 +2001,19 @@ export class K8sWorkloadService {
                 sanitizedServicePorts[0].nodePort !== undefined &&
                 sanitizedServicePorts[0].nodePort !== null
                   ? sanitizedServicePorts[0].nodePort
-                  : null,
-            },
+                  : null
+            }
           });
 
           const priorPublic = snapshotPublicPortState(
             await this.prisma.servicePort.findMany({
               where: { serviceId: serviceRecord.id },
-              select: { port: true, protocol: true, publicEnabled: true, publicPort: true },
-            }),
+              select: { port: true, protocol: true, publicEnabled: true, publicPort: true }
+            })
           );
 
           await this.prisma.servicePort.deleteMany({
-            where: { serviceId: serviceRecord.id },
+            where: { serviceId: serviceRecord.id }
           });
 
           await this.prisma.servicePort.createMany({
@@ -1947,51 +2028,48 @@ export class K8sWorkloadService {
                 nodePort:
                   port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null,
                 publicEnabled: prior ? prior.publicEnabled : false,
-                publicPort: prior ? prior.publicPort : null,
+                publicPort: prior ? prior.publicPort : null
               };
-            }),
+            })
           });
         } catch (serviceError) {
           if (serviceError.response?.statusCode !== 404) {
             console.error('[Sync] Service sync error:', {
               message: serviceError.message,
               code: serviceError.code,
-              statusCode: serviceError.response?.statusCode,
+              statusCode: serviceError.response?.statusCode
             });
           }
         }
-
       }
-      
-      const dbDeploymentNames = new Set(
-        deploymentList.body.items.map(d => d.metadata.name)
-      );
-      
+
+      const dbDeploymentNames = new Set(deploymentList.body.items.map((d) => d.metadata.name));
+
       const dbDeployments = await this.prisma.deployment.findMany({
         where: {
           projectId: project.id,
-          buildStatus: 'succeeded',
+          buildStatus: 'succeeded'
         }
       });
 
       for (const dbDeployment of dbDeployments) {
         if (!dbDeploymentNames.has(dbDeployment.name)) {
           this.logger.warn(
-            `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`,
+            `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`
           );
           await this.prisma.deployment.delete({
             where: { id: dbDeployment.id }
           });
         }
       }
-      
+
       console.log('[Sync] Successfully synced namespace:', namespace);
-      
+
       return {
         success: true,
         namespace,
         projectId: project.id,
-        deploymentsCount: deploymentList.body.items.length,
+        deploymentsCount: deploymentList.body.items.length
       };
     } catch (error) {
       console.error('[Sync] Error syncing namespace:', error);
@@ -2002,18 +2080,22 @@ export class K8sWorkloadService {
     }
   }
 
-
   async restartDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
-    
-    console.log('[API] Restarting deployment:', cleanDeploymentName, 'in namespace:', cleanNamespace);
-    
+
+    console.log(
+      '[API] Restarting deployment:',
+      cleanDeploymentName,
+      'in namespace:',
+      cleanNamespace
+    );
+
     try {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
-      
+
       const patch = {
         spec: {
           template: {
@@ -2025,7 +2107,7 @@ export class K8sWorkloadService {
           }
         }
       };
-      
+
       await api.patchNamespacedDeployment(
         cleanDeploymentName,
         cleanNamespace,
@@ -2039,9 +2121,9 @@ export class K8sWorkloadService {
           headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
         }
       );
-      
+
       console.log('[API] Successfully restarted deployment:', cleanDeploymentName);
-      
+
       return {
         success: true,
         deployment: cleanDeploymentName,
@@ -2050,14 +2132,14 @@ export class K8sWorkloadService {
       };
     } catch (error) {
       console.error('Error restarting deployment:', error);
-      
+
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
           message: `Deployment ${cleanDeploymentName} not found in namespace ${cleanNamespace}`
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to restart deployment',
         message: error.message
@@ -2069,7 +2151,7 @@ export class K8sWorkloadService {
     deploymentName: string,
     namespace: string,
     timeoutMs = 120_000,
-    pollMs = 2_000,
+    pollMs = 2_000
   ): Promise<boolean> {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -2087,7 +2169,9 @@ export class K8sWorkloadService {
           return true;
         }
       } catch {}
-      await new Promise((r) => { setTimeout(r, pollMs); });
+      await new Promise((r) => {
+        setTimeout(r, pollMs);
+      });
     }
     return false;
   }
@@ -2096,37 +2180,49 @@ export class K8sWorkloadService {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
     await api.patchNamespacedDeployment(
-      deploymentName, namespace,
+      deploymentName,
+      namespace,
       { spec: { replicas } },
-      undefined, undefined, undefined, undefined, undefined,
-      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
     );
   }
 
   async scaleDeployment(deploymentName: string, namespace: string, replicas: number) {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
-    
+
     if (replicas < 0 || !Number.isInteger(replicas)) {
       throw new BadRequestException({
         error: 'Invalid replicas',
         message: 'Replicas must be a non-negative integer'
       });
     }
-    
-    console.log('[API] Scaling deployment:', cleanDeploymentName, 'to', replicas, 'replicas in namespace:', cleanNamespace);
-    
+
+    console.log(
+      '[API] Scaling deployment:',
+      cleanDeploymentName,
+      'to',
+      replicas,
+      'replicas in namespace:',
+      cleanNamespace
+    );
+
     try {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
-      
+
       const patch = {
         spec: {
           replicas
         }
       };
-      
+
       const result = await api.patchNamespacedDeployment(
         cleanDeploymentName,
         cleanNamespace,
@@ -2140,22 +2236,28 @@ export class K8sWorkloadService {
           headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
         }
       );
-      
-      console.log('[API] Successfully scaled deployment:', cleanDeploymentName, 'to', replicas, 'replicas');
-      
+
+      console.log(
+        '[API] Successfully scaled deployment:',
+        cleanDeploymentName,
+        'to',
+        replicas,
+        'replicas'
+      );
+
       const project = await this.prisma.project.findFirst({
         where: { namespace: cleanNamespace }
       });
-      
+
       if (project) {
         await this.prisma.deployment.updateMany({
           where: { projectId: project.id, name: cleanDeploymentName },
-          data: { replicas },
+          data: { replicas }
         });
 
         console.log('[API] Updated deployment replicas in database');
       }
-      
+
       return {
         success: true,
         deployment: cleanDeploymentName,
@@ -2166,14 +2268,14 @@ export class K8sWorkloadService {
       };
     } catch (error) {
       console.error('Error scaling deployment:', error);
-      
+
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
           message: `Deployment ${cleanDeploymentName} not found in namespace ${cleanNamespace}`
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to scale deployment',
         message: error.message
@@ -2186,7 +2288,7 @@ export class K8sWorkloadService {
   async updateDeploymentStrategy(
     deploymentName: string,
     namespace: string,
-    strategy: 'rollingUpdate' | 'recreate',
+    strategy: 'rollingUpdate' | 'recreate'
   ) {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -2196,9 +2298,10 @@ export class K8sWorkloadService {
     // Setting `rollingUpdate: null` clears any prior rolling config when
     // switching to Recreate. K8s rejects strategy.rollingUpdate alongside
     // type=Recreate, so we have to actively wipe it.
-    const body: k8s.V1DeploymentStrategy = strategy === 'recreate'
-      ? { type: 'Recreate', rollingUpdate: null as any }
-      : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+    const body: k8s.V1DeploymentStrategy =
+      strategy === 'recreate'
+        ? { type: 'Recreate', rollingUpdate: null as any }
+        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
     try {
       await api.patchNamespacedDeployment(
@@ -2210,18 +2313,18 @@ export class K8sWorkloadService {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
       );
     } catch (error) {
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
-          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`,
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`
         });
       }
       throw new BadRequestException({
         error: 'Failed to update deployment strategy',
-        message: error.message,
+        message: error.message
       });
     }
 
@@ -2235,7 +2338,7 @@ export class K8sWorkloadService {
   async updateDeploymentPullPolicy(
     deploymentName: string,
     namespace: string,
-    policy: 'Always' | 'IfNotPresent',
+    policy: 'Always' | 'IfNotPresent'
   ) {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -2250,10 +2353,10 @@ export class K8sWorkloadService {
       spec: {
         template: {
           spec: {
-            containers: [{ name: cleanName, imagePullPolicy: policy }],
-          },
-        },
-      },
+            containers: [{ name: cleanName, imagePullPolicy: policy }]
+          }
+        }
+      }
     };
 
     try {
@@ -2266,18 +2369,18 @@ export class K8sWorkloadService {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
       );
     } catch (error) {
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
-          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`,
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`
         });
       }
       throw new BadRequestException({
         error: 'Failed to update image pull policy',
-        message: error.message,
+        message: error.message
       });
     }
 
@@ -2286,13 +2389,20 @@ export class K8sWorkloadService {
 
   async updateDeploymentImage(deploymentName: string, namespace: string, image: string) {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
     const cleanImage = String(image).trim();
-    
-    console.log('[API] Updating deployment image:', cleanDeploymentName, 'to', cleanImage, 'in namespace:', cleanNamespace);
-    
+
+    console.log(
+      '[API] Updating deployment image:',
+      cleanDeploymentName,
+      'to',
+      cleanImage,
+      'in namespace:',
+      cleanNamespace
+    );
+
     try {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
 
@@ -2307,7 +2417,7 @@ export class K8sWorkloadService {
       try {
         const live = await api.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
         const hasPvc = (live.body.spec?.template?.spec?.volumes ?? []).some(
-          (v) => v.persistentVolumeClaim?.claimName,
+          (v) => v.persistentVolumeClaim?.claimName
         );
         forceRecreate = hasPvc && live.body.spec?.strategy?.type !== 'Recreate';
       } catch {
@@ -2316,24 +2426,25 @@ export class K8sWorkloadService {
 
       const patch = {
         spec: {
-          ...(forceRecreate
-            ? { strategy: { type: 'Recreate', rollingUpdate: null as any } }
-            : {}),
+          ...(forceRecreate ? { strategy: { type: 'Recreate', rollingUpdate: null as any } } : {}),
           template: {
             spec: {
               containers: [
                 {
                   name: cleanDeploymentName,
-                  image: cleanImage,
-                },
-              ],
-            },
-          },
-        },
+                  image: cleanImage
+                }
+              ]
+            }
+          }
+        }
       };
 
       if (forceRecreate) {
-        console.log('[API] PVC volume detected with RollingUpdate strategy, switching to Recreate:', cleanDeploymentName);
+        console.log(
+          '[API] PVC volume detected with RollingUpdate strategy, switching to Recreate:',
+          cleanDeploymentName
+        );
       }
 
       await api.patchNamespacedDeployment(
@@ -2349,16 +2460,21 @@ export class K8sWorkloadService {
           headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
         }
       );
-      
-      console.log('[API] Successfully updated deployment image:', cleanDeploymentName, 'to', cleanImage);
-      
+
+      console.log(
+        '[API] Successfully updated deployment image:',
+        cleanDeploymentName,
+        'to',
+        cleanImage
+      );
+
       const project = await this.prisma.project.findFirst({
         where: { namespace: cleanNamespace }
       });
-      
+
       if (project) {
         const deployment = await this.prisma.deployment.findFirst({
-          where: { projectId: project.id, name: cleanDeploymentName },
+          where: { projectId: project.id, name: cleanDeploymentName }
         });
 
         if (deployment) {
@@ -2366,28 +2482,28 @@ export class K8sWorkloadService {
             where: { id: deployment.id },
             data: {
               image: cleanImage,
-              ...(forceRecreate ? { deployStrategy: 'recreate' } : {}),
-            },
+              ...(forceRecreate ? { deployStrategy: 'recreate' } : {})
+            }
           });
         }
       }
-      
+
       return {
         success: true,
         deployment: cleanDeploymentName,
         namespace: cleanNamespace,
-        image: cleanImage,
+        image: cleanImage
       };
     } catch (error) {
       console.error('Error updating deployment image:', error);
-      
+
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
           message: `Deployment ${cleanDeploymentName} not found in namespace ${cleanNamespace}`
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to update deployment image',
         message: error.message
@@ -2409,14 +2525,17 @@ export class K8sWorkloadService {
       );
 
       return events.body.items
-        .filter(event => event.type === 'Warning' || event.reason === 'BackOff' || event.reason === 'Failed')
-        .map(event => ({
+        .filter(
+          (event) =>
+            event.type === 'Warning' || event.reason === 'BackOff' || event.reason === 'Failed'
+        )
+        .map((event) => ({
           type: event.type,
           reason: event.reason,
           message: event.message,
           count: event.count || 1,
           firstTimestamp: event.firstTimestamp,
-          lastTimestamp: event.lastTimestamp,
+          lastTimestamp: event.lastTimestamp
         }))
         .sort((a, b) => {
           const timeA = a.lastTimestamp ? new Date(a.lastTimestamp).getTime() : 0;
@@ -2450,8 +2569,13 @@ export class K8sWorkloadService {
   }
 
   // Cluster-wide pod metrics. Returns Map<"namespace/podName", {cpuMilli, memBytes}>.
-  async getAllPodMetrics(): Promise<Map<string, { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }>> {
-    const out = new Map<string, { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }>();
+  async getAllPodMetrics(): Promise<
+    Map<string, { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }>
+  > {
+    const out = new Map<
+      string,
+      { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }
+    >();
     this.ensureKubeConfig();
     if (!this.kc) return out;
     try {
@@ -2476,7 +2600,12 @@ export class K8sWorkloadService {
           else if (memStr.endsWith('Gi')) mem += parseInt(memStr, 10) * 1024 * 1024 * 1024;
           else mem += parseInt(memStr, 10);
         }
-        out.set(`${ns}/${pod}`, { cpuMilli: Math.round(cpu), memoryBytes: mem, namespace: ns, podName: pod });
+        out.set(`${ns}/${pod}`, {
+          cpuMilli: Math.round(cpu),
+          memoryBytes: mem,
+          namespace: ns,
+          podName: pod
+        });
       }
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
@@ -2485,7 +2614,10 @@ export class K8sWorkloadService {
     return out;
   }
 
-  async getPodMetrics(namespace: string, labelSelector: string): Promise<Map<string, { cpuUsage: number; memoryUsage: number }>> {
+  async getPodMetrics(
+    namespace: string,
+    labelSelector: string
+  ): Promise<Map<string, { cpuUsage: number; memoryUsage: number }>> {
     try {
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
       const response = await customApi.listNamespacedCustomObject(
@@ -2540,7 +2672,10 @@ export class K8sWorkloadService {
 
       return metricsMap;
     } catch (error) {
-      console.warn('[API] Failed to fetch pod metrics (metrics-server may not be available):', error.message);
+      console.warn(
+        '[API] Failed to fetch pod metrics (metrics-server may not be available):',
+        error.message
+      );
       return new Map();
     }
   }
@@ -2551,7 +2686,7 @@ export class K8sWorkloadService {
    * intended for status-badge computation across many deployments.
    */
   async listNamespacePodsByApp(
-    namespace: string,
+    namespace: string
   ): Promise<Map<string, { pods: any[]; warnings: any[] }> | null> {
     this.ensureKubeConfig();
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -2566,7 +2701,7 @@ export class K8sWorkloadService {
         const containerStatuses = pod.status?.containerStatuses ?? [];
         const totalRestartCount = containerStatuses.reduce(
           (sum, c) => sum + (c.restartCount ?? 0),
-          0,
+          0
         );
 
         const computedStatus = computePodStatus(pod);
@@ -2577,7 +2712,7 @@ export class K8sWorkloadService {
           if (waiting?.reason === 'CrashLoopBackOff' || waiting?.reason === 'ImagePullBackOff') {
             warnings.push({
               podName: pod.metadata?.name,
-              message: `${cs.name}: ${waiting.message || waiting.reason}`,
+              message: `${cs.name}: ${waiting.message || waiting.reason}`
             });
           }
         }
@@ -2586,7 +2721,7 @@ export class K8sWorkloadService {
         entry.pods.push({
           name: pod.metadata?.name,
           status: computedStatus,
-          restartCount: totalRestartCount,
+          restartCount: totalRestartCount
         });
         entry.warnings.push(...warnings);
         result.set(appLabel, entry);
@@ -2607,13 +2742,21 @@ export class K8sWorkloadService {
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
 
-    console.log('[API] Fetching pods for deployment:', cleanDeploymentName, 'in namespace:', cleanNamespace);
+    console.log(
+      '[API] Fetching pods for deployment:',
+      cleanDeploymentName,
+      'in namespace:',
+      cleanNamespace
+    );
 
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
       const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
-      const k8sDeployment = await appsApi.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
+      const k8sDeployment = await appsApi.readNamespacedDeployment(
+        cleanDeploymentName,
+        cleanNamespace
+      );
 
       const selector = k8sDeployment.body.spec.selector;
       const labelSelector = selector.matchLabels
@@ -2621,7 +2764,7 @@ export class K8sWorkloadService {
             .map(([key, value]) => `${key}=${value}`)
             .join(',')
         : `app=${cleanDeploymentName}`;
-      
+
       const podList = await coreApi.listNamespacedPod(
         cleanNamespace,
         undefined,
@@ -2630,73 +2773,77 @@ export class K8sWorkloadService {
         undefined,
         labelSelector
       );
-      
-      const pods = await Promise.all(podList.body.items.map(async pod => {
-        const containerStatuses = pod.status?.containerStatuses ?? [];
-        const statusByName = new Map(
-          containerStatuses.map(status => [status.name, status])
-        );
 
-        const containers = pod.spec?.containers?.map(container => {
-          const status = statusByName.get(container.name);
-          const state = status?.state;
-          let containerWarning: string | undefined;
+      const pods = await Promise.all(
+        podList.body.items.map(async (pod) => {
+          const containerStatuses = pod.status?.containerStatuses ?? [];
+          const statusByName = new Map(containerStatuses.map((status) => [status.name, status]));
 
-          if (state?.waiting) {
-            if (state.waiting.reason === 'CrashLoopBackOff' || state.waiting.reason === 'ImagePullBackOff') {
-              containerWarning = state.waiting.message || state.waiting.reason;
-            }
-          }
+          const containers =
+            pod.spec?.containers?.map((container) => {
+              const status = statusByName.get(container.name);
+              const state = status?.state;
+              let containerWarning: string | undefined;
 
-          const term = state?.terminated ?? status?.lastState?.terminated;
+              if (state?.waiting) {
+                if (
+                  state.waiting.reason === 'CrashLoopBackOff' ||
+                  state.waiting.reason === 'ImagePullBackOff'
+                ) {
+                  containerWarning = state.waiting.message || state.waiting.reason;
+                }
+              }
+
+              const term = state?.terminated ?? status?.lastState?.terminated;
+
+              return {
+                name: container.name,
+                image: container.image,
+                ready: status?.ready ?? false,
+                restartCount: status?.restartCount ?? 0,
+                warning: containerWarning,
+                lastTerminatedAt: term?.finishedAt,
+                lastTerminationReason: term?.reason,
+                lastExitCode: term?.exitCode
+              };
+            }) ?? [];
+
+          const totalRestartCount = containerStatuses.reduce(
+            (sum, current) => sum + (current.restartCount ?? 0),
+            0
+          );
+
+          const podName = pod.metadata?.name;
+          const events = podName ? await this.getPodEvents(podName, cleanNamespace) : [];
+
+          const computedStatus = computePodStatus(pod);
 
           return {
-            name: container.name,
-            image: container.image,
-            ready: status?.ready ?? false,
-            restartCount: status?.restartCount ?? 0,
-            warning: containerWarning,
-            lastTerminatedAt: term?.finishedAt,
-            lastTerminationReason: term?.reason,
-            lastExitCode: term?.exitCode,
+            name: podName,
+            namespace: pod.metadata?.namespace,
+            podIp: pod.status?.podIP,
+            nodeName: pod.spec?.nodeName,
+            status: computedStatus,
+            restartCount: totalRestartCount,
+            createdAt: pod.metadata?.creationTimestamp,
+            containers,
+            // 5 was enough when nothing rendered these; the Events panel in
+            // ObserveTab shows the real history, and a crash loop generates
+            // several distinct reasons before the interesting one.
+            events: events.slice(0, 20)
           };
-        }) ?? [];
-
-        const totalRestartCount = containerStatuses.reduce(
-          (sum, current) => sum + (current.restartCount ?? 0),
-          0
-        );
-
-        const podName = pod.metadata?.name;
-        const events = podName ? await this.getPodEvents(podName, cleanNamespace) : [];
-
-        const computedStatus = computePodStatus(pod);
-
-        return {
-          name: podName,
-          namespace: pod.metadata?.namespace,
-          podIp: pod.status?.podIP,
-          nodeName: pod.spec?.nodeName,
-          status: computedStatus,
-          restartCount: totalRestartCount,
-          createdAt: pod.metadata?.creationTimestamp,
-          containers,
-          // 5 was enough when nothing rendered these; the Events panel in
-          // ObserveTab shows the real history, and a crash loop generates
-          // several distinct reasons before the interesting one.
-          events: events.slice(0, 20),
-        };
-      }));
+        })
+      );
 
       // Warnings mirror the pod's CURRENT state, not k8s event history.
       // Kubernetes retains warning events for ~1h after the condition
       // resolves, so a pod that briefly failed scheduling or volume attach
       // would otherwise keep showing the alert long after it went ready.
       const RECENT_TERMINATION_MS = 15 * 60 * 1000;
-      const warnings = pods.flatMap(pod => {
+      const warnings = pods.flatMap((pod) => {
         const podWarnings: { message: string; timestamp?: any }[] = [];
 
-        pod.containers?.forEach(container => {
+        pod.containers?.forEach((container) => {
           if (container.warning) {
             podWarnings.push({ message: `${container.name}: ${container.warning}` });
           }
@@ -2709,53 +2856,48 @@ export class K8sWorkloadService {
             container.restartCount > 0 && (pod.status !== 'ready' || recentlyTerminated);
 
           const reason = container.lastTerminationReason;
-          if (
-            reason &&
-            reason !== 'Completed' &&
-            reason !== 'Error' &&
-            restartingOrRecentlyDied
-          ) {
+          if (reason && reason !== 'Completed' && reason !== 'Error' && restartingOrRecentlyDied) {
             const codePart =
               container.lastExitCode != null ? ` (exit code ${container.lastExitCode})` : '';
             podWarnings.push({
               message: `${container.name}: last terminated with ${reason}${codePart}`,
-              timestamp: container.lastTerminatedAt,
+              timestamp: container.lastTerminatedAt
             });
           }
 
           if (restartingOrRecentlyDied) {
             podWarnings.push({
               message: `${container.name} has restarted ${container.restartCount} time(s)`,
-              timestamp: container.lastTerminatedAt,
+              timestamp: container.lastTerminatedAt
             });
           }
         });
 
         if (pod.status !== 'ready') {
-          pod.events?.forEach(event => {
+          pod.events?.forEach((event) => {
             if (/failedscheduling/i.test(event.reason ?? '') && pod.nodeName) return;
             podWarnings.push({
               message: `${event.reason}: ${event.message}`,
-              timestamp: event.lastTimestamp,
+              timestamp: event.lastTimestamp
             });
           });
         }
 
-        return podWarnings.map(warning => ({
+        return podWarnings.map((warning) => ({
           podName: pod.name,
           message: warning.message,
-          timestamp: warning.timestamp || pod.createdAt,
+          timestamp: warning.timestamp || pod.createdAt
         }));
       });
-      
+
       // Fetch metrics and attach to pods
       const metricsMap = await this.getPodMetrics(cleanNamespace, labelSelector);
-      const podsWithMetrics = pods.map(pod => {
+      const podsWithMetrics = pods.map((pod) => {
         const metrics = metricsMap.get(pod.name);
         return {
           ...pod,
           cpuUsage: metrics?.cpuUsage ?? null,
-          memoryUsage: metrics?.memoryUsage ?? null,
+          memoryUsage: metrics?.memoryUsage ?? null
         };
       });
 
@@ -2770,11 +2912,13 @@ export class K8sWorkloadService {
         pods: podsWithMetrics,
         warnings: warnings.slice(0, 10),
         totalCpuUsage: hasMetrics ? totalCpuUsage : null,
-        totalMemoryUsage: hasMetrics ? totalMemoryUsage : null,
+        totalMemoryUsage: hasMetrics ? totalMemoryUsage : null
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {
-        console.log(`[API] Deployment ${cleanDeploymentName} not found in Kubernetes (may still be building), returning empty pods`);
+        console.log(
+          `[API] Deployment ${cleanDeploymentName} not found in Kubernetes (may still be building), returning empty pods`
+        );
         return {
           deployment: cleanDeploymentName,
           namespace: cleanNamespace,
@@ -2782,10 +2926,10 @@ export class K8sWorkloadService {
           pods: [],
           warnings: [],
           totalCpuUsage: null,
-          totalMemoryUsage: null,
+          totalMemoryUsage: null
         };
       }
-      
+
       console.error('[API] Error fetching deployment pods:', error.message);
       throw new BadRequestException({
         error: 'Failed to fetch deployment pods',
@@ -2804,8 +2948,13 @@ export class K8sWorkloadService {
    * Use for list/overview endpoints where you have many deployments in a
    * shared namespace; collapses 2*N round-trips to a single one.
    */
-  async listPodStatusesByDeploymentInNamespace(namespace: string): Promise<
-    Map<string, { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }>
+  async listPodStatusesByDeploymentInNamespace(
+    namespace: string
+  ): Promise<
+    Map<
+      string,
+      { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }
+    >
   > {
     this.ensureKubeConfig();
     const cleanNamespace = String(namespace || '').trim();
@@ -2820,8 +2969,11 @@ export class K8sWorkloadService {
     try {
       const podList = await coreApi.listNamespacedPod(
         cleanNamespace,
-        undefined, undefined, undefined, undefined,
-        'app.kubernetes.io/managed-by=orchard',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'app.kubernetes.io/managed-by=orchard'
       );
 
       for (const pod of podList.body.items) {
@@ -2831,10 +2983,7 @@ export class K8sWorkloadService {
         const containerStatuses = pod.status?.containerStatuses ?? [];
         const computedStatus = computePodStatus(pod);
 
-        const totalRestarts = containerStatuses.reduce(
-          (sum, c) => sum + (c.restartCount ?? 0),
-          0,
-        );
+        const totalRestarts = containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0);
 
         const bucket = result.get(deploymentName) ?? { pods: [], warnings: [] };
         bucket.pods.push({ status: computedStatus, restartCount: totalRestarts });
@@ -2843,7 +2992,7 @@ export class K8sWorkloadService {
           const reason = cs.state?.waiting?.reason;
           if (reason === 'CrashLoopBackOff' || reason === 'ImagePullBackOff') {
             bucket.warnings.push({
-              message: cs.state?.waiting?.message ?? reason,
+              message: cs.state?.waiting?.message ?? reason
             });
           }
         }
@@ -2853,13 +3002,15 @@ export class K8sWorkloadService {
     } catch (err: any) {
       // 404 just means the namespace doesn't exist yet; treat as empty.
       if (err?.response?.statusCode !== 404) {
-        console.error(`[API] listPodStatusesByDeploymentInNamespace(${cleanNamespace}):`, err?.message ?? err);
+        console.error(
+          `[API] listPodStatusesByDeploymentInNamespace(${cleanNamespace}):`,
+          err?.message ?? err
+        );
       }
     }
 
     return result;
   }
-
 
   // ── Public (MetalLB LoadBalancer) exposure ──
 
@@ -2868,7 +3019,7 @@ export class K8sWorkloadService {
     deploymentName: string,
     authKey: string,
     hostname: string,
-    servicePorts: { port: number; targetPort: number; protocol: string }[],
+    servicePorts: { port: number; targetPort: number; protocol: string }[]
   ): Promise<void> {
     this.ensureKubeConfig();
     if (!this.kc) return;
@@ -2883,19 +3034,19 @@ export class K8sWorkloadService {
     const orchardLabels = {
       'app.kubernetes.io/managed-by': 'orchard',
       'orchard.my/tailscale': 'true',
-      'orchard.my/target-deployment': deploymentName,
+      'orchard.my/target-deployment': deploymentName
     };
 
     const podLabels = {
       ...orchardLabels,
-      'app.kubernetes.io/name': tsDeployName,
+      'app.kubernetes.io/name': tsDeployName
     };
 
     // 1. Create Secret with the auth key
     const secretBody: k8s.V1Secret = {
       metadata: { name: secretName, namespace, labels: orchardLabels },
       type: 'Opaque',
-      stringData: { TS_AUTHKEY: authKey },
+      stringData: { TS_AUTHKEY: authKey }
     };
     try {
       await coreApi.createNamespacedSecret(namespace, secretBody);
@@ -2911,7 +3062,7 @@ export class K8sWorkloadService {
     const saName = tsDeployName;
     try {
       await coreApi.createNamespacedServiceAccount(namespace, {
-        metadata: { name: saName, labels: orchardLabels },
+        metadata: { name: saName, labels: orchardLabels }
       });
     } catch (error: any) {
       if (error.response?.statusCode !== 409) throw error;
@@ -2925,20 +3076,20 @@ export class K8sWorkloadService {
         {
           apiGroups: [''],
           resources: ['secrets'],
-          verbs: ['create'],
+          verbs: ['create']
         },
         {
           apiGroups: [''],
           resources: ['secrets'],
           verbs: ['get', 'update', 'patch'],
-          resourceNames: [secretName],
+          resourceNames: [secretName]
         },
         {
           apiGroups: [''],
           resources: ['events'],
-          verbs: ['get', 'create', 'patch'],
-        },
-      ],
+          verbs: ['get', 'create', 'patch']
+        }
+      ]
     };
     try {
       await rbacApi.createNamespacedRole(namespace, roleBody);
@@ -2953,7 +3104,7 @@ export class K8sWorkloadService {
       await rbacApi.createNamespacedRoleBinding(namespace, {
         metadata: { name: tsDeployName, labels: orchardLabels },
         roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: tsDeployName },
-        subjects: [{ kind: 'ServiceAccount', name: saName, namespace }],
+        subjects: [{ kind: 'ServiceAccount', name: saName, namespace }]
       });
     } catch (error: any) {
       if (error.response?.statusCode !== 409) throw error;
@@ -2965,16 +3116,16 @@ export class K8sWorkloadService {
       TCP: Object.fromEntries(
         servicePorts.map((p) => [
           String(p.targetPort),
-          { TCPForward: `${deploymentName}:${p.targetPort}` },
-        ]),
-      ),
+          { TCPForward: `${deploymentName}:${p.targetPort}` }
+        ])
+      )
     });
     const serveConfigName = `ts-serve-${deploymentName}`;
 
     // Store the serve config in a ConfigMap
     const configMapBody: k8s.V1ConfigMap = {
       metadata: { name: serveConfigName, namespace, labels: orchardLabels },
-      data: { 'serve-config.json': serveConfig },
+      data: { 'serve-config.json': serveConfig }
     };
     try {
       await coreApi.createNamespacedConfigMap(namespace, configMapBody);
@@ -3004,7 +3155,7 @@ export class K8sWorkloadService {
                 env: [
                   {
                     name: 'TS_AUTHKEY',
-                    valueFrom: { secretKeyRef: { name: secretName, key: 'TS_AUTHKEY' } },
+                    valueFrom: { secretKeyRef: { name: secretName, key: 'TS_AUTHKEY' } }
                   },
                   { name: 'TS_HOSTNAME', value: hostname },
                   { name: 'TS_STATE_DIR', value: '/var/lib/tailscale' },
@@ -3012,32 +3163,32 @@ export class K8sWorkloadService {
                   { name: 'TS_KUBE_SECRET', value: secretName },
                   { name: 'TS_SERVE_CONFIG', value: '/config/serve-config.json' },
                   { name: 'POD_NAME', valueFrom: { fieldRef: { fieldPath: 'metadata.name' } } },
-                  { name: 'POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } },
+                  { name: 'POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }
                 ],
                 resources: {
                   requests: { cpu: '10m', memory: '64Mi' },
-                  limits: { cpu: '100m', memory: '128Mi' },
+                  limits: { cpu: '100m', memory: '128Mi' }
                 },
                 securityContext: {
                   runAsUser: 1000,
-                  runAsGroup: 1000,
+                  runAsGroup: 1000
                 },
                 volumeMounts: [
                   { name: 'tailscale-state', mountPath: '/var/lib/tailscale' },
-                  { name: 'serve-config', mountPath: '/config', readOnly: true },
-                ],
-              },
+                  { name: 'serve-config', mountPath: '/config', readOnly: true }
+                ]
+              }
             ],
             volumes: [
               { name: 'tailscale-state', emptyDir: {} },
               {
                 name: 'serve-config',
-                configMap: { name: serveConfigName },
-              },
-            ],
-          },
-        },
-      },
+                configMap: { name: serveConfigName }
+              }
+            ]
+          }
+        }
+      }
     };
 
     try {
@@ -3066,7 +3217,10 @@ export class K8sWorkloadService {
       const ports = subsets.flatMap((s) => (s.ports ?? []).map((p) => p.port));
       if (ips.length && ports.length) {
         apiServerPeers = ips.map((ip) => ({ ipBlock: { cidr: `${ip}/32` } }));
-        apiServerPorts = [...new Set(ports)].map((port) => ({ port: port as any, protocol: 'TCP' as any }));
+        apiServerPorts = [...new Set(ports)].map((port) => ({
+          port: port as any,
+          protocol: 'TCP' as any
+        }));
       }
     } catch {
       // Fall back to allowing 6443 to any peer.
@@ -3077,7 +3231,7 @@ export class K8sWorkloadService {
       metadata: { name: netpolName, namespace, labels: orchardLabels },
       spec: {
         podSelector: {
-          matchLabels: { 'app.kubernetes.io/name': tsDeployName },
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName }
         },
         policyTypes: ['Ingress', 'Egress'],
         // Ingress: allow nothing from inside the cluster (Tailscale uses DERP/WireGuard UDP from outside)
@@ -3088,43 +3242,46 @@ export class K8sWorkloadService {
             to: [
               {
                 podSelector: {
-                  matchLabels: { 'app.kubernetes.io/name': deploymentName },
-                },
-              },
+                  matchLabels: { 'app.kubernetes.io/name': deploymentName }
+                }
+              }
             ],
             ports: servicePorts.map((p) => ({
               port: p.targetPort,
-              protocol: (p.protocol || 'TCP') as any,
-            })),
+              protocol: (p.protocol || 'TCP') as any
+            }))
           },
           // Allow DNS resolution (needed for K8s service name → ClusterIP)
           {
             to: [],
             ports: [
               { port: 53, protocol: 'UDP' as any },
-              { port: 53, protocol: 'TCP' as any },
-            ],
+              { port: 53, protocol: 'TCP' as any }
+            ]
           },
           // Allow Tailscale DERP/coordination (external, any IP, specific ports)
           {
             to: [
               {
-                ipBlock: { cidr: '0.0.0.0/0', except: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] },
-              },
+                ipBlock: {
+                  cidr: '0.0.0.0/0',
+                  except: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+                }
+              }
             ],
             ports: [
-              { port: 443, protocol: 'TCP' as any },    // DERP + coordination
-              { port: 3478, protocol: 'UDP' as any },   // STUN
-              { port: 41641, protocol: 'UDP' as any },  // WireGuard direct
-            ],
+              { port: 443, protocol: 'TCP' as any }, // DERP + coordination
+              { port: 3478, protocol: 'UDP' as any }, // STUN
+              { port: 41641, protocol: 'UDP' as any } // WireGuard direct
+            ]
           },
           // Allow the kube apiserver (state Secret reads/writes)
           {
             to: apiServerPeers,
-            ports: apiServerPorts,
-          },
-        ],
-      },
+            ports: apiServerPorts
+          }
+        ]
+      }
     };
 
     try {
@@ -3147,18 +3304,22 @@ export class K8sWorkloadService {
       metadata: {
         name: `ts-apiserver-${deploymentName}`,
         namespace,
-        labels: orchardLabels,
+        labels: orchardLabels
       },
       spec: {
         endpointSelector: {
-          matchLabels: { 'app.kubernetes.io/name': tsDeployName },
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName }
         },
-        egress: [{ toEntities: ['kube-apiserver'] }],
-      },
+        egress: [{ toEntities: ['kube-apiserver'] }]
+      }
     };
     try {
       await customApi.createNamespacedCustomObject(
-        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', tsApiServerPolicy,
+        'cilium.io',
+        'v2',
+        namespace,
+        'ciliumnetworkpolicies',
+        tsApiServerPolicy
       );
     } catch (e: any) {
       const code = e.response?.statusCode;
@@ -3174,10 +3335,7 @@ export class K8sWorkloadService {
   /**
    * Remove the isolated Tailscale proxy pod and all associated resources.
    */
-  async removeTailscaleSidecar(
-    namespace: string,
-    deploymentName: string,
-  ): Promise<void> {
+  async removeTailscaleSidecar(namespace: string, deploymentName: string): Promise<void> {
     this.ensureKubeConfig();
     if (!this.kc) return;
 
@@ -3195,57 +3353,69 @@ export class K8sWorkloadService {
     try {
       await appsApi.deleteNamespacedDeployment(tsDeployName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete TS deployment ${tsDeployName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete TS deployment ${tsDeployName}:`, e);
     }
 
     // Delete the NetworkPolicy
     try {
       await networkingApi.deleteNamespacedNetworkPolicy(netpolName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
     }
 
     // Delete the apiserver CiliumNetworkPolicy
     try {
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
       await customApi.deleteNamespacedCustomObject(
-        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', `ts-apiserver-${deploymentName}`,
+        'cilium.io',
+        'v2',
+        namespace,
+        'ciliumnetworkpolicies',
+        `ts-apiserver-${deploymentName}`
       );
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete CNP ts-apiserver-${deploymentName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete CNP ts-apiserver-${deploymentName}:`, e);
     }
 
     // Delete the ConfigMap
     try {
       await coreApi.deleteNamespacedConfigMap(serveConfigName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete ConfigMap ${serveConfigName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete ConfigMap ${serveConfigName}:`, e);
     }
 
     // Delete RBAC
     try {
       await rbacApi.deleteNamespacedRoleBinding(tsDeployName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete RoleBinding ${tsDeployName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete RoleBinding ${tsDeployName}:`, e);
     }
     try {
       await rbacApi.deleteNamespacedRole(tsDeployName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete Role ${tsDeployName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete Role ${tsDeployName}:`, e);
     }
 
     // Delete ServiceAccount
     try {
       await coreApi.deleteNamespacedServiceAccount(tsDeployName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete ServiceAccount ${tsDeployName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete ServiceAccount ${tsDeployName}:`, e);
     }
 
     // Delete the secret
     try {
       await coreApi.deleteNamespacedSecret(secretName, namespace);
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete Secret ${secretName}:`, e);
+      if (e.response?.statusCode !== 404)
+        console.error(`[K8s] Failed to delete Secret ${secretName}:`, e);
     }
   }
 
@@ -3254,7 +3424,7 @@ export class K8sWorkloadService {
    */
   async getTailscaleStatus(
     namespace: string,
-    deploymentName: string,
+    deploymentName: string
   ): Promise<{ ip: string | null; dns: string | null }> {
     this.ensureKubeConfig();
     if (!this.kc) return { ip: null, dns: null };
@@ -3265,8 +3435,11 @@ export class K8sWorkloadService {
     // Find the running Tailscale proxy pod
     const { body: podList } = await coreApi.listNamespacedPod(
       namespace,
-      undefined, undefined, undefined, undefined,
-      `app.kubernetes.io/name=${tsDeployName}`,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `app.kubernetes.io/name=${tsDeployName}`
     );
 
     const runningPod = podList.items.find((p) => p.status?.phase === 'Running');
@@ -3288,37 +3461,38 @@ export class K8sWorkloadService {
       stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
 
-      exec.exec(
-        namespace,
-        podName,
-        'tailscale',
-        ['tailscale', '--socket=/tmp/tailscaled.sock', 'status', '--json'],
-        stdout,
-        stderr,
-        null,
-        false,
-        (status) => {
-          try {
-            const output = Buffer.concat(chunks).toString('utf-8').trim();
-            if (status.status === 'Success' && output) {
-              const data = JSON.parse(output);
-              const selfKey = data.Self;
-              if (selfKey) {
-                const ip = selfKey.TailscaleIPs?.[0] || null;
-                const dns = selfKey.DNSName?.replace(/\.$/, '') || null;
-                resolve({ ip, dns });
-                return;
+      exec
+        .exec(
+          namespace,
+          podName,
+          'tailscale',
+          ['tailscale', '--socket=/tmp/tailscaled.sock', 'status', '--json'],
+          stdout,
+          stderr,
+          null,
+          false,
+          (status) => {
+            try {
+              const output = Buffer.concat(chunks).toString('utf-8').trim();
+              if (status.status === 'Success' && output) {
+                const data = JSON.parse(output);
+                const selfKey = data.Self;
+                if (selfKey) {
+                  const ip = selfKey.TailscaleIPs?.[0] || null;
+                  const dns = selfKey.DNSName?.replace(/\.$/, '') || null;
+                  resolve({ ip, dns });
+                  return;
+                }
               }
+            } catch {
+              // Parse error — proxy may not be ready yet
             }
-          } catch {
-            // Parse error — proxy may not be ready yet
+            resolve({ ip: null, dns: null });
           }
+        )
+        .catch(() => {
           resolve({ ip: null, dns: null });
-        },
-      ).catch(() => {
-        resolve({ ip: null, dns: null });
-      });
+        });
     });
   }
-
 }

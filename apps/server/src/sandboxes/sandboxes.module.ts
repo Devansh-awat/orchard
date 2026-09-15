@@ -20,15 +20,23 @@ const REAPER_INTERVAL_MS = 60_000;
 @Module({
   imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
   controllers: [SandboxesController],
-  providers: [SandboxesService, SandboxK8sService, SandboxChatService, SandboxWorkspaceService, SandboxConversationsService, SandboxReaperService, SandboxEnabledGuard],
-  exports: [SandboxesService, SandboxK8sService],
+  providers: [
+    SandboxesService,
+    SandboxK8sService,
+    SandboxChatService,
+    SandboxWorkspaceService,
+    SandboxConversationsService,
+    SandboxReaperService,
+    SandboxEnabledGuard
+  ],
+  exports: [SandboxesService, SandboxK8sService]
 })
 export class SandboxesModule implements OnModuleInit, OnModuleDestroy {
   private reaperInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly reaper: SandboxReaperService,
-    private readonly leaderElection: LeaderElectionService,
+    private readonly leaderElection: LeaderElectionService
   ) {}
 
   onModuleInit() {

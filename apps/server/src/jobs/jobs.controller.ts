@@ -10,7 +10,7 @@ import {
   Body,
   Request,
   ConflictException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
@@ -26,7 +26,7 @@ function userData(req: any) {
     username: req.user.username,
     firstName: req.user.firstName,
     lastName: req.user.lastName,
-    imageUrl: req.user.imageUrl,
+    imageUrl: req.user.imageUrl
   };
 }
 
@@ -39,7 +39,7 @@ export class JobsController {
     private readonly projectAccess: ProjectAccessService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
-    private readonly nodes: NodesService,
+    private readonly nodes: NodesService
   ) {}
 
   private async assertJobView(jobId: string, req: any) {
@@ -47,7 +47,7 @@ export class JobsController {
     const { user, access } = await this.projectAccess.assertProjectView(
       job.projectId,
       req.user.sub,
-      userData(req),
+      userData(req)
     );
     return { job, user, access };
   }
@@ -58,7 +58,7 @@ export class JobsController {
       job.projectId,
       req.user.sub,
       userData(req),
-      action,
+      action
     );
     return { job, user, access };
   }
@@ -68,7 +68,7 @@ export class JobsController {
     const { user, access } = await this.projectAccess.assertProjectView(
       run.job.projectId,
       req.user.sub,
-      userData(req),
+      userData(req)
     );
     return { run, user, access };
   }
@@ -89,21 +89,17 @@ export class JobsController {
   }
 
   @Post('projects/:projectId/jobs')
-  async createJob(
-    @Param('projectId') projectId: string,
-    @Body() body: JobInput,
-    @Request() req,
-  ) {
+  async createJob(@Param('projectId') projectId: string, @Body() body: JobInput, @Request() req) {
     const { user } = await this.projectAccess.assertProjectEditAccess(
       projectId,
       req.user.sub,
       userData(req),
-      'create jobs',
+      'create jobs'
     );
     await this.nodes.assertPoolAssignable({
       nodePoolId: body?.nodePoolId,
       placementOverride: body?.placementOverride,
-      userId: user.id,
+      userId: user.id
     });
     const job = await this.jobs.createJob(projectId, body ?? ({} as JobInput), user.id);
     await this.orchestrator.syncCronJob(job.id).catch(() => {});
@@ -114,7 +110,7 @@ export class JobsController {
       organizationId: job.organizationId,
       targetType: 'job',
       targetId: job.id,
-      targetLabel: job.name,
+      targetLabel: job.name
     });
     return job;
   }
@@ -131,7 +127,7 @@ export class JobsController {
     await this.nodes.assertPoolAssignable({
       nodePoolId: body?.nodePoolId,
       placementOverride: body?.placementOverride,
-      userId: user.id,
+      userId: user.id
     });
     const updated = await this.jobs.updateJob(id, body ?? {});
     await this.orchestrator.syncCronJob(id).catch(() => {});
@@ -142,7 +138,7 @@ export class JobsController {
       organizationId: job.project.organizationId,
       targetType: 'job',
       targetId: id,
-      targetLabel: updated.name,
+      targetLabel: updated.name
     });
     return updated;
   }
@@ -151,7 +147,7 @@ export class JobsController {
   async replaceSteps(
     @Param('id') id: string,
     @Body() body: { steps: JobStepInput[] },
-    @Request() req,
+    @Request() req
   ) {
     const { job, user } = await this.assertJobEdit(id, req, 'update jobs');
     const updated = await this.jobs.replaceSteps(id, body?.steps ?? []);
@@ -163,7 +159,7 @@ export class JobsController {
       organizationId: job.project.organizationId,
       targetType: 'job',
       targetId: id,
-      targetLabel: job.name,
+      targetLabel: job.name
     });
     return updated;
   }
@@ -180,7 +176,7 @@ export class JobsController {
       organizationId: job.project.organizationId,
       targetType: 'job',
       targetId: id,
-      targetLabel: job.name,
+      targetLabel: job.name
     });
     return { success: true };
   }
@@ -189,13 +185,13 @@ export class JobsController {
   async runNow(
     @Param('id') id: string,
     @Body() body: { allowConcurrent?: boolean } | undefined,
-    @Request() req,
+    @Request() req
   ) {
     const { job, user } = await this.assertJobEdit(id, req, 'run jobs');
     const run = await this.orchestrator.triggerRun(job.id, {
       trigger: 'manual',
       triggeredBy: user.id,
-      allowConcurrent: body?.allowConcurrent === true,
+      allowConcurrent: body?.allowConcurrent === true
     });
     if (!run) {
       throw new ConflictException('A run is already in progress for this job');
@@ -207,7 +203,7 @@ export class JobsController {
       organizationId: job.project.organizationId,
       targetType: 'job',
       targetId: id,
-      targetLabel: `${job.name} #${run.number}`,
+      targetLabel: `${job.name} #${run.number}`
     });
     return run;
   }
@@ -217,7 +213,7 @@ export class JobsController {
     @Param('id') id: string,
     @Query('cursor') cursor: string | undefined,
     @Query('limit') limit: string | undefined,
-    @Request() req,
+    @Request() req
   ) {
     await this.assertJobView(id, req);
     return this.jobs.listRuns(id, cursor || undefined, limit ? parseInt(limit, 10) || 25 : 25);
@@ -236,7 +232,7 @@ export class JobsController {
       run.job.projectId,
       req.user.sub,
       userData(req),
-      'cancel job runs',
+      'cancel job runs'
     );
     const result = await this.orchestrator.cancelRun(runId);
     await this.audit.log({
@@ -246,17 +242,13 @@ export class JobsController {
       organizationId: run.job.project.organizationId,
       targetType: 'job',
       targetId: run.jobId,
-      targetLabel: `${run.job.name} #${run.number}`,
+      targetLabel: `${run.job.name} #${run.number}`
     });
     return result;
   }
 
   @Get('job-runs/:runId/steps/:order/logs')
-  async getStepLogs(
-    @Param('runId') runId: string,
-    @Param('order') order: string,
-    @Request() req,
-  ) {
+  async getStepLogs(@Param('runId') runId: string, @Param('order') order: string, @Request() req) {
     const { run } = await this.assertRunView(runId, req);
     const stepOrder = parseInt(order, 10);
     if (!Number.isFinite(stepOrder)) throw new NotFoundException('Step not found');

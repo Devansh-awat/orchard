@@ -1,4 +1,22 @@
-import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Body,
+  Request,
+  Delete,
+  Put,
+  Patch,
+  Query,
+  Res,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ProjectsService } from './projects.service';
@@ -28,7 +46,7 @@ export class ProjectsController {
     private readonly storageService: StorageService,
     private readonly githubService: GitHubService,
     private readonly usersService: UsersService,
-    private readonly orgTransfer: ProjectOrgTransferService,
+    private readonly orgTransfer: ProjectOrgTransferService
   ) {}
 
   /**
@@ -64,7 +82,7 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName || req.user.name?.split(' ')[0],
       lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     };
 
     let repoUrl = String(body.repoUrl || '').trim();
@@ -100,9 +118,7 @@ export class ProjectsController {
 
     const buildType = overrides.buildType ?? det.buildType;
     const dockerfilePath = overrides.dockerfilePath ?? det.dockerfilePath ?? undefined;
-    const ports = overrides.port
-      ? [overrides.port]
-      : det.ports;
+    const ports = overrides.port ? [overrides.port] : det.ports;
 
     const envByKey = new Map<string, { key: string; value: string; secret?: boolean }>();
     for (const e of det.env) envByKey.set(e.key, e);
@@ -122,14 +138,14 @@ export class ProjectsController {
             name: `port-${i + 1}`,
             containerPort: p,
             servicePort: p,
-            protocol: 'TCP',
+            protocol: 'TCP'
           })),
           replicas: overrides.replicas,
           env: Array.from(envByKey.values()),
           cpuRequestMilli: overrides.cpuRequestMilli ?? null,
           memoryRequestBytes: overrides.memoryRequestBytes ?? null,
           autoDeployEnabled: true,
-          autoDeployBranch: branch,
+          autoDeployBranch: branch
         },
         clerkId,
         userData
@@ -138,7 +154,7 @@ export class ProjectsController {
       throw new BadRequestException({
         message: `Project ${project.slug} was created but the deployment failed: ${error?.message ?? error}`,
         projectId: project.id,
-        projectSlug: project.slug,
+        projectSlug: project.slug
       });
     }
 
@@ -152,7 +168,10 @@ export class ProjectsController {
         );
         liveUrl = (withUrl as any)?.url ?? null;
       } catch (error) {
-        console.warn(`[Projects] Auto URL creation failed for import ${deployment.id}:`, error?.message ?? error);
+        console.warn(
+          `[Projects] Auto URL creation failed for import ${deployment.id}:`,
+          error?.message ?? error
+        );
       }
     }
 
@@ -164,25 +183,27 @@ export class ProjectsController {
       branch,
       buildType,
       framework: det.framework,
-      url: liveUrl,
+      url: liveUrl
     };
   }
 
   @Get()
-
   async listProjects(@Request() req, @Query('orgId') orgId?: string) {
     return this.projectsService.listProjects(req.user.sub, orgId);
   }
 
   @Get('slug/:slug')
-
-  async getProjectBySlug(@Param('slug') slug: string, @Query('orgId') orgId: string, @Request() req) {
+  async getProjectBySlug(
+    @Param('slug') slug: string,
+    @Query('orgId') orgId: string,
+    @Request() req
+  ) {
     return this.projectsService.getProjectBySlug(orgId, slug, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -190,31 +211,25 @@ export class ProjectsController {
   async getProjectBySlugsFull(
     @Param('orgSlug') orgSlug: string,
     @Param('projectSlug') projectSlug: string,
-    @Request() req,
+    @Request() req
   ) {
-    return this.projectsService.getProjectBySlugsFull(
-      orgSlug,
-      projectSlug,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
-    );
+    return this.projectsService.getProjectBySlugsFull(orgSlug, projectSlug, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post('ingresses/validate-dns')
-
   async validateIngressDns(
     @Body()
     body: {
       projectId: string;
       domain: string;
     },
-    @Request() req,
+    @Request() req
   ) {
     if (!body || typeof body.projectId !== 'string' || !body.projectId.trim()) {
       throw new BadRequestException('projectId is required');
@@ -225,22 +240,17 @@ export class ProjectsController {
     // Require project-edit on the named project before performing any DNS
     // lookup. This prevents the endpoint from being abused as an arbitrary
     // DNS oracle by any authenticated user.
-    await this.projectAccess.assertProjectEditAccess(
-      body.projectId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
-    );
+    await this.projectAccess.assertProjectEditAccess(body.projectId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
     return this.ingress.validateIngressDns(body.domain);
   }
 
   @Post()
-
   async createProject(
     @Body()
     body: {
@@ -264,7 +274,7 @@ export class ProjectsController {
         username: req.user.username,
         firstName: req.user.firstName || req.user.name?.split(' ')[0],
         lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -282,18 +292,13 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateProject(
-      id,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.updateProject(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/icon')
@@ -301,7 +306,7 @@ export class ProjectsController {
   async uploadProjectIcon(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @Request() req,
+    @Request() req
   ) {
     if (!file) throw new BadRequestException('No file provided');
     // SVG intentionally excluded: SVG is an executable document (can carry
@@ -316,15 +321,18 @@ export class ProjectsController {
       throw new BadRequestException('File size exceeds 2MB limit');
     }
     return this.projectsService.uploadProjectAsset(
-      id, 'icon', file, this.storageService,
+      id,
+      'icon',
+      file,
+      this.storageService,
       req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
+        imageUrl: req.user.imageUrl
+      }
     );
   }
 
@@ -333,7 +341,7 @@ export class ProjectsController {
   async uploadProjectBackground(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @Request() req,
+    @Request() req
   ) {
     if (!file) throw new BadRequestException('No file provided');
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -344,59 +352,51 @@ export class ProjectsController {
       throw new BadRequestException('File size exceeds 8MB limit');
     }
     return this.projectsService.uploadProjectAsset(
-      id, 'backgroundImage', file, this.storageService,
+      id,
+      'backgroundImage',
+      file,
+      this.storageService,
       req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
+        imageUrl: req.user.imageUrl
+      }
     );
   }
 
   @Delete(':id')
-
   async deleteProject(@Param('id') id: string, @Request() req) {
-    return this.projectsService.deleteProject(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.deleteProject(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Get(':id')
-
   async getProject(@Param('id') id: string, @Request() req) {
-    return this.projectsService.getProject(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.getProject(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Get(':id/deployments')
-
   async getProjectDeployments(@Param('id') id: string, @Request() req) {
     return this.deployments.getProjectDeployments(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -406,19 +406,13 @@ export class ProjectsController {
     @Body() body: { email: string; role: string },
     @Request() req
   ) {
-    return this.projectsService.addProjectMember(
-      id,
-      body.email,
-      body.role,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.addProjectMember(id, body.email, body.role, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':id/invitations/:invitationId')
@@ -427,18 +421,13 @@ export class ProjectsController {
     @Param('invitationId') invitationId: string,
     @Request() req
   ) {
-    return this.projectsService.revokeProjectInvitation(
-      id,
-      invitationId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.revokeProjectInvitation(id, invitationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':id/members/:memberId')
@@ -447,18 +436,13 @@ export class ProjectsController {
     @Param('memberId') memberId: string,
     @Request() req
   ) {
-    return this.projectsService.removeProjectMember(
-      id,
-      memberId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.removeProjectMember(id, memberId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Patch(':id/members/:memberId')
@@ -468,19 +452,13 @@ export class ProjectsController {
     @Body('role') role: string,
     @Request() req
   ) {
-    return this.projectsService.updateProjectMemberRole(
-      id,
-      memberId,
-      role,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.projectsService.updateProjectMemberRole(id, memberId, role, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/transfer-request')
@@ -498,7 +476,7 @@ export class ProjectsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -510,7 +488,7 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -521,14 +499,14 @@ export class ProjectsController {
     @Param('id') id: string,
     @Query('destinationOrgId') destinationOrgId: string,
     @Query('slug') slug: string | undefined,
-    @Request() req,
+    @Request() req
   ) {
     return this.orgTransfer.preview(id, destinationOrgId, slug, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -536,7 +514,7 @@ export class ProjectsController {
   async transferProjectToOrg(
     @Param('id') id: string,
     @Body() body: { destinationOrgId?: string; slug?: string },
-    @Request() req,
+    @Request() req
   ) {
     if (!body?.destinationOrgId) {
       throw new BadRequestException('destinationOrgId is required');
@@ -546,12 +524,11 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Post(':id/databases')
-
   async createDatabase(
     @Param('id') id: string,
     @Body() body: {
@@ -573,25 +550,23 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/databases')
-
   async getProjectDatabases(@Param('id') id: string, @Request() req) {
     const { user, access } = await this.projectAccess.assertProjectView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
     return this.databases.getProjectDatabases(id, access.canEdit, user.id);
   }
 
   @Post(':id/ingresses')
-
   async createProjectIngress(
     @Param('id') id: string,
     @Body()
@@ -612,12 +587,11 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Put(':id/ingresses/:ingressId')
-
   async updateProjectIngress(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -639,12 +613,11 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/ingresses/:ingressId')
-
   async getProjectIngress(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -655,12 +628,11 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Delete(':id/ingresses/:ingressId')
-
   async deleteProjectIngress(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -671,7 +643,7 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -679,7 +651,7 @@ export class ProjectsController {
   async getIngressProtection(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
-    @Request() req,
+    @Request() req
   ) {
     return this.ingress.getIngressProtection(id, ingressId, req.user.sub);
   }
@@ -694,7 +666,7 @@ export class ProjectsController {
       password?: string;
       bypassPaths?: string[];
     },
-    @Request() req,
+    @Request() req
   ) {
     return this.ingress.updateIngressProtection(
       id,
@@ -703,12 +675,11 @@ export class ProjectsController {
       body.mode,
       body.password,
       body.bypassPaths,
-      body.username,
+      body.username
     );
   }
 
   @Post(':id/deployments')
-
   async createDeployment(
     @Param('id') id: string,
     @Body()
@@ -744,17 +715,47 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy, environmentId } = body;
+    const {
+      name,
+      image,
+      port,
+      ports,
+      replicas,
+      env,
+      exposePublic,
+      volumes,
+      cpuRequestMilli,
+      memoryRequestBytes,
+      nodePoolId,
+      placementOverride,
+      imagePullPolicy,
+      environmentId
+    } = body;
     const result = await this.deployments.createDeployment(
       id,
-      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride, imagePullPolicy, environmentId },
+      {
+        name,
+        image,
+        port,
+        ports,
+        replicas,
+        env,
+        exposePublic,
+        volumes,
+        cpuRequestMilli,
+        memoryRequestBytes,
+        nodePoolId,
+        placementOverride,
+        imagePullPolicy,
+        environmentId
+      },
       req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
 
@@ -766,11 +767,14 @@ export class ProjectsController {
           username: req.user.username,
           firstName: req.user.firstName,
           lastName: req.user.lastName,
-          imageUrl: req.user.imageUrl,
+          imageUrl: req.user.imageUrl
         });
         if (withUrl) return withUrl;
       } catch (error) {
-        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+        console.warn(
+          `[Projects] Auto URL creation failed for deployment ${result.id}:`,
+          error?.message ?? error
+        );
       }
     }
     return result;
@@ -807,24 +811,30 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName || req.user.name?.split(' ')[0],
       lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     };
     const result = await this.deployments.createDeploymentFromLocal(id, body, clerkId, userData);
 
     const declaredPort = Boolean(body.port || (Array.isArray(body.ports) && body.ports.length > 0));
     if ((body.autoUrl ?? declaredPort) && result?.id) {
       try {
-        const withUrl = await this.ingress.createAutoIngressForDeployment(result.id, clerkId, userData);
+        const withUrl = await this.ingress.createAutoIngressForDeployment(
+          result.id,
+          clerkId,
+          userData
+        );
         if (withUrl) return withUrl;
       } catch (error) {
-        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+        console.warn(
+          `[Projects] Auto URL creation failed for deployment ${result.id}:`,
+          error?.message ?? error
+        );
       }
     }
     return result;
   }
 
   @Post(':id/deployments/from-github')
-
   async createDeploymentFromGitHub(
     @Param('id') id: string,
     @Body()
@@ -876,7 +886,7 @@ export class ProjectsController {
       username: req.user.username,
       firstName: req.user.firstName || req.user.name?.split(' ')[0],
       lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     };
     const result = await this.deployments.createDeploymentFromGitHub(
       id,
@@ -891,18 +901,21 @@ export class ProjectsController {
     const exposeDetected =
       !declaredPort &&
       (result?.services ?? []).some((s: any) =>
-        (s.ports ?? []).some((p: any) => Number(p.port) !== 80),
+        (s.ports ?? []).some((p: any) => Number(p.port) !== 80)
       );
     if ((body.autoUrl ?? (declaredPort || exposeDetected)) && result?.id) {
       try {
         const withUrl = await this.ingress.createAutoIngressForDeployment(
           result.id,
           req.user.externalAuthId || req.user.sub,
-          userData,
+          userData
         );
         if (withUrl) return withUrl;
       } catch (error) {
-        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+        console.warn(
+          `[Projects] Auto URL creation failed for deployment ${result.id}:`,
+          error?.message ?? error
+        );
       }
     }
     return result;
@@ -920,27 +933,29 @@ export class DeploymentsController {
     private readonly webhooksService: WebhooksService,
     private readonly faviconService: FaviconService,
     private readonly metricsService: MetricsService,
-    private readonly logCapture: PodLogCaptureService,
+    private readonly logCapture: PodLogCaptureService
   ) {}
 
   @Get(':id/build-runs')
   async getBuildRuns(@Param('id') id: string, @Request() req, @Query('limit') limitStr?: string) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.listBuildRuns(id, Number(limitStr) || 20);
   }
 
   @Get(':id/build-runs/:runId/logs')
-  async getBuildRunLogs(
-    @Param('id') id: string,
-    @Param('runId') runId: string,
-    @Request() req,
-  ) {
+  async getBuildRunLogs(@Param('id') id: string, @Param('runId') runId: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getBuildRunLogs(id, runId);
   }
@@ -952,11 +967,14 @@ export class DeploymentsController {
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
     @Query('step') stepStr?: string,
-    @Query('groupBy') groupBy?: string,
+    @Query('groupBy') groupBy?: string
   ) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     const end = Number(endStr) || Date.now();
     const start = Number(startStr) || end - 60 * 60 * 1000;
@@ -974,7 +992,7 @@ export class DeploymentsController {
         deploymentName: dep.name,
         startMs: start,
         endMs: end,
-        stepMs: step,
+        stepMs: step
       });
       return { start, end, step, groupBy: 'pod', grouped };
     }
@@ -984,7 +1002,7 @@ export class DeploymentsController {
       deploymentName: dep.name,
       startMs: start,
       endMs: end,
-      stepMs: step,
+      stepMs: step
     });
     return { start, end, step, data };
   }
@@ -993,11 +1011,14 @@ export class DeploymentsController {
   async updateDeploymentStrategy(
     @Param('id') id: string,
     @Body() body: { strategy: 'rollingUpdate' | 'recreate' },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the deploy strategy');
@@ -1009,11 +1030,14 @@ export class DeploymentsController {
   async updateDeploymentDisruptionBudget(
     @Param('id') id: string,
     @Body() body: { minAvailable: number },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the disruption budget');
@@ -1024,8 +1048,11 @@ export class DeploymentsController {
   @Get(':id/next-steps')
   async getDeploymentNextSteps(@Param('id') id: string, @Request() req) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getDeploymentNextSteps(id, user.id);
   }
@@ -1034,11 +1061,14 @@ export class DeploymentsController {
   async updateDeploymentPullPolicy(
     @Param('id') id: string,
     @Body() body: { imagePullPolicy: 'Always' | 'IfNotPresent' | null },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the image pull policy');
@@ -1050,11 +1080,14 @@ export class DeploymentsController {
   async updateDeploymentImage(
     @Param('id') id: string,
     @Body() body: { image: string },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the deployment image');
@@ -1066,35 +1099,39 @@ export class DeploymentsController {
   async updateResources(
     @Param('id') id: string,
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to update deployment resources');
     }
-    return this.deployments.updateDeploymentResources(id, {
-      cpuRequestMilli: body.cpuRequestMilli ?? null,
-      memoryRequestBytes: body.memoryRequestBytes ?? null,
-    }, user.id);
+    return this.deployments.updateDeploymentResources(
+      id,
+      {
+        cpuRequestMilli: body.cpuRequestMilli ?? null,
+        memoryRequestBytes: body.memoryRequestBytes ?? null
+      },
+      user.id
+    );
   }
 
   @Get()
-
   async listDeployments(@Request() req, @Query('orgId') orgId?: string) {
     return this.deployments.listDeploymentsSummary(req.user.sub, orgId);
   }
 
   @Get('recent-builds')
-
   async listRecentBuilds(@Request() req, @Query('orgId') orgId?: string) {
     return this.deployments.listRecentBuilds(req.user.sub, orgId);
   }
 
   @Get('favicon')
-
   async getFavicon(@Query('domain') domain: string, @Res() res: Response) {
     if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
       return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Invalid domain' });
@@ -1115,68 +1152,64 @@ export class DeploymentsController {
   }
 
   @Get(':id')
-
   async getDeployment(@Param('id') id: string, @Request() req) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getDeployment(id, access.canEdit, user.id);
   }
 
   @Get(':id/logs')
-
   async getDeploymentLogs(@Param('id') id: string, @Request() req) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     const deployment = await this.deployments.getDeployment(id, access.canEdit, user.id);
     return {
-      logs: access.canEdit ? (deployment.buildLogs || '') : '',
+      logs: access.canEdit ? deployment.buildLogs || '' : '',
       status: deployment.status,
-      buildError: access.canEdit ? deployment.buildError : null,
+      buildError: access.canEdit ? deployment.buildError : null
     };
   }
 
   @Post(':id/cancel')
-
   async cancelDeploymentBuild(@Param('id') id: string, @Request() req) {
-    return this.deployments.cancelDeploymentBuild(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.cancelDeploymentBuild(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':id')
-
   async deleteDeployment(@Param('id') id: string, @Request() req) {
-    return this.deployments.deleteDeployment(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.deleteDeployment(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Get(':id/pods')
-
   async getDeploymentPods(@Param('id') id: string, @Request() req, @Query('live') live?: string) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (live === '1' || live === 'true') {
       const result = await this.deployments.getDeploymentPodsLive(id, user.id);
@@ -1188,8 +1221,11 @@ export class DeploymentsController {
   @Get(':id/pods-live')
   async getDeploymentPodsLive(@Param('id') id: string, @Request() req) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getDeploymentPodsLive(id, user.id);
   }
@@ -1197,8 +1233,11 @@ export class DeploymentsController {
   @Get(':id/killed-containers')
   async getKilledContainers(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.logCapture.list(id);
   }
@@ -1207,11 +1246,14 @@ export class DeploymentsController {
   async getKilledContainerLogs(
     @Param('id') id: string,
     @Param('entryId') entryId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     const entry = await this.logCapture.getLogs(id, entryId);
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
@@ -1237,72 +1279,50 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Post(':id/rebuild')
-
   async rebuildDeployment(@Param('id') id: string, @Request() req) {
-    return this.deployments.rebuildDeployment(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.rebuildDeployment(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/scale')
-
   async scaleDeployment(
     @Param('id') id: string,
     @Body() body: { replicas: number },
     @Request() req
   ) {
-    return this.deployments.scaleDeployment(
-      id,
-      body.replicas,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.scaleDeployment(id, body.replicas, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/restart')
-
-  async restartDeployment(
-    @Param('id') id: string,
-    @Request() req
-  ) {
-    return this.deployments.restartDeployment(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+  async restartDeployment(@Param('id') id: string, @Request() req) {
+    return this.deployments.restartDeployment(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/retry-apply')
-  async retryApply(
-    @Param('id') id: string,
-    @Request() req
-  ) {
+  async retryApply(@Param('id') id: string, @Request() req) {
     return this.deployments.retryApply(id, req.user.sub);
   }
 
@@ -1321,31 +1341,35 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Get(':id/image-history')
-
   async getImageHistory(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getImageHistory(id, req.user.sub);
   }
 
   @Get(':id/image-history/:imageHistoryId/logs')
-
   async getImageHistoryLogs(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
-    @Request() req,
+    @Request() req
   ) {
     const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       return { logs: '' };
@@ -1354,28 +1378,21 @@ export class DeploymentsController {
   }
 
   @Post(':id/rollback/:imageHistoryId')
-
   async rollbackToImage(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
     @Request() req
   ) {
-    return this.deployments.rollbackToImage(
-      id,
-      imageHistoryId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.rollbackToImage(id, imageHistoryId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Put(':id/env')
-
   async updateDeploymentEnvVars(
     @Param('id') id: string,
     @Body()
@@ -1384,18 +1401,13 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.deployments.updateDeploymentEnvVars(
-      id,
-      body.env || [],
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.updateDeploymentEnvVars(id, body.env || [], req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Put(':id/build-config')
@@ -1417,38 +1429,27 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.deployments.updateDeploymentBuildConfig(
-      id,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
-    );
+    return this.deployments.updateDeploymentBuildConfig(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Patch(':id/name')
-
-  async renameDeployment(
-    @Param('id') id: string,
-    @Body() body: { name?: string },
-    @Request() req
-  ) {
+  async renameDeployment(@Param('id') id: string, @Body() body: { name?: string }, @Request() req) {
     return this.deployments.renameDeployment(id, body?.name ?? '', req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Put(':id/github-repo')
-
   async updateDeploymentGitHubRepo(
     @Param('id') id: string,
     @Body()
@@ -1465,7 +1466,7 @@ export class DeploymentsController {
       {
         repoUrl: body.repoUrl || body.githubRepo || '',
         branch: body.branch || '',
-        dockerfilePath: body.dockerfilePath,
+        dockerfilePath: body.dockerfilePath
       },
       req.user.sub,
       {
@@ -1473,13 +1474,12 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Put(':id/health-check')
-
   async updateDeploymentHealthCheck(
     @Param('id') id: string,
     @Body()
@@ -1500,22 +1500,16 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.deployments.updateDeploymentHealthCheck(
-      id,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.updateDeploymentHealthCheck(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Put(':id/volumes')
-
   async updateDeploymentVolumes(
     @Param('id') id: string,
     @Body()
@@ -1532,22 +1526,16 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.deployments.updateDeploymentVolumes(
-      id,
-      body.volumes || [],
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.updateDeploymentVolumes(id, body.volumes || [], req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/ingresses')
-
   async createDeploymentIngress(
     @Param('id') id: string,
     @Body()
@@ -1567,22 +1555,16 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.ingress.createDeploymentIngress(
-      id,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.ingress.createDeploymentIngress(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Put(':deploymentId/ingresses/:ingressId')
-
   async updateDeploymentIngress(
     @Param('deploymentId') deploymentId: string,
     @Param('ingressId') ingressId: string,
@@ -1602,44 +1584,31 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.ingress.updateDeploymentIngress(
-      deploymentId,
-      ingressId,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.ingress.updateDeploymentIngress(deploymentId, ingressId, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':deploymentId/ingresses/:ingressId')
-
   async deleteDeploymentIngress(
     @Param('deploymentId') deploymentId: string,
     @Param('ingressId') ingressId: string,
     @Request() req
   ) {
-    return this.ingress.deleteDeploymentIngress(
-      deploymentId,
-      ingressId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.ingress.deleteDeploymentIngress(deploymentId, ingressId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':deploymentId/services')
-
   async createDeploymentService(
     @Param('deploymentId') deploymentId: string,
     @Body()
@@ -1657,22 +1626,16 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.deployments.createDeploymentService(
-      deploymentId,
-      body,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.createDeploymentService(deploymentId, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Put(':deploymentId/services/:serviceId')
-
   async updateServiceConfiguration(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
@@ -1694,7 +1657,7 @@ export class DeploymentsController {
       serviceId,
       {
         ports: body.ports,
-        domain: body.domain,
+        domain: body.domain
       },
       req.user.sub,
       {
@@ -1702,34 +1665,27 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Delete(':deploymentId/services/:serviceId')
-
   async deleteDeploymentService(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
     @Request() req
   ) {
-    return this.deployments.deleteDeploymentService(
-      deploymentId,
-      serviceId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.deleteDeploymentService(deploymentId, serviceId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Patch(':deploymentId/services/:serviceId/exposure')
-
   async updateServiceExposure(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
@@ -1749,7 +1705,7 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -1759,15 +1715,15 @@ export class DeploymentsController {
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
     @Param('portId') portId: string,
-    @Request() req,
+    @Request() req
   ) {
-    return this.deployments.enableServicePortPublic(
-      deploymentId, serviceId, portId, req.user.sub,
-      {
-        email: req.user.email, username: req.user.username,
-        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
-      },
-    );
+    return this.deployments.enableServicePortPublic(deploymentId, serviceId, portId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':deploymentId/services/:serviceId/ports/:portId/public')
@@ -1775,31 +1731,38 @@ export class DeploymentsController {
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
     @Param('portId') portId: string,
-    @Request() req,
+    @Request() req
   ) {
     return this.deployments.disableServicePortPublic(
-      deploymentId, serviceId, portId, req.user.sub,
+      deploymentId,
+      serviceId,
+      portId,
+      req.user.sub,
       {
-        email: req.user.email, username: req.user.username,
-        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
-      },
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl
+      }
     );
   }
 
   // Auto-deploy endpoints
 
   @Get(':id/auto-deploy')
-
   async getAutoDeployStatus(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getAutoDeployStatus(id, req.user.sub);
   }
 
   @Post(':id/auto-deploy/enable')
-
   async enableAutoDeploy(
     @Param('id') id: string,
     @Body() body: { branch: string; paths?: string[] },
@@ -1814,34 +1777,31 @@ export class DeploymentsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       },
       body.paths
     );
   }
 
   @Post(':id/auto-deploy/disable')
-
   async disableAutoDeploy(@Param('id') id: string, @Request() req) {
-    return this.deployments.disableAutoDeploy(
-      id,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.deployments.disableAutoDeploy(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Get(':id/github-deployments')
-
   async getGitHubDeployments(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.deployments.getGitHubDeployments(id, req.user.sub);
   }
@@ -1849,17 +1809,15 @@ export class DeploymentsController {
   // Webhook token management endpoints
 
   @Get(':id/webhook-tokens')
-
   async listWebhookTokens(@Param('id') id: string, @Request() req) {
     return this.webhooksService.listWebhookTokens(id, req.user.sub);
   }
 
   @Post(':id/webhook-tokens')
-
   async createWebhookToken(
     @Param('id') id: string,
     @Body() body: { label?: string },
-    @Request() req,
+    @Request() req
   ) {
     // H-3: forward the originating API token id (if any) so the webhook is
     // cascade-deleted when the API token is revoked. Session-auth requests
@@ -1869,11 +1827,10 @@ export class DeploymentsController {
   }
 
   @Delete(':id/webhook-tokens/:tokenId')
-
   async deleteWebhookToken(
     @Param('id') id: string,
     @Param('tokenId') tokenId: string,
-    @Request() req,
+    @Request() req
   ) {
     return this.webhooksService.deleteWebhookToken(id, tokenId, req.user.sub);
   }
@@ -1885,18 +1842,17 @@ export class IngressesController {
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly projectAccess: ProjectAccessService,
-    private readonly ingress: IngressService,
+    private readonly ingress: IngressService
   ) {}
 
   @Get(':id')
-
   async getIngress(@Param('id') id: string, @Request() req) {
     return this.ingress.getIngressById(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 }
@@ -1909,7 +1865,7 @@ export class DatabasesController {
     private readonly projectAccess: ProjectAccessService,
     private readonly databases: DatabasesService,
     private readonly metricsService: MetricsService,
-    private readonly logCapture: PodLogCaptureService,
+    private readonly logCapture: PodLogCaptureService
   ) {}
 
   // The post-mortem safety net app deployments already had. A crashing Postgres
@@ -1918,8 +1874,11 @@ export class DatabasesController {
   @Get(':id/killed-containers')
   async getDatabaseKilledContainers(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.logCapture.list(id, 'database');
   }
@@ -1928,11 +1887,14 @@ export class DatabasesController {
   async getDatabaseKilledContainerLogs(
     @Param('id') id: string,
     @Param('entryId') entryId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     const entry = await this.logCapture.getLogs(id, entryId, 'database');
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
@@ -1952,11 +1914,13 @@ export class DatabasesController {
   }
 
   @Get(':id')
-
   async getDatabase(@Param('id') id: string, @Request() req, @Query('fast') fast?: string) {
     const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.databases.getDatabase(id, access.canEdit, user.id, fast === '1');
   }
@@ -1964,8 +1928,11 @@ export class DatabasesController {
   @Get(':id/live')
   async getDatabaseLive(@Param('id') id: string, @Request() req) {
     const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.databases.getDatabaseLive(id, user.id);
   }
@@ -1976,11 +1943,14 @@ export class DatabasesController {
     @Request() req,
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
-    @Query('step') stepStr?: string,
+    @Query('step') stepStr?: string
   ) {
     const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     const end = Number(endStr) || Date.now();
     const start = Number(startStr) || end - 60 * 60 * 1000;
@@ -1999,7 +1969,7 @@ export class DatabasesController {
       podPrefix,
       startMs: start,
       endMs: end,
-      stepMs: step,
+      stepMs: step
     });
     return { start, end, step, data };
   }
@@ -2008,62 +1978,84 @@ export class DatabasesController {
   async updateDatabaseResources(
     @Param('id') id: string,
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to update database resources');
     }
-    return this.projectsService.updateDatabaseResources(id, {
-      cpuRequestMilli: body.cpuRequestMilli ?? null,
-      memoryRequestBytes: body.memoryRequestBytes ?? null,
-    }, user.id);
+    return this.projectsService.updateDatabaseResources(
+      id,
+      {
+        cpuRequestMilli: body.cpuRequestMilli ?? null,
+        memoryRequestBytes: body.memoryRequestBytes ?? null
+      },
+      user.id
+    );
   }
 
   @Patch(':id/replicas')
   async updateDatabaseReplicas(
     @Param('id') id: string,
     @Body() body: { replicas?: number },
-    @Request() req,
+    @Request() req
   ) {
     return this.databases.updateDatabaseReplicas(id, Number(body?.replicas), req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Post(':id/stop')
   async stopDatabase(@Param('id') id: string, @Request() req) {
     return this.databases.stopDatabase(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Post(':id/start')
   async startDatabase(@Param('id') id: string, @Request() req) {
     return this.databases.startDatabase(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Post(':id/restart')
   async restartDatabase(@Param('id') id: string, @Request() req) {
     return this.databases.restartDatabase(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/query-stats')
   async getDatabaseQueryStats(@Param('id') id: string, @Request() req) {
     await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.databases.getDatabaseQueryStats(id);
   }
@@ -2071,23 +2063,22 @@ export class DatabasesController {
   @Post(':id/query-stats/reset')
   async resetDatabaseQueryStats(@Param('id') id: string, @Request() req) {
     return this.databases.resetDatabaseQueryStats(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Patch(':id/name')
-  async renameDatabase(
-    @Param('id') id: string,
-    @Body() body: { name?: string },
-    @Request() req,
-  ) {
+  async renameDatabase(@Param('id') id: string, @Body() body: { name?: string }, @Request() req) {
     return this.databases.renameDatabase(id, body?.name ?? '', req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2095,11 +2086,14 @@ export class DatabasesController {
   async expandDatabaseStorage(
     @Param('id') id: string,
     @Body() body: { storageSize?: string },
-    @Request() req,
+    @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to expand database storage');
@@ -2108,22 +2102,24 @@ export class DatabasesController {
   }
 
   @Delete(':id')
-
   async deleteDatabase(@Param('id') id: string, @Request() req) {
     return this.databases.deleteDatabase(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/provisioning')
   async getProvisioning(@Param('id') id: string, @Request() req) {
     const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
     return this.databases.getDatabaseProvisioning(id, user.id);
   }
@@ -2135,7 +2131,7 @@ export class DatabasesController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2150,7 +2146,7 @@ export class DatabasesController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2165,15 +2161,18 @@ export class DatabasesController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/extensions')
   async listExtensions(@Param('id') id: string, @Request() req) {
     return this.databases.listDatabaseExtensions(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2181,11 +2180,14 @@ export class DatabasesController {
   async installExtension(
     @Param('id') id: string,
     @Body() body: { name: string; addToPreload?: boolean },
-    @Request() req,
+    @Request() req
   ) {
     return this.databases.installDatabaseExtension(id, body, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2194,66 +2196,85 @@ export class DatabasesController {
     @Param('id') id: string,
     @Param('name') name: string,
     @Query('removeFromPreload') removeFromPreload: string,
-    @Request() req,
+    @Request() req
   ) {
     return this.databases.uninstallDatabaseExtension(
-      id, { name, removeFromPreload: removeFromPreload === 'true' }, req.user.sub,
+      id,
+      { name, removeFromPreload: removeFromPreload === 'true' },
+      req.user.sub,
       {
-        email: req.user.email, username: req.user.username,
-        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
-      },
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl
+      }
     );
   }
 
   @Get(':id/settings')
   async getSettings(@Param('id') id: string, @Request() req) {
     return this.databases.getDatabaseSettings(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Post(':id/public')
   async enablePublic(@Param('id') id: string, @Request() req) {
     return this.databases.enableDatabasePublic(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Delete(':id/public')
   async disablePublic(@Param('id') id: string, @Request() req) {
     return this.databases.disableDatabasePublic(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/backup-schedule')
   async getBackupSchedule(@Param('id') id: string, @Request() req) {
     return this.databases.getBackupSchedule(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Put(':id/backup-schedule')
-  async setBackupSchedule(
-    @Param('id') id: string,
-    @Body() body: { cron: string },
-    @Request() req,
-  ) {
+  async setBackupSchedule(@Param('id') id: string, @Body() body: { cron: string }, @Request() req) {
     return this.databases.setBackupSchedule(id, body, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Delete(':id/backup-schedule')
   async clearBackupSchedule(@Param('id') id: string, @Request() req) {
     return this.databases.deleteBackupSchedule(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -2261,11 +2282,14 @@ export class DatabasesController {
   async updateSettings(
     @Param('id') id: string,
     @Body() body: { parameters: Record<string, string>; backupCompression?: string | null },
-    @Request() req,
+    @Request() req
   ) {
     return this.databases.updateDatabaseSettings(id, body, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 }

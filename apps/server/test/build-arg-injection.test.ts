@@ -23,7 +23,7 @@ const KEYS = ['DATABASE_URL', 'OPENAI_API_KEY', 'REVIEW_IDS'];
 /** Run the generated script over a Dockerfile and hand back the rewrite. */
 function inject(
   dockerfile: string,
-  opts: { keys?: string[]; dockerfilePath?: string } = {},
+  opts: { keys?: string[]; dockerfilePath?: string } = {}
 ): string {
   const workspace = mkdtempSync(join(tmpdir(), 'orchard-buildargs-'));
   const dockerfilePath = opts.dockerfilePath ?? 'Dockerfile';
@@ -34,7 +34,7 @@ function inject(
     execFileSync(
       '/bin/sh',
       ['-c', injectBuildArgsScript({ dockerfilePath, keys: opts.keys ?? KEYS })],
-      { env: { ...process.env, WORKSPACE: workspace }, stdio: 'pipe' },
+      { env: { ...process.env, WORKSPACE: workspace }, stdio: 'pipe' }
     );
     return readFileSync(target, 'utf8');
   } finally {
@@ -65,7 +65,7 @@ test('the values themselves never touch the Dockerfile', () => {
     assert.ok(out.includes(`ARG ${key}`), `missing ARG for ${key}`);
     assert.ok(
       !out.includes(`${key}=`),
-      `${key} appears as an assignment, which bakes it into a layer`,
+      `${key} appears as an assignment, which bakes it into a layer`
     );
   }
 });
@@ -94,8 +94,8 @@ CMD ["node", "server.js"]
   const out = inject(dockerfile);
 
   // Their ENV stays; we simply stop adding our own.
-  assert.ok(out.includes('ENV NODE_ENV=production'), 'clobbered the user\'s ENV');
-  assert.ok(out.includes('ARG MY_OWN_ARG'), 'clobbered the user\'s ARG');
+  assert.ok(out.includes('ENV NODE_ENV=production'), "clobbered the user's ENV");
+  assert.ok(out.includes('ARG MY_OWN_ARG'), "clobbered the user's ARG");
   for (const line of ['WORKDIR /app', 'RUN npm ci', 'CMD ["node", "server.js"]']) {
     assert.ok(out.includes(line), `dropped ${line}`);
   }
@@ -114,7 +114,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
   assert.ok(out.includes('FROM nginx:alpine'), 'lost the runtime stage');
   assert.ok(
     out.includes('COPY --from=builder /app/dist /usr/share/nginx/html'),
-    'lost the artifact copy',
+    'lost the artifact copy'
   );
   const envLines = out.split('\n').filter((l) => /^ENV\b/.test(l.trim()));
   assert.deepEqual(envLines, [], 'multi-stage build still got baked ENV directives');
@@ -132,8 +132,8 @@ test('a missing Dockerfile fails the build instead of silently continuing', () =
       execFileSync(
         '/bin/sh',
         ['-c', injectBuildArgsScript({ dockerfilePath: 'Dockerfile', keys: KEYS })],
-        { env: { ...process.env, WORKSPACE: workspace }, stdio: 'pipe' },
-      ),
+        { env: { ...process.env, WORKSPACE: workspace }, stdio: 'pipe' }
+      )
     );
   } finally {
     rmSync(workspace, { recursive: true, force: true });

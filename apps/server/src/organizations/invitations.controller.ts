@@ -14,7 +14,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -25,7 +25,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -40,7 +40,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -51,7 +51,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -68,7 +68,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -79,7 +79,7 @@ export class InvitationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 }

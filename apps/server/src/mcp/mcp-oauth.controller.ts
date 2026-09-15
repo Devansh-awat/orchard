@@ -32,7 +32,7 @@ export class McpOAuthController {
     if (this.registrationHits.length >= MAX_REGISTRATIONS_PER_WINDOW) {
       return res.status(HttpStatus.TOO_MANY_REQUESTS).json({
         error: 'rate_limited',
-        error_description: 'too many client registrations',
+        error_description: 'too many client registrations'
       });
     }
     this.registrationHits.push(now);
@@ -41,7 +41,7 @@ export class McpOAuthController {
     if (result.error) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         error: result.error,
-        ...(result.error_description && { error_description: result.error_description }),
+        ...(result.error_description && { error_description: result.error_description })
       });
     }
     return res.status(HttpStatus.CREATED).json(result.registration);
@@ -56,15 +56,13 @@ export class McpOAuthController {
       response_type: query.response_type,
       state: query.state,
       code_challenge: query.code_challenge,
-      code_challenge_method: query.code_challenge_method,
+      code_challenge_method: query.code_challenge_method
     });
 
     if (result.error) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         error: result.error,
-        ...(result.error_description
-          ? { error_description: result.error_description }
-          : {}),
+        ...(result.error_description ? { error_description: result.error_description } : {})
       });
     }
 
@@ -76,7 +74,7 @@ export class McpOAuthController {
     try {
       const result = await this.oauthService.completeAuthorization({
         mcp_state: req.body.mcp_state,
-        session_token: req.body.session_token,
+        session_token: req.body.session_token
       });
 
       if (result.error) {
@@ -92,20 +90,26 @@ export class McpOAuthController {
 
   @Post('token')
   async exchangeToken(@Req() req: Request, @Res() res: Response) {
-    console.error(`[MCP OAuth] Token exchange: grant_type=${req.body.grant_type}, client_id=${req.body.client_id}, code_length=${req.body.code?.length || 0}`);
+    console.error(
+      `[MCP OAuth] Token exchange: grant_type=${req.body.grant_type}, client_id=${req.body.client_id}, code_length=${req.body.code?.length || 0}`
+    );
     const result = await this.oauthService.exchangeToken(req.body);
 
     if (result.error) {
-      console.error(`[MCP OAuth] Token exchange failed: ${result.error} ${result.error_description || ''}`);
+      console.error(
+        `[MCP OAuth] Token exchange failed: ${result.error} ${result.error_description || ''}`
+      );
       return res.status(HttpStatus.BAD_REQUEST).json({
         error: result.error,
         ...(result.error_description && {
-          error_description: result.error_description,
-        }),
+          error_description: result.error_description
+        })
       });
     }
 
-    console.error(`[MCP OAuth] Token exchange succeeded, access_token length: ${result.token_response?.access_token?.length || 0}`);
+    console.error(
+      `[MCP OAuth] Token exchange succeeded, access_token length: ${result.token_response?.access_token?.length || 0}`
+    );
     return res.json(result.token_response);
   }
 }

@@ -9,6 +9,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [KubernetesModule, UsersModule, AuthModule],
   controllers: [WebhooksController],
   providers: [WebhooksService],
-  exports: [WebhooksService],
+  exports: [WebhooksService]
 })
 export class WebhooksModule {}

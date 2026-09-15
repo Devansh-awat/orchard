@@ -36,17 +36,27 @@ import { PrismaModule } from '../prisma/prisma.module';
     StorageService,
     {
       provide: APP_GUARD,
-      useClass: SuperAdminGuard,
+      useClass: SuperAdminGuard
     },
     // ScopeGuard MUST follow SuperAdminGuard: it reads `request['auth']`
     // which SuperAdminGuard populates. Nest runs APP_GUARDs in registration
     // order, so this ordering is load-bearing.
     {
       provide: APP_GUARD,
-      useClass: ScopeGuard,
-    },
+      useClass: ScopeGuard
+    }
   ],
-  exports: [SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, ProtectionService, SessionsService, MembershipCacheService, AuthorizationService],
+  exports: [
+    SuperAdminGuard,
+    OAuthService,
+    OtpService,
+    PasskeyService,
+    RateLimitService,
+    ApiTokensService,
+    ProtectionService,
+    SessionsService,
+    MembershipCacheService,
+    AuthorizationService
+  ]
 })
 export class AuthModule {}
-

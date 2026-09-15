@@ -6,7 +6,9 @@ import { AuditService } from '../audit/audit.service';
 import { ScimError } from './scim-error';
 import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
 
-interface Ctx { organizationId: string }
+interface Ctx {
+  organizationId: string;
+}
 
 // Normalized shape both a live membership and a deactivated tombstone reduce
 // to, so the SCIM projection has one code path.
@@ -58,7 +60,7 @@ function normalizeRole(raw: any): string | null {
     throw ScimError(
       400,
       'invalidValue',
-      `Unknown role "${raw}"; expected one of ${ROLE_GROUPS.join(', ')}`,
+      `Unknown role "${raw}"; expected one of ${ROLE_GROUPS.join(', ')}`
     );
   }
   return role;
@@ -80,7 +82,7 @@ function roleFromInstance(instance: any, currentRole?: string | null): string | 
   const ordered = [...roles].sort((a, b) => Number(!!b?.primary) - Number(!!a?.primary));
   const candidates = [
     ...ordered.map((r: any) => normalizeRole(r?.value)),
-    normalizeRole(instance?.userType),
+    normalizeRole(instance?.userType)
   ].filter((r): r is string => r !== null);
 
   if (!candidates.length) return null;
@@ -98,7 +100,7 @@ function profileFromInstance(instance: any, fallbackUserName: string) {
     userName: trim(instance?.userName)?.toLowerCase() ?? fallbackUserName,
     givenName: trim(instance?.name?.givenName),
     familyName: trim(instance?.name?.familyName),
-    displayName: trim(instance?.displayName),
+    displayName: trim(instance?.displayName)
   };
 }
 
@@ -120,7 +122,7 @@ export class ScimService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
   onModuleInit() {
@@ -139,7 +141,7 @@ export class ScimService implements OnModuleInit {
       SCIMMY.Resources.Group,
       SCIMMY.Resources.Schema,
       SCIMMY.Resources.ResourceType,
-      SCIMMY.Resources.ServiceProviderConfig,
+      SCIMMY.Resources.ServiceProviderConfig
     ]) {
       R.basepath(SCIM_BASEPATH);
     }
@@ -155,23 +157,23 @@ export class ScimService implements OnModuleInit {
         {
           type: 'oauthbearertoken',
           name: 'OAuth Bearer Token',
-          description: 'Authentication via the SCIM bearer token minted in org settings.',
-        },
-      ],
+          description: 'Authentication via the SCIM bearer token minted in org settings.'
+        }
+      ]
     });
 
     // Optional (not required) so an IdP that never sends it still validates.
     SCIMMY.Resources.User.extend(SCIMMY.Schemas.EnterpriseUser, false);
 
-    SCIMMY.Resources.User
-      .ingress((resource, instance, ctx: Ctx) => this.ingressUser(resource, instance, ctx))
+    SCIMMY.Resources.User.ingress((resource, instance, ctx: Ctx) =>
+      this.ingressUser(resource, instance, ctx)
+    )
       .egress((resource, ctx: Ctx) => this.egressUsers(resource, ctx))
       .degress((resource, ctx: Ctx) => this.degressUser(resource, ctx));
 
-    SCIMMY.Resources.Group
-      .ingress(() => {
-        throw ScimError(501, null, 'Group provisioning is read-only; manage roles in-app');
-      })
+    SCIMMY.Resources.Group.ingress(() => {
+      throw ScimError(501, null, 'Group provisioning is read-only; manage roles in-app');
+    })
       .egress((resource, ctx: Ctx) => this.egressGroups(resource, ctx))
       .degress(() => {
         throw ScimError(501, null, 'Group provisioning is read-only; manage roles in-app');
@@ -218,13 +220,13 @@ export class ScimService implements OnModuleInit {
       role: member.role,
       enterprise: member.scimEnterprise ?? null,
       userName: (owned ? member.scimUserName : null) ?? member.user?.email,
-      givenName: owned ? member.scimGivenName ?? null : member.user?.firstName ?? null,
-      familyName: owned ? member.scimFamilyName ?? null : member.user?.lastName ?? null,
-      displayName: owned ? member.scimDisplayName ?? null : null,
+      givenName: owned ? (member.scimGivenName ?? null) : (member.user?.firstName ?? null),
+      familyName: owned ? (member.scimFamilyName ?? null) : (member.user?.lastName ?? null),
+      displayName: owned ? (member.scimDisplayName ?? null) : null,
       active: true,
       created: member.addedAt,
       lastModified: member.addedAt,
-      user: member.user,
+      user: member.user
     };
   }
 
@@ -254,7 +256,7 @@ export class ScimService implements OnModuleInit {
       active: false,
       created: row.deactivatedAt,
       lastModified: row.deactivatedAt,
-      user: row.user,
+      user: row.user
     };
   }
 
@@ -267,7 +269,7 @@ export class ScimService implements OnModuleInit {
       userName: view.userName,
       name: {
         givenName: view.givenName ?? undefined,
-        familyName: view.familyName ?? undefined,
+        familyName: view.familyName ?? undefined
       },
       displayName: view.displayName || fullName || user.username || view.userName,
       emails: [{ value: view.userName, primary: true, type: 'work' }],
@@ -285,8 +287,8 @@ export class ScimService implements OnModuleInit {
       meta: {
         resourceType: 'User',
         created: view.created,
-        lastModified: view.lastModified,
-      },
+        lastModified: view.lastModified
+      }
     };
   }
 
@@ -295,13 +297,13 @@ export class ScimService implements OnModuleInit {
   private async assertNotLastOwner(view: ScimMemberView, ctx: Ctx, action: string) {
     if (view.role !== 'owner') return;
     const owners = await this.prisma.organizationMember.count({
-      where: { organizationId: ctx.organizationId, role: 'owner' },
+      where: { organizationId: ctx.organizationId, role: 'owner' }
     });
     if (owners <= 1) {
       throw ScimError(
         400,
         'invalidValue',
-        `Refusing to ${action} the organization's last owner; promote another owner first`,
+        `Refusing to ${action} the organization's last owner; promote another owner first`
       );
     }
   }
@@ -311,13 +313,13 @@ export class ScimService implements OnModuleInit {
   private async findViewById(id: string, ctx: Ctx): Promise<ScimMemberView | null> {
     const member = await this.prisma.organizationMember.findFirst({
       where: { id, organizationId: ctx.organizationId },
-      include: { user: true },
+      include: { user: true }
     });
     if (member) return this.viewFromMember(member);
 
     const tombstone = await this.prisma.scimDeprovisionedMember.findFirst({
       where: { id, organizationId: ctx.organizationId },
-      include: { user: true },
+      include: { user: true }
     });
     return tombstone ? this.viewFromTombstone(tombstone) : null;
   }
@@ -335,13 +337,13 @@ export class ScimService implements OnModuleInit {
       this.prisma.organizationMember.findMany({
         where: { organizationId: ctx.organizationId },
         include: { user: true },
-        orderBy: { addedAt: 'asc' },
+        orderBy: { addedAt: 'asc' }
       }),
       this.prisma.scimDeprovisionedMember.findMany({
         where: { organizationId: ctx.organizationId },
         include: { user: true },
-        orderBy: { deactivatedAt: 'asc' },
-      }),
+        orderBy: { deactivatedAt: 'asc' }
+      })
     ]);
 
     // A live membership wins over a stale tombstone for the same person — that
@@ -350,7 +352,7 @@ export class ScimService implements OnModuleInit {
     const live = new Set(members.map((m) => m.userId));
     const mapped = [
       ...members.map((m) => this.viewFromMember(m)),
-      ...tombstones.filter((t) => !live.has(t.userId)).map((t) => this.viewFromTombstone(t)),
+      ...tombstones.filter((t) => !live.has(t.userId)).map((t) => this.viewFromTombstone(t))
     ].map((v) => this.toScimUser(v));
 
     // SCIMMY applies sort + pagination in the ListResponse, but filtering is the
@@ -359,10 +361,11 @@ export class ScimService implements OnModuleInit {
   }
 
   private async ensureUniqueUsername(base: string): Promise<string> {
-    const seed = (base.split('@')[0] || 'user')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '')
-      .slice(0, 80) || 'user';
+    const seed =
+      (base.split('@')[0] || 'user')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 80) || 'user';
     let candidate = seed;
     for (let i = 0; i < 6; i++) {
       const clash = await this.prisma.user.findUnique({ where: { username: candidate } });
@@ -385,15 +388,15 @@ export class ScimService implements OnModuleInit {
       await tx.organizationMember.delete({ where: { id: view.id } });
       await tx.scimDeprovisionedMember.upsert({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: view.userId },
+          organizationId_userId: { organizationId: ctx.organizationId, userId: view.userId }
         },
         create: {
           id: view.id,
           organizationId: ctx.organizationId,
           userId: view.userId,
-          ...fields,
+          ...fields
         },
-        update: fields,
+        update: fields
       });
     });
 
@@ -402,7 +405,7 @@ export class ScimService implements OnModuleInit {
       organizationId: ctx.organizationId,
       targetType: 'user',
       targetId: view.userId,
-      targetLabel: view.user.email,
+      targetLabel: view.user.email
     });
 
     return { ...view, ...write, active: false, lastModified: new Date() };
@@ -415,9 +418,9 @@ export class ScimService implements OnModuleInit {
     const member = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.organizationMember.findUnique({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: view.userId },
+          organizationId_userId: { organizationId: ctx.organizationId, userId: view.userId }
         },
-        include: { user: true },
+        include: { user: true }
       });
       await tx.scimDeprovisionedMember.delete({ where: { id: view.id } });
       if (existing) return existing;
@@ -433,9 +436,9 @@ export class ScimService implements OnModuleInit {
           scimEnterprise: write.enterprise,
           scimGivenName: write.givenName,
           scimFamilyName: write.familyName,
-          scimDisplayName: write.displayName,
+          scimDisplayName: write.displayName
         },
-        include: { user: true },
+        include: { user: true }
       });
     });
 
@@ -444,7 +447,7 @@ export class ScimService implements OnModuleInit {
       organizationId: ctx.organizationId,
       targetType: 'user',
       targetId: member.userId,
-      targetLabel: member.user.email,
+      targetLabel: member.user.email
     });
 
     return this.viewFromMember(member);
@@ -465,7 +468,7 @@ export class ScimService implements OnModuleInit {
       const write: ScimWrite = {
         externalId: instance.externalId ?? null,
         enterprise: enterpriseFromInstance(instance),
-        ...profileFromInstance(instance, email ?? view.userName),
+        ...profileFromInstance(instance, email ?? view.userName)
       };
       const requestedRole = roleFromInstance(instance, view.role);
 
@@ -484,7 +487,7 @@ export class ScimService implements OnModuleInit {
       if (!view.active && instance.active !== true) {
         await this.prisma.scimDeprovisionedMember.update({
           where: { id: view.id },
-          data: { ...write, role: (requestedRole ?? view.role) as any },
+          data: { ...write, role: (requestedRole ?? view.role) as any }
         });
         return this.toScimUser({ ...view, ...write, role: requestedRole ?? view.role });
       }
@@ -511,9 +514,9 @@ export class ScimService implements OnModuleInit {
           scimGivenName: write.givenName,
           scimFamilyName: write.familyName,
           scimDisplayName: write.displayName,
-          role: role as any,
+          role: role as any
         },
-        include: { user: true },
+        include: { user: true }
       });
 
       if (role !== view.role) {
@@ -522,7 +525,7 @@ export class ScimService implements OnModuleInit {
           organizationId: ctx.organizationId,
           targetType: 'user',
           targetId: target.userId,
-          targetLabel: `${write.userName}: ${view.role} -> ${role}`,
+          targetLabel: `${write.userName}: ${view.role} -> ${role}`
         });
       }
 
@@ -537,7 +540,7 @@ export class ScimService implements OnModuleInit {
     const write: ScimWrite = {
       externalId: instance.externalId ?? null,
       enterprise: enterpriseFromInstance(instance),
-      ...profileFromInstance(instance, email),
+      ...profileFromInstance(instance, email)
     };
     const role = roleFromInstance(instance) ?? DEFAULT_ROLE;
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
@@ -545,8 +548,8 @@ export class ScimService implements OnModuleInit {
     if (existingUser) {
       const member = await this.prisma.organizationMember.findUnique({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id },
-        },
+          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id }
+        }
       });
       // RFC 7644 §3.3: creating a resource that already exists is a conflict,
       // not a silent update. IdPs branch on this to switch to PUT/PATCH.
@@ -558,16 +561,16 @@ export class ScimService implements OnModuleInit {
       // so the SCIM id the IdP already knows keeps working.
       const tombstone = await this.prisma.scimDeprovisionedMember.findUnique({
         where: {
-          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id },
+          organizationId_userId: { organizationId: ctx.organizationId, userId: existingUser.id }
         },
-        include: { user: true },
+        include: { user: true }
       });
       if (tombstone) {
         const revived = await this.reactivate(
           this.viewFromTombstone(tombstone),
           write,
           roleFromInstance(instance, tombstone.role) ?? tombstone.role,
-          ctx,
+          ctx
         );
         return this.toScimUser(revived);
       }
@@ -586,8 +589,8 @@ export class ScimService implements OnModuleInit {
             firstName: write.givenName,
             lastName: write.familyName,
             emailVerified: true,
-            emailVerifiedAt: new Date(),
-          },
+            emailVerifiedAt: new Date()
+          }
         }));
 
       return tx.organizationMember.create({
@@ -601,9 +604,9 @@ export class ScimService implements OnModuleInit {
           scimUserName: write.userName,
           scimGivenName: write.givenName,
           scimFamilyName: write.familyName,
-          scimDisplayName: write.displayName,
+          scimDisplayName: write.displayName
         },
-        include: { user: true },
+        include: { user: true }
       });
     });
 
@@ -612,7 +615,7 @@ export class ScimService implements OnModuleInit {
       organizationId: ctx.organizationId,
       targetType: 'user',
       targetId: result.userId,
-      targetLabel: `${result.user.email} as ${role}`,
+      targetLabel: `${result.user.email} as ${role}`
     });
 
     return this.toScimUser(this.viewFromMember(result));
@@ -633,10 +636,10 @@ export class ScimService implements OnModuleInit {
     // the id stops resolving entirely.
     await this.prisma.$transaction(async (tx) => {
       await tx.organizationMember.deleteMany({
-        where: { id: view.id, organizationId: ctx.organizationId },
+        where: { id: view.id, organizationId: ctx.organizationId }
       });
       await tx.scimDeprovisionedMember.deleteMany({
-        where: { organizationId: ctx.organizationId, userId: view.userId },
+        where: { organizationId: ctx.organizationId, userId: view.userId }
       });
     });
 
@@ -645,7 +648,7 @@ export class ScimService implements OnModuleInit {
       organizationId: ctx.organizationId,
       targetType: 'user',
       targetId: view.userId,
-      targetLabel: view.user.email,
+      targetLabel: view.user.email
     });
   }
 
@@ -654,7 +657,7 @@ export class ScimService implements OnModuleInit {
   private async egressGroups(resource: any, ctx: Ctx) {
     const members = await this.prisma.organizationMember.findMany({
       where: { organizationId: ctx.organizationId },
-      include: { user: true },
+      include: { user: true }
     });
 
     const build = (role: string) => ({
@@ -663,7 +666,7 @@ export class ScimService implements OnModuleInit {
       members: members
         .filter((m) => m.role === role)
         .map((m) => ({ value: m.id, display: m.user.email, type: 'User' })),
-      meta: { resourceType: 'Group' },
+      meta: { resourceType: 'Group' }
     });
 
     if (resource.id) {

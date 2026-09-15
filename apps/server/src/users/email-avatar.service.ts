@@ -33,13 +33,13 @@ const PROVIDERS: Provider[] = [
   // to Gravatar for addresses it does not host.
   {
     id: 'libravatar',
-    url: (h, s) => `https://seccdn.libravatar.org/avatar/${h.md5}?s=${s}&d=404`,
+    url: (h, s) => `https://seccdn.libravatar.org/avatar/${h.md5}?s=${s}&d=404`
   },
   {
     id: 'gravatar',
     // Gravatar moved to SHA-256; MD5 still resolves but is the legacy path.
-    url: (h, s) => `https://gravatar.com/avatar/${h.sha256}?s=${s}&d=404`,
-  },
+    url: (h, s) => `https://gravatar.com/avatar/${h.sha256}?s=${s}&d=404`
+  }
 ];
 
 const SIZE = 256;
@@ -47,13 +47,7 @@ const RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_BYTES = 2 * 1024 * 1024;
 // Libravatar serves `image/jpg` where Gravatar serves `image/jpeg`. Omitting
 // the non-standard spelling silently rejected every Libravatar hit.
-const ALLOWED_TYPES = new Set([
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
+const ALLOWED_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
 
 @Injectable()
 export class EmailAvatarService {
@@ -78,7 +72,10 @@ export class EmailAvatarService {
   private providers(): Provider[] {
     const raw = (process.env.EMAIL_AVATAR_PROVIDERS || '').trim();
     if (!raw) return PROVIDERS;
-    const wanted = raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const wanted = raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
     return wanted
       .map((id) => PROVIDERS.find((p) => p.id === id))
       .filter((p): p is Provider => Boolean(p));
@@ -101,7 +98,7 @@ export class EmailAvatarService {
     this.s3Client = new S3Client({
       region: 'auto',
       endpoint,
-      credentials: { accessKeyId, secretAccessKey },
+      credentials: { accessKeyId, secretAccessKey }
     });
   }
 
@@ -110,7 +107,7 @@ export class EmailAvatarService {
     const normalized = email.trim().toLowerCase();
     return {
       sha256: createHash('sha256').update(normalized).digest('hex'),
-      md5: createHash('md5').update(normalized).digest('hex'),
+      md5: createHash('md5').update(normalized).digest('hex')
     };
   }
 
@@ -131,10 +128,7 @@ export class EmailAvatarService {
     if (!this.enabled()) return user.imageUrl;
     // An upload always wins, and 'none' means they explicitly removed one.
     if (user.imageSource === 'upload' || user.imageSource === 'none') return user.imageUrl;
-    if (
-      user.avatarCheckedAt &&
-      Date.now() - user.avatarCheckedAt.getTime() < RECHECK_MS
-    ) {
+    if (user.avatarCheckedAt && Date.now() - user.avatarCheckedAt.getTime() < RECHECK_MS) {
       return user.imageUrl;
     }
 
@@ -143,7 +137,7 @@ export class EmailAvatarService {
 
     const task = this.resolve(user).catch((err) => {
       this.logger.warn(
-        `email avatar lookup failed for ${user.id}: ${err instanceof Error ? err.message : err}`,
+        `email avatar lookup failed for ${user.id}: ${err instanceof Error ? err.message : err}`
       );
       return user.imageUrl;
     });
@@ -180,9 +174,9 @@ export class EmailAvatarService {
       const claimed = await this.prisma.user.updateMany({
         where: {
           id: user.id,
-          OR: [{ imageSource: null }, { imageSource: 'gravatar' }],
+          OR: [{ imageSource: null }, { imageSource: 'gravatar' }]
         },
-        data: { imageUrl: stored, imageSource: 'gravatar', avatarCheckedAt: new Date() },
+        data: { imageUrl: stored, imageSource: 'gravatar', avatarCheckedAt: new Date() }
       });
       if (claimed.count === 0) {
         this.logger.log(`skipped ${provider.id} import for ${user.id}: picture set meanwhile`);
@@ -197,9 +191,9 @@ export class EmailAvatarService {
     await this.prisma.user.updateMany({
       where: {
         id: user.id,
-        OR: [{ imageSource: null }, { imageSource: 'gravatar' }],
+        OR: [{ imageSource: null }, { imageSource: 'gravatar' }]
       },
-      data: { avatarCheckedAt: new Date() },
+      data: { avatarCheckedAt: new Date() }
     });
     return user.imageUrl;
   }
@@ -207,14 +201,14 @@ export class EmailAvatarService {
   /** `d=404` is the documented way to ask "is one actually set?" — no placeholder. */
   private async fetchFrom(
     provider: Provider,
-    hashes: Hashes,
+    hashes: Hashes
   ): Promise<{ body: Buffer; contentType: string } | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
       const res = await fetch(provider.url(hashes, SIZE), {
         signal: controller.signal,
-        redirect: 'follow',
+        redirect: 'follow'
       });
       if (!res.ok) return null;
 
@@ -236,7 +230,7 @@ export class EmailAvatarService {
 
   private async store(
     hash: string,
-    found: { body: Buffer; contentType: string },
+    found: { body: Buffer; contentType: string }
   ): Promise<string | null> {
     this.initS3();
     if (!this.s3Client || !this.bucketName) {
@@ -253,8 +247,8 @@ export class EmailAvatarService {
         Key: key,
         Body: found.body,
         ContentType: found.contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
-      }),
+        CacheControl: 'public, max-age=31536000, immutable'
+      })
     );
     return `${this.publicUrl}/${key}`;
   }

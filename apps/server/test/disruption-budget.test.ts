@@ -4,7 +4,7 @@ import {
   disruptionBudgetActive,
   disruptionBudgetManifest,
   normalizeMinAvailable,
-  readMinAvailable,
+  readMinAvailable
 } from '../src/kubernetes/disruption-budget';
 
 test('a budget that covers every replica is never written', () => {

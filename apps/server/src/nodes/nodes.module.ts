@@ -11,6 +11,6 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
   imports: [PrismaModule, AuthModule, KubernetesModule],
   controllers: [NodesController, NodePoolsController, UserNodePoolsController],
   providers: [NodesService, NodePoolsService],
-  exports: [NodesService, NodePoolsService],
+  exports: [NodesService, NodePoolsService]
 })
 export class NodesModule {}

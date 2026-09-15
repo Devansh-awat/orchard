@@ -9,4 +9,3 @@ import { PrismaModule } from '../prisma/prisma.module';
   exports: [UsersService, EmailAvatarService]
 })
 export class UsersModule {}
-

@@ -33,7 +33,7 @@ export class ApplyExecutorService {
     this.kubernetes.ensureKubeConfig();
     const api = k8s.KubernetesObjectApi.makeApiClient(this.kubernetes.kc!);
     await api.patch(manifest, undefined, undefined, 'orchard', true, {
-      headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML },
+      headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML }
     });
   }
 
@@ -50,7 +50,7 @@ export class ApplyExecutorService {
       await handler(item);
       return { ok: true };
     } catch (error) {
-      const status = (error as { response?: { statusCode?: number }; statusCode?: number });
+      const status = error as { response?: { statusCode?: number }; statusCode?: number };
       const code = status.response?.statusCode ?? status.statusCode;
       const message =
         (error as { response?: { body?: { message?: string } } }).response?.body?.message ??

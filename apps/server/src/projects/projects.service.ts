@@ -1,4 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  InternalServerErrorException,
+  Inject,
+  forwardRef
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -21,7 +29,12 @@ import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { DeploymentsService } from './deployments.service';
-import { formatSlug, redactDatabaseForViewer, scrubIngress, stripR2ProxyCreds } from './projects.utils';
+import {
+  formatSlug,
+  redactDatabaseForViewer,
+  scrubIngress,
+  stripR2ProxyCreds
+} from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 
@@ -52,20 +65,20 @@ export class ProjectsService {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => DeploymentsService))
     private readonly deployments: DeploymentsService,
-    private readonly environments: EnvironmentsService,
+    private readonly environments: EnvironmentsService
   ) {}
 
   private scrubMembersForViewer<
     M extends {
       user?: { email?: string | null } | null;
       adder?: { email?: string | null } | null;
-    },
+    }
   >(members: M[] | null | undefined): M[] {
     if (!members) return [] as M[];
     return members.map((m) => ({
       ...m,
       user: m.user ? { ...m.user, email: null } : m.user,
-      adder: m.adder ? { ...m.adder, email: null } : m.adder,
+      adder: m.adder ? { ...m.adder, email: null } : m.adder
     }));
   }
 
@@ -81,7 +94,7 @@ export class ProjectsService {
    * decides its own fallback (Folder icon) when `project.icon` is null.
    */
   private async resolveProjectIconFallback(
-    _deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined,
+    _deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined
   ): Promise<string | null> {
     return null;
   }
@@ -93,7 +106,7 @@ export class ProjectsService {
    * always wins and clearing it reverts to the auto one.
    */
   private async resolveProjectBannerFallback(
-    deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined,
+    deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined
   ): Promise<string | null> {
     try {
       const hosts = (deployments ?? [])
@@ -114,16 +127,24 @@ export class ProjectsService {
   // plane components in different clusters, etc). This list mirrors the
   // platform-owned namespaces; analogous to RESERVED_HOSTS for ingress.
   private static readonly RESERVED_NAMESPACES = new Set<string>([
-    'kube-system', 'kube-public', 'kube-node-lease', 'default',
-    'orchard', 'orchard-builders', 'orchard-r2-proxy',
-    'harbor', 'postgresql', 'network', 'longhorn-system',
-    'flux-system', 'monitoring', 'cert-manager',
+    'kube-system',
+    'kube-public',
+    'kube-node-lease',
+    'default',
+    'orchard',
+    'orchard-builders',
+    'orchard-r2-proxy',
+    'harbor',
+    'postgresql',
+    'network',
+    'longhorn-system',
+    'flux-system',
+    'monitoring',
+    'cert-manager'
   ]);
 
   private buildNamespace(parts: string[]) {
-    const sanitized = parts
-      .map((part) => formatSlug(part))
-      .filter((part) => part.length > 0);
+    const sanitized = parts.map((part) => formatSlug(part)).filter((part) => part.length > 0);
 
     const namespace = sanitized.join('-').substring(0, 63);
 
@@ -140,7 +161,14 @@ export class ProjectsService {
 
   async createProject(
     organizationId: string,
-    data: { name: string; slug?: string; description?: string; repositoryUrl?: string; icon?: string; backgroundImage?: string },
+    data: {
+      name: string;
+      slug?: string;
+      description?: string;
+      repositoryUrl?: string;
+      icon?: string;
+      backgroundImage?: string;
+    },
     clerkId: string,
     userData?: {
       email?: string;
@@ -157,7 +185,7 @@ export class ProjectsService {
     }
 
     const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
+      where: { id: organizationId }
     });
 
     if (!organization) {
@@ -188,7 +216,7 @@ export class ProjectsService {
 
     while (true) {
       const slugInUse = await this.prisma.project.findUnique({
-        where: { organizationId_slug: { organizationId, slug } },
+        where: { organizationId_slug: { organizationId, slug } }
       });
       const namespaceInUse = slugInUse
         ? null
@@ -214,7 +242,7 @@ export class ProjectsService {
 
     if (!adminRole) {
       throw new InternalServerErrorException(
-        'The "admin" project role is missing; the database has not been fully migrated',
+        'The "admin" project role is missing; the database has not been fully migrated'
       );
     }
 
@@ -240,9 +268,9 @@ export class ProjectsService {
           create: {
             userId: user.id,
             roleId: adminRole.id,
-            addedBy: user.id,
-          },
-        },
+            addedBy: user.id
+          }
+        }
       },
       include: {
         organization: true,
@@ -252,15 +280,15 @@ export class ProjectsService {
             email: true,
             username: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         _count: {
           select: {
-            deployments: true,
-          },
-        },
-      },
+            deployments: true
+          }
+        }
+      }
     });
 
     // Create the default production environment. It reuses the namespace we
@@ -284,7 +312,7 @@ export class ProjectsService {
       targetType: 'project',
       targetId: project.id,
       targetLabel: project.name,
-      metadata: { slug: project.slug, namespace: project.namespace },
+      metadata: { slug: project.slug, namespace: project.namespace }
     });
 
     return project;
@@ -293,11 +321,11 @@ export class ProjectsService {
   async updateDatabaseResources(
     databaseId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
-    userId?: string,
+    userId?: string
   ) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: true },
+      include: { project: true }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -312,34 +340,35 @@ export class ProjectsService {
 
     if (database.importBoosted) {
       throw new BadRequestException(
-        'Resources cannot be changed while the initial import is running. Try again once provisioning completes.',
+        'Resources cannot be changed while the initial import is running. Try again once provisioning completes.'
       );
     }
 
-    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
-      cpuRequestMilli: data.cpuRequestMilli,
-      memoryRequestBytes: data.memoryRequestBytes,
-    }, 'postgres');
+    const resolved = await this.quotasService.resolvePodResources(
+      database.projectId,
+      {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes
+      },
+      'postgres'
+    );
     // The new size applies to every instance in the cluster, not just the primary.
     const instances = Math.max(1, database.replicas ?? 1);
     const requested = {
       cpuMilli: resolved.cpuMilli * instances,
-      memoryBytes: resolved.memoryBytes * instances,
+      memoryBytes: resolved.memoryBytes * instances
     };
-    await this.quotasService.enforceOrgCapForNewPod(
-      database.project.organizationId,
-      requested,
-    );
+    await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, requested);
     await this.quotasService.enforceMemberAllowanceForNewPod(
       database.project.organizationId,
       database.project.ownerId,
-      requested,
+      requested
     );
 
     await this.k8sCnpg.updateCnpgClusterResources(
       database.namespace,
       database.clusterName,
-      resolved,
+      resolved
     );
 
     // Re-derive everything the user hasn't taken ownership of. Anything present
@@ -349,38 +378,36 @@ export class ProjectsService {
       memoryLimitBytes: resolved.memoryBytes,
       overrides: {
         sharedBuffers: (database.pgParameters as Record<string, string> | null)?.shared_buffers,
-        backupCompression: database.backupCompression,
-      },
+        backupCompression: database.backupCompression
+      }
     });
-    await this.k8sCnpg.applyCnpgDerivedTuning(
-      database.namespace,
-      database.clusterName,
-      tuning,
-    ).catch((e: any) => {
-      // The resource change already landed; failing to retune is worth a log,
-      // not an error the user has to retry the whole resize for.
-      console.warn(`[DB/tuning] Failed to retune ${database.clusterName}: ${e?.message ?? e}`);
-    });
+    await this.k8sCnpg
+      .applyCnpgDerivedTuning(database.namespace, database.clusterName, tuning)
+      .catch((e: any) => {
+        // The resource change already landed; failing to retune is worth a log,
+        // not an error the user has to retry the whole resize for.
+        console.warn(`[DB/tuning] Failed to retune ${database.clusterName}: ${e?.message ?? e}`);
+      });
 
     const updated = await this.prisma.database.update({
       where: { id: databaseId },
       data: {
         cpuRequestMilli: data.cpuRequestMilli,
-        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        memoryRequestBytes:
+          data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         // Pod is being force-recreated by updateCnpgClusterResources — surface this
         // in the UI until the new pod is ready (the getDatabase reconciler flips
         // it back to 'ready' once liveStatus.ready is true).
-        status: 'restarting',
-      },
+        status: 'restarting'
+      }
     });
     return stripR2ProxyCreds(updated);
   }
 
-
   async expandDatabaseStorage(databaseId: string, storageSize: string, userId?: string) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: true },
+      include: { project: true }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -403,12 +430,12 @@ export class ProjectsService {
     const { previousSize, archivingFailure } = await this.k8sCnpg.expandCnpgClusterStorage(
       database.namespace,
       database.clusterName,
-      size,
+      size
     );
 
     await this.prisma.database.update({
       where: { id: databaseId },
-      data: { storageSize: size },
+      data: { storageSize: size }
     });
 
     void this.audit.log({
@@ -419,7 +446,7 @@ export class ProjectsService {
       targetType: 'database',
       targetId: databaseId,
       targetLabel: database.name,
-      metadata: { storageSize: [previousSize, size] },
+      metadata: { storageSize: [previousSize, size] }
     });
 
     return {
@@ -427,7 +454,7 @@ export class ProjectsService {
       storageSize: size,
       warning: archivingFailure
         ? `WAL archiving on this cluster is failing (${archivingFailure}). PostgreSQL cannot recycle WAL segments while archiving fails, so the volume will keep filling and eventually run out of space again regardless of size. Fix or disable the backup/archiving configuration to stop WAL accumulation.`
-        : null,
+        : null
     };
   }
 
@@ -450,7 +477,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { organization: true },
+      include: { organization: true }
     });
 
     if (!project) {
@@ -469,18 +496,21 @@ export class ProjectsService {
         projectId,
         user: {
           organizationMembers: {
-            some: { organizationId: project.organizationId, role: 'guest' },
-          },
-        },
+            some: { organizationId: project.organizationId, role: 'guest' }
+          }
+        }
       },
-      select: { userId: true },
+      select: { userId: true }
     });
 
     // Clean up Tailscale sidecars before deleting the namespace
     try {
       await this.tailscaleService.cleanupNamespace(project.namespace);
     } catch (error) {
-      console.error(`[Projects] Failed to clean up Tailscale for namespace ${project.namespace}:`, error);
+      console.error(
+        `[Projects] Failed to clean up Tailscale for namespace ${project.namespace}:`,
+        error
+      );
     }
 
     await this.k8sNamespace.deleteNamespace(project.namespace);
@@ -495,15 +525,15 @@ export class ProjectsService {
 
       for (const g of guestsOnProject) {
         const remaining = await tx.projectMember.count({
-          where: { userId: g.userId, project: { organizationId: project.organizationId } },
+          where: { userId: g.userId, project: { organizationId: project.organizationId } }
         });
         if (remaining === 0) {
           const res = await tx.organizationMember.deleteMany({
             where: {
               organizationId: project.organizationId,
               userId: g.userId,
-              role: 'guest',
-            },
+              role: 'guest'
+            }
           });
           if (res.count > 0) droppedGuests.push(g.userId);
         }
@@ -523,8 +553,8 @@ export class ProjectsService {
       await this.prisma.apiToken.deleteMany({
         where: {
           userId: { in: droppedGuests },
-          restrictedProjectIds: { has: projectId },
-        },
+          restrictedProjectIds: { has: projectId }
+        }
       });
     }
 
@@ -536,13 +566,13 @@ export class ProjectsService {
       targetType: 'project',
       targetId: projectId,
       targetLabel: project.name,
-      metadata: { slug: project.slug, namespace: project.namespace },
+      metadata: { slug: project.slug, namespace: project.namespace }
     });
 
     return {
       success: true,
       projectId,
-      namespace: project.namespace,
+      namespace: project.namespace
     };
   }
 
@@ -579,9 +609,16 @@ export class ProjectsService {
           include: {
             role: true,
             user: {
-              select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
-            },
-          },
+              select: {
+                id: true,
+                email: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true
+              }
+            }
+          }
         },
         creator: {
           select: {
@@ -589,37 +626,37 @@ export class ProjectsService {
             email: true,
             username: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         deployments: {
           include: {
             services: {
               include: {
-                ports: true,
-              },
+                ports: true
+              }
             },
             ingresses: {
               include: {
-                service: true,
-              },
+                service: true
+              }
             },
             envVars: true,
             _count: {
               select: {
                 pods: true,
-                services: true,
-              },
-            },
-          },
+                services: true
+              }
+            }
+          }
         },
         ingresses: {
           select: {
             id: true,
             name: true,
             host: true,
-            tlsSecretName: true,
-          },
+            tlsSecretName: true
+          }
         },
         databases: {
           select: {
@@ -628,8 +665,8 @@ export class ProjectsService {
             dbName: true,
             status: true,
             mode: true,
-            createdAt: true,
-          },
+            createdAt: true
+          }
         },
         templateInstances: {
           select: {
@@ -643,20 +680,20 @@ export class ProjectsService {
                 name: true,
                 displayName: true,
                 icon: true,
-                category: true,
-              },
+                category: true
+              }
             },
             _count: {
               select: {
                 deployments: true,
                 databases: true,
-                ingresses: true,
-              },
-            },
+                ingresses: true
+              }
+            }
           },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
     });
 
     if (!project) {
@@ -664,7 +701,9 @@ export class ProjectsService {
     }
 
     const { access } = await this.access.assertProjectAccess(
-      project.id, user.id, project.organizationId,
+      project.id,
+      user.id,
+      project.organizationId
     );
 
     // Compute status for each deployment
@@ -675,7 +714,7 @@ export class ProjectsService {
         const merged = DeploymentsService.redactSecretEnv({
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
-          status: computedStatus,
+          status: computedStatus
         });
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged);
       })
@@ -684,7 +723,10 @@ export class ProjectsService {
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const backgroundImage =
       project.backgroundImage ?? (await this.resolveProjectBannerFallback(project.deployments));
-    const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
+    const membersWithOrgRole = await this.attachOrgRoleToMembers(
+      project.organizationId,
+      project.members
+    );
     const safeMembers = access.canEdit
       ? membersWithOrgRole
       : this.scrubMembersForViewer(membersWithOrgRole as any);
@@ -697,7 +739,7 @@ export class ProjectsService {
       deployments: deploymentsWithComputedStatus,
       pendingTransfer: await this.getPendingProjectTransfer(project.id, {
         canEdit: access.canEdit,
-        userId: user.id,
+        userId: user.id
       }),
       currentUserRole: {
         orgRole: access.orgRole,
@@ -707,8 +749,12 @@ export class ProjectsService {
         canEdit: access.canEdit,
         canManageMembers: access.canManageMembers,
         canDelete: access.canDelete,
-        canTransferOwnership: this.authz.canTransferProjectOwnership(access, project.ownerId, user.id),
-      },
+        canTransferOwnership: this.authz.canTransferProjectOwnership(
+          access,
+          project.ownerId,
+          user.id
+        )
+      }
     };
   }
 
@@ -719,13 +765,13 @@ export class ProjectsService {
    */
   private async attachOrgRoleToMembers<M extends { user: { id: string } }>(
     organizationId: string,
-    members: M[],
+    members: M[]
   ): Promise<(M & { orgRole: string | null })[]> {
     if (members.length === 0) return [] as (M & { orgRole: string | null })[];
     const userIds = members.map((m) => m.user.id);
     const orgMembers = await this.prisma.organizationMember.findMany({
       where: { organizationId, userId: { in: userIds } },
-      select: { userId: true, role: true },
+      select: { userId: true, role: true }
     });
     const byUserId = new Map(orgMembers.map((om) => [om.userId, om.role]));
     return members.map((m) => ({ ...m, orgRole: byUserId.get(m.user.id) ?? null }));
@@ -733,9 +779,21 @@ export class ProjectsService {
 
   async updateProject(
     projectId: string,
-    data: { name?: string; description?: string; repositoryUrl?: string | null; icon?: string | null; backgroundImage?: string | null },
+    data: {
+      name?: string;
+      description?: string;
+      repositoryUrl?: string | null;
+      icon?: string | null;
+      backgroundImage?: string | null;
+    },
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -767,11 +825,11 @@ export class ProjectsService {
 
     const before = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { name: true, description: true, repositoryUrl: true, organizationId: true },
+      select: { name: true, description: true, repositoryUrl: true, organizationId: true }
     });
     const updated = await this.prisma.project.update({
       where: { id: projectId },
-      data: updates,
+      data: updates
     });
 
     const meta = this.audit.diff(before as any, updates, ['name', 'description', 'repositoryUrl']);
@@ -785,7 +843,7 @@ export class ProjectsService {
         targetType: 'project',
         targetId: projectId,
         targetLabel: updated.name,
-        metadata: meta,
+        metadata: meta
       });
     }
 
@@ -796,9 +854,18 @@ export class ProjectsService {
     projectId: string,
     field: 'icon' | 'backgroundImage',
     file: Express.Multer.File,
-    storageService: { uploadFile: (f: Express.Multer.File, folder: string) => Promise<string>; deleteFile: (url: string) => Promise<void> },
+    storageService: {
+      uploadFile: (f: Express.Multer.File, folder: string) => Promise<string>;
+      deleteFile: (url: string) => Promise<void>;
+    },
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string },
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -812,13 +879,16 @@ export class ProjectsService {
 
     const previous = existing[field];
     if (previous) {
-      try { await storageService.deleteFile(previous); }
-      catch (e) { console.error(`Failed to delete old ${field}:`, e); }
+      try {
+        await storageService.deleteFile(previous);
+      } catch (e) {
+        console.error(`Failed to delete old ${field}:`, e);
+      }
     }
 
     return this.prisma.project.update({
       where: { id: projectId },
-      data: { [field]: url },
+      data: { [field]: url }
     });
   }
 
@@ -827,7 +897,13 @@ export class ProjectsService {
     email: string,
     roleName: string,
     addedByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const adder = await this.usersService.findOrCreateByClerkId(addedByClerkId, userData);
     if (!adder) throw new NotFoundException('User adding member not found');
@@ -842,7 +918,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { organizationId: true, name: true },
+      select: { organizationId: true, name: true }
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -859,13 +935,13 @@ export class ProjectsService {
         projectRoleId: role.id,
         projectRoleName: role.name,
         email: normalizedEmail,
-        inviter: adder,
+        inviter: adder
       });
       return { invited: true, invitation };
     }
 
     const existing = await this.prisma.projectMember.findFirst({
-      where: { projectId, userId: user.id },
+      where: { projectId, userId: user.id }
     });
     if (existing) throw new BadRequestException('User is already a member of this project');
 
@@ -875,7 +951,7 @@ export class ProjectsService {
     // Existing members/admins/owners keep their current role — we never
     // downgrade.
     const existingOrgMember = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } },
+      where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } }
     });
     if (!existingOrgMember) {
       await this.prisma.organizationMember.create({
@@ -883,8 +959,8 @@ export class ProjectsService {
           organizationId: project.organizationId,
           userId: user.id,
           role: 'guest',
-          addedBy: adder.id,
-        },
+          addedBy: adder.id
+        }
       });
       this.membershipCache.invalidateInternalUserId(user.id);
     }
@@ -894,14 +970,21 @@ export class ProjectsService {
         projectId,
         userId: user.id,
         roleId: role.id,
-        addedBy: adder.id,
+        addedBy: adder.id
       },
       include: {
         role: true,
         user: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
-        },
-      },
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true
+          }
+        }
+      }
     });
 
     void this.audit.log({
@@ -913,7 +996,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: user.id,
       targetLabel: user.email,
-      metadata: { role: role.name },
+      metadata: { role: role.name }
     });
 
     return created;
@@ -923,7 +1006,13 @@ export class ProjectsService {
     projectId: string,
     invitationId: string,
     revokedByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const revoker = await this.usersService.findOrCreateByClerkId(revokedByClerkId, userData);
     if (!revoker) throw new NotFoundException('User not found');
@@ -932,7 +1021,7 @@ export class ProjectsService {
 
     const invitation = await this.prisma.organizationInvitation.findUnique({
       where: { id: invitationId },
-      select: { id: true, email: true, projectId: true, organizationId: true },
+      select: { id: true, email: true, projectId: true, organizationId: true }
     });
     if (!invitation || invitation.projectId !== projectId) {
       throw new NotFoundException('Invitation not found for this project');
@@ -948,7 +1037,7 @@ export class ProjectsService {
       projectId,
       targetType: 'invitation',
       targetId: invitation.id,
-      targetLabel: invitation.email,
+      targetLabel: invitation.email
     });
 
     return { success: true };
@@ -958,7 +1047,13 @@ export class ProjectsService {
     projectId: string,
     memberId: string,
     removedByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const remover = await this.usersService.findOrCreateByClerkId(removedByClerkId, userData);
     if (!remover) throw new NotFoundException('User removing member not found');
@@ -966,7 +1061,7 @@ export class ProjectsService {
     await this.access.assertProjectAdmin(projectId, remover.id);
 
     const member = await this.prisma.projectMember.findUnique({
-      where: { id: memberId },
+      where: { id: memberId }
     });
     if (!member || member.projectId !== projectId) {
       throw new NotFoundException('Member not found in this project');
@@ -975,7 +1070,7 @@ export class ProjectsService {
     const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
     if (adminRole && member.roleId === adminRole.id) {
       const adminCount = await this.prisma.projectMember.count({
-        where: { projectId, roleId: adminRole.id },
+        where: { projectId, roleId: adminRole.id }
       });
       if (adminCount <= 1) {
         throw new BadRequestException('Cannot remove the last admin of a project');
@@ -984,10 +1079,13 @@ export class ProjectsService {
 
     const memberFull = await this.prisma.projectMember.findUnique({
       where: { id: memberId },
-      include: { user: { select: { id: true, email: true } }, role: { select: { name: true } } },
+      include: { user: { select: { id: true, email: true } }, role: { select: { name: true } } }
     });
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true }
+    });
 
     // Atomically delete the project membership and, if the user is a guest
     // with no remaining project memberships in this org, drop the org
@@ -1001,12 +1099,14 @@ export class ProjectsService {
       if (!project) return;
 
       const orgMember = await tx.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: project.organizationId, userId: member.userId } },
+        where: {
+          organizationId_userId: { organizationId: project.organizationId, userId: member.userId }
+        }
       });
       if (orgMember?.role !== 'guest') return;
 
       const remaining = await tx.projectMember.count({
-        where: { userId: member.userId, project: { organizationId: project.organizationId } },
+        where: { userId: member.userId, project: { organizationId: project.organizationId } }
       });
       if (remaining === 0) {
         await tx.organizationMember.delete({ where: { id: orgMember.id } });
@@ -1030,8 +1130,8 @@ export class ProjectsService {
     await this.prisma.apiToken.deleteMany({
       where: {
         userId: member.userId,
-        restrictedProjectIds: { has: projectId },
-      },
+        restrictedProjectIds: { has: projectId }
+      }
     });
 
     void this.audit.log({
@@ -1043,7 +1143,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: memberFull?.user.id ?? member.userId,
       targetLabel: memberFull?.user.email,
-      metadata: { role: memberFull?.role.name ?? null },
+      metadata: { role: memberFull?.role.name ?? null }
     });
 
     return { success: true, message: 'Member removed from project' };
@@ -1054,7 +1154,13 @@ export class ProjectsService {
     memberId: string,
     roleName: string,
     updatedByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const updater = await this.usersService.findOrCreateByClerkId(updatedByClerkId, userData);
     if (!updater) throw new NotFoundException('User updating role not found');
@@ -1072,30 +1178,43 @@ export class ProjectsService {
     const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
     if (adminRole && member.roleId === adminRole.id && role.id !== adminRole.id) {
       const adminCount = await this.prisma.projectMember.count({
-        where: { projectId, roleId: adminRole.id },
+        where: { projectId, roleId: adminRole.id }
       });
       if (adminCount <= 1) {
         throw new BadRequestException('Cannot demote the last admin of a project');
       }
     }
 
-    const oldRole = await this.prisma.role.findUnique({ where: { id: member.roleId }, select: { name: true } });
+    const oldRole = await this.prisma.role.findUnique({
+      where: { id: member.roleId },
+      select: { name: true }
+    });
     const updated = await this.prisma.projectMember.update({
       where: { id: memberId },
       data: { roleId: role.id },
       include: {
         role: true,
         user: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
-        },
-      },
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true
+          }
+        }
+      }
     });
 
     if (oldRole?.name !== role.name) {
       await this.sessions.revokeUserSessions(member.userId).catch(() => {});
     }
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true }
+    });
     void this.audit.log({
       action: 'project.member.role_changed',
       actorUserId: updater.id,
@@ -1105,7 +1224,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: member.userId,
       targetLabel: updated.user.email,
-      metadata: { role: [oldRole?.name ?? null, role.name] },
+      metadata: { role: [oldRole?.name ?? null, role.name] }
     });
 
     return updated;
@@ -1118,9 +1237,34 @@ export class ProjectsService {
     status: true,
     createdAt: true,
     expiresAt: true,
-    project: { select: { id: true, name: true, slug: true, organization: { select: { id: true, name: true, slug: true } } } },
-    from: { select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true } },
-    to: { select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true } },
+    project: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        organization: { select: { id: true, name: true, slug: true } }
+      }
+    },
+    from: {
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        imageUrl: true
+      }
+    },
+    to: {
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        imageUrl: true
+      }
+    }
   } as const;
 
   /**
@@ -1134,17 +1278,20 @@ export class ProjectsService {
    * hand a read-only member the emails the members list just withheld. The
    * recipient is the exception: the offer is addressed to them.
    */
-  async getPendingProjectTransfer(projectId: string, viewer?: { canEdit: boolean; userId: string }) {
+  async getPendingProjectTransfer(
+    projectId: string,
+    viewer?: { canEdit: boolean; userId: string }
+  ) {
     const transfer = await this.prisma.projectTransferRequest.findFirst({
       where: { projectId, status: 'pending', expiresAt: { gt: new Date() } },
-      select: ProjectsService.TRANSFER_REQUEST_SHAPE,
+      select: ProjectsService.TRANSFER_REQUEST_SHAPE
     });
     if (!transfer || !viewer) return transfer;
     if (viewer.canEdit || transfer.to.id === viewer.userId) return transfer;
     return {
       ...transfer,
       from: { ...transfer.from, email: null },
-      to: { ...transfer.to, email: null },
+      to: { ...transfer.to, email: null }
     };
   }
 
@@ -1167,13 +1314,13 @@ export class ProjectsService {
 
     const user = await this.prisma.user.findUnique({
       where: targetUserId ? { id: targetUserId } : { email: targetEmail! },
-      select: { id: true, email: true, username: true },
+      select: { id: true, email: true, username: true }
     });
     if (!user) throw new NotFoundException('The new owner does not have an Orchard account');
 
     const membership = await this.prisma.projectMember.findFirst({
       where: { projectId, userId: user.id },
-      select: { id: true, roleId: true, role: { select: { name: true } } },
+      select: { id: true, roleId: true, role: { select: { name: true } } }
     });
     if (!membership) throw new BadRequestException(notAMemberMessage);
 
@@ -1190,7 +1337,13 @@ export class ProjectsService {
     projectId: string,
     target: { userId?: string; email?: string },
     requestedByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const actor = await this.usersService.findOrCreateByClerkId(requestedByClerkId, userData);
     if (!actor) throw new NotFoundException('User requesting the transfer not found');
@@ -1199,7 +1352,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, name: true, organizationId: true, ownerId: true },
+      select: { id: true, name: true, organizationId: true, ownerId: true }
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -1234,11 +1387,11 @@ export class ProjectsService {
       .$transaction(async (tx) => {
         await tx.projectTransferRequest.updateMany({
           where: { projectId, status: 'pending', expiresAt: { lte: new Date() } },
-          data: { status: 'canceled', respondedAt: new Date() },
+          data: { status: 'canceled', respondedAt: new Date() }
         });
         return tx.projectTransferRequest.create({
           data: { projectId, fromUserId: actor.id, toUserId: recipient.id, expiresAt },
-          select: ProjectsService.TRANSFER_REQUEST_SHAPE,
+          select: ProjectsService.TRANSFER_REQUEST_SHAPE
         });
       })
       .catch((e) => {
@@ -1260,7 +1413,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: recipient.id,
       targetLabel: recipient.email,
-      metadata: { requestId: created.id, expiresAt: expiresAt.toISOString() },
+      metadata: { requestId: created.id, expiresAt: expiresAt.toISOString() }
     });
 
     return created;
@@ -1269,7 +1422,13 @@ export class ProjectsService {
   async cancelProjectOwnershipTransfer(
     projectId: string,
     canceledByClerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const actor = await this.usersService.findOrCreateByClerkId(canceledByClerkId, userData);
     if (!actor) throw new NotFoundException('User canceling the transfer not found');
@@ -1281,7 +1440,7 @@ export class ProjectsService {
 
     await this.prisma.projectTransferRequest.update({
       where: { id: open.id },
-      data: { status: 'canceled', respondedAt: new Date() },
+      data: { status: 'canceled', respondedAt: new Date() }
     });
 
     void this.audit.log({
@@ -1293,7 +1452,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: open.to.id,
       targetLabel: open.to.email,
-      metadata: { requestId: open.id },
+      metadata: { requestId: open.id }
     });
 
     return { success: true };
@@ -1302,7 +1461,13 @@ export class ProjectsService {
   /** Every live offer addressed to the caller, across every org they're in. */
   async listIncomingProjectTransfers(
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -1310,7 +1475,7 @@ export class ProjectsService {
     return this.prisma.projectTransferRequest.findMany({
       where: { toUserId: user.id, status: 'pending', expiresAt: { gt: new Date() } },
       select: ProjectsService.TRANSFER_REQUEST_SHAPE,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -1324,7 +1489,7 @@ export class ProjectsService {
   private async loadTransferForRecipient(requestId: string, userId: string) {
     const request = await this.prisma.projectTransferRequest.findUnique({
       where: { id: requestId },
-      select: { ...ProjectsService.TRANSFER_REQUEST_SHAPE, toUserId: true, fromUserId: true },
+      select: { ...ProjectsService.TRANSFER_REQUEST_SHAPE, toUserId: true, fromUserId: true }
     });
     // Same 404 for "not yours" as for "doesn't exist" — a request id must not
     // be an oracle for the existence of somebody else's project transfer.
@@ -1343,7 +1508,13 @@ export class ProjectsService {
   async acceptProjectTransfer(
     requestId: string,
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -1360,7 +1531,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, organizationId: true, ownerId: true },
+      select: { id: true, organizationId: true, ownerId: true }
     });
     if (!project) throw new NotFoundException('Project not found');
     if (project.ownerId === user.id) {
@@ -1389,18 +1560,21 @@ export class ProjectsService {
     const previousOwner = project.ownerId
       ? await this.prisma.user.findUnique({
           where: { id: project.ownerId },
-          select: { id: true, email: true, username: true },
+          select: { id: true, email: true, username: true }
         })
       : null;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.project.update({ where: { id: projectId }, data: { ownerId: user.id } });
       if (promoted) {
-        await tx.projectMember.update({ where: { id: membership.id }, data: { roleId: adminRole.id } });
+        await tx.projectMember.update({
+          where: { id: membership.id },
+          data: { roleId: adminRole.id }
+        });
       }
       await tx.projectTransferRequest.update({
         where: { id: request.id },
-        data: { status: 'accepted', respondedAt: new Date() },
+        data: { status: 'accepted', respondedAt: new Date() }
       });
     });
 
@@ -1420,8 +1594,8 @@ export class ProjectsService {
       metadata: {
         requestId: request.id,
         owner: [previousOwner?.email ?? null, user.email],
-        requestedBy: request.from.email,
-      },
+        requestedBy: request.from.email
+      }
     });
 
     return {
@@ -1431,14 +1605,20 @@ export class ProjectsService {
         ? { id: previousOwner.id, username: previousOwner.username, email: previousOwner.email }
         : null,
       owner: { id: user.id, username: user.username, email: user.email },
-      promotedToAdmin: promoted,
+      promotedToAdmin: promoted
     };
   }
 
   async declineProjectTransfer(
     requestId: string,
     clerkId: string,
-    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -1447,7 +1627,7 @@ export class ProjectsService {
 
     await this.prisma.projectTransferRequest.update({
       where: { id: request.id },
-      data: { status: 'declined', respondedAt: new Date() },
+      data: { status: 'declined', respondedAt: new Date() }
     });
 
     void this.audit.log({
@@ -1459,7 +1639,7 @@ export class ProjectsService {
       targetType: 'user',
       targetId: request.from.id,
       targetLabel: request.from.email,
-      metadata: { requestId: request.id },
+      metadata: { requestId: request.id }
     });
 
     return { success: true };
@@ -1476,7 +1656,7 @@ export class ProjectsService {
     }
     const proj = await this.prisma.project.findUnique({
       where: { organizationId_slug: { organizationId, slug } },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true }
     });
     if (!proj) {
       throw new NotFoundException(`Project with slug ${slug} not found`);
@@ -1486,8 +1666,8 @@ export class ProjectsService {
       where: {
         organizationId_slug: {
           organizationId,
-          slug,
-        },
+          slug
+        }
       },
       include: {
         organization: true,
@@ -1497,37 +1677,37 @@ export class ProjectsService {
             email: true,
             username: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         deployments: {
           include: {
             services: {
               include: {
-                ports: true,
-              },
+                ports: true
+              }
             },
             ingresses: {
               include: {
-                service: true,
-              },
+                service: true
+              }
             },
             _count: {
               select: {
                 pods: true,
-                services: true,
-              },
-            },
-          },
+                services: true
+              }
+            }
+          }
         },
         ingresses: {
           select: {
             id: true,
             name: true,
-            host: true,
-          },
-        },
-      },
+            host: true
+          }
+        }
+      }
     });
 
     if (!project) {
@@ -1542,7 +1722,7 @@ export class ProjectsService {
         return {
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
-          status: computedStatus,
+          status: computedStatus
         };
       })
     );
@@ -1555,7 +1735,7 @@ export class ProjectsService {
       ...project,
       icon,
       backgroundImage,
-      deployments: deploymentsWithComputedStatus,
+      deployments: deploymentsWithComputedStatus
     };
   }
 
@@ -1578,7 +1758,7 @@ export class ProjectsService {
 
     const organization = await this.prisma.organization.findUnique({
       where: { slug: orgSlug },
-      select: { id: true, slug: true, name: true },
+      select: { id: true, slug: true, name: true }
     });
     if (!organization) {
       throw new NotFoundException('Project not found');
@@ -1588,8 +1768,8 @@ export class ProjectsService {
       where: {
         organizationId_slug: {
           organizationId: organization.id,
-          slug: projectSlug,
-        },
+          slug: projectSlug
+        }
       },
       include: {
         organization: true,
@@ -1598,12 +1778,19 @@ export class ProjectsService {
           include: {
             role: true,
             user: {
-              select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
-            },
-          },
+              select: {
+                id: true,
+                email: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true
+              }
+            }
+          }
         },
         creator: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+          select: { id: true, email: true, username: true, firstName: true, lastName: true }
         },
         deployments: {
           select: {
@@ -1623,7 +1810,7 @@ export class ProjectsService {
             updatedAt: true,
             createdAt: true,
             creator: {
-              select: { id: true, username: true, firstName: true, lastName: true, imageUrl: true },
+              select: { id: true, username: true, firstName: true, lastName: true, imageUrl: true }
             },
             imageHistory: {
               where: { isActive: true },
@@ -1635,18 +1822,24 @@ export class ProjectsService {
                 commitAuthorName: true,
                 commitAuthorUsername: true,
                 triggeredBy: {
-                  select: { id: true, username: true, firstName: true, lastName: true, imageUrl: true },
-                },
-              },
+                  select: {
+                    id: true,
+                    username: true,
+                    firstName: true,
+                    lastName: true,
+                    imageUrl: true
+                  }
+                }
+              }
             },
             services: { include: { ports: true } },
             ingresses: { include: { service: true } },
             // envVars omitted — large per-deployment, only needed on deployment detail.
-            _count: { select: { pods: true, services: true } },
-          },
+            _count: { select: { pods: true, services: true } }
+          }
         },
         ingresses: {
-          select: { id: true, name: true, host: true, tlsSecretName: true },
+          select: { id: true, name: true, host: true, tlsSecretName: true }
         },
         databases: {
           select: {
@@ -1658,8 +1851,8 @@ export class ProjectsService {
             createdAt: true,
             namespace: true,
             clusterName: true,
-            environmentId: true,
-          },
+            environmentId: true
+          }
         },
         templateInstances: {
           select: {
@@ -1668,13 +1861,13 @@ export class ProjectsService {
             status: true,
             createdAt: true,
             template: {
-              select: { id: true, name: true, displayName: true, icon: true, category: true },
+              select: { id: true, name: true, displayName: true, icon: true, category: true }
             },
-            _count: { select: { deployments: true, databases: true, ingresses: true } },
+            _count: { select: { deployments: true, databases: true, ingresses: true } }
           },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
     });
 
     if (!project) {
@@ -1684,7 +1877,9 @@ export class ProjectsService {
     let access;
     try {
       ({ access } = await this.access.assertProjectAccess(
-        project.id, user.id, project.organizationId,
+        project.id,
+        user.id,
+        project.organizationId
       ));
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -1706,10 +1901,10 @@ export class ProjectsService {
           name: true,
           status: true,
           restartCount: true,
-          lastTerminationReason: true,
-        },
+          lastTerminationReason: true
+        }
       }),
-      this.prisma.k8sWorkload.findMany({ where: { deploymentId: { in: deploymentIds } } }),
+      this.prisma.k8sWorkload.findMany({ where: { deploymentId: { in: deploymentIds } } })
     ]);
     const podsByDeployment = new Map<string, typeof storedPods>();
     for (const pod of storedPods) {
@@ -1724,7 +1919,7 @@ export class ProjectsService {
         const bucket = podsByDeployment.get(deployment.id) ?? [];
         let computedStatus = await this.deployments.computeDeploymentStatus(deployment, {
           pods: bucket,
-          warnings: this.deployments.synthesizePodWarnings(bucket),
+          warnings: this.deployments.synthesizePodWarnings(bucket)
         });
         if (computedStatus === 'pending' && bucket.length === 0) {
           const workload = workloadByDeployment.get(deployment.id);
@@ -1733,10 +1928,10 @@ export class ProjectsService {
         const merged = {
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
-          status: computedStatus,
+          status: computedStatus
         };
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged as any);
-      }),
+      })
     );
 
     // The cnpg mirror consumer keeps database.status in sync with the watched
@@ -1746,7 +1941,10 @@ export class ProjectsService {
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const backgroundImage =
       project.backgroundImage ?? (await this.resolveProjectBannerFallback(project.deployments));
-    const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
+    const membersWithOrgRole = await this.attachOrgRoleToMembers(
+      project.organizationId,
+      project.members
+    );
     const safeMembers = access.canEdit
       ? membersWithOrgRole
       : this.scrubMembersForViewer(membersWithOrgRole as any);
@@ -1764,9 +1962,9 @@ export class ProjectsService {
             email: true,
             createdAt: true,
             expiresAt: true,
-            projectRole: { select: { name: true } },
+            projectRole: { select: { name: true } }
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'desc' }
         })
       : [];
 
@@ -1780,7 +1978,7 @@ export class ProjectsService {
       databases: safeDatabases,
       pendingTransfer: await this.getPendingProjectTransfer(project.id, {
         canEdit: access.canEdit,
-        userId: user.id,
+        userId: user.id
       }),
       currentUserRole: {
         orgRole: access.orgRole,
@@ -1790,8 +1988,12 @@ export class ProjectsService {
         canEdit: access.canEdit,
         canManageMembers: access.canManageMembers,
         canDelete: access.canDelete,
-        canTransferOwnership: this.authz.canTransferProjectOwnership(access, project.ownerId, user.id),
-      },
+        canTransferOwnership: this.authz.canTransferProjectOwnership(
+          access,
+          project.ownerId,
+          user.id
+        )
+      }
     };
   }
 
@@ -1808,9 +2010,9 @@ export class ProjectsService {
           include: {
             role: true,
             user: {
-              select: { id: true, email: true, firstName: true, lastName: true, imageUrl: true },
-            },
-          },
+              select: { id: true, email: true, firstName: true, lastName: true, imageUrl: true }
+            }
+          }
         },
         deployments: {
           select: {
@@ -1818,14 +2020,14 @@ export class ProjectsService {
             name: true,
             displayName: true,
             status: true,
-            ingresses: { select: { id: true, host: true } },
-          },
+            ingresses: { select: { id: true, host: true } }
+          }
         },
         _count: {
-          select: { deployments: true, databases: true, ingresses: true },
-        },
+          select: { deployments: true, databases: true, ingresses: true }
+        }
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: 'desc' }
     });
 
     if (projects.length === 0) return [];
@@ -1848,7 +2050,7 @@ export class ProjectsService {
       const memberUserId = (await this.membershipCache.resolveUserId(userId)) ?? userId;
       const rows = await this.prisma.projectMember.findMany({
         where: { userId: memberUserId, projectId: { in: projectIds } },
-        select: { projectId: true, role: { select: { name: true } } },
+        select: { projectId: true, role: { select: { name: true } } }
       });
       for (const r of rows) projectMembersByProjectId.set(r.projectId, r.role.name);
     }
@@ -1894,8 +2096,8 @@ export class ProjectsService {
             id: true,
             name: true,
             slug: true,
-            organizationId: true,
-          },
+            organizationId: true
+          }
         },
         // Matches the deployment summary so a person search covers everything
         // they own, not just their apps. No email, same as everywhere else.
@@ -1905,11 +2107,11 @@ export class ProjectsService {
             username: true,
             firstName: true,
             lastName: true,
-            imageUrl: true,
-          },
-        },
+            imageUrl: true
+          }
+        }
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: 'desc' }
     });
   }
 
@@ -1920,13 +2122,13 @@ export class ProjectsService {
   async getOrgOverviewBySlug(userId: string, orgSlug: string) {
     const org = await this.prisma.organization.findUnique({
       where: { slug: orgSlug },
-      select: { id: true, slug: true, name: true },
+      select: { id: true, slug: true, name: true }
     });
     if (!org) throw new NotFoundException('Organization not found');
 
     const [isSuper, memberships] = await Promise.all([
       this.authz.isSuperAdmin(userId),
-      this.membershipCache.getMembershipsForOrg(userId, org.id),
+      this.membershipCache.getMembershipsForOrg(userId, org.id)
     ]);
     if (!isSuper && memberships.length === 0) {
       throw new NotFoundException('Organization not found');
@@ -1942,15 +2144,14 @@ export class ProjectsService {
     const [projects, deployments, databases] = await Promise.all([
       this.listProjects(userId, org.id),
       this.deployments.listDeploymentsSummary(userId, org.id),
-      this.listDatabasesSummary(userId, org.id),
+      this.listDatabasesSummary(userId, org.id)
     ]);
 
     // Resolve favicon URLs in bulk so cards can point straight at R2 instead
     // of issuing one authenticated /deployments/favicon request per card.
     // peekFavicons never blocks on cold domains (background warm + null).
     try {
-      const hostOf = (d: any): string | null =>
-        d?.ingresses?.[0]?.host?.split('/')[0] || null;
+      const hostOf = (d: any): string | null => d?.ingresses?.[0]?.host?.split('/')[0] || null;
       const hosts = deployments.map(hostOf).filter(Boolean) as string[];
       const favicons = await this.faviconService.peekFavicons(hosts);
       for (const d of deployments as any[]) {
@@ -1975,9 +2176,7 @@ export class ProjectsService {
         if (hosts.length) candidateHosts.set(p.id, hosts);
       }
       if (candidateHosts.size > 0) {
-        const banners = await this.faviconService.peekBanners(
-          [...candidateHosts.values()].flat(),
-        );
+        const banners = await this.faviconService.peekBanners([...candidateHosts.values()].flat());
         for (const p of projects as any[]) {
           const hosts = candidateHosts.get(p.id);
           if (!hosts) continue;
@@ -2002,13 +2201,13 @@ export class ProjectsService {
   async getOrgBuildsBySlug(userId: string, orgSlug: string, scope: 'mine' | 'all' = 'mine') {
     const org = await this.prisma.organization.findUnique({
       where: { slug: orgSlug },
-      select: { id: true },
+      select: { id: true }
     });
     if (!org) throw new NotFoundException('Organization not found');
 
     const [isSuper, memberships] = await Promise.all([
       this.authz.isSuperAdmin(userId),
-      this.membershipCache.getMembershipsForOrg(userId, org.id),
+      this.membershipCache.getMembershipsForOrg(userId, org.id)
     ]);
     if (!isSuper && memberships.length === 0) {
       throw new NotFoundException('Organization not found');
@@ -2017,18 +2216,17 @@ export class ProjectsService {
     const builds = await this.deployments.listRecentBuilds(userId, org.id, {
       scope,
       activeLimit: 15,
-      recentLimit: 8,
+      recentLimit: 8
     });
 
     try {
-      const hostOf = (d: any): string | null =>
-        d?.ingresses?.[0]?.host?.split('/')[0] || null;
+      const hostOf = (d: any): string | null => d?.ingresses?.[0]?.host?.split('/')[0] || null;
       const targets: any[] = [
         ...builds.active,
-        ...builds.recent.map((b: any) => b.deployment).filter(Boolean),
+        ...builds.recent.map((b: any) => b.deployment).filter(Boolean)
       ];
       const favicons = await this.faviconService.peekFavicons(
-        targets.map(hostOf).filter(Boolean) as string[],
+        targets.map(hostOf).filter(Boolean) as string[]
       );
       for (const d of targets) {
         const h = hostOf(d);
@@ -2040,5 +2238,4 @@ export class ProjectsService {
 
     return builds;
   }
-
 }

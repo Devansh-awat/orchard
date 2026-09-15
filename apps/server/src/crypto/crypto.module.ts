@@ -13,27 +13,29 @@ class SecretBackfillService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly crypto: SecretCryptoService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   async onModuleInit(): Promise<void> {
     if (!this.crypto.enabled) return;
     try {
       const shared = await this.encryptPlaintext(
-        () => this.prisma.environmentSharedVar.findMany({
-          where: { secret: true },
-          select: { id: true, value: true },
-        }),
-        (id, value) => this.prisma.environmentSharedVar.update({ where: { id }, data: { value } }),
+        () =>
+          this.prisma.environmentSharedVar.findMany({
+            where: { secret: true },
+            select: { id: true, value: true }
+          }),
+        (id, value) => this.prisma.environmentSharedVar.update({ where: { id }, data: { value } })
       );
       if (shared) this.logger.log(`encrypted ${shared} plaintext shared secret var(s) at rest`);
 
       const own = await this.encryptPlaintext(
-        () => this.prisma.deploymentEnvVar.findMany({
-          where: { secret: true },
-          select: { id: true, value: true },
-        }),
-        (id, value) => this.prisma.deploymentEnvVar.update({ where: { id }, data: { value } }),
+        () =>
+          this.prisma.deploymentEnvVar.findMany({
+            where: { secret: true },
+            select: { id: true, value: true }
+          }),
+        (id, value) => this.prisma.deploymentEnvVar.update({ where: { id }, data: { value } })
       );
       if (own) this.logger.log(`encrypted ${own} plaintext deployment secret var(s) at rest`);
     } catch (e: any) {
@@ -43,7 +45,7 @@ class SecretBackfillService implements OnModuleInit {
 
   private async encryptPlaintext(
     read: () => Promise<{ id: string; value: string }[]>,
-    write: (id: string, value: string) => Promise<unknown>,
+    write: (id: string, value: string) => Promise<unknown>
   ): Promise<number> {
     let n = 0;
     for (const row of await read()) {
@@ -58,6 +60,6 @@ class SecretBackfillService implements OnModuleInit {
 @Global()
 @Module({
   providers: [SecretCryptoService, SecretBackfillService],
-  exports: [SecretCryptoService],
+  exports: [SecretCryptoService]
 })
 export class CryptoModule {}

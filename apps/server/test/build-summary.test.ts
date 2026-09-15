@@ -10,10 +10,10 @@ const craftFailure = [
   '#22 7.102 error during build:',
   '#22 7.102 src/routes/+layout.ts (3:9): "PUBLIC_POSTHOG_KEY" is not exported by "virtual:env/static/public"',
   '#22 ERROR: process "pnpm run build" did not complete successfully: exit code: 1',
-  'error: failed to solve: process "pnpm run build" did not complete successfully: exit code: 1',
+  'error: failed to solve: process "pnpm run build" did not complete successfully: exit code: 1'
 ].join('\n');
 
-test('the failing step\'s own output carries the cause, not just the exit code', () => {
+test("the failing step's own output carries the cause, not just the exit code", () => {
   const summary = summarizeBuildFailure(craftFailure);
   assert.match(summary, /PUBLIC_POSTHOG_KEY/);
   assert.match(summary, /error during build:/);
@@ -22,7 +22,7 @@ test('the failing step\'s own output carries the cause, not just the exit code',
 
 test('output from steps that did not fail is left out', () => {
   const summary = summarizeBuildFailure(
-    ['#4 1.0 installing unrelated things', ...craftFailure.split('\n')].join('\n'),
+    ['#4 1.0 installing unrelated things', ...craftFailure.split('\n')].join('\n')
   );
   assert.doesNotMatch(summary, /unrelated things/);
 });
@@ -31,7 +31,7 @@ test('only the tail of a noisy failing step is kept', () => {
   const noisy = [
     ...Array.from({ length: 40 }, (_, i) => `#22 0.${i} noise line ${i}`),
     '#22 9.9 the real cause',
-    '#22 ERROR: process "pnpm run build" did not complete successfully: exit code: 1',
+    '#22 ERROR: process "pnpm run build" did not complete successfully: exit code: 1'
   ].join('\n');
   const summary = summarizeBuildFailure(noisy);
   assert.match(summary, /the real cause/);

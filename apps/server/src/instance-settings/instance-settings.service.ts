@@ -30,7 +30,7 @@ export class InstanceSettingsService {
     await this.prisma.instanceSetting.upsert({
       where: { key },
       create: { key, value },
-      update: { value },
+      update: { value }
     });
   }
 
@@ -53,7 +53,7 @@ export class InstanceSettingsService {
     await this.prisma.instanceSetting.upsert({
       where: { key },
       create: { key, value: str },
-      update: { value: str },
+      update: { value: str }
     });
   }
 
@@ -88,7 +88,7 @@ export class InstanceSettingsService {
   private assertUnlocked(envVar: string): void {
     if (this.envOverride(envVar) === null) return;
     throw new ConflictException(
-      `This is pinned by the ${envVar} environment variable. Unset it to change this here.`,
+      `This is pinned by the ${envVar} environment variable. Unset it to change this here.`
     );
   }
 

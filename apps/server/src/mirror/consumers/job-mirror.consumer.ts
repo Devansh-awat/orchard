@@ -6,13 +6,15 @@ import {
   RunContext,
   LABEL_JOB_ID,
   LABEL_RUN_ID,
-  LABEL_STEP_ORDER,
+  LABEL_STEP_ORDER
 } from '../../jobs/jobs-orchestrator.service';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
-export function jobTerminalOutcome(
-  job: k8s.V1Job,
-): { terminal: boolean; succeeded: boolean; reason: string | null } {
+export function jobTerminalOutcome(job: k8s.V1Job): {
+  terminal: boolean;
+  succeeded: boolean;
+  reason: string | null;
+} {
   const conditions = job.status?.conditions ?? [];
   const complete = conditions.find((c) => c.type === 'Complete' && c.status === 'True');
   if (complete) return { terminal: true, succeeded: true, reason: null };
@@ -29,7 +31,7 @@ export class JobMirrorConsumer {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly orchestrator: JobsOrchestratorService,
+    private readonly orchestrator: JobsOrchestratorService
   ) {}
 
   async mapRefs(job: k8s.V1Job): Promise<MirrorRefs> {
@@ -48,7 +50,7 @@ export class JobMirrorConsumer {
       // derived_version behind its resourceVersion so the next pass retries the
       // run rather than assuming it was recorded.
       this.logger.warn(
-        `processJob(${job.metadata?.namespace}/${job.metadata?.name}) failed: ${(err as Error)?.message ?? err}`,
+        `processJob(${job.metadata?.namespace}/${job.metadata?.name}) failed: ${(err as Error)?.message ?? err}`
       );
       throw err;
     } finally {
@@ -70,7 +72,7 @@ export class JobMirrorConsumer {
     if (!runId) {
       const known = await this.prisma.jobRunStep.findUnique({
         where: { k8sJobUid: uid },
-        select: { id: true },
+        select: { id: true }
       });
       if (!known) {
         await this.orchestrator.materializeCronRun(job);
@@ -88,14 +90,14 @@ export class JobMirrorConsumer {
       mapping.runId,
       mapping.stepOrder,
       { succeeded: outcome.succeeded, reason: outcome.reason },
-      job,
+      job
     );
   }
 
   private async resolveRunStep(
     uid: string,
     labeledRunId: string | null,
-    job: k8s.V1Job,
+    job: k8s.V1Job
   ): Promise<{ ctx: RunContext; runId: string; stepOrder: number } | null> {
     const step = await this.prisma.jobRunStep.findUnique({
       where: { k8sJobUid: uid },
@@ -107,12 +109,12 @@ export class JobMirrorConsumer {
             jobId: true,
             job: {
               select: {
-                project: { select: { id: true, namespace: true, organizationId: true } },
-              },
-            },
-          },
-        },
-      },
+                project: { select: { id: true, namespace: true, organizationId: true } }
+              }
+            }
+          }
+        }
+      }
     });
     if (step) {
       return {
@@ -122,8 +124,8 @@ export class JobMirrorConsumer {
           jobId: step.run.jobId,
           projectId: step.run.job.project.id,
           organizationId: step.run.job.project.organizationId,
-          namespace: step.run.job.project.namespace,
-        },
+          namespace: step.run.job.project.namespace
+        }
       };
     }
 
@@ -138,16 +140,16 @@ export class JobMirrorConsumer {
         jobId: true,
         job: {
           select: {
-            project: { select: { id: true, namespace: true, organizationId: true } },
-          },
-        },
-      },
+            project: { select: { id: true, namespace: true, organizationId: true } }
+          }
+        }
+      }
     });
     if (!run) return null;
     await this.prisma.jobRunStep
       .updateMany({
         where: { runId: run.id, stepOrder, k8sJobUid: null },
-        data: { k8sJobUid: uid, k8sJobName: job.metadata?.name ?? null },
+        data: { k8sJobUid: uid, k8sJobName: job.metadata?.name ?? null }
       })
       .catch(() => {});
     return {
@@ -157,8 +159,8 @@ export class JobMirrorConsumer {
         jobId: run.jobId,
         projectId: run.job.project.id,
         organizationId: run.job.project.organizationId,
-        namespace: run.job.project.namespace,
-      },
+        namespace: run.job.project.namespace
+      }
     };
   }
 
@@ -175,12 +177,12 @@ export class JobMirrorConsumer {
             jobId: true,
             job: {
               select: {
-                project: { select: { id: true, namespace: true, organizationId: true } },
-              },
-            },
-          },
-        },
-      },
+                project: { select: { id: true, namespace: true, organizationId: true } }
+              }
+            }
+          }
+        }
+      }
     });
     if (!step) return;
     if (!['pending', 'running'].includes(step.status)) return;
@@ -190,22 +192,26 @@ export class JobMirrorConsumer {
       jobId: step.run.jobId,
       projectId: step.run.job.project.id,
       organizationId: step.run.job.project.organizationId,
-      namespace: step.run.job.project.namespace,
+      namespace: step.run.job.project.namespace
     };
     await this.prisma.jobRunStep.updateMany({
-      where: { runId: step.runId, stepOrder: step.stepOrder, status: { in: ['pending', 'running'] } },
-      data: { status: 'failed', reason: 'JobDeleted', finishedAt: new Date() },
+      where: {
+        runId: step.runId,
+        stepOrder: step.stepOrder,
+        status: { in: ['pending', 'running'] }
+      },
+      data: { status: 'failed', reason: 'JobDeleted', finishedAt: new Date() }
     });
     await this.prisma.jobRunStep.updateMany({
       where: { runId: step.runId, stepOrder: { gt: step.stepOrder }, status: 'pending' },
-      data: { status: 'skipped' },
+      data: { status: 'skipped' }
     });
     await this.orchestrator.finishRun(
       ctx,
       step.runId,
       'failed',
       'The Kubernetes job was deleted outside Orchard',
-      step.stepOrder,
+      step.stepOrder
     );
   }
 }

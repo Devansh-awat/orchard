@@ -72,8 +72,8 @@ async function mintToken(userId: string): Promise<string> {
       userId,
       expiresAt: new Date(Date.now() + 3600_000),
       ipAddress: '127.0.0.1',
-      userAgent: RUN_TAG,
-    },
+      userAgent: RUN_TAG
+    }
   });
   return new SignJWT({ sub: userId, sessionId: session.id })
     .setProtectedHeader({ alg: 'HS256' })
@@ -94,7 +94,7 @@ before(async () => {
   const [adminRole, memberRole, viewerRole] = await Promise.all([
     prisma.role.upsert({ where: { name: 'admin' }, update: {}, create: { name: 'admin' } }),
     prisma.role.upsert({ where: { name: 'member' }, update: {}, create: { name: 'member' } }),
-    prisma.role.upsert({ where: { name: 'viewer' }, update: {}, create: { name: 'viewer' } }),
+    prisma.role.upsert({ where: { name: 'viewer' }, update: {}, create: { name: 'viewer' } })
   ]);
 
   // Users
@@ -105,8 +105,8 @@ before(async () => {
         email,
         username: `${RUN_TAG}-${label}`,
         firstName: label,
-        lastName: 'Test',
-      },
+        lastName: 'Test'
+      }
     });
     return { id: u.id, email, token: await mintToken(u.id) };
   }
@@ -123,15 +123,15 @@ before(async () => {
     data: {
       name: `${RUN_TAG}-orgA`,
       slug: `${RUN_TAG}-org-a`,
-      createdBy: owner.id,
-    },
+      createdBy: owner.id
+    }
   });
   const orgB = await prisma.organization.create({
     data: {
       name: `${RUN_TAG}-orgB`,
       slug: `${RUN_TAG}-org-b`,
-      createdBy: outsider.id,
-    },
+      createdBy: outsider.id
+    }
   });
 
   // Org memberships
@@ -142,8 +142,8 @@ before(async () => {
       { organizationId: orgA.id, userId: plainMember.id, role: 'member' },
       { organizationId: orgA.id, userId: viewer.id, role: 'member' },
       { organizationId: orgA.id, userId: guest.id, role: 'guest' },
-      { organizationId: orgB.id, userId: outsider.id, role: 'owner' },
-    ],
+      { organizationId: orgB.id, userId: outsider.id, role: 'owner' }
+    ]
   });
 
   // Projects (in orgA)
@@ -153,8 +153,8 @@ before(async () => {
       name: 'Project A',
       slug: 'project-a',
       namespace: `${RUN_TAG}-ns-a`,
-      createdBy: owner.id,
-    },
+      createdBy: owner.id
+    }
   });
   const projectB = await prisma.project.create({
     data: {
@@ -162,8 +162,8 @@ before(async () => {
       name: 'Project B',
       slug: 'project-b',
       namespace: `${RUN_TAG}-ns-b`,
-      createdBy: owner.id,
-    },
+      createdBy: owner.id
+    }
   });
 
   // Project memberships on projectA only. Guest is a project admin to prove
@@ -172,8 +172,8 @@ before(async () => {
     data: [
       { projectId: projectA.id, userId: plainMember.id, roleId: memberRole.id },
       { projectId: projectA.id, userId: viewer.id, roleId: viewerRole.id },
-      { projectId: projectA.id, userId: guest.id, roleId: adminRole.id },
-    ],
+      { projectId: projectA.id, userId: guest.id, roleId: adminRole.id }
+    ]
   });
 
   // A deployment on projectA
@@ -183,26 +183,32 @@ before(async () => {
       name: 'dep-a',
       image: 'nginx:alpine',
       namespace: projectA.namespace,
-      status: 'pending',
-    },
+      status: 'pending'
+    }
   });
 
   fx = {
     orgA: { id: orgA.id, slug: orgA.slug },
     orgB: { id: orgB.id, slug: orgB.slug },
-    owner, admin, plainMember, viewer, outsider,
+    owner,
+    admin,
+    plainMember,
+    viewer,
+    outsider,
     guest,
     projectA: { id: projectA.id, slug: projectA.slug, namespace: projectA.namespace },
     projectB: { id: projectB.id, slug: projectB.slug, namespace: projectB.namespace },
-    deploymentA: { id: deploymentA.id },
+    deploymentA: { id: deploymentA.id }
   };
 
   // Smoke-check the server is up before doing anything else.
   const ping = await fetch(`${SERVER_URL}/${PREFIX}/organizations/user`, {
-    headers: { Authorization: `Bearer ${owner.token}` },
+    headers: { Authorization: `Bearer ${owner.token}` }
   });
   if (!ping.ok && ping.status !== 200) {
-    console.error(`Server at ${SERVER_URL} did not respond OK (status ${ping.status}). Is it running?`);
+    console.error(
+      `Server at ${SERVER_URL} did not respond OK (status ${ping.status}). Is it running?`
+    );
     process.exit(1);
   }
 });
@@ -212,12 +218,27 @@ after(async () => {
   // Cascade should handle most of this but be explicit on the things we touched.
   try {
     await prisma.deployment.deleteMany({ where: { id: fx.deploymentA.id } });
-    await prisma.projectMember.deleteMany({ where: { projectId: { in: [fx.projectA.id, fx.projectB.id] } } });
+    await prisma.projectMember.deleteMany({
+      where: { projectId: { in: [fx.projectA.id, fx.projectB.id] } }
+    });
     await prisma.project.deleteMany({ where: { id: { in: [fx.projectA.id, fx.projectB.id] } } });
-    await prisma.organizationMember.deleteMany({ where: { organizationId: { in: [fx.orgA.id, fx.orgB.id] } } });
+    await prisma.organizationMember.deleteMany({
+      where: { organizationId: { in: [fx.orgA.id, fx.orgB.id] } }
+    });
     await prisma.organization.deleteMany({ where: { id: { in: [fx.orgA.id, fx.orgB.id] } } });
     await prisma.user.deleteMany({
-      where: { id: { in: [fx.owner.id, fx.admin.id, fx.plainMember.id, fx.viewer.id, fx.guest.id, fx.outsider.id] } },
+      where: {
+        id: {
+          in: [
+            fx.owner.id,
+            fx.admin.id,
+            fx.plainMember.id,
+            fx.viewer.id,
+            fx.guest.id,
+            fx.outsider.id
+          ]
+        }
+      }
     });
   } finally {
     await prisma.$disconnect();
@@ -248,7 +269,7 @@ describe('Org-level RBAC', () => {
   test('plain member cannot update org (403)', async () => {
     const res = await req(`/organizations/${fx.orgA.id}`, fx.plainMember.token, {
       method: 'PATCH',
-      body: JSON.stringify({ description: 'hacked' }),
+      body: JSON.stringify({ description: 'hacked' })
     });
     assert.equal(res.status, 403);
   });
@@ -256,7 +277,7 @@ describe('Org-level RBAC', () => {
   test('admin can update org', async () => {
     const res = await req(`/organizations/${fx.orgA.id}`, fx.admin.token, {
       method: 'PATCH',
-      body: JSON.stringify({ description: 'updated by admin' }),
+      body: JSON.stringify({ description: 'updated by admin' })
     });
     assert.equal(res.status, 200);
   });
@@ -309,14 +330,16 @@ describe('Project-level RBAC', () => {
   });
 
   test('viewer cannot delete deployment (403)', async () => {
-    const res = await req(`/deployments/${fx.deploymentA.id}`, fx.viewer.token, { method: 'DELETE' });
+    const res = await req(`/deployments/${fx.deploymentA.id}`, fx.viewer.token, {
+      method: 'DELETE'
+    });
     assert.equal(res.status, 403);
   });
 
   test('viewer cannot scale deployment (403)', async () => {
     const res = await req(`/deployments/${fx.deploymentA.id}/scale`, fx.viewer.token, {
       method: 'POST',
-      body: JSON.stringify({ replicas: 2 }),
+      body: JSON.stringify({ replicas: 2 })
     });
     assert.equal(res.status, 403);
   });
@@ -324,7 +347,7 @@ describe('Project-level RBAC', () => {
   test('viewer cannot update project (403)', async () => {
     const res = await req(`/projects/${fx.projectA.id}`, fx.viewer.token, {
       method: 'PATCH',
-      body: JSON.stringify({ description: 'viewer attempt' }),
+      body: JSON.stringify({ description: 'viewer attempt' })
     });
     assert.equal(res.status, 403);
   });
@@ -332,7 +355,7 @@ describe('Project-level RBAC', () => {
   test('member CAN scale deployment (not 403)', async () => {
     const res = await req(`/deployments/${fx.deploymentA.id}/scale`, fx.plainMember.token, {
       method: 'POST',
-      body: JSON.stringify({ replicas: 1 }),
+      body: JSON.stringify({ replicas: 1 })
     });
     // The action may fail downstream (no real K8s), but auth must not reject.
     assert.notEqual(res.status, 403);
@@ -340,14 +363,16 @@ describe('Project-level RBAC', () => {
   });
 
   test('member cannot delete project (403) — only admin/owner can', async () => {
-    const res = await req(`/projects/${fx.projectA.id}`, fx.plainMember.token, { method: 'DELETE' });
+    const res = await req(`/projects/${fx.projectA.id}`, fx.plainMember.token, {
+      method: 'DELETE'
+    });
     assert.equal(res.status, 403);
   });
 
   test('member cannot add project member (403)', async () => {
     const res = await req(`/projects/${fx.projectA.id}/members`, fx.plainMember.token, {
       method: 'POST',
-      body: JSON.stringify({ email: fx.outsider.id, role: 'member' }),
+      body: JSON.stringify({ email: fx.outsider.id, role: 'member' })
     });
     assert.equal(res.status, 403);
   });
@@ -413,7 +438,7 @@ describe('Guest org members', () => {
   test('guest cannot create a new project (403)', async () => {
     const res = await req(`/projects`, fx.guest.token, {
       method: 'POST',
-      body: JSON.stringify({ organizationId: fx.orgA.id, name: 'guest-attempt' }),
+      body: JSON.stringify({ organizationId: fx.orgA.id, name: 'guest-attempt' })
     });
     assert.equal(res.status, 403);
   });
@@ -421,7 +446,7 @@ describe('Guest org members', () => {
   test('plain member CAN create a new project (not 403/404) — guests are uniquely blocked', async () => {
     const res = await req(`/projects`, fx.plainMember.token, {
       method: 'POST',
-      body: JSON.stringify({ organizationId: fx.orgA.id, name: `${RUN_TAG}-member-spawn` }),
+      body: JSON.stringify({ organizationId: fx.orgA.id, name: `${RUN_TAG}-member-spawn` })
     });
     // Action may succeed (200) or hit a downstream constraint (400, no K8s, etc.) but
     // must not be rejected by auth.
@@ -437,7 +462,7 @@ describe('Guest org members', () => {
   test('org admin cannot invite someone as a guest directly (400)', async () => {
     const res = await req(`/organizations/${fx.orgA.id}/members`, fx.admin.token, {
       method: 'POST',
-      body: JSON.stringify({ email: 'someone@example.test', role: 'guest' }),
+      body: JSON.stringify({ email: 'someone@example.test', role: 'guest' })
     });
     assert.equal(res.status, 400);
   });
@@ -445,7 +470,7 @@ describe('Guest org members', () => {
   test('guest cannot see org settings page data they should not (cannot update org)', async () => {
     const res = await req(`/organizations/${fx.orgA.id}`, fx.guest.token, {
       method: 'PATCH',
-      body: JSON.stringify({ description: 'guest attempt' }),
+      body: JSON.stringify({ description: 'guest attempt' })
     });
     assert.equal(res.status, 403);
   });
@@ -456,20 +481,20 @@ describe('Guest org members', () => {
     const newGuest = await prisma.user.create({
       data: {
         email: newGuestEmail,
-        username: `${RUN_TAG}-fresh-guest`,
-      },
+        username: `${RUN_TAG}-fresh-guest`
+      }
     });
     try {
       // admin invites them to projectA as a member.
       const res = await req(`/projects/${fx.projectA.id}/members`, fx.admin.token, {
         method: 'POST',
-        body: JSON.stringify({ email: newGuestEmail, role: 'member' }),
+        body: JSON.stringify({ email: newGuestEmail, role: 'member' })
       });
       assert.equal(res.status, 201, `expected 201, got ${res.status}`);
 
       // They should now have an OrgMember row with role=guest.
       const orgMembership = await prisma.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: fx.orgA.id, userId: newGuest.id } },
+        where: { organizationId_userId: { organizationId: fx.orgA.id, userId: newGuest.id } }
       });
       assert.ok(orgMembership, 'org membership should have been auto-created');
       assert.equal(orgMembership!.role, 'guest');
@@ -488,10 +513,14 @@ describe('Membership cache invalidation', () => {
 
     // Remove plainMember from orgA via the API (must be admin).
     const membershipRow = await prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: fx.orgA.id, userId: fx.plainMember.id } },
+      where: { organizationId_userId: { organizationId: fx.orgA.id, userId: fx.plainMember.id } }
     });
     assert.ok(membershipRow, 'membership should exist before removal');
-    const del = await req(`/organizations/${fx.orgA.id}/members/${membershipRow!.id}`, fx.admin.token, { method: 'DELETE' });
+    const del = await req(
+      `/organizations/${fx.orgA.id}/members/${membershipRow!.id}`,
+      fx.admin.token,
+      { method: 'DELETE' }
+    );
     assert.equal(del.status, 200, 'admin should be able to remove the member');
 
     // Immediately re-check — the removed member must lose access right away.
@@ -501,12 +530,12 @@ describe('Membership cache invalidation', () => {
     res = await req(`/organizations/${fx.orgA.id}`, fx.plainMember.token);
     assert.ok(
       res.status === 401 || res.status === 404,
-      `removed member must lose access immediately, not after cache TTL (got ${res.status})`,
+      `removed member must lose access immediately, not after cache TTL (got ${res.status})`
     );
 
     // Restore the membership so subsequent tests / teardown remain consistent.
     await prisma.organizationMember.create({
-      data: { organizationId: fx.orgA.id, userId: fx.plainMember.id, role: 'member' },
+      data: { organizationId: fx.orgA.id, userId: fx.plainMember.id, role: 'member' }
     });
   });
 });

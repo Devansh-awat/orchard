@@ -2,7 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { SshIdentity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,14 +29,16 @@ export class SshIdentitiesService {
   async list(userId: string): Promise<SshIdentityDto[]> {
     const rows = await this.prisma.sshIdentity.findMany({
       where: { userId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'asc' }
     });
     return rows.map(toSshIdentityDto);
   }
 
   private validate(name: string, publicKey: string): void {
     if (!name || name.length > 100 || !NAME_RE.test(name)) {
-      throw new BadRequestException('Identity name must be 1-100 characters (letters, numbers, spaces, ._-)');
+      throw new BadRequestException(
+        'Identity name must be 1-100 characters (letters, numbers, spaces, ._-)'
+      );
     }
     const key = publicKey.trim();
     if (!key || key.length > MAX_KEY_LENGTH || !SSH_KEY_RE.test(key) || key.includes('\n')) {
@@ -44,7 +46,10 @@ export class SshIdentitiesService {
     }
   }
 
-  async create(userId: string, body: { name?: string; publicKey?: string }): Promise<SshIdentityDto> {
+  async create(
+    userId: string,
+    body: { name?: string; publicKey?: string }
+  ): Promise<SshIdentityDto> {
     const name = (body.name || '').trim();
     const publicKey = (body.publicKey || '').trim();
     this.validate(name, publicKey);
@@ -62,12 +67,12 @@ export class SshIdentitiesService {
   async remove(id: string, userId: string): Promise<void> {
     const row = await this.prisma.sshIdentity.findUnique({
       where: { id },
-      include: { sandboxes: { select: { name: true } } },
+      include: { sandboxes: { select: { name: true } } }
     });
     if (!row || row.userId !== userId) throw new NotFoundException('SSH identity not found');
     if (row.sandboxes.length) {
       throw new ConflictException(
-        `Identity is attached to sandbox ${row.sandboxes.map((s) => `"${s.name}"`).join(', ')}; detach it first`,
+        `Identity is attached to sandbox ${row.sandboxes.map((s) => `"${s.name}"`).join(', ')}; detach it first`
       );
     }
     await this.prisma.sshIdentity.delete({ where: { id } });
@@ -76,7 +81,7 @@ export class SshIdentitiesService {
   async importFromGithub(userId: string): Promise<SshIdentityDto[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { githubUsername: true },
+      select: { githubUsername: true }
     });
     if (!user?.githubUsername) {
       throw new BadRequestException('No GitHub account is linked to your user');
@@ -86,7 +91,7 @@ export class SshIdentitiesService {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`https://github.com/${user.githubUsername}.keys`, {
-        signal: controller.signal,
+        signal: controller.signal
       });
       clearTimeout(timer);
       if (res.ok) {
@@ -103,7 +108,7 @@ export class SshIdentitiesService {
     }
     const existing = await this.prisma.sshIdentity.findMany({
       where: { userId },
-      select: { name: true, publicKey: true },
+      select: { name: true, publicKey: true }
     });
     const existingKeys = new Set(existing.map((r) => r.publicKey.trim()));
     const existingNames = new Set(existing.map((r) => r.name));
@@ -118,7 +123,7 @@ export class SshIdentitiesService {
       }
       existingNames.add(name);
       const row = await this.prisma.sshIdentity.create({
-        data: { userId, name, publicKey: key },
+        data: { userId, name, publicKey: key }
       });
       created.push(toSshIdentityDto(row));
       n += 1;

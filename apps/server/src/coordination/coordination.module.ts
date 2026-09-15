@@ -6,6 +6,6 @@ import { LeaseService } from './lease.service';
 @Module({
   imports: [KubernetesModule],
   providers: [LeaseService],
-  exports: [LeaseService],
+  exports: [LeaseService]
 })
 export class CoordinationModule {}

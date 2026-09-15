@@ -18,9 +18,11 @@ export interface BuildJobTerminalEvent extends BuildJobObservation {
 const DEPLOYMENT_ID_LABEL = 'orchard.my/deployment-id';
 const FULL_IMAGE_ANNOTATIONS = ['orchard.my/full-image', 'orchard.dev/full-image'];
 
-export function buildJobTerminalOutcome(
-  job: k8s.V1Job,
-): { terminal: boolean; succeeded: boolean; reason: string | null } {
+export function buildJobTerminalOutcome(job: k8s.V1Job): {
+  terminal: boolean;
+  succeeded: boolean;
+  reason: string | null;
+} {
   const conditions = job.status?.conditions ?? [];
   const complete = conditions.find((c) => c.type === 'Complete' && c.status === 'True');
   if (complete) return { terminal: true, succeeded: true, reason: null };
@@ -39,9 +41,10 @@ export function observationFromJob(job: k8s.V1Job): BuildJobObservation {
   else if (job.status?.active) phase = 'running';
   else phase = 'pending';
 
-  const deploymentId = job.metadata?.labels?.[DEPLOYMENT_ID_LABEL]
-    ?? job.metadata?.labels?.['orchard.dev/deployment-id']
-    ?? null;
+  const deploymentId =
+    job.metadata?.labels?.[DEPLOYMENT_ID_LABEL] ??
+    job.metadata?.labels?.['orchard.dev/deployment-id'] ??
+    null;
 
   return { phase, reason: outcome.reason, image, deploymentId, at: Date.now() };
 }
@@ -89,15 +92,18 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     const listFn = () =>
       batchApi.listNamespacedJob(
         this.namespace,
-        undefined, undefined, undefined, undefined,
-        DEPLOYMENT_ID_LABEL,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        DEPLOYMENT_ID_LABEL
       );
 
     this.informer = k8s.makeInformer(
       this.kc,
       `/apis/batch/v1/namespaces/${this.namespace}/jobs`,
       listFn,
-      DEPLOYMENT_ID_LABEL,
+      DEPLOYMENT_ID_LABEL
     );
 
     this.informer.on('add', (job) => this.record(job));
@@ -110,7 +116,7 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     this.informer.on('error', (err) => {
       this.connected = false;
       this.logger.warn(
-        `build job informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`,
+        `build job informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`
       );
       this.scheduleRestart();
     });
@@ -123,7 +129,9 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     if (this.restartTimer) clearTimeout(this.restartTimer);
     try {
       await this.informer?.stop();
-    } catch { /* shutting down */ }
+    } catch {
+      /* shutting down */
+    }
   }
 
   private async start() {
@@ -172,7 +180,7 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
       reason: 'JobDeleted',
       image: known?.image ?? null,
       deploymentId: known?.deploymentId ?? observationFromJob(job).deploymentId,
-      at: Date.now(),
+      at: Date.now()
     };
     this.latest.set(name, observation);
     this.notify(name, observation);
@@ -182,7 +190,9 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     for (const subscriber of this.terminalSubscribers) {
       try {
         subscriber({ ...observation, jobName: name });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     const set = this.waiters.get(name);
@@ -191,7 +201,9 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     for (const resolve of set) {
       try {
         resolve(observation);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 

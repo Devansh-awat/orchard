@@ -46,15 +46,15 @@ the data stays on your hardware.
 
 ## What it does
 
-| | |
-|---|---|
-| **Deploys** | GitHub repos or container images, built on your cluster with logs streaming as they happen |
-| **Routing** | An HTTPS URL per app, custom domains with certificates that renew themselves, and an auth wall if you want one |
-| **Data** | Managed Postgres with backups, extensions, read replicas and a query console |
-| **Jobs** | Cron schedules and multi-step pipelines, with per-step output and exit codes |
-| **Visibility** | Live logs by pod and time range, CPU and memory over time, plus the logs of containers that already died |
-| **Teams** | Organizations, projects, roles, SSO, SCIM provisioning, audit logs and quotas |
-| **Interfaces** | A web dashboard, a Go CLI, and an MCP server so your agent can drive it |
+|                |                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Deploys**    | GitHub repos or container images, built on your cluster with logs streaming as they happen                     |
+| **Routing**    | An HTTPS URL per app, custom domains with certificates that renew themselves, and an auth wall if you want one |
+| **Data**       | Managed Postgres with backups, extensions, read replicas and a query console                                   |
+| **Jobs**       | Cron schedules and multi-step pipelines, with per-step output and exit codes                                   |
+| **Visibility** | Live logs by pod and time range, CPU and memory over time, plus the logs of containers that already died       |
+| **Teams**      | Organizations, projects, roles, SSO, SCIM provisioning, audit logs and quotas                                  |
+| **Interfaces** | A web dashboard, a Go CLI, and an MCP server so your agent can drive it                                        |
 
 ## How to install
 
@@ -242,6 +242,6 @@ an open core with the good parts held back.
 
 <div align="center">
 
-*Made with <3 by a leaf*
+_Made with <3 by a leaf_
 
 </div>

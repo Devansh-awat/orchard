@@ -33,7 +33,7 @@ function buildPolicies(namespace: string) {
   const metricsNamespace = process.env.PLATFORM_METRICS_NAMESPACE || 'orchard-metrics';
   const r2ProxyNamespace = process.env.PLATFORM_R2_PROXY_NAMESPACE || 'orchard-r2-proxy';
   const dbSelector = {
-    matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }],
+    matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }]
   };
   return [
     {
@@ -42,7 +42,7 @@ function buildPolicies(namespace: string) {
       metadata: {
         name: 'orchard-platform-db-control-plane',
         namespace,
-        labels: { 'orchard.my/managed': 'true' },
+        labels: { 'orchard.my/managed': 'true' }
       },
       spec: {
         description:
@@ -53,11 +53,11 @@ function buildPolicies(namespace: string) {
             fromEndpoints: [
               {},
               { matchLabels: { 'io.kubernetes.pod.namespace': metricsNamespace } },
-              { matchLabels: { 'io.kubernetes.pod.namespace': r2ProxyNamespace } },
-            ],
-          },
-        ],
-      },
+              { matchLabels: { 'io.kubernetes.pod.namespace': r2ProxyNamespace } }
+            ]
+          }
+        ]
+      }
     },
     {
       apiVersion: 'cilium.io/v2',
@@ -65,7 +65,7 @@ function buildPolicies(namespace: string) {
       metadata: {
         name: 'orchard-platform-db-operator',
         namespace,
-        labels: { 'orchard.my/managed': 'true' },
+        labels: { 'orchard.my/managed': 'true' }
       },
       spec: {
         description:
@@ -77,15 +77,15 @@ function buildPolicies(namespace: string) {
               {
                 matchLabels: {
                   'io.kubernetes.pod.namespace': operatorNamespace,
-                  'app.kubernetes.io/name': 'cloudnative-pg',
-                },
-              },
+                  'app.kubernetes.io/name': 'cloudnative-pg'
+                }
+              }
             ],
-            toPorts: [{ ports: [{ port: '8000', protocol: 'TCP' }] }],
-          },
-        ],
-      },
-    },
+            toPorts: [{ ports: [{ port: '8000', protocol: 'TCP' }] }]
+          }
+        ]
+      }
+    }
   ];
 }
 
@@ -121,7 +121,11 @@ async function main() {
     const name = policy.metadata.name;
     try {
       await api.createNamespacedCustomObject(
-        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', policy,
+        'cilium.io',
+        'v2',
+        namespace,
+        'ciliumnetworkpolicies',
+        policy
       );
       console.log(`[platform-db-policies] created ${name}`);
     } catch (e: any) {
@@ -129,21 +133,32 @@ async function main() {
       if (status === 409) {
         try {
           const existing: any = await api.getNamespacedCustomObject(
-            'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', name,
+            'cilium.io',
+            'v2',
+            namespace,
+            'ciliumnetworkpolicies',
+            name
           );
           const body = {
             ...policy,
             metadata: {
               ...policy.metadata,
-              resourceVersion: existing.body?.metadata?.resourceVersion,
-            },
+              resourceVersion: existing.body?.metadata?.resourceVersion
+            }
           };
           await api.replaceNamespacedCustomObject(
-            'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', name, body,
+            'cilium.io',
+            'v2',
+            namespace,
+            'ciliumnetworkpolicies',
+            name,
+            body
           );
           console.log(`[platform-db-policies] updated ${name}`);
         } catch (re: any) {
-          console.log(`[platform-db-policies] ${name} exists, replace failed: ${re?.message || re}`);
+          console.log(
+            `[platform-db-policies] ${name} exists, replace failed: ${re?.message || re}`
+          );
         }
       } else if (status === 404) {
         console.log('[platform-db-policies] cilium CRD not present, skipping');

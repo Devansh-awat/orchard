@@ -10,7 +10,7 @@ export class SandboxMirrorConsumer {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly k8s: SandboxK8sService,
+    private readonly k8s: SandboxK8sService
   ) {}
 
   /**
@@ -27,7 +27,7 @@ export class SandboxMirrorConsumer {
     if (!podName) return;
     const row = await this.prisma.sandbox.findUnique({
       where: { podName },
-      select: { id: true, status: true },
+      select: { id: true, status: true }
     });
     // A row mid-delete is on its way out under its own power, and one that does
     // not exist is either an orphan (swept below) or another install's.
@@ -36,7 +36,7 @@ export class SandboxMirrorConsumer {
     if (type === 'delete') {
       await this.prisma.sandbox.update({
         where: { id: row.id },
-        data: { status: 'error', statusMessage: 'Sandbox resource disappeared from the cluster' },
+        data: { status: 'error', statusMessage: 'Sandbox resource disappeared from the cluster' }
       });
       return;
     }
@@ -45,7 +45,7 @@ export class SandboxMirrorConsumer {
     if (!status || status === row.status) return;
     await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: { status, statusMessage: null },
+      data: { status, statusMessage: null }
     });
   }
 
@@ -66,7 +66,7 @@ export class SandboxMirrorConsumer {
     if (names.length === 0) return;
     const known = await this.prisma.sandbox.findMany({
       where: { podName: { in: names } },
-      select: { podName: true },
+      select: { podName: true }
     });
     const claimed = new Set(known.map((r) => r.podName));
     for (const name of names) {

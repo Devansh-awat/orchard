@@ -23,7 +23,10 @@ export async function assertSafeWebhookUrl(raw: string): Promise<void> {
   if (port !== 80 && port !== 443 && port < 1024) {
     throw new BadRequestException('Webhook URL port must be 80, 443, or 1024+');
   }
-  const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .replace(/^\[|\]$/g, '');
   if (isIP(host)) {
     if (!isPublicAddress(host)) {
       throw new BadRequestException('Webhook URL must resolve to a public address');
@@ -49,7 +52,7 @@ export async function assertSafeWebhookUrl(raw: string): Promise<void> {
 export function guardedLookup(
   hostname: string,
   options: any,
-  callback: (err: NodeJS.ErrnoException | null, address?: any, family?: number) => void,
+  callback: (err: NodeJS.ErrnoException | null, address?: any, family?: number) => void
 ) {
   dnsLookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) {
@@ -58,7 +61,11 @@ export function guardedLookup(
     }
     const list = Array.isArray(addresses) ? addresses : [];
     if (list.length === 0 || list.some((a) => !isPublicAddress(a.address))) {
-      callback(Object.assign(new Error('Destination resolves to a non-public address'), { code: 'EBLOCKED' }));
+      callback(
+        Object.assign(new Error('Destination resolves to a non-public address'), {
+          code: 'EBLOCKED'
+        })
+      );
       return;
     }
     if (options?.all) callback(null, list);

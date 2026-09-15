@@ -7,7 +7,7 @@ const passthroughObject = z.object({}).passthrough();
 // value is honoured however dangerous it looks, and this is how we say so.
 const tuningAdvisory = z.object({
   key: z.string(),
-  message: z.string(),
+  message: z.string()
 });
 
 const creatorSchema = z
@@ -16,7 +16,7 @@ const creatorSchema = z
     email: z.string().nullish(),
     username: z.string().nullish(),
     firstName: z.string().nullish(),
-    lastName: z.string().nullish(),
+    lastName: z.string().nullish()
   })
   .passthrough();
 
@@ -35,7 +35,7 @@ const liveStatusSchema = z
     message: z.string().optional(),
     lastTerminationReason: z.string().optional(),
     lastTerminationExitCode: z.number().optional(),
-    lastTerminationAt: z.string().optional(),
+    lastTerminationAt: z.string().optional()
   })
   .passthrough();
 
@@ -74,7 +74,7 @@ const databaseSchema = z
     createdAt: z.string(),
     updatedAt: z.string(),
     creator: creatorSchema.nullish(),
-    liveStatus: liveStatusSchema.optional(),
+    liveStatus: liveStatusSchema.optional()
   })
   .passthrough();
 
@@ -85,7 +85,7 @@ const databaseDetailSchema = databaseSchema.extend({
   publicConnectionString: z.string().nullable(),
   liveStatus: liveStatusSchema,
   backupsEnabled: z.boolean(),
-  pods: z.array(passthroughObject),
+  pods: z.array(passthroughObject)
 });
 
 const databaseSummarySchema = z
@@ -102,9 +102,9 @@ const databaseSummarySchema = z
         id: z.string(),
         name: z.string(),
         slug: z.string(),
-        organizationId: z.string(),
+        organizationId: z.string()
       })
-      .passthrough(),
+      .passthrough()
   })
   .passthrough();
 
@@ -121,7 +121,7 @@ const backupSchema = z
     errorMessage: z.string().nullish(),
     createdBy: z.string().nullish(),
     createdAt: z.string(),
-    completedAt: z.string().nullish(),
+    completedAt: z.string().nullish()
   })
   .passthrough();
 
@@ -131,7 +131,7 @@ const provisioningStepSchema = z
     label: z.string(),
     description: z.string(),
     status: z.enum(['pending', 'running', 'done', 'error']),
-    detail: z.string().optional(),
+    detail: z.string().optional()
   })
   .passthrough();
 
@@ -150,7 +150,7 @@ const provisioningSchema = z
     conditions: z.array(passthroughObject).optional(),
     events: z.array(passthroughObject),
     pod: passthroughObject.nullish(),
-    importPod: passthroughObject.nullish(),
+    importPod: passthroughObject.nullish()
   })
   .passthrough();
 
@@ -166,9 +166,9 @@ const metricsResponseSchema = z
         cpu: z.array(seriesPointSchema),
         mem: z.array(seriesPointSchema),
         rx: z.array(seriesPointSchema),
-        tx: z.array(seriesPointSchema),
+        tx: z.array(seriesPointSchema)
       })
-      .passthrough(),
+      .passthrough()
   })
   .passthrough();
 
@@ -178,7 +178,7 @@ const extensionSchema = z
     installed: z.boolean(),
     version: z.string().optional(),
     defaultVersion: z.string().optional(),
-    comment: z.string().optional(),
+    comment: z.string().optional()
   })
   .passthrough();
 
@@ -195,7 +195,7 @@ const createDatabaseRequest = z.object({
     .describe('Optional postgres:// URL to migrate data from on first boot.'),
   cpuRequestMilli: z.number().int().positive().nullish(),
   memoryRequestBytes: z.number().int().positive().nullish(),
-  templateInstanceId: z.string().optional(),
+  templateInstanceId: z.string().optional()
 });
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
@@ -203,91 +203,94 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: 'List databases across all projects the caller can access',
     scope: 'read',
     request: z.object({ orgId: z.string().optional() }),
-    response: z.array(databaseSummarySchema),
+    response: z.array(databaseSummarySchema)
   },
   'GET /databases/:id': {
     summary: 'Get database details, connection info, and live cluster health',
     scope: 'read',
-    response: databaseDetailSchema,
+    response: databaseDetailSchema
   },
   'DELETE /databases/:id': {
     summary: 'Delete a database and destroy all its data',
     scope: 'deploy',
-    response: z.object({ success: z.boolean(), message: z.string() }).passthrough(),
+    response: z.object({ success: z.boolean(), message: z.string() }).passthrough()
   },
   'GET /databases/:id/metrics': {
     summary: 'Get CPU, memory, and network time series for a database',
     scope: 'read',
     request: z.object({
-      start: z.string().optional().describe('Range start in epoch milliseconds. Defaults to end minus 1h.'),
+      start: z
+        .string()
+        .optional()
+        .describe('Range start in epoch milliseconds. Defaults to end minus 1h.'),
       end: z.string().optional().describe('Range end in epoch milliseconds. Defaults to now.'),
-      step: z.string().optional().describe('Step in milliseconds, minimum 1000. Defaults to 30000.'),
+      step: z.string().optional().describe('Step in milliseconds, minimum 1000. Defaults to 30000.')
     }),
-    response: metricsResponseSchema,
+    response: metricsResponseSchema
   },
   'GET /databases/:id/provisioning': {
     summary: 'Get step-by-step provisioning status for a database',
     scope: 'read',
-    response: provisioningSchema,
+    response: provisioningSchema
   },
   'PATCH /databases/:id/resources': {
     summary: 'Update CPU and memory requests for a database',
     scope: 'deploy',
     request: z.object({
       cpuRequestMilli: z.number().int().positive().nullish(),
-      memoryRequestBytes: z.number().int().positive().nullish(),
+      memoryRequestBytes: z.number().int().positive().nullish()
     }),
-    response: databaseSchema,
+    response: databaseSchema
   },
   'PATCH /databases/:id/storage': {
     summary: 'Expand the storage volume of a database (grow only, max 200Gi)',
     scope: 'deploy',
     request: z.object({
-      storageSize: z.string().regex(/^\d+(Mi|Gi|Ti)$/),
+      storageSize: z.string().regex(/^\d+(Mi|Gi|Ti)$/)
     }),
     response: z
       .object({
         previousSize: z.string().nullish(),
         storageSize: z.string(),
-        warning: z.string().nullable(),
+        warning: z.string().nullable()
       })
-      .passthrough(),
+      .passthrough()
   },
   'GET /databases/:id/backups': {
     summary: 'List backups for a database',
     scope: 'read',
-    response: z.array(backupSchema),
+    response: z.array(backupSchema)
   },
   'POST /databases/:id/backups': {
     summary: 'Trigger a new database backup (asynchronous)',
     scope: 'deploy',
     request: z.object({
       label: z.string().optional(),
-      type: z.enum(['full', 'diff', 'incr']).optional(),
+      type: z.enum(['full', 'diff', 'incr']).optional()
     }),
-    response: backupSchema,
+    response: backupSchema
   },
   'POST /databases/:id/restore': {
     summary: 'Restore a database from a backup, replacing all current data',
     scope: 'deploy',
     request: z.object({ backupId: z.string() }),
-    response: z.object({ success: z.boolean(), message: z.string() }).passthrough(),
+    response: z.object({ success: z.boolean(), message: z.string() }).passthrough()
   },
   'GET /databases/:id/backup-schedule': {
     summary: 'Get the automated backup schedule for a database',
     scope: 'read',
-    response: z.object({ cron: z.string().nullable() }).passthrough(),
+    response: z.object({ cron: z.string().nullable() }).passthrough()
   },
   'PUT /databases/:id/backup-schedule': {
     summary: 'Set or replace the automated backup schedule (5 or 6 field cron, UTC)',
     scope: 'deploy',
     request: z.object({ cron: z.string() }),
-    response: z.object({ cron: z.string() }).passthrough(),
+    response: z.object({ cron: z.string() }).passthrough()
   },
   'DELETE /databases/:id/backup-schedule': {
     summary: 'Clear the automated backup schedule for a database',
     scope: 'deploy',
-    response: z.object({ success: z.boolean() }).passthrough(),
+    response: z.object({ success: z.boolean() }).passthrough()
   },
   'GET /databases/:id/extensions': {
     summary: 'List available and installed PostgreSQL extensions',
@@ -295,24 +298,24 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z
       .object({
         extensions: z.array(extensionSchema),
-        sharedPreloadLibraries: z.array(z.string()),
+        sharedPreloadLibraries: z.array(z.string())
       })
-      .passthrough(),
+      .passthrough()
   },
   'POST /databases/:id/extensions': {
     summary: 'Install a PostgreSQL extension, optionally adding it to shared_preload_libraries',
     scope: 'deploy',
     request: z.object({
       name: z.string(),
-      addToPreload: z.boolean().optional(),
+      addToPreload: z.boolean().optional()
     }),
     response: z
       .object({
         success: z.boolean(),
         output: z.string(),
-        preloadAdded: z.boolean(),
+        preloadAdded: z.boolean()
       })
-      .passthrough(),
+      .passthrough()
   },
   'DELETE /databases/:id/extensions/:name': {
     summary: 'Drop a PostgreSQL extension, optionally removing it from shared_preload_libraries',
@@ -321,9 +324,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       removeFromPreload: z
         .string()
         .optional()
-        .describe('Set to "true" to also remove the extension from shared_preload_libraries.'),
+        .describe('Set to "true" to also remove the extension from shared_preload_libraries.')
     }),
-    response: z.object({ success: z.boolean(), output: z.string() }).passthrough(),
+    response: z.object({ success: z.boolean(), output: z.string() }).passthrough()
   },
   'GET /databases/:id/settings': {
     summary: 'Get configured PostgreSQL parameters and shared_preload_libraries',
@@ -333,7 +336,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         parameters: z
           .record(z.string())
           .describe(
-            'Only parameters the user has explicitly set. A parameter absent here is sized automatically from the memory limit.',
+            'Only parameters the user has explicitly set. A parameter absent here is sized automatically from the memory limit.'
           ),
         sharedPreloadLibraries: z.array(z.string()),
         backupCompression: z
@@ -341,9 +344,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           .nullable()
           .optional()
           .describe('"gzip", "none", or null to derive it from the memory limit.'),
-        advisories: z.array(tuningAdvisory).optional(),
+        advisories: z.array(tuningAdvisory).optional()
       })
-      .passthrough(),
+      .passthrough()
   },
   'PATCH /databases/:id/settings': {
     summary: 'Update PostgreSQL parameters on a database',
@@ -352,13 +355,13 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       parameters: z
         .record(z.string())
         .describe(
-          'Values are applied as given and never clamped. Omit a key (or send it empty) to hand it back to automatic sizing.',
+          'Values are applied as given and never clamped. Omit a key (or send it empty) to hand it back to automatic sizing.'
         ),
       backupCompression: z
         .enum(['gzip', 'none'])
         .nullable()
         .optional()
-        .describe('null restores automatic selection based on the memory limit.'),
+        .describe('null restores automatic selection based on the memory limit.')
     }),
     response: z
       .object({
@@ -368,9 +371,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         advisories: z
           .array(tuningAdvisory)
           .optional()
-          .describe('Warnings about the values that were just applied. Never a rejection.'),
+          .describe('Warnings about the values that were just applied. Never a rejection.')
       })
-      .passthrough(),
+      .passthrough()
   },
   'POST /databases/:id/public': {
     summary: 'Expose a database publicly with TLS on a shared organization IP',
@@ -381,24 +384,24 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         host: z.string(),
         ip: z.string().optional(),
         port: z.number(),
-        connectionString: z.string(),
+        connectionString: z.string()
       })
-      .passthrough(),
+      .passthrough()
   },
   'DELETE /databases/:id/public': {
     summary: 'Disable public exposure for a database',
     scope: 'deploy',
-    response: z.object({ enabled: z.boolean() }).passthrough(),
+    response: z.object({ enabled: z.boolean() }).passthrough()
   },
   'GET /projects/:id/databases': {
     summary: 'List databases in a project with live cluster status',
     scope: 'read',
-    response: z.array(databaseSchema),
+    response: z.array(databaseSchema)
   },
   'POST /projects/:id/databases': {
     summary: 'Create a PostgreSQL database in a project',
     scope: 'deploy',
     request: createDatabaseRequest,
-    response: databaseSchema,
-  },
+    response: databaseSchema
+  }
 };

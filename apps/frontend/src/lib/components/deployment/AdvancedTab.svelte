@@ -449,8 +449,7 @@
 							class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
 							rows="3"
 							placeholder="apps/web/**&#10;packages/ui/**&#10;!**/*.md"
-							bind:value={autoDeployPaths}
-						></textarea>
+							bind:value={autoDeployPaths}></textarea>
 						<div class="mt-1.5 flex items-end justify-between gap-3">
 							<p class="text-xs text-muted">
 								One glob per line. A push only builds when it changes a file matching one of them,
@@ -569,8 +568,7 @@
 							class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
 							rows="2"
 							placeholder="apps/web/**&#10;!**/*.md"
-							bind:value={autoDeployPaths}
-						></textarea>
+							bind:value={autoDeployPaths}></textarea>
 						<p class="text-xs mt-1 text-muted">
 							One glob per line. Only pushes changing a matching file will build. Leave it empty to
 							build on every push.

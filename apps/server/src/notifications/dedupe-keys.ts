@@ -13,7 +13,7 @@ export function deployKey(
   deploymentId: string,
   status: 'succeeded' | 'failed',
   buildRunId: string | null,
-  fallbackStamp: number,
+  fallbackStamp: number
 ): string {
   return buildRunId
     ? clamp(`deploy:${buildRunId}:${status}`)

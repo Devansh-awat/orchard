@@ -9,8 +9,8 @@
     "preview": "astro preview --port 5174",
     "generate": "tsx scripts/generate.ts",
     "check": "astro check",
-    "format": "prettier --write .",
-    "lint": "prettier --check .",
+    "format": "oxfmt .",
+    "lint": "oxlint .",
     "check:generated": "bash scripts/check-generated.sh"
   },
   "dependencies": {
@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "@orchard/contracts": "workspace:*",
-    "prettier": "^3.7.4",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "zod": "^3.25.76",

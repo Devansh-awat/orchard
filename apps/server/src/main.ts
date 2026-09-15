@@ -37,13 +37,17 @@ declare global {
   }
 }
 
-// eslint-disable-next-line no-extend-native
-BigInt.prototype.toJSON = function() {
+// oxlint-disable-next-line no-extend-native
+BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, bodyParser: false, logger: new OtelConsoleLogger() });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+    bodyParser: false,
+    logger: new OtelConsoleLogger()
+  });
 
   app.enableShutdownHooks();
 
@@ -71,7 +75,7 @@ async function bootstrap() {
   // POST /scim/v2/Users saw an empty object.
   app.useBodyParser('json', {
     limit: '25mb',
-    type: ['application/json', 'application/scim+json'],
+    type: ['application/json', 'application/scim+json']
   });
   app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
 
@@ -112,15 +116,13 @@ async function bootstrap() {
   // Hosts that are part of the platform itself (login, status page, docs,
   // etc.) and may issue credentialed requests to the API. Comma-separated
   // origins, e.g. `https://app.orchard.my,https://docs.orchard.my`.
-  const platformOrigins = new Set<string>(
-    [
-      frontendUrl,
-      ...(process.env.PLATFORM_ORIGINS || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-    ],
-  );
+  const platformOrigins = new Set<string>([
+    frontendUrl,
+    ...(process.env.PLATFORM_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  ]);
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -137,7 +139,7 @@ async function bootstrap() {
       // additional first-party origins, add them to PLATFORM_ORIGINS.
       callback(new Error('Not allowed by CORS'));
     },
-    credentials: true,
+    credentials: true
   });
 
   const port = process.env.PORT || 3001;
@@ -157,4 +159,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

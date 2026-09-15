@@ -25,7 +25,7 @@ export class SessionsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
   /**
@@ -40,12 +40,9 @@ export class SessionsService {
     ttlMs?: number;
   }): Promise<string> {
     const deviceName =
-      params.deviceName ??
-      (params.userAgent ? this.parseDeviceName(params.userAgent) : null);
+      params.deviceName ?? (params.userAgent ? this.parseDeviceName(params.userAgent) : null);
 
-    const location = params.ipAddress
-      ? await this.lookupLocation(params.ipAddress)
-      : null;
+    const location = params.ipAddress ? await this.lookupLocation(params.ipAddress) : null;
 
     const expiresAt = new Date(Date.now() + (params.ttlMs ?? BROWSER_SESSION_TTL_MS));
 
@@ -57,8 +54,8 @@ export class SessionsService {
         deviceName,
         location,
         authMethod: params.authMethod || null,
-        expiresAt,
-      },
+        expiresAt
+      }
     });
 
     void this.audit.log({
@@ -69,8 +66,8 @@ export class SessionsService {
       metadata: {
         auth_method: params.authMethod ?? null,
         device_name: deviceName ?? null,
-        location: location ?? null,
-      },
+        location: location ?? null
+      }
     });
 
     return session.id;
@@ -81,7 +78,7 @@ export class SessionsService {
    */
   async validateSession(sessionId: string): Promise<boolean> {
     const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
+      where: { id: sessionId }
     });
 
     if (!session) return false;
@@ -98,7 +95,7 @@ export class SessionsService {
     await this.prisma.session
       .update({
         where: { id: sessionId },
-        data: { lastActiveAt: new Date() },
+        data: { lastActiveAt: new Date() }
       })
       .catch(() => {});
   }
@@ -114,12 +111,12 @@ export class SessionsService {
       where: {
         id: sessionId,
         revokedAt: null,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: new Date() }
       },
       data: {
         expiresAt: new Date(Date.now() + ttlMs),
-        lastActiveAt: new Date(),
-      },
+        lastActiveAt: new Date()
+      }
     });
   }
 
@@ -131,7 +128,7 @@ export class SessionsService {
       where: {
         userId,
         revokedAt: null,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: new Date() }
       },
       orderBy: { lastActiveAt: 'desc' },
       select: {
@@ -141,8 +138,8 @@ export class SessionsService {
         location: true,
         authMethod: true,
         lastActiveAt: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     return sessions;
@@ -153,14 +150,14 @@ export class SessionsService {
    */
   async revokeSession(userId: string, sessionId: string): Promise<boolean> {
     const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, userId },
+      where: { id: sessionId, userId }
     });
 
     if (!session) return false;
 
     await this.prisma.session.update({
       where: { id: sessionId },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date() }
     });
 
     return true;
@@ -178,13 +175,10 @@ export class SessionsService {
    * The only legitimate callers are user-initiated "Sign out everywhere"
    * and account-deletion paths, where nuking every token is the goal.
    */
-  async revokeAllSessions(
-    userId: string,
-    exceptSessionId?: string,
-  ): Promise<number> {
+  async revokeAllSessions(userId: string, exceptSessionId?: string): Promise<number> {
     const where: any = {
       userId,
-      revokedAt: null,
+      revokedAt: null
     };
 
     if (exceptSessionId) {
@@ -194,9 +188,9 @@ export class SessionsService {
     const [sessionRes] = await this.prisma.$transaction([
       this.prisma.session.updateMany({
         where,
-        data: { revokedAt: new Date() },
+        data: { revokedAt: new Date() }
       }),
-      this.prisma.apiToken.deleteMany({ where: { userId } }),
+      this.prisma.apiToken.deleteMany({ where: { userId } })
     ]);
 
     return sessionRes.count;
@@ -212,9 +206,9 @@ export class SessionsService {
       where: {
         userId,
         revokedAt: null,
-        authMethod: { not: MCP_SESSION_AUTH_METHOD },
+        authMethod: { not: MCP_SESSION_AUTH_METHOD }
       },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date() }
     });
     return res.count;
   }
@@ -259,7 +253,7 @@ export class SessionsService {
     try {
       const response = await fetch(
         `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
-        { signal: controller.signal },
+        { signal: controller.signal }
       );
       if (!response.ok) return null;
       const data = (await response.json()) as {
@@ -270,7 +264,7 @@ export class SessionsService {
       };
       if (data.success === false) return null;
       const parts = [data.city, data.region, data.country].filter(
-        (s): s is string => typeof s === 'string' && s.length > 0,
+        (s): s is string => typeof s === 'string' && s.length > 0
       );
       return parts.length > 0 ? parts.join(', ') : null;
     } catch {

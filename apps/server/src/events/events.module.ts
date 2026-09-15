@@ -27,9 +27,9 @@ const legacyInformers =
     K8sNodeInformerService,
     PodLogCaptureService,
     MetricsPusherService,
-    ...legacyInformers,
+    ...legacyInformers
   ],
   controllers: [EventsController],
-  exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService],
+  exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService]
 })
 export class EventsModule {}

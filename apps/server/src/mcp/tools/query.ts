@@ -210,12 +210,12 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     {
       description: "Get the currently authenticated user's profile information",
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const user = await client.get('/auth/me');
       return { content: [{ type: 'text', text: JSON.stringify(user, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -223,12 +223,12 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     {
       description: 'List all organizations the authenticated user belongs to',
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const orgs = await client.get('/organizations/user');
       return { content: [{ type: 'text', text: JSON.stringify(orgs, null, 2) }] };
-    },
+    }
   );
 
   // ── Projects ──────────────────────────────────────────────────────
@@ -239,14 +239,14 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'List all projects in an organization',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        organizationId: z.string().optional().describe('Organization UUID to filter by (optional)'),
-      },
+        organizationId: z.string().optional().describe('Organization UUID to filter by (optional)')
+      }
     },
     async ({ organizationId }) => {
       const url = organizationId ? `/projects?orgId=${organizationId}` : '/projects';
       const projects = await client.get(url);
       return { content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -255,13 +255,13 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'Get project details including deployments, databases, and ingresses',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-      },
+        projectId: z.string().describe('The project UUID')
+      }
     },
     async ({ projectId }) => {
       const project = await client.get(`/projects/${projectId}`);
       return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
-    },
+    }
   );
 
   // ── Deployments ───────────────────────────────────────────────────
@@ -272,28 +272,29 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'List all deployments in a project',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-      },
+        projectId: z.string().describe('The project UUID')
+      }
     },
     async ({ projectId }) => {
       const deployments = await client.get(`/projects/${projectId}/deployments`);
       return { content: [{ type: 'text', text: JSON.stringify(deployments, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_deployment',
     {
-      description: 'Get deployment details including status, image, replicas, env vars, services, and ingresses',
+      description:
+        'Get deployment details including status, image, replicas, env vars, services, and ingresses',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -302,13 +303,13 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'Get the image version history for a deployment (for rollback purposes)',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const history = await client.get(`/deployments/${deploymentId}/image-history`);
       return { content: [{ type: 'text', text: JSON.stringify(history, null, 2) }] };
-    },
+    }
   );
 
   // ── Environment Variables ─────────────────────────────────────────
@@ -319,14 +320,14 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'Get the current environment variables for a deployment',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const envVars = deployment.envVars || [];
       return { content: [{ type: 'text', text: JSON.stringify(envVars, null, 2) }] };
-    },
+    }
   );
 
   // ── Networking ────────────────────────────────────────────────────
@@ -337,14 +338,14 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'List all ingresses (public domains/routes) for a deployment',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const ingresses = deployment.ingresses || [];
       return { content: [{ type: 'text', text: JSON.stringify(ingresses, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -353,29 +354,34 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'Get ingress details',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        ingressId: z.string().describe('The ingress UUID'),
-      },
+        ingressId: z.string().describe('The ingress UUID')
+      }
     },
     async ({ ingressId }) => {
       const ingress = await client.get(`/ingresses/${ingressId}`);
       return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'validate_dns',
     {
-      description: "Validate that a domain's DNS is correctly pointed to the Orchard cluster. Run this before creating an ingress.",
+      description:
+        "Validate that a domain's DNS is correctly pointed to the Orchard cluster. Run this before creating an ingress.",
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID the domain belongs to (from list_projects, or the projectId on get_deployment)'),
-        domain: z.string().describe('The domain to validate (e.g. myapp.example.com)'),
-      },
+        projectId: z
+          .string()
+          .describe(
+            'The project UUID the domain belongs to (from list_projects, or the projectId on get_deployment)'
+          ),
+        domain: z.string().describe('The domain to validate (e.g. myapp.example.com)')
+      }
     },
     async ({ projectId, domain }) => {
       const result = await client.post('/projects/ingresses/validate-dns', { projectId, domain });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -384,14 +390,14 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'List services for a deployment (internal networking, load balancers, etc.)',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const services = deployment.services || [];
       return { content: [{ type: 'text', text: JSON.stringify(services, null, 2) }] };
-    },
+    }
   );
 
   // ── Databases ─────────────────────────────────────────────────────
@@ -402,13 +408,13 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: 'List all PostgreSQL databases in a project',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-      },
+        projectId: z.string().describe('The project UUID')
+      }
     },
     async ({ projectId }) => {
       const databases = await client.get(`/projects/${projectId}/databases`);
       return { content: [{ type: 'text', text: JSON.stringify(databases, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -430,13 +436,13 @@ Returns connection info (host, port, user, password, database name) plus a \`liv
 To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.lastTerminationReason\`, and \`liveStatus.restartCount\` together. \`status: "ready"\` at the top level reflects only the provisioning state — it can say "ready" while the pod is actively OOM-cycling.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        databaseId: z.string().describe('The database UUID'),
-      },
+        databaseId: z.string().describe('The database UUID')
+      }
     },
     async ({ databaseId }) => {
       const database = await client.get(`/databases/${databaseId}`);
       return { content: [{ type: 'text', text: JSON.stringify(database, null, 2) }] };
-    },
+    }
   );
 
   // ── Logs & Pods ───────────────────────────────────────────────────
@@ -447,48 +453,64 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       description: 'Get the build logs for a deployment (Docker build output)',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const logs = await client.get(`/deployments/${deploymentId}/logs`);
-      return { content: [{ type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }] };
-    },
+      return {
+        content: [
+          { type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }
+        ]
+      };
+    }
   );
 
   server.registerTool(
     'list_pods',
     {
-      description: 'List all running pods for a deployment. The response includes the namespace which you should pass to get_pod_logs.',
+      description:
+        'List all running pods for a deployment. The response includes the namespace which you should pass to get_pod_logs.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const [pods, deployment] = await Promise.all([
         client.get(`/deployments/${deploymentId}/pods`),
-        client.get(`/deployments/${deploymentId}`),
+        client.get(`/deployments/${deploymentId}`)
       ]);
       const result = {
         namespace: deployment?.namespace,
-        pods,
+        pods
       };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_pod_logs',
     {
-      description: 'Get runtime logs from a specific pod. Use list_pods first to get pod names. Pass previous=true to read the logs of the prior (terminated) container instance after a crash/OOM restart.',
+      description:
+        'Get runtime logs from a specific pod. Use list_pods first to get pod names. Pass previous=true to read the logs of the prior (terminated) container instance after a crash/OOM restart.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         podName: z.string().describe('The pod name (from list_pods)'),
-        namespace: z.string().optional().describe('Kubernetes namespace (defaults to deployment namespace). Get this from the deployment details or list_pods.'),
+        namespace: z
+          .string()
+          .optional()
+          .describe(
+            'Kubernetes namespace (defaults to deployment namespace). Get this from the deployment details or list_pods.'
+          ),
         tailLines: z.number().optional().describe('Number of log lines to return (default: 100)'),
-        previous: z.boolean().optional().describe('Read logs from the previous (terminated) container instance instead of the current one. Use this to see what a crashed/OOMKilled container printed before it died.'),
-      },
+        previous: z
+          .boolean()
+          .optional()
+          .describe(
+            'Read logs from the previous (terminated) container instance instead of the current one. Use this to see what a crashed/OOMKilled container printed before it died.'
+          )
+      }
     },
     async ({ podName, namespace, tailLines, previous }) => {
       const params = new URLSearchParams();
@@ -497,41 +519,47 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       if (previous) params.set('previous', 'true');
       const qs = params.toString();
       const logs = await client.get(`/pods/${podName}/logs${qs ? `?${qs}` : ''}`);
-      return { content: [{ type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }] };
-    },
+      return {
+        content: [
+          { type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }
+        ]
+      };
+    }
   );
 
   server.registerTool(
     'list_killed_containers',
     {
-      description: 'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
+      description:
+        'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const entries = await client.get(`/deployments/${deploymentId}/killed-containers`);
       return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_killed_container_logs',
     {
-      description: 'Get the captured logs a killed container printed before it died (last ~500 lines, retained 24h). Works even after the pod was deleted. Use list_killed_containers first to get the entryId.',
+      description:
+        'Get the captured logs a killed container printed before it died (last ~500 lines, retained 24h). Works even after the pod was deleted. Use list_killed_containers first to get the entryId.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        entryId: z.string().describe('The killed-container entryId (from list_killed_containers)'),
-      },
+        entryId: z.string().describe('The killed-container entryId (from list_killed_containers)')
+      }
     },
     async ({ deploymentId, entryId }) => {
       const entry = await client.get(
-        `/deployments/${deploymentId}/killed-containers/${encodeURIComponent(entryId)}/logs`,
+        `/deployments/${deploymentId}/killed-containers/${encodeURIComponent(entryId)}/logs`
       );
       return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -542,17 +570,14 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        window: z
-          .number()
-          .optional()
-          .describe('Look-back window in minutes (default 60, max 1440)'),
-      },
+        window: z.number().optional().describe('Look-back window in minutes (default 60, max 1440)')
+      }
     },
     async ({ deploymentId, window }) => {
       const qs = window ? `?window=${window}` : '';
       const groups = await client.get(`/observe/deployments/${deploymentId}/errors${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(groups, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -563,7 +588,9 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        fingerprint: z.string().describe('The error group fingerprint (from list_deployment_errors)'),
+        fingerprint: z
+          .string()
+          .describe('The error group fingerprint (from list_deployment_errors)'),
         status: z
           .enum(['unresolved', 'resolved', 'ignored'])
           .optional()
@@ -572,8 +599,8 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
           .string()
           .nullable()
           .optional()
-          .describe('User UUID to assign, or null to unassign'),
-      },
+          .describe('User UUID to assign, or null to unassign')
+      }
     },
     async ({ deploymentId, fingerprint, status, assigneeId }) => {
       const body: Record<string, unknown> = {};
@@ -581,25 +608,26 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
       if (assigneeId !== undefined) body.assigneeId = assigneeId;
       const res = await client.patch(
         `/observe/deployments/${deploymentId}/errors/${encodeURIComponent(fingerprint)}`,
-        body,
+        body
       );
       return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_pod_details',
     {
-      description: 'Get detailed information about a specific pod including status, IP, node, and restart count',
+      description:
+        'Get detailed information about a specific pod including status, IP, node, and restart count',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        podName: z.string().describe('The pod name'),
-      },
+        podName: z.string().describe('The pod name')
+      }
     },
     async ({ podName }) => {
       const pod = await client.get(`/pods/${podName}`);
       return { content: [{ type: 'text', text: JSON.stringify(pod, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -618,21 +646,33 @@ Not for long-running interactive sessions — the call times out (default 60s, m
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       inputSchema: {
         podName: z.string().describe('Pod name (from list_pods)'),
-        namespace: z.string().describe('Kubernetes namespace (from list_pods or get_deployment.namespace)'),
-        command: z.union([z.string(), z.array(z.string())]).describe('Command to run. String → run via /bin/sh -c. Array → exec directly (e.g. ["ls", "-la", "/data"]).'),
-        container: z.string().optional().describe('Container name within the pod (defaults to the first container)'),
-        timeoutMs: z.number().optional().describe('Hard timeout in milliseconds (default 60000, max 300000)'),
-      },
+        namespace: z
+          .string()
+          .describe('Kubernetes namespace (from list_pods or get_deployment.namespace)'),
+        command: z
+          .union([z.string(), z.array(z.string())])
+          .describe(
+            'Command to run. String → run via /bin/sh -c. Array → exec directly (e.g. ["ls", "-la", "/data"]).'
+          ),
+        container: z
+          .string()
+          .optional()
+          .describe('Container name within the pod (defaults to the first container)'),
+        timeoutMs: z
+          .number()
+          .optional()
+          .describe('Hard timeout in milliseconds (default 60000, max 300000)')
+      }
     },
     async ({ podName, namespace, command, container, timeoutMs }) => {
       const result = await client.post(`/pods/${podName}/exec`, {
         namespace,
         command,
         ...(container && { container }),
-        ...(timeoutMs && { timeoutMs }),
+        ...(timeoutMs && { timeoutMs })
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -649,8 +689,8 @@ Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To
         deploymentId: z.string().describe('The deployment UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
         end: z.number().optional().describe('Window end (unix-ms). Default: now'),
-        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000'),
-      },
+        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
+      }
     },
     async ({ deploymentId, start, end, step }) => {
       const params = new URLSearchParams();
@@ -660,7 +700,7 @@ Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To
       const qs = params.toString();
       const metrics = await client.get(`/deployments/${deploymentId}/metrics${qs ? `?${qs}` : ''}`);
       return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -677,8 +717,8 @@ To diagnose an OOMKill, look for memory rising to the request/limit ceiling righ
         databaseId: z.string().describe('The database UUID'),
         start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
         end: z.number().optional().describe('Window end (unix-ms). Default: now'),
-        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000'),
-      },
+        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
+      }
     },
     async ({ databaseId, start, end, step }) => {
       const params = new URLSearchParams();
@@ -688,7 +728,7 @@ To diagnose an OOMKill, look for memory rising to the request/limit ceiling righ
       const qs = params.toString();
       const metrics = await client.get(`/databases/${databaseId}/metrics${qs ? `?${qs}` : ''}`);
       return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -699,8 +739,8 @@ Returns a per-deployment summary: cpu/memory current usage, request × replicas 
 Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking deployment is actually starved.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const dep = await client.get(`/deployments/${deploymentId}`);
@@ -726,7 +766,7 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
           capacityMilli: cpuCapacity,
           ratio: cpuRatio,
           nearLimit: cpuRatio != null && cpuRatio >= NEAR,
-          unlimited: cpuReq === 0,
+          unlimited: cpuReq === 0
         },
         memory: {
           usageBytes: memUsage,
@@ -734,15 +774,15 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
           capacityBytes: memCapacity,
           ratio: memRatio,
           nearLimit: memRatio != null && memRatio >= NEAR,
-          unlimited: memReq === 0,
+          unlimited: memReq === 0
         },
         recommendation:
           (cpuRatio != null && cpuRatio >= NEAR) || (memRatio != null && memRatio >= NEAR)
             ? 'Usage is near limits — consider increasing CPU/memory requests, the pod may behave unexpectedly under load.'
-            : 'Within healthy bounds.',
+            : 'Within healthy bounds.'
       };
       return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
-    },
+    }
   );
 
   // ── Volumes ───────────────────────────────────────────────────────
@@ -755,8 +795,8 @@ Volumes are returned with their full record (id, name, type, mountPath, pvcName,
 The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can sanity-check that PVCs they expected are actually attached — a 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
+        deploymentId: z.string().describe('The deployment UUID')
+      }
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
@@ -771,12 +811,13 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
         pvcCount,
         volumeCount: volumes.length,
         volumes,
-        note: pvcCount > 0
-          ? `This deployment has ${pvcCount} PVC volume(s); k8s update strategy is forced to Recreate so rolling deploys are disabled.`
-          : undefined,
+        note:
+          pvcCount > 0
+            ? `This deployment has ${pvcCount} PVC volume(s); k8s update strategy is forced to Recreate so rolling deploys are disabled.`
+            : undefined
       };
       return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
-    },
+    }
   );
 
   // ── GitHub ────────────────────────────────────────────────────────
@@ -784,14 +825,15 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
   server.registerTool(
     'get_github_status',
     {
-      description: "Check if the user's GitHub account is linked to Orchard. Required before deploying from GitHub repos.",
+      description:
+        "Check if the user's GitHub account is linked to Orchard. Required before deploying from GitHub repos.",
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const status = await client.get('/github/status');
       return { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -799,12 +841,12 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     {
       description: `Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account — i.e. the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const repos = await client.get('/github/repositories');
       return { content: [{ type: 'text', text: JSON.stringify(repos, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -814,29 +856,30 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner (GitHub username or org)'),
-        repo: z.string().describe('Repository name'),
-      },
+        repo: z.string().describe('Repository name')
+      }
     },
     async ({ owner, repo }) => {
       const branches = await client.get(`/github/repositories/${owner}/${repo}/branches`);
       return { content: [{ type: 'text', text: JSON.stringify(branches, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_repo_dockerfiles',
     {
-      description: 'Find Dockerfiles in a GitHub repository. Useful to determine if a repo can be deployed and which Dockerfile to use.',
+      description:
+        'Find Dockerfiles in a GitHub repository. Useful to determine if a repo can be deployed and which Dockerfile to use.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner'),
-        repo: z.string().describe('Repository name'),
-      },
+        repo: z.string().describe('Repository name')
+      }
     },
     async ({ owner, repo }) => {
       const dockerfiles = await client.get(`/github/repositories/${owner}/${repo}/dockerfiles`);
       return { content: [{ type: 'text', text: JSON.stringify(dockerfiles, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -851,30 +894,34 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       inputSchema: {
         owner: z.string().describe('Repository owner'),
         repo: z.string().describe('Repository name'),
-        branch: z.string().optional().describe('Branch to inspect (default: the repository default branch)'),
-      },
+        branch: z
+          .string()
+          .optional()
+          .describe('Branch to inspect (default: the repository default branch)')
+      }
     },
     async ({ owner, repo, branch }) => {
       const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
       const detected = await client.get(`/github/repositories/${owner}/${repo}/detect${query}`);
       return { content: [{ type: 'text', text: JSON.stringify(detected, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_repo_contents',
     {
-      description: 'Get the file/directory listing of a GitHub repository. Useful to analyze what the app needs.',
+      description:
+        'Get the file/directory listing of a GitHub repository. Useful to analyze what the app needs.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         owner: z.string().describe('Repository owner'),
-        repo: z.string().describe('Repository name'),
-      },
+        repo: z.string().describe('Repository name')
+      }
     },
     async ({ owner, repo }) => {
       const contents = await client.get(`/github/repositories/${owner}/${repo}/contents`);
       return { content: [{ type: 'text', text: JSON.stringify(contents, null, 2) }] };
-    },
+    }
   );
 
   // ── Templates ─────────────────────────────────────────────────────
@@ -884,12 +931,12 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     {
       description: 'List all available templates (both built-in and custom)',
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
     async () => {
       const templates = await client.get('/templates');
       return { content: [{ type: 'text', text: JSON.stringify(templates, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -898,13 +945,13 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       description: 'Get a template by ID, including its full YAML definition and parameter schema',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        templateId: z.string().describe('The template UUID'),
-      },
+        templateId: z.string().describe('The template UUID')
+      }
     },
     async ({ templateId }) => {
       const template = await client.get(`/templates/${templateId}`);
       return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -913,13 +960,13 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       description: 'List all template instances (deployed templates) in a project',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-      },
+        projectId: z.string().describe('The project UUID')
+      }
     },
     async ({ projectId }) => {
       const instances = await client.get(`/projects/${projectId}/template-instances`);
       return { content: [{ type: 'text', text: JSON.stringify(instances, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -928,22 +975,23 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
       description: 'Get details of a deployed template instance, including all created resources',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        instanceId: z.string().describe('The template instance UUID'),
-      },
+        instanceId: z.string().describe('The template instance UUID')
+      }
     },
     async ({ instanceId }) => {
       const instance = await client.get(`/template-instances/${instanceId}`);
       return { content: [{ type: 'text', text: JSON.stringify(instance, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
     'get_template_yaml_guide',
     {
-      description: 'Get the full YAML format guide for creating Leaf templates, including all resource types, parameter types, interpolation syntax, and a complete example.',
+      description:
+        'Get the full YAML format guide for creating Leaf templates, including all resource types, parameter types, interpolation syntax, and a complete example.',
       annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
+      inputSchema: {}
     },
-    async () => ({ content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] }),
+    async () => ({ content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] })
   );
 }

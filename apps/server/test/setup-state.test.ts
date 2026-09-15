@@ -19,7 +19,7 @@ function serviceWith(counts: {
     orgs: counts.orgs ?? 0,
     orgName: counts.orgName ?? 'Leafd',
     deployments: counts.deployments ?? 0,
-    skipped: counts.skipped ?? ([] as string[]),
+    skipped: counts.skipped ?? ([] as string[])
   };
   const svc = Object.create(SetupService.prototype) as any;
   svc.logger = { warn() {}, error() {} };
@@ -27,15 +27,18 @@ function serviceWith(counts: {
   svc.prisma = {
     user: {
       findUnique: async () => ({ id: 'u1', email: 'hi@leafd.dev', setupSkipped: state.skipped }),
-      update: async ({ data }: any) => { state.skipped = data.setupSkipped; return {}; },
+      update: async ({ data }: any) => {
+        state.skipped = data.setupSkipped;
+        return {};
+      }
     },
     passkey: { count: async () => state.passkeys },
     organization: {
       findMany: async () => Array.from({ length: state.orgs }, () => ({ name: state.orgName })),
-      findUnique: async () => null,
+      findUnique: async () => null
     },
     organizationMember: { count: async () => state.orgs },
-    deployment: { count: async () => state.deployments },
+    deployment: { count: async () => state.deployments }
   };
   return { svc: svc as SetupService, state };
 }
@@ -123,7 +126,11 @@ test('an account with no org gets one when its setup state is read', async () =>
 // completing anyway would strand the account with nothing it can create.
 test('setup cannot complete without an organization', async () => {
   const { svc } = serviceWith({ orgs: 0, passkeys: 1 });
-  (svc as any).admin = { createOrganization: async () => { throw new Error('nope'); } };
+  (svc as any).admin = {
+    createOrganization: async () => {
+      throw new Error('nope');
+    }
+  };
   await svc.skipSetupStep('u1', 'organization');
   const s = await svc.skipSetupStep('u1', 'deploy');
   assert.equal(s.complete, false);

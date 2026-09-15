@@ -1,17 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, utimesSync, chmodSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readdirSync,
+  utimesSync,
+  chmodSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cacheEvictScript, cacheEvictInitContainer, CacheEvictOptions } from '../src/docker/cache-evict';
+import {
+  cacheEvictScript,
+  cacheEvictInitContainer,
+  CacheEvictOptions
+} from '../src/docker/cache-evict';
 
 const OPTS: CacheEvictOptions = {
   cacheSubPath: 'ysws-mine',
   maxAgeDays: 14,
   highPct: 80,
   targetPct: 60,
-  idleMinutes: 60,
+  idleMinutes: 60
 };
 
 const DAY = 86400;
@@ -21,13 +33,20 @@ const DAY = 86400;
  * because the script hard-codes the in-pod mount path, and the thresholds are
  * overridden per-case so a sweep can be exercised without filling a disk.
  */
-function runScript(root: string, opts: Partial<CacheEvictOptions>, overrides: Record<string, string> = {}) {
+function runScript(
+  root: string,
+  opts: Partial<CacheEvictOptions>,
+  overrides: Record<string, string> = {}
+) {
   let script = cacheEvictScript({ ...OPTS, ...opts });
   script = script.replace('CACHE_ROOT="/cache"', `CACHE_ROOT="${root}"`);
   for (const [key, value] of Object.entries(overrides)) {
     script = script.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${value}`);
   }
-  const out = execFileSync('sh', ['-c', script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const out = execFileSync('sh', ['-c', script], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
   return { out, survivors: readdirSync(root).sort() };
 }
 
@@ -38,7 +57,12 @@ function seedTenant(root: string, name: string, ageSeconds: number) {
   writeFileSync(join(imageDir, 'index.json'), '{}');
   const when = new Date(Date.now() - ageSeconds * 1000);
   // Depth 3 upward, so the depth-2 probe sees the intended age.
-  for (const p of [join(imageDir, 'index.json'), join(imageDir, 'blobs'), imageDir, join(root, name)]) {
+  for (const p of [
+    join(imageDir, 'index.json'),
+    join(imageDir, 'blobs'),
+    imageDir,
+    join(root, name)
+  ]) {
     utimesSync(p, when, when);
   }
 }
@@ -53,7 +77,7 @@ function withRoot(fn: (root: string) => void) {
 }
 
 test('evicts tenants past the age cutoff regardless of disk pressure', () => {
-  withRoot(root => {
+  withRoot((root) => {
     seedTenant(root, 'ancient', 30 * DAY);
     seedTenant(root, 'fresh', 60);
     // HIGH=101 is unreachable, so only the age sweep can run.
@@ -63,7 +87,7 @@ test('evicts tenants past the age cutoff regardless of disk pressure', () => {
 });
 
 test('never evicts the tenant the build belongs to, however stale it looks', () => {
-  withRoot(root => {
+  withRoot((root) => {
     seedTenant(root, 'ysws-mine', 400 * DAY);
     seedTenant(root, 'other', 400 * DAY);
     const { survivors } = runScript(root, {}, { HIGH: '0', TARGET: '0' });
@@ -73,7 +97,7 @@ test('never evicts the tenant the build belongs to, however stale it looks', () 
 });
 
 test('under pressure, evicts least-recently-used first and spares in-flight builds', () => {
-  withRoot(root => {
+  withRoot((root) => {
     seedTenant(root, 'oldest', 10 * DAY);
     seedTenant(root, 'middle', 5 * DAY);
     seedTenant(root, 'building-now', 30);
@@ -85,13 +109,13 @@ test('under pressure, evicts least-recently-used first and spares in-flight buil
     assert.ok(!survivors.includes('oldest') && !survivors.includes('middle'));
     assert.ok(
       out.indexOf('Evicting tenant cache: oldest') < out.indexOf('Evicting tenant cache: middle'),
-      'eviction order must be least-recently-used first',
+      'eviction order must be least-recently-used first'
     );
   });
 });
 
 test('leaves everything alone when there is no pressure and nothing is stale', () => {
-  withRoot(root => {
+  withRoot((root) => {
     seedTenant(root, 'a', 2 * DAY);
     seedTenant(root, 'b', 3 * DAY);
     const { survivors } = runScript(root, {}, { HIGH: '101' });
@@ -100,14 +124,14 @@ test('leaves everything alone when there is no pressure and nothing is stale', (
 });
 
 test("creates this build's own subPath so kubelet never has to", () => {
-  withRoot(root => {
+  withRoot((root) => {
     const { survivors } = runScript(root, {}, { HIGH: '101' });
     assert.ok(survivors.includes('ysws-mine'));
   });
 });
 
 test('fails loudly, and non-zero, when the cache directory cannot be created', () => {
-  withRoot(root => {
+  withRoot((root) => {
     // A file where the directory should go stands in for ENOSPC: mkdir -p
     // fails, and the branch that reports it has to exit non-zero so the build
     // retries without the shared cache instead of dying.
@@ -118,27 +142,33 @@ test('fails loudly, and non-zero, when the cache directory cannot be created', (
         assert.equal(err.status, 1);
         assert.match(err.stdout, /could not create this build's directory/);
         return true;
-      },
+      }
     );
   });
 });
 
-test('skips a tenant whose age cannot be read rather than treating it as ancient', { skip: process.getuid?.() === 0 ? 'needs a non-root uid to make a directory unreadable' : false }, () => {
-  withRoot(root => {
-    seedTenant(root, 'unreadable', 400 * DAY);
-    chmodSync(join(root, 'unreadable'), 0o000);
-    try {
-      // Both sweeps wide open: the only thing that can save this tenant is the
-      // guard. Without it an unreadable directory reads as epoch-old and every
-      // tenant on the volume gets wiped by one bad stat.
-      const { out, survivors } = runScript(root, {}, { HIGH: '0', TARGET: '0' });
-      assert.ok(survivors.includes('unreadable'), 'unknown age must mean "leave it alone"');
-      assert.match(out, /Skipping unreadable: could not determine age/);
-    } finally {
-      chmodSync(join(root, 'unreadable'), 0o755);
-    }
-  });
-});
+test(
+  'skips a tenant whose age cannot be read rather than treating it as ancient',
+  {
+    skip: process.getuid?.() === 0 ? 'needs a non-root uid to make a directory unreadable' : false
+  },
+  () => {
+    withRoot((root) => {
+      seedTenant(root, 'unreadable', 400 * DAY);
+      chmodSync(join(root, 'unreadable'), 0o000);
+      try {
+        // Both sweeps wide open: the only thing that can save this tenant is the
+        // guard. Without it an unreadable directory reads as epoch-old and every
+        // tenant on the volume gets wiped by one bad stat.
+        const { out, survivors } = runScript(root, {}, { HIGH: '0', TARGET: '0' });
+        assert.ok(survivors.includes('unreadable'), 'unknown age must mean "leave it alone"');
+        assert.match(out, /Skipping unreadable: could not determine age/);
+      } finally {
+        chmodSync(join(root, 'unreadable'), 0o755);
+      }
+    });
+  }
+);
 
 test('mounts the cache at its root with no subPath, or it cannot start on a full volume', () => {
   const container = cacheEvictInitContainer(OPTS);
@@ -147,7 +177,7 @@ test('mounts the cache at its root with no subPath, or it cannot start on a full
   assert.equal(mount.name, 'buildkit-cache');
   assert.ok(
     !('subPath' in mount),
-    'a subPath here would reintroduce the very failure this container exists to prevent',
+    'a subPath here would reintroduce the very failure this container exists to prevent'
   );
 });
 

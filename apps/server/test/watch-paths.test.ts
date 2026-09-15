@@ -7,7 +7,7 @@ import {
   partitionByWatchPaths,
   fileMatchesWatchPaths,
   normalizeWatchPaths,
-  pushMatchesWatchPaths,
+  pushMatchesWatchPaths
 } from '../src/github/watch-paths';
 
 test('a bare directory matches everything under it', () => {
@@ -21,7 +21,7 @@ test('a bare directory matches everything under it', () => {
 test('leading slashes, ./ prefixes and trailing slashes normalize away', () => {
   assert.deepEqual(normalizeWatchPaths(['/apps/web/', './packages/ui', '  ']), [
     'apps/web/',
-    'packages/ui',
+    'packages/ui'
   ]);
   const patterns = normalizeWatchPaths(['/apps/web/']);
   assert.equal(fileMatchesWatchPaths('/apps/web/src/main.ts', patterns), true);
@@ -105,9 +105,9 @@ test('changed files come from every commit in the push', () => {
   const files = changedFilesFromPush({
     commits: [
       { id: 'a', added: ['apps/web/a.ts'], removed: [], modified: ['README.md'] },
-      { id: 'b', added: [], removed: ['docs/old.md'], modified: [] },
+      { id: 'b', added: [], removed: ['docs/old.md'], modified: [] }
     ],
-    head_commit: { id: 'b', added: [], removed: ['docs/old.md'], modified: [] },
+    head_commit: { id: 'b', added: [], removed: ['docs/old.md'], modified: [] }
   });
   assert.deepEqual(files?.sort(), ['README.md', 'apps/web/a.ts', 'docs/old.md']);
 });
@@ -115,7 +115,7 @@ test('changed files come from every commit in the push', () => {
 test('a head commit missing from the commit list is still counted', () => {
   const files = changedFilesFromPush({
     commits: [],
-    head_commit: { id: 'z', added: ['apps/web/a.ts'], removed: [], modified: [] },
+    head_commit: { id: 'z', added: ['apps/web/a.ts'], removed: [], modified: [] }
   });
   assert.deepEqual(files, ['apps/web/a.ts']);
 });
@@ -131,7 +131,7 @@ test('a truncated commit list is unknown', () => {
     id: String(i),
     added: [],
     removed: [],
-    modified: ['docs/intro.md'],
+    modified: ['docs/intro.md']
   }));
   assert.equal(changedFilesFromPush({ commits }), null);
 });
@@ -143,10 +143,10 @@ test('a compare response reports every changed file', () => {
     changedFilesFromCompare({
       files: [
         { filename: 'v2_pipeline/app.py', status: 'modified' },
-        { filename: 'frontend/src/routes/posts/+page.svelte', status: 'added' },
-      ],
+        { filename: 'frontend/src/routes/posts/+page.svelte', status: 'added' }
+      ]
     }),
-    ['v2_pipeline/app.py', 'frontend/src/routes/posts/+page.svelte'],
+    ['v2_pipeline/app.py', 'frontend/src/routes/posts/+page.svelte']
   );
 });
 
@@ -155,11 +155,9 @@ test('a rename counts as a change to both the old path and the new one', () => {
   // push payload says the same thing as an add plus a remove.
   assert.deepEqual(
     changedFilesFromCompare({
-      files: [
-        { filename: 'v2_pipeline/steps.py', previous_filename: 'pipeline/steps.py' },
-      ],
+      files: [{ filename: 'v2_pipeline/steps.py', previous_filename: 'pipeline/steps.py' }]
     }),
-    ['v2_pipeline/steps.py', 'pipeline/steps.py'],
+    ['v2_pipeline/steps.py', 'pipeline/steps.py']
   );
 });
 
@@ -184,7 +182,7 @@ test('an unknown compare deploys rather than skipping', () => {
 
 test('a compare answer filters exactly like a push payload would', () => {
   const compared = changedFilesFromCompare({
-    files: [{ filename: 'frontend/src/app.css' }],
+    files: [{ filename: 'frontend/src/app.css' }]
   });
   assert.equal(pushMatchesWatchPaths(['frontend/**'], compared), true);
   assert.equal(pushMatchesWatchPaths(['v2_pipeline/**'], compared), false);
@@ -199,10 +197,16 @@ const everything = { name: 'everything', autoDeployPaths: [] };
 test('each deployment gets its own verdict on the same push', () => {
   const { watched, unmatched } = partitionByWatchPaths(
     [frontend, pipeline, everything],
-    ['frontend/src/app.css'],
+    ['frontend/src/app.css']
   );
-  assert.deepEqual(watched.map((d) => d.name), ['frontend', 'everything']);
-  assert.deepEqual(unmatched.map((d) => d.name), ['pipeline']);
+  assert.deepEqual(
+    watched.map((d) => d.name),
+    ['frontend', 'everything']
+  );
+  assert.deepEqual(
+    unmatched.map((d) => d.name),
+    ['pipeline']
+  );
 });
 
 test('a deployment watching everything is never held back for confirmation', () => {
@@ -219,7 +223,10 @@ test('an unknown file list clears the whole unmatched set', () => {
   assert.deepEqual(first.watched, []);
 
   const second = partitionByWatchPaths(first.unmatched, null);
-  assert.deepEqual(second.watched.map((d) => d.name), ['frontend', 'pipeline']);
+  assert.deepEqual(
+    second.watched.map((d) => d.name),
+    ['frontend', 'pipeline']
+  );
   assert.deepEqual(second.unmatched, []);
 });
 
@@ -227,28 +234,36 @@ test('a confirmed miss stays a miss', () => {
   const first = partitionByWatchPaths([frontend, pipeline], ['docs/readme.md']);
   const second = partitionByWatchPaths(first.unmatched, ['docs/readme.md', 'LICENSE']);
   assert.deepEqual(second.watched, []);
-  assert.deepEqual(second.unmatched.map((d) => d.name), ['frontend', 'pipeline']);
+  assert.deepEqual(
+    second.unmatched.map((d) => d.name),
+    ['frontend', 'pipeline']
+  );
 });
 
 test('a payload miss that the compare contradicts still builds', () => {
   // The case the second stage exists for: the payload did not mention the file,
   // the complete list does.
   const first = partitionByWatchPaths([pipeline], ['frontend/src/app.css']);
-  assert.deepEqual(first.unmatched.map((d) => d.name), ['pipeline']);
+  assert.deepEqual(
+    first.unmatched.map((d) => d.name),
+    ['pipeline']
+  );
 
   const compared = changedFilesFromCompare({
-    files: [{ filename: 'frontend/src/app.css' }, { filename: 'v2_pipeline/app.py' }],
+    files: [{ filename: 'frontend/src/app.css' }, { filename: 'v2_pipeline/app.py' }]
   });
-  assert.deepEqual(partitionByWatchPaths(first.unmatched, compared).watched.map((d) => d.name), [
-    'pipeline',
-  ]);
+  assert.deepEqual(
+    partitionByWatchPaths(first.unmatched, compared).watched.map((d) => d.name),
+    ['pipeline']
+  );
 });
 
 test('paths that are not a list of strings are treated as no filter', () => {
   assert.deepEqual(
-    partitionByWatchPaths([{ autoDeployPaths: null }, { autoDeployPaths: 'frontend/**' }], [
-      'docs/readme.md',
-    ]).unmatched,
-    [],
+    partitionByWatchPaths(
+      [{ autoDeployPaths: null }, { autoDeployPaths: 'frontend/**' }],
+      ['docs/readme.md']
+    ).unmatched,
+    []
   );
 });

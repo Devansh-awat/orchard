@@ -7,9 +7,14 @@ import {
   CRD_PLURAL,
   CRD_VERSION,
   INSTANCE_LABEL,
-  SANDBOX_SHARD,
+  SANDBOX_SHARD
 } from '../sandboxes/sandbox-cr';
-import { MirrorListOptions, MirrorListPage, MirrorRefs, MirrorResourceConfig } from './mirror-informer';
+import {
+  MirrorListOptions,
+  MirrorListPage,
+  MirrorRefs,
+  MirrorResourceConfig
+} from './mirror-informer';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
@@ -54,7 +59,7 @@ function toListResult(res: K8sListBody): MirrorListPage {
   return {
     items: res.body.items ?? [],
     resourceVersion: meta.resourceVersion ?? '',
-    continueToken: meta._continue ?? meta.continue ?? null,
+    continueToken: meta._continue ?? meta.continue ?? null
   };
 }
 
@@ -66,7 +71,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
   const listPods = async (
     kc: k8s.KubeConfig,
     opts: MirrorListOptions,
-    labelSelector: string,
+    labelSelector: string
   ): Promise<MirrorListPage> =>
     toListResult(
       await core(kc).listPodForAllNamespaces(
@@ -74,8 +79,8 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
         opts.continueToken,
         undefined,
         labelSelector,
-        opts.limit,
-      ),
+        opts.limit
+      )
     );
 
   const shards: MirrorShardDef[] = [
@@ -91,9 +96,9 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           list: (kc, opts) => listPods(kc, opts, ORCHARD_SELECTOR),
           mapRefs: (obj) => deps.pods.mapRefs(obj),
           onEvent: (type, obj) => deps.pods.onEvent(type, obj),
-          onListComplete: (seen) => deps.pods.pruneStalePods(seen),
-        },
-      ],
+          onListComplete: (seen) => deps.pods.pruneStalePods(seen)
+        }
+      ]
     },
     {
       name: 'cnpg',
@@ -106,7 +111,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           labelSelector: CNPG_POD_SELECTOR,
           list: (kc, opts) => listPods(kc, opts, CNPG_POD_SELECTOR),
           mapRefs: (obj) => deps.cnpg.mapPodRefs(obj),
-          onEvent: (type, obj) => deps.cnpg.onPodEvent(type, obj),
+          onEvent: (type, obj) => deps.cnpg.onPodEvent(type, obj)
         },
         {
           kind: 'Cluster',
@@ -125,13 +130,13 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   undefined,
-                  opts.limit,
-                )) as K8sListBody,
+                  opts.limit
+                )) as K8sListBody
             ),
           mapRefs: (obj) => deps.cnpg.mapClusterRefs(obj),
-          onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj),
-        },
-      ],
+          onEvent: (type, obj) => deps.cnpg.onClusterEvent(type, obj)
+        }
+      ]
     },
     {
       name: 'workloads',
@@ -151,11 +156,11 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   ORCHARD_SELECTOR,
-                  opts.limit,
-                ),
+                  opts.limit
+                )
             ),
           mapRefs: (obj) => deps.workloads.mapRefs(obj),
-          onEvent: (type, obj) => deps.workloads.onEvent(type, obj),
+          onEvent: (type, obj) => deps.workloads.onEvent(type, obj)
         },
         {
           kind: 'PodDisruptionBudget',
@@ -171,13 +176,13 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   ORCHARD_SELECTOR,
-                  opts.limit,
-                ),
+                  opts.limit
+                )
             ),
           mapRefs: (obj) => deps.workloads.mapPdbRefs(obj),
-          onEvent: (type, obj) => deps.workloads.onPdbEvent(type, obj),
-        },
-      ],
+          onEvent: (type, obj) => deps.workloads.onPdbEvent(type, obj)
+        }
+      ]
     },
     {
       name: 'batch',
@@ -197,11 +202,11 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   LABEL_JOB_ID,
-                  opts.limit,
-                ),
+                  opts.limit
+                )
             ),
           mapRefs: (obj) => deps.jobs.mapRefs(obj),
-          onEvent: (type, obj) => deps.jobs.onEvent(type, obj),
+          onEvent: (type, obj) => deps.jobs.onEvent(type, obj)
         },
         {
           kind: 'CronJob',
@@ -217,12 +222,12 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   LABEL_JOB_ID,
-                  opts.limit,
-                ),
+                  opts.limit
+                )
             ),
-          mapRefs: (obj) => deps.jobs.mapRefs(obj),
-        },
-      ],
+          mapRefs: (obj) => deps.jobs.mapRefs(obj)
+        }
+      ]
     },
     {
       name: 'net',
@@ -242,10 +247,10 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   INGRESS_SELECTOR,
-                  opts.limit,
-                ),
+                  opts.limit
+                )
             ),
-          mapRefs: byNamespace,
+          mapRefs: byNamespace
         },
         {
           kind: 'Service',
@@ -259,12 +264,12 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.continueToken,
                 undefined,
                 ORCHARD_SELECTOR,
-                opts.limit,
-              ),
+                opts.limit
+              )
             ),
-          mapRefs: byNamespace,
-        },
-      ],
+          mapRefs: byNamespace
+        }
+      ]
     },
     {
       name: 'storage',
@@ -282,13 +287,13 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.continueToken,
                 undefined,
                 ORCHARD_SELECTOR,
-                opts.limit,
-              ),
+                opts.limit
+              )
             ),
-          mapRefs: byNamespace,
-        },
-      ],
-    },
+          mapRefs: byNamespace
+        }
+      ]
+    }
   ];
 
   if (deps.sandboxScope) {
@@ -321,11 +326,11 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.continueToken,
                   undefined,
                   ownSelector,
-                  opts.limit,
-                )) as K8sListBody,
+                  opts.limit
+                )) as K8sListBody
             ),
           onEvent: (type, obj) => deps.sandboxes.onEvent(type, obj),
-          onListComplete: (seen) => deps.sandboxes.sweepOrphans(seen),
+          onListComplete: (seen) => deps.sandboxes.sweepOrphans(seen)
         },
         {
           // Held for lookups, not for derived state: exec, the SSH tunnel and
@@ -344,11 +349,11 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.continueToken,
                 undefined,
                 ownSelector,
-                opts.limit,
-              ),
-            ),
-        },
-      ],
+                opts.limit
+              )
+            )
+        }
+      ]
     });
   }
 

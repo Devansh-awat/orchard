@@ -390,7 +390,7 @@ k3s cluster running Traefik wants `traefik,orchard`.
 
 ```yaml
 tenant:
-  ingressNamespaces: "traefik,orchard"
+  ingressNamespaces: 'traefik,orchard'
 ```
 
 On an installer-built host:

@@ -31,13 +31,17 @@ interface OAuthEndpoints {
 const HACKCLUB_ENDPOINTS: OAuthEndpoints = {
   authorizeUrl: 'https://account.hackclub.com/oauth/authorize',
   tokenUrl: 'https://account.hackclub.com/oauth/token',
-  userinfoUrl: 'https://account.hackclub.com/api/v1/me',
+  userinfoUrl: 'https://account.hackclub.com/api/v1/me'
 };
 
 function claimPath(data: unknown, path: string): unknown {
   return path
     .split('.')
-    .reduce<unknown>((obj, key) => (obj && typeof obj === 'object' ? (obj as Record<string, unknown>)[key] : undefined), data);
+    .reduce<unknown>(
+      (obj, key) =>
+        obj && typeof obj === 'object' ? (obj as Record<string, unknown>)[key] : undefined,
+      data
+    );
 }
 
 @Injectable()
@@ -76,7 +80,9 @@ export class OAuthService {
       this.redirectUri = process.env.HACKCLUB_REDIRECT_URI;
       this.scopes = 'email name';
       if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-        throw new Error('AUTH_PROVIDER=hackclub requires HACKCLUB_CLIENT_ID, HACKCLUB_CLIENT_SECRET and HACKCLUB_REDIRECT_URI');
+        throw new Error(
+          'AUTH_PROVIDER=hackclub requires HACKCLUB_CLIENT_ID, HACKCLUB_CLIENT_SECRET and HACKCLUB_REDIRECT_URI'
+        );
       }
     } else if (this.provider === 'oidc') {
       this.clientId = process.env.AUTH_OAUTH_CLIENT_ID;
@@ -88,10 +94,14 @@ export class OAuthService {
         process.env.AUTH_OAUTH_TOKEN_URL &&
         process.env.AUTH_OAUTH_USERINFO_URL;
       if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-        throw new Error('AUTH_PROVIDER=oidc requires AUTH_OAUTH_CLIENT_ID, AUTH_OAUTH_CLIENT_SECRET and AUTH_OAUTH_REDIRECT_URI');
+        throw new Error(
+          'AUTH_PROVIDER=oidc requires AUTH_OAUTH_CLIENT_ID, AUTH_OAUTH_CLIENT_SECRET and AUTH_OAUTH_REDIRECT_URI'
+        );
       }
       if (!process.env.AUTH_OAUTH_ISSUER && !hasExplicitEndpoints) {
-        throw new Error('AUTH_PROVIDER=oidc requires AUTH_OAUTH_ISSUER or AUTH_OAUTH_AUTHORIZE_URL + AUTH_OAUTH_TOKEN_URL + AUTH_OAUTH_USERINFO_URL');
+        throw new Error(
+          'AUTH_PROVIDER=oidc requires AUTH_OAUTH_ISSUER or AUTH_OAUTH_AUTHORIZE_URL + AUTH_OAUTH_TOKEN_URL + AUTH_OAUTH_USERINFO_URL'
+        );
       }
     } else {
       this.scopes = '';
@@ -121,7 +131,7 @@ export class OAuthService {
       this.oidcEndpoints = {
         authorizeUrl: process.env.AUTH_OAUTH_AUTHORIZE_URL,
         tokenUrl: process.env.AUTH_OAUTH_TOKEN_URL,
-        userinfoUrl: process.env.AUTH_OAUTH_USERINFO_URL,
+        userinfoUrl: process.env.AUTH_OAUTH_USERINFO_URL
       };
       return this.oidcEndpoints;
     }
@@ -132,13 +142,17 @@ export class OAuthService {
       throw new Error(`OIDC discovery failed for ${issuer}: ${response.status}`);
     }
     const discovery = await response.json();
-    if (!discovery.authorization_endpoint || !discovery.token_endpoint || !discovery.userinfo_endpoint) {
+    if (
+      !discovery.authorization_endpoint ||
+      !discovery.token_endpoint ||
+      !discovery.userinfo_endpoint
+    ) {
       throw new Error(`OIDC discovery document for ${issuer} is missing required endpoints`);
     }
     this.oidcEndpoints = {
       authorizeUrl: discovery.authorization_endpoint,
       tokenUrl: discovery.token_endpoint,
-      userinfoUrl: discovery.userinfo_endpoint,
+      userinfoUrl: discovery.userinfo_endpoint
     };
     return this.oidcEndpoints;
   }
@@ -149,7 +163,7 @@ export class OAuthService {
       client_id: this.clientId!,
       redirect_uri: this.redirectUri!,
       scope: this.scopes,
-      response_type: 'code',
+      response_type: 'code'
     });
 
     if (state) {
@@ -166,15 +180,15 @@ export class OAuthService {
       client_secret: this.clientSecret!,
       redirect_uri: this.redirectUri!,
       code,
-      grant_type: 'authorization_code',
+      grant_type: 'authorization_code'
     });
 
     const response = await fetch(endpoints.tokenUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: params.toString(),
+      body: params.toString()
     });
 
     if (!response.ok) {
@@ -190,8 +204,8 @@ export class OAuthService {
     const endpoints = await this.getEndpoints();
     const response = await fetch(endpoints.userinfoUrl, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+        Authorization: `Bearer ${accessToken}`
+      }
     });
 
     if (!response.ok) {
@@ -206,7 +220,7 @@ export class OAuthService {
         id: identity.id,
         email: identity.primary_email,
         name: `${identity.first_name} ${identity.last_name}`,
-        slackId: identity.slack_id,
+        slackId: identity.slack_id
       };
     }
 
@@ -225,7 +239,7 @@ export class OAuthService {
     return {
       id: String(id),
       email: String(email),
-      name: String(name),
+      name: String(name)
     };
   }
 
@@ -234,7 +248,7 @@ export class OAuthService {
       email: user.email,
       name: user.name,
       externalAuthId: user.id,
-      authMethod: 'oauth',
+      authMethod: 'oauth'
     };
     if (sessionId) payload.sessionId = sessionId;
 
@@ -260,12 +274,12 @@ export class OAuthService {
     sessionId?: string,
     // Confines the session to one organization. Set for sign-ins that came
     // from that org's own identity provider; see RequestAuthContext.
-    orgScope?: string,
+    orgScope?: string
   ): Promise<string> {
     const payload: Record<string, unknown> = {
       email,
       name,
-      authMethod,
+      authMethod
     };
     if (sessionId) payload.sessionId = sessionId;
     if (orgScope) payload.orgScope = orgScope;
@@ -304,7 +318,7 @@ export class OAuthService {
         sessionId: payload.sessionId as string | undefined,
         orgScope: payload.orgScope as string | undefined,
         iat: payload.iat as number,
-        exp: payload.exp as number,
+        exp: payload.exp as number
       };
     } catch (error) {
       throw new Error('Invalid or expired token');

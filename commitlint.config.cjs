@@ -27,8 +27,8 @@ module.exports = {
         'release',
         'ci',
         'deps',
-        'repo',
-      ],
-    ],
-  },
+        'repo'
+      ]
+    ]
+  }
 };

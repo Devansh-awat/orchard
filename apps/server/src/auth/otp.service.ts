@@ -15,7 +15,7 @@ export class OtpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    private readonly rateLimitService: RateLimitService,
+    private readonly rateLimitService: RateLimitService
   ) {}
 
   /**
@@ -45,7 +45,10 @@ export class OtpService {
    * Request an OTP code to be sent to the email address.
    * Implements rate limiting by email and IP.
    */
-  async requestOtp(email: string, ipAddress: string): Promise<{ success: boolean; message: string }> {
+  async requestOtp(
+    email: string,
+    ipAddress: string
+  ): Promise<{ success: boolean; message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check rate limits for both email and IP
@@ -57,11 +60,11 @@ export class OtpService {
       where: {
         email: normalizedEmail,
         used: false,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: new Date() }
       },
       data: {
-        used: true, // Mark as used so they can't be used
-      },
+        used: true // Mark as used so they can't be used
+      }
     });
 
     // Generate new OTP
@@ -76,15 +79,15 @@ export class OtpService {
         code: hashedCode,
         expiresAt,
         attempts: 0,
-        used: false,
-      },
+        used: false
+      }
     });
 
     // Send OTP email
     const emailSent = await this.emailService.sendOtpEmail({
       recipientEmail: normalizedEmail,
       otpCode: plainCode,
-      expiryMinutes: OTP_EXPIRY_MINUTES,
+      expiryMinutes: OTP_EXPIRY_MINUTES
     });
 
     // Increment rate limit counter
@@ -102,7 +105,7 @@ export class OtpService {
 
     return {
       success: true,
-      message: 'If an account exists with this email, you will receive an OTP code shortly.',
+      message: 'If an account exists with this email, you will receive an OTP code shortly.'
     };
   }
 
@@ -113,7 +116,7 @@ export class OtpService {
   async verifyOtp(
     email: string,
     code: string,
-    ipAddress: string,
+    ipAddress: string
   ): Promise<{ valid: boolean; email?: string }> {
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedCode = code.trim();
@@ -134,9 +137,9 @@ export class OtpService {
       where: {
         email: normalizedEmail,
         used: false,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: new Date() }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
     if (!otpRecord) {
@@ -151,17 +154,17 @@ export class OtpService {
       // Mark as used to prevent further attempts
       await this.prisma.otpCode.update({
         where: { id: otpRecord.id },
-        data: { used: true },
+        data: { used: true }
       });
       throw new BadRequestException(
-        'Maximum verification attempts exceeded. Please request a new code.',
+        'Maximum verification attempts exceeded. Please request a new code.'
       );
     }
 
     // Increment attempt counter
     await this.prisma.otpCode.update({
       where: { id: otpRecord.id },
-      data: { attempts: { increment: 1 } },
+      data: { attempts: { increment: 1 } }
     });
 
     // Use timing-safe comparison to prevent timing attacks
@@ -177,7 +180,7 @@ export class OtpService {
     // Mark OTP as used
     await this.prisma.otpCode.update({
       where: { id: otpRecord.id },
-      data: { used: true },
+      data: { used: true }
     });
 
     // H-6: a successful OTP verification proves ownership of the email
@@ -187,7 +190,7 @@ export class OtpService {
     // with emailVerified=true), so this is safe for both flows.
     await this.prisma.user.updateMany({
       where: { email: normalizedEmail, emailVerified: false },
-      data: { emailVerified: true, emailVerifiedAt: new Date() },
+      data: { emailVerified: true, emailVerifiedAt: new Date() }
     });
 
     // Reset rate limits on success
@@ -221,9 +224,9 @@ export class OtpService {
       where: {
         OR: [
           { expiresAt: { lt: new Date() } },
-          { used: true, createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-        ],
-      },
+          { used: true, createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+        ]
+      }
     });
 
     return result.count;

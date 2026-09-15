@@ -11,8 +11,8 @@ async function main() {
     update: {},
     create: {
       name: 'admin',
-      description: 'Full administrative access to a project',
-    },
+      description: 'Full administrative access to a project'
+    }
   });
 
   await prisma.role.upsert({
@@ -20,8 +20,8 @@ async function main() {
     update: {},
     create: {
       name: 'member',
-      description: 'Standard member access to a project',
-    },
+      description: 'Standard member access to a project'
+    }
   });
 
   await prisma.role.upsert({
@@ -29,8 +29,8 @@ async function main() {
     update: {},
     create: {
       name: 'viewer',
-      description: 'Read-only access to a project',
-    },
+      description: 'Read-only access to a project'
+    }
   });
 
   console.log('✅ Created roles: admin, member, viewer');
@@ -46,8 +46,8 @@ async function main() {
       passwordHash,
       firstName: 'Orchard',
       lastName: 'Admin',
-      setupCompleted: true,
-    },
+      setupCompleted: true
+    }
   });
 
   console.log('✅ Created user: admin@orchard.dev');
@@ -59,8 +59,8 @@ async function main() {
       name: 'Orchard Demo',
       slug: 'orchard-demo',
       description: 'Orchard Demo organization',
-      createdBy: user.id,
-    },
+      createdBy: user.id
+    }
   });
 
   console.log('✅ Created organization: Orchard Demo');
@@ -69,16 +69,16 @@ async function main() {
     where: {
       organizationId_userId: {
         organizationId: organization.id,
-        userId: user.id,
-      },
+        userId: user.id
+      }
     },
     update: {},
     create: {
       organizationId: organization.id,
       userId: user.id,
       role: 'owner',
-      addedBy: user.id,
-    },
+      addedBy: user.id
+    }
   });
 
   console.log('✅ Added user to organization as owner');
@@ -87,8 +87,8 @@ async function main() {
     where: {
       organizationId_slug: {
         organizationId: organization.id,
-        slug: 'midnight',
-      },
+        slug: 'midnight'
+      }
     },
     update: {},
     create: {
@@ -98,8 +98,8 @@ async function main() {
       namespace: 'orchard-demo-midnight',
       description: 'Demo project for local development',
       createdBy: user.id,
-      ownerId: user.id,
-    },
+      ownerId: user.id
+    }
   });
 
   console.log('✅ Created project: Midnight (namespace: orchard-demo-midnight)');
@@ -108,16 +108,16 @@ async function main() {
     where: {
       projectId_userId: {
         projectId: project.id,
-        userId: user.id,
-      },
+        userId: user.id
+      }
     },
     update: {},
     create: {
       projectId: project.id,
       userId: user.id,
       roleId: adminRole.id,
-      addedBy: user.id,
-    },
+      addedBy: user.id
+    }
   });
 
   console.log('✅ Added user to project as admin');
@@ -126,8 +126,8 @@ async function main() {
     where: {
       projectId_slug: {
         projectId: project.id,
-        slug: 'production',
-      },
+        slug: 'production'
+      }
     },
     update: {},
     create: {
@@ -136,8 +136,8 @@ async function main() {
       slug: 'production',
       namespace: project.namespace,
       isDefault: true,
-      isProduction: true,
-    },
+      isProduction: true
+    }
   });
 
   console.log('✅ Created environment: Production');

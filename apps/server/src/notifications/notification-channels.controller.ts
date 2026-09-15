@@ -9,7 +9,7 @@ import {
   Query,
   Request,
   ForbiddenException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { NotificationChannelsService, ChannelInput } from './notification-channels.service';
@@ -29,13 +29,13 @@ export class NotificationChannelsController {
     private readonly organizationsService: OrganizationsService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   private async currentUser(req: any) {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
-      username: req.user.username,
+      username: req.user.username
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
@@ -68,7 +68,9 @@ export class NotificationChannelsController {
   private async requireNotificationsFeature(userId: string): Promise<void> {
     const enabled = await this.analytics.isFeatureEnabled('notifications', userId);
     if (!enabled) {
-      throw new ForbiddenException('Notifications are not enabled for your account. Enable the Notifications beta in Early Access Features.');
+      throw new ForbiddenException(
+        'Notifications are not enabled for your account. Enable the Notifications beta in Early Access Features.'
+      );
     }
   }
 
@@ -80,7 +82,7 @@ export class NotificationChannelsController {
     @Param('id') organizationId: string,
     @Query('scopeType') scopeType: string,
     @Query('scopeId') scopeId: string,
-    @Request() req,
+    @Request() req
   ) {
     if (scopeType) {
       await this.requireMember(organizationId, req);
@@ -95,14 +97,14 @@ export class NotificationChannelsController {
   async createChannel(
     @Param('id') organizationId: string,
     @Body() body: ChannelInput,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.requireMember(organizationId, req);
     await this.requireNotificationsFeature(user.id);
     const scope = await this.rules.resolveScope(
       organizationId,
       body?.scopeType ?? 'org',
-      body?.scopeId ?? null,
+      body?.scopeId ?? null
     );
     await this.rules.assertCanEditScope(organizationId, scope, user);
     return this.channels.createChannel(organizationId, body ?? {}, user, scope);
@@ -113,7 +115,7 @@ export class NotificationChannelsController {
     @Param('id') organizationId: string,
     @Param('channelId') channelId: string,
     @Body() body: ChannelInput,
-    @Request() req,
+    @Request() req
   ) {
     const { user, scope } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
@@ -124,7 +126,7 @@ export class NotificationChannelsController {
   async deleteChannel(
     @Param('id') organizationId: string,
     @Param('channelId') channelId: string,
-    @Request() req,
+    @Request() req
   ) {
     const { user } = await this.requireChannelScope(organizationId, channelId, req);
     return this.channels.deleteChannel(organizationId, channelId, user);
@@ -134,7 +136,7 @@ export class NotificationChannelsController {
   async listDeliveries(
     @Param('id') organizationId: string,
     @Param('channelId') channelId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.requireChannelScope(organizationId, channelId, req);
     return this.channels.listDeliveries(organizationId, channelId);
@@ -145,7 +147,7 @@ export class NotificationChannelsController {
   async testChannel(
     @Param('id') organizationId: string,
     @Param('channelId') channelId: string,
-    @Request() req,
+    @Request() req
   ) {
     const { user } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
@@ -158,7 +160,7 @@ export class NotificationChannelsController {
     @Param('id') organizationId: string,
     @Param('channelId') channelId: string,
     @Body() body: { sinceHours?: number },
-    @Request() req,
+    @Request() req
   ) {
     const { user } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
@@ -170,7 +172,7 @@ export class NotificationChannelsController {
     @Param('id') organizationId: string,
     @Query('scopeType') scopeType: string,
     @Query('scopeId') scopeId: string,
-    @Request() req,
+    @Request() req
   ) {
     await this.requireMember(organizationId, req);
     return this.rules.listRules(organizationId, scopeType, scopeId);
@@ -188,7 +190,7 @@ export class NotificationChannelsController {
     @Param('id') organizationId: string,
     @Param('ruleId') ruleId: string,
     @Body() body: RuleInput,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.requireMember(organizationId, req);
     await this.requireNotificationsFeature(user.id);
@@ -199,7 +201,7 @@ export class NotificationChannelsController {
   async deleteRule(
     @Param('id') organizationId: string,
     @Param('ruleId') ruleId: string,
-    @Request() req,
+    @Request() req
   ) {
     const user = await this.requireMember(organizationId, req);
     return this.rules.deleteRule(organizationId, ruleId, user);

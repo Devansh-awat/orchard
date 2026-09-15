@@ -66,16 +66,14 @@ export interface InvolvementContext {
 
 export function isInvolved(userId: string, ctx: InvolvementContext): boolean {
   return (
-    userId === ctx.actorUserId ||
-    userId === ctx.resourceCreatorId ||
-    userId === ctx.projectOwnerId
+    userId === ctx.actorUserId || userId === ctx.resourceCreatorId || userId === ctx.projectOwnerId
   );
 }
 
 export function shouldNotifyUser(
   userId: string,
   settings: SettingRow[],
-  ctx: InvolvementContext,
+  ctx: InvolvementContext
 ): boolean {
   const value = resolveSettingValue(settings, userId);
   if (value === 'never') return false;

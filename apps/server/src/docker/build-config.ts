@@ -61,15 +61,17 @@ export function parseRailpackInfo(logs: string | null | undefined): RailpackDete
     : [];
 
   // Metadata booleans are serialized as strings by railpack's Metadata.SetBool.
-  const isStatic = metadata.nodeIsSPA === 'true' || metadata.nodeIsSPA === true
-    || providers.includes('staticfile');
+  const isStatic =
+    metadata.nodeIsSPA === 'true' ||
+    metadata.nodeIsSPA === true ||
+    providers.includes('staticfile');
 
   return {
     framework: metadata.nodeRuntime ?? providers[0] ?? null,
     providers,
     isStatic,
     packageManager: metadata.nodePackageManager ?? null,
-    railpackVersion: info?.railpackVersion ?? null,
+    railpackVersion: info?.railpackVersion ?? null
   };
 }
 
@@ -131,8 +133,8 @@ export function railpackConfigOverride(env: Record<string, string>): Record<stri
   const step = (cmd: string) => ({
     commands: [
       { src: '.', dest: '.' },
-      { cmd: `sh -c '${cmd}'`, customName: cmd },
-    ],
+      { cmd: `sh -c '${cmd}'`, customName: cmd }
+    ]
   });
 
   const install = env.RAILPACK_INSTALL_CMD?.trim();
@@ -142,7 +144,7 @@ export function railpackConfigOverride(env: Record<string, string>): Record<stri
   if (install || build) {
     out.steps = {
       ...(install ? { install: step(install) } : {}),
-      ...(build ? { build: step(build) } : {}),
+      ...(build ? { build: step(build) } : {})
     };
   }
   if (start) out.deploy = { startCommand: start };
@@ -189,7 +191,7 @@ export function railpackOverrideEnv(config: DeploymentBuildConfig): Record<strin
  */
 export function resolveScratchMode(
   override: string | undefined,
-  runtimeClass: string | undefined,
+  runtimeClass: string | undefined
 ): 'tmpfs' | 'disk' | 'block' {
   const chosen = (override || '').trim();
   if (chosen === 'tmpfs' || chosen === 'disk' || chosen === 'block') return chosen;

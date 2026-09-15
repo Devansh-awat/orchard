@@ -23,17 +23,17 @@ const STORED: StoredHealthCheck = {
   healthCheckRetries: 3,
   startupFailureThreshold: 30,
   healthCheckOverride: false,
-  dockerfileHealthCheck: null,
+  dockerfileHealthCheck: null
 };
 
 test('a shell-form HEALTHCHECK keeps its operators by running under sh -c', () => {
   const hc = parse(
-    'FROM node:20\nHEALTHCHECK --interval=10s --timeout=2s --retries=5 CMD curl -f http://localhost:3000/health || exit 1\n',
+    'FROM node:20\nHEALTHCHECK --interval=10s --timeout=2s --retries=5 CMD curl -f http://localhost:3000/health || exit 1\n'
   );
   assert.deepEqual(hc?.command, [
     '/bin/sh',
     '-c',
-    'curl -f http://localhost:3000/health || exit 1',
+    'curl -f http://localhost:3000/health || exit 1'
   ]);
   assert.equal(hc?.interval, 10);
   assert.equal(hc?.timeout, 2);
@@ -47,7 +47,7 @@ test('an exec-form HEALTHCHECK is taken as argv', () => {
 
 test('a line continuation is read as one instruction', () => {
   const hc = parse(
-    'FROM alpine\nHEALTHCHECK --interval=1m \\\n  --start-period=45s \\\n  CMD wget -q -O /dev/null http://localhost/\n',
+    'FROM alpine\nHEALTHCHECK --interval=1m \\\n  --start-period=45s \\\n  CMD wget -q -O /dev/null http://localhost/\n'
   );
   assert.deepEqual(hc?.command, ['/bin/sh', '-c', 'wget -q -O /dev/null http://localhost/']);
   assert.equal(hc?.interval, 60);
@@ -56,7 +56,7 @@ test('a line continuation is read as one instruction', () => {
 
 test('a comment inside a continuation does not swallow the instruction', () => {
   const hc = parse(
-    'FROM alpine\nHEALTHCHECK --interval=30s \\\n  # keep this cheap\n\n  CMD curl -f http://localhost/ || exit 1\n',
+    'FROM alpine\nHEALTHCHECK --interval=30s \\\n  # keep this cheap\n\n  CMD curl -f http://localhost/ || exit 1\n'
   );
   assert.deepEqual(hc?.command, ['/bin/sh', '-c', 'curl -f http://localhost/ || exit 1']);
   assert.equal(hc?.interval, 30);
@@ -64,21 +64,21 @@ test('a comment inside a continuation does not swallow the instruction', () => {
 
 test('a builder stage HEALTHCHECK never reaches the built image', () => {
   const hc = parse(
-    'FROM golang AS build\nHEALTHCHECK CMD /build/check\nFROM alpine\nCOPY --from=build /out /app\n',
+    'FROM golang AS build\nHEALTHCHECK CMD /build/check\nFROM alpine\nCOPY --from=build /out /app\n'
   );
   assert.equal(hc, null);
 });
 
 test('a HEALTHCHECK is inherited from the stage the final image is built on', () => {
   const hc = parse(
-    'FROM alpine AS base\nHEALTHCHECK CMD /base/check\nFROM base AS runtime\nCMD ["/app"]\n',
+    'FROM alpine AS base\nHEALTHCHECK CMD /base/check\nFROM base AS runtime\nCMD ["/app"]\n'
   );
   assert.deepEqual(hc?.command, ['/bin/sh', '-c', '/base/check']);
 });
 
 test('HEALTHCHECK NONE withdraws an inherited check', () => {
   const hc = parse(
-    'FROM alpine AS base\nHEALTHCHECK CMD /base/check\nFROM base\nHEALTHCHECK NONE\n',
+    'FROM alpine AS base\nHEALTHCHECK CMD /base/check\nFROM base\nHEALTHCHECK NONE\n'
   );
   assert.equal(hc, null);
 });
@@ -97,7 +97,7 @@ test('a commented-out HEALTHCHECK is not one', () => {
 test('a Dockerfile HEALTHCHECK runs even when Orchard has no health check configured', () => {
   const resolved = resolveHealthCheck({
     ...STORED,
-    dockerfileHealthCheck: { command: ['/bin/sh', '-c', 'curl -f localhost || exit 1'] },
+    dockerfileHealthCheck: { command: ['/bin/sh', '-c', 'curl -f localhost || exit 1'] }
   });
   assert.equal(resolved.enabled, true);
   assert.equal(resolved.source, 'dockerfile');
@@ -113,8 +113,8 @@ test('a start period becomes a startup probe long enough to cover it', () => {
       command: ['/check'],
       interval: 10,
       retries: 2,
-      startPeriod: 60,
-    },
+      startPeriod: 60
+    }
   });
   assert.equal(resolved.startupEnabled, true);
   assert.equal(resolved.startupFailureThreshold, 8);
@@ -123,7 +123,7 @@ test('a start period becomes a startup probe long enough to cover it', () => {
 test('a check may not take longer than the gap between checks', () => {
   const resolved = resolveHealthCheck({
     ...STORED,
-    dockerfileHealthCheck: { command: ['/check'], interval: 5 },
+    dockerfileHealthCheck: { command: ['/check'], interval: 5 }
   });
   assert.equal(resolved.timeout, 5);
 });
@@ -133,7 +133,7 @@ test('the override flag hands the deployment back to its own settings', () => {
     ...STORED,
     healthCheckEnabled: true,
     healthCheckOverride: true,
-    dockerfileHealthCheck: { command: ['/check'] },
+    dockerfileHealthCheck: { command: ['/check'] }
   });
   assert.equal(resolved.source, 'manual');
   assert.equal(resolved.type, 'http');

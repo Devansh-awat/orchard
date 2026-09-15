@@ -23,27 +23,19 @@ export class WebhooksController {
   @Post('deploy')
   async triggerDeployHeader(
     @Headers('authorization') authHeader: string | undefined,
-    @Body() body: { image?: string; tag?: string },
+    @Body() body: { image?: string; tag?: string }
   ) {
     const token = this.resolveToken(authHeader);
-    return this.webhooksService.triggerWebhookDeploy(
-      token,
-      body?.image,
-      body?.tag,
-    );
+    return this.webhooksService.triggerWebhookDeploy(token, body?.image, body?.tag);
   }
 
   @Post('deploy/:token')
   async triggerDeploy(
     @Param('token') token: string,
     @Headers('authorization') authHeader: string | undefined,
-    @Body() body: { image?: string; tag?: string },
+    @Body() body: { image?: string; tag?: string }
   ) {
     const resolved = this.resolveToken(authHeader, token);
-    return this.webhooksService.triggerWebhookDeploy(
-      resolved,
-      body?.image,
-      body?.tag,
-    );
+    return this.webhooksService.triggerWebhookDeploy(resolved, body?.image, body?.tag);
   }
 }

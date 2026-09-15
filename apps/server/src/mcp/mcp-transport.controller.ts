@@ -8,9 +8,7 @@ import { McpTransportService } from './mcp-transport.service';
 // internally, so all three verbs funnel through the same dispatch.
 @Controller()
 export class McpTransportController {
-  constructor(
-    @Inject(McpTransportService) private readonly transport: McpTransportService,
-  ) {}
+  constructor(@Inject(McpTransportService) private readonly transport: McpTransportService) {}
 
   @Post()
   handlePost(@Req() req: Request, @Res() res: Response) {

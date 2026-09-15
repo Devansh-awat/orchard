@@ -4,7 +4,7 @@ import {
   deriveDbTuning,
   parsePgMemory,
   formatPgMemory,
-  MANAGED_DB_MIN_MEMORY_BYTES,
+  MANAGED_DB_MIN_MEMORY_BYTES
 } from '../src/kubernetes/db-tuning';
 import { parseMemory } from '../src/kubernetes/quantity';
 
@@ -50,7 +50,7 @@ test('an unknown limit assumes the managed-database floor', () => {
 test('a manual shared_buffers is honoured verbatim, however large', () => {
   const t = deriveDbTuning({
     memoryLimitBytes: 128 * MiB,
-    overrides: { sharedBuffers: '512MB' },
+    overrides: { sharedBuffers: '512MB' }
   });
   // Four times the container's entire memory limit, and we still hand it back.
   assert.equal(t.sharedBuffers, '512MB');
@@ -59,7 +59,7 @@ test('a manual shared_buffers is honoured verbatim, however large', () => {
 test('a dangerous manual value advises instead of clamping', () => {
   const t = deriveDbTuning({
     memoryLimitBytes: 128 * MiB,
-    overrides: { sharedBuffers: '128MB' },
+    overrides: { sharedBuffers: '128MB' }
   });
   assert.equal(t.sharedBuffers, '128MB');
   const advisory = t.advisories.find((a) => a.key === 'shared_buffers');
@@ -72,7 +72,7 @@ test('a dangerous manual value advises instead of clamping', () => {
 test('a reasonable manual value stays quiet', () => {
   const t = deriveDbTuning({
     memoryLimitBytes: 1024 * MiB,
-    overrides: { sharedBuffers: '320MB' },
+    overrides: { sharedBuffers: '320MB' }
   });
   assert.equal(t.sharedBuffers, '320MB');
   assert.deepEqual(t.advisories, []);
@@ -94,14 +94,14 @@ test('base-backup compression is off on small instances, on above the threshold'
 test('compression can be forced either way, with an advisory when it is unsafe', () => {
   const forcedOn = deriveDbTuning({
     memoryLimitBytes: 128 * MiB,
-    overrides: { backupCompression: 'gzip' },
+    overrides: { backupCompression: 'gzip' }
   });
   assert.equal(forcedOn.dataCompression, 'gzip');
   assert.ok(forcedOn.advisories.some((a) => a.key === 'backupCompression'));
 
   const forcedOff = deriveDbTuning({
     memoryLimitBytes: 4096 * MiB,
-    overrides: { backupCompression: 'none' },
+    overrides: { backupCompression: 'none' }
   });
   assert.equal(forcedOff.dataCompression, null);
   assert.deepEqual(forcedOff.advisories, []);
@@ -109,7 +109,7 @@ test('compression can be forced either way, with an advisory when it is unsafe',
   // Forcing on where it was already safe is not worth a warning.
   const forcedOnSafe = deriveDbTuning({
     memoryLimitBytes: 4096 * MiB,
-    overrides: { backupCompression: 'gzip' },
+    overrides: { backupCompression: 'gzip' }
   });
   assert.equal(forcedOnSafe.dataCompression, 'gzip');
   assert.deepEqual(forcedOnSafe.advisories, []);
@@ -120,7 +120,7 @@ test('an empty or null override means derived, not "set to empty"', () => {
   for (const overrides of [
     { sharedBuffers: null, backupCompression: null },
     { sharedBuffers: '', backupCompression: '' },
-    { sharedBuffers: '   ' },
+    { sharedBuffers: '   ' }
   ]) {
     assert.deepEqual(deriveDbTuning({ memoryLimitBytes: 1024 * MiB, overrides }), derived);
   }

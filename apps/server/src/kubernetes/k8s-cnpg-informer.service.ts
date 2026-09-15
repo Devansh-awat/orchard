@@ -70,7 +70,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     private readonly orgEvents: OrgEventsService,
     private readonly leader: LeaderElectionService,
     private readonly notifications: NotificationsService,
-    private readonly logCapture: PodLogCaptureService,
+    private readonly logCapture: PodLogCaptureService
   ) {}
 
   async onModuleInit() {
@@ -92,7 +92,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     });
     this.informer.on('error', (err) => {
       this.logger.warn(
-        `cnpg informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`,
+        `cnpg informer error: ${(err as Error)?.message ?? err}; restarting in ${this.backoffMs}ms`
       );
       this.scheduleRestart();
     });
@@ -182,7 +182,10 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const coreApi = kc.makeApiClient(k8s.CoreV1Api);
       const { body } = await coreApi.listPodForAllNamespaces(
-        undefined, undefined, undefined, CNPG_SELECTOR,
+        undefined,
+        undefined,
+        undefined,
+        CNPG_SELECTOR
       );
       const pods = body.items ?? [];
       const seen = new Map<string, Set<string>>();
@@ -205,7 +208,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       let pruned = 0;
       for (const [databaseId, names] of seen) {
         const { count } = await this.prisma.databasePod.deleteMany({
-          where: { databaseId, name: { notIn: [...names] } },
+          where: { databaseId, name: { notIn: [...names] } }
         });
         pruned += count;
       }
@@ -239,13 +242,13 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
           pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null,
         lastTerminationReason: term?.reason ?? null,
         lastExitCode: term?.exitCode ?? null,
-        lastTerminatedAt: term?.finishedAt ?? null,
+        lastTerminatedAt: term?.finishedAt ?? null
       };
 
       await this.prisma.databasePod.upsert({
         where: { databaseId_name: { databaseId, name } },
         create: { databaseId, name, ...data },
-        update: data,
+        update: data
       });
     } catch (err) {
       this.logger.warn(`syncPod(${databaseId}/${name}) failed: ${(err as Error)?.message ?? err}`);
@@ -256,7 +259,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const pods = await this.prisma.databasePod.findMany({
         where: { databaseId: ctx.databaseId },
-        select: { status: true },
+        select: { status: true }
       });
       const crashing = pods.some((p) => p.status === 'crashing');
       const track = this.crashTracks.get(ctx.databaseId);
@@ -269,14 +272,14 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
           this.crashTracks.set(ctx.databaseId, {
             crashing,
             notifiedCrash: false,
-            lastNotifiedAt: 0,
+            lastNotifiedAt: 0
           });
           return;
         }
         this.crashTracks.set(ctx.databaseId, {
           crashing: false,
           notifiedCrash: false,
-          lastNotifiedAt: 0,
+          lastNotifiedAt: 0
         });
         if (crashing) this.scheduleCrashConfirm(ctx);
         return;
@@ -299,8 +302,8 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
             .notifyDbState(ctx.databaseId, 'recovered')
             .catch((err) =>
               this.logger.warn(
-                `db recovery notification failed for ${ctx.databaseId}: ${err?.message ?? err}`,
-              ),
+                `db recovery notification failed for ${ctx.databaseId}: ${err?.message ?? err}`
+              )
             );
         }
       }
@@ -312,7 +315,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       }
     } catch (err) {
       this.logger.warn(
-        `trackCrashState(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`,
+        `trackCrashState(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`
       );
     }
   }
@@ -336,7 +339,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
     try {
       const crashingPod = await this.prisma.databasePod.findFirst({
         where: { databaseId: ctx.databaseId, status: 'crashing' },
-        select: { lastTerminationReason: true, lastExitCode: true },
+        select: { lastTerminationReason: true, lastExitCode: true }
       });
       if (!crashingPod) {
         track.crashing = false;
@@ -387,7 +390,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       type: 'database.changed',
       id: ctx.databaseId,
       projectId: ctx.projectId,
-      payload,
+      payload
     });
   }
 
@@ -404,7 +407,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
       lastTermination: term?.reason
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
-        : null,
+        : null
     };
   }
 
@@ -421,7 +424,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
         const name = cluster.metadata?.name;
         if (!ns || !name) continue;
         const cond = (cluster.status?.conditions || []).find(
-          (c: any) => c.type === 'ContinuousArchiving',
+          (c: any) => c.type === 'ContinuousArchiving'
         );
         if (!cond) continue;
         const ok = cond.status === 'True';
@@ -438,7 +441,11 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
         if (!ctx) continue;
         this.scheduleEmit(ctx, { archiving: ok });
         await this.notifications
-          .notifyDbArchiving(ctx.databaseId, ok ? 'recovered' : 'failing', cond.message || undefined)
+          .notifyDbArchiving(
+            ctx.databaseId,
+            ok ? 'recovered' : 'failing',
+            cond.message || undefined
+          )
           .catch(() => {});
       }
     } catch (err) {
@@ -458,8 +465,8 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           projectId: true,
-          project: { select: { organizationId: true } },
-        },
+          project: { select: { organizationId: true } }
+        }
       });
       if (db) {
         ctx = { databaseId: db.id, orgId: db.project.organizationId, projectId: db.projectId };
@@ -475,7 +482,7 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
 }
 
 function latestTermination(
-  containerStatuses: k8s.V1ContainerStatus[],
+  containerStatuses: k8s.V1ContainerStatus[]
 ): { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null {
   let best: { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null =
     null;
@@ -487,7 +494,7 @@ function latestTermination(
     best = {
       reason: t.reason ?? null,
       exitCode: t.exitCode ?? null,
-      finishedAt,
+      finishedAt
     };
   }
   return best;

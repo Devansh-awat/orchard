@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,17 +15,16 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   async getStats() {
-    const [userCount, orgCount, projectCount, deploymentCount] =
-      await Promise.all([
-        this.prisma.user.count(),
-        this.prisma.organization.count(),
-        this.prisma.project.count(),
-        this.prisma.deployment.count(),
-      ]);
+    const [userCount, orgCount, projectCount, deploymentCount] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.organization.count(),
+      this.prisma.project.count(),
+      this.prisma.deployment.count()
+    ]);
 
     return { userCount, orgCount, projectCount, deploymentCount };
   }
@@ -34,8 +38,8 @@ export class AdminService {
             { email: { contains: search, mode: 'insensitive' } },
             { username: { contains: search, mode: 'insensitive' } },
             { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-          ],
+            { lastName: { contains: search, mode: 'insensitive' } }
+          ]
         }
       : {};
 
@@ -58,12 +62,12 @@ export class AdminService {
           _count: {
             select: {
               organizationMembers: true,
-              projectMembers: true,
-            },
-          },
-        },
+              projectMembers: true
+            }
+          }
+        }
       }),
-      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where })
     ]);
 
     return {
@@ -71,7 +75,7 @@ export class AdminService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / limit)
     };
   }
 
@@ -89,15 +93,15 @@ export class AdminService {
         createdAt: true,
         updatedAt: true,
         organizationMembers: {
-          include: { organization: { select: { id: true, name: true, slug: true } } },
+          include: { organization: { select: { id: true, name: true, slug: true } } }
         },
         projectMembers: {
           include: {
             project: { select: { id: true, name: true, slug: true } },
-            role: { select: { name: true } },
-          },
-        },
-      },
+            role: { select: { name: true } }
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -110,13 +114,22 @@ export class AdminService {
   async updateUser(
     userId: string,
     requesterId: string,
-    data: { firstName?: string; lastName?: string; isSuperAdmin?: boolean; maxSandboxes?: number | null },
+    data: {
+      firstName?: string;
+      lastName?: string;
+      isSuperAdmin?: boolean;
+      maxSandboxes?: number | null;
+    }
   ) {
     if (data.isSuperAdmin === false && userId === requesterId) {
       throw new ForbiddenException('Cannot remove your own superadmin status');
     }
     if (data.maxSandboxes !== undefined && data.maxSandboxes !== null) {
-      if (!Number.isInteger(data.maxSandboxes) || data.maxSandboxes < 0 || data.maxSandboxes > 100) {
+      if (
+        !Number.isInteger(data.maxSandboxes) ||
+        data.maxSandboxes < 0 ||
+        data.maxSandboxes > 100
+      ) {
         throw new BadRequestException('maxSandboxes must be an integer between 0 and 100, or null');
       }
     }
@@ -132,7 +145,7 @@ export class AdminService {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.isSuperAdmin !== undefined && { isSuperAdmin: data.isSuperAdmin }),
-        ...(data.maxSandboxes !== undefined && { maxSandboxes: data.maxSandboxes }),
+        ...(data.maxSandboxes !== undefined && { maxSandboxes: data.maxSandboxes })
       },
       select: {
         id: true,
@@ -141,8 +154,8 @@ export class AdminService {
         firstName: true,
         lastName: true,
         isSuperAdmin: true,
-        maxSandboxes: true,
-      },
+        maxSandboxes: true
+      }
     });
 
     if (data.isSuperAdmin !== undefined && data.isSuperAdmin !== user.isSuperAdmin) {
@@ -152,7 +165,7 @@ export class AdminService {
         actorUserId: requesterId,
         targetType: 'user',
         targetId: userId,
-        targetLabel: user.email,
+        targetLabel: user.email
       });
     }
 
@@ -176,7 +189,7 @@ export class AdminService {
       actorUserId: requesterId,
       targetType: 'user',
       targetId: userId,
-      targetLabel: user.email,
+      targetLabel: user.email
     });
 
     return { success: true };
@@ -189,8 +202,8 @@ export class AdminService {
       ? {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
-            { slug: { contains: search, mode: 'insensitive' } },
-          ],
+            { slug: { contains: search, mode: 'insensitive' } }
+          ]
         }
       : {};
 
@@ -209,17 +222,17 @@ export class AdminService {
           plan: true,
           createdAt: true,
           creator: {
-            select: { id: true, email: true, username: true, firstName: true, lastName: true },
+            select: { id: true, email: true, username: true, firstName: true, lastName: true }
           },
           _count: {
             select: {
               members: true,
-              projects: true,
-            },
-          },
-        },
+              projects: true
+            }
+          }
+        }
       }),
-      this.prisma.organization.count({ where }),
+      this.prisma.organization.count({ where })
     ]);
 
     return {
@@ -227,7 +240,7 @@ export class AdminService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / limit)
     };
   }
 
@@ -240,14 +253,14 @@ export class AdminService {
       plan?: string;
       primaryOwnerEmail?: string;
     },
-    inviterId?: string,
+    inviterId?: string
   ) {
     let primaryOwnerId: string | undefined;
 
     if (data.primaryOwnerEmail?.trim()) {
       const email = data.primaryOwnerEmail.trim().toLowerCase();
       const user = await this.prisma.user.findFirst({
-        where: { email: { equals: email, mode: 'insensitive' } },
+        where: { email: { equals: email, mode: 'insensitive' } }
       });
       if (user) {
         primaryOwnerId = user.id;
@@ -261,8 +274,8 @@ export class AdminService {
         description: data.description,
         avatarUrl: data.avatarUrl,
         plan: data.plan,
-        createdBy: primaryOwnerId,
-      },
+        createdBy: primaryOwnerId
+      }
     });
 
     void this.audit.log({
@@ -272,7 +285,7 @@ export class AdminService {
       targetType: 'organization',
       targetId: org.id,
       targetLabel: org.name,
-      metadata: { slug: org.slug, plan: org.plan ?? null },
+      metadata: { slug: org.slug, plan: org.plan ?? null }
     });
 
     if (primaryOwnerId) {
@@ -280,8 +293,8 @@ export class AdminService {
         data: {
           organizationId: org.id,
           userId: primaryOwnerId,
-          role: 'owner',
-        },
+          role: 'owner'
+        }
       });
       void this.audit.log({
         action: 'org.member.added',
@@ -289,7 +302,7 @@ export class AdminService {
         organizationId: org.id,
         targetType: 'user',
         targetId: primaryOwnerId,
-        metadata: { role: 'owner', via: 'admin_create' },
+        metadata: { role: 'owner', via: 'admin_create' }
       });
       return { organization: org };
     }
@@ -308,8 +321,8 @@ export class AdminService {
           token: null,
           tokenHash,
           invitedBy: inviterId,
-          expiresAt,
-        },
+          expiresAt
+        }
       });
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const inviteLink = `${frontendUrl}/invite/${token}`;
@@ -329,13 +342,14 @@ export class AdminService {
       where: { id: orgId },
       data: {
         ...(data.name !== undefined && { name: data.name }),
-        ...(data.description !== undefined && { description: data.description }),
-      },
+        ...(data.description !== undefined && { description: data.description })
+      }
     });
 
     const meta: Record<string, [unknown, unknown]> = {};
     if (data.name !== undefined && data.name !== org.name) meta.name = [org.name, data.name];
-    if (data.description !== undefined && data.description !== org.description) meta.description = [org.description, data.description];
+    if (data.description !== undefined && data.description !== org.description)
+      meta.description = [org.description, data.description];
     if (Object.keys(meta).length) {
       void this.audit.log({
         action: 'org.updated',
@@ -343,7 +357,7 @@ export class AdminService {
         targetType: 'organization',
         targetId: orgId,
         targetLabel: updated.name,
-        metadata: meta,
+        metadata: meta
       });
     }
 
@@ -352,7 +366,7 @@ export class AdminService {
     return {
       ...safe,
       backupR2AccessKeyConfigured: Boolean(backupR2AccessKey),
-      backupR2SecretKeyConfigured: Boolean(backupR2SecretKey),
+      backupR2SecretKeyConfigured: Boolean(backupR2SecretKey)
     };
   }
 
@@ -370,7 +384,7 @@ export class AdminService {
       targetType: 'organization',
       targetId: orgId,
       targetLabel: org.name,
-      metadata: { slug: org.slug },
+      metadata: { slug: org.slug }
     });
 
     return { success: true };

@@ -1,10 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
-import {
-  NOTIFICATION_EVENTS,
-  RULE_SCOPE_TYPES,
-} from '../../notifications/notification-events';
+import { NOTIFICATION_EVENTS, RULE_SCOPE_TYPES } from '../../notifications/notification-events';
 
 // Sourced from the server's own list rather than redeclared, which is how the
 // old copy silently drifted and stopped offering job and archiving events.
@@ -21,9 +18,12 @@ With a scope it is what that project or resource may route to (its own destinati
       annotations: { readOnlyHint: true },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
-        scopeType: z.enum(SCOPE_VALUES).optional().describe('org, project, deployment, database, or job'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
-      },
+        scopeType: z
+          .enum(SCOPE_VALUES)
+          .optional()
+          .describe('org, project, deployment, database, or job'),
+        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+      }
     },
     async ({ organizationId, scopeType, scopeId }) => {
       const params = new URLSearchParams();
@@ -31,10 +31,10 @@ With a scope it is what that project or resource may route to (its own destinati
       if (scopeId) params.set('scopeId', scopeId);
       const query = params.toString();
       const result = await client.get(
-        `/organizations/${organizationId}/notification-channels${query ? `?${query}` : ''}`,
+        `/organizations/${organizationId}/notification-channels${query ? `?${query}` : ''}`
       );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -50,10 +50,16 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         type: z.enum(['discord', 'slack', 'webhook', 'email']).describe('Channel type'),
         name: z.string().max(100).describe('Display name, e.g. "#deploys"'),
         url: z.string().optional().describe('Webhook URL (discord/slack/webhook types)'),
-        recipients: z.array(z.string()).optional().describe('Email recipients (email type, members of the owning scope only)'),
-        scopeType: z.enum(SCOPE_VALUES).optional().describe('Who owns this destination, default org'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
-      },
+        recipients: z
+          .array(z.string())
+          .optional()
+          .describe('Email recipients (email type, members of the owning scope only)'),
+        scopeType: z
+          .enum(SCOPE_VALUES)
+          .optional()
+          .describe('Who owns this destination, default org'),
+        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+      }
     },
     async ({ organizationId, type, name, url, recipients, scopeType, scopeId }) => {
       const result = await client.post(`/organizations/${organizationId}/notification-channels`, {
@@ -61,10 +67,10 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         name,
         config: type === 'email' ? { recipients: recipients ?? [] } : { url },
         scopeType: scopeType ?? 'org',
-        scopeId: scopeId ?? null,
+        scopeId: scopeId ?? null
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -78,19 +84,28 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         name: z.string().max(100).optional().describe('New display name'),
         url: z.string().optional().describe('New webhook URL (keeps the existing signing secret)'),
         recipients: z.array(z.string()).optional().describe('Replace email recipients'),
-        enabled: z.boolean().optional().describe('false pauses the channel, true resumes it and resets its breaker'),
-      },
+        enabled: z
+          .boolean()
+          .optional()
+          .describe('false pauses the channel, true resumes it and resets its breaker')
+      }
     },
     async ({ organizationId, channelId, name, url, recipients, enabled }) => {
       const body: Record<string, unknown> = {};
       if (name !== undefined) body.name = name;
       if (enabled !== undefined) body.enabled = enabled;
       if (url !== undefined || recipients !== undefined) {
-        body.config = { ...(url !== undefined ? { url } : {}), ...(recipients !== undefined ? { recipients } : {}) };
+        body.config = {
+          ...(url !== undefined ? { url } : {}),
+          ...(recipients !== undefined ? { recipients } : {})
+        };
       }
-      const result = await client.patch(`/organizations/${organizationId}/notification-channels/${channelId}`, body);
+      const result = await client.patch(
+        `/organizations/${organizationId}/notification-channels/${channelId}`,
+        body
+      );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -100,9 +115,12 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
       annotations: { readOnlyHint: true },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
-        scopeType: z.enum(SCOPE_VALUES).optional().describe('org, project, deployment, database, or job'),
-        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
-      },
+        scopeType: z
+          .enum(SCOPE_VALUES)
+          .optional()
+          .describe('org, project, deployment, database, or job'),
+        scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)')
+      }
     },
     async ({ organizationId, scopeType, scopeId }) => {
       const params = new URLSearchParams();
@@ -110,10 +128,10 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
       if (scopeId) params.set('scopeId', scopeId);
       const query = params.toString();
       const result = await client.get(
-        `/organizations/${organizationId}/notification-rules${query ? `?${query}` : ''}`,
+        `/organizations/${organizationId}/notification-rules${query ? `?${query}` : ''}`
       );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -129,8 +147,8 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         scopeType: z.enum(SCOPE_VALUES).describe('org, project, deployment, database, or job'),
         scopeId: z.string().optional().describe('The UUID of the scope (omit for scopeType=org)'),
         events: z.array(z.enum(EVENT_VALUES)).min(1).describe('Events this rule matches'),
-        mode: z.enum(['deliver', 'mute']).optional().describe('deliver (default) or mute'),
-      },
+        mode: z.enum(['deliver', 'mute']).optional().describe('deliver (default) or mute')
+      }
     },
     async ({ organizationId, channelId, scopeType, scopeId, events, mode }) => {
       const result = await client.post(`/organizations/${organizationId}/notification-rules`, {
@@ -138,10 +156,10 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         scopeType,
         scopeId: scopeId ?? null,
         events,
-        mode: mode ?? 'deliver',
+        mode: mode ?? 'deliver'
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -154,17 +172,20 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         ruleId: z.string().describe('The notification rule UUID'),
         events: z.array(z.enum(EVENT_VALUES)).min(1).optional().describe('Replace matched events'),
         mode: z.enum(['deliver', 'mute']).optional().describe('deliver or mute'),
-        enabled: z.boolean().optional().describe('false stops the rule matching'),
-      },
+        enabled: z.boolean().optional().describe('false stops the rule matching')
+      }
     },
     async ({ organizationId, ruleId, events, mode, enabled }) => {
       const body: Record<string, unknown> = {};
       if (events !== undefined) body.events = events;
       if (mode !== undefined) body.mode = mode;
       if (enabled !== undefined) body.enabled = enabled;
-      const result = await client.patch(`/organizations/${organizationId}/notification-rules/${ruleId}`, body);
+      const result = await client.patch(
+        `/organizations/${organizationId}/notification-rules/${ruleId}`,
+        body
+      );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -174,13 +195,15 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
-        ruleId: z.string().describe('The notification rule UUID'),
-      },
+        ruleId: z.string().describe('The notification rule UUID')
+      }
     },
     async ({ organizationId, ruleId }) => {
-      const result = await client.delete(`/organizations/${organizationId}/notification-rules/${ruleId}`);
+      const result = await client.delete(
+        `/organizations/${organizationId}/notification-rules/${ruleId}`
+      );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -190,13 +213,16 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID'),
-      },
+        channelId: z.string().describe('The notification channel UUID')
+      }
     },
     async ({ organizationId, channelId }) => {
-      const result = await client.post(`/organizations/${organizationId}/notification-channels/${channelId}/test`, {});
+      const result = await client.post(
+        `/organizations/${organizationId}/notification-channels/${channelId}/test`,
+        {}
+      );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -207,16 +233,21 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
         channelId: z.string().describe('The notification channel UUID'),
-        sinceHours: z.number().min(1).max(72).optional().describe('How far back to replay, default 24'),
-      },
+        sinceHours: z
+          .number()
+          .min(1)
+          .max(72)
+          .optional()
+          .describe('How far back to replay, default 24')
+      }
     },
     async ({ organizationId, channelId, sinceHours }) => {
       const result = await client.post(
         `/organizations/${organizationId}/notification-channels/${channelId}/replay`,
-        { sinceHours: sinceHours ?? 24 },
+        { sinceHours: sinceHours ?? 24 }
       );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 
   server.registerTool(
@@ -226,12 +257,14 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       annotations: { readOnlyHint: true },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),
-        channelId: z.string().describe('The notification channel UUID'),
-      },
+        channelId: z.string().describe('The notification channel UUID')
+      }
     },
     async ({ organizationId, channelId }) => {
-      const result = await client.get(`/organizations/${organizationId}/notification-channels/${channelId}/deliveries`);
+      const result = await client.get(
+        `/organizations/${organizationId}/notification-channels/${channelId}/deliveries`
+      );
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    },
+    }
   );
 }

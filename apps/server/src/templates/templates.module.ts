@@ -10,6 +10,6 @@ import { TemplateEngineService } from './template-engine.service';
   imports: [ProjectsModule, AuthModule, UsersModule],
   providers: [TemplatesService, TemplateEngineService],
   controllers: [TemplatesController],
-  exports: [TemplatesService],
+  exports: [TemplatesService]
 })
 export class TemplatesModule {}

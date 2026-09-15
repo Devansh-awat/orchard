@@ -10,6 +10,6 @@ import { SshIdentitiesService } from './ssh-identities.service';
   imports: [AuthModule, PrismaModule, UsersModule, AnalyticsModule],
   controllers: [SshIdentitiesController],
   providers: [SshIdentitiesService],
-  exports: [SshIdentitiesService],
+  exports: [SshIdentitiesService]
 })
 export class SshIdentitiesModule {}

@@ -16,14 +16,10 @@ const FORBIDDEN_DOMAIN_SUFFIXES = [
   '.internal',
   '.local',
   '.consul',
-  '.localhost',
+  '.localhost'
 ];
 
-const FORBIDDEN_DOMAIN_EXACT = new Set([
-  'localhost',
-  'metadata',
-  'metadata.google.internal',
-]);
+const FORBIDDEN_DOMAIN_EXACT = new Set(['localhost', 'metadata', 'metadata.google.internal']);
 
 /**
  * Return true for IPv4/IPv6 addresses that point to private, loopback,
@@ -119,7 +115,9 @@ async function assertPublicDomain(domain: string, _logger: Logger): Promise<void
   }
   for (const a of addrs) {
     if (isPrivateAddress(a.address)) {
-      throw new Error(`Refusing to fetch ${domain} — resolves to private/internal address ${a.address}`);
+      throw new Error(
+        `Refusing to fetch ${domain} — resolves to private/internal address ${a.address}`
+      );
     }
   }
 }
@@ -146,7 +144,7 @@ export class FaviconService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly leaderElection: LeaderElectionService,
+    private readonly leaderElection: LeaderElectionService
   ) {}
 
   private s3InitAt = -1;
@@ -170,7 +168,7 @@ export class FaviconService {
     this.s3Client = new S3Client({
       region: 'auto',
       endpoint,
-      credentials: { accessKeyId, secretAccessKey },
+      credentials: { accessKeyId, secretAccessKey }
     });
   }
 
@@ -185,11 +183,13 @@ export class FaviconService {
    */
   private async objectExists(key: string): Promise<boolean> {
     if (!this.s3Client || !this.bucketName) return false;
-    const res = await this.s3Client.send(new ListObjectsV2Command({
-      Bucket: this.bucketName,
-      Prefix: key,
-      MaxKeys: 1,
-    }));
+    const res = await this.s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: this.bucketName,
+        Prefix: key,
+        MaxKeys: 1
+      })
+    );
     return res.Contents?.some((o) => o.Key === key) ?? false;
   }
 
@@ -219,7 +219,9 @@ export class FaviconService {
         }
       } catch (err) {
         // R2 lookup failed — fall through and try to (re)fetch it.
-        this.logger.warn(`R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
+        this.logger.warn(
+          `R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
+        );
       }
     }
 
@@ -261,7 +263,9 @@ export class FaviconService {
         return url;
       }
     } catch (err) {
-      this.logger.warn(`peekFavicon R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `peekFavicon R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
+      );
     }
     // Not in R2 (or lookup failed) — warm it in the background, don't block.
     if (!this.pendingFetches.has(domain)) {
@@ -307,21 +311,23 @@ export class FaviconService {
     try {
       rows = await this.prisma.ingress.findMany({ select: { host: true } });
     } catch (err) {
-      this.logger.warn(`Favicon refresh: failed to list ingresses: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `Favicon refresh: failed to list ingresses: ${err instanceof Error ? err.message : err}`
+      );
       return;
     }
     const domains = [
       ...new Set(
         rows
           .map((r) => r.host?.split('/')[0]?.toLowerCase())
-          .filter((d): d is string => !!d && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d)),
-      ),
+          .filter((d): d is string => !!d && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d))
+      )
     ];
     this.logger.log(`Daily favicon refresh: ${domains.length} domains`);
     const BATCH = 5;
     for (let i = 0; i < domains.length; i += BATCH) {
       await Promise.all(
-        domains.slice(i, i + BATCH).map((d) => this.refreshFavicon(d).catch(() => null)),
+        domains.slice(i, i + BATCH).map((d) => this.refreshFavicon(d).catch(() => null))
       );
     }
     this.logger.log('Daily favicon refresh complete');
@@ -331,7 +337,7 @@ export class FaviconService {
   async peekFavicons(domains: string[]): Promise<Record<string, string | null>> {
     const unique = [...new Set(domains)];
     const entries = await Promise.all(
-      unique.map(async (d) => [d, await this.peekFavicon(d)] as const),
+      unique.map(async (d) => [d, await this.peekFavicon(d)] as const)
     );
     return Object.fromEntries(entries);
   }
@@ -352,7 +358,7 @@ export class FaviconService {
             // Redirects handled manually below: we only follow same-origin
             // hops — a cross-host 3xx Location could rebind to an internal
             // host that would bypass our pre-resolution check.
-            redirect: 'manual',
+            redirect: 'manual'
           });
         } finally {
           clearTimeout(timeout);
@@ -407,14 +413,16 @@ export class FaviconService {
 
       return await this.storeToR2(domain, r2Key, iconData.buffer, iconData.contentType);
     } catch (err) {
-      this.logger.warn(`Failed to fetch favicon for ${domain}: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `Failed to fetch favicon for ${domain}: ${err instanceof Error ? err.message : err}`
+      );
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;
     }
   }
 
   private resolveHtmlUrl(href: string, domain: string): string {
-    if (href.startsWith('//')) return `https:${  href}`;
+    if (href.startsWith('//')) return `https:${href}`;
     if (href.startsWith('/')) return `https://${domain}${href}`;
     if (!/^https?:/i.test(href)) return `https://${domain}/${href}`;
     return href;
@@ -426,12 +434,11 @@ export class FaviconService {
     const metaRegex = /<meta\s[^>]*>/gi;
     for (let m = metaRegex.exec(html); m !== null; m = metaRegex.exec(html)) {
       const tag = m[0];
-      const prop = tag
-        .match(/(?:property|name)=["']([^"']+)["']/i)?.[1]
-        ?.toLowerCase();
+      const prop = tag.match(/(?:property|name)=["']([^"']+)["']/i)?.[1]?.toLowerCase();
       if (!prop) continue;
       let priority = -1;
-      if (prop === 'og:image' || prop === 'og:image:url' || prop === 'og:image:secure_url') priority = 2;
+      if (prop === 'og:image' || prop === 'og:image:url' || prop === 'og:image:secure_url')
+        priority = 2;
       else if (prop === 'twitter:image' || prop === 'twitter:image:src') priority = 1;
       if (priority < 0) continue;
       const content = tag.match(/content=["']([^"']+)["']/i)?.[1];
@@ -445,7 +452,7 @@ export class FaviconService {
 
   private async resizeBanner(
     buffer: Buffer,
-    contentType: string,
+    contentType: string
   ): Promise<{ buffer: Buffer; contentType: string }> {
     try {
       const sharp = (await import('sharp')).default;
@@ -464,7 +471,9 @@ export class FaviconService {
 
   /** Download + store the page's og:image banner. Keyed banners/<domain>.png */
   private async storeBanner(domain: string, html: string): Promise<void> {
-    const setNull = () => { this.bannerCache.set(domain, { url: null, ts: Date.now() }); };
+    const setNull = () => {
+      this.bannerCache.set(domain, { url: null, ts: Date.now() });
+    };
     try {
       const bannerUrl = html ? this.parseBannerFromHtml(html, domain) : null;
       if (!bannerUrl) return setNull();
@@ -473,18 +482,22 @@ export class FaviconService {
       if (!this.s3Client || !this.bucketName) return setNull();
       const { buffer, contentType } = await this.resizeBanner(img.buffer, img.contentType);
       const key = `banners/${domain}.png`;
-      await this.s3Client.send(new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-        CacheControl: 'public, max-age=604800', // 7 days
-      }));
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType,
+          CacheControl: 'public, max-age=604800' // 7 days
+        })
+      );
       const url = `${this.publicUrl}/${key}`;
       this.logger.log(`Cached banner for ${domain} → ${url}`);
       this.bannerCache.set(domain, { url, ts: Date.now() });
     } catch (err) {
-      this.logger.warn(`Failed to store banner for ${domain}: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `Failed to store banner for ${domain}: ${err instanceof Error ? err.message : err}`
+      );
       setNull();
     }
   }
@@ -510,7 +523,9 @@ export class FaviconService {
         return url;
       }
     } catch (err) {
-      this.logger.warn(`peekBanner R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `peekBanner R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`
+      );
     }
     // Not in R2 (or lookup failed) — fetchAndStore extracts the banner
     // alongside the favicon.
@@ -526,7 +541,7 @@ export class FaviconService {
   async peekBanners(domains: string[]): Promise<Record<string, string | null>> {
     const unique = [...new Set(domains)];
     const entries = await Promise.all(
-      unique.map(async (d) => [d, await this.peekBanner(d)] as const),
+      unique.map(async (d) => [d, await this.peekBanner(d)] as const)
     );
     return Object.fromEntries(entries);
   }
@@ -538,7 +553,11 @@ export class FaviconService {
     // Handles both rel-before-href and href-before-rel orderings
     const linkRegex = /<link\s[^>]*>/gi;
 
-    for (let linkMatch = linkRegex.exec(html); linkMatch !== null; linkMatch = linkRegex.exec(html)) {
+    for (
+      let linkMatch = linkRegex.exec(html);
+      linkMatch !== null;
+      linkMatch = linkRegex.exec(html)
+    ) {
       const tag = linkMatch[0];
 
       // Check if it's an icon link
@@ -546,8 +565,11 @@ export class FaviconService {
       if (!relMatch) continue;
       const rel = relMatch[1].toLowerCase();
 
-      const isIcon = rel === 'icon' || rel === 'shortcut icon' ||
-        rel === 'apple-touch-icon' || rel === 'apple-touch-icon-precomposed';
+      const isIcon =
+        rel === 'icon' ||
+        rel === 'shortcut icon' ||
+        rel === 'apple-touch-icon' ||
+        rel === 'apple-touch-icon-precomposed';
       if (!isIcon) continue;
 
       // Extract href
@@ -557,7 +579,7 @@ export class FaviconService {
 
       // Resolve relative URLs
       if (href.startsWith('//')) {
-        href = `https:${  href}`;
+        href = `https:${href}`;
       } else if (href.startsWith('/')) {
         href = `https://${domain}${href}`;
       } else if (!href.startsWith('http')) {
@@ -583,7 +605,9 @@ export class FaviconService {
     return icons[0].url;
   }
 
-  private async downloadImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  private async downloadImage(
+    url: string
+  ): Promise<{ buffer: Buffer; contentType: string } | null> {
     try {
       // Follow redirects manually (CDNs commonly 3xx image URLs), validating
       // scheme + hostname against private/internal space on EVERY hop — image
@@ -614,7 +638,7 @@ export class FaviconService {
           res = await fetch(current, {
             signal: controller.signal,
             headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
-            redirect: 'manual',
+            redirect: 'manual'
           });
         } finally {
           clearTimeout(timeout);
@@ -657,7 +681,7 @@ export class FaviconService {
   // .ico variants).
   private async resizeIcon(
     buffer: Buffer,
-    contentType: string,
+    contentType: string
   ): Promise<{ buffer: Buffer; contentType: string }> {
     try {
       const sharp = (await import('sharp')).default;
@@ -694,12 +718,7 @@ export class FaviconService {
       const nearWhite = (i: number) =>
         data[i] >= 240 && data[i + 1] >= 240 && data[i + 2] >= 240 && data[i + 3] >= 250;
 
-      const corners = [
-        px(0, 0),
-        px(width - 1, 0),
-        px(0, height - 1),
-        px(width - 1, height - 1),
-      ];
+      const corners = [px(0, 0), px(width - 1, 0), px(0, height - 1), px(width - 1, height - 1)];
       if (corners.filter(nearWhite).length < 3) return buffer;
 
       const visited = new Uint8Array(width * height);
@@ -738,7 +757,12 @@ export class FaviconService {
     }
   }
 
-  private async storeToR2(domain: string, key: string, buffer: Buffer, contentType: string): Promise<string | null> {
+  private async storeToR2(
+    domain: string,
+    key: string,
+    buffer: Buffer,
+    contentType: string
+  ): Promise<string | null> {
     if (!this.s3Client || !this.bucketName) {
       // R2 not configured — return the original URL from memory
       this.logger.warn('R2 not configured, cannot cache favicon');
@@ -746,23 +770,30 @@ export class FaviconService {
       return null;
     }
 
-    const { buffer: finalBuffer, contentType: finalContentType } = await this.resizeIcon(buffer, contentType);
+    const { buffer: finalBuffer, contentType: finalContentType } = await this.resizeIcon(
+      buffer,
+      contentType
+    );
 
     try {
-      await this.s3Client.send(new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: finalBuffer,
-        ContentType: finalContentType,
-        CacheControl: 'public, max-age=604800', // 7 days
-      }));
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+          Body: finalBuffer,
+          ContentType: finalContentType,
+          CacheControl: 'public, max-age=604800' // 7 days
+        })
+      );
 
       const url = `${this.publicUrl}/${key}`;
       this.logger.log(`Cached favicon for ${domain} → ${url}`);
       this.memoryCache.set(domain, { url, ts: Date.now() });
       return url;
     } catch (err) {
-      this.logger.error(`Failed to store favicon for ${domain}: ${err instanceof Error ? err.message : err}`);
+      this.logger.error(
+        `Failed to store favicon for ${domain}: ${err instanceof Error ? err.message : err}`
+      );
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;
     }

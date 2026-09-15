@@ -328,8 +328,7 @@
 										bind:value={description}
 										placeholder="A brief description of this project"
 										rows="3"
-										class="input"
-									></textarea>
+										class="input"></textarea>
 								</Field>
 
 								<!-- Namespace Preview -->

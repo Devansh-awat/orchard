@@ -13,14 +13,14 @@ Install the Helm chart instead and keep your own platform layer
 
 ## What it installs
 
-| Component | Why |
-|---|---|
-| k3s | The cluster. Traefik disabled (installed separately), servicelb kept |
-| Traefik | Control-plane ingress and the app Gateway |
-| CloudNativePG | Orchard's own database and every database you create |
-| cert-manager | TLS, unless Cloudflare is terminating it for you |
-| zot | Registry for images Orchard builds |
-| Orchard | The Helm chart, with a generated values file, including the MCP endpoint agents connect to |
+| Component     | Why                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| k3s           | The cluster. Traefik disabled (installed separately), servicelb kept                       |
+| Traefik       | Control-plane ingress and the app Gateway                                                  |
+| CloudNativePG | Orchard's own database and every database you create                                       |
+| cert-manager  | TLS, unless Cloudflare is terminating it for you                                           |
+| zot           | Registry for images Orchard builds                                                         |
+| Orchard       | The Helm chart, with a generated values file, including the MCP endpoint agents connect to |
 
 Everything lands in `/etc/orchard/values.yaml`. Edit that file and run
 `orchard-update` to apply changes.
@@ -76,11 +76,11 @@ token is consumed. If it expires, restart the server to mint a new one.
 
 Build concurrency, cache size and registry size are derived from the machine:
 
-| RAM | Concurrent builds |
-|---|---|
-| < 8Gi | 1 |
-| 8–16Gi | 2 |
-| > 16Gi | 3 |
+| RAM    | Concurrent builds |
+| ------ | ----------------- |
+| < 8Gi  | 1                 |
+| 8–16Gi | 2                 |
+| > 16Gi | 3                 |
 
 Build cache and registry each get a fifth of the free disk, capped at 60G and
 50G. The floor is 4Gi RAM and 20G disk; 8Gi and 60G is comfortable.
@@ -97,10 +97,10 @@ yourself, then flip the matching flag in `/etc/orchard/values.yaml` and run
 `orchard-update`:
 
 ```yaml
-tenantSandbox:                # gVisor for tenant app pods
+tenantSandbox: # gVisor for tenant app pods
   enabled: true
   runtimeClassName: gvisor
-builderSandbox:               # Kata VMs for build jobs
+builderSandbox: # Kata VMs for build jobs
   enabled: true
   runtimeClassName: kata
 ```
@@ -142,36 +142,36 @@ sudo ./install.sh --yes \
 
 ### How traffic gets in
 
-| Flag | Environment variable | Meaning |
-|---|---|---|
-| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted. |
-| `--domain <host>` | `ORCHARD_DOMAIN` | Where the Orchard UI lives. Defaults to an `sslip.io` name in `lan` mode. |
-| `--app-domain <host>` | `ORCHARD_APP_DOMAIN` | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`. |
-| `--mcp-domain <host>` | `ORCHARD_MCP_DOMAIN` | Where agents connect over MCP. Defaults to `mcp.<your domain>`. |
-| `--email <address>` | `ORCHARD_ACME_EMAIL` | Let's Encrypt contact. Required in `public` mode. |
-| `--tunnel-token <token>` | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode. |
+| Flag                           | Environment variable   | Meaning                                                                   |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
+| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                   |
+| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to an `sslip.io` name in `lan` mode. |
+| `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`.      |
+| `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<your domain>`.           |
+| `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Required in `public` mode.                         |
+| `--tunnel-token <token>`       | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode.                       |
 
 ### Behaviour
 
-| Flag | Environment variable | Default |
-|---|---|---|
-| `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes` |
-| `--mcp <true\|false>` | `ORCHARD_MCP` | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
-| `--yes`, `-y` | `ORCHARD_ASSUME_YES` | `false` |
-| `--help`, `-h` | | |
-| | `NO_COLOR` | unset. Any value disables colour. |
-| | `ORCHARD_NO_PACING` | unset. `1` removes the brief pauses in the opening screen. |
+| Flag                            | Environment variable    | Default                                                                     |
+| ------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| `--updates <manual\|automatic>` | `ORCHARD_UPDATE_POLICY` | asks; `manual` under `--yes`                                                |
+| `--mcp <true\|false>`           | `ORCHARD_MCP`           | `true`. Off, no MCP is deployed and the admin panel's toggle is pinned off. |
+| `--yes`, `-y`                   | `ORCHARD_ASSUME_YES`    | `false`                                                                     |
+| `--help`, `-h`                  |                         |                                                                             |
+|                                 | `NO_COLOR`              | unset. Any value disables colour.                                           |
+|                                 | `ORCHARD_NO_PACING`     | unset. `1` removes the brief pauses in the opening screen.                  |
 
 ### Versions and images
 
-| Flag | Environment variable | Default |
-|---|---|---|
-| `--chart <ref>` | `ORCHARD_CHART` | `oci://ghcr.io/hackclub/orchard/charts/orchard` |
-| `--chart-version <semver>` | `ORCHARD_VERSION` | latest |
-| `--image-tag <tag>` | `ORCHARD_IMAGE_TAG` | `latest` |
-| `--image-pull-policy <policy>` | `ORCHARD_IMAGE_PULL_POLICY` | `Always` |
-| `--image-registry <host>` | `ORCHARD_IMAGE_REGISTRY` | `ghcr.io` |
-| `--image-repository <path>` | `ORCHARD_IMAGE_REPOSITORY` | `hackclub/orchard` |
+| Flag                           | Environment variable        | Default                                         |
+| ------------------------------ | --------------------------- | ----------------------------------------------- |
+| `--chart <ref>`                | `ORCHARD_CHART`             | `oci://ghcr.io/hackclub/orchard/charts/orchard` |
+| `--chart-version <semver>`     | `ORCHARD_VERSION`           | latest                                          |
+| `--image-tag <tag>`            | `ORCHARD_IMAGE_TAG`         | `latest`                                        |
+| `--image-pull-policy <policy>` | `ORCHARD_IMAGE_PULL_POLICY` | `Always`                                        |
+| `--image-registry <host>`      | `ORCHARD_IMAGE_REGISTRY`    | `ghcr.io`                                       |
+| `--image-repository <path>`    | `ORCHARD_IMAGE_REPOSITORY`  | `hackclub/orchard`                              |
 
 The image tag is pinned rather than inherited from the chart's `appVersion`,
 because the server and the frontend are versioned independently and one
@@ -179,14 +179,14 @@ because the server and the frontend are versioned independently and one
 
 ### Cluster
 
-| Flag | Environment variable | Default |
-|---|---|---|
-| `--k3s-version <version>` | `K3S_VERSION` | `v1.31.5+k3s1` |
-| `--gateway-api-version <ver>` | `GATEWAY_API_VERSION` | `v1.2.1` |
-| `--node-port-range <lo-hi>` | `ORCHARD_NODE_PORT_RANGE` | `30000-30100` |
-| `--registry-port <port>` | `ORCHARD_ZOT_NODE_PORT` | `30100` |
-| `--registry-host <host>` | `ORCHARD_REGISTRY_HOST` | `registry.orchard.local` |
-| `--state-dir <path>` | `ORCHARD_STATE_DIR` | `/etc/orchard` |
+| Flag                          | Environment variable      | Default                  |
+| ----------------------------- | ------------------------- | ------------------------ |
+| `--k3s-version <version>`     | `K3S_VERSION`             | `v1.31.5+k3s1`           |
+| `--gateway-api-version <ver>` | `GATEWAY_API_VERSION`     | `v1.2.1`                 |
+| `--node-port-range <lo-hi>`   | `ORCHARD_NODE_PORT_RANGE` | `30000-30100`            |
+| `--registry-port <port>`      | `ORCHARD_ZOT_NODE_PORT`   | `30100`                  |
+| `--registry-host <host>`      | `ORCHARD_REGISTRY_HOST`   | `registry.orchard.local` |
+| `--state-dir <path>`          | `ORCHARD_STATE_DIR`       | `/etc/orchard`           |
 
 The node port range is what your apps can claim, so it is also the range you
 forward on a router. The registry port must sit inside it; the installer refuses

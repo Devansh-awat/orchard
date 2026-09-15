@@ -41,7 +41,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly executor: ApplyExecutorService,
+    private readonly executor: ApplyExecutorService
   ) {}
 
   onModuleInit() {
@@ -55,7 +55,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
       }, TICK_MS),
       setInterval(() => {
         void this.reclaim();
-      }, RECLAIM_MS),
+      }, RECLAIM_MS)
     ];
     for (const t of this.timers) t.unref?.();
   }
@@ -73,7 +73,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         opType: input.opType,
         manifest: manifest ?? undefined,
         deploymentId: input.deploymentId ?? null,
-        requestedById: input.requestedById ?? null,
+        requestedById: input.requestedById ?? null
       },
       update: {
         manifest: manifest ?? undefined,
@@ -82,14 +82,14 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         attempts: 0,
         notBefore: new Date(),
         lastError: null,
-        requestedById: input.requestedById ?? null,
-      },
+        requestedById: input.requestedById ?? null
+      }
     });
     if (input.deploymentId) {
       await this.prisma.deployment
         .update({
           where: { id: input.deploymentId },
-          data: { applyStatus: 'pending', applyError: null },
+          data: { applyStatus: 'pending', applyError: null }
         })
         .catch(() => {});
     }
@@ -104,14 +104,14 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         attempts: 0,
         notBefore: new Date(),
         lastError: null,
-        generation: { increment: 1 },
-      },
+        generation: { increment: 1 }
+      }
     });
     if (result.count > 0) {
       await this.prisma.deployment
         .update({
           where: { id: deploymentId },
-          data: { applyStatus: 'pending', applyError: null },
+          data: { applyStatus: 'pending', applyError: null }
         })
         .catch(() => {});
       this.kick();
@@ -163,14 +163,20 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
     const result = await this.executor.execute(item);
     const current = await this.prisma.k8sApplyItem.findUnique({
       where: { id: item.id },
-      select: { generation: true },
+      select: { generation: true }
     });
     if (!current) return;
 
     if (current.generation > item.generation) {
       await this.prisma.k8sApplyItem.update({
         where: { id: item.id },
-        data: { status: 'pending', attempts: 0, notBefore: new Date(), claimedBy: null, claimedAt: null },
+        data: {
+          status: 'pending',
+          attempts: 0,
+          notBefore: new Date(),
+          claimedBy: null,
+          claimedAt: null
+        }
       });
       this.kick();
       return;
@@ -179,7 +185,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
     if (result.ok) {
       await this.prisma.k8sApplyItem.update({
         where: { id: item.id },
-        data: { status: 'applied', lastError: null, claimedBy: null, claimedAt: null },
+        data: { status: 'applied', lastError: null, claimedBy: null, claimedAt: null }
       });
       await this.settleDeployment(item.deploymentId);
       return;
@@ -194,18 +200,20 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
           attempts,
           lastError: result.error ?? 'apply failed',
           claimedBy: null,
-          claimedAt: null,
-        },
+          claimedAt: null
+        }
       });
       if (item.deploymentId) {
         await this.prisma.deployment
           .update({
             where: { id: item.deploymentId },
-            data: { applyStatus: 'error', applyError: result.error ?? 'apply failed' },
+            data: { applyStatus: 'error', applyError: result.error ?? 'apply failed' }
           })
           .catch(() => {});
       }
-      this.logger.warn(`apply ${item.dedupeKey} terminal after ${attempts} attempts: ${result.error}`);
+      this.logger.warn(
+        `apply ${item.dedupeKey} terminal after ${attempts} attempts: ${result.error}`
+      );
       return;
     }
 
@@ -218,21 +226,21 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         notBefore: new Date(Date.now() + backoff),
         lastError: result.error ?? null,
         claimedBy: null,
-        claimedAt: null,
-      },
+        claimedAt: null
+      }
     });
   }
 
   private async settleDeployment(deploymentId: string | null): Promise<void> {
     if (!deploymentId) return;
     const open = await this.prisma.k8sApplyItem.count({
-      where: { deploymentId, status: { in: ['pending', 'applying', 'failed'] } },
+      where: { deploymentId, status: { in: ['pending', 'applying', 'failed'] } }
     });
     if (open === 0) {
       await this.prisma.deployment
         .update({
           where: { id: deploymentId },
-          data: { applyStatus: 'synced', applyError: null },
+          data: { applyStatus: 'synced', applyError: null }
         })
         .catch(() => {});
     }

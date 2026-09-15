@@ -1,17 +1,31 @@
-import {
-  Injectable,
-  BadRequestException,
-  ConflictException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { optionalDomain } from '../env/platform-domains';
 
 const RESERVED_SUBDOMAINS = new Set([
-  'www', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
-  'ssh', 'ns1', 'ns2', 'cdn', 'app', 'dashboard', 'login', 'auth',
-  'status', 'docs', 'help', 'support', 'billing', 'blog',
+  'www',
+  'api',
+  'admin',
+  'mail',
+  'smtp',
+  'imap',
+  'pop',
+  'ftp',
+  'ssh',
+  'ns1',
+  'ns2',
+  'cdn',
+  'app',
+  'dashboard',
+  'login',
+  'auth',
+  'status',
+  'docs',
+  'help',
+  'support',
+  'billing',
+  'blog'
 ]);
 
 /**
@@ -34,7 +48,7 @@ export class VanityDomainService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly k8sNetwork: K8sNetworkService,
+    private readonly k8sNetwork: K8sNetworkService
   ) {
     this.baseDomain = optionalDomain(process.env.BASE_DOMAIN);
     this.platformNamespace = process.env.PLATFORM_NAMESPACE || 'default';
@@ -48,12 +62,12 @@ export class VanityDomainService {
     if (normalized) {
       if (!this.baseDomain) {
         throw new BadRequestException(
-          'This instance has no vanity domain configured (BASE_DOMAIN), so org subdomains are unavailable.',
+          'This instance has no vanity domain configured (BASE_DOMAIN), so org subdomains are unavailable.'
         );
       }
       if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(normalized)) {
         throw new BadRequestException(
-          'Subdomain must be 3-50 characters, alphanumeric and hyphens only, cannot start or end with a hyphen',
+          'Subdomain must be 3-50 characters, alphanumeric and hyphens only, cannot start or end with a hyphen'
         );
       }
       if (RESERVED_SUBDOMAINS.has(normalized)) {
@@ -64,20 +78,20 @@ export class VanityDomainService {
     const { result, oldSubdomain } = await this.prisma.$transaction(async (tx) => {
       const current = await tx.organization.findUnique({
         where: { id: organizationId },
-        select: { subdomain: true },
+        select: { subdomain: true }
       });
 
       if (normalized) {
         const conflict = await tx.organization.findFirst({
           where: { subdomain: normalized, NOT: { id: organizationId } },
-          select: { id: true },
+          select: { id: true }
         });
         if (conflict) throw new ConflictException('This subdomain is already taken');
       }
 
       const updated = await tx.organization.update({
         where: { id: organizationId },
-        data: { subdomain: normalized },
+        data: { subdomain: normalized }
       });
       return { result: updated, oldSubdomain: current?.subdomain ?? null };
     });
@@ -92,14 +106,14 @@ export class VanityDomainService {
     } catch (err) {
       this.logger.error(
         `Ingress work failed for subdomain ${normalized ?? 'null'}; reverting to ${oldSubdomain ?? 'null'}`,
-        err instanceof Error ? err.stack : String(err),
+        err instanceof Error ? err.stack : String(err)
       );
       await this.prisma.organization
         .update({ where: { id: organizationId }, data: { subdomain: oldSubdomain } })
         .catch((revertErr) => {
           this.logger.error(
             `Failed to revert subdomain for org ${organizationId}`,
-            revertErr instanceof Error ? revertErr.stack : String(revertErr),
+            revertErr instanceof Error ? revertErr.stack : String(revertErr)
           );
         });
       throw err;
@@ -124,7 +138,7 @@ export class VanityDomainService {
       servicePort: this.platformServicePort,
       tlsSecretName: `sso-tls-${subdomain}`,
       tlsHosts: [host],
-      annotations: { 'cert-manager.io/cluster-issuer': 'letsencrypt-prod' },
+      annotations: { 'cert-manager.io/cluster-issuer': 'letsencrypt-prod' }
     };
 
     try {

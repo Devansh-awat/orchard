@@ -10,7 +10,7 @@ import {
   Header,
   HttpException,
   HttpStatus,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SsoProtocol } from '@prisma/client';
@@ -26,7 +26,7 @@ export class SsoController {
 
   constructor(
     private readonly sso: SsoService,
-    private readonly login: SsoLoginService,
+    private readonly login: SsoLoginService
   ) {}
 
   private get frontendUrl(): string {
@@ -73,7 +73,7 @@ export class SsoController {
   async start(
     @Param('providerId') providerId: string,
     @Query('returnTo') returnTo: string | undefined,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     try {
       const url = await this.login.startLogin(providerId, returnTo);
@@ -88,16 +88,17 @@ export class SsoController {
   async callback(
     @Param('providerId') providerId: string,
     @Req() req: Request,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     try {
       const provider = await this.login.loadLoginProvider(providerId);
       const state = req.query.state as string;
       if (!state) throw new HttpException('Missing state parameter', HttpStatus.BAD_REQUEST);
 
-      const result = provider.protocol === SsoProtocol.oauth2
-        ? await this.login.handleOAuth2Callback(providerId, req.query.code as string, state)
-        : await this.login.handleOidcCallback(providerId, this.requestUrl(req), state);
+      const result =
+        provider.protocol === SsoProtocol.oauth2
+          ? await this.login.handleOAuth2Callback(providerId, req.query.code as string, state)
+          : await this.login.handleOidcCallback(providerId, this.requestUrl(req), state);
 
       return this.finish(res, result);
     } catch (err) {
@@ -111,7 +112,7 @@ export class SsoController {
     @Param('providerId') providerId: string,
     @Body('SAMLResponse') samlResponse: string,
     @Body('RelayState') relayState: string,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     try {
       if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
@@ -149,7 +150,7 @@ export class SsoController {
   async legacyOidcCallback(
     @Param('orgId') orgId: string,
     @Req() req: Request,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     try {
       const state = req.query.state as string;
@@ -167,7 +168,7 @@ export class SsoController {
     @Param('orgId') orgId: string,
     @Body('SAMLResponse') samlResponse: string,
     @Body('RelayState') relayState: string,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     try {
       if (!samlResponse) throw new HttpException('Missing SAML response', HttpStatus.BAD_REQUEST);
@@ -190,9 +191,10 @@ export class SsoController {
 
   private fail(res: Response, err: unknown) {
     this.logger.warn(`SSO callback failed: ${err instanceof Error ? err.message : String(err)}`);
-    const reason = err instanceof Error && /private_beta|signups_disabled/.test(err.message)
-      ? err.message
-      : 'sso_failed';
+    const reason =
+      err instanceof Error && /private_beta|signups_disabled/.test(err.message)
+        ? err.message
+        : 'sso_failed';
     return res.redirect(`${this.frontendUrl}?error=${encodeURIComponent(reason)}`);
   }
 }

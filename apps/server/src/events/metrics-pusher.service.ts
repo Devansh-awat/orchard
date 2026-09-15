@@ -16,11 +16,13 @@ export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly k8sWorkload: K8sWorkloadService,
+    private readonly k8sWorkload: K8sWorkloadService
   ) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => { void this.tick(); }, PUSH_INTERVAL_MS);
+    this.timer = setInterval(() => {
+      void this.tick();
+    }, PUSH_INTERVAL_MS);
   }
 
   onModuleDestroy() {
@@ -36,15 +38,15 @@ export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
       const deployments = await this.prisma.deployment.findMany({
         where: {
           project: { organizationId: { in: orgIds } },
-          replicas: { gt: 0 },
+          replicas: { gt: 0 }
         },
         select: {
           id: true,
           namespace: true,
           projectId: true,
           project: { select: { organizationId: true } },
-          pods: { select: { name: true } },
-        },
+          pods: { select: { name: true } }
+        }
       });
       if (deployments.length === 0) return;
 
@@ -70,7 +72,7 @@ export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
           type: 'deployment.metrics',
           id: dep.id,
           projectId: dep.projectId,
-          payload: { totalCpuUsage: totalCpu, totalMemoryUsage: totalMem, pods },
+          payload: { totalCpuUsage: totalCpu, totalMemoryUsage: totalMem, pods }
         });
       }
     } catch (err) {

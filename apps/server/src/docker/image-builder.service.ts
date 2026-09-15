@@ -12,7 +12,7 @@ import {
   ORCHARD_RAILPACK_CONFIG,
   parseRailpackInfo,
   railpackConfigOverride,
-  resolveScratchMode,
+  resolveScratchMode
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withGitHubCredentials } from './repo-url';
@@ -27,11 +27,11 @@ import {
   PullAuthError,
   pullAuthsFromEnv,
   registryAuth,
-  type RegistryAuths,
+  type RegistryAuths
 } from './registry-pull-auth';
 import { BuildJobInformerService } from './build-job-informer.service';
 import { isUnseenTerminalSignal, remainingIntervalMs } from './build-poll-pacing';
-import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
+import { objectStorage } from '../instance-config/object-storage';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -111,13 +111,15 @@ export class ImageBuilderService {
   private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
 
   // Internal Harbor registry for pushing (HTTP on port 80)
-  private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
+  private readonly harborRegistryPush =
+    process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
 
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
 
   private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
 
-  private readonly registrySecretName = process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds';
+  private readonly registrySecretName =
+    process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds';
 
   // Depot configuration
   private readonly depotToken = process.env.DEPOT_TOKEN;
@@ -143,7 +145,9 @@ export class ImageBuilderService {
   }
 
   private get s3SecretAccessKey(): string | undefined {
-    return process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || objectStorage().secretAccessKey || undefined;
+    return (
+      process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || objectStorage().secretAccessKey || undefined
+    );
   }
 
   private readonly s3CachePrefix = process.env.BUILDKIT_S3_CACHE_PREFIX || 'buildkit-cache/';
@@ -163,7 +167,8 @@ export class ImageBuilderService {
   private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.33.0';
 
   private readonly railpackFrontendImage =
-    process.env.RAILPACK_FRONTEND_IMAGE || `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.33.0'}`;
+    process.env.RAILPACK_FRONTEND_IMAGE ||
+    `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.33.0'}`;
 
   private readonly railpackMiseImage =
     process.env.RAILPACK_MISE_IMAGE || 'ghcr.io/railwayapp/railpack-mise:20260227';
@@ -211,12 +216,14 @@ export class ImageBuilderService {
   //     the creds and pushes the OCI tarball BuildKit wrote to /output.
   //     Defence-in-depth against a malicious Dockerfile / BuildKit RCE
   //     exfiltrating `/root/.docker/config.json`.
-  private readonly builderRuntimeClass = (process.env.BUILDER_RUNTIME_CLASS || '').trim() || undefined;
+  private readonly builderRuntimeClass =
+    (process.env.BUILDER_RUNTIME_CLASS || '').trim() || undefined;
 
   // Super builds execute on Depot's machines; the in-cluster pod only clones,
   // tars and uploads, so it never runs repo code and does not need a VM per
   // build. Falls back to BUILDER_RUNTIME_CLASS when unset.
-  private readonly depotRuntimeClass = (process.env.BUILDER_DEPOT_RUNTIME_CLASS || '').trim() || undefined;
+  private readonly depotRuntimeClass =
+    (process.env.BUILDER_DEPOT_RUNTIME_CLASS || '').trim() || undefined;
 
   private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
 
@@ -238,7 +245,7 @@ export class ImageBuilderService {
   // pins tmpfs explicitly) keeps whatever they chose.
   private readonly scratchMode = resolveScratchMode(
     process.env.BUILDER_SCRATCH_MODE,
-    this.builderRuntimeClass,
+    this.builderRuntimeClass
   );
 
   private readonly scratchBlock = this.scratchMode === 'block';
@@ -258,10 +265,11 @@ export class ImageBuilderService {
 
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
 
-  private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
+  private readonly scratchStorageClass =
+    process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
 
   private readonly pendingScheduleTimeoutSeconds = Number(
-    process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300,
+    process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300
   );
 
   private static readonly SCRATCH_DEVICE = '/dev/buildscratch';
@@ -274,7 +282,7 @@ export class ImageBuilderService {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
-    @Optional() private readonly jobInformer?: BuildJobInformerService,
+    @Optional() private readonly jobInformer?: BuildJobInformerService
   ) {
     this.initKubeConfig();
   }
@@ -285,7 +293,7 @@ export class ImageBuilderService {
     if (!ctx) {
       const dep = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { projectId: true, project: { select: { organizationId: true } } },
+        select: { projectId: true, project: { select: { organizationId: true } } }
       });
       if (!dep) return;
       ctx = { orgId: dep.project.organizationId, projectId: dep.projectId };
@@ -295,7 +303,7 @@ export class ImageBuilderService {
       organizationId: ctx.orgId,
       type: 'build.changed',
       id: deploymentId,
-      projectId: ctx.projectId,
+      projectId: ctx.projectId
     });
   }
 
@@ -304,8 +312,10 @@ export class ImageBuilderService {
       this.kc = new k8s.KubeConfig();
       if (process.env.KUBECONFIG_BASE64) {
         let base64Value = process.env.KUBECONFIG_BASE64.trim();
-        while ((base64Value.startsWith('"') && base64Value.endsWith('"')) ||
-               (base64Value.startsWith("'") && base64Value.endsWith("'"))) {
+        while (
+          (base64Value.startsWith('"') && base64Value.endsWith('"')) ||
+          (base64Value.startsWith("'") && base64Value.endsWith("'"))
+        ) {
           base64Value = base64Value.slice(1, -1).trim();
         }
         const decoded = Buffer.from(base64Value, 'base64').toString('utf-8');
@@ -331,8 +341,11 @@ export class ImageBuilderService {
   private generateJobName(imageName: string): string {
     const hash = crypto.randomBytes(4).toString('hex');
     const sanitized = truncateK8sName(
-      imageName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
-      40,
+      imageName
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+/, ''),
+      40
     );
     return `image-builder-${sanitized || 'image'}-${hash}`;
   }
@@ -340,15 +353,27 @@ export class ImageBuilderService {
   private sanitizeLogMessage(message: string): string {
     let sanitized = message;
 
-    sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi, '***REDACTED***');
+    sanitized = sanitized.replace(
+      /(x-access-token:|ghs_|ghp_|github_pat_|dckr_pat_)[a-zA-Z0-9_-]+/gi,
+      '***REDACTED***'
+    );
 
-    sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+    sanitized = sanitized.replace(
+      /https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi,
+      'https://***@github.com'
+    );
 
     sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 
-    sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi, '$1 ***REDACTED***');
+    sanitized = sanitized.replace(
+      /(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi,
+      '$1 ***REDACTED***'
+    );
 
-    sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+    sanitized = sanitized.replace(
+      /(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi,
+      '$1=***REDACTED***'
+    );
 
     // Redact internal registry hostnames so the registry URL never leaks into user-visible logs.
     const registryHosts = new Set<string>();
@@ -369,10 +394,16 @@ export class ImageBuilderService {
   // instead. Reading logs from a container the pod doesn't have throws, which
   // is why super builds used to stream nothing at all.
   private mainContainerName(containerStatuses?: k8s.V1ContainerStatus[]): string {
-    return containerStatuses?.some((cs) => cs.name === DEPOT_CONTAINER) ? DEPOT_CONTAINER : 'buildkit';
+    return containerStatuses?.some((cs) => cs.name === DEPOT_CONTAINER)
+      ? DEPOT_CONTAINER
+      : 'buildkit';
   }
 
-  private async appendLog(deploymentId: string | undefined, message: string, level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO') {
+  private async appendLog(
+    deploymentId: string | undefined,
+    message: string,
+    level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO'
+  ) {
     if (!deploymentId) return;
 
     try {
@@ -395,7 +426,11 @@ export class ImageBuilderService {
   // the new chunk since last poll (so the frontend can parse the full #N step
   // history). Tracks offset per job so re-polling the full pod log doesn't
   // duplicate content.
-  private async streamBuildkitOutput(deploymentId: string | undefined, jobName: string, fullLogs: string | undefined) {
+  private async streamBuildkitOutput(
+    deploymentId: string | undefined,
+    jobName: string,
+    fullLogs: string | undefined
+  ) {
     if (!deploymentId || !fullLogs) return;
     const chunk = this.takeLogChunk(jobName, fullLogs);
     if (chunk === null) return;
@@ -415,7 +450,11 @@ export class ImageBuilderService {
     this.emitBuildChanged(deploymentId).catch(() => {});
   }
 
-  private async streamPusherOutput(deploymentId: string | undefined, jobName: string, pusherLogs: string | undefined) {
+  private async streamPusherOutput(
+    deploymentId: string | undefined,
+    jobName: string,
+    pusherLogs: string | undefined
+  ) {
     if (!deploymentId || !pusherLogs) return;
     const chunk = this.takeLogChunk(`${jobName}:pusher`, pusherLogs);
     if (chunk === null) return;
@@ -428,9 +467,10 @@ export class ImageBuilderService {
     try {
       const deployment = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { buildStepTimestamps: true },
+        select: { buildStepTimestamps: true }
       });
-      const offsets = ((deployment?.buildStepTimestamps as Record<string, any>)?.__logOffsets ?? {}) as Record<string, unknown>;
+      const offsets = ((deployment?.buildStepTimestamps as Record<string, any>)?.__logOffsets ??
+        {}) as Record<string, unknown>;
       for (const [key, value] of Object.entries(offsets)) {
         if (key !== jobName && !key.startsWith(`${jobName}:`)) continue;
         if (typeof value === 'number' && !this.buildkitLogOffsets.has(key)) {
@@ -449,7 +489,12 @@ export class ImageBuilderService {
     return fullLogs.slice(offset);
   }
 
-  private async appendStreamedChunk(deploymentId: string, chunk: string, offsetKey?: string, offsetValue?: number) {
+  private async appendStreamedChunk(
+    deploymentId: string,
+    chunk: string,
+    offsetKey?: string,
+    offsetValue?: number
+  ) {
     try {
       const sanitized = this.sanitizeLogMessage(chunk);
       if (offsetKey !== undefined && offsetValue !== undefined) {
@@ -502,7 +547,7 @@ export class ImageBuilderService {
     try {
       const deployment = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { buildStepTimestamps: true },
+        select: { buildStepTimestamps: true }
       });
       if (!deployment) return;
 
@@ -511,7 +556,7 @@ export class ImageBuilderService {
 
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { buildStep: step, buildStepTimestamps: timestamps },
+        data: { buildStep: step, buildStepTimestamps: timestamps }
       });
     } catch (error) {
       if ((error as { code?: string })?.code === 'P2025') return;
@@ -525,11 +570,11 @@ export class ImageBuilderService {
 
     const namespaceLabels = {
       'app.kubernetes.io/managed-by': 'orchard-image-builder',
-      'purpose': 'image-builds',
+      purpose: 'image-builds',
       // Required for BuildKit privileged containers - exempts from PodSecurity
       'pod-security.kubernetes.io/enforce': 'privileged',
       'pod-security.kubernetes.io/audit': 'privileged',
-      'pod-security.kubernetes.io/warn': 'privileged',
+      'pod-security.kubernetes.io/warn': 'privileged'
     };
 
     try {
@@ -539,7 +584,9 @@ export class ImageBuilderService {
       // Check if pod-security labels are set, if not, patch the namespace
       const existingLabels = existingNs.body.metadata?.labels || {};
       if (existingLabels['pod-security.kubernetes.io/enforce'] !== 'privileged') {
-        console.log(`[ImageBuilder] Patching namespace ${this.builderNamespace} with pod-security labels`);
+        console.log(
+          `[ImageBuilder] Patching namespace ${this.builderNamespace} with pod-security labels`
+        );
         await coreApi.patchNamespace(
           this.builderNamespace,
           { metadata: { labels: namespaceLabels } },
@@ -557,8 +604,8 @@ export class ImageBuilderService {
         await coreApi.createNamespace({
           metadata: {
             name: this.builderNamespace,
-            labels: namespaceLabels,
-          },
+            labels: namespaceLabels
+          }
         });
       } else {
         throw error;
@@ -572,26 +619,26 @@ export class ImageBuilderService {
     const auth = registryAuth(username, password);
     return {
       [this.harborRegistryPush]: auth,
-      [this.harborRegistryPull]: auth,
+      [this.harborRegistryPull]: auth
     };
   }
 
   private async upsertDockerConfigSecret(
     name: string,
     auths: RegistryAuths,
-    extraMetadata: k8s.V1ObjectMeta = {},
+    extraMetadata: k8s.V1ObjectMeta = {}
   ): Promise<void> {
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
     const body: k8s.V1Secret = {
       metadata: {
         name,
         namespace: this.builderNamespace,
-        ...extraMetadata,
+        ...extraMetadata
       },
       type: 'kubernetes.io/dockerconfigjson',
       data: {
-        '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson(auths))).toString('base64'),
-      },
+        '.dockerconfigjson': Buffer.from(JSON.stringify(dockerConfigJson(auths))).toString('base64')
+      }
     };
     try {
       await coreApi.readNamespacedSecret(name, this.builderNamespace);
@@ -618,26 +665,26 @@ export class ImageBuilderService {
         await coreApi.replaceNamespacedSecret(s3SecretName, this.builderNamespace, {
           metadata: {
             name: s3SecretName,
-            namespace: this.builderNamespace,
+            namespace: this.builderNamespace
           },
           type: 'Opaque',
           stringData: {
             AWS_ACCESS_KEY_ID: this.s3AccessKeyId,
-            AWS_SECRET_ACCESS_KEY: this.s3SecretAccessKey,
-          },
+            AWS_SECRET_ACCESS_KEY: this.s3SecretAccessKey
+          }
         });
       } catch (error) {
         if (error.statusCode === 404) {
           await coreApi.createNamespacedSecret(this.builderNamespace, {
             metadata: {
               name: s3SecretName,
-              namespace: this.builderNamespace,
+              namespace: this.builderNamespace
             },
             type: 'Opaque',
             stringData: {
               AWS_ACCESS_KEY_ID: this.s3AccessKeyId,
-              AWS_SECRET_ACCESS_KEY: this.s3SecretAccessKey,
-            },
+              AWS_SECRET_ACCESS_KEY: this.s3SecretAccessKey
+            }
           });
         } else {
           throw error;
@@ -659,7 +706,7 @@ export class ImageBuilderService {
     const httpRegistries = new Set<string>(
       (process.env.REGISTRY_HTTP_HOSTS || 'harbor-core.harbor.svc.cluster.local,178.156.144.127')
         .split(',')
-        .filter(Boolean),
+        .filter(Boolean)
     );
 
     // For plain HTTP registries, use ONLY http=true
@@ -667,8 +714,10 @@ export class ImageBuilderService {
     // See: https://github.com/moby/buildkit/issues/4458
     // External registries (e.g. OVH, Docker Hub) use HTTPS and should NOT have http=true
     const registryConfigs = Array.from(httpRegistries)
-      .map(reg => `[registry."${reg}"]
-  http = true`)
+      .map(
+        (reg) => `[registry."${reg}"]
+  http = true`
+      )
       .join('\n\n');
 
     const buildkitConfig = `# BuildKit daemon configuration
@@ -711,12 +760,12 @@ ${registryConfigs}
           namespace: this.builderNamespace,
           labels: {
             'app.kubernetes.io/name': 'image-builder',
-            'app.kubernetes.io/managed-by': 'orchard',
-          },
+            'app.kubernetes.io/managed-by': 'orchard'
+          }
         },
         data: {
-          'buildkitd.toml': buildkitConfig,
-        },
+          'buildkitd.toml': buildkitConfig
+        }
       });
     } catch (error) {
       if (error.statusCode === 404) {
@@ -726,12 +775,12 @@ ${registryConfigs}
             namespace: this.builderNamespace,
             labels: {
               'app.kubernetes.io/name': 'image-builder',
-              'app.kubernetes.io/managed-by': 'orchard',
-            },
+              'app.kubernetes.io/managed-by': 'orchard'
+            }
           },
           data: {
-            'buildkitd.toml': buildkitConfig,
-          },
+            'buildkitd.toml': buildkitConfig
+          }
         });
       } else {
         throw error;
@@ -746,10 +795,7 @@ ${registryConfigs}
       console.log(`[ImageBuilder] Local cache enabled - path: ${cacheDir}`);
       const importCache = `type=local,src=${cacheDir}`;
       const exportCache = `type=local,dest=${cacheDir},mode=max,compression=zstd,ignore-error=true`;
-      return [
-        '--import-cache', importCache,
-        '--export-cache', exportCache,
-      ];
+      return ['--import-cache', importCache, '--export-cache', exportCache];
     }
 
     if (!this.s3CacheEnabled || !this.s3Endpoint || !this.s3Bucket) {
@@ -765,7 +811,9 @@ ${registryConfigs}
       ? `${this.s3CachePrefix}${imageName.replace(/[^a-z0-9-]/gi, '-')}/`
       : this.s3CachePrefix;
 
-    console.log(`[ImageBuilder] S3 cache enabled - endpoint: ${this.s3Endpoint}, bucket: ${this.s3Bucket}, prefix: ${cachePrefix}`);
+    console.log(
+      `[ImageBuilder] S3 cache enabled - endpoint: ${this.s3Endpoint}, bucket: ${this.s3Bucket}, prefix: ${cachePrefix}`
+    );
 
     // BuildKit S3 cache format for Cloudflare R2
     // R2 is S3-compatible but requires specific settings:
@@ -776,10 +824,7 @@ ${registryConfigs}
     const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},use_path_style=true`;
     const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=max,use_path_style=true`;
 
-    return [
-      '--import-cache', importCache,
-      '--export-cache', exportCache,
-    ];
+    return ['--import-cache', importCache, '--export-cache', exportCache];
   }
 
   private createDepotContainer(opts: {
@@ -791,7 +836,15 @@ ${registryConfigs}
     envVars: Record<string, string>;
     pullAuths?: RegistryAuths;
   }): k8s.V1Container {
-    const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars, pullAuths = {} } = opts;
+    const {
+      dockerfilePath,
+      fullImageName,
+      target,
+      buildFromRoot,
+      buildType,
+      envVars,
+      pullAuths = {}
+    } = opts;
 
     // Keys are interpolated into the depot build shell string below. Reject
     // anything that isn't a POSIX identifier — same rule applied elsewhere
@@ -810,7 +863,7 @@ ${registryConfigs}
     // fast with something actionable instead.
     if (buildType === 'railpack') {
       throw new BadRequestException(
-        'Super builds do not support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build.',
+        'Super builds do not support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build.'
       );
     }
 
@@ -839,7 +892,7 @@ ${registryConfigs}
     const depotBuildArgs = Object.entries(envVars).map(([key, value], index) => ({
       key,
       envName: `ORCHARD_BUILD_ARG_${index}`,
-      value,
+      value
     }));
     const buildArgLines = depotBuildArgs
       .map(({ key, envName }) => `--build-arg "${key}=\${${envName}}"`)
@@ -847,9 +900,10 @@ ${registryConfigs}
 
     // Same lint behavior as the BuildKit path: without this, a repo's
     // "# check=error=true" directive fails depot builds that pass locally.
-    const checkArgLine = 'BUILDKIT_DOCKERFILE_CHECK' in envVars
-      ? ''
-      : '--build-arg "BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv"';
+    const checkArgLine =
+      'BUILDKIT_DOCKERFILE_CHECK' in envVars
+        ? ''
+        : '--build-arg "BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv"';
 
     const targetFlag = target ? `--target "${target}"` : '';
 
@@ -904,29 +958,29 @@ echo "=== Super Build completed ==="
         ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
         {
           name: 'DOCKER_AUTH_JSON',
-          value: JSON.stringify(dockerConfigJson(mergeRegistryAuths(this.harborAuths(), pullAuths))),
+          value: JSON.stringify(dockerConfigJson(mergeRegistryAuths(this.harborAuths(), pullAuths)))
         },
         ...depotBuildArgs.map(({ envName, value }) => ({
           name: envName,
-          value,
-        })),
+          value
+        }))
       ],
       volumeMounts: [
         {
           name: 'workspace',
-          mountPath: '/workspace',
-        },
+          mountPath: '/workspace'
+        }
       ],
       resources: {
         requests: {
           cpu: '200m',
-          memory: '512Mi',
+          memory: '512Mi'
         },
         limits: {
           cpu: '1',
-          memory: '2Gi',
-        },
-      },
+          memory: '2Gi'
+        }
+      }
     };
   }
 
@@ -954,9 +1008,6 @@ if ! mountpoint -q /buildkit-state 2>/dev/null; then
 fi
 `;
   }
-
-
-
 
   /**
    * Generate a shell snippet that prunes *this tenant's own* per-image cache
@@ -1004,7 +1055,7 @@ fi
   private static readonly FATAL_WAITING_REASONS = new Set([
     'CreateContainerConfigError',
     'CreateContainerError',
-    'InvalidImageName',
+    'InvalidImageName'
   ]);
 
   private static readonly GIT_SHA_PREAMBLE =
@@ -1026,7 +1077,10 @@ if [ -f /workspace/.orchard-build-dir ]; then
 fi
 `;
 
-  private generateBuildScriptWithCacheFallback(buildctlArgs: string[], injectGitSha = false): string {
+  private generateBuildScriptWithCacheFallback(
+    buildctlArgs: string[],
+    injectGitSha = false
+  ): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
 
@@ -1041,32 +1095,41 @@ fi
     const buildDirPreamble = ImageBuilderService.BUILD_DIR_PREAMBLE;
 
     if (!hasCacheEnabled) {
-      return gitShaPreamble + buildDirPreamble
-        + this.generateBuildScript(`buildctl-daemonless.sh ${argsWithCache}`);
+      return (
+        gitShaPreamble +
+        buildDirPreamble +
+        this.generateBuildScript(`buildctl-daemonless.sh ${argsWithCache}`)
+      );
     }
 
     // Split the cache flags off the base args so the build can drop them at
     // runtime. Values are restricted to shellQuote's safe charset (no spaces),
     // so $CACHE_ARGS word-splits back into the original arguments.
     const isCacheFlag = (arg: string, idx: number, arr: string[]) =>
-      arg === '--import-cache' || arg === '--export-cache'
-      || (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache'));
+      arg === '--import-cache' ||
+      arg === '--export-cache' ||
+      (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache'));
 
-    const baseArgs = buildctlArgs.filter((a, i, arr) => !isCacheFlag(a, i, arr))
-      .map(shellQuote).join(' ') + gitShaOpt;
+    const baseArgs =
+      buildctlArgs
+        .filter((a, i, arr) => !isCacheFlag(a, i, arr))
+        .map(shellQuote)
+        .join(' ') + gitShaOpt;
     const cacheOnlyArgs = buildctlArgs.filter(isCacheFlag).map(shellQuote).join(' ');
 
     const argAfter = (flag: string) =>
       buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag) || '';
-    const cacheDirMatch = argAfter('--export-cache').match(/dest=([^,]+)/)
-      || argAfter('--import-cache').match(/src=([^,]+)/);
+    const cacheDirMatch =
+      argAfter('--export-cache').match(/dest=([^,]+)/) ||
+      argAfter('--import-cache').match(/src=([^,]+)/);
     const cacheDir = cacheDirMatch?.[1] ?? '';
 
     // A broken cache is our problem, not the user's build's. Probe it up front
     // and drop the cache flags if it is unusable, so the build still produces
     // an image — but say so loudly, because a cache that silently stops working
     // is exactly the kind of fault worth noticing.
-    const cachePreflight = cacheDir ? `
+    const cachePreflight = cacheDir
+      ? `
 CACHE_ARGS="${cacheOnlyArgs}"
 CACHE_DIR="${cacheDir}"
 if ! mkdir -p "$CACHE_DIR" 2>/dev/null || ! touch "$CACHE_DIR/.orchard-probe" 2>/dev/null; then
@@ -1077,7 +1140,8 @@ if ! mkdir -p "$CACHE_DIR" 2>/dev/null || ! touch "$CACHE_DIR/.orchard-probe" 2>
   CACHE_ARGS=""
 fi
 rm -f "$CACHE_DIR/.orchard-probe" 2>/dev/null || true
-` : `
+`
+      : `
 CACHE_ARGS="${cacheOnlyArgs}"
 `;
 
@@ -1149,7 +1213,7 @@ exit $EXIT_CODE
       buildWithDepot = false,
       cacheTenantKey,
       persistentBuildCache = false,
-      localContextUrl,
+      localContextUrl
     } = options;
 
     // Filter once, here, so every consumer below agrees on the set: the ARG
@@ -1172,7 +1236,10 @@ exit $EXIT_CODE
     // the legacy behaviour (every build in one directory) — only used when
     // a caller hasn't been updated yet. New callers must pass this.
     const cacheSubPath = cacheTenantKey
-      ? cacheTenantKey.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 63) || '_shared'
+      ? cacheTenantKey
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')
+          .slice(0, 63) || '_shared'
       : '_shared';
 
     if (!this.builderInfraReady) {
@@ -1182,26 +1249,30 @@ exit $EXIT_CODE
     }
 
     const jobName = this.generateJobName(imageName);
-    const jobDockerConfigSecret = hasAppPullAuth
-      ? `bdc-${jobName.slice(-8)}`
-      : null;
+    const jobDockerConfigSecret = hasAppPullAuth ? `bdc-${jobName.slice(-8)}` : null;
     if (jobDockerConfigSecret) {
       await this.upsertDockerConfigSecret(
         jobDockerConfigSecret,
         this.sidecarPushEnabled
           ? appPullAuths
           : mergeRegistryAuths(this.harborAuths(), appPullAuths),
-        { labels: { 'orchard.my/build-job': jobName } },
+        { labels: { 'orchard.my/build-job': jobName } }
       );
-      this.appendLog(deploymentId, 'Using registry credentials from the app environment to pull base images').catch(() => {});
+      this.appendLog(
+        deploymentId,
+        'Using registry credentials from the app environment to pull base images'
+      ).catch(() => {});
     }
-    const buildkitAuthSecret = jobDockerConfigSecret
-      ?? (this.sidecarPushEnabled ? null : this.registrySecretName);
+    const buildkitAuthSecret =
+      jobDockerConfigSecret ?? (this.sidecarPushEnabled ? null : this.registrySecretName);
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}:${tag}`;
 
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
     const builderLabel = buildWithDepot ? 'Super Builds' : 'BuildKit';
-    this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`).catch(() => {});
+    this.appendLog(
+      deploymentId,
+      `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`
+    ).catch(() => {});
 
     const parsedRepo = localContextUrl ? null : parseRepoUrl(repoUrl);
     if (!localContextUrl && !parsedRepo) {
@@ -1225,7 +1296,7 @@ exit $EXIT_CODE
       envVars,
       secretsHash,
       cacheKey,
-      skipCache: persistentBuildCache && !!this.buildKitPool,
+      skipCache: persistentBuildCache && !!this.buildKitPool
     });
 
     const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
@@ -1250,32 +1321,32 @@ tar xzf /tmp/context.tar.gz -C /workspace
 rm -f /tmp/context.tar.gz
 echo "=== Build context extracted ==="
 ls -la /workspace
-`,
+`
           ],
           env: [{ name: 'CONTEXT_URL', value: localContextUrl }],
           volumeMounts: [
             {
               name: 'workspace',
-              mountPath: '/workspace',
-            },
+              mountPath: '/workspace'
+            }
           ],
           resources: {
             requests: {
               cpu: '100m',
-              memory: '256Mi',
+              memory: '256Mi'
             },
             limits: {
               cpu: '500m',
-              memory: '512Mi',
-            },
-          },
+              memory: '512Mi'
+            }
+          }
         }
       : {
-        name: 'git-clone',
-        image: 'alpine/git:latest',
-        command: ['/bin/sh', '-c'],
-        args: [
-          `set -e
+          name: 'git-clone',
+          image: 'alpine/git:latest',
+          command: ['/bin/sh', '-c'],
+          args: [
+            `set -e
 echo "=== Cloning repository ==="
 MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/://x-access-token:***@}"
 MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/://***@}"
@@ -1326,26 +1397,26 @@ if [ "$LFS_READY" = "1" ] && [ -n "$(git -C /workspace lfs ls-files 2>/dev/null)
 fi
 echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)"
 ls -la /workspace
-`,
-        ],
-        env: [{ name: 'CLONE_URL', value: cloneUrl }],
-        volumeMounts: [
-          {
-            name: 'workspace',
-            mountPath: '/workspace',
-          },
-        ],
-        resources: {
-          requests: {
-            cpu: '100m',
-            memory: '256Mi',
-          },
-          limits: {
-            cpu: '500m',
-            memory: '512Mi',
-          },
-        },
-      };
+`
+          ],
+          env: [{ name: 'CLONE_URL', value: cloneUrl }],
+          volumeMounts: [
+            {
+              name: 'workspace',
+              mountPath: '/workspace'
+            }
+          ],
+          resources: {
+            requests: {
+              cpu: '100m',
+              memory: '256Mi'
+            },
+            limits: {
+              cpu: '500m',
+              memory: '512Mi'
+            }
+          }
+        };
 
     const initContainers: k8s.V1Container[] = [sourceInit];
 
@@ -1367,26 +1438,24 @@ ls -la /workspace
         name: 'inject-build-args',
         image: 'alpine:latest',
         command: ['/bin/sh', '-c'],
-        args: [
-          injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) }),
-        ],
+        args: [injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) })],
         workingDir: '/workspace',
         volumeMounts: [
           {
             name: 'workspace',
-            mountPath: '/workspace',
-          },
+            mountPath: '/workspace'
+          }
         ],
         resources: {
           requests: {
             cpu: '50m',
-            memory: '64Mi',
+            memory: '64Mi'
           },
           limits: {
             cpu: '200m',
-            memory: '128Mi',
-          },
-        },
+            memory: '128Mi'
+          }
+        }
       });
     }
 
@@ -1405,7 +1474,8 @@ ls -la /workspace
       const overrideConfig = railpackConfigOverride(envVars);
       const configOverrideJson = overrideConfig ? JSON.stringify(overrideConfig) : '';
       const configFileArg = overrideConfig ? ` --config-file ${ORCHARD_RAILPACK_CONFIG}` : '';
-      const configOverrideBlock = overrideConfig ? `
+      const configOverrideBlock = overrideConfig
+        ? `
 echo "=== Applying Orchard build settings over the repository config ==="
 cat > /tmp/orchard-override.json <<'ORCHARD_RAILPACK_OVERRIDE'
 ${configOverrideJson}
@@ -1418,7 +1488,8 @@ elif [ -f railpack.json ]; then
 else
   cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
 fi
-` : '';
+`
+        : '';
 
       initContainers.push({
         name: 'railpack-prepare',
@@ -1518,25 +1589,25 @@ if [ -f railpack-info.json ]; then
   # and never the build.
   echo "${RAILPACK_INFO_MARKER}$(tr -d '\\n' < railpack-info.json)"
 fi
-`,
+`
         ],
         workingDir: '/workspace',
         volumeMounts: [
           {
             name: 'workspace',
-            mountPath: '/workspace',
-          },
+            mountPath: '/workspace'
+          }
         ],
         resources: {
           requests: {
             cpu: '200m',
-            memory: '512Mi',
+            memory: '512Mi'
           },
           limits: {
             cpu: '1',
-            memory: '2Gi',
-          },
-        },
+            memory: '2Gi'
+          }
+        }
       });
     }
 
@@ -1550,27 +1621,37 @@ fi
         daemonIp = daemon.podIp;
         await this.appendLog(deploymentId, `Using persistent BuildKit daemon at ${daemon.podName}`);
       } catch (err) {
-        console.warn(`[ImageBuilder] Failed to get daemon, falling back to daemonless:`, err.message);
-        await this.appendLog(deploymentId, `Persistent daemon unavailable, using standard builder`, 'WARNING');
+        console.warn(
+          `[ImageBuilder] Failed to get daemon, falling back to daemonless:`,
+          err.message
+        );
+        await this.appendLog(
+          deploymentId,
+          `Persistent daemon unavailable, using standard builder`,
+          'WARNING'
+        );
       }
     }
 
     // Runs first, and only when the cache volume is the real shared PVC — the
     // disableSharedCache fallback swaps in an emptyDir with nothing to evict,
     // and daemon mode keeps its cache in the daemon pod.
-    const sharedCacheVolume = !daemonIp
-      && !buildWithDepot
-      && this.localCacheEnabled
-      && !!this.localCachePvc
-      && !options.disableSharedCache;
+    const sharedCacheVolume =
+      !daemonIp &&
+      !buildWithDepot &&
+      this.localCacheEnabled &&
+      !!this.localCachePvc &&
+      !options.disableSharedCache;
     if (sharedCacheVolume) {
-      initContainers.unshift(cacheEvictInitContainer({
-        cacheSubPath,
-        maxAgeDays: this.cacheEvictMaxAgeDays,
-        highPct: this.cacheEvictHighPct,
-        targetPct: this.cacheEvictTargetPct,
-        idleMinutes: this.cacheEvictIdleMinutes,
-      }) as k8s.V1Container);
+      initContainers.unshift(
+        cacheEvictInitContainer({
+          cacheSubPath,
+          maxAgeDays: this.cacheEvictMaxAgeDays,
+          highPct: this.cacheEvictHighPct,
+          targetPct: this.cacheEvictTargetPct,
+          idleMinutes: this.cacheEvictIdleMinutes
+        }) as k8s.V1Container
+      );
     }
 
     // Build the BuildKit container spec.
@@ -1584,129 +1665,153 @@ fi
     // sidecarPushEnabled changes credential handling in both modes:
     //   - no docker-config mount — the build cannot exfiltrate push creds.
     //   - mount `output` emptyDir at /output for the OCI tarball.
-    const buildkitContainer: k8s.V1Container | null = buildWithDepot ? null : (() => {
-      if (daemonIp) {
-        // --- Daemon client mode ---
-        // buildctl sends the local context directory to the remote daemon
-        // over gRPC, so the client needs /workspace but NOT privilege.
-        const shellQuote = (arg: string) =>
-          /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
-        const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}${
-          injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''
-        }`;
-        const clientScript =
-          (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
-          // Same directory handoff as the daemonless path: buildctl streams the
-          // local context from the client's cwd, so it must match the directory
-          // railpack-prepare generated the plan for.
-          ImageBuilderService.BUILD_DIR_PREAMBLE +
-          this.generateBuildScript(clientCmd);
+    const buildkitContainer: k8s.V1Container | null = buildWithDepot
+      ? null
+      : (() => {
+          if (daemonIp) {
+            // --- Daemon client mode ---
+            // buildctl sends the local context directory to the remote daemon
+            // over gRPC, so the client needs /workspace but NOT privilege.
+            const shellQuote = (arg: string) =>
+              /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+            const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}${
+              injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''
+            }`;
+            const clientScript =
+              (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
+              // Same directory handoff as the daemonless path: buildctl streams the
+              // local context from the client's cwd, so it must match the directory
+              // railpack-prepare generated the plan for.
+              ImageBuilderService.BUILD_DIR_PREAMBLE +
+              this.generateBuildScript(clientCmd);
 
-        return {
-          name: 'buildkit',
-          image: this.buildkitImage,
-          // Not privileged — just a gRPC client. The daemon pod has registry
-          // creds and pushes directly, so the client doesn't need docker-config.
-          command: ['/bin/sh', '-c'],
-          args: [clientScript],
-          workingDir: '/workspace',
-          env: builderContainerEnv(envVars),
-          volumeMounts: [
-            { name: 'workspace', mountPath: '/workspace' },
-          ],
-          resources: {
-            requests: { cpu: '200m', memory: '512Mi' },
-            limits: { cpu: '2', memory: '4Gi' },
-          },
-        } as k8s.V1Container;
-      }
+            return {
+              name: 'buildkit',
+              image: this.buildkitImage,
+              // Not privileged — just a gRPC client. The daemon pod has registry
+              // creds and pushes directly, so the client doesn't need docker-config.
+              command: ['/bin/sh', '-c'],
+              args: [clientScript],
+              workingDir: '/workspace',
+              env: builderContainerEnv(envVars),
+              volumeMounts: [{ name: 'workspace', mountPath: '/workspace' }],
+              resources: {
+                requests: { cpu: '200m', memory: '512Mi' },
+                limits: { cpu: '2', memory: '4Gi' }
+              }
+            } as k8s.V1Container;
+          }
 
-      // --- Daemonless mode (original) ---
-      // Cache export is only worth skipping for the S3 backend, which
-      // round-trips the whole cache over the network before the pusher can
-      // read the tarball. The local backend writes to a PVC and is
-      // independent of the push, so keep it — without the export nothing ever
-      // populates the cache dir and every build imports from an empty path.
-      const stripExportCache = this.sidecarPushEnabled && !this.localCacheEnabled;
-      const scriptArgs = stripExportCache
-        ? buildctlArgs.filter((arg, idx, arr) => {
-            if (arg === '--export-cache') return false;
-            if (idx > 0 && arr[idx - 1] === '--export-cache') return false;
-            return true;
-          })
-        : buildctlArgs;
-      return {
-        name: 'buildkit',
-        image: this.buildkitImage,
-        securityContext: { privileged: true },
-        command: ['/bin/sh', '-c'],
-        args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
-        workingDir: '/workspace',
-        env: [
-          ...(buildkitAuthSecret
-            ? [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]
-            : []),
-          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}` },
-          ...builderContainerEnv(envVars),
-          // After the user's variables, not before. A build that pulls assets
-          // from S3 sets AWS_ACCESS_KEY_ID for perfectly good reasons, and it
-          // reaches the build by value as a --build-arg, so losing the race
-          // here costs it nothing — while losing it the other way points our
-          // cache exporter at someone else's bucket.
-          ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
-            {
-              name: 'AWS_ACCESS_KEY_ID',
-              valueFrom: {
-                secretKeyRef: {
-                  name: 'buildkit-s3-cache-creds',
-                  key: 'AWS_ACCESS_KEY_ID',
-                  optional: true,
+          // --- Daemonless mode (original) ---
+          // Cache export is only worth skipping for the S3 backend, which
+          // round-trips the whole cache over the network before the pusher can
+          // read the tarball. The local backend writes to a PVC and is
+          // independent of the push, so keep it — without the export nothing ever
+          // populates the cache dir and every build imports from an empty path.
+          const stripExportCache = this.sidecarPushEnabled && !this.localCacheEnabled;
+          const scriptArgs = stripExportCache
+            ? buildctlArgs.filter((arg, idx, arr) => {
+                if (arg === '--export-cache') return false;
+                if (idx > 0 && arr[idx - 1] === '--export-cache') return false;
+                return true;
+              })
+            : buildctlArgs;
+          return {
+            name: 'buildkit',
+            image: this.buildkitImage,
+            securityContext: { privileged: true },
+            command: ['/bin/sh', '-c'],
+            args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
+            workingDir: '/workspace',
+            env: [
+              ...(buildkitAuthSecret ? [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }] : []),
+              {
+                name: 'BUILDKITD_FLAGS',
+                value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}`
+              },
+              ...builderContainerEnv(envVars),
+              // After the user's variables, not before. A build that pulls assets
+              // from S3 sets AWS_ACCESS_KEY_ID for perfectly good reasons, and it
+              // reaches the build by value as a --build-arg, so losing the race
+              // here costs it nothing — while losing it the other way points our
+              // cache exporter at someone else's bucket.
+              ...(this.s3CacheEnabled && !this.localCacheEnabled
+                ? [
+                    {
+                      name: 'AWS_ACCESS_KEY_ID',
+                      valueFrom: {
+                        secretKeyRef: {
+                          name: 'buildkit-s3-cache-creds',
+                          key: 'AWS_ACCESS_KEY_ID',
+                          optional: true
+                        }
+                      }
+                    },
+                    {
+                      name: 'AWS_SECRET_ACCESS_KEY',
+                      valueFrom: {
+                        secretKeyRef: {
+                          name: 'buildkit-s3-cache-creds',
+                          key: 'AWS_SECRET_ACCESS_KEY',
+                          optional: true
+                        }
+                      }
+                    }
+                  ]
+                : [])
+            ],
+            volumeMounts: [
+              { name: 'workspace', mountPath: '/workspace' },
+              ...(buildkitAuthSecret
+                ? [
+                    {
+                      name: 'buildkit-auth',
+                      mountPath: '/root/.docker',
+                      readOnly: true
+                    }
+                  ]
+                : []),
+              { name: 'buildkit-config', mountPath: '/etc/buildkit', readOnly: true },
+              ...(this.sidecarPushEnabled
+                ? [
+                    {
+                      name: 'output',
+                      mountPath: '/output'
+                    }
+                  ]
+                : []),
+              ...((this.workspaceTmpfs || this.scratchDisk || this.scratchTmpfs) &&
+              !this.scratchBlock
+                ? [
+                    {
+                      name: 'buildkit-state',
+                      mountPath: '/buildkit-state'
+                    }
+                  ]
+                : []),
+              ...(this.localCacheEnabled
+                ? [
+                    {
+                      name: 'buildkit-cache',
+                      mountPath: this.localCachePath,
+                      subPath: cacheSubPath
+                    }
+                  ]
+                : [])
+            ],
+            ...(this.scratchBlock
+              ? {
+                  volumeDevices: [
+                    { name: 'buildkit-state', devicePath: ImageBuilderService.SCRATCH_DEVICE }
+                  ]
                 }
-              }
-            },
-            {
-              name: 'AWS_SECRET_ACCESS_KEY',
-              valueFrom: {
-                secretKeyRef: {
-                  name: 'buildkit-s3-cache-creds',
-                  key: 'AWS_SECRET_ACCESS_KEY',
-                  optional: true,
-                }
-              }
-            },
-          ] : []),
-        ],
-        volumeMounts: [
-          { name: 'workspace', mountPath: '/workspace' },
-          ...(buildkitAuthSecret ? [{
-            name: 'buildkit-auth',
-            mountPath: '/root/.docker',
-            readOnly: true,
-          }] : []),
-          { name: 'buildkit-config', mountPath: '/etc/buildkit', readOnly: true },
-          ...(this.sidecarPushEnabled ? [{
-            name: 'output',
-            mountPath: '/output',
-          }] : []),
-          ...((this.workspaceTmpfs || this.scratchDisk || this.scratchTmpfs) && !this.scratchBlock ? [{
-            name: 'buildkit-state',
-            mountPath: '/buildkit-state',
-          }] : []),
-          ...(this.localCacheEnabled ? [{
-            name: 'buildkit-cache',
-            mountPath: this.localCachePath,
-            subPath: cacheSubPath,
-          }] : []),
-        ],
-        ...(this.scratchBlock ? {
-          volumeDevices: [{ name: 'buildkit-state', devicePath: ImageBuilderService.SCRATCH_DEVICE }],
-        } : {}),
-        resources: {
-          requests: { cpu: '500m', memory: '2Gi' },
-          limits: { cpu: '4', memory: process.env.BUILDER_MEMORY_LIMIT || '32Gi' },
-        },
-      } as k8s.V1Container;
-    })();
+              : {}),
+            resources: {
+              requests: { cpu: '500m', memory: '2Gi' },
+              limits: { cpu: '4', memory: process.env.BUILDER_MEMORY_LIMIT || '32Gi' }
+            }
+          } as k8s.V1Container;
+        })();
 
     // Pusher container — only used when sidecarPushEnabled. Polls for a
     // done-marker written by BuildKit, then `skopeo copy`s the OCI
@@ -1726,12 +1831,14 @@ fi
     // BuildKit cannot read the pusher container's
     // /root/.docker/config.json.
     // No pusher in daemon mode — the daemon pushes directly (it has creds).
-    const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled && !daemonIp) ? {
-      name: 'pusher',
-      image: this.pusherImage,
-      command: ['/bin/sh', '-c'],
-      args: [
-        `set -e
+    const pusherContainer: k8s.V1Container | null =
+      buildkitContainer && this.sidecarPushEnabled && !daemonIp
+        ? {
+            name: 'pusher',
+            image: this.pusherImage,
+            command: ['/bin/sh', '-c'],
+            args: [
+              `set -e
 echo "[pusher] waiting for build to finish..."
 TIMEOUT=1700
 ELAPSED=0
@@ -1748,20 +1855,21 @@ if [ -f /output/.failed ]; then
   exit 1
 fi
 echo "[pusher] build done, pushing..."
-exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oci-archive:/output/image.tar 'docker://${fullImageName.replace(/'/g, `'\\''`)}'`,
-      ],
-      volumeMounts: [
-        { name: 'output', mountPath: '/output' },
-        { name: 'docker-config', mountPath: '/root/.docker', readOnly: true },
-      ],
-      resources: {
-        requests: { cpu: '100m', memory: '256Mi' },
-        limits: { cpu: '1', memory: '1Gi' },
-      },
-    } : null;
+exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oci-archive:/output/image.tar 'docker://${fullImageName.replace(/'/g, `'\\''`)}'`
+            ],
+            volumeMounts: [
+              { name: 'output', mountPath: '/output' },
+              { name: 'docker-config', mountPath: '/root/.docker', readOnly: true }
+            ],
+            resources: {
+              requests: { cpu: '100m', memory: '256Mi' },
+              limits: { cpu: '1', memory: '1Gi' }
+            }
+          }
+        : null;
 
     const podRuntimeClass = buildWithDepot
-      ? (this.depotRuntimeClass || this.builderRuntimeClass)
+      ? this.depotRuntimeClass || this.builderRuntimeClass
       : this.builderRuntimeClass;
 
     // Final container layout:
@@ -1772,20 +1880,31 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
     //     exit so the pusher knows when to act.
     let containers: k8s.V1Container[];
     if (buildWithDepot) {
-      containers = [this.createDepotContainer({
-        dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars, pullAuths: appPullAuths,
-      })];
+      containers = [
+        this.createDepotContainer({
+          dockerfilePath,
+          fullImageName,
+          target,
+          buildFromRoot,
+          buildType,
+          envVars,
+          pullAuths: appPullAuths
+        })
+      ];
     } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
 
       const shellQuote2 = (arg: string) =>
         /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
-      const cacheExportArgs = buildctlArgs.map(a =>
-        a.includes('dest=/output/image.tar')
-          ? a.replace('dest=/output/image.tar', 'dest=/tmp/cache-export.tar')
-          : a,
-      ).map(shellQuote2).join(' ');
-      const hasCacheExport = buildctlArgs.some(a => a === '--export-cache');
+      const cacheExportArgs = buildctlArgs
+        .map((a) =>
+          a.includes('dest=/output/image.tar')
+            ? a.replace('dest=/output/image.tar', 'dest=/tmp/cache-export.tar')
+            : a
+        )
+        .map(shellQuote2)
+        .join(' ');
+      const hasCacheExport = buildctlArgs.some((a) => a === '--export-cache');
 
       buildkitContainer.args = [
         `mkdir -p /output
@@ -1806,16 +1925,20 @@ done
 
 if [ "$rc" -eq 0 ]; then
   touch /output/.done
-${hasCacheExport ? `  echo "=== Exporting build cache ==="
+${
+  hasCacheExport
+    ? `  echo "=== Exporting build cache ==="
   buildctl ${cacheExportArgs} >/dev/null 2>&1 || echo "=== Cache export failed (non-critical) ==="
-  rm -f /tmp/cache-export.tar` : ''}
+  rm -f /tmp/cache-export.tar`
+    : ''
+}
 else
   touch /output/.failed
 fi
 
 kill $DAEMON_PID 2>/dev/null
 wait $DAEMON_PID 2>/dev/null || true
-exit $rc`,
+exit $rc`
       ];
       containers = [buildkitContainer, pusherContainer];
     } else {
@@ -1834,16 +1957,19 @@ exit $rc`,
           'app.kubernetes.io/managed-by': 'orchard',
           'orchard.my/deployment-id': deploymentId || 'unknown',
           'orchard.my/image-name': truncateK8sName(
-            imageName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
-            63,
+            imageName
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, '-')
+              .replace(/^-+/, ''),
+            63
           ),
-          'orchard.my/build-type': buildType,
+          'orchard.my/build-type': buildType
         },
         annotations: {
           'orchard.my/repo-url': repoUrl,
           'orchard.my/branch': branch,
-          'orchard.my/full-image': fullImageName,
-        },
+          'orchard.my/full-image': fullImageName
+        }
       },
       spec: {
         ttlSecondsAfterFinished: 3600, // Cleanup job after 1 hour
@@ -1853,8 +1979,8 @@ exit $rc`,
           metadata: {
             labels: {
               'app.kubernetes.io/name': 'image-builder',
-              'orchard.my/deployment-id': deploymentId || 'unknown',
-            },
+              'orchard.my/deployment-id': deploymentId || 'unknown'
+            }
           },
           spec: {
             restartPolicy: 'Never',
@@ -1873,20 +1999,24 @@ exit $rc`,
             // Daemon-client mode doesn't need Kata — it's just a gRPC client,
             // the daemon pod itself runs with the runtime class.
             ...(!daemonIp && podRuntimeClass ? { runtimeClassName: podRuntimeClass } : {}),
-            ...(this.dedicatedNodeEnabled ? {
-              nodeSelector: { 'orchard-builder': 'true' },
-              tolerations: [{
-                key: 'orchard-builder',
-                operator: 'Exists',
-                effect: 'NoSchedule',
-              }],
-            } : {}),
+            ...(this.dedicatedNodeEnabled
+              ? {
+                  nodeSelector: { 'orchard-builder': 'true' },
+                  tolerations: [
+                    {
+                      key: 'orchard-builder',
+                      operator: 'Exists',
+                      effect: 'NoSchedule'
+                    }
+                  ]
+                }
+              : {}),
             initContainers,
             containers,
             volumes: [
               {
                 name: 'workspace',
-                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
+                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {}
               },
               {
                 name: 'docker-config',
@@ -1895,64 +2025,86 @@ exit $rc`,
                   items: [
                     {
                       key: '.dockerconfigjson',
-                      path: 'config.json',
-                    },
-                  ],
-                },
+                      path: 'config.json'
+                    }
+                  ]
+                }
               },
-              ...(buildkitAuthSecret ? [{
-                name: 'buildkit-auth',
-                secret: {
-                  secretName: buildkitAuthSecret,
-                  items: [
+              ...(buildkitAuthSecret
+                ? [
                     {
-                      key: '.dockerconfigjson',
-                      path: 'config.json',
-                    },
-                  ],
-                },
-              }] : []),
+                      name: 'buildkit-auth',
+                      secret: {
+                        secretName: buildkitAuthSecret,
+                        items: [
+                          {
+                            key: '.dockerconfigjson',
+                            path: 'config.json'
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                : []),
               // Daemon-client mode doesn't need buildkit-config, buildkit-state,
               // or buildkit-cache — the daemon pod has its own.
-              ...(!daemonIp && !buildWithDepot ? [{
-                name: 'buildkit-config',
-                configMap: {
-                  name: 'buildkit-config',
-                },
-              }] : []),
-              ...(this.sidecarPushEnabled && !buildWithDepot ? [{
-                name: 'output',
-                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
-              }] : []),
-              ...(!daemonIp && !buildWithDepot && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs) ? [{
-                name: 'buildkit-state',
-                ...(this.scratchBlock
-                  ? {
-                      ephemeral: {
-                        volumeClaimTemplate: {
-                          spec: {
-                            accessModes: ['ReadWriteOnce'],
-                            storageClassName: this.scratchStorageClass,
-                            volumeMode: 'Block',
-                            resources: { requests: { storage: this.scratchSize } },
-                          },
-                        },
-                      },
+              ...(!daemonIp && !buildWithDepot
+                ? [
+                    {
+                      name: 'buildkit-config',
+                      configMap: {
+                        name: 'buildkit-config'
+                      }
                     }
-                  : this.scratchDisk
-                    ? { emptyDir: { sizeLimit: this.scratchSize } }
-                    : { emptyDir: { medium: 'Memory', sizeLimit: this.scratchSize } }),
-              }] : []),
-              ...(!daemonIp && !buildWithDepot && this.localCacheEnabled ? [{
-                name: 'buildkit-cache',
-                ...(this.localCachePvc && !options.disableSharedCache
-                  ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
-                  : { emptyDir: {} }),
-              }] : []),
-            ],
-          },
-        },
-      },
+                  ]
+                : []),
+              ...(this.sidecarPushEnabled && !buildWithDepot
+                ? [
+                    {
+                      name: 'output',
+                      emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {}
+                    }
+                  ]
+                : []),
+              ...(!daemonIp &&
+              !buildWithDepot &&
+              (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs)
+                ? [
+                    {
+                      name: 'buildkit-state',
+                      ...(this.scratchBlock
+                        ? {
+                            ephemeral: {
+                              volumeClaimTemplate: {
+                                spec: {
+                                  accessModes: ['ReadWriteOnce'],
+                                  storageClassName: this.scratchStorageClass,
+                                  volumeMode: 'Block',
+                                  resources: { requests: { storage: this.scratchSize } }
+                                }
+                              }
+                            }
+                          }
+                        : this.scratchDisk
+                          ? { emptyDir: { sizeLimit: this.scratchSize } }
+                          : { emptyDir: { medium: 'Memory', sizeLimit: this.scratchSize } })
+                    }
+                  ]
+                : []),
+              ...(!daemonIp && !buildWithDepot && this.localCacheEnabled
+                ? [
+                    {
+                      name: 'buildkit-cache',
+                      ...(this.localCachePvc && !options.disableSharedCache
+                        ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
+                        : { emptyDir: {} })
+                    }
+                  ]
+                : [])
+            ]
+          }
+        }
+      }
     };
 
     let cacheBackend = 'none';
@@ -1968,12 +2120,14 @@ exit $rc`,
       initContainerCount: initContainers.length,
       hasCacheEnabled: this.localCacheEnabled || this.s3CacheEnabled,
       cacheBackend,
-      envVarsCount: Object.keys(envVars).length,
+      envVarsCount: Object.keys(envVars).length
     });
 
     try {
       const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
-      console.log(`[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`);
+      console.log(
+        `[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`
+      );
 
       if (jobDockerConfigSecret && jobCreationResult.body.metadata?.uid) {
         const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
@@ -1983,24 +2137,29 @@ exit $rc`,
             this.builderNamespace,
             {
               metadata: {
-                ownerReferences: [{
-                  apiVersion: 'batch/v1',
-                  kind: 'Job',
-                  name: jobName,
-                  uid: jobCreationResult.body.metadata.uid,
-                  controller: true,
-                }],
-              },
+                ownerReferences: [
+                  {
+                    apiVersion: 'batch/v1',
+                    kind: 'Job',
+                    name: jobName,
+                    uid: jobCreationResult.body.metadata.uid,
+                    controller: true
+                  }
+                ]
+              }
             },
             undefined,
             undefined,
             undefined,
             undefined,
             undefined,
-            { headers: { 'Content-Type': 'application/merge-patch+json' } },
+            { headers: { 'Content-Type': 'application/merge-patch+json' } }
           );
         } catch (error) {
-          console.warn(`[ImageBuilder] Could not attach ownerRef to ${jobDockerConfigSecret}:`, error.message);
+          console.warn(
+            `[ImageBuilder] Could not attach ownerRef to ${jobDockerConfigSecret}:`,
+            error.message
+          );
         }
       }
 
@@ -2029,19 +2188,19 @@ exit $rc`,
     } catch (error) {
       const errorDetails = error.body ? JSON.stringify(error.body, null, 2) : error.message;
       const errorMsg = `Failed to create build job: ${error.message}${error.body ? `\nDetails: ${errorDetails}` : ''}`;
-      
+
       console.error('[ImageBuilder] Job creation failed:', {
         jobName,
         namespace: this.builderNamespace,
         error: error.message,
         statusCode: error.statusCode,
         errorBody: error.body,
-        errorStack: error.stack,
+        errorStack: error.stack
       });
-      
+
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
       await this.appendLog(deploymentId, `Job creation error details: ${errorDetails}`, 'ERROR');
-      
+
       throw new BadRequestException(`Failed to create build job: ${error.message}`);
     }
   }
@@ -2054,13 +2213,7 @@ exit $rc`,
     envVars: Record<string, string>;
     skipCache?: boolean;
   }): string[] {
-    const {
-      dockerfilePath,
-      fullImageName,
-      target,
-      buildFromRoot,
-      envVars,
-    } = options;
+    const { dockerfilePath, fullImageName, target, buildFromRoot, envVars } = options;
 
     // Determine dockerfile location and context
     let dockerfileDir = '.';
@@ -2082,12 +2235,18 @@ exit $rc`,
 
     const args: string[] = [
       'build',
-      '--progress', 'plain',
-      '--frontend', 'dockerfile.v0',
-      '--local', `context=${buildFromRoot ? '.' : dockerfileDir}`,
-      '--local', `dockerfile=${buildFromRoot ? '.' : dockerfileDir}`,
-      '--opt', `filename=${dockerfileName}`,
-      '--opt', 'platform=linux/amd64',
+      '--progress',
+      'plain',
+      '--frontend',
+      'dockerfile.v0',
+      '--local',
+      `context=${buildFromRoot ? '.' : dockerfileDir}`,
+      '--local',
+      `dockerfile=${buildFromRoot ? '.' : dockerfileDir}`,
+      '--opt',
+      `filename=${dockerfileName}`,
+      '--opt',
+      'platform=linux/amd64'
     ];
 
     // Add target if specified
@@ -2141,20 +2300,20 @@ exit $rc`,
     cacheKey?: string;
     skipCache?: boolean;
   }): string[] {
-    const {
-      fullImageName,
-      envVars,
-      secretsHash,
-      cacheKey,
-    } = options;
+    const { fullImageName, envVars, secretsHash, cacheKey } = options;
 
     const args: string[] = [
       'build',
-      '--progress', 'plain',
-      '--frontend', 'gateway.v0',
-      '--opt', `source=${this.railpackFrontendImage}`,
-      '--local', 'context=.',
-      '--local', 'dockerfile=.',
+      '--progress',
+      'plain',
+      '--frontend',
+      'gateway.v0',
+      '--opt',
+      `source=${this.railpackFrontendImage}`,
+      '--local',
+      'context=.',
+      '--local',
+      'dockerfile=.'
     ];
 
     if (secretsHash) {
@@ -2198,7 +2357,15 @@ exit $rc`,
     cacheKey?: string;
     skipCache?: boolean;
   }): string[] {
-    const { buildType, fullImageName, envVars, secretsHash, cacheKey, skipCache, ...dockerfileOptions } = options;
+    const {
+      buildType,
+      fullImageName,
+      envVars,
+      secretsHash,
+      cacheKey,
+      skipCache,
+      ...dockerfileOptions
+    } = options;
 
     if (buildType === 'railpack') {
       return this.generateBuildctlArgsForRailpack({
@@ -2206,7 +2373,7 @@ exit $rc`,
         envVars,
         secretsHash: secretsHash || '',
         cacheKey,
-        skipCache,
+        skipCache
       });
     }
 
@@ -2214,7 +2381,7 @@ exit $rc`,
       ...dockerfileOptions,
       fullImageName,
       envVars,
-      skipCache,
+      skipCache
     });
   }
 
@@ -2244,8 +2411,11 @@ exit $rc`,
       const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
       const pods = await coreApi.listNamespacedPod(
         this.builderNamespace,
-        undefined, undefined, undefined, undefined,
-        `job-name=${jobName}`,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        `job-name=${jobName}`
       );
       const pod = pods.body.items[0];
       if (!pod) return;
@@ -2257,7 +2427,9 @@ exit $rc`,
         return { start: new Date(t.startedAt).getTime(), end: new Date(t.finishedAt).getTime() };
       };
 
-      const clone = windowOf(pod.status?.initContainerStatuses?.find((c) => c.name === 'git-clone'));
+      const clone = windowOf(
+        pod.status?.initContainerStatuses?.find((c) => c.name === 'git-clone')
+      );
       if (clone) recordPhaseSpan('build.clone', clone.start, clone.end, tags);
 
       const mainName = this.mainContainerName(pod.status?.containerStatuses);
@@ -2273,7 +2445,10 @@ exit $rc`,
         recordPhaseSpan('build.push', start, push.end, tags);
       }
     } catch (error) {
-      console.warn(`[ImageBuilder] Failed to emit build phase spans for ${jobName}:`, (error as Error).message);
+      console.warn(
+        `[ImageBuilder] Failed to emit build phase spans for ${jobName}:`,
+        (error as Error).message
+      );
     }
   }
 
@@ -2284,7 +2459,7 @@ exit $rc`,
    */
   private async persistRailpackDetection(
     deploymentId: string | undefined,
-    infoLog: string,
+    infoLog: string
   ): Promise<void> {
     if (!deploymentId) return;
 
@@ -2294,10 +2469,13 @@ exit $rc`,
     try {
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { detectedConfig: detection as unknown as object },
+        data: { detectedConfig: detection as unknown as object }
       });
     } catch (error) {
-      console.warn(`[ImageBuilder] Could not persist Railpack detection for ${deploymentId}:`, error.message);
+      console.warn(
+        `[ImageBuilder] Could not persist Railpack detection for ${deploymentId}:`,
+        error.message
+      );
     }
   }
 
@@ -2313,7 +2491,7 @@ exit $rc`,
     coreApi: k8s.CoreV1Api,
     podName: string | undefined,
     jobName: string,
-    initContainerStatuses: k8s.V1ContainerStatus[] | undefined,
+    initContainerStatuses: k8s.V1ContainerStatus[] | undefined
   ): Promise<string | undefined> {
     if (!podName || this.railpackInfoFetched.has(jobName)) return undefined;
 
@@ -2327,18 +2505,26 @@ exit $rc`,
         podName,
         this.builderNamespace,
         'railpack-prepare',
-        undefined, undefined, undefined, undefined, undefined, undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         // The marker is the final line, so the tail only has to be long enough
         // to reach it. It is generous because the same read is what gets shown
         // to the user: Railpack's detection summary, resolved package versions
         // and any warnings all print above the railpack-info.json dump, and
         // that is the only place a warning like "no start command detected"
         // ever appears.
-        400,
+        400
       );
       return typeof res.body === 'string' ? res.body : undefined;
     } catch (error) {
-      console.warn(`[ImageBuilder] Could not read railpack-prepare logs for ${podName}:`, error.message);
+      console.warn(
+        `[ImageBuilder] Could not read railpack-prepare logs for ${podName}:`,
+        error.message
+      );
       return undefined;
     }
   }
@@ -2381,7 +2567,10 @@ exit $rc`,
         WHERE "id" = ${deploymentId}::uuid
       `;
     } catch (error) {
-      console.warn(`[ImageBuilder] Could not append railpack-prepare log for ${deploymentId}:`, error.message);
+      console.warn(
+        `[ImageBuilder] Could not append railpack-prepare log for ${deploymentId}:`,
+        error.message
+      );
     }
   }
 
@@ -2394,14 +2583,17 @@ exit $rc`,
       const job = await batchApi.readNamespacedJob(jobName, this.builderNamespace);
       const jobSpec = job.body;
 
-      console.log(`[ImageBuilder] Job ${jobName} status:`, JSON.stringify({
-        succeeded: jobSpec.status?.succeeded,
-        failed: jobSpec.status?.failed,
-        active: jobSpec.status?.active,
-        conditions: jobSpec.status?.conditions,
-        startTime: jobSpec.status?.startTime,
-        completionTime: jobSpec.status?.completionTime,
-      }));
+      console.log(
+        `[ImageBuilder] Job ${jobName} status:`,
+        JSON.stringify({
+          succeeded: jobSpec.status?.succeeded,
+          failed: jobSpec.status?.failed,
+          active: jobSpec.status?.active,
+          conditions: jobSpec.status?.conditions,
+          startTime: jobSpec.status?.startTime,
+          completionTime: jobSpec.status?.completionTime
+        })
+      );
 
       let status: BuildJobStatus['status'] = 'unknown';
       let logs = '';
@@ -2414,7 +2606,10 @@ exit $rc`,
         status = 'succeeded';
       } else if (jobSpec.status?.failed && jobSpec.status.failed > 0) {
         status = 'failed';
-        console.error(`[ImageBuilder] Job ${jobName} failed. Conditions:`, JSON.stringify(jobSpec.status?.conditions));
+        console.error(
+          `[ImageBuilder] Job ${jobName} failed. Conditions:`,
+          JSON.stringify(jobSpec.status?.conditions)
+        );
       } else if (jobSpec.status?.active && jobSpec.status.active > 0) {
         // A Job counts an unscheduled pod as active, so this is only a
         // provisional 'running' — the pod's own phase decides, below.
@@ -2447,11 +2642,11 @@ exit $rc`,
             status = 'pending';
           }
 
-          const scheduled = podConditions?.find(c => c.type === 'PodScheduled');
+          const scheduled = podConditions?.find((c) => c.type === 'PodScheduled');
           if (scheduled?.status === 'False') {
-            schedulingMessage = [scheduled.reason, scheduled.message]
-              .filter(Boolean)
-              .join(': ') || 'pod is not schedulable';
+            schedulingMessage =
+              [scheduled.reason, scheduled.message].filter(Boolean).join(': ') ||
+              'pod is not schedulable';
           }
 
           // A pod that scheduled fine but whose container config kubelet keeps
@@ -2459,8 +2654,9 @@ exit $rc`,
           // burns the entire build timeout in silence. Surface the waiting
           // reason so the caller can fail fast with something actionable.
           if (!schedulingMessage && podPhase === 'Pending') {
-            const blocked = [...(initContainerStatuses ?? []), ...(containerStatuses ?? [])]
-              .find(cs => ImageBuilderService.FATAL_WAITING_REASONS.has(cs.state?.waiting?.reason ?? ''));
+            const blocked = [...(initContainerStatuses ?? []), ...(containerStatuses ?? [])].find(
+              (cs) => ImageBuilderService.FATAL_WAITING_REASONS.has(cs.state?.waiting?.reason ?? '')
+            );
             const waiting = blocked?.state?.waiting;
             if (waiting) {
               startupMessage = `container ${blocked?.name}: ${waiting.reason}${waiting.message ? ` - ${waiting.message}` : ''}`;
@@ -2471,29 +2667,32 @@ exit $rc`,
             coreApi,
             podName,
             jobName,
-            initContainerStatuses,
+            initContainerStatuses
           );
 
-          console.log(`[ImageBuilder] Pod ${podName} details:`, JSON.stringify({
-            phase: podPhase,
-            conditions: podConditions,
-            containerStatuses: containerStatuses?.map(cs => ({
-              name: cs.name,
-              ready: cs.ready,
-              state: cs.state,
-              lastState: cs.lastState,
-            })),
-            initContainerStatuses: initContainerStatuses?.map(ics => ({
-              name: ics.name,
-              ready: ics.ready,
-              state: ics.state,
-              lastState: ics.lastState,
-            })),
-          }));
+          console.log(
+            `[ImageBuilder] Pod ${podName} details:`,
+            JSON.stringify({
+              phase: podPhase,
+              conditions: podConditions,
+              containerStatuses: containerStatuses?.map((cs) => ({
+                name: cs.name,
+                ready: cs.ready,
+                state: cs.state,
+                lastState: cs.lastState
+              })),
+              initContainerStatuses: initContainerStatuses?.map((ics) => ({
+                name: ics.name,
+                ready: ics.ready,
+                state: ics.state,
+                lastState: ics.lastState
+              }))
+            })
+          );
 
           if (status === 'failed' || podPhase === 'Failed') {
             const failureReasons: string[] = [];
-            
+
             if (containerStatuses) {
               for (const cs of containerStatuses) {
                 if (cs.state?.terminated) {
@@ -2503,14 +2702,25 @@ exit $rc`,
                   // that exited 127 reports as whatever the pusher said when
                   // its sibling container vanished underneath it.
                   const exit = cs.state.terminated.exitCode;
-                  const detail = cs.state.terminated.message
-                    || (typeof exit === 'number' ? `exit code ${exit}` : 'No message');
-                  failureReasons.push(`Container ${cs.name} terminated: ${cs.state.terminated.reason || 'Unknown'} - ${detail}`);
-                  console.error(`[ImageBuilder] Container failure:`, JSON.stringify(cs.state.terminated));
+                  const detail =
+                    cs.state.terminated.message ||
+                    (typeof exit === 'number' ? `exit code ${exit}` : 'No message');
+                  failureReasons.push(
+                    `Container ${cs.name} terminated: ${cs.state.terminated.reason || 'Unknown'} - ${detail}`
+                  );
+                  console.error(
+                    `[ImageBuilder] Container failure:`,
+                    JSON.stringify(cs.state.terminated)
+                  );
                 }
                 if (cs.state?.waiting) {
-                  failureReasons.push(`Container ${cs.name} waiting: ${cs.state.waiting.reason || 'Unknown'} - ${cs.state.waiting.message || 'No message'}`);
-                  console.error(`[ImageBuilder] Container waiting:`, JSON.stringify(cs.state.waiting));
+                  failureReasons.push(
+                    `Container ${cs.name} waiting: ${cs.state.waiting.reason || 'Unknown'} - ${cs.state.waiting.message || 'No message'}`
+                  );
+                  console.error(
+                    `[ImageBuilder] Container waiting:`,
+                    JSON.stringify(cs.state.waiting)
+                  );
                 }
               }
             }
@@ -2518,12 +2728,22 @@ exit $rc`,
             if (initContainerStatuses) {
               for (const ics of initContainerStatuses) {
                 if (ics.state?.terminated && ics.state.terminated.exitCode !== 0) {
-                  failureReasons.push(`Init container ${ics.name} failed with exit code ${ics.state.terminated.exitCode}: ${ics.state.terminated.reason || 'Unknown'} - ${ics.state.terminated.message || 'No message'}`);
-                  console.error(`[ImageBuilder] Init container failure:`, JSON.stringify(ics.state.terminated));
+                  failureReasons.push(
+                    `Init container ${ics.name} failed with exit code ${ics.state.terminated.exitCode}: ${ics.state.terminated.reason || 'Unknown'} - ${ics.state.terminated.message || 'No message'}`
+                  );
+                  console.error(
+                    `[ImageBuilder] Init container failure:`,
+                    JSON.stringify(ics.state.terminated)
+                  );
                 }
                 if (ics.state?.waiting) {
-                  failureReasons.push(`Init container ${ics.name} waiting: ${ics.state.waiting.reason || 'Unknown'} - ${ics.state.waiting.message || 'No message'}`);
-                  console.error(`[ImageBuilder] Init container waiting:`, JSON.stringify(ics.state.waiting));
+                  failureReasons.push(
+                    `Init container ${ics.name} waiting: ${ics.state.waiting.reason || 'Unknown'} - ${ics.state.waiting.message || 'No message'}`
+                  );
+                  console.error(
+                    `[ImageBuilder] Init container waiting:`,
+                    JSON.stringify(ics.state.waiting)
+                  );
                 }
               }
             }
@@ -2568,15 +2788,21 @@ exit $rc`,
                     pusherLogs = pusherLog.body;
                   }
                 } catch (pusherLogError) {
-                  console.warn(`[ImageBuilder] Could not fetch pusher logs for pod ${podName}:`, pusherLogError.message);
+                  console.warn(
+                    `[ImageBuilder] Could not fetch pusher logs for pod ${podName}:`,
+                    pusherLogError.message
+                  );
                 }
               }
             } catch (buildkitLogError) {
-              console.warn(`[ImageBuilder] Could not fetch buildkit logs for pod ${podName}:`, buildkitLogError.message);
-              
+              console.warn(
+                `[ImageBuilder] Could not fetch buildkit logs for pod ${podName}:`,
+                buildkitLogError.message
+              );
+
               try {
                 const allContainerLogs: string[] = [];
-                
+
                 if (initContainerStatuses) {
                   for (const ics of initContainerStatuses) {
                     try {
@@ -2592,9 +2818,14 @@ exit $rc`,
                         undefined,
                         1000
                       );
-                      allContainerLogs.push(`\n=== Init Container: ${ics.name} ===\n${initLogResponse.body ?? ''}`);
+                      allContainerLogs.push(
+                        `\n=== Init Container: ${ics.name} ===\n${initLogResponse.body ?? ''}`
+                      );
                     } catch (initLogErr) {
-                      console.warn(`[ImageBuilder] Could not fetch logs for init container ${ics.name}:`, initLogErr.message);
+                      console.warn(
+                        `[ImageBuilder] Could not fetch logs for init container ${ics.name}:`,
+                        initLogErr.message
+                      );
                     }
                   }
                 }
@@ -2603,20 +2834,27 @@ exit $rc`,
                   logs += allContainerLogs.join('\n');
                 }
               } catch (fallbackError) {
-                console.error(`[ImageBuilder] Failed to fetch any container logs:`, fallbackError.message);
+                console.error(
+                  `[ImageBuilder] Failed to fetch any container logs:`,
+                  fallbackError.message
+                );
               }
             }
           }
         }
       } catch (logError) {
-        console.error(`[ImageBuilder] Error fetching pod details for job ${jobName}:`, logError.message);
+        console.error(
+          `[ImageBuilder] Error fetching pod details for job ${jobName}:`,
+          logError.message
+        );
         if (logError.body) {
           console.error(`[ImageBuilder] Error body:`, JSON.stringify(logError.body));
         }
       }
 
-      const imageRef = jobSpec.metadata?.annotations?.['orchard.my/full-image']
-        ?? jobSpec.metadata?.annotations?.['orchard.dev/full-image'];
+      const imageRef =
+        jobSpec.metadata?.annotations?.['orchard.my/full-image'] ??
+        jobSpec.metadata?.annotations?.['orchard.dev/full-image'];
 
       return {
         jobName,
@@ -2626,7 +2864,7 @@ exit $rc`,
         imageRef,
         railpackInfoLog,
         schedulingMessage,
-        startupMessage,
+        startupMessage
       };
     } catch (error) {
       if (error.statusCode === 404) {
@@ -2634,7 +2872,7 @@ exit $rc`,
         return {
           jobName,
           status: 'unknown',
-          logs: 'Job not found',
+          logs: 'Job not found'
         };
       }
       console.error(`[ImageBuilder] Error reading job ${jobName}:`, error.message);
@@ -2649,14 +2887,14 @@ exit $rc`,
     jobName: string,
     deploymentId: string | undefined,
     expectedImage: string | null | undefined,
-    reason: string,
+    reason: string
   ): Promise<BuildJobStatus> {
     if (expectedImage) {
       const pushed = await this.imageExistsInRegistry(expectedImage);
       if (pushed === true) {
         await this.appendLog(
           deploymentId,
-          `Build job ${jobName} is gone but ${expectedImage} is in the registry; treating the build as successful.`,
+          `Build job ${jobName} is gone but ${expectedImage} is in the registry; treating the build as successful.`
         );
         return { jobName, status: 'succeeded', imageRef: expectedImage };
       }
@@ -2664,10 +2902,10 @@ exit $rc`,
     await this.appendLog(
       deploymentId,
       `Build job ${jobName} disappeared before reporting a result (${reason}).`,
-      'ERROR',
+      'ERROR'
     );
     throw new BadRequestException(
-      `Build failed: the build job disappeared before it reported a result (${reason}). This is an Orchard-side fault, not a problem with your code - retry the build.`,
+      `Build failed: the build job disappeared before it reported a result (${reason}). This is an Orchard-side fault, not a problem with your code - retry the build.`
     );
   }
 
@@ -2675,7 +2913,7 @@ exit $rc`,
     jobName: string,
     deploymentId?: string,
     timeoutMs = 1800000,
-    opts?: { expectedImage?: string | null },
+    opts?: { expectedImage?: string | null }
   ): Promise<BuildJobStatus> {
     const startTime = Date.now();
     const pollInterval = 3000;
@@ -2687,7 +2925,9 @@ exit $rc`,
     let missingSince: number | null = null;
     let lastTerminalSignalAt = 0;
 
-    console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
+    console.log(
+      `[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`
+    );
     await this.seedLogOffsets(jobName, deploymentId);
     await this.appendLog(deploymentId, `Waiting for build job ${jobName} to complete...`);
 
@@ -2695,13 +2935,13 @@ exit $rc`,
     // first non-pending status observed (5s poll granularity).
     const scheduleSpan = startPhaseSpan('build.schedule', {
       'build.job_name': jobName,
-      'build.deployment_id': deploymentId,
+      'build.deployment_id': deploymentId
     });
 
     while (Date.now() - startTime < timeoutMs) {
       pollCount++;
       const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-      
+
       try {
         const status = await this.getBuildJobStatus(jobName);
 
@@ -2733,7 +2973,7 @@ exit $rc`,
                 jobName,
                 deploymentId,
                 expectedImage ?? observed?.image ?? null,
-                observed?.reason ?? 'not found',
+                observed?.reason ?? 'not found'
               );
               recordBuildOutcome({
                 outcome: 'succeeded',
@@ -2742,7 +2982,7 @@ exit $rc`,
                 deploymentId: deploymentId ?? 'unknown',
                 jobName,
                 durationMs: Date.now() - startTime,
-                lastPhase: 'gone',
+                lastPhase: 'gone'
               });
               return resolved;
             } catch (vanished) {
@@ -2754,7 +2994,7 @@ exit $rc`,
                 jobName,
                 durationMs: Date.now() - startTime,
                 lastPhase: 'gone',
-                detail: (vanished as Error)?.message,
+                detail: (vanished as Error)?.message
               });
               throw vanished;
             }
@@ -2765,15 +3005,21 @@ exit $rc`,
         }
 
         if (status.status !== lastLoggedStatus) {
-          console.log(`[ImageBuilder] Job ${jobName} status changed: ${lastLoggedStatus} -> ${status.status} (poll #${pollCount}, elapsed: ${elapsedSeconds}s)`);
+          console.log(
+            `[ImageBuilder] Job ${jobName} status changed: ${lastLoggedStatus} -> ${status.status} (poll #${pollCount}, elapsed: ${elapsedSeconds}s)`
+          );
           lastLoggedStatus = status.status;
         }
 
         if (status.status === 'succeeded') {
-          console.log(`[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`);
+          console.log(
+            `[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`
+          );
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
-          this.appendLog(deploymentId, `Build job ${jobName} completed successfully`).catch(() => {});
+          this.appendLog(deploymentId, `Build job ${jobName} completed successfully`).catch(
+            () => {}
+          );
           this.clearBuildkitOffset(jobName);
           this.emitBuildPhaseSpans(jobName, deploymentId).catch(() => {});
           this.jobInformer?.release(jobName);
@@ -2783,20 +3029,26 @@ exit $rc`,
             deploymentId: deploymentId ?? 'unknown',
             jobName,
             durationMs: Date.now() - startTime,
-            lastPhase: 'succeeded',
+            lastPhase: 'succeeded'
           });
           return status;
         }
 
         if (status.status === 'failed') {
           const errorMsg = status.logs || 'Unknown error - no logs available';
-          console.error(`[ImageBuilder] Build job ${jobName} failed after ${elapsedSeconds}s. Error: ${errorMsg.substring(0, 500)}`);
+          console.error(
+            `[ImageBuilder] Build job ${jobName} failed after ${elapsedSeconds}s. Error: ${errorMsg.substring(0, 500)}`
+          );
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
           await this.appendLog(deploymentId, `Build job ${jobName} failed`, 'ERROR');
 
           if (!status.logs && !status.pusherLogs) {
-            await this.appendLog(deploymentId, 'No build logs available - this may indicate a pod scheduling or initialization failure', 'ERROR');
+            await this.appendLog(
+              deploymentId,
+              'No build logs available - this may indicate a pod scheduling or initialization failure',
+              'ERROR'
+            );
           }
 
           this.clearBuildkitOffset(jobName);
@@ -2814,12 +3066,12 @@ exit $rc`,
             jobName,
             durationMs: Date.now() - startTime,
             lastPhase: 'failed',
-            detail: summary || errorMsg,
+            detail: summary || errorMsg
           });
           throw new BadRequestException(
             summary
               ? `Build failed: ${summary}`
-              : 'Build failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.',
+              : 'Build failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.'
           );
         }
 
@@ -2835,7 +3087,11 @@ exit $rc`,
         }
 
         if (status.status === 'pending' && status.startupMessage && elapsedSeconds > 60) {
-          await this.appendLog(deploymentId, `Build pod could not start: ${status.startupMessage}`, 'ERROR');
+          await this.appendLog(
+            deploymentId,
+            `Build pod could not start: ${status.startupMessage}`,
+            'ERROR'
+          );
           await this.deleteBuildJob(jobName).catch(() => {});
           this.jobInformer?.release(jobName);
           recordBuildOutcome({
@@ -2846,20 +3102,26 @@ exit $rc`,
             jobName,
             durationMs: Date.now() - startTime,
             lastPhase: 'pending',
-            detail: status.startupMessage,
+            detail: status.startupMessage
           });
           throw new BadRequestException(`Build failed: ${status.startupMessage}`);
         }
 
         if (status.status === 'pending' && elapsedSeconds > 60) {
           const detail = status.schedulingMessage ? ` (${status.schedulingMessage})` : '';
-          console.warn(`[ImageBuilder] Job ${jobName} still pending after ${elapsedSeconds}s - possible scheduling issue${detail}`);
+          console.warn(
+            `[ImageBuilder] Job ${jobName} still pending after ${elapsedSeconds}s - possible scheduling issue${detail}`
+          );
 
           // An unschedulable pod does not recover on its own often enough to
           // justify burning the whole build timeout on it. Give the scheduler
           // a grace window, then fail with the reason instead of a silent wait.
           if (status.schedulingMessage && elapsedSeconds > this.pendingScheduleTimeoutSeconds) {
-            await this.appendLog(deploymentId, `Build job could not be scheduled after ${elapsedSeconds}s: ${status.schedulingMessage}`, 'ERROR');
+            await this.appendLog(
+              deploymentId,
+              `Build job could not be scheduled after ${elapsedSeconds}s: ${status.schedulingMessage}`,
+              'ERROR'
+            );
             await this.deleteBuildJob(jobName).catch(() => {});
             this.jobInformer?.release(jobName);
             recordBuildOutcome({
@@ -2870,29 +3132,39 @@ exit $rc`,
               jobName,
               durationMs: Date.now() - startTime,
               lastPhase: 'pending',
-              detail: status.schedulingMessage,
+              detail: status.schedulingMessage
             });
             throw new BadRequestException(
-              `Build failed: could not schedule build pod after ${elapsedSeconds}s - ${status.schedulingMessage}`,
+              `Build failed: could not schedule build pod after ${elapsedSeconds}s - ${status.schedulingMessage}`
             );
           }
 
           if (elapsedSeconds % 30 === 0) {
-            await this.appendLog(deploymentId, `Build job still pending after ${elapsedSeconds}s${detail} - waiting for pod to be scheduled...`, 'WARNING');
+            await this.appendLog(
+              deploymentId,
+              `Build job still pending after ${elapsedSeconds}s${detail} - waiting for pod to be scheduled...`,
+              'WARNING'
+            );
           }
         }
-
       } catch (error) {
-        console.error(`[ImageBuilder] Error polling build job ${jobName} status (poll #${pollCount}):`, error.message);
+        console.error(
+          `[ImageBuilder] Error polling build job ${jobName} status (poll #${pollCount}):`,
+          error.message
+        );
         if (error.body) {
           console.error(`[ImageBuilder] Error details:`, JSON.stringify(error.body));
         }
-        
+
         if (error instanceof BadRequestException) {
           throw error;
         }
-        
-        await this.appendLog(deploymentId, `Warning: Error checking build status: ${error.message}`, 'WARNING');
+
+        await this.appendLog(
+          deploymentId,
+          `Warning: Error checking build status: ${error.message}`,
+          'WARNING'
+        );
       }
 
       const waitStartedAt = Date.now();
@@ -2902,12 +3174,14 @@ exit $rc`,
       const earlyWakeEarned = isUnseenTerminalSignal(terminal, lastTerminalSignalAt);
       if (earlyWakeEarned && terminal) {
         lastTerminalSignalAt = terminal.at;
-        console.log(`[ImageBuilder] Job ${jobName} reached ${terminal.phase} via watch after ${Math.floor((Date.now() - startTime) / 1000)}s`);
+        console.log(
+          `[ImageBuilder] Job ${jobName} reached ${terminal.phase} via watch after ${Math.floor((Date.now() - startTime) / 1000)}s`
+        );
       }
       const settleMs = remainingIntervalMs(
         pollInterval,
         Date.now() - waitStartedAt,
-        earlyWakeEarned,
+        earlyWakeEarned
       );
       if (settleMs > 0) {
         await new Promise<void>((resolve) => {
@@ -2917,8 +3191,14 @@ exit $rc`,
     }
 
     const finalElapsed = Math.floor((Date.now() - startTime) / 1000);
-    console.error(`[ImageBuilder] Build job ${jobName} timed out after ${finalElapsed}s (${pollCount} polls)`);
-    await this.appendLog(deploymentId, `Build job ${jobName} timed out after ${finalElapsed}s`, 'ERROR');
+    console.error(
+      `[ImageBuilder] Build job ${jobName} timed out after ${finalElapsed}s (${pollCount} polls)`
+    );
+    await this.appendLog(
+      deploymentId,
+      `Build job ${jobName} timed out after ${finalElapsed}s`,
+      'ERROR'
+    );
 
     let finalPhase = lastKnownPhase;
     try {
@@ -2944,9 +3224,11 @@ exit $rc`,
       jobName,
       durationMs: Date.now() - startTime,
       lastPhase: finalPhase,
-      detail: `timed out after ${finalElapsed}s; last status ${lastLoggedStatus || 'none'}`,
+      detail: `timed out after ${finalElapsed}s; last status ${lastLoggedStatus || 'none'}`
     });
-    throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
+    throw new BadRequestException(
+      `Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`
+    );
   }
 
   async deleteBuildJob(jobName: string): Promise<void> {
@@ -2996,7 +3278,7 @@ exit $rc`,
           undefined,
           undefined,
           `orchard.dev/deployment-id=${deploymentId}`
-        ),
+        )
       ]);
       const jobNames = new Set<string>();
       const jobs = {
@@ -3006,8 +3288,8 @@ exit $rc`,
             if (!n || jobNames.has(n)) return false;
             jobNames.add(n);
             return true;
-          }),
-        },
+          })
+        }
       };
 
       if (jobs.body.items.length === 0) {
@@ -3015,15 +3297,19 @@ exit $rc`,
         return;
       }
 
-      console.log(`[ImageBuilder] Found ${jobs.body.items.length} build job(s) for deployment ${deploymentId}`);
+      console.log(
+        `[ImageBuilder] Found ${jobs.body.items.length} build job(s) for deployment ${deploymentId}`
+      );
 
       for (const job of jobs.body.items) {
         const jobName = job.metadata?.name;
         if (!jobName) continue;
 
         try {
-          console.log(`[ImageBuilder] Deleting build job ${jobName} for deployment ${deploymentId}`);
-          
+          console.log(
+            `[ImageBuilder] Deleting build job ${jobName} for deployment ${deploymentId}`
+          );
+
           const pods = await coreApi.listNamespacedPod(
             this.builderNamespace,
             undefined,
@@ -3049,12 +3335,15 @@ exit $rc`,
                 );
               } catch (podDeleteError) {
                 if (podDeleteError.statusCode !== 404) {
-                  console.warn(`[ImageBuilder] Failed to delete pod ${podName}:`, podDeleteError.message);
+                  console.warn(
+                    `[ImageBuilder] Failed to delete pod ${podName}:`,
+                    podDeleteError.message
+                  );
                 }
               }
             }
           }
-          
+
           await batchApi.deleteNamespacedJob(
             jobName,
             this.builderNamespace,
@@ -3076,13 +3365,23 @@ exit $rc`,
         }
       }
     } catch (error) {
-      console.error(`[ImageBuilder] Error cancelling build jobs for deployment ${deploymentId}:`, error.message);
+      console.error(
+        `[ImageBuilder] Error cancelling build jobs for deployment ${deploymentId}:`,
+        error.message
+      );
       throw error;
     }
   }
 
   async buildAndPush(options: BuildJobOptions): Promise<string> {
-    const { imageName, tag = 'latest', deploymentId, repoUrl, branch, buildType = 'dockerfile' } = options;
+    const {
+      imageName,
+      tag = 'latest',
+      deploymentId,
+      repoUrl,
+      branch,
+      buildType = 'dockerfile'
+    } = options;
 
     console.log(`[ImageBuilder] buildAndPush called with:`, {
       imageName,
@@ -3095,7 +3394,7 @@ exit $rc`,
       target: options.target,
       buildFromRoot: options.buildFromRoot,
       hasAccessToken: !!options.accessToken,
-      envVarsCount: Object.keys(options.envVars || {}).length,
+      envVarsCount: Object.keys(options.envVars || {}).length
     });
 
     try {
@@ -3121,7 +3420,7 @@ exit $rc`,
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
       await this.waitForBuildJob(jobName, deploymentId, undefined, {
-        expectedImage: `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`,
+        expectedImage: `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`
       });
 
       if (deploymentId && !this.buildkitPushDetected.has(jobName)) {
@@ -3146,7 +3445,9 @@ exit $rc`,
       const imageRef = fullImagePath.split('/').slice(-1)[0] || fullImagePath;
       this.appendLog(deploymentId, `Build and push completed successfully.`).catch(() => {});
       this.appendLog(deploymentId, `Image: ${imageRef}`).catch(() => {});
-      this.deleteBuildJob(jobName).catch(err => console.error('[ImageBuilder] Failed to delete build job:', err));
+      this.deleteBuildJob(jobName).catch((err) =>
+        console.error('[ImageBuilder] Failed to delete build job:', err)
+      );
 
       return fullImagePath;
     } catch (error) {
@@ -3155,10 +3456,12 @@ exit $rc`,
       // built. Nothing ran, so there is nothing to report to the user beyond
       // a second attempt.
       if (!options.sandboxRetried && isSandboxStartFault(error?.message ?? '')) {
-        console.warn(`[ImageBuilder] Sandbox start fault for ${imageName}:${tag}, retrying: ${error.message}`);
+        console.warn(
+          `[ImageBuilder] Sandbox start fault for ${imageName}:${tag}, retrying: ${error.message}`
+        );
         await this.appendLog(
           deploymentId,
-          'The build sandbox failed to start. Retrying the build.',
+          'The build sandbox failed to start. Retrying the build.'
         ).catch(() => {});
         return this.buildAndPush({ ...options, sandboxRetried: true });
       }
@@ -3181,14 +3484,17 @@ exit $rc`,
         //   - cache-evict exiting non-zero. That container touches nothing but
         //     the shared cache, so its failure can't mean anything else.
         const message = error?.message ?? '';
-        const cacheUnusable = /no space left on device|ENOSPC/i.test(`${message}\n${logTail}`)
-          || /failed to create subPath directory for volumeMount "buildkit-cache"/i.test(message)
-          || /init container cache-evict failed/i.test(message);
+        const cacheUnusable =
+          /no space left on device|ENOSPC/i.test(`${message}\n${logTail}`) ||
+          /failed to create subPath directory for volumeMount "buildkit-cache"/i.test(message) ||
+          /init container cache-evict failed/i.test(message);
         if (cacheUnusable) {
-          console.warn(`[ImageBuilder] Shared cache unusable for ${imageName}:${tag}, retrying without it`);
+          console.warn(
+            `[ImageBuilder] Shared cache unusable for ${imageName}:${tag}, retrying without it`
+          );
           await this.appendLog(
             deploymentId,
-            'The shared build cache is unavailable. Retrying the build without it.',
+            'The shared build cache is unavailable. Retrying the build without it.'
           ).catch(() => {});
           return this.buildAndPush({ ...options, disableSharedCache: true });
         }
@@ -3205,7 +3511,7 @@ exit $rc`,
         stack: errorStack,
         errorType: error.constructor.name,
         statusCode: error.statusCode || error.status,
-        responseBody: error.body || error.response,
+        responseBody: error.body || error.response
       });
 
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
@@ -3217,17 +3523,19 @@ exit $rc`,
           // Don't overwrite a successful build status from a newer build
           const currentDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { buildStatus: true },
+            select: { buildStatus: true }
           });
           if (currentDeployment?.buildStatus === 'succeeded') {
-            console.log(`[ImageBuilder] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
+            console.log(
+              `[ImageBuilder] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`
+            );
           } else {
             await this.prisma.deployment.update({
               where: { id: deploymentId },
               data: {
                 buildStatus: 'failed',
-                buildError: error.message,
-              },
+                buildError: error.message
+              }
             });
           }
         } catch (dbError) {
@@ -3254,8 +3562,8 @@ exit $rc`,
         await coreApi.createNamespacedServiceAccount(this.builderNamespace, {
           metadata: {
             name: saName,
-            namespace: this.builderNamespace,
-          },
+            namespace: this.builderNamespace
+          }
         });
       }
     }
@@ -3266,38 +3574,38 @@ exit $rc`,
       {
         apiGroups: [''],
         resources: ['pods', 'pods/log'],
-        verbs: ['get', 'list', 'watch'],
+        verbs: ['get', 'list', 'watch']
       },
       {
         apiGroups: [''],
         resources: ['secrets'],
-        verbs: ['get'],
+        verbs: ['get']
       },
       {
         apiGroups: ['batch'],
         resources: ['jobs'],
-        verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'],
-      },
+        verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+      }
     ];
-    
+
     try {
       await rbacApi.readNamespacedRole(roleName, this.builderNamespace);
       // Role exists, update it to ensure it has the correct permissions
       await rbacApi.replaceNamespacedRole(roleName, this.builderNamespace, {
         metadata: {
           name: roleName,
-          namespace: this.builderNamespace,
+          namespace: this.builderNamespace
         },
-        rules: roleRules,
+        rules: roleRules
       });
     } catch (error) {
       if (error.statusCode === 404) {
         await rbacApi.createNamespacedRole(this.builderNamespace, {
           metadata: {
             name: roleName,
-            namespace: this.builderNamespace,
+            namespace: this.builderNamespace
           },
-          rules: roleRules,
+          rules: roleRules
         });
       } else {
         throw error;
@@ -3313,40 +3621,48 @@ exit $rc`,
         await rbacApi.createNamespacedRoleBinding(this.builderNamespace, {
           metadata: {
             name: roleBindingName,
-            namespace: this.builderNamespace,
+            namespace: this.builderNamespace
           },
           subjects: [
             {
               kind: 'ServiceAccount',
               name: saName,
-              namespace: this.builderNamespace,
-            },
+              namespace: this.builderNamespace
+            }
           ],
           roleRef: {
             kind: 'Role',
             name: roleName,
-            apiGroup: 'rbac.authorization.k8s.io',
-          },
+            apiGroup: 'rbac.authorization.k8s.io'
+          }
         });
       }
     }
   }
 
-  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[] | null> {
+  async findBuildJobsForDeployment(
+    deploymentId: string
+  ): Promise<{ name: string; image: string | null; status: string }[] | null> {
     this.ensureKubeConfig();
     try {
       const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
       const [current, legacy] = await Promise.all([
         batchApi.listNamespacedJob(
           this.builderNamespace,
-          undefined, undefined, undefined, undefined,
-          `orchard.my/deployment-id=${deploymentId}`,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `orchard.my/deployment-id=${deploymentId}`
         ),
         batchApi.listNamespacedJob(
           this.builderNamespace,
-          undefined, undefined, undefined, undefined,
-          `orchard.dev/deployment-id=${deploymentId}`,
-        ),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `orchard.dev/deployment-id=${deploymentId}`
+        )
       ]);
       const seen = new Set<string>();
       const items = [...current.body.items, ...legacy.body.items].filter((j) => {
@@ -3361,15 +3677,18 @@ exit $rc`,
           const tb = b.metadata?.creationTimestamp?.getTime() ?? 0;
           return tb - ta;
         })
-        .map(j => {
+        .map((j) => {
           let status = 'pending';
           if (j.status?.succeeded) status = 'succeeded';
           else if (j.status?.failed) status = 'failed';
           else if (j.status?.active) status = 'running';
           return {
             name: j.metadata?.name || '',
-            image: j.metadata?.annotations?.['orchard.my/full-image'] || j.metadata?.annotations?.['orchard.dev/full-image'] || null,
-            status,
+            image:
+              j.metadata?.annotations?.['orchard.my/full-image'] ||
+              j.metadata?.annotations?.['orchard.dev/full-image'] ||
+              null,
+            status
           };
         });
     } catch {
@@ -3409,7 +3728,7 @@ exit $rc`,
     const registryPrefixes = [this.harborRegistryPush, this.harborRegistryPull];
     let repo = imagePath;
     for (const prefix of registryPrefixes) {
-      if (repo.startsWith(`${prefix  }/`)) {
+      if (repo.startsWith(`${prefix}/`)) {
         repo = repo.substring(prefix.length + 1);
         break;
       }
@@ -3422,10 +3741,12 @@ exit $rc`,
     const harborUsername = process.env.HARBOR_USERNAME;
     const harborPassword = process.env.HARBOR_PASSWORD;
     if (!harborUsername || !harborPassword) {
-      console.warn('[ImageBuilder] Harbor credentials not configured, skipping registry image deletion');
+      console.warn(
+        '[ImageBuilder] Harbor credentials not configured, skipping registry image deletion'
+      );
       return null;
     }
-    const authHeader = `Basic ${  Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64')}`;
+    const authHeader = `Basic ${Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64')}`;
     const registryUrl = this.harborRegistryPull.startsWith('http')
       ? this.harborRegistryPull
       : `https://${this.harborRegistryPull}`;
@@ -3451,16 +3772,22 @@ exit $rc`,
 
       const response = await fetch(deleteUrl, {
         method: 'DELETE',
-        headers: { 'Authorization': auth.authHeader },
+        headers: { Authorization: auth.authHeader }
       });
 
       if (response.ok) {
-        console.log(`[ImageBuilder] Deleted artifact from registry: ${this.harborProject}/${repoName}:${tag}`);
+        console.log(
+          `[ImageBuilder] Deleted artifact from registry: ${this.harborProject}/${repoName}:${tag}`
+        );
       } else if (response.status === 404) {
-        console.warn(`[ImageBuilder] Artifact not found in registry (already deleted?): ${this.harborProject}/${repoName}:${tag}`);
+        console.warn(
+          `[ImageBuilder] Artifact not found in registry (already deleted?): ${this.harborProject}/${repoName}:${tag}`
+        );
       } else {
         const body = await response.text();
-        console.error(`[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}:${tag}, status: ${response.status}, body: ${body}`);
+        console.error(
+          `[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}:${tag}, status: ${response.status}, body: ${body}`
+        );
       }
     } catch (error) {
       console.error(`[ImageBuilder] Error deleting artifact from registry: ${image}`, error);
@@ -3482,16 +3809,22 @@ exit $rc`,
 
       const response = await fetch(deleteUrl, {
         method: 'DELETE',
-        headers: { 'Authorization': auth.authHeader },
+        headers: { Authorization: auth.authHeader }
       });
 
       if (response.ok) {
-        console.log(`[ImageBuilder] Deleted repository from registry: ${this.harborProject}/${repoName}`);
+        console.log(
+          `[ImageBuilder] Deleted repository from registry: ${this.harborProject}/${repoName}`
+        );
       } else if (response.status === 404) {
-        console.warn(`[ImageBuilder] Repository not found in registry (already deleted?): ${this.harborProject}/${repoName}`);
+        console.warn(
+          `[ImageBuilder] Repository not found in registry (already deleted?): ${this.harborProject}/${repoName}`
+        );
       } else {
         const body = await response.text();
-        console.error(`[ImageBuilder] Failed to delete repository: ${this.harborProject}/${repoName}, status: ${response.status}, body: ${body}`);
+        console.error(
+          `[ImageBuilder] Failed to delete repository: ${this.harborProject}/${repoName}, status: ${response.status}, body: ${body}`
+        );
       }
     } catch (error) {
       console.error(`[ImageBuilder] Error deleting repository from registry: ${image}`, error);

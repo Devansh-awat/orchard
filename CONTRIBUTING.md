@@ -16,16 +16,15 @@ http://localhost:4000.
 - Releases are cut automatically by release-please from commit types, so the
   type you pick decides whether a service version bumps. Breaking changes need
   a `!` (`feat!:`) and a `BREAKING CHANGE:` footer.
-- CI runs only the jobs for the apps you touched. Fork PRs run a prettier
-  check instead of the auto-format bot; run
-  `pnpm --filter frontend exec prettier --write .` before pushing frontend
-  changes.
+- CI runs only the jobs for the apps you touched. Lint and format always
+  run (oxlint + oxfmt). Fork PRs get a check-only format job; same-repo PRs
+  auto-apply oxfmt. Run `pnpm format` before pushing if you are on a fork.
 
 ## Checks to run locally
 
 ```bash
-pnpm lint                                  # eslint across the workspace
-pnpm --filter frontend exec prettier --check .
+pnpm lint                                  # oxlint + frontend design guardrails
+pnpm format:check                          # oxfmt across the workspace
 pnpm --filter frontend check:design        # design-system guardrails
 pnpm --filter server test:auth-coverage    # route/auth snapshot
 cd apps/cli && go test ./...
@@ -38,6 +37,8 @@ forget).
 
 ## Code style
 
+- Lint with oxlint (`pnpm lint`) and format with oxfmt (`pnpm format`).
+  ESLint and Prettier are not used.
 - No code comments; write code that reads on its own (see AGENTS.md).
 - Frontend work must follow `apps/frontend/DESIGN.md`: semantic tokens only,
   no raw hex colors, `ui/` components over legacy classes. `pnpm check:design`

@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -57,22 +57,35 @@ export class ProjectOrgTransferService {
     private readonly k8sNamespace: K8sNamespaceService,
     private readonly databases: DatabasesService,
     private readonly membershipCache: MembershipCacheService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
-  private hasR2(org: {
-    backupR2Endpoint: string | null;
-    backupR2Bucket: string | null;
-    backupR2AccessKey: string | null;
-    backupR2SecretKey: string | null;
-  } | null | undefined): boolean {
+  private hasR2(
+    org:
+      | {
+          backupR2Endpoint: string | null;
+          backupR2Bucket: string | null;
+          backupR2AccessKey: string | null;
+          backupR2SecretKey: string | null;
+        }
+      | null
+      | undefined
+  ): boolean {
     return Boolean(
-      org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey,
+      org?.backupR2Endpoint &&
+      org?.backupR2Bucket &&
+      org?.backupR2AccessKey &&
+      org?.backupR2SecretKey
     );
   }
 
   /** Authorize the move and load the project + destination org. */
-  private async resolve(projectId: string, destinationOrgId: string, clerkId: string, userData?: UserData) {
+  private async resolve(
+    projectId: string,
+    destinationOrgId: string,
+    clerkId: string,
+    userData?: UserData
+  ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
@@ -80,8 +93,8 @@ export class ProjectOrgTransferService {
       where: { id: projectId },
       include: {
         organization: true,
-        members: { include: { user: { select: { id: true, username: true } } } },
-      },
+        members: { include: { user: { select: { id: true, username: true } } } }
+      }
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -92,11 +105,15 @@ export class ProjectOrgTransferService {
     // Source: you must be able to edit the project. Destination: you must be
     // able to create projects there (member, not guest) — the same gate as
     // spawning a brand-new project in that org.
-    await this.authz.requireProjectEdit(projectId, user.id, 'move a project to another organization');
+    await this.authz.requireProjectEdit(
+      projectId,
+      user.id,
+      'move a project to another organization'
+    );
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);
 
     const destOrg = (await this.prisma.organization.findUnique({
-      where: { id: destinationOrgId },
+      where: { id: destinationOrgId }
     })) as OrgWithR2 | null;
     if (!destOrg) throw new NotFoundException('Destination organization not found');
 
@@ -107,13 +124,13 @@ export class ProjectOrgTransferService {
   private async computePlan(
     project: Awaited<ReturnType<ProjectOrgTransferService['resolve']>>['project'],
     destOrg: OrgWithR2,
-    requestedSlug?: string,
+    requestedSlug?: string
   ) {
     const desiredSlug = formatSlug((requestedSlug ?? '').trim() || project.slug);
     if (!desiredSlug) throw new BadRequestException('Project slug cannot be empty');
 
     const slugTaken = await this.prisma.project.findUnique({
-      where: { organizationId_slug: { organizationId: destOrg.id, slug: desiredSlug } },
+      where: { organizationId_slug: { organizationId: destOrg.id, slug: desiredSlug } }
     });
     const slugCollision = Boolean(slugTaken && slugTaken.id !== project.id);
 
@@ -123,7 +140,7 @@ export class ProjectOrgTransferService {
     const destMembers = memberUserIds.length
       ? await this.prisma.organizationMember.findMany({
           where: { organizationId: destOrg.id, userId: { in: memberUserIds } },
-          select: { userId: true },
+          select: { userId: true }
         })
       : [];
     const destMemberSet = new Set(destMembers.map((m) => m.userId));
@@ -148,13 +165,13 @@ export class ProjectOrgTransferService {
       const [deployments, dbs, orgQuota] = await Promise.all([
         this.prisma.deployment.findMany({
           where: { projectId: project.id },
-          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true },
+          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true }
         }),
         this.prisma.database.findMany({
           where: { projectId: project.id },
-          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true },
+          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true }
         }),
-        this.quotas.getOrgUsageWithCaps(destOrg.id),
+        this.quotas.getOrgUsageWithCaps(destOrg.id)
       ]);
       let requestedCpuMilli = 0;
       let requestedMemoryBytes = 0;
@@ -167,7 +184,8 @@ export class ProjectOrgTransferService {
       const capMemoryBytes = orgQuota.org.memoryLimitBytes;
       const willExceed =
         (capCpuMilli != null && orgQuota.usage.cpuMilli + requestedCpuMilli > capCpuMilli) ||
-        (capMemoryBytes != null && orgQuota.usage.memoryBytes + requestedMemoryBytes > capMemoryBytes);
+        (capMemoryBytes != null &&
+          orgQuota.usage.memoryBytes + requestedMemoryBytes > capMemoryBytes);
       quota = {
         willExceed,
         requestedCpuMilli,
@@ -175,7 +193,7 @@ export class ProjectOrgTransferService {
         usedCpuMilli: orgQuota.usage.cpuMilli,
         usedMemoryBytes: orgQuota.usage.memoryBytes,
         capCpuMilli,
-        capMemoryBytes,
+        capMemoryBytes
       };
     }
 
@@ -190,7 +208,7 @@ export class ProjectOrgTransferService {
       willContinue: databaseCount > 0 && destHasR2,
       // The scary-warning case: backups were running but the destination has no
       // storage, so new backups stop until it is configured.
-      willPause: databaseCount > 0 && sourceHasR2 && !destHasR2,
+      willPause: databaseCount > 0 && sourceHasR2 && !destHasR2
     };
 
     return {
@@ -200,16 +218,26 @@ export class ProjectOrgTransferService {
       membersKept,
       ownerInDest,
       quota,
-      backups,
+      backups
     };
   }
 
-  async preview(projectId: string, destinationOrgId: string, requestedSlug: string | undefined, clerkId: string, userData?: UserData) {
+  async preview(
+    projectId: string,
+    destinationOrgId: string,
+    requestedSlug: string | undefined,
+    clerkId: string,
+    userData?: UserData
+  ) {
     const { project, destOrg } = await this.resolve(projectId, destinationOrgId, clerkId, userData);
     const plan = await this.computePlan(project, destOrg, requestedSlug);
     return {
       project: { id: project.id, name: project.name, slug: project.slug },
-      sourceOrg: { id: project.organization.id, name: project.organization.name, slug: project.organization.slug },
+      sourceOrg: {
+        id: project.organization.id,
+        name: project.organization.name,
+        slug: project.organization.slug
+      },
       destinationOrg: { id: destOrg.id, name: destOrg.name, slug: destOrg.slug },
       proposedSlug: plan.desiredSlug,
       slugCollision: plan.slugCollision,
@@ -217,17 +245,28 @@ export class ProjectOrgTransferService {
       membersKept: plan.membersKept,
       ownerReassignedToMover: !plan.ownerInDest,
       quota: plan.quota,
-      backups: plan.backups,
+      backups: plan.backups
     };
   }
 
-  async transfer(projectId: string, destinationOrgId: string, requestedSlug: string | undefined, clerkId: string, userData?: UserData) {
-    const { user, project, destOrg } = await this.resolve(projectId, destinationOrgId, clerkId, userData);
+  async transfer(
+    projectId: string,
+    destinationOrgId: string,
+    requestedSlug: string | undefined,
+    clerkId: string,
+    userData?: UserData
+  ) {
+    const { user, project, destOrg } = await this.resolve(
+      projectId,
+      destinationOrgId,
+      clerkId,
+      userData
+    );
     const plan = await this.computePlan(project, destOrg, requestedSlug);
 
     if (plan.slugCollision) {
       throw new BadRequestException(
-        'A project with this name already exists in the destination organization. Pick a different name.',
+        'A project with this name already exists in the destination organization. Pick a different name.'
       );
     }
 
@@ -241,11 +280,13 @@ export class ProjectOrgTransferService {
         data: {
           organizationId: destOrg.id,
           slug: plan.desiredSlug,
-          ...(reassignOwner ? { ownerId: user.id } : {}),
-        },
+          ...(reassignOwner ? { ownerId: user.id } : {})
+        }
       });
       if (losingIds.length) {
-        await tx.projectMember.deleteMany({ where: { projectId: project.id, userId: { in: losingIds } } });
+        await tx.projectMember.deleteMany({
+          where: { projectId: project.id, userId: { in: losingIds } }
+        });
       }
       // Pending project invitations were issued in the source-org context and
       // would grant access to the wrong org.
@@ -254,11 +295,11 @@ export class ProjectOrgTransferService {
       // stay behind with the source org by design.
       await tx.notificationChannel.updateMany({
         where: { organizationId: sourceOrgId, scopeType: 'project', scopeId: project.id },
-        data: { organizationId: destOrg.id },
+        data: { organizationId: destOrg.id }
       });
       await tx.notificationRule.updateMany({
         where: { organizationId: sourceOrgId, scopeType: 'project', scopeId: project.id },
-        data: { organizationId: destOrg.id },
+        data: { organizationId: destOrg.id }
       });
     });
 
@@ -268,14 +309,17 @@ export class ProjectOrgTransferService {
     const adminRole = await this.prisma.role.findFirst({ where: { name: 'admin' } });
     if (adminRole) {
       const existing = await this.prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId: project.id, userId: user.id } },
+        where: { projectId_userId: { projectId: project.id, userId: user.id } }
       });
       if (!existing) {
         await this.prisma.projectMember.create({
-          data: { projectId: project.id, userId: user.id, roleId: adminRole.id, addedBy: user.id },
+          data: { projectId: project.id, userId: user.id, roleId: adminRole.id, addedBy: user.id }
         });
       } else if (reassignOwner && existing.roleId !== adminRole.id) {
-        await this.prisma.projectMember.update({ where: { id: existing.id }, data: { roleId: adminRole.id } });
+        await this.prisma.projectMember.update({
+          where: { id: existing.id },
+          data: { roleId: adminRole.id }
+        });
       }
     }
 
@@ -285,7 +329,7 @@ export class ProjectOrgTransferService {
     // the new org (`kubectl get ns -l orchard.my/current-org=<slug>`).
     const envs = await this.prisma.environment.findMany({
       where: { projectId: project.id },
-      select: { namespace: true },
+      select: { namespace: true }
     });
     const namespaces = new Set<string>([project.namespace, ...envs.map((e) => e.namespace)]);
     for (const ns of namespaces) {
@@ -293,7 +337,7 @@ export class ProjectOrgTransferService {
         .tagNamespaceMoved(ns, {
           fromOrgSlug: project.organization.slug,
           toOrgSlug: destOrg.slug,
-          movedBy: user.email || user.id,
+          movedBy: user.email || user.id
         })
         .catch((e) => this.logger.error(`Failed to tag namespace ${ns}: ${e?.message ?? e}`));
     }
@@ -303,14 +347,18 @@ export class ProjectOrgTransferService {
     this.membershipCache.invalidateOrg(destOrg.id);
 
     // Re-push every environment namespace's quotas under the destination's caps.
-    await this.quotas.applyProjectQuota(project.id).catch((e) => this.logger.error(`applyProjectQuota failed: ${e?.message ?? e}`));
+    await this.quotas
+      .applyProjectQuota(project.id)
+      .catch((e) => this.logger.error(`applyProjectQuota failed: ${e?.message ?? e}`));
 
     // Re-point the databases' backups at the destination's storage (or pause
     // them if it has none). Existing backups are never touched.
     if (plan.backups.databaseCount > 0) {
       void this.databases
         .repointProjectBackupsToOrg(project.id, destOrg.id)
-        .catch((e) => this.logger.error(`Backup re-point failed for project ${project.id}: ${e?.message ?? e}`));
+        .catch((e) =>
+          this.logger.error(`Backup re-point failed for project ${project.id}: ${e?.message ?? e}`)
+        );
     }
 
     void this.audit.log({
@@ -329,15 +377,15 @@ export class ProjectOrgTransferService {
         membersEvicted: losingIds.length,
         ownerReassigned: reassignOwner,
         backupsRepointed: plan.backups.willContinue,
-        backupsPaused: plan.backups.willPause,
-      },
+        backupsPaused: plan.backups.willPause
+      }
     });
 
     return {
       id: project.id,
       slug: plan.desiredSlug,
       organizationId: destOrg.id,
-      destinationOrgSlug: destOrg.slug,
+      destinationOrgSlug: destOrg.slug
     };
   }
 }

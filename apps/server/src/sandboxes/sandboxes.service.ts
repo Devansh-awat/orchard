@@ -4,7 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  ServiceUnavailableException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { SignJWT } from 'jose';
 import { Sandbox, SandboxStatus } from '@prisma/client';
@@ -50,7 +50,7 @@ function specOf(row: SandboxWithIdentity): SandboxSpecInput {
     cpuLimit: row.cpuLimit,
     memoryLimit: row.memoryLimit,
     diskSize: row.diskSize,
-    setupScript: row.setupScript,
+    setupScript: row.setupScript
   };
 }
 
@@ -75,7 +75,7 @@ export function toSandboxDto(row: SandboxWithIdentity): SandboxDto {
       : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    lastActiveAt: row.lastActiveAt,
+    lastActiveAt: row.lastActiveAt
   };
 }
 
@@ -88,12 +88,12 @@ export class SandboxesService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly crypto: SecretCryptoService,
-    private readonly k8s: SandboxK8sService,
+    private readonly k8s: SandboxK8sService
   ) {}
 
   async list(
     userId: string,
-    organizationId?: string,
+    organizationId?: string
   ): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number }> {
     let where: Record<string, unknown> = { userId };
     if (organizationId) {
@@ -106,14 +106,14 @@ export class SandboxesService {
         orderBy: { createdAt: 'asc' },
         include: {
           sshIdentity: { select: { id: true, name: true } },
-          user: { select: { id: true, username: true, email: true } },
-        },
+          user: { select: { id: true, username: true, email: true } }
+        }
       }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } })
     ]);
     return {
       sandboxes: rows.map(toSandboxDto),
-      maxSandboxes: user?.maxSandboxes ?? defaultMaxSandboxes(),
+      maxSandboxes: user?.maxSandboxes ?? defaultMaxSandboxes()
     };
   }
 
@@ -122,8 +122,8 @@ export class SandboxesService {
       where: { id },
       include: {
         sshIdentity: { select: { id: true, name: true } },
-        user: { select: { id: true, username: true, email: true } },
-      },
+        user: { select: { id: true, username: true, email: true } }
+      }
     });
     if (!row) throw new NotFoundException('Sandbox not found');
     if (row.userId === userId) return row;
@@ -141,11 +141,7 @@ export class SandboxesService {
     const identity = row.sshIdentityId
       ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
       : null;
-    return this.buildSecretInput(
-      row.userId,
-      identity ? [identity.publicKey] : [],
-      row.setupScript,
-    );
+    return this.buildSecretInput(row.userId, identity ? [identity.publicKey] : [], row.setupScript);
   }
 
   /**
@@ -196,14 +192,14 @@ export class SandboxesService {
   private validateName(name: string): void {
     if (name.length > 63 || !NAME_RE.test(name)) {
       throw new BadRequestException(
-        'Sandbox name must be a lowercase DNS label (a-z, 0-9, hyphens, max 63 chars)',
+        'Sandbox name must be a lowercase DNS label (a-z, 0-9, hyphens, max 63 chars)'
       );
     }
   }
 
   private async resolveOrganization(
     userId: string,
-    organizationId: string | undefined,
+    organizationId: string | undefined
   ): Promise<string> {
     if (organizationId) {
       await this.authz.requireOrgCanCreateProjects(organizationId, userId);
@@ -212,19 +208,19 @@ export class SandboxesService {
     const memberships = await this.prisma.organizationMember.findMany({
       where: { userId },
       orderBy: { addedAt: 'asc' },
-      select: { organizationId: true, role: true },
+      select: { organizationId: true, role: true }
     });
     const eligible = memberships.filter((m) => m.role !== 'guest');
     if (eligible.length === 0) {
       throw new ForbiddenException(
         memberships.length
           ? 'Guests cannot create sandboxes in this organization'
-          : 'You must belong to an organization to create a sandbox',
+          : 'You must belong to an organization to create a sandbox'
       );
     }
     if (eligible.length > 1) {
       throw new BadRequestException(
-        'You belong to multiple organizations; pass organizationId to pick one',
+        'You belong to multiple organizations; pass organizationId to pick one'
       );
     }
     await this.authz.requireOrgCanCreateProjects(eligible[0].organizationId, userId);
@@ -233,7 +229,7 @@ export class SandboxesService {
 
   private async resolveIdentity(
     userId: string,
-    sshIdentityId: string | undefined,
+    sshIdentityId: string | undefined
   ): Promise<{ id: string; publicKey: string }> {
     if (sshIdentityId) {
       const identity = await this.prisma.sshIdentity.findUnique({ where: { id: sshIdentityId } });
@@ -249,7 +245,7 @@ export class SandboxesService {
     throw new BadRequestException(
       identities.length === 0
         ? 'You have no SSH identities yet; add one in user settings first'
-        : 'You have multiple SSH identities; pass sshIdentityId to pick one',
+        : 'You have multiple SSH identities; pass sshIdentityId to pick one'
     );
   }
 
@@ -257,7 +253,7 @@ export class SandboxesService {
     if (script === undefined || script === null || script === '') return null;
     if (script.length > MAX_SETUP_SCRIPT_LENGTH) {
       throw new BadRequestException(
-        `Setup script must be at most ${MAX_SETUP_SCRIPT_LENGTH} characters`,
+        `Setup script must be at most ${MAX_SETUP_SCRIPT_LENGTH} characters`
       );
     }
     return script;
@@ -267,15 +263,15 @@ export class SandboxesService {
     if (!process.env.SANDBOX_MCP_URL || !process.env.JWT_SECRET) return null;
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, username: true, externalAuthId: true },
+      select: { email: true, username: true, externalAuthId: true }
     });
     if (!user) return null;
     let session = await this.prisma.session.findFirst({
       where: {
         userId,
         deviceName: 'sandbox-mcp',
-        expiresAt: { gt: new Date(Date.now() + 7 * 86400000) },
-      },
+        expiresAt: { gt: new Date(Date.now() + 7 * 86400000) }
+      }
     });
     if (!session) {
       session = await this.prisma.session.create({
@@ -283,8 +279,8 @@ export class SandboxesService {
           userId,
           authMethod: 'otp',
           deviceName: 'sandbox-mcp',
-          expiresAt: new Date(Date.now() + 60 * 86400000),
-        },
+          expiresAt: new Date(Date.now() + 60 * 86400000)
+        }
       });
     }
     return new SignJWT({
@@ -293,7 +289,7 @@ export class SandboxesService {
       name: user.username,
       externalAuthId: user.externalAuthId,
       authMethod: 'otp',
-      sessionId: session.id,
+      sessionId: session.id
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
@@ -306,10 +302,10 @@ export class SandboxesService {
     const [user, credential, mcpToken] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { githubAccessToken: true },
+        select: { githubAccessToken: true }
       }),
       this.prisma.sandboxCredential.findUnique({ where: { userId } }),
-      this.mintMcpToken(userId).catch(() => null),
+      this.mintMcpToken(userId).catch(() => null)
     ]);
     return {
       authorizedKeys: keys,
@@ -317,7 +313,7 @@ export class SandboxesService {
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
       setupScript,
-      mcpToken,
+      mcpToken
     };
   }
 
@@ -330,19 +326,19 @@ export class SandboxesService {
       sshIdentityId?: string;
       setupScript?: string | null;
       organizationId?: string;
-    },
+    }
   ): Promise<SandboxDto> {
     const organizationId = await this.resolveOrganization(userId, body.organizationId);
     const setupScript = this.validateSetupScript(body.setupScript);
     const identity = await this.resolveIdentity(userId, body.sshIdentityId);
     const [count, user] = await Promise.all([
       this.prisma.sandbox.count({ where: { userId } }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } })
     ]);
     const cap = user?.maxSandboxes ?? defaultMaxSandboxes();
     if (count >= cap) {
       throw new ForbiddenException(
-        `Sandbox limit reached (${count} of ${cap}). Ask an admin to raise your limit.`,
+        `Sandbox limit reached (${count} of ${cap}). Ask an admin to raise your limit.`
       );
     }
     if (body.repoUrl !== undefined && body.repoUrl !== null && body.repoUrl !== '') {
@@ -363,7 +359,7 @@ export class SandboxesService {
       name = 'sandbox';
       const existing = await this.prisma.sandbox.findUnique({
         where: { userId_name: { userId, name } },
-        select: { id: true },
+        select: { id: true }
       });
       if (existing) name = `sandbox-${Math.random().toString(36).slice(2, 6)}`;
     }
@@ -382,8 +378,8 @@ export class SandboxesService {
           setupScript,
           cpuLimit: process.env.SANDBOX_CPU_LIMIT || '2',
           memoryLimit: process.env.SANDBOX_MEMORY_LIMIT || '4Gi',
-          diskSize: process.env.SANDBOX_DISK_SIZE || '10Gi',
-        },
+          diskSize: process.env.SANDBOX_DISK_SIZE || '10Gi'
+        }
       })
       .catch((e) => {
         if (e?.code === 'P2002') {
@@ -395,7 +391,7 @@ export class SandboxesService {
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
       data: { podName },
-      include: { sshIdentity: { select: { id: true, name: true } } },
+      include: { sshIdentity: { select: { id: true, name: true } } }
     });
 
     this.audit
@@ -406,7 +402,7 @@ export class SandboxesService {
         targetType: 'sandbox',
         targetId: row.id,
         targetLabel: name,
-        metadata: { repoUrl: body.repoUrl || null },
+        metadata: { repoUrl: body.repoUrl || null }
       })
       .catch(() => {});
 
@@ -422,16 +418,16 @@ export class SandboxesService {
           cpuLimit: updated.cpuLimit,
           memoryLimit: updated.memoryLimit,
           diskSize: updated.diskSize,
-          setupScript,
+          setupScript
         },
-        secret,
+        secret
       );
     } catch (e: any) {
       this.logger.error(`sandbox ${row.id} create failed: ${k8sErrorMessage(e)}`);
       const failed = await this.prisma.sandbox.update({
         where: { id: row.id },
         data: { status: 'error', statusMessage: `Failed to create sandbox: ${k8sErrorMessage(e)}` },
-        include: { sshIdentity: { select: { id: true, name: true } } },
+        include: { sshIdentity: { select: { id: true, name: true } } }
       });
       return toSandboxDto(failed);
     }
@@ -446,7 +442,7 @@ export class SandboxesService {
       name?: string;
       sshIdentityId?: string;
       setupScript?: string | null;
-    },
+    }
   ): Promise<SandboxDto> {
     const row = await this.getOwnedStrict(id, userId);
     const data: { name?: string; sshIdentityId?: string; setupScript?: string | null } = {};
@@ -468,7 +464,7 @@ export class SandboxesService {
       .update({
         where: { id: row.id },
         data,
-        include: { sshIdentity: { select: { id: true, name: true, publicKey: true } } },
+        include: { sshIdentity: { select: { id: true, name: true, publicKey: true } } }
       })
       .catch((e) => {
         if (e?.code === 'P2002') {
@@ -478,11 +474,7 @@ export class SandboxesService {
       });
     if (data.sshIdentityId !== undefined || data.setupScript !== undefined) {
       const key = identityKey ?? updated.sshIdentity?.publicKey ?? null;
-      const secret = await this.buildSecretInput(
-        row.userId,
-        key ? [key] : [],
-        updated.setupScript,
-      );
+      const secret = await this.buildSecretInput(row.userId, key ? [key] : [], updated.setupScript);
       await this.k8s.ensureAuthSecret(
         {
           id: updated.id,
@@ -493,9 +485,9 @@ export class SandboxesService {
           cpuLimit: updated.cpuLimit,
           memoryLimit: updated.memoryLimit,
           diskSize: updated.diskSize,
-          setupScript: updated.setupScript,
+          setupScript: updated.setupScript
         },
-        secret,
+        secret
       );
       this.audit
         .log({
@@ -507,8 +499,9 @@ export class SandboxesService {
           targetLabel: updated.name,
           metadata: {
             sshIdentity: updated.sshIdentity?.name ?? null,
-            setupScript: data.setupScript === undefined ? 'unchanged' : data.setupScript ? 'set' : 'cleared',
-          },
+            setupScript:
+              data.setupScript === undefined ? 'unchanged' : data.setupScript ? 'set' : 'cleared'
+          }
         })
         .catch(() => {});
     }
@@ -529,9 +522,9 @@ export class SandboxesService {
       data: {
         status: settled === 'running' ? 'running' : 'starting',
         statusMessage: null,
-        lastActiveAt: new Date(),
+        lastActiveAt: new Date()
       },
-      include: { sshIdentity: { select: { id: true, name: true } } },
+      include: { sshIdentity: { select: { id: true, name: true } } }
     });
     this.audit
       .log({
@@ -541,7 +534,7 @@ export class SandboxesService {
         targetType: 'sandbox',
         targetId: row.id,
         targetLabel: row.name,
-        metadata: { rebuilt },
+        metadata: { rebuilt }
       })
       .catch(() => {});
     return toSandboxDto(updated);
@@ -559,7 +552,7 @@ export class SandboxesService {
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
       data: { status: !existed || settled === 'stopped' ? 'stopped' : 'stopping' },
-      include: { sshIdentity: { select: { id: true, name: true } } },
+      include: { sshIdentity: { select: { id: true, name: true } } }
     });
     this.audit
       .log({
@@ -568,7 +561,7 @@ export class SandboxesService {
         actorEmail,
         targetType: 'sandbox',
         targetId: row.id,
-        targetLabel: row.name,
+        targetLabel: row.name
       })
       .catch(() => {});
     return toSandboxDto(updated);
@@ -583,7 +576,7 @@ export class SandboxesService {
       this.logger.error(`sandbox ${row.id} delete failed: ${k8sErrorMessage(e)}`);
       await this.prisma.sandbox.update({
         where: { id: row.id },
-        data: { status: 'error', statusMessage: `Failed to delete sandbox: ${k8sErrorMessage(e)}` },
+        data: { status: 'error', statusMessage: `Failed to delete sandbox: ${k8sErrorMessage(e)}` }
       });
       throw e;
     }
@@ -595,7 +588,7 @@ export class SandboxesService {
         actorEmail,
         targetType: 'sandbox',
         targetId: row.id,
-        targetLabel: row.name,
+        targetLabel: row.name
       })
       .catch(() => {});
   }
@@ -608,14 +601,14 @@ export class SandboxesService {
   async setCredentials(
     userId: string,
     actorEmail: string | null,
-    body: { claudeToken?: string | null; openaiToken?: string | null },
+    body: { claudeToken?: string | null; openaiToken?: string | null }
   ): Promise<{ claude: boolean; openai: boolean }> {
     const wantsWrite =
       (typeof body.claudeToken === 'string' && body.claudeToken.length > 0) ||
       (typeof body.openaiToken === 'string' && body.openaiToken.length > 0);
     if (wantsWrite && !this.crypto.enabled) {
       throw new ServiceUnavailableException(
-        'SECRETS_ENCRYPTION_KEY is not configured; refusing to store agent tokens in plaintext',
+        'SECRETS_ENCRYPTION_KEY is not configured; refusing to store agent tokens in plaintext'
       );
     }
     const clean = (v: string) => v.replace(/\s+/g, '');
@@ -629,18 +622,18 @@ export class SandboxesService {
     await this.prisma.sandboxCredential.upsert({
       where: { userId },
       create: { userId, ...data },
-      update: data,
+      update: data
     });
     const rows = await this.prisma.sandbox.findMany({
       where: { userId },
-      include: { sshIdentity: { select: { publicKey: true } } },
+      include: { sshIdentity: { select: { publicKey: true } } }
     });
     for (const row of rows) {
       try {
         const secret = await this.buildSecretInput(
           userId,
           row.sshIdentity ? [row.sshIdentity.publicKey] : [],
-          row.setupScript,
+          row.setupScript
         );
         await this.k8s.ensureAuthSecret(
           {
@@ -652,9 +645,9 @@ export class SandboxesService {
             cpuLimit: row.cpuLimit,
             memoryLimit: row.memoryLimit,
             diskSize: row.diskSize,
-            setupScript: row.setupScript,
+            setupScript: row.setupScript
           },
-          secret,
+          secret
         );
       } catch (e: any) {
         this.logger.warn(`credential refresh failed for sandbox ${row.id}: ${e?.message}`);
@@ -668,9 +661,11 @@ export class SandboxesService {
         targetType: 'sandbox_credentials',
         targetId: userId,
         metadata: {
-          claude: body.claudeToken === undefined ? 'unchanged' : body.claudeToken ? 'set' : 'cleared',
-          openai: body.openaiToken === undefined ? 'unchanged' : body.openaiToken ? 'set' : 'cleared',
-        },
+          claude:
+            body.claudeToken === undefined ? 'unchanged' : body.claudeToken ? 'set' : 'cleared',
+          openai:
+            body.openaiToken === undefined ? 'unchanged' : body.openaiToken ? 'set' : 'cleared'
+        }
       })
       .catch(() => {});
     return this.getCredentialPresence(userId);

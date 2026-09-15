@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Request,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationRole } from '@prisma/client';
 import { OrganizationsService } from './organizations.service';
@@ -20,7 +32,7 @@ export class OrganizationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -31,7 +43,7 @@ export class OrganizationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -42,7 +54,7 @@ export class OrganizationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -77,16 +89,13 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Delete(':id/avatar')
-  async deleteAvatar(
-    @Param('id') organizationId: string,
-    @Request() req
-  ) {
+  async deleteAvatar(@Param('id') organizationId: string, @Request() req) {
     return this.organizationsService.deleteAvatar(
       organizationId,
       req.user.sub,
@@ -96,7 +105,7 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -108,21 +117,18 @@ export class OrganizationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get(':id/members/me')
-  async getCurrentUserMembership(
-    @Param('id') organizationId: string,
-    @Request() req
-  ) {
+  async getCurrentUserMembership(@Param('id') organizationId: string, @Request() req) {
     return this.organizationsService.getMembershipByUserId(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -141,18 +147,13 @@ export class OrganizationsController {
     },
     @Request() req
   ) {
-    return this.organizationsService.updateOrganization(
-      organizationId,
-      req.user.sub,
-      body || {},
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.organizationsService.updateOrganization(organizationId, req.user.sub, body || {}, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Get(':id/backup-settings')
@@ -162,7 +163,7 @@ export class OrganizationsController {
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -181,7 +182,7 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -203,27 +204,20 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
 
   @Get(':id/invitations')
-  async getOrganizationInvitations(
-    @Param('id') organizationId: string,
-    @Request() req
-  ) {
-    return this.organizationsService.getOrganizationInvitations(
-      organizationId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+  async getOrganizationInvitations(@Param('id') organizationId: string, @Request() req) {
+    return this.organizationsService.getOrganizationInvitations(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':id/invitations/:invitationId')
@@ -232,17 +226,13 @@ export class OrganizationsController {
     @Param('invitationId') invitationId: string,
     @Request() req
   ) {
-    return this.organizationsService.cancelInvitation(
-      invitationId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.organizationsService.cancelInvitation(invitationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Post(':id/invitations/:invitationId/resend')
@@ -251,17 +241,13 @@ export class OrganizationsController {
     @Param('invitationId') invitationId: string,
     @Request() req
   ) {
-    return this.organizationsService.resendInvitation(
-      invitationId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
+    return this.organizationsService.resendInvitation(invitationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
   }
 
   @Delete(':id/members/:memberId')
@@ -279,7 +265,7 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
@@ -301,10 +287,8 @@ export class OrganizationsController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       }
     );
   }
-
 }
-

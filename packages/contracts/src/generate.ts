@@ -2,7 +2,7 @@ import {
   OpenAPIRegistry,
   OpenApiGeneratorV31,
   extendZodWithOpenApi,
-  type RouteConfig,
+  type RouteConfig
 } from '@asteasolutions/zod-to-openapi';
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -39,15 +39,13 @@ function requestFor(route: Route): RouteConfig['request'] {
   const request: NonNullable<RouteConfig['request']> = {};
   const params = pathParams(route.path);
   if (params.length > 0) {
-    request.params = z.object(
-      Object.fromEntries(params.map((name) => [name, z.string()])),
-    );
+    request.params = z.object(Object.fromEntries(params.map((name) => [name, z.string()])));
   }
   if (bodyMethods.has(route.method)) {
     request.body = {
       content: {
-        'application/json': { schema: route.request ?? genericObject },
-      },
+        'application/json': { schema: route.request ?? genericObject }
+      }
     };
   } else if (route.request instanceof z.ZodObject) {
     request.query = route.request;
@@ -60,14 +58,14 @@ const openApiRegistry = new OpenAPIRegistry();
 openApiRegistry.registerComponent('securitySchemes', 'bearerAuth', {
   type: 'http',
   scheme: 'bearer',
-  description: 'Orchard personal access token',
+  description: 'Orchard personal access token'
 });
 
 openApiRegistry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',
   in: 'cookie',
   name: 'session_token',
-  description: 'Browser session cookie',
+  description: 'Browser session cookie'
 });
 
 for (const route of routeRegistry) {
@@ -75,22 +73,23 @@ for (const route of routeRegistry) {
     // OpenAPI has no 'all' verb, but the wildcard passthrough routes genuinely
     // accept every method and the generated document has always carried them
     // that way. Keep the shape, drop the type error.
-    method: route.method.toLowerCase() as Parameters<typeof openApiRegistry.registerPath>[0]['method'],
+    method: route.method.toLowerCase() as Parameters<
+      typeof openApiRegistry.registerPath
+    >[0]['method'],
     path: toOpenApiPath(route.path),
     summary: route.summary ?? `${route.method} ${route.path}`,
     description: descriptionFor(route),
     tags: [tagFor(route.path)],
-    security:
-      route.auth === 'public' ? undefined : [{ bearerAuth: [] }, { cookieAuth: [] }],
+    security: route.auth === 'public' ? undefined : [{ bearerAuth: [] }, { cookieAuth: [] }],
     request: requestFor(route),
     responses: {
       200: {
         description: 'OK',
         content: {
-          'application/json': { schema: route.response ?? genericObject },
-        },
-      },
-    },
+          'application/json': { schema: route.response ?? genericObject }
+        }
+      }
+    }
   });
 }
 
@@ -101,8 +100,8 @@ const document = generator.generateDocument({
     title: 'Orchard API',
     version: '0.1.0',
     description:
-      'Generated from @orchard/contracts route registry (bootstrap source: apps/server auth-coverage snapshot).',
-  },
+      'Generated from @orchard/contracts route registry (bootstrap source: apps/server auth-coverage snapshot).'
+  }
 });
 
 function sortDeep(value: unknown): unknown {
@@ -111,7 +110,7 @@ function sortDeep(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, entry]) => [key, sortDeep(entry)]),
+        .map(([key, entry]) => [key, sortDeep(entry)])
     );
   }
   return value;
@@ -124,11 +123,11 @@ const operationCount = Object.values(document.paths ?? {}).reduce(
   (count, pathItem) =>
     count +
     Object.keys(pathItem as object).filter((key) =>
-      ['get', 'post', 'put', 'patch', 'delete'].includes(key),
+      ['get', 'post', 'put', 'patch', 'delete'].includes(key)
     ).length,
-  0,
+  0
 );
 
 console.log(
-  `wrote ${outputPath}: ${Object.keys(document.paths ?? {}).length} paths, ${operationCount} operations, ${json.length} bytes`,
+  `wrote ${outputPath}: ${Object.keys(document.paths ?? {}).length} paths, ${operationCount} operations, ${json.length} bytes`
 );

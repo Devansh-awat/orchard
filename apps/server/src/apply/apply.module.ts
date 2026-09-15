@@ -7,6 +7,6 @@ import { ApplyExecutorService } from './apply-executor.service';
 @Module({
   imports: [KubernetesModule],
   providers: [ApplyQueueService, ApplyExecutorService],
-  exports: [ApplyQueueService, ApplyExecutorService],
+  exports: [ApplyQueueService, ApplyExecutorService]
 })
 export class ApplyModule {}

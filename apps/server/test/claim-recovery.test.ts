@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recoveryState } from '../src/setup/setup-token';
 
-function prismaWith(opts: {
-  superadmins?: number;
-  passkeys?: number;
-  emailRow?: string | null;
-} = {}) {
+function prismaWith(
+  opts: {
+    superadmins?: number;
+    passkeys?: number;
+    emailRow?: string | null;
+  } = {}
+) {
   const seen: { passkeyWhere?: any } = {};
   const prisma = {
     user: { count: async () => opts.superadmins ?? 0 },
@@ -14,11 +16,11 @@ function prismaWith(opts: {
       count: async (args: any) => {
         seen.passkeyWhere = args?.where;
         return opts.passkeys ?? 0;
-      },
+      }
     },
     instanceSetting: {
-      findUnique: async () => (opts.emailRow == null ? null : { value: opts.emailRow }),
-    },
+      findUnique: async () => (opts.emailRow == null ? null : { value: opts.emailRow })
+    }
   };
   return { prisma: prisma as any, seen };
 }
@@ -43,7 +45,7 @@ const CLEAR = {
   AUTH_OAUTH_CLIENT_ID: undefined,
   AUTH_OAUTH_CLIENT_SECRET: undefined,
   HACKCLUB_CLIENT_ID: undefined,
-  HACKCLUB_CLIENT_SECRET: undefined,
+  HACKCLUB_CLIENT_SECRET: undefined
 };
 
 test('a fresh instance is claimable', async () => {
@@ -97,7 +99,7 @@ test('SMTP stored in the admin panel blocks it too', async () => {
   await withEnv(CLEAR, async () => {
     const { prisma } = prismaWith({
       superadmins: 1,
-      emailRow: JSON.stringify({ host: 'smtp.example.com' }),
+      emailRow: JSON.stringify({ host: 'smtp.example.com' })
     });
     const state = await recoveryState(prisma);
     assert.equal(state.blockedBy, 'smtp');
@@ -126,7 +128,7 @@ test('an identity provider blocks it', async () => {
     async () => {
       const { prisma } = prismaWith({ superadmins: 1 });
       assert.equal((await recoveryState(prisma)).blockedBy, 'oauth');
-    },
+    }
   );
 });
 

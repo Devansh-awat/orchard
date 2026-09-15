@@ -5,7 +5,7 @@ import {
   EVENT_RESOURCE_SCOPE,
   NotificationEventName,
   NotificationMessage,
-  ResourceScopeType,
+  ResourceScopeType
 } from './notification-events';
 import { backupKey, dbArchivingKey, dbStateKey, deployKey, jobRunKey, podKey } from './dedupe-keys';
 import { NotificationFanoutService } from './notification-fanout.service';
@@ -32,7 +32,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
-    private readonly fanout: NotificationFanoutService,
+    private readonly fanout: NotificationFanoutService
   ) {}
 
   // scopeId is not a foreign key, so nothing here goes when the resource does.
@@ -60,10 +60,10 @@ export class NotificationsService {
             id: true,
             name: true,
             organizationId: true,
-            organization: { select: { slug: true } },
-          },
-        },
-      },
+            organization: { select: { slug: true } }
+          }
+        }
+      }
     });
     if (!dep) return;
 
@@ -72,7 +72,7 @@ export class NotificationsService {
     const run = await this.prisma.buildRun.findFirst({
       where: { deploymentId },
       orderBy: { scheduledAt: 'desc' },
-      select: { id: true, triggeredById: true },
+      select: { id: true, triggeredById: true }
     });
 
     const label = dep.displayName || dep.name;
@@ -94,8 +94,8 @@ export class NotificationsService {
         projectName: dep.project.name,
         targetId: dep.id,
         targetName: label,
-        fields: dep.githubBranch ? [{ name: 'Branch', value: dep.githubBranch }] : undefined,
-      },
+        fields: dep.githubBranch ? [{ name: 'Branch', value: dep.githubBranch }] : undefined
+      }
     });
   }
 
@@ -112,10 +112,10 @@ export class NotificationsService {
             id: true,
             name: true,
             organizationId: true,
-            organization: { select: { slug: true } },
-          },
-        },
-      },
+            organization: { select: { slug: true } }
+          }
+        }
+      }
     });
     if (!dep) return;
     const label = dep.displayName || dep.name;
@@ -136,8 +136,8 @@ export class NotificationsService {
         projectId: dep.project.id,
         projectName: dep.project.name,
         targetId: dep.id,
-        targetName: label,
-      },
+        targetName: label
+      }
     });
   }
 
@@ -158,12 +158,12 @@ export class NotificationsService {
                 id: true,
                 name: true,
                 organizationId: true,
-                organization: { select: { slug: true } },
-              },
-            },
-          },
-        },
-      },
+                organization: { select: { slug: true } }
+              }
+            }
+          }
+        }
+      }
     });
     if (!backup) return;
     const db = backup.database;
@@ -184,8 +184,8 @@ export class NotificationsService {
         projectId: db.project.id,
         projectName: db.project.name,
         targetId: backup.id,
-        targetName: db.name,
-      },
+        targetName: db.name
+      }
     });
   }
 
@@ -201,10 +201,10 @@ export class NotificationsService {
             id: true,
             name: true,
             organizationId: true,
-            organization: { select: { slug: true } },
-          },
-        },
-      },
+            organization: { select: { slug: true } }
+          }
+        }
+      }
     });
     if (!db) return;
     const failing = state === 'failing';
@@ -226,8 +226,8 @@ export class NotificationsService {
         projectId: db.project.id,
         projectName: db.project.name,
         targetId: db.id,
-        targetName: db.name,
-      },
+        targetName: db.name
+      }
     });
   }
 
@@ -243,10 +243,10 @@ export class NotificationsService {
             id: true,
             name: true,
             organizationId: true,
-            organization: { select: { slug: true } },
-          },
-        },
-      },
+            organization: { select: { slug: true } }
+          }
+        }
+      }
     });
     if (!db) return;
     const crashing = state === 'crashing';
@@ -266,8 +266,8 @@ export class NotificationsService {
         projectId: db.project.id,
         projectName: db.project.name,
         targetId: db.id,
-        targetName: db.name,
-      },
+        targetName: db.name
+      }
     });
   }
 
@@ -289,18 +289,18 @@ export class NotificationsService {
                 id: true,
                 name: true,
                 organizationId: true,
-                organization: { select: { slug: true } },
-              },
-            },
-          },
+                organization: { select: { slug: true } }
+              }
+            }
+          }
         },
         steps: {
           where: { status: { in: ['failed', 'timed_out'] } },
           orderBy: { stepOrder: 'asc' },
           take: 1,
-          select: { name: true, stepOrder: true, reason: true },
-        },
-      },
+          select: { name: true, stepOrder: true, reason: true }
+        }
+      }
     });
     if (!run) return;
     const { job } = run;
@@ -325,16 +325,20 @@ export class NotificationsService {
         targetName: job.name,
         fields: [
           { name: 'Trigger', value: run.trigger },
-          ...(failedStep?.reason ? [{ name: 'Reason', value: failedStep.reason }] : []),
-        ],
-      },
+          ...(failedStep?.reason ? [{ name: 'Reason', value: failedStep.reason }] : [])
+        ]
+      }
     });
   }
 
   // Generic entry point, kept for callers that build their own message. Scope is
   // derived from the event so nobody has to remember that backups hang off a
   // database rather than a deployment.
-  async notify(organizationId: string, message: NotificationMessage, opts?: { scopeId?: string; actorUserId?: string | null; dedupeKey?: string }) {
+  async notify(
+    organizationId: string,
+    message: NotificationMessage,
+    opts?: { scopeId?: string; actorUserId?: string | null; dedupeKey?: string }
+  ) {
     const scopeId = opts?.scopeId ?? message.targetId;
     if (!scopeId) {
       this.logger.warn(`notify(${message.event}) dropped: no scope id`);
@@ -345,8 +349,9 @@ export class NotificationsService {
       scopeType: EVENT_RESOURCE_SCOPE[message.event],
       scopeId,
       actorUserId: opts?.actorUserId ?? null,
-      dedupeKey: opts?.dedupeKey ?? `${message.event}:${scopeId}:${Math.floor(Date.now() / 60_000)}`,
-      message,
+      dedupeKey:
+        opts?.dedupeKey ?? `${message.event}:${scopeId}:${Math.floor(Date.now() / 60_000)}`,
+      message
     });
   }
 
@@ -355,7 +360,7 @@ export class NotificationsService {
     // access), so force the enrollment property here: disabling the flag stops
     // all sends; per-user rollout is enforced at the management endpoints.
     const enabled = await this.analytics.isFeatureEnabled('notifications', input.organizationId, {
-      personProperties: { '$feature_enrollment/notifications': true },
+      personProperties: { '$feature_enrollment/notifications': true }
     });
     if (!enabled) return;
 

@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
+  ConflictException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
@@ -21,7 +21,7 @@ export class ProjectAccessService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly authz: AuthorizationService,
-    private readonly membershipCache: MembershipCacheService,
+    private readonly membershipCache: MembershipCacheService
   ) {}
 
   /**
@@ -42,7 +42,9 @@ export class ProjectAccessService {
    * host first is a low-grade enumeration oracle.
    */
   async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
-    const host = String(rawHost || '').trim().toLowerCase();
+    const host = String(rawHost || '')
+      .trim()
+      .toLowerCase();
     if (!host) {
       throw new BadRequestException('Hostname is required');
     }
@@ -60,7 +62,7 @@ export class ProjectAccessService {
       (process.env.RESERVED_HOSTS || '')
         .split(',')
         .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
+        .filter(Boolean)
     );
     const reservedSuffixes = (process.env.RESERVED_HOST_SUFFIXES || '')
       .split(',')
@@ -68,26 +70,22 @@ export class ProjectAccessService {
       .filter(Boolean);
 
     if (reservedExact.has(host)) {
-      throw new ConflictException(
-        `Hostname ${rawHost} is unavailable. Choose a different domain.`,
-      );
+      throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
     }
     for (const suffix of reservedSuffixes) {
       if (host === suffix || host.endsWith(`.${suffix}`)) {
         throw new ConflictException(
-          `Hostname ${rawHost} is unavailable. Choose a different domain.`,
+          `Hostname ${rawHost} is unavailable. Choose a different domain.`
         );
       }
     }
 
     const conflict = await this.prisma.ingress.findFirst({
       where: { host: rawHost, NOT: { projectId } },
-      select: { id: true },
+      select: { id: true }
     });
     if (conflict) {
-      throw new ConflictException(
-        `Hostname ${rawHost} is unavailable. Choose a different domain.`,
-      );
+      throw new ConflictException(`Hostname ${rawHost} is unavailable. Choose a different domain.`);
     }
   }
 
@@ -139,7 +137,7 @@ export class ProjectAccessService {
     if (explicitOnlyOrgIds.length > 0) {
       conditions.push({
         organizationId: { in: explicitOnlyOrgIds },
-        members: { some: { userId: memberUserId } },
+        members: { some: { userId: memberUserId } }
       });
     }
     if (conditions.length === 0) return null;
@@ -167,10 +165,14 @@ export class ProjectAccessService {
     if (!user) throw new NotFoundException('User not found');
     const dep = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } }
     });
     if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
-    const access = await this.authz.resolveProjectAccess(dep.projectId, dep.project.organizationId, user.id);
+    const access = await this.authz.resolveProjectAccess(
+      dep.projectId,
+      dep.project.organizationId,
+      user.id
+    );
     if (!access || !access.canView) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
@@ -188,7 +190,7 @@ export class ProjectAccessService {
     projectId: string,
     clerkId: string,
     userData?: any,
-    action = 'perform this action',
+    action = 'perform this action'
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -201,10 +203,14 @@ export class ProjectAccessService {
     if (!user) throw new NotFoundException('User not found');
     const db = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } }
     });
     if (!db) throw new NotFoundException(`Database ${databaseId} not found`);
-    const access = await this.authz.resolveProjectAccess(db.projectId, db.project.organizationId, user.id);
+    const access = await this.authz.resolveProjectAccess(
+      db.projectId,
+      db.project.organizationId,
+      user.id
+    );
     if (!access || !access.canView) {
       throw new NotFoundException(`Database ${databaseId} not found`);
     }
@@ -216,10 +222,14 @@ export class ProjectAccessService {
     if (!user) throw new NotFoundException('User not found');
     const ing = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
-      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } }
     });
     if (!ing) throw new NotFoundException(`Ingress ${ingressId} not found`);
-    const access = await this.authz.resolveProjectAccess(ing.projectId, ing.project.organizationId, user.id);
+    const access = await this.authz.resolveProjectAccess(
+      ing.projectId,
+      ing.project.organizationId,
+      user.id
+    );
     if (!access || !access.canView) {
       throw new NotFoundException(`Ingress ${ingressId} not found`);
     }
@@ -235,11 +245,11 @@ export class ProjectAccessService {
     const [projectMembership, orgMembership] = await Promise.all([
       this.prisma.projectMember.findFirst({
         where: { projectId, userId },
-        include: { role: true },
+        include: { role: true }
       }),
       this.prisma.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId, userId } },
-      }),
+        where: { organizationId_userId: { organizationId, userId } }
+      })
     ]);
     return { orgMembership, projectMembership, access };
   }
@@ -257,7 +267,7 @@ export class ProjectAccessService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } },
+      include: { project: { include: { organization: true } } }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -275,21 +285,21 @@ export class ProjectAccessService {
     databaseId: string,
     clerkId: string,
     userData?: any,
-    opts: { allowViewer?: boolean } = {},
+    opts: { allowViewer?: boolean } = {}
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } },
+      include: { project: { include: { organization: true } } }
     });
     if (!database) throw new NotFoundException('Database not found');
 
     const access = await this.authz.resolveProjectAccess(
       database.project.id,
       database.project.organizationId,
-      user.id,
+      user.id
     );
     if (!access || !access.canView) {
       throw new NotFoundException(`Database ${databaseId} not found`);
@@ -306,7 +316,7 @@ export class ProjectAccessService {
     serviceId: string,
     portId: string,
     clerkId: string,
-    userData?: any,
+    userData?: any
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -315,17 +325,17 @@ export class ProjectAccessService {
       where: {
         id: portId,
         serviceId,
-        service: { deploymentId },
+        service: { deploymentId }
       },
       include: {
         service: {
           include: {
             deployment: {
-              include: { project: { include: { organization: true } } },
-            },
-          },
-        },
-      },
+              include: { project: { include: { organization: true } } }
+            }
+          }
+        }
+      }
     });
     if (!port || !port.service || !port.service.deployment) {
       throw new NotFoundException('Port not found');

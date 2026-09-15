@@ -27,14 +27,14 @@ export function startTelemetry(): void {
     resource: resourceFromAttributes({
       'service.name': process.env.OTEL_SERVICE_NAME || 'orchard-server',
       'service.namespace': 'orchard',
-      'deployment.environment': process.env.NODE_ENV || 'development',
+      'deployment.environment': process.env.NODE_ENV || 'development'
     }),
     logRecordProcessor: new BatchLogRecordProcessor({
       exporter: new OTLPLogExporter({
         url: endpoint,
-        headers: { Authorization: `Bearer ${key}` },
-      }),
-    }),
+        headers: { Authorization: `Bearer ${key}` }
+      })
+    })
   });
 
   sdk.start();
@@ -66,7 +66,7 @@ const SEVERITY: Record<string, SeverityNumber> = {
   log: SeverityNumber.INFO,
   info: SeverityNumber.INFO,
   debug: SeverityNumber.DEBUG,
-  verbose: SeverityNumber.TRACE,
+  verbose: SeverityNumber.TRACE
 };
 
 export function emitLog(level: string, message: string, attributes?: Record<string, unknown>) {
@@ -76,7 +76,7 @@ export function emitLog(level: string, message: string, attributes?: Record<stri
       severityNumber: SEVERITY[level] ?? SeverityNumber.INFO,
       severityText: level.toUpperCase(),
       body: message,
-      attributes: attributes as Record<string, string | number | boolean>,
+      attributes: attributes as Record<string, string | number | boolean>
     });
   } catch {
     // never let logging crash the app

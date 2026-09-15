@@ -30,7 +30,7 @@ export class EnvironmentSharedVarsService {
     private readonly audit: AuditService,
     private readonly orgEvents: OrgEventsService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly crypto: SecretCryptoService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   /**
@@ -41,7 +41,7 @@ export class EnvironmentSharedVarsService {
   private async propagateToDeployments(
     environmentId: string,
     before: EnvVar[],
-    after: EnvVar[],
+    after: EnvVar[]
   ): Promise<void> {
     const deployments = await this.prisma.deployment.findMany({
       where: { environmentId },
@@ -49,8 +49,8 @@ export class EnvironmentSharedVarsService {
         id: true,
         name: true,
         namespace: true,
-        envVars: { select: { key: true, value: true, secret: true } },
-      },
+        envVars: { select: { key: true, value: true, secret: true } }
+      }
     });
     await Promise.allSettled(
       deployments.map(async (dep) => {
@@ -66,16 +66,20 @@ export class EnvironmentSharedVarsService {
           .catch(() => false);
         if (!exists) return;
         await this.k8sWorkload
-          .updateDeploymentEnv({ namespace: dep.namespace, deploymentName: dep.name, env: resolvedAfter })
+          .updateDeploymentEnv({
+            namespace: dep.namespace,
+            deploymentName: dep.name,
+            env: resolvedAfter
+          })
           .catch((e) => this.logger.warn(`re-inject ${dep.name} failed: ${e?.message}`));
-      }),
+      })
     );
   }
 
   private async envOrThrow(environmentId: string) {
     const env = await this.prisma.environment.findUnique({
       where: { id: environmentId },
-      include: { project: { select: { id: true, organizationId: true } } },
+      include: { project: { select: { id: true, organizationId: true } } }
     });
     if (!env) throw new NotFoundException('Environment not found');
     return env;
@@ -86,13 +90,13 @@ export class EnvironmentSharedVarsService {
     const vars = await this.prisma.environmentSharedVar.findMany({
       where: { environmentId },
       orderBy: { key: 'asc' },
-      select: { key: true, value: true, secret: true },
+      select: { key: true, value: true, secret: true }
     });
     // Viewers never see values; secret values are additionally never returned.
     return vars.map((v) => ({
       key: v.key,
       secret: v.secret,
-      value: !canEdit || v.secret ? null : v.value,
+      value: !canEdit || v.secret ? null : v.value
     }));
   }
 
@@ -104,7 +108,7 @@ export class EnvironmentSharedVarsService {
     const before = (
       await this.prisma.environmentSharedVar.findMany({
         where: { environmentId },
-        select: { key: true, value: true, secret: true },
+        select: { key: true, value: true, secret: true }
       })
     ).map((v) => this.crypto.maybeDecrypt(v));
     const beforeMap = new Map(before.map((v) => [v.key, v]));
@@ -132,7 +136,7 @@ export class EnvironmentSharedVarsService {
       if (raw.value == null) {
         if (existing?.secret && !secret) {
           throw new BadRequestException(
-            `Cannot un-mark ${key} as secret without providing a value`,
+            `Cannot un-mark ${key} as secret without providing a value`
           );
         }
         value = existing ? existing.value : '';
@@ -158,8 +162,8 @@ export class EnvironmentSharedVarsService {
             environmentId,
             key: v.key,
             value: this.crypto.encryptIfSecret(v.value, v.secret),
-            secret: v.secret,
-          })),
+            secret: v.secret
+          }))
         });
       }
     });
@@ -168,7 +172,7 @@ export class EnvironmentSharedVarsService {
     void this.propagateToDeployments(
       environmentId,
       before.map((v) => ({ key: v.key, value: v.value, secret: v.secret })),
-      vars.map((v) => ({ key: v.key, value: v.value, secret: v.secret })),
+      vars.map((v) => ({ key: v.key, value: v.value, secret: v.secret }))
     ).catch((e) => this.logger.warn(`shared-var propagation failed: ${e?.message}`));
 
     // Save-time reference validation → warnings, not errors (don't force
@@ -198,15 +202,15 @@ export class EnvironmentSharedVarsService {
       metadata: {
         added: added.join(',') || null,
         removed: removed.join(',') || null,
-        changed: changed.join(',') || null,
-      },
+        changed: changed.join(',') || null
+      }
     });
 
     this.orgEvents.emit({
       organizationId: env.project.organizationId,
       type: 'sharedvars.changed',
       id: env.id,
-      projectId: env.project.id,
+      projectId: env.project.id
     });
 
     return { vars: await this.getSharedVars(environmentId, true), warnings };

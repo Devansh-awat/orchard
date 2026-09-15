@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-  Req,
-  NotFoundException,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { Auth } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -18,7 +9,7 @@ import { ScimTokensService } from './scim-tokens.service';
 export class ScimTokensController {
   constructor(
     private readonly scimTokens: ScimTokensService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   // The base URL an admin pastes into their IdP's SCIM connector. Tenant
@@ -35,7 +26,7 @@ export class ScimTokensController {
     await this.authz.requireOrgOwner(organizationId, req['auth'].userId);
     return {
       baseUrl: this.scimBaseUrl(req, organizationId),
-      tokens: await this.scimTokens.list(organizationId),
+      tokens: await this.scimTokens.list(organizationId)
     };
   }
 
@@ -43,7 +34,7 @@ export class ScimTokensController {
   async create(
     @Param('id') organizationId: string,
     @Req() req: Request,
-    @Body() body: { name: string; expiresAt?: string },
+    @Body() body: { name: string; expiresAt?: string }
   ) {
     await this.authz.requireOrgOwner(organizationId, req['auth'].userId);
     const expiresAt = body?.expiresAt ? new Date(body.expiresAt) : undefined;
@@ -51,7 +42,7 @@ export class ScimTokensController {
       organizationId,
       req['auth'].userId,
       body?.name,
-      expiresAt,
+      expiresAt
     );
     return { ...created, baseUrl: this.scimBaseUrl(req, organizationId) };
   }
@@ -60,7 +51,7 @@ export class ScimTokensController {
   async revoke(
     @Param('id') organizationId: string,
     @Param('tokenId') tokenId: string,
-    @Req() req: Request,
+    @Req() req: Request
   ) {
     await this.authz.requireOrgOwner(organizationId, req['auth'].userId);
     const result = await this.scimTokens.revoke(organizationId, req['auth'].userId, tokenId);

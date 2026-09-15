@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { objectStorage, objectStorageGeneration } from '../instance-config/object-storage';
@@ -21,7 +26,9 @@ export class StorageService {
     const { accessKeyId, secretAccessKey, bucketName, endpoint } = objectStorage();
 
     if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
-      throw new Error('Object storage is not configured. Set it under Instance admin, or with the R2_* environment variables.');
+      throw new Error(
+        'Object storage is not configured. Set it under Instance admin, or with the R2_* environment variables.'
+      );
     }
 
     this.bucketName = bucketName;
@@ -31,8 +38,8 @@ export class StorageService {
       endpoint,
       credentials: {
         accessKeyId,
-        secretAccessKey,
-      },
+        secretAccessKey
+      }
     });
 
     this.initializedAt = generation;
@@ -53,13 +60,13 @@ export class StorageService {
       Key: fileName,
       Body: file.buffer,
       ContentType: file.mimetype,
-      CacheControl: 'public, max-age=31536000, immutable',
+      CacheControl: 'public, max-age=31536000, immutable'
     });
 
     await this.s3Client.send(command);
 
     const publicUrl = objectStorage().publicUrl ?? '';
-    
+
     return `${publicUrl}/${fileName}`;
   }
 
@@ -71,7 +78,7 @@ export class StorageService {
     }
 
     const publicUrl = objectStorage().publicUrl ?? '';
-    
+
     if (!url.startsWith(publicUrl)) {
       return;
     }
@@ -80,7 +87,7 @@ export class StorageService {
 
     const command = new DeleteObjectCommand({
       Bucket: this.bucketName,
-      Key: key,
+      Key: key
     });
 
     await this.s3Client.send(command);
@@ -93,8 +100,8 @@ export class StorageService {
     }
     return Boolean(
       objectStorage().buildContextBucket &&
-        objectStorage().accessKeyId &&
-        objectStorage().secretAccessKey,
+      objectStorage().accessKeyId &&
+      objectStorage().secretAccessKey
     );
   }
 
@@ -116,7 +123,7 @@ export class StorageService {
     this.s3Client = new S3Client({
       region: 'auto',
       endpoint,
-      credentials: { accessKeyId, secretAccessKey },
+      credentials: { accessKeyId, secretAccessKey }
     });
   }
 
@@ -127,18 +134,16 @@ export class StorageService {
         Bucket: bucket,
         Key: key,
         Body: body,
-        ContentType: 'application/gzip',
-      }),
+        ContentType: 'application/gzip'
+      })
     );
   }
 
   async signBuildContextGet(key: string, expiresInSeconds = 900): Promise<string> {
     const bucket = this.contextBucket();
-    return getSignedUrl(
-      this.s3Client! as any,
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
-      { expiresIn: expiresInSeconds },
-    );
+    return getSignedUrl(this.s3Client! as any, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+      expiresIn: expiresInSeconds
+    });
   }
 
   async deleteBuildContext(key: string): Promise<void> {

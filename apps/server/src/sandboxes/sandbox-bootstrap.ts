@@ -6,7 +6,7 @@ export const SANDBOX_PHASES = [
   'storage',
   'account',
   'services',
-  'ready',
+  'ready'
 ] as const;
 
 export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';

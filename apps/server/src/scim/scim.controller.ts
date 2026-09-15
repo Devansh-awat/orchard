@@ -13,7 +13,7 @@ import {
   Req,
   Res,
   UseFilters,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Public } from '../auth/decorators';
@@ -29,7 +29,7 @@ function groupsAreReadOnly(): never {
   throw ScimError(
     501,
     null,
-    'Groups are a read-only projection of organization roles; manage roles in-app',
+    'Groups are a read-only projection of organization roles; manage roles in-app'
   );
 }
 
@@ -60,7 +60,12 @@ export class ScimController {
   }
 
   @Get('Users/:id')
-  async getUser(@Param('id') id: string, @Req() req: Request, @Res() res: Response, @Query() q: Record<string, any>) {
+  async getUser(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query() q: Record<string, any>
+  ) {
     this.send(res, await this.scim.getUser(id, parseQuery(q), this.ctx(req)));
   }
 
@@ -73,12 +78,22 @@ export class ScimController {
   }
 
   @Put('Users/:id')
-  async replaceUser(@Param('id') id: string, @Body() body: any, @Req() req: Request, @Res() res: Response) {
+  async replaceUser(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
     this.send(res, await this.scim.replaceUser(id, body, this.ctx(req)));
   }
 
   @Patch('Users/:id')
-  async patchUser(@Param('id') id: string, @Body() body: any, @Req() req: Request, @Res() res: Response) {
+  async patchUser(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
     const result = await this.scim.patchUser(id, body, this.ctx(req));
     // SCIMMY returns undefined when a patch leaves nothing to represent.
     if (!result) return res.status(204).end();
@@ -103,7 +118,12 @@ export class ScimController {
   }
 
   @Get('Groups/:id')
-  async getGroup(@Param('id') id: string, @Req() req: Request, @Res() res: Response, @Query() q: Record<string, any>) {
+  async getGroup(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query() q: Record<string, any>
+  ) {
     this.send(res, await this.scim.getGroup(id, parseQuery(q), this.ctx(req)));
   }
 

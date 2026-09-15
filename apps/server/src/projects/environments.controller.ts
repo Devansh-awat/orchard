@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Put,
-  Param,
-  Body,
-  Request,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Put, Param, Body, Request } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
@@ -20,7 +10,7 @@ function userData(req: any) {
     username: req.user.username,
     firstName: req.user.firstName,
     lastName: req.user.lastName,
-    imageUrl: req.user.imageUrl,
+    imageUrl: req.user.imageUrl
   };
 }
 
@@ -30,7 +20,7 @@ export class EnvironmentsController {
   constructor(
     private readonly environments: EnvironmentsService,
     private readonly sharedVars: EnvironmentSharedVarsService,
-    private readonly projectAccess: ProjectAccessService,
+    private readonly projectAccess: ProjectAccessService
   ) {}
 
   @Get('projects/:projectId/environments')
@@ -43,13 +33,13 @@ export class EnvironmentsController {
   async create(
     @Param('projectId') projectId: string,
     @Body() body: { name: string; slug?: string },
-    @Request() req,
+    @Request() req
   ) {
     const { user } = await this.projectAccess.assertProjectEditAccess(
       projectId,
       req.user.sub,
       userData(req),
-      'create environments',
+      'create environments'
     );
     return this.environments.createEnvironment(projectId, body ?? ({} as any), user.id);
   }
@@ -79,14 +69,23 @@ export class EnvironmentsController {
   }
 
   @Put('environments/:id/shared-vars')
-  async putShared(@Param('id') id: string, @Body() body: { vars: SharedVarInput[] }, @Request() req) {
+  async putShared(
+    @Param('id') id: string,
+    @Body() body: { vars: SharedVarInput[] },
+    @Request() req
+  ) {
     const { user } = await this.resolveEnvEdit(id, req, 'manage shared variables');
     return this.sharedVars.updateSharedVars(id, body?.vars ?? [], user.id);
   }
 
   private async resolveEnvEdit(environmentId: string, req: any, action: string) {
     const projectId = await this.environments.projectIdForEnv(environmentId);
-    return this.projectAccess.assertProjectEditAccess(projectId, req.user.sub, userData(req), action);
+    return this.projectAccess.assertProjectEditAccess(
+      projectId,
+      req.user.sub,
+      userData(req),
+      action
+    );
   }
 
   private async resolveEnvView(environmentId: string, req: any) {

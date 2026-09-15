@@ -15,7 +15,7 @@ import { RUNTIME_OWNED_ENV_KEYS } from '../env/reserved-env';
  * took the builder down with it. See env/reserved-env.ts.
  */
 export function parseDockerfileEnvVars(
-  dockerfileContent: string,
+  dockerfileContent: string
 ): { key: string; value: string }[] {
   const envVars: { key: string; value: string }[] = [];
   const lines = dockerfileContent.split('\n');
@@ -37,7 +37,7 @@ export function parseDockerfileEnvVars(
 
     const rest = trimmed.substring(4).trim();
     const kvMatches = rest.matchAll(
-      /([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g,
+      /([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g
     );
     let matched = false;
     for (const m of kvMatches) {
@@ -45,8 +45,8 @@ export function parseDockerfileEnvVars(
       const key = m[1];
       let value = m[2];
       if (
-        (value.startsWith('"') && value.endsWith('"'))
-        || (value.startsWith("'") && value.endsWith("'"))
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
       ) {
         value = value.slice(1, -1);
       }

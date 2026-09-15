@@ -67,7 +67,7 @@ function projectPod(pod: k8s.V1Pod): PodSnapshot {
     memoryRequestBytes,
     cpuLimitMilli,
     memoryLimitBytes,
-    labels: pod.metadata?.labels || {},
+    labels: pod.metadata?.labels || {}
   };
 }
 
@@ -102,7 +102,7 @@ export async function clusterPods(kc: k8s.KubeConfig | null): Promise<PodSnapsho
 }
 
 export async function clusterServiceCounts(
-  kc: k8s.KubeConfig | null,
+  kc: k8s.KubeConfig | null
 ): Promise<Map<string, number>> {
   if (!kc) return new Map();
   if (fresh(svcCache)) return svcCache.value;

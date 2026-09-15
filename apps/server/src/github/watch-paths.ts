@@ -190,7 +190,7 @@ export function changedFilesFromCompare(body: any): string[] | null {
  */
 export function partitionByWatchPaths<T extends { autoDeployPaths: unknown }>(
   deployments: T[],
-  files: string[] | null,
+  files: string[] | null
 ): { watched: T[]; unmatched: T[] } {
   const watched: T[] = [];
   const unmatched: T[] = [];

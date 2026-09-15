@@ -1,4 +1,18 @@
-import { Controller, Get, Patch, Post, Delete, Query, Body, Res, Req, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Delete,
+  Query,
+  Body,
+  Res,
+  Req,
+  HttpException,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import * as crypto from 'crypto';
@@ -22,7 +36,7 @@ export class OAuthController {
     private readonly storageService: StorageService,
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   /**
@@ -31,14 +45,14 @@ export class OAuthController {
    */
   private async hasPrivateBetaAccess(
     email: string,
-    existingUser: { id: string; isSuperAdmin: boolean } | null,
+    existingUser: { id: string; isSuperAdmin: boolean } | null
   ): Promise<boolean> {
     if (signupMode() === 'open') return true;
     if (existingUser?.isSuperAdmin) return true;
 
     if (existingUser) {
       const membership = await this.prisma.organizationMember.findFirst({
-        where: { userId: existingUser.id },
+        where: { userId: existingUser.id }
       });
       if (membership) return true;
     }
@@ -48,8 +62,8 @@ export class OAuthController {
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
         email: email.toLowerCase(),
-        expiresAt: { gt: new Date() },
-      },
+        expiresAt: { gt: new Date() }
+      }
     });
     return !!invitation;
   }
@@ -66,7 +80,7 @@ export class OAuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 10 * 60 * 1000,
-      path: '/apiv1/auth',
+      path: '/apiv1/auth'
     });
     const authUrl = await this.oauthService.getAuthorizationUrl(state);
     return res.redirect(authUrl);
@@ -86,7 +100,7 @@ export class OAuthController {
     @Query('error') error: string,
     @Query('state') state: string,
     @Req() req: Request,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
 
@@ -115,7 +129,7 @@ export class OAuthController {
     if (stateMismatch) {
       this.clearOauthStateCookie(res);
       return res.redirect(
-        `${frontendBase}/oauth/callback?error=${encodeURIComponent('invalid_state')}`,
+        `${frontendBase}/oauth/callback?error=${encodeURIComponent('invalid_state')}`
       );
     }
     this.clearOauthStateCookie(res);
@@ -125,12 +139,12 @@ export class OAuthController {
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
       let existingUser = await this.prisma.user.findUnique({
-        where: { externalAuthId: hackClubUser.id },
+        where: { externalAuthId: hackClubUser.id }
       });
 
       if (!existingUser) {
         const emailOwner = await this.prisma.user.findUnique({
-          where: { email: hackClubUser.email },
+          where: { email: hackClubUser.email }
         });
         if (emailOwner) {
           if (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id) {
@@ -138,7 +152,7 @@ export class OAuthController {
             // identity — refuse with a generic error to avoid an enumeration
             // oracle.
             return res.redirect(
-              `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`,
+              `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`
             );
           }
           // Email row exists but isn't linked to a Hack Club identity yet
@@ -163,14 +177,11 @@ export class OAuthController {
         }
       } catch {
         return res.redirect(
-          `${frontendBase}/oauth/callback?error=${encodeURIComponent('sso_required')}`,
+          `${frontendBase}/oauth/callback?error=${encodeURIComponent('sso_required')}`
         );
       }
 
-      const hasAccess = await this.hasPrivateBetaAccess(
-        hackClubUser.email,
-        existingUser,
-      );
+      const hasAccess = await this.hasPrivateBetaAccess(hackClubUser.email, existingUser);
       if (!hasAccess) {
         return res.redirect(
           `${frontendBase}/oauth/callback?error=${encodeURIComponent(signupDeniedError())}`
@@ -183,7 +194,7 @@ export class OAuthController {
         userId: user.id,
         ipAddress: this.getClientIp(req),
         userAgent: req.headers['user-agent'],
-        authMethod: 'oauth',
+        authMethod: 'oauth'
       });
 
       const sessionToken = await this.oauthService.generateSessionToken(hackClubUser, sessionId);
@@ -213,7 +224,7 @@ export class OAuthController {
           if (payload.externalAuthId) {
             const dbUser = await this.prisma.user.findUnique({
               where: { externalAuthId: payload.externalAuthId },
-              select: { id: true },
+              select: { id: true }
             });
             if (dbUser) userId = dbUser.id;
           }
@@ -245,7 +256,7 @@ export class OAuthController {
         user = await this.usersService.findOrCreateByExternalAuthId({
           id: req.user.externalAuthId,
           email: req.user.email,
-          name: req.user.name,
+          name: req.user.name
         });
       }
     } else {
@@ -268,7 +279,7 @@ export class OAuthController {
       externalAuthId: req.user.externalAuthId || user.externalAuthId,
       hackClubId: req.user.externalAuthId || user.externalAuthId,
       setupCompleted: user.setupCompleted,
-      seenUpdates: user.seenUpdates ?? [],
+      seenUpdates: user.seenUpdates ?? []
     };
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
   }
@@ -287,7 +298,12 @@ export class OAuthController {
   @Patch('me')
   async updateMe(
     @Req() req: any,
-    @Body() body: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean },
+    @Body() body: {
+      firstName?: string | null;
+      lastName?: string | null;
+      username?: string;
+      setupCompleted?: boolean;
+    }
   ) {
     const userId = req.user.sub;
 
@@ -298,7 +314,7 @@ export class OAuthController {
         user = await this.usersService.findOrCreateByExternalAuthId({
           id: req.user.externalAuthId,
           email: req.user.email,
-          name: req.user.name,
+          name: req.user.name
         });
       }
     } else {
@@ -313,7 +329,7 @@ export class OAuthController {
         firstName: body.firstName,
         lastName: body.lastName,
         username: body.username,
-        setupCompleted: body.setupCompleted,
+        setupCompleted: body.setupCompleted
       });
 
       return updatedUser;
@@ -335,7 +351,7 @@ export class OAuthController {
       return this.usersService.findOrCreateByExternalAuthId({
         id: req.user.externalAuthId,
         email: req.user.email,
-        name: req.user.name,
+        name: req.user.name
       });
     }
     const user = await this.usersService.findByIdOrExternalAuthId(req.user.sub);
@@ -346,17 +362,17 @@ export class OAuthController {
   @Auth()
   @Post('me/avatar')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadAvatar(
-    @UploadedFile() file: Express.Multer.File,
-    @Req() req: any,
-  ) {
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     if (!file) {
       throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);
     }
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new HttpException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed',
+        HttpStatus.BAD_REQUEST
+      );
     }
 
     if (file.size > 5 * 1024 * 1024) {
@@ -373,7 +389,7 @@ export class OAuthController {
 
     const updatedUser = await this.usersService.updateProfile(user.id, {
       imageUrl,
-      imageSource: 'upload',
+      imageSource: 'upload'
     });
     return updatedUser;
   }
@@ -391,7 +407,7 @@ export class OAuthController {
     // re-import the Gravatar they only now finished deleting.
     const updatedUser = await this.usersService.updateProfile(user.id, {
       imageUrl: null,
-      imageSource: 'none',
+      imageSource: 'none'
     });
     return updatedUser;
   }

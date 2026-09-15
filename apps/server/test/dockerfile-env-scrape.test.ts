@@ -27,21 +27,21 @@ test('a Dockerfile PATH built on $PATH is not offered as a deployment env var', 
 
 test('a runtime-owned name is skipped even with a fully literal value', () => {
   const keys = parse('FROM alpine\nENV PATH=/usr/bin:/bin\nENV HOME=/root\nENV APP=x\n').map(
-    (e) => e.key,
+    (e) => e.key
   );
   assert.deepEqual(keys, ['APP']);
 });
 
 test('any build-time expansion is skipped, not just PATH', () => {
   const keys = parse('FROM alpine\nENV GEM_PATH=$GEM_HOME/vendor\nENV PORT=3000\n').map(
-    (e) => e.key,
+    (e) => e.key
   );
   assert.deepEqual(keys, ['PORT']);
 });
 
 test('the space-separated ENV form is filtered too', () => {
   const keys = parse('FROM alpine\nENV PATH /opt/bin:$PATH\nENV NODE_ENV production\n').map(
-    (e) => e.key,
+    (e) => e.key
   );
   assert.deepEqual(keys, ['NODE_ENV']);
 });
@@ -49,7 +49,7 @@ test('the space-separated ENV form is filtered too', () => {
 test('ordinary values still come through with quotes stripped', () => {
   assert.deepEqual(parse('FROM alpine\nENV RAILS_ENV="production" PORT=3000\n'), [
     { key: 'RAILS_ENV', value: 'production' },
-    { key: 'PORT', value: '3000' },
+    { key: 'PORT', value: '3000' }
   ]);
 });
 
@@ -58,7 +58,7 @@ test('a deployment that already stores PATH cannot reach the builder container',
     PATH: '/usr/local/bun/bin:$PATH',
     DOCKER_CONFIG: '/tmp/evil',
     BUILDKITD_FLAGS: '--debug',
-    DATABASE_URL: 'postgres://app',
+    DATABASE_URL: 'postgres://app'
   });
   assert.deepEqual(env, [{ name: 'DATABASE_URL', value: 'postgres://app' }]);
 });
@@ -68,14 +68,14 @@ test('AWS credentials are a normal build input and are never withheld', () => {
   assert.deepEqual(buildSafeEnv(stored), stored);
   assert.deepEqual(builderContainerEnv(stored), [
     { name: 'AWS_ACCESS_KEY_ID', value: 'AKIA' },
-    { name: 'AWS_SECRET_ACCESS_KEY', value: 'shh' },
+    { name: 'AWS_SECRET_ACCESS_KEY', value: 'shh' }
   ]);
 });
 
 test('the same set is withheld from the build, so ARG PATH never shadows the base image', () => {
   assert.deepEqual(
     buildSafeEnv({ PATH: '/usr/local/bun/bin:$PATH', HOME: '/x', DATABASE_URL: 'postgres://app' }),
-    { DATABASE_URL: 'postgres://app' },
+    { DATABASE_URL: 'postgres://app' }
   );
 });
 

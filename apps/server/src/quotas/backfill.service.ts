@@ -32,7 +32,7 @@ export class QuotaBackfillService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly k8sCnpg: K8sCnpgService,
+    private readonly k8sCnpg: K8sCnpgService
   ) {}
 
   // List every Deployment and Database that has no cpuRequestMilli set,
@@ -47,11 +47,11 @@ export class QuotaBackfillService {
               id: true,
               name: true,
               slug: true,
-              organization: { select: { id: true, name: true, slug: true } },
-            },
-          },
+              organization: { select: { id: true, name: true, slug: true } }
+            }
+          }
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'asc' }
       }),
       this.prisma.database.findMany({
         where: { cpuRequestMilli: null, mode: 'cnpg' },
@@ -61,14 +61,14 @@ export class QuotaBackfillService {
               id: true,
               name: true,
               slug: true,
-              organization: { select: { id: true, name: true, slug: true } },
-            },
-          },
+              organization: { select: { id: true, name: true, slug: true } }
+            }
+          }
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'asc' }
       }),
       this.k8sWorkload.getAllPodMetrics(),
-      this.k8sWorkload.getAllPodLabels(),
+      this.k8sWorkload.getAllPodLabels()
     ]);
 
     const rows: BackfillRow[] = [];
@@ -87,9 +87,10 @@ export class QuotaBackfillService {
         sumMem += m.memoryBytes;
         matched += 1;
       }
-      const perReplica = matched > 0
-        ? { cpuMilli: Math.round(sumCpu / matched), memoryBytes: Math.round(sumMem / matched) }
-        : null;
+      const perReplica =
+        matched > 0
+          ? { cpuMilli: Math.round(sumCpu / matched), memoryBytes: Math.round(sumMem / matched) }
+          : null;
       const rec = perReplica ? recommendFromUsage(perReplica) : null;
       rows.push({
         kind: 'deployment',
@@ -100,13 +101,17 @@ export class QuotaBackfillService {
           ? { id: d.project.id, name: d.project.name, slug: d.project.slug }
           : null,
         organization: d.project?.organization
-          ? { id: d.project.organization.id, name: d.project.organization.name, slug: d.project.organization.slug }
+          ? {
+              id: d.project.organization.id,
+              name: d.project.organization.name,
+              slug: d.project.organization.slug
+            }
           : null,
         pods: matched,
         observed: perReplica,
         recommendation: rec
           ? { cpuMilli: rec.cpuMilli, memoryBytes: rec.memoryBytes, presetId: rec.id }
-          : null,
+          : null
       });
     }
 
@@ -123,9 +128,10 @@ export class QuotaBackfillService {
         sumMem += m.memoryBytes;
         matched += 1;
       }
-      const observed = matched > 0
-        ? { cpuMilli: Math.round(sumCpu / matched), memoryBytes: Math.round(sumMem / matched) }
-        : null;
+      const observed =
+        matched > 0
+          ? { cpuMilli: Math.round(sumCpu / matched), memoryBytes: Math.round(sumMem / matched) }
+          : null;
       const rec = observed ? recommendFromUsage(observed) : null;
       rows.push({
         kind: 'database',
@@ -136,13 +142,17 @@ export class QuotaBackfillService {
           ? { id: db.project.id, name: db.project.name, slug: db.project.slug }
           : null,
         organization: db.project?.organization
-          ? { id: db.project.organization.id, name: db.project.organization.name, slug: db.project.organization.slug }
+          ? {
+              id: db.project.organization.id,
+              name: db.project.organization.name,
+              slug: db.project.organization.slug
+            }
           : null,
         pods: matched,
         observed,
         recommendation: rec
           ? { cpuMilli: rec.cpuMilli, memoryBytes: rec.memoryBytes, presetId: rec.id }
-          : null,
+          : null
       });
     }
 
@@ -152,7 +162,7 @@ export class QuotaBackfillService {
   // Apply a chosen size to one target. Updates DB row + patches k8s.
   async apply(
     target: { kind: 'deployment' | 'database'; id: string },
-    values: { cpuMilli: number; memoryBytes: number },
+    values: { cpuMilli: number; memoryBytes: number }
   ) {
     if (target.kind === 'deployment') {
       const d = await this.prisma.deployment.findUnique({ where: { id: target.id } });
@@ -162,8 +172,8 @@ export class QuotaBackfillService {
         where: { id: target.id },
         data: {
           cpuRequestMilli: values.cpuMilli,
-          memoryRequestBytes: BigInt(values.memoryBytes),
-        },
+          memoryRequestBytes: BigInt(values.memoryBytes)
+        }
       });
     } else {
       const db = await this.prisma.database.findUnique({ where: { id: target.id } });
@@ -174,8 +184,8 @@ export class QuotaBackfillService {
         where: { id: target.id },
         data: {
           cpuRequestMilli: values.cpuMilli,
-          memoryRequestBytes: BigInt(values.memoryBytes),
-        },
+          memoryRequestBytes: BigInt(values.memoryBytes)
+        }
       });
     }
   }

@@ -7,7 +7,7 @@ import {
   EVENT_TONE,
   NotificationMessage,
   TONE_COLORS,
-  isNotificationEvent,
+  isNotificationEvent
 } from './notification-events';
 import { assertSafeWebhookUrl, defaultPort, guardedLookup } from './webhook-guard';
 
@@ -68,7 +68,10 @@ export class NotificationTransport {
     }
   }
 
-  private async sendDiscord(target: TransportTarget, messages: NotificationMessage[]): Promise<SendOutcome> {
+  private async sendDiscord(
+    target: TransportTarget,
+    messages: NotificationMessage[]
+  ): Promise<SendOutcome> {
     const embeds = messages.slice(0, 10).map((message) => ({
       title: truncate(message.title, 250),
       description: truncate(message.body, 2000),
@@ -77,26 +80,29 @@ export class NotificationTransport {
       fields: (message.fields ?? []).map((f) => ({
         name: truncate(f.name, 250),
         value: truncate(f.value, 1000),
-        inline: true,
+        inline: true
       })),
       footer: {
-        text: message.projectName ? `Orchard · ${truncate(message.projectName, 100)}` : 'Orchard',
+        text: message.projectName ? `Orchard · ${truncate(message.projectName, 100)}` : 'Orchard'
       },
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString()
     }));
     return this.postJson(target.config.url, {
       allowed_mentions: { parse: [] },
       ...(messages.length > 1 ? { content: digestHeadline(messages) } : {}),
-      embeds,
+      embeds
     });
   }
 
-  private async sendSlack(target: TransportTarget, messages: NotificationMessage[]): Promise<SendOutcome> {
+  private async sendSlack(
+    target: TransportTarget,
+    messages: NotificationMessage[]
+  ): Promise<SendOutcome> {
     const blocks: unknown[] = [];
     if (messages.length > 1) {
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: `*${slackEscape(digestHeadline(messages))}*` },
+        text: { type: 'mrkdwn', text: `*${slackEscape(digestHeadline(messages))}*` }
       });
     }
     for (const message of messages.slice(0, 20)) {
@@ -106,10 +112,13 @@ export class NotificationTransport {
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${heading}*\n${body}` } });
       const context = [
         ...(message.projectName ? [`*Project:* ${slackEscape(message.projectName)}`] : []),
-        ...(message.fields ?? []).map((f) => `*${slackEscape(f.name)}:* ${slackEscape(f.value)}`),
+        ...(message.fields ?? []).map((f) => `*${slackEscape(f.name)}:* ${slackEscape(f.value)}`)
       ];
       if (context.length) {
-        blocks.push({ type: 'context', elements: context.map((text) => ({ type: 'mrkdwn', text })) });
+        blocks.push({
+          type: 'context',
+          elements: context.map((text) => ({ type: 'mrkdwn', text }))
+        });
       }
     }
     const first = messages[0];
@@ -120,7 +129,10 @@ export class NotificationTransport {
     return this.postJson(target.config.url, { text: fallback, blocks });
   }
 
-  private async sendWebhook(target: TransportTarget, messages: NotificationMessage[]): Promise<SendOutcome> {
+  private async sendWebhook(
+    target: TransportTarget,
+    messages: NotificationMessage[]
+  ): Promise<SendOutcome> {
     const render = (message: NotificationMessage) => ({
       event: message.event,
       title: message.title,
@@ -131,15 +143,20 @@ export class NotificationTransport {
       projectName: message.projectName ?? null,
       targetId: message.targetId ?? null,
       targetName: message.targetName ?? null,
-      fields: message.fields ?? [],
+      fields: message.fields ?? []
     });
     const payload =
       messages.length > 1
-        ? { batch: true, count: messages.length, events: messages.map(render), timestamp: new Date().toISOString() }
+        ? {
+            batch: true,
+            count: messages.length,
+            events: messages.map(render),
+            timestamp: new Date().toISOString()
+          }
         : { ...render(messages[0]), timestamp: new Date().toISOString() };
     const raw = JSON.stringify(payload);
     const headers: Record<string, string> = {
-      'x-orchard-event': messages.length > 1 ? 'batch' : messages[0].event,
+      'x-orchard-event': messages.length > 1 ? 'batch' : messages[0].event
     };
     if (target.config.secret) {
       const ts = Date.now().toString();
@@ -151,7 +168,10 @@ export class NotificationTransport {
     return this.postRaw(target.config.url, raw, headers);
   }
 
-  private async sendEmail(target: TransportTarget, messages: NotificationMessage[]): Promise<SendOutcome> {
+  private async sendEmail(
+    target: TransportTarget,
+    messages: NotificationMessage[]
+  ): Promise<SendOutcome> {
     const recipients = (target.config.recipients ?? []).filter(Boolean);
     if (recipients.length === 0) {
       return { ok: false, permanent: true, error: 'No recipients configured' };
@@ -168,7 +188,7 @@ export class NotificationTransport {
       title: subject,
       body,
       contextLine: !digest && first.projectName ? `Project: ${first.projectName}` : '',
-      ctaUrl: (digest ? undefined : first.url) || this.frontendUrl,
+      ctaUrl: (digest ? undefined : first.url) || this.frontendUrl
     });
     if (!sent) return { ok: false, error: 'Email sending failed or SMTP is not configured' };
     return { ok: true };
@@ -183,7 +203,7 @@ export class NotificationTransport {
   private async postRaw(
     rawUrl: string | undefined,
     body: string,
-    headers: Record<string, string>,
+    headers: Record<string, string>
   ): Promise<SendOutcome> {
     if (!rawUrl) return { ok: false, permanent: true, error: 'No webhook URL configured' };
     try {
@@ -194,7 +214,11 @@ export class NotificationTransport {
     return this.post(rawUrl, body, headers);
   }
 
-  private post(rawUrl: string, body: string, headers: Record<string, string>): Promise<SendOutcome> {
+  private post(
+    rawUrl: string,
+    body: string,
+    headers: Record<string, string>
+  ): Promise<SendOutcome> {
     return new Promise((resolve) => {
       let url: URL;
       try {
@@ -215,11 +239,11 @@ export class NotificationTransport {
             'content-type': 'application/json',
             'content-length': payload.length,
             'user-agent': 'Orchard-Notifications/2.0',
-            ...headers,
+            ...headers
           },
           lookup: guardedLookup,
           timeout: HTTP_TIMEOUT_MS,
-          agent: false,
+          agent: false
         },
         (res) => {
           const status = res.statusCode ?? 0;
@@ -242,14 +266,14 @@ export class NotificationTransport {
               httpStatus: status,
               retryAfterMs: retryAfterFrom(res.headers),
               permanent: isPermanentStatus(status),
-              error: `HTTP ${status}${snippet ? `: ${snippet}` : ''}`,
+              error: `HTTP ${status}${snippet ? `: ${snippet}` : ''}`
             });
           });
-        },
+        }
       );
       req.on('timeout', () => req.destroy(new Error('Request timed out')));
       req.on('error', (e: any) =>
-        resolve({ ok: false, error: truncate(String(e?.message ?? e), 500) }),
+        resolve({ ok: false, error: truncate(String(e?.message ?? e), 500) })
       );
       req.end(payload);
     });
@@ -267,7 +291,8 @@ function retryAfterFrom(headers: Record<string, any>): number | undefined {
   const resetAfter = headers['x-ratelimit-reset-after'];
   if (resetAfter) {
     const seconds = Number(Array.isArray(resetAfter) ? resetAfter[0] : resetAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 6 * 60 * 60 * 1000);
+    if (Number.isFinite(seconds) && seconds >= 0)
+      return Math.min(seconds * 1000, 6 * 60 * 60 * 1000);
   }
   const raw = headers['retry-after'];
   if (!raw) return undefined;

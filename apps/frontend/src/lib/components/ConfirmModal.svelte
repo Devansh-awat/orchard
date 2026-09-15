@@ -45,7 +45,6 @@
 	{/snippet}
 	<h2 class="cm-title">{title}</h2>
 	{#if html}
-		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		<p class="cm-desc">{@html description}</p>
 	{:else}
 		<p class="cm-desc">{description}</p>

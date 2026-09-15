@@ -41,7 +41,7 @@ export class AiChatController {
         email: user.email,
         externalAuthId: user.externalAuthId,
         sessionId: user.sessionId,
-        token,
+        token
       })) {
         const trimmed = chunk.trim();
         if (trimmed) {

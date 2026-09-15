@@ -27,7 +27,7 @@ import { SessionsService } from '../auth/sessions.service';
     McpTransportService,
     SessionsService,
     AuditService,
-    InstanceSettingsService,
-  ],
+    InstanceSettingsService
+  ]
 })
 export class McpModule {}

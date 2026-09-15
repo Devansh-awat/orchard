@@ -28,7 +28,7 @@ const EMPTY: GithubAppConfig = {
   privateKey: null,
   webhookSecret: null,
   clientId: null,
-  clientSecret: null,
+  clientSecret: null
 };
 
 @Injectable()
@@ -39,7 +39,7 @@ export class GithubAppConfigService implements OnModuleInit {
 
   constructor(
     private readonly settings: InstanceSettingsService,
-    private readonly crypto: SecretCryptoService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -58,7 +58,7 @@ export class GithubAppConfigService implements OnModuleInit {
         ...parsed,
         privateKey: this.crypto.decrypt(parsed.privateKey),
         clientSecret: this.crypto.decrypt(parsed.clientSecret),
-        webhookSecret: this.crypto.decrypt(parsed.webhookSecret),
+        webhookSecret: this.crypto.decrypt(parsed.webhookSecret)
       };
     } catch (e) {
       this.logger.error(`could not read the stored GitHub App config: ${e}`);
@@ -86,8 +86,7 @@ export class GithubAppConfigService implements OnModuleInit {
       webhookSecret:
         GithubAppConfigService.env('GITHUB_APP_WEBHOOK_SECRET') ?? s?.webhookSecret ?? null,
       clientId: GithubAppConfigService.env('GITHUB_CLIENT_ID') ?? s?.clientId ?? null,
-      clientSecret:
-        GithubAppConfigService.env('GITHUB_CLIENT_SECRET') ?? s?.clientSecret ?? null,
+      clientSecret: GithubAppConfigService.env('GITHUB_CLIENT_SECRET') ?? s?.clientSecret ?? null
     };
   }
 
@@ -117,7 +116,7 @@ export class GithubAppConfigService implements OnModuleInit {
       ['privateKey', 'GITHUB_APP_PRIVATE_KEY'],
       ['webhookSecret', 'GITHUB_APP_WEBHOOK_SECRET'],
       ['clientId', 'GITHUB_CLIENT_ID'],
-      ['clientSecret', 'GITHUB_CLIENT_SECRET'],
+      ['clientSecret', 'GITHUB_CLIENT_SECRET']
     ]
       .filter(([, envName]) => GithubAppConfigService.env(envName) !== null)
       .map(([field]) => field);
@@ -128,7 +127,7 @@ export class GithubAppConfigService implements OnModuleInit {
       ...config,
       privateKey: this.crypto.encrypt(config.privateKey),
       clientSecret: this.crypto.encrypt(config.clientSecret),
-      webhookSecret: this.crypto.encrypt(config.webhookSecret),
+      webhookSecret: this.crypto.encrypt(config.webhookSecret)
     };
     await this.settings.set(GITHUB_APP_KEY, JSON.stringify(payload));
     await this.reload();

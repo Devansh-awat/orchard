@@ -8,7 +8,7 @@ import {
   NotificationCategory,
   NotificationEventName,
   NotificationMessage,
-  isNotificationEvent,
+  isNotificationEvent
 } from './notification-events';
 import { InvolvementContext, resolveRuleLane, shouldNotifyUser } from './notification-resolution';
 
@@ -70,7 +70,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly delivery: NotificationDeliveryService,
+    private readonly delivery: NotificationDeliveryService
   ) {}
 
   onModuleInit() {
@@ -118,7 +118,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
       if (events.length === 0) return;
       for (const event of events) {
         await this.fanOut(event).catch((e) =>
-          this.logger.warn(`fanout for event ${event.id} failed: ${e?.message ?? e}`),
+          this.logger.warn(`fanout for event ${event.id} failed: ${e?.message ?? e}`)
         );
       }
       if (events.length < CLAIM_BATCH) return;
@@ -163,7 +163,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     if (!isNotificationEvent(event.event)) {
       await this.prisma.notificationEvent.update({
         where: { id: event.id },
-        data: { status: 'skipped', fannedOutAt: new Date() },
+        data: { status: 'skipped', fannedOutAt: new Date() }
       });
       return;
     }
@@ -171,14 +171,14 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     if (!chain) {
       await this.prisma.notificationEvent.update({
         where: { id: event.id },
-        data: { status: 'skipped', fannedOutAt: new Date() },
+        data: { status: 'skipped', fannedOutAt: new Date() }
       });
       return;
     }
 
     const [channelIds, userDestinations] = await Promise.all([
       this.resolveRuleLane(event, chain),
-      this.resolvePersonalLane(event, chain),
+      this.resolvePersonalLane(event, chain)
     ]);
 
     const message = event.payload as NotificationMessage;
@@ -188,14 +188,14 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         destinationKey: `channel:${channelId}`,
         channelId,
         userDestId: null,
-        userId: null,
+        userId: null
       })),
       ...userDestinations.map((d) => ({
         destinationKey: `userdest:${d.id}`,
         channelId: null,
         userDestId: d.id,
-        userId: d.userId,
-      })),
+        userId: d.userId
+      }))
     ];
 
     await this.prisma.$transaction(async (tx) => {
@@ -214,7 +214,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
       }
       await tx.notificationEvent.update({
         where: { id: event.id },
-        data: { status: 'fanned_out', fannedOutAt: new Date() },
+        data: { status: 'fanned_out', fannedOutAt: new Date() }
       });
     });
 
@@ -226,7 +226,11 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     if (event.scopeType === 'deployment') {
       const dep = await this.prisma.deployment.findUnique({
         where: { id: event.scopeId },
-        select: { id: true, createdBy: true, project: { select: { id: true, ownerId: true, organizationId: true } } },
+        select: {
+          id: true,
+          createdBy: true,
+          project: { select: { id: true, ownerId: true, organizationId: true } }
+        }
       });
       if (!dep) return null;
       return {
@@ -235,13 +239,17 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         resourceType: 'deployment',
         resourceId: dep.id,
         projectOwnerId: dep.project.ownerId,
-        resourceCreatorId: dep.createdBy,
+        resourceCreatorId: dep.createdBy
       };
     }
     if (event.scopeType === 'database') {
       const db = await this.prisma.database.findUnique({
         where: { id: event.scopeId },
-        select: { id: true, createdBy: true, project: { select: { id: true, ownerId: true, organizationId: true } } },
+        select: {
+          id: true,
+          createdBy: true,
+          project: { select: { id: true, ownerId: true, organizationId: true } }
+        }
       });
       if (!db) return null;
       return {
@@ -250,13 +258,17 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         resourceType: 'database',
         resourceId: db.id,
         projectOwnerId: db.project.ownerId,
-        resourceCreatorId: db.createdBy,
+        resourceCreatorId: db.createdBy
       };
     }
     if (event.scopeType === 'job') {
       const job = await this.prisma.job.findUnique({
         where: { id: event.scopeId },
-        select: { id: true, createdBy: true, project: { select: { id: true, ownerId: true, organizationId: true } } },
+        select: {
+          id: true,
+          createdBy: true,
+          project: { select: { id: true, ownerId: true, organizationId: true } }
+        }
       });
       if (!job) return null;
       return {
@@ -265,7 +277,7 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         resourceType: 'job',
         resourceId: job.id,
         projectOwnerId: job.project.ownerId,
-        resourceCreatorId: job.createdBy,
+        resourceCreatorId: job.createdBy
       };
     }
     return null;
@@ -284,17 +296,19 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
         OR: [
           { scopeType: 'org' },
           ...(chain.projectId ? [{ scopeType: 'project', scopeId: chain.projectId }] : []),
-          ...(chain.resourceId ? [{ scopeType: chain.resourceType, scopeId: chain.resourceId }] : []),
-        ],
+          ...(chain.resourceId
+            ? [{ scopeType: chain.resourceType, scopeId: chain.resourceId }]
+            : [])
+        ]
       },
-      select: { channelId: true, scopeType: true, events: true, mode: true },
+      select: { channelId: true, scopeType: true, events: true, mode: true }
     });
     return resolveRuleLane(rules, event.event);
   }
 
   private async resolvePersonalLane(
     event: ClaimedEvent,
-    chain: ScopeChain,
+    chain: ScopeChain
   ): Promise<{ id: string; userId: string }[]> {
     const category = EVENT_CATEGORY[event.event as NotificationEventName];
     const candidates = await this.candidateUserIds(chain);
@@ -308,10 +322,12 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
           { scopeType: 'global', scopeId: GLOBAL_SCOPE_ID },
           { scopeType: 'org', scopeId: chain.organizationId },
           ...(chain.projectId ? [{ scopeType: 'project', scopeId: chain.projectId }] : []),
-          ...(chain.resourceId ? [{ scopeType: chain.resourceType, scopeId: chain.resourceId }] : []),
-        ],
+          ...(chain.resourceId
+            ? [{ scopeType: chain.resourceType, scopeId: chain.resourceId }]
+            : [])
+        ]
       },
-      select: { userId: true, scopeType: true, value: true },
+      select: { userId: true, scopeType: true, value: true }
     });
 
     // 'subscribed' means the thing is mine in some concrete way. Vercel routes
@@ -320,14 +336,14 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     const involvement: InvolvementContext = {
       actorUserId: event.actorUserId,
       resourceCreatorId: chain.resourceCreatorId,
-      projectOwnerId: chain.projectOwnerId,
+      projectOwnerId: chain.projectOwnerId
     };
     const wanted = candidates.filter((userId) => shouldNotifyUser(userId, settings, involvement));
     if (wanted.length === 0) return [];
 
     const destinations = await this.prisma.userNotificationDestination.findMany({
       where: { userId: { in: wanted }, enabled: true },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true }
     });
     return destinations;
   }
@@ -337,16 +353,16 @@ export class NotificationFanoutService implements OnModuleInit, OnModuleDestroy 
     const [members, project, orgAdmins] = await Promise.all([
       this.prisma.projectMember.findMany({
         where: { projectId: chain.projectId },
-        select: { userId: true },
+        select: { userId: true }
       }),
       this.prisma.project.findUnique({
         where: { id: chain.projectId },
-        select: { ownerId: true, createdBy: true },
+        select: { ownerId: true, createdBy: true }
       }),
       this.prisma.organizationMember.findMany({
         where: { organizationId: chain.organizationId, role: { in: ['owner', 'admin'] } },
-        select: { userId: true },
-      }),
+        select: { userId: true }
+      })
     ]);
     const ids = new Set<string>();
     for (const m of members) ids.add(m.userId);

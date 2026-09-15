@@ -47,7 +47,7 @@ function newInformer(): MirrorInformer {
       return {
         items: cluster.slice(start, next),
         resourceVersion: '9000',
-        continueToken: next < cluster.length ? String(next) : null,
+        continueToken: next < cluster.length ? String(next) : null
       };
     },
     mapRefs: async () => {
@@ -58,15 +58,13 @@ function newInformer(): MirrorInformer {
       const name = o?.metadata?.name;
       if (failHandlerFor.delete(name)) throw new Error(`handler blew up for ${name}`);
       seenEvents.push({ type, name });
-    },
+    }
   };
-  const informer = new MirrorInformer(
-    {} as never,
-    prisma as never,
-    SHARD,
-    config as never,
-    { onListed: () => {}, onWatchEvent: () => {}, onHealthChange: () => {} },
-  );
+  const informer = new MirrorInformer({} as never, prisma as never, SHARD, config as never, {
+    onListed: () => {},
+    onWatchEvent: () => {},
+    onHealthChange: () => {}
+  });
   // The tests drive list/sync directly rather than opening a real watch.
   (informer as unknown as { stopped: boolean }).stopped = false;
   return informer;
@@ -81,9 +79,10 @@ function listAndSync(informer: MirrorInformer) {
 }
 
 function handle(informer: MirrorInformer, phase: string, o: unknown) {
-  return (
-    informer as unknown as { handle(phase: string, o: unknown): Promise<void> }
-  ).handle(phase, o);
+  return (informer as unknown as { handle(phase: string, o: unknown): Promise<void> }).handle(
+    phase,
+    o
+  );
 }
 
 async function mirrored() {
@@ -95,9 +94,9 @@ async function mirrored() {
       resourceVersion: true,
       derivedVersion: true,
       deploymentId: true,
-      syncedAt: true,
+      syncedAt: true
     },
-    orderBy: { name: 'asc' },
+    orderBy: { name: 'asc' }
   });
 }
 
@@ -113,8 +112,8 @@ function newConsumer(): PodMirrorConsumer {
     {
       notifyPodState: async (id: string, state: string, detail?: string) => {
         notified.push({ deploymentId: id, state, detail });
-      },
-    } as never,
+      }
+    } as never
   );
 }
 
@@ -125,7 +124,7 @@ function podEvent(name: string, crashing: boolean, dep = 'test-mirror-dep') {
       name,
       namespace: NS,
       resourceVersion: '1',
-      labels: { 'app.kubernetes.io/name': dep },
+      labels: { 'app.kubernetes.io/name': dep }
     },
     spec: { nodeName: 'node-a' },
     status: {
@@ -140,11 +139,13 @@ function podEvent(name: string, crashing: boolean, dep = 'test-mirror-dep') {
             ? { waiting: { reason: 'CrashLoopBackOff' } }
             : { running: { startedAt: new Date().toISOString() } },
           lastState: crashing
-            ? { terminated: { reason: 'Error', exitCode: 137, finishedAt: new Date().toISOString() } }
-            : {},
-        },
-      ],
-    },
+            ? {
+                terminated: { reason: 'Error', exitCode: 137, finishedAt: new Date().toISOString() }
+              }
+            : {}
+        }
+      ]
+    }
   };
 }
 
@@ -156,8 +157,8 @@ async function ageCrashState(ms: number) {
     where: { deploymentId },
     data: {
       crashingSince: state.crashingSince ? new Date(state.crashingSince.getTime() - ms) : null,
-      healthySince: state.healthySince ? new Date(state.healthySince.getTime() - ms) : null,
-    },
+      healthySince: state.healthySince ? new Date(state.healthySince.getTime() - ms) : null
+    }
   });
 }
 
@@ -172,18 +173,18 @@ async function cleanup() {
 before(async () => {
   await cleanup();
   const org = await prisma.organization.create({
-    data: { name: 'Test Mirror Org', slug: SLUG },
+    data: { name: 'Test Mirror Org', slug: SLUG }
   });
   const project = await prisma.project.create({
-    data: { organizationId: org.id, name: 'mirror', slug: 'mirror', namespace: NS },
+    data: { organizationId: org.id, name: 'mirror', slug: 'mirror', namespace: NS }
   });
   projectId = project.id;
   const deployment = await prisma.deployment.create({
-    data: { projectId, name: 'test-mirror-dep', namespace: NS },
+    data: { projectId, name: 'test-mirror-dep', namespace: NS }
   });
   deploymentId = deployment.id;
   const other = await prisma.deployment.create({
-    data: { projectId, name: 'test-mirror-dep-b', namespace: NS },
+    data: { projectId, name: 'test-mirror-dep-b', namespace: NS }
   });
   otherDeploymentId = other.id;
 });
@@ -196,7 +197,9 @@ after(async () => {
 beforeEach(async () => {
   await prisma.k8sObject.deleteMany({ where: { shard: SHARD } });
   await prisma.deploymentCrashState.deleteMany({ where: { deploymentId } });
-  await prisma.pod.deleteMany({ where: { deploymentId: { in: [deploymentId, otherDeploymentId] } } });
+  await prisma.pod.deleteMany({
+    where: { deploymentId: { in: [deploymentId, otherDeploymentId] } }
+  });
   cluster = [];
   seenEvents = [];
   listCalls = [];
@@ -208,7 +211,9 @@ beforeEach(async () => {
 // --- informer ----------------------------------------------------------------
 
 test('a paginated list mirrors every object and only asks the apiserver in pages', async () => {
-  cluster = Array.from({ length: 550 }, (_, i) => obj(`uid-${i}`, `ing-${String(i).padStart(4, '0')}`));
+  cluster = Array.from({ length: 550 }, (_, i) =>
+    obj(`uid-${i}`, `ing-${String(i).padStart(4, '0')}`)
+  );
   const informer = newInformer();
 
   await listAndSync(informer);
@@ -358,15 +363,19 @@ test('objects that leave the cluster are swept and reported as deletes', async (
   await listAndSync(informer);
 
   const rows = await mirrored();
-  assert.deepEqual(rows.map((r) => r.uid), ['uid-a']);
+  assert.deepEqual(
+    rows.map((r) => r.uid),
+    ['uid-a']
+  );
   assert.deepEqual(seenEvents, [{ type: 'delete', name: 'ing-b' }]);
 });
 
 test('the stale sweep survives an object count past the bind-parameter ceiling', async () => {
   // One parameter per uid would exceed Postgres' 65535-parameter limit here;
   // the sweep binds the whole set as a single array.
-  cluster = Array.from({ length: 70_000 }, (_, i) => ({ uid: `u${i}` }))
-    .map((x, i) => obj(x.uid, `ing-${i}`));
+  cluster = Array.from({ length: 70_000 }, (_, i) => ({ uid: `u${i}` })).map((x, i) =>
+    obj(x.uid, `ing-${i}`)
+  );
   const informer = newInformer();
   const seenUids = cluster.map((c) => c.metadata.uid);
 
@@ -474,7 +483,7 @@ test('the prune drops pod rows the cluster no longer lists and clears their aler
 
   // The pod is gone from the cluster and the relist never mentions it.
   await consumer.pruneStalePods([
-    { namespace: NS, name: 'something-else', refs: { deploymentId } },
+    { namespace: NS, name: 'something-else', refs: { deploymentId } }
   ]);
 
   assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0);
@@ -493,7 +502,7 @@ test('the prune keys on the deployment, not just the pod name', async () => {
   // Only the second deployment still runs a pod called web-0. Matching on the
   // bare name would keep the first deployment's dead row alive forever.
   await consumer.pruneStalePods([
-    { namespace: NS, name: 'web-0', refs: { deploymentId: otherDeploymentId } },
+    { namespace: NS, name: 'web-0', refs: { deploymentId: otherDeploymentId } }
   ]);
 
   assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0);
@@ -508,7 +517,7 @@ test('a pass that could not resolve every pod prunes nothing', async () => {
   // against an incomplete set takes live pods with it.
   await consumer.pruneStalePods([
     { namespace: NS, name: 'someone-elses-pod', refs: null },
-    { namespace: NS, name: 'still-running', refs: { deploymentId: otherDeploymentId } },
+    { namespace: NS, name: 'still-running', refs: { deploymentId: otherDeploymentId } }
   ]);
 
   assert.equal(await prisma.pod.count({ where: { deploymentId } }), 1);
@@ -537,9 +546,9 @@ test('a pod row lost to a failed sync is restored while the pod sits still', asy
         }
         await consumer.onEvent(type, o);
       },
-      onListComplete: (seen: any) => consumer.pruneStalePods(seen),
+      onListComplete: (seen: any) => consumer.pruneStalePods(seen)
     } as never,
-    { onListed: () => {}, onWatchEvent: () => {}, onHealthChange: () => {} },
+    { onListed: () => {}, onWatchEvent: () => {}, onHealthChange: () => {} }
   );
   (informer as unknown as { stopped: boolean }).stopped = false;
 
@@ -572,7 +581,7 @@ function pod(over: {
     metadata: {
       name: 'p',
       namespace: NS,
-      ...(over.deleting ? { deletionTimestamp: new Date().toISOString() } : {}),
+      ...(over.deleting ? { deletionTimestamp: new Date().toISOString() } : {})
     },
     status: {
       phase: over.phase ?? 'Running',
@@ -582,10 +591,10 @@ function pod(over: {
           name: 'app',
           ready,
           restartCount: 0,
-          state: over.waiting ? { waiting: { reason: over.waiting } } : { running: {} },
-        },
-      ],
-    },
+          state: over.waiting ? { waiting: { reason: over.waiting } } : { running: {} }
+        }
+      ]
+    }
   } as never;
 }
 
@@ -610,20 +619,23 @@ test('every stuck waiting reason reads as crashing, not as progress', () => {
     'CreateContainerError',
     'CreateContainerConfigError',
     'RunContainerError',
-    'InvalidImageName',
+    'InvalidImageName'
   ]) {
     assert.equal(
       computePodStatus(pod({ phase: 'Pending', waiting: reason })),
       'crashing',
-      `${reason} should read as crashing`,
+      `${reason} should read as crashing`
     );
   }
 });
 
 test('a pod being deleted is terminating, even mid crash loop', () => {
-  assert.equal(computePodStatus(pod({ phase: 'Running', ready: true, deleting: true })), 'terminating');
+  assert.equal(
+    computePodStatus(pod({ phase: 'Running', ready: true, deleting: true })),
+    'terminating'
+  );
   assert.equal(
     computePodStatus(pod({ phase: 'Running', waiting: 'CrashLoopBackOff', deleting: true })),
-    'terminating',
+    'terminating'
   );
 });

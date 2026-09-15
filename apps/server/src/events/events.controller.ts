@@ -1,4 +1,12 @@
-import { Controller, Param, Query, Request, NotFoundException, Sse, MessageEvent } from '@nestjs/common';
+import {
+  Controller,
+  Param,
+  Query,
+  Request,
+  NotFoundException,
+  Sse,
+  MessageEvent
+} from '@nestjs/common';
 import { Observable, merge, interval, map, finalize, defer, concat, from, mergeMap } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { MembershipCacheService } from '../auth/membership-cache.service';
@@ -11,14 +19,14 @@ export class EventsController {
   constructor(
     private readonly orgEvents: OrgEventsService,
     private readonly memberships: MembershipCacheService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   @Sse('orgs/:orgId')
   async streamOrg(
     @Param('orgId') orgId: string,
     @Query('lastEventId') lastEventIdQuery: string | undefined,
-    @Request() req,
+    @Request() req
   ): Promise<Observable<MessageEvent>> {
     const userId = req.user.sub;
     const lastEventId =
@@ -41,7 +49,7 @@ export class EventsController {
 
     // 25s heartbeat so proxies don't kill idle SSE connections.
     const heartbeat$ = interval(25_000).pipe(
-      map(() => ({ data: { type: 'heartbeat', ts: Date.now() } })),
+      map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }))
     );
 
     // Track subscriber count per org so server-side pushers (metrics emitter)
@@ -51,10 +59,10 @@ export class EventsController {
       const live$ = this.orgEvents.forOrgAsSseScoped(orgId, userId, visibleProjectIds);
       const events$ = lastEventId
         ? concat(
-            from(
-              this.orgEvents.replayScoped(lastEventId, orgId, userId, visibleProjectIds),
-            ).pipe(mergeMap((msgs) => from(msgs))),
-            live$,
+            from(this.orgEvents.replayScoped(lastEventId, orgId, userId, visibleProjectIds)).pipe(
+              mergeMap((msgs) => from(msgs))
+            ),
+            live$
           )
         : live$;
       return merge(events$, heartbeat$);

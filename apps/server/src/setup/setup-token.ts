@@ -73,14 +73,21 @@ async function smtpConfigured(prisma: RecoveryPrisma): Promise<boolean> {
 export async function recoveryState(prisma: RecoveryPrisma): Promise<RecoveryState> {
   const superadmins = await prisma.user.count({ where: { isSuperAdmin: true } });
   if (superadmins === 0) {
-    return { superadmins, passkeys: 0, smtp: false, oauth: false, claimable: true, blockedBy: null };
+    return {
+      superadmins,
+      passkeys: 0,
+      smtp: false,
+      oauth: false,
+      claimable: true,
+      blockedBy: null
+    };
   }
 
   const passkeys = await prisma.passkey.count({ where: { user: { isSuperAdmin: true } } });
   const smtp = await smtpConfigured(prisma);
   const oauth =
-    envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET')
-    || envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
+    envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET') ||
+    envSet('HACKCLUB_CLIENT_ID', 'HACKCLUB_CLIENT_SECRET');
 
   let blockedBy: RecoveryState['blockedBy'] = null;
   if (passkeys > 0) blockedBy = 'passkey';

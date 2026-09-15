@@ -26,8 +26,8 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     NotificationFanoutService,
     NotificationDeliveryService,
     NotificationTransport,
-    NotificationRateLimiter,
+    NotificationRateLimiter
   ],
-  exports: [NotificationsService, NotificationRulesService, UserNotificationsService],
+  exports: [NotificationsService, NotificationRulesService, UserNotificationsService]
 })
 export class NotificationsModule {}

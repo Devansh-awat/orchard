@@ -319,8 +319,7 @@
 			bind:value={composerBody}
 			rows="6"
 			maxlength={10000}
-			placeholder="Details"
-		></textarea>
+			placeholder="Details"></textarea>
 		<div class="gv-form-actions">
 			<ImageAttach bind:images={composerImages} disabled={submitting} />
 			<div class="gv-form-buttons">

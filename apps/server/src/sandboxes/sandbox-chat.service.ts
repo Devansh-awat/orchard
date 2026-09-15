@@ -22,7 +22,7 @@ export class SandboxChatService {
     private readonly kubernetes: KubernetesService,
     private readonly sandboxK8s: SandboxK8sService,
     private readonly workspace: SandboxWorkspaceService,
-    private readonly conversations: SandboxConversationsService,
+    private readonly conversations: SandboxConversationsService
   ) {}
 
   async stream(
@@ -35,7 +35,7 @@ export class SandboxChatService {
     },
     message: string,
     opts: { conversationId?: string; repo?: string },
-    res: Response,
+    res: Response
   ): Promise<void> {
     if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE_LENGTH) {
       throw new BadRequestException('message must be a non-empty string');
@@ -47,14 +47,14 @@ export class SandboxChatService {
       throw new BadRequestException('Kubernetes is not configured');
     }
     const credential = await this.prisma.sandboxCredential.findUnique({
-      where: { userId: sandbox.userId },
+      where: { userId: sandbox.userId }
     });
     const claudeToken = credential?.claudeToken
       ? this.crypto.decrypt(credential.claudeToken).replace(/\s+/g, '')
       : null;
     if (!claudeToken) {
       throw new BadRequestException(
-        'No Claude credentials configured; add a token in user settings first',
+        'No Claude credentials configured; add a token in user settings first'
       );
     }
     const pod = await this.sandboxK8s.runningPod(sandbox.id);
@@ -66,20 +66,20 @@ export class SandboxChatService {
       ? await this.conversations.getOwned(sandbox.id, opts.conversationId)
       : await this.prisma.sandboxConversation.findFirst({
           where: { sandboxId: sandbox.id },
-          orderBy: { updatedAt: 'desc' },
+          orderBy: { updatedAt: 'desc' }
         });
     if (!conversation) {
       conversation = await this.prisma.sandboxConversation.create({
         data: {
           sandboxId: sandbox.id,
           title: 'New conversation',
-          repo: opts.repo || null,
-        },
+          repo: opts.repo || null
+        }
       });
     } else if (opts.repo && !conversation.claudeSessionId && conversation.repo !== opts.repo) {
       conversation = await this.prisma.sandboxConversation.update({
         where: { id: conversation.id },
-        data: { repo: opts.repo },
+        data: { repo: opts.repo }
       });
     }
 
@@ -110,7 +110,7 @@ export class SandboxChatService {
       '-l',
       'dev',
       '-c',
-      `export CLAUDE_CODE_OAUTH_TOKEN=${q(claudeToken)}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume} -- ${q(message)}`,
+      `export CLAUDE_CODE_OAUTH_TOKEN=${q(claudeToken)}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume} -- ${q(message)}`
     ];
 
     const stdout = new PassThrough();
@@ -138,7 +138,7 @@ export class SandboxChatService {
             this.prisma.sandboxConversation
               .update({
                 where: { id: conversation.id },
-                data: { claudeSessionId: event.session_id, ...autoTitle },
+                data: { claudeSessionId: event.session_id, ...autoTitle }
               })
               .catch(() => {});
           }
@@ -156,6 +156,8 @@ export class SandboxChatService {
     const exec = new k8s.Exec(this.kubernetes.kc);
     let execWs: any = null;
     let finished = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let touchTimer: ReturnType<typeof setInterval> | undefined;
     const finish = async (status: 'done' | 'error', detail?: string) => {
       if (finished) return;
       finished = true;
@@ -171,13 +173,13 @@ export class SandboxChatService {
       res.end();
     };
 
-    const timeout = setTimeout(() => {
+    timeout = setTimeout(() => {
       try {
         execWs?.close();
       } catch {}
       void finish('error', 'chat turn timed out');
     }, CHAT_TIMEOUT_MS);
-    const touchTimer = setInterval(touch, 60_000);
+    touchTimer = setInterval(touch, 60_000);
 
     res.on('close', () => {
       try {
@@ -205,7 +207,7 @@ export class SandboxChatService {
               : stderrText.trim().slice(-500) || status.message || 'claude exited with an error';
             void finish('error', detail);
           }
-        },
+        }
       );
     } catch (e: any) {
       this.logger.warn(`chat exec failed for sandbox ${sandbox.id}: ${e?.message}`);

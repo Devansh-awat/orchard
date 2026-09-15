@@ -3,7 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   OnModuleDestroy,
-  OnModuleInit,
+  OnModuleInit
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -19,7 +19,7 @@ import {
   type DetectedApp,
   type WorkspaceInfo,
   type RepoBuildConfig,
-  type FileReader,
+  type FileReader
 } from './framework-detect';
 
 /** What the create form and the CLI get back from a detection run. */
@@ -168,7 +168,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
     private readonly appConfig: GithubAppConfigService,
-    private readonly leader: LeaderElectionService,
+    private readonly leader: LeaderElectionService
   ) {}
 
   onModuleInit() {
@@ -195,15 +195,15 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   private getCachedRepos(accessToken: string, maxPages: number): GitHubRepo[] | null {
     const key = this.getCacheKey(accessToken, maxPages);
     const cached = this.repoCache.get(key);
-    
+
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       return cached.repos;
     }
-    
+
     if (cached) {
       this.repoCache.delete(key);
     }
-    
+
     return null;
   }
 
@@ -228,16 +228,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const params = new URLSearchParams({
       client_id: this.clientId,
       client_secret: this.clientSecret,
-      code,
+      code
     });
 
     const response = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
+        Accept: 'application/json'
       },
-      body: params.toString(),
+      body: params.toString()
     });
 
     if (!response.ok) {
@@ -262,12 +262,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   } {
     const now = Date.now();
     const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : null;
-    const refreshExpiresIn = typeof data.refresh_token_expires_in === 'number' ? data.refresh_token_expires_in : null;
+    const refreshExpiresIn =
+      typeof data.refresh_token_expires_in === 'number' ? data.refresh_token_expires_in : null;
     return {
       accessToken: data.access_token,
       expiresAt: expiresIn ? new Date(now + expiresIn * 1000) : null,
       refreshToken: data.refresh_token ?? null,
-      refreshTokenExpiresAt: refreshExpiresIn ? new Date(now + refreshExpiresIn * 1000) : null,
+      refreshTokenExpiresAt: refreshExpiresIn ? new Date(now + refreshExpiresIn * 1000) : null
     };
   }
 
@@ -276,10 +277,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   async refreshUserToken(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { githubRefreshToken: true, githubRefreshTokenExpiresAt: true },
+      select: { githubRefreshToken: true, githubRefreshTokenExpiresAt: true }
     });
     if (!user?.githubRefreshToken) return null;
-    if (user.githubRefreshTokenExpiresAt && user.githubRefreshTokenExpiresAt.getTime() <= Date.now()) {
+    if (
+      user.githubRefreshTokenExpiresAt &&
+      user.githubRefreshTokenExpiresAt.getTime() <= Date.now()
+    ) {
       return null;
     }
 
@@ -287,16 +291,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       client_id: this.clientId,
       client_secret: this.clientSecret,
       grant_type: 'refresh_token',
-      refresh_token: user.githubRefreshToken,
+      refresh_token: user.githubRefreshToken
     });
 
     const response = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
+        Accept: 'application/json'
       },
-      body: params.toString(),
+      body: params.toString()
     });
 
     if (!response.ok) {
@@ -319,11 +323,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubAccessToken: parsed.accessToken,
         githubTokenExpiresAt: parsed.expiresAt,
         // GitHub rotates the refresh token on each use — only overwrite if returned.
-        ...(parsed.refreshToken ? {
-          githubRefreshToken: parsed.refreshToken,
-          githubRefreshTokenExpiresAt: parsed.refreshTokenExpiresAt,
-        } : {}),
-      },
+        ...(parsed.refreshToken
+          ? {
+              githubRefreshToken: parsed.refreshToken,
+              githubRefreshTokenExpiresAt: parsed.refreshTokenExpiresAt
+            }
+          : {})
+      }
     });
     return parsed.accessToken;
   }
@@ -333,7 +339,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   async getValidUserToken(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { githubAccessToken: true, githubTokenExpiresAt: true, githubRefreshToken: true },
+      select: { githubAccessToken: true, githubTokenExpiresAt: true, githubRefreshToken: true }
     });
     if (!user?.githubAccessToken) return null;
 
@@ -357,18 +363,18 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubAccessToken: null,
         githubTokenExpiresAt: null,
         githubRefreshToken: null,
-        githubRefreshTokenExpiresAt: null,
-      },
+        githubRefreshTokenExpiresAt: null
+      }
     });
   }
 
   async getGitHubUser(accessToken: string): Promise<GitHubUser> {
     const response = await fetch('https://api.github.com/user', {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
     });
 
     if (!response.ok) {
@@ -384,11 +390,11 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     const existing = await this.prisma.user.findUnique({
       where: { githubId: String(githubUser.id) },
-      select: { id: true },
+      select: { id: true }
     });
     if (existing && existing.id !== userId) {
       throw new ConflictException(
-        `This GitHub account (@${githubUser.login}) is already linked to another Orchard account. Disconnect it there first, then try again.`,
+        `This GitHub account (@${githubUser.login}) is already linked to another Orchard account. Disconnect it there first, then try again.`
       );
     }
 
@@ -400,8 +406,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubAccessToken: tokens.accessToken,
         githubTokenExpiresAt: tokens.expiresAt,
         githubRefreshToken: tokens.refreshToken,
-        githubRefreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-      },
+        githubRefreshTokenExpiresAt: tokens.refreshTokenExpiresAt
+      }
     });
   }
 
@@ -414,8 +420,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         githubAccessToken: null,
         githubTokenExpiresAt: null,
         githubRefreshToken: null,
-        githubRefreshTokenExpiresAt: null,
-      },
+        githubRefreshTokenExpiresAt: null
+      }
     });
   }
 
@@ -426,9 +432,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
 
     const headers = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
     };
 
     const fetchPage = async (page: number): Promise<GitHubRepo[]> => {
@@ -445,7 +451,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     };
 
     const firstPage = await fetchPage(1);
-    
+
     if (firstPage.length < 100 || maxPages <= 1) {
       this.setCachedRepos(accessToken, maxPages, firstPage);
       return firstPage;
@@ -458,20 +464,20 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const allRepos = [
       firstPage,
       ...remainingPages
-        .filter((result): result is PromiseFulfilledResult<GitHubRepo[]> => 
-          result.status === 'fulfilled'
+        .filter(
+          (result): result is PromiseFulfilledResult<GitHubRepo[]> => result.status === 'fulfilled'
         )
-        .map(result => result.value)
+        .map((result) => result.value)
     ].flat();
-    
+
     this.setCachedRepos(accessToken, maxPages, allRepos);
     return allRepos;
   }
 
   private githubApiHeaders(accessToken?: string): Record<string, string> {
     const headers: Record<string, string> = {
-      'Accept': 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
     };
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
@@ -485,8 +491,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       const response = await fetch(
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100&page=${page}`,
         {
-          headers: this.githubApiHeaders(accessToken),
-        },
+          headers: this.githubApiHeaders(accessToken)
+        }
       );
       if (!response.ok) throw new BadRequestException('Failed to fetch repository branches');
       return response.json();
@@ -496,7 +502,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const first = await fetchPage(1);
     if (first.length < 100) return first;
     const rest = await Promise.all(
-      Array.from({ length: MAX_PAGES - 1 }, (_, i) => fetchPage(i + 2)),
+      Array.from({ length: MAX_PAGES - 1 }, (_, i) => fetchPage(i + 2))
     );
     const all = [first];
     for (const page of rest) {
@@ -536,7 +542,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
 
     const response = await fetch(url, {
-      headers: this.githubApiHeaders(accessToken),
+      headers: this.githubApiHeaders(accessToken)
     });
 
     if (!response.ok) {
@@ -563,7 +569,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const response = await fetch(url, {
-        headers: this.githubApiHeaders(accessToken),
+        headers: this.githubApiHeaders(accessToken)
       });
       if (!response.ok) return null;
 
@@ -694,20 +700,27 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     repo: string,
     dockerfilePath: string,
     branch?: string
-  ): Promise<{ exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] }> {
+  ): Promise<{
+    exposedPorts: number[];
+    envVars: { key: string; value: string }[];
+    stages: string[];
+  }> {
     const content = await this.getFileContent(accessToken, owner, repo, dockerfilePath, branch);
     return {
       exposedPorts: this.parseExposedPorts(content),
       envVars: this.parseEnvVars(content),
-      stages: this.parseDockerfileStages(content),
+      stages: this.parseDockerfileStages(content)
     };
   }
 
   async getDefaultBranch(accessToken: string | null, owner: string, repo: string): Promise<string> {
     try {
-      const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
-        headers: this.githubApiHeaders(accessToken ?? ''),
-      });
+      const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+        {
+          headers: this.githubApiHeaders(accessToken ?? '')
+        }
+      );
       if (response.ok) {
         const data = await response.json();
         if (data?.default_branch) return String(data.default_branch);
@@ -743,7 +756,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       crypto.createHash('sha256').update(accessToken).digest('hex').slice(0, 16),
       owner,
       repo,
-      branch ?? '',
+      branch ?? ''
     ].join(' ');
 
     const now = Date.now();
@@ -844,16 +857,20 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       installCommand: null,
       buildCommand: null,
       startCommand: null,
-      outputDirectory: null,
+      outputDirectory: null
     };
 
     if (dockerfiles.length > 0) {
       const dockerfilePath = [...dockerfiles].sort(
         (a, b) => a.split('/').length - b.split('/').length || a.length - b.length
       )[0];
-      const info = await this.getDockerfileInfo(accessToken, owner, repo, dockerfilePath, branch).catch(
-        () => null
-      );
+      const info = await this.getDockerfileInfo(
+        accessToken,
+        owner,
+        repo,
+        dockerfilePath,
+        branch
+      ).catch(() => null);
       return {
         buildType: 'dockerfile',
         dockerfilePath,
@@ -863,7 +880,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         env: info?.envVars ?? [],
         framework: null,
         suggestedName,
-        ...empty,
+        ...empty
       };
     }
 
@@ -880,19 +897,19 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         env: [{ key: 'PORT', value: '3000' }],
         framework: null,
         suggestedName,
-        ...empty,
+        ...empty
       };
     }
 
     const { apps, workspace, repoConfig } = await detectApps(
       tree,
-      this.repoFileReader(accessToken, owner, repo, branch),
+      this.repoFileReader(accessToken, owner, repo, branch)
     );
     // An orchard.json naming a directory picks the app; otherwise the usual
     // "recognised root app, else shallowest" rule applies.
-    const primary = (repoConfig?.rootDirectory
-      && apps.find((a) => a.dir === repoConfig.rootDirectory))
-      || primaryApp(apps);
+    const primary =
+      (repoConfig?.rootDirectory && apps.find((a) => a.dir === repoConfig.rootDirectory)) ||
+      primaryApp(apps);
 
     return {
       buildType: 'railpack',
@@ -910,14 +927,14 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       installCommand: primary?.installCommand ?? null,
       buildCommand: primary?.buildCommand ?? null,
       startCommand: primary?.startCommand ?? null,
-      outputDirectory: primary?.outputDirectory ?? null,
+      outputDirectory: primary?.outputDirectory ?? null
     };
   }
 
   parseDockerfileStages(dockerfileContent: string): string[] {
     const stages: string[] = [];
     const lines = dockerfileContent.split('\n');
-    
+
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith('FROM')) {
@@ -930,7 +947,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         }
       }
     }
-    
+
     return stages;
   }
 
@@ -951,16 +968,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
 
-    const expectedSignature = `sha256=${  crypto
+    const expectedSignature = `sha256=${crypto
       .createHmac('sha256', secret)
       .update(payload)
       .digest('hex')}`;
 
     try {
-      return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expectedSignature)
-      );
+      return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
     } catch {
       return false;
     }
@@ -984,10 +998,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           name: 'web',
@@ -997,9 +1011,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
             url: webhookUrl,
             content_type: 'json',
             secret,
-            insecure_ssl: '0',
-          },
-        }),
+            insecure_ssl: '0'
+          }
+        })
       }
     );
 
@@ -1023,10 +1037,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
     );
 
@@ -1050,18 +1064,18 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           ref,
           environment,
           description: description || `Deploying ${ref} to ${environment}`,
           auto_merge: false,
-          required_contexts: [], // Skip status checks for now
-        }),
+          required_contexts: [] // Skip status checks for now
+        })
       }
     );
 
@@ -1088,7 +1102,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const body: Record<string, unknown> = {
       state,
-      auto_inactive: true,
+      auto_inactive: true
     };
 
     if (options?.logUrl) {
@@ -1106,12 +1120,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       }
     );
 
@@ -1133,10 +1147,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(ref)}`,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
     );
 
@@ -1176,14 +1190,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const { appId, privateKey } = this.appConfig.get();
 
     if (!appId || !privateKey) {
-      throw new BadRequestException('GitHub App not configured. Create one from Admin, or set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.');
+      throw new BadRequestException(
+        'GitHub App not configured. Create one from Admin, or set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.'
+      );
     }
 
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       iat: now - 60, // Issued 60 seconds ago to account for clock drift
       exp: now + 600, // Expires in 10 minutes (max allowed)
-      iss: appId,
+      iss: appId
     };
 
     // Create JWT manually using crypto (RS256)
@@ -1199,7 +1215,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Get an installation access token for a specific installation
-  async getInstallationAccessToken(installationId: bigint): Promise<{ token: string; expiresAt: Date }> {
+  async getInstallationAccessToken(
+    installationId: bigint
+  ): Promise<{ token: string; expiresAt: Date }> {
     const jwt = this.generateAppJwt();
 
     const response = await fetch(
@@ -1207,10 +1225,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${jwt}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+          Authorization: `Bearer ${jwt}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
     );
 
@@ -1220,7 +1238,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         await this.prisma.gitHubAppInstallation
           .updateMany({
             where: { installationId, suspendedAt: null },
-            data: { suspendedAt: new Date() },
+            data: { suspendedAt: new Date() }
           })
           .catch(() => {});
       }
@@ -1230,7 +1248,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const data = await response.json();
     return {
       token: data.token,
-      expiresAt: new Date(data.expires_at),
+      expiresAt: new Date(data.expires_at)
     };
   }
 
@@ -1238,7 +1256,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   async getOrRefreshInstallationToken(installationId: bigint): Promise<string> {
     // Check if we have a cached token
     const installation = await this.prisma.gitHubAppInstallation.findUnique({
-      where: { installationId },
+      where: { installationId }
     });
 
     if (installation?.accessToken && installation.tokenExpiresAt) {
@@ -1258,8 +1276,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         where: { installationId },
         data: {
           accessToken: token,
-          tokenExpiresAt: expiresAt,
-        },
+          tokenExpiresAt: expiresAt
+        }
       });
     }
 
@@ -1280,15 +1298,19 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     },
     sender: { login: string; id: number }
   ): Promise<void> {
-    console.log(`[GitHub App] Installation ${action} by ${sender.login} for ${installation.account.login}`);
+    console.log(
+      `[GitHub App] Installation ${action} by ${sender.login} for ${installation.account.login}`
+    );
 
     if (action === 'created') {
       const user = await this.prisma.user.findFirst({
-        where: { githubId: String(sender.id) },
+        where: { githubId: String(sender.id) }
       });
 
       if (!user) {
-        console.warn(`[GitHub App] No Orchard user for GitHub ID ${sender.id} (${sender.login}) — creating installation without user link`);
+        console.warn(
+          `[GitHub App] No Orchard user for GitHub ID ${sender.id} (${sender.login}) — creating installation without user link`
+        );
       }
 
       await this.prisma.gitHubAppInstallation.upsert({
@@ -1299,7 +1321,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
           accountLogin: installation.account.login,
           accountId: BigInt(installation.account.id),
           accountType: installation.account.type,
-          repositorySelection: installation.repository_selection,
+          repositorySelection: installation.repository_selection
         },
         update: {
           ...(user ? { userId: user.id } : {}),
@@ -1307,29 +1329,31 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
           accountId: BigInt(installation.account.id),
           accountType: installation.account.type,
           repositorySelection: installation.repository_selection,
-          suspendedAt: null,
-        },
+          suspendedAt: null
+        }
       });
 
-      console.log(`[GitHub App] Installation created for ${installation.account.login}${user ? ` (linked to ${user.username})` : ' (no user link)'}`);
+      console.log(
+        `[GitHub App] Installation created for ${installation.account.login}${user ? ` (linked to ${user.username})` : ' (no user link)'}`
+      );
     } else if (action === 'deleted') {
       // Delete the installation record
       await this.prisma.gitHubAppInstallation.deleteMany({
-        where: { installationId: BigInt(installation.id) },
+        where: { installationId: BigInt(installation.id) }
       });
 
       console.log(`[GitHub App] Installation deleted`);
     } else if (action === 'suspend') {
       await this.prisma.gitHubAppInstallation.updateMany({
         where: { installationId: BigInt(installation.id) },
-        data: { suspendedAt: new Date() },
+        data: { suspendedAt: new Date() }
       });
 
       console.log(`[GitHub App] Installation suspended`);
     } else if (action === 'unsuspend') {
       await this.prisma.gitHubAppInstallation.updateMany({
         where: { installationId: BigInt(installation.id) },
-        data: { suspendedAt: null },
+        data: { suspendedAt: null }
       });
 
       console.log(`[GitHub App] Installation unsuspended`);
@@ -1344,15 +1368,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     let page = 1;
     const perPage = 100;
 
-    while (page <= 10) { // Max 10 pages
+    while (page <= 10) {
+      // Max 10 pages
       const response = await fetch(
         `https://api.github.com/installation/repositories?per_page=${perPage}&page=${page}`,
         {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
         }
       );
 
@@ -1374,17 +1399,21 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Check if a repository is accessible by an installation
-  async isRepoAccessibleByInstallation(installationId: bigint, owner: string, repo: string): Promise<boolean> {
+  async isRepoAccessibleByInstallation(
+    installationId: bigint,
+    owner: string,
+    repo: string
+  ): Promise<boolean> {
     const token = await this.getOrRefreshInstallationToken(installationId);
 
     const response = await fetch(
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
     );
 
@@ -1407,13 +1436,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Find installation for a repository
-  async findInstallationForRepo(owner: string, repo: string): Promise<{ installationId: bigint } | null> {
+  async findInstallationForRepo(
+    owner: string,
+    repo: string
+  ): Promise<{ installationId: bigint } | null> {
     // Find installations that might have access to this repo
     const installations = await this.prisma.gitHubAppInstallation.findMany({
       where: {
         accountLogin: { equals: owner, mode: 'insensitive' },
-        suspendedAt: null,
-      },
+        suspendedAt: null
+      }
     });
     for (const installation of installations) {
       try {
@@ -1427,7 +1459,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
-        console.warn(`[GitHub App] Failed to check repo access for installation ${installation.installationId}: ${reason}`);
+        console.warn(
+          `[GitHub App] Failed to check repo access for installation ${installation.installationId}: ${reason}`
+        );
       }
     }
 
@@ -1439,38 +1473,43 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/installation`,
         {
           headers: {
-            'Authorization': `Bearer ${jwt}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-        },
+            Authorization: `Bearer ${jwt}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        }
       );
       if (response.ok) {
         const data = await response.json();
         const installationId = BigInt(data.id);
 
         // Backfill DB — non-blocking so the return isn't gated on it
-        this.prisma.gitHubAppInstallation.upsert({
-          where: { installationId },
-          create: {
-            userId: null,
-            installationId,
-            accountLogin: data.account?.login ?? owner,
-            accountId: BigInt(data.account?.id ?? 0),
-            accountType: data.account?.type ?? 'Organization',
-            repositorySelection: data.repository_selection ?? 'all',
-          },
-          update: {
-            accountLogin: data.account?.login ?? owner,
-            accountType: data.account?.type ?? 'Organization',
-            repositorySelection: data.repository_selection ?? 'all',
-            suspendedAt: null,
-          },
-        }).then(() => {
-          console.log(`[GitHub App] Backfilled installation ${installationId} for ${owner}/${repo} from GitHub API.`);
-        }).catch((e) => {
-          console.warn(`[GitHub App] Failed to backfill installation ${installationId}:`, e);
-        });
+        this.prisma.gitHubAppInstallation
+          .upsert({
+            where: { installationId },
+            create: {
+              userId: null,
+              installationId,
+              accountLogin: data.account?.login ?? owner,
+              accountId: BigInt(data.account?.id ?? 0),
+              accountType: data.account?.type ?? 'Organization',
+              repositorySelection: data.repository_selection ?? 'all'
+            },
+            update: {
+              accountLogin: data.account?.login ?? owner,
+              accountType: data.account?.type ?? 'Organization',
+              repositorySelection: data.repository_selection ?? 'all',
+              suspendedAt: null
+            }
+          })
+          .then(() => {
+            console.log(
+              `[GitHub App] Backfilled installation ${installationId} for ${owner}/${repo} from GitHub API.`
+            );
+          })
+          .catch((e) => {
+            console.warn(`[GitHub App] Failed to backfill installation ${installationId}:`, e);
+          });
 
         return { installationId };
       }
@@ -1518,9 +1557,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
         {
           headers: {
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
         }
       );
       if (!response.ok) return false;
@@ -1542,10 +1581,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
       }
     );
     return response.ok;
@@ -1563,22 +1602,24 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         {
           signal: AbortSignal.timeout(8000),
           headers: {
-            'Authorization': `Bearer ${installationToken}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+            Authorization: `Bearer ${installationToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
         }
       );
       if (!response.ok) {
         if (response.status === 404) return { repos: [], lastPage: null };
-        throw new BadRequestException(`Failed to list installation repos: ${await response.text()}`);
+        throw new BadRequestException(
+          `Failed to list installation repos: ${await response.text()}`
+        );
       }
       const link = response.headers.get('link') || '';
       const lastMatch = link.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
       const data = await response.json();
       return {
         repos: data.repositories || [],
-        lastPage: lastMatch ? Number(lastMatch[1]) : null,
+        lastPage: lastMatch ? Number(lastMatch[1]) : null
       };
     };
 
@@ -1587,10 +1628,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     const lastPage = Math.min(first.lastPage, maxPages);
     if (first.lastPage > maxPages) {
-      console.warn(`[GitHub] installation has more than ${maxPages * perPage} repos, mirror truncated`);
+      console.warn(
+        `[GitHub] installation has more than ${maxPages * perPage} repos, mirror truncated`
+      );
     }
     const rest = await Promise.all(
-      Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2)),
+      Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2))
     );
     return [first, ...rest].flatMap((r) => r.repos);
   }
@@ -1607,7 +1650,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * is what we have to list against. Returns null when we could not determine
    * the set, so callers can fail closed rather than fall back to the mirror.
    */
-  private async getUserAccessibleRepoIds(userToken: string, installationId: bigint): Promise<Set<string> | null> {
+  private async getUserAccessibleRepoIds(
+    userToken: string,
+    installationId: bigint
+  ): Promise<Set<string> | null> {
     const perPage = 100;
     const maxPages = 30;
 
@@ -1617,10 +1663,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         {
           signal: AbortSignal.timeout(8000),
           headers: {
-            'Authorization': `Bearer ${userToken}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+            Authorization: `Bearer ${userToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
         }
       );
       if (!response.ok) {
@@ -1631,7 +1677,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       const data = await response.json();
       return {
         ids: (data.repositories || []).map((r: any) => String(r.id)),
-        lastPage: lastMatch ? Number(lastMatch[1]) : null,
+        lastPage: lastMatch ? Number(lastMatch[1]) : null
       };
     };
 
@@ -1641,19 +1687,27 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
       const lastPage = Math.min(first.lastPage, maxPages);
       if (first.lastPage > maxPages) {
-        console.warn(`[GitHub] user-accessible repo list for installation ${installationId} truncated at ${maxPages * perPage}`);
+        console.warn(
+          `[GitHub] user-accessible repo list for installation ${installationId} truncated at ${maxPages * perPage}`
+        );
       }
       const rest = await Promise.all(
-        Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2)),
+        Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2))
       );
       return new Set([first, ...rest].flatMap((r) => r.ids));
     } catch (e: any) {
-      console.warn(`[GitHub] could not resolve user-accessible repos for installation ${installationId}:`, e?.message ?? e);
+      console.warn(
+        `[GitHub] could not resolve user-accessible repos for installation ${installationId}:`,
+        e?.message ?? e
+      );
       return null;
     }
   }
 
-  async syncInstallationRepos(appInstallation: { id: string; installationId: bigint }): Promise<void> {
+  async syncInstallationRepos(appInstallation: {
+    id: string;
+    installationId: bigint;
+  }): Promise<void> {
     if (this.mirrorSyncInflight.has(appInstallation.id)) return;
     this.mirrorSyncInflight.add(appInstallation.id);
     try {
@@ -1661,7 +1715,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       const repos = await this.listInstallationRepos(token);
       const now = new Date();
       await this.prisma.$transaction([
-        this.prisma.gitHubRepoMirror.deleteMany({ where: { appInstallationId: appInstallation.id } }),
+        this.prisma.gitHubRepoMirror.deleteMany({
+          where: { appInstallationId: appInstallation.id }
+        }),
         this.prisma.gitHubRepoMirror.createMany({
           data: repos.map((r) => ({
             appInstallationId: appInstallation.id,
@@ -1670,12 +1726,14 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
             private: Boolean(r.private),
             defaultBranch: r.default_branch ?? null,
             pushedAt: r.pushed_at ? new Date(r.pushed_at) : null,
-            syncedAt: now,
+            syncedAt: now
           })),
-          skipDuplicates: true,
-        }),
+          skipDuplicates: true
+        })
       ]);
-      console.log(`[GitHub] mirrored ${repos.length} repos for installation ${appInstallation.installationId}`);
+      console.log(
+        `[GitHub] mirrored ${repos.length} repos for installation ${appInstallation.installationId}`
+      );
     } finally {
       this.mirrorSyncInflight.delete(appInstallation.id);
     }
@@ -1687,25 +1745,34 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     await this.syncInstallationRepos(inst);
   }
 
-  async applyInstallationReposEvent(installationId: bigint, added: any[], removed: any[]): Promise<void> {
+  async applyInstallationReposEvent(
+    installationId: bigint,
+    added: any[],
+    removed: any[]
+  ): Promise<void> {
     const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
     if (!inst) return;
     if (removed.length > 0) {
       await this.prisma.gitHubRepoMirror.deleteMany({
-        where: { appInstallationId: inst.id, githubRepoId: { in: removed.map((r) => BigInt(r.id)) } },
+        where: {
+          appInstallationId: inst.id,
+          githubRepoId: { in: removed.map((r) => BigInt(r.id)) }
+        }
       });
     }
     for (const r of added) {
       await this.prisma.gitHubRepoMirror.upsert({
-        where: { appInstallationId_githubRepoId: { appInstallationId: inst.id, githubRepoId: BigInt(r.id) } },
+        where: {
+          appInstallationId_githubRepoId: { appInstallationId: inst.id, githubRepoId: BigInt(r.id) }
+        },
         update: { fullName: r.full_name, private: Boolean(r.private), syncedAt: new Date() },
         create: {
           appInstallationId: inst.id,
           githubRepoId: BigInt(r.id),
           fullName: r.full_name,
           private: Boolean(r.private),
-          pushedAt: new Date(),
-        },
+          pushedAt: new Date()
+        }
       });
     }
   }
@@ -1721,25 +1788,21 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
    * anything being raised anywhere. Rows are still required to belong to the
    * sending installation, so a full name alone can never impersonate a repo.
    */
-  async findAutoDeployTargets(
-    installationId: bigint,
-    repoId: bigint | null,
-    repoFullName: string,
-  ) {
+  async findAutoDeployTargets(installationId: bigint, repoId: bigint | null, repoFullName: string) {
     const byUrl = { githubRepo: { in: repoUrlVariants(repoFullName) } };
     const rows = await this.prisma.deployment.findMany({
       where: {
         githubInstallationId: installationId,
         autoDeployEnabled: true,
-        ...(repoId == null ? byUrl : { OR: [byUrl, { githubRepoId: repoId }] }),
+        ...(repoId == null ? byUrl : { OR: [byUrl, { githubRepoId: repoId }] })
       },
       include: {
         project: {
           include: {
-            organization: true,
-          },
-        },
-      },
+            organization: true
+          }
+        }
+      }
     });
     if (repoId != null) await this.adoptRepoIdentity(rows, repoId, repoFullName);
     return rows;
@@ -1753,7 +1816,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   private async adoptRepoIdentity(
     rows: { id: string; githubRepo: string | null; githubRepoId: bigint | null }[],
     repoId: bigint,
-    repoFullName: string,
+    repoFullName: string
   ): Promise<void> {
     for (const row of rows) {
       const url = canonicalRepoUrl(row.githubRepo, repoFullName);
@@ -1763,7 +1826,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       if (Object.keys(data).length === 0) continue;
       await this.prisma.deployment
         .update({ where: { id: row.id }, data })
-        .catch((e) => console.warn(`[GitHub] adopting repo identity for ${row.id} failed:`, e?.message ?? e));
+        .catch((e) =>
+          console.warn(`[GitHub] adopting repo identity for ${row.id} failed:`, e?.message ?? e)
+        );
     }
   }
 
@@ -1782,7 +1847,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     installationId: bigint,
     repoFullName: string,
     base: string | null | undefined,
-    head: string | null | undefined,
+    head: string | null | undefined
   ): Promise<string[] | null> {
     // A branch's first push has no base to compare against.
     if (isNullSha(base) || isNullSha(head)) return null;
@@ -1793,13 +1858,15 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
+            Accept: 'application/vnd.github+json'
           },
-          signal: AbortSignal.timeout(COMPARE_TIMEOUT_MS),
-        },
+          signal: AbortSignal.timeout(COMPARE_TIMEOUT_MS)
+        }
       );
       if (!response.ok) {
-        console.warn(`[GitHub] compare ${repoFullName} ${base}...${head} returned ${response.status}`);
+        console.warn(
+          `[GitHub] compare ${repoFullName} ${base}...${head} returned ${response.status}`
+        );
         return null;
       }
       return changedFilesFromCompare(await response.json());
@@ -1813,14 +1880,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     installationId: bigint,
     action: string,
     repo: any,
-    previousFullName?: string | null,
+    previousFullName?: string | null
   ): Promise<void> {
     if (!repo?.id) return;
     const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
     if (!inst) return;
     const githubRepoId = BigInt(repo.id);
     if (action === 'deleted' || action === 'transferred') {
-      await this.prisma.gitHubRepoMirror.deleteMany({ where: { appInstallationId: inst.id, githubRepoId } });
+      await this.prisma.gitHubRepoMirror.deleteMany({
+        where: { appInstallationId: inst.id, githubRepoId }
+      });
       return;
     }
     await this.prisma.gitHubRepoMirror.updateMany({
@@ -1829,8 +1898,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
         fullName: repo.full_name,
         private: Boolean(repo.private),
         defaultBranch: repo.default_branch ?? null,
-        syncedAt: new Date(),
-      },
+        syncedAt: new Date()
+      }
     });
     if (repo.full_name) {
       await this.applyRepoRename(installationId, githubRepoId, repo.full_name, previousFullName);
@@ -1846,15 +1915,15 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     installationId: bigint,
     repoId: bigint,
     fullName: string,
-    previousFullName?: string | null,
+    previousFullName?: string | null
   ): Promise<void> {
     const oldUrls = previousFullName ? repoUrlVariants(previousFullName) : [];
     const rows = await this.prisma.deployment.findMany({
       where: {
         githubInstallationId: installationId,
-        OR: [{ githubRepoId: repoId }, ...(oldUrls.length ? [{ githubRepo: { in: oldUrls } }] : [])],
+        OR: [{ githubRepoId: repoId }, ...(oldUrls.length ? [{ githubRepo: { in: oldUrls } }] : [])]
       },
-      select: { id: true, githubRepo: true, githubRepoId: true },
+      select: { id: true, githubRepo: true, githubRepoId: true }
     });
     await this.adoptRepoIdentity(rows, repoId, fullName);
 
@@ -1864,19 +1933,19 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     if (oldUrls.length === 0) return;
     const stacks = await this.prisma.composeStack.findMany({
       where: { githubInstallationId: installationId, githubRepo: { in: oldUrls } },
-      select: { id: true, githubRepo: true },
+      select: { id: true, githubRepo: true }
     });
     for (const stack of stacks) {
       await this.prisma.composeStack
         .update({
           where: { id: stack.id },
-          data: { githubRepo: canonicalRepoUrl(stack.githubRepo, fullName) },
+          data: { githubRepo: canonicalRepoUrl(stack.githubRepo, fullName) }
         })
         .catch(() => {});
     }
     if (rows.length > 0 || stacks.length > 0) {
       console.log(
-        `[GitHub] ${previousFullName} -> ${fullName}: relinked ${rows.length} deployment(s), ${stacks.length} compose stack(s)`,
+        `[GitHub] ${previousFullName} -> ${fullName}: relinked ${rows.length} deployment(s), ${stacks.length} compose stack(s)`
       );
     }
   }
@@ -1909,10 +1978,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       where: {
         githubRepoId: null,
         githubInstallationId: { not: null },
-        githubRepo: { not: null },
+        githubRepo: { not: null }
       },
       select: { id: true, githubRepo: true, githubInstallationId: true },
-      take: REPO_LINK_SCAN,
+      take: REPO_LINK_SCAN
     });
     if (rows.length === 0) return 0;
 
@@ -1934,19 +2003,21 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     if (groups.size === 0) return 0;
 
     const installs = await this.prisma.gitHubAppInstallation.findMany({
-      where: { installationId: { in: [...new Set([...groups.values()].map((g) => g.installationId))] } },
-      select: { id: true, installationId: true },
+      where: {
+        installationId: { in: [...new Set([...groups.values()].map((g) => g.installationId))] }
+      },
+      select: { id: true, installationId: true }
     });
     const instByInstallationId = new Map(installs.map((i) => [i.installationId.toString(), i.id]));
     const mirrored = await this.prisma.gitHubRepoMirror.findMany({
       where: {
         appInstallationId: { in: installs.map((i) => i.id) },
-        fullName: { in: [...new Set([...groups.values()].map((g) => g.fullName))] },
+        fullName: { in: [...new Set([...groups.values()].map((g) => g.fullName))] }
       },
-      select: { appInstallationId: true, githubRepoId: true, fullName: true },
+      select: { appInstallationId: true, githubRepoId: true, fullName: true }
     });
     const mirrorIndex = new Map(
-      mirrored.map((m) => [`${m.appInstallationId}/${m.fullName}`, m.githubRepoId]),
+      mirrored.map((m) => [`${m.appInstallationId}/${m.fullName}`, m.githubRepoId])
     );
 
     let linked = 0;
@@ -1969,7 +2040,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       await this.adoptRepoIdentity(
         group.rows.map((r) => ({ ...r, githubRepoId: null })),
         repoId,
-        fullName,
+        fullName
       );
       linked += group.rows.length;
     }
@@ -1979,15 +2050,15 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   /** Ask GitHub what a stored owner/name is now. Follows renames; null if it is gone. */
   private async lookupRepoIdentity(
     installationId: bigint,
-    fullName: string,
+    fullName: string
   ): Promise<{ repoId: bigint; fullName: string } | null> {
     try {
       const token = await this.getOrRefreshInstallationToken(installationId);
       const response = await fetch(`https://api.github.com/repos/${fullName}`, {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-        },
+          Accept: 'application/vnd.github+json'
+        }
       });
       if (!response.ok) return null;
       const body: any = await response.json();
@@ -2002,13 +2073,16 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async touchRepoPush(installationId: bigint, repo: { id?: number; full_name?: string }): Promise<void> {
+  async touchRepoPush(
+    installationId: bigint,
+    repo: { id?: number; full_name?: string }
+  ): Promise<void> {
     if (!repo?.id) return;
     const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
     if (!inst) return;
     await this.prisma.gitHubRepoMirror.updateMany({
       where: { appInstallationId: inst.id, githubRepoId: BigInt(repo.id) },
-      data: { pushedAt: new Date(), ...(repo.full_name ? { fullName: repo.full_name } : {}) },
+      data: { pushedAt: new Date(), ...(repo.full_name ? { fullName: repo.full_name } : {}) }
     });
   }
 
@@ -2020,7 +2094,10 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       try {
         return await this.getOrRefreshInstallationToken(installation.installationId);
       } catch (e) {
-        console.warn(`[GitHub] Installation token failed for ${owner}/${repo}, trying user token:`, e);
+        console.warn(
+          `[GitHub] Installation token failed for ${owner}/${repo}, trying user token:`,
+          e
+        );
       }
     }
 
@@ -2052,7 +2129,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   // this user can actually see through each installation. An org member with
   // access to one repo must not be shown the rest of the org's private repos
   // just because the App is installed org-wide.
-  async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
+  async getAllUserRepositories(userId: string): Promise<{
+    repos: GitHubRepo[];
+    installations: any[];
+    hasInstallations: boolean;
+    userLinked: boolean;
+  }> {
     let installations: any[];
     const cachedInst = this.userInstallationsCache.get(userId);
     if (cachedInst && Date.now() - cachedInst.at < GitHubService.INSTALLATIONS_CACHE_MS) {
@@ -2079,7 +2161,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const loadRows = () =>
       this.prisma.gitHubRepoMirror.findMany({
         where: { appInstallationId: { in: instIds } },
-        orderBy: [{ pushedAt: { sort: 'desc', nulls: 'last' } }, { fullName: 'asc' }],
+        orderBy: [{ pushedAt: { sort: 'desc', nulls: 'last' } }, { fullName: 'asc' }]
       });
 
     let rows = await loadRows();
@@ -2089,9 +2171,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       await Promise.all(
         unseeded.map((i) =>
           this.syncInstallationRepos(i).catch((e) =>
-            console.error(`[GitHub] mirror seed failed for installation ${i.installationId}:`, e?.message ?? e),
-          ),
-        ),
+            console.error(
+              `[GitHub] mirror seed failed for installation ${i.installationId}:`,
+              e?.message ?? e
+            )
+          )
+        )
       );
       rows = await loadRows();
     } else {
@@ -2122,11 +2207,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
           const ids = await this.getUserAccessibleRepoIds(userToken, i.installationId);
           if (ids) this.accessibleReposCache.set(key, { at: Date.now(), ids });
           return [i.id, ids];
-        }),
-      ),
+        })
+      )
     );
 
-    rows = rows.filter((r) => allowedByInst.get(r.appInstallationId)?.has(r.githubRepoId.toString()) ?? false);
+    rows = rows.filter(
+      (r) => allowedByInst.get(r.appInstallationId)?.has(r.githubRepoId.toString()) ?? false
+    );
 
     const countByInst = new Map<string, number>();
     for (const r of rows) {
@@ -2145,8 +2232,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
           clone_url: `https://github.com/${r.fullName}.git`,
           pushed_at: r.pushedAt?.toISOString() ?? null,
           installationId: inst.installationId.toString(),
-          accountLogin: inst.accountLogin,
-        } as any,
+          accountLogin: inst.accountLogin
+        } as any
       ];
     });
 
@@ -2155,7 +2242,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       installationId: i.installationId.toString(),
       accountLogin: i.accountLogin,
       accountType: i.accountType,
-      repositoryCount: countByInst.get(i.id) ?? 0,
+      repositoryCount: countByInst.get(i.id) ?? 0
     }));
 
     return { repos, installations: installationData, hasInstallations: true, userLinked };
@@ -2173,7 +2260,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
   async getUserInstallations(userId: string) {
     const dbRows = await this.prisma.gitHubAppInstallation.findMany({
       where: { suspendedAt: null, userId },
-      orderBy: { accountLogin: 'asc' },
+      orderBy: { accountLogin: 'asc' }
     });
 
     const userToken = await this.getValidUserToken(userId);
@@ -2187,17 +2274,14 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       repository_selection: 'all' | 'selected';
     }[] = [];
     try {
-      const response = await fetch(
-        'https://api.github.com/user/installations?per_page=100',
-        {
-          headers: {
-            Authorization: `Bearer ${userToken}`,
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-          signal: AbortSignal.timeout(5000),
+      const response = await fetch('https://api.github.com/user/installations?per_page=100', {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
         },
-      );
+        signal: AbortSignal.timeout(5000)
+      });
       if (response.ok) {
         const data = await response.json();
         githubInstallations = data.installations ?? [];
@@ -2216,7 +2300,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
 
     // Backfill installations GitHub knows about that we don't have in the DB
     const toBackfill = githubInstallations.filter(
-      (inst) => inst.account?.login && !dbByInstallationId.has(String(inst.id)),
+      (inst) => inst.account?.login && !dbByInstallationId.has(String(inst.id))
     );
     for (const inst of toBackfill) {
       try {
@@ -2228,13 +2312,13 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
             accountLogin: inst.account!.login,
             accountId: BigInt(inst.account!.id),
             accountType: inst.account!.type,
-            repositorySelection: inst.repository_selection,
+            repositorySelection: inst.repository_selection
           },
           update: {
             accountLogin: inst.account!.login,
             accountType: inst.account!.type,
-            repositorySelection: inst.repository_selection,
-          },
+            repositorySelection: inst.repository_selection
+          }
         });
         dbByInstallationId.set(row.installationId.toString(), row);
       } catch (e) {
@@ -2259,7 +2343,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
           tokenExpiresAt: null,
           suspendedAt: null,
           createdAt: new Date(),
-          updatedAt: new Date(),
+          updatedAt: new Date()
         } as unknown as (typeof dbRows)[number];
       })
       .sort((a, b) => a.accountLogin.localeCompare(b.accountLogin));
@@ -2281,11 +2365,11 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       where = 'Install it from the GitHub App settings';
     }
     return (
-      `The GitHub App is not installed on ${owner}/${repo}, so pushes cannot reach Orchard `
-      + 'and auto-deploy cannot be enabled. '
-      + `${where}, and if it is installed with "only select repositories", add ${repo} to the `
-      + 'selection: a repository created after the install is not added to it automatically. '
-      + 'Manual builds and rebuilds work without this.'
+      `The GitHub App is not installed on ${owner}/${repo}, so pushes cannot reach Orchard ` +
+      'and auto-deploy cannot be enabled. ' +
+      `${where}, and if it is installed with "only select repositories", add ${repo} to the ` +
+      'selection: a repository created after the install is not added to it automatically. ' +
+      'Manual builds and rebuilds work without this.'
     );
   }
 
@@ -2311,7 +2395,14 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       name: string;
       headSha: string;
       status?: 'queued' | 'in_progress' | 'completed';
-      conclusion?: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required';
+      conclusion?:
+        | 'success'
+        | 'failure'
+        | 'neutral'
+        | 'cancelled'
+        | 'skipped'
+        | 'timed_out'
+        | 'action_required';
       detailsUrl?: string;
       externalId?: string;
       output?: {
@@ -2326,7 +2417,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     const body: Record<string, unknown> = {
       name: options.name,
       head_sha: options.headSha,
-      status: options.status || 'queued',
+      status: options.status || 'queued'
     };
 
     if (options.conclusion) {
@@ -2355,12 +2446,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       }
     );
 
@@ -2382,7 +2473,14 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     checkRunId: number,
     options: {
       status?: 'queued' | 'in_progress' | 'completed';
-      conclusion?: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required';
+      conclusion?:
+        | 'success'
+        | 'failure'
+        | 'neutral'
+        | 'cancelled'
+        | 'skipped'
+        | 'timed_out'
+        | 'action_required';
       detailsUrl?: string;
       output?: {
         title: string;
@@ -2417,12 +2515,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       }
     );
 
@@ -2432,5 +2530,4 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       // Don't throw - we don't want to break the build if check update fails
     }
   }
-
 }

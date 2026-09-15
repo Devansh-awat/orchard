@@ -67,6 +67,5 @@
 		autocapitalize="off"
 		placeholder={RUNTIME_INFO[runtime].placeholder}
 		bind:value={script}
-		onkeydown={onKeydown}
-	></textarea>
+		onkeydown={onKeydown}></textarea>
 </div>

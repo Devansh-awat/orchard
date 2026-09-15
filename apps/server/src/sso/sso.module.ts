@@ -18,7 +18,14 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
 @Module({
   imports: [PrismaModule, AuthModule, UsersModule, OrganizationsModule, KubernetesModule],
   controllers: [SsoController, SsoAdminController, SsoInstanceController, VanityDomainController],
-  providers: [SsoService, SsoLoginService, SsoCryptoService, OrgDomainsService, VanityDomainService, OidcStateStore],
-  exports: [SsoService, OrgDomainsService],
+  providers: [
+    SsoService,
+    SsoLoginService,
+    SsoCryptoService,
+    OrgDomainsService,
+    VanityDomainService,
+    OidcStateStore
+  ],
+  exports: [SsoService, OrgDomainsService]
 })
 export class SsoModule {}

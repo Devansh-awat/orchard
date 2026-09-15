@@ -24,7 +24,7 @@ export class SecretCryptoService {
     this.key = secret ? scryptSync(secret, 'orchard-env-secret', 32) : null;
     if (!this.key) {
       this.logger.warn(
-        'SECRETS_ENCRYPTION_KEY not set — secret env values cannot be encrypted at rest.',
+        'SECRETS_ENCRYPTION_KEY not set — secret env values cannot be encrypted at rest.'
       );
     }
   }
@@ -40,7 +40,7 @@ export class SecretCryptoService {
   encrypt(plaintext: string): string {
     if (!this.key) {
       throw new Error(
-        'SECRETS_ENCRYPTION_KEY is not configured; refusing to store secret env values in plaintext',
+        'SECRETS_ENCRYPTION_KEY is not configured; refusing to store secret env values in plaintext'
       );
     }
     const iv = randomBytes(16);
@@ -58,10 +58,9 @@ export class SecretCryptoService {
     const [ivHex, tagHex, ctHex] = value.slice(PREFIX.length).split(':');
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(ivHex, 'hex'));
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ctHex, 'hex')),
-      decipher.final(),
-    ]).toString('utf8');
+    return Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString(
+      'utf8'
+    );
   }
 
   /**

@@ -16,7 +16,7 @@ const DEPLOY_SELECT = {
   branch: true,
   triggerType: true,
   createdAt: true,
-  triggeredBy: { select: { username: true } },
+  triggeredBy: { select: { username: true } }
 } as const;
 
 // Errors are parsed from pod logs server-side on the leader so history keeps
@@ -34,7 +34,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leader: LeaderElectionService,
-    private readonly observability: ObservabilityService,
+    private readonly observability: ObservabilityService
   ) {}
 
   onModuleInit() {
@@ -60,7 +60,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
         where: { status: { in: ['running', 'degraded'] } },
         select: { id: true },
         take: MAX_DEPLOYMENTS_PER_SWEEP,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { updatedAt: 'desc' }
       });
       let touched = 0;
       for (const d of deployments) {
@@ -89,14 +89,14 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
     const cutoff = new Date(Date.now() - windowMinutes * 60_000);
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { githubRepo: true, projectId: true },
+      select: { githubRepo: true, projectId: true }
     });
 
     // Only people who can actually open this deployment are assignable.
     const members = deployment?.projectId
       ? await this.prisma.projectMember.findMany({
           where: { projectId: deployment.projectId },
-          select: { user: { select: { id: true, username: true, imageUrl: true } } },
+          select: { user: { select: { id: true, username: true, imageUrl: true } } }
         })
       : [];
     const groups = await this.prisma.errorGroup.findMany({
@@ -109,10 +109,10 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
         occurrences: {
           select: {
             count: true,
-            imageHistory: { select: DEPLOY_SELECT },
-          },
-        },
-      },
+            imageHistory: { select: DEPLOY_SELECT }
+          }
+        }
+      }
     });
 
     return {
@@ -133,8 +133,8 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
         deployCount: g.occurrences.length,
         deploys: g.occurrences
           .filter((o) => o.imageHistory)
-          .map((o) => ({ ...mapDeploy(o.imageHistory!), count: o.count })),
-      })),
+          .map((o) => ({ ...mapDeploy(o.imageHistory!), count: o.count }))
+      }))
     };
   }
 
@@ -142,7 +142,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     fingerprint: string,
     body: { status?: string; assigneeId?: string | null },
-    actingUserId: string,
+    actingUserId: string
   ) {
     const allowed = ['unresolved', 'resolved', 'ignored'];
     const data: Record<string, unknown> = {};
@@ -156,7 +156,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
 
     await this.prisma.errorGroup.update({
       where: { deploymentId_fingerprint: { deploymentId, fingerprint } },
-      data,
+      data
     });
     return { ok: true };
   }
@@ -168,7 +168,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
     let savedCount = 0;
     const activeImage = await this.prisma.imageHistory.findFirst({
       where: { deploymentId, isActive: true },
-      select: { id: true },
+      select: { id: true }
     });
 
     for (const group of errors) {
@@ -178,9 +178,9 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
 
       const existing = await this.prisma.errorGroup.findUnique({
         where: {
-          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint },
+          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint }
         },
-        select: { id: true, lastSeenAt: true, status: true },
+        select: { id: true, lastSeenAt: true, status: true }
       });
 
       // Only the slice newer than the watermark is new; overlapping sweeps of
@@ -188,9 +188,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
       const watermark = existing?.lastSeenAt ?? null;
       let newCount = group.count;
       if (watermark) {
-        const fresh = group.samples.some(
-          (s) => s.timestamp && new Date(s.timestamp) > watermark,
-        );
+        const fresh = group.samples.some((s) => s.timestamp && new Date(s.timestamp) > watermark);
         newCount = fresh ? group.count : 0;
       }
       if (existing && newCount === 0) continue;
@@ -200,7 +198,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
 
       const saved = await this.prisma.errorGroup.upsert({
         where: {
-          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint },
+          deploymentId_fingerprint: { deploymentId, fingerprint: group.fingerprint }
         },
         create: {
           deploymentId,
@@ -211,7 +209,7 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
           firstSeenAt: firstSeen,
           lastSeenAt: lastSeen,
           firstImageHistoryId: activeImage?.id ?? null,
-          sampleStack,
+          sampleStack
         },
         update: {
           message: group.message,
@@ -221,9 +219,9 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
           // A group that fires again after being resolved is a regression.
           ...(existing?.status === 'resolved'
             ? { status: 'unresolved', resolvedAt: null, resolvedById: null }
-            : {}),
+            : {})
         },
-        select: { id: true },
+        select: { id: true }
       });
 
       if (activeImage) {
@@ -231,20 +229,20 @@ export class ErrorIngestService implements OnModuleInit, OnModuleDestroy {
           where: {
             errorGroupId_imageHistoryId: {
               errorGroupId: saved.id,
-              imageHistoryId: activeImage.id,
-            },
+              imageHistoryId: activeImage.id
+            }
           },
           create: {
             errorGroupId: saved.id,
             imageHistoryId: activeImage.id,
             count: group.count,
             firstSeenAt: firstSeen,
-            lastSeenAt: lastSeen,
+            lastSeenAt: lastSeen
           },
           update: {
             count: { increment: newCount },
-            lastSeenAt: lastSeen,
-          },
+            lastSeenAt: lastSeen
+          }
         });
       }
     }
@@ -266,6 +264,6 @@ function mapDeploy(h: {
     branch: h.branch,
     triggerType: h.triggerType,
     triggeredBy: h.triggeredBy?.username ?? null,
-    at: h.createdAt.toISOString(),
+    at: h.createdAt.toISOString()
   };
 }

@@ -4,7 +4,7 @@ import {
   createMcpHandler,
   type AuthInfo,
   type McpRequestContext,
-  type McpHttpHandler,
+  type McpHttpHandler
 } from '@modelcontextprotocol/server';
 import { toNodeHandler, type NodeMcpRequestHandler } from '@modelcontextprotocol/node';
 import { createOrchardMcpServer } from './server';
@@ -27,16 +27,14 @@ export class McpTransportService implements OnModuleDestroy {
   // client. A 2025-era client (today's Claude) is still served through the
   // handler's built-in legacy fallback, so this is drop-in for existing
   // connections.
-  private readonly handler: McpHttpHandler = createMcpHandler((ctx) =>
-    this.buildServer(ctx),
-  );
+  private readonly handler: McpHttpHandler = createMcpHandler((ctx) => this.buildServer(ctx));
 
   // The handler does no auth of its own; we gate every request with our own
   // bearer validation (which enforces session revocation) and pass the result
   // through as AuthInfo. toNodeHandler bridges Express <-> web Request/Response,
   // including SSE streaming.
   private readonly nodeHandler: NodeMcpRequestHandler = toNodeHandler({
-    fetch: (request, options) => this.authenticateAndDispatch(request, options),
+    fetch: (request, options) => this.authenticateAndDispatch(request, options)
   });
 
   constructor(private readonly oauth: McpOAuthService) {}
@@ -57,28 +55,28 @@ export class McpTransportService implements OnModuleDestroy {
       sub: extra.sub as string,
       email: extra.email,
       externalAuthId: extra.externalAuthId,
-      sessionId: extra.sessionId as string,
+      sessionId: extra.sessionId as string
     });
   }
 
   private async authenticateAndDispatch(
     request: Request,
-    options?: { parsedBody?: unknown },
+    options?: { parsedBody?: unknown }
   ): Promise<Response> {
     // M-6: bind every dispatch to the bearer's `sub`. The per-request server
     // built for this call holds an OrchardClient minted with this caller's
     // identity, so validating here (and caching nothing) is what keeps one
     // user's tool calls from ever running as another.
     const auth = await this.oauth.validateBearerTokenWithSub(
-      request.headers.get('authorization') ?? undefined,
+      request.headers.get('authorization') ?? undefined
     );
     if (!auth) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer resource_metadata="${this.oauth.resourceMetadataUrl}", scope="mcp:access"`,
-        },
+          'WWW-Authenticate': `Bearer resource_metadata="${this.oauth.resourceMetadataUrl}", scope="mcp:access"`
+        }
       });
     }
 
@@ -90,8 +88,8 @@ export class McpTransportService implements OnModuleDestroy {
         sub: auth.sub,
         email: auth.email,
         externalAuthId: auth.externalAuthId,
-        sessionId: auth.sessionId,
-      } satisfies McpAuthExtra,
+        sessionId: auth.sessionId
+      } satisfies McpAuthExtra
     };
 
     return this.handler.fetch(request, { ...options, authInfo });

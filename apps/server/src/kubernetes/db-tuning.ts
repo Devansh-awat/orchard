@@ -20,11 +20,13 @@ const PG_MEM_UNITS: Record<string, number> = {
   kB: 1024,
   MB: 1024 ** 2,
   GB: 1024 ** 3,
-  TB: 1024 ** 4,
+  TB: 1024 ** 4
 };
 
 export function parsePgMemory(value: string): number {
-  const m = String(value ?? '').trim().match(/^(\d+)\s*(kB|MB|GB|TB)$/);
+  const m = String(value ?? '')
+    .trim()
+    .match(/^(\d+)\s*(kB|MB|GB|TB)$/);
   if (!m) return 0;
   return parseInt(m[1], 10) * PG_MEM_UNITS[m[2]];
 }
@@ -90,7 +92,7 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
 
   const derivedSharedBuffers = Math.max(
     SHARED_BUFFERS_MIN_BYTES,
-    Math.floor((basis * SHARED_BUFFERS_FRACTION) / MiB) * MiB,
+    Math.floor((basis * SHARED_BUFFERS_FRACTION) / MiB) * MiB
   );
 
   const override = input.overrides?.sharedBuffers?.trim();
@@ -103,11 +105,11 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
       advisories.push({
         key: 'shared_buffers',
         message:
-          `shared_buffers is ${override}, ${pct}% of this database's memory limit. `
-          + 'Postgres reserves that up front, so there may not be enough left for '
-          + 'connections and backups, and the database can be OOMKilled. '
-          + `The automatic value for this limit is ${formatPgMemory(derivedSharedBuffers)}. `
-          + 'Clear the setting to go back to automatic.',
+          `shared_buffers is ${override}, ${pct}% of this database's memory limit. ` +
+          'Postgres reserves that up front, so there may not be enough left for ' +
+          'connections and backups, and the database can be OOMKilled. ' +
+          `The automatic value for this limit is ${formatPgMemory(derivedSharedBuffers)}. ` +
+          'Clear the setting to go back to automatic.'
       });
     }
   } else {
@@ -122,9 +124,9 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
       advisories.push({
         key: 'backupCompression',
         message:
-          'Backup compression is forced on below the memory level where it is safe. '
-          + 'Compressing the base backup can OOMKill the database while it runs. '
-          + 'Clear the setting to go back to automatic.',
+          'Backup compression is forced on below the memory level where it is safe. ' +
+          'Compressing the base backup can OOMKill the database while it runs. ' +
+          'Clear the setting to go back to automatic.'
       });
     }
   } else if (compressionOverride === 'none') {

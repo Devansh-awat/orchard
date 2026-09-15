@@ -1,7 +1,7 @@
 import type * as k8s from '@kubernetes/client-node';
 
 export function latestTermination(
-  containerStatuses: k8s.V1ContainerStatus[],
+  containerStatuses: k8s.V1ContainerStatus[]
 ): { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null {
   let best: { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null =
     null;
@@ -13,7 +13,7 @@ export function latestTermination(
     best = {
       reason: t.reason ?? null,
       exitCode: t.exitCode ?? null,
-      finishedAt,
+      finishedAt
     };
   }
   return best;
@@ -31,11 +31,11 @@ export const POD_BACKOFF_REASONS = new Set([
   'createcontainererror',
   'createcontainerconfigerror',
   'runcontainererror',
-  'invalidimagename',
+  'invalidimagename'
 ]);
 
 export function podBackoffReason(
-  containerStatuses: k8s.V1ContainerStatus[] | undefined,
+  containerStatuses: k8s.V1ContainerStatus[] | undefined
 ): string | null {
   for (const c of containerStatuses ?? []) {
     const reason = c?.state?.waiting?.reason;

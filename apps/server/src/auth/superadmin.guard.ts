@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import { Request } from 'express';
@@ -10,7 +16,7 @@ import {
   REQUIRES_AUTH_KEY,
   REQUIRES_SUPERADMIN_KEY,
   REQUIRED_SCOPE_KEY,
-  ApiTokenScopeName,
+  ApiTokenScopeName
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
@@ -61,7 +67,7 @@ export class SuperAdminGuard implements CanActivate {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionsService: SessionsService,
-    private readonly reflector: Reflector,
+    private readonly reflector: Reflector
   ) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
@@ -78,13 +84,13 @@ export class SuperAdminGuard implements CanActivate {
 
     const requiresAuth = this.reflector.getAllAndOverride<boolean>(REQUIRES_AUTH_KEY, [
       context.getHandler(),
-      context.getClass(),
+      context.getClass()
     ]);
 
     if (!requiresAuth) {
       const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
         context.getHandler(),
-        context.getClass(),
+        context.getClass()
       ]);
       if (isPublic) {
         return true;
@@ -109,7 +115,9 @@ export class SuperAdminGuard implements CanActivate {
       const actingSub = request.headers['x-acting-user-sub'] as string | undefined;
       const actingSessionId = request.headers['x-acting-user-session-id'] as string | undefined;
       const actingEmail = request.headers['x-acting-user-email'] as string | undefined;
-      const actingExternalAuthId = request.headers['x-acting-user-hackclub-id'] as string | undefined;
+      const actingExternalAuthId = request.headers['x-acting-user-hackclub-id'] as
+        | string
+        | undefined;
 
       if (!actingSub || !actingSessionId) {
         throw new UnauthorizedException('MCP gateway request missing acting-user headers');
@@ -128,12 +136,12 @@ export class SuperAdminGuard implements CanActivate {
       if (actingExternalAuthId) {
         let dbUser = await this.prisma.user.findUnique({
           where: { externalAuthId: actingExternalAuthId },
-          select: { id: true },
+          select: { id: true }
         });
         if (!dbUser && actingEmail) {
           dbUser = await this.prisma.user.findUnique({
             where: { email: actingEmail },
-            select: { id: true },
+            select: { id: true }
           });
         }
         if (!dbUser) {
@@ -148,20 +156,20 @@ export class SuperAdminGuard implements CanActivate {
         email: actingEmail,
         externalAuthId: actingExternalAuthId,
         sessionId: actingSessionId,
-        viaMcpGateway: true,
+        viaMcpGateway: true
       };
       publishAuthContext({});
 
-      const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(REQUIRES_SUPERADMIN_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]);
+      const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(
+        REQUIRES_SUPERADMIN_KEY,
+        [context.getHandler(), context.getClass()]
+      );
       if (requiresAuth && !requiresSuperadminGw) {
         return true;
       }
       const sa = await this.prisma.user.findFirst({
         where: { id: dbUserId },
-        select: { isSuperAdmin: true },
+        select: { isSuperAdmin: true }
       });
       if (!sa || !sa.isSuperAdmin) {
         throw new ForbiddenException('Superadmin access required');
@@ -195,12 +203,12 @@ export class SuperAdminGuard implements CanActivate {
       if (externalAuthId) {
         let dbUser = await this.prisma.user.findUnique({
           where: { externalAuthId },
-          select: { id: true },
+          select: { id: true }
         });
         if (!dbUser && payload.email) {
           dbUser = await this.prisma.user.findUnique({
             where: { email: payload.email as string },
-            select: { id: true },
+            select: { id: true }
           });
         }
         if (!dbUser) {
@@ -245,7 +253,7 @@ export class SuperAdminGuard implements CanActivate {
         name: payload.name,
         externalAuthId,
         sessionId,
-        orgScope,
+        orgScope
       };
       // Session-auth: no token-scope restrictions to publish, but an org-scoped
       // session publishes its confinement so AuthorizationService can enforce it.
@@ -257,7 +265,7 @@ export class SuperAdminGuard implements CanActivate {
 
     if (orgScopeDenied) {
       throw new ForbiddenException(
-        'This sign-in is scoped to a single organization and cannot manage account credentials',
+        'This sign-in is scoped to a single organization and cannot manage account credentials'
       );
     }
 
@@ -270,7 +278,18 @@ export class SuperAdminGuard implements CanActivate {
 
       const apiToken = await this.prisma.apiToken.findUnique({
         where: { tokenHash: hashApiToken(token) },
-        include: { user: { select: { id: true, email: true, username: true, firstName: true, lastName: true, externalAuthId: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              externalAuthId: true
+            }
+          }
+        }
       });
 
       if (!apiToken) {
@@ -292,26 +311,28 @@ export class SuperAdminGuard implements CanActivate {
         userId: user.id,
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
-        tokenProjectIds: restrictedProjectIds,
+        tokenProjectIds: restrictedProjectIds
       };
       request['tokenScopes'] = scopes;
       publishAuthContext({
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
-        tokenProjectIds: restrictedProjectIds,
+        tokenProjectIds: restrictedProjectIds
       });
       request['user'] = {
         sub: user.id,
         email: user.email,
         name,
-        externalAuthId: user.externalAuthId,
+        externalAuthId: user.externalAuthId
       };
 
       // Update lastUsedAt in the background
-      this.prisma.apiToken.update({
-        where: { id: apiToken.id },
-        data: { lastUsedAt: new Date() },
-      }).catch(() => {});
+      this.prisma.apiToken
+        .update({
+          where: { id: apiToken.id },
+          data: { lastUsedAt: new Date() }
+        })
+        .catch(() => {});
     }
 
     // Explicit @SuperAdmin() forces the superadmin check even if @Auth() is also present.
@@ -319,7 +340,7 @@ export class SuperAdminGuard implements CanActivate {
     // maintainer adding @Auth() and accidentally opening the surface.
     const requiresSuperadmin = this.reflector.getAllAndOverride<boolean>(REQUIRES_SUPERADMIN_KEY, [
       context.getHandler(),
-      context.getClass(),
+      context.getClass()
     ]);
 
     // Check @Auth() — JWT verified, no superadmin check needed (unless @SuperAdmin() overrides)
@@ -337,11 +358,15 @@ export class SuperAdminGuard implements CanActivate {
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          ...(userId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i) ? [{ id: userId }] : []),
-          { externalAuthId: userId },
-        ],
+          ...(userId.match(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+          )
+            ? [{ id: userId }]
+            : []),
+          { externalAuthId: userId }
+        ]
       },
-      select: { id: true, isSuperAdmin: true },
+      select: { id: true, isSuperAdmin: true }
     });
 
     if (!user || !user.isSuperAdmin) {
@@ -366,9 +391,7 @@ export class SuperAdminGuard implements CanActivate {
     const authHeader = request.headers.authorization;
     const cookieToken = request.cookies?.session_token;
 
-    return authHeader?.startsWith('Bearer ')
-      ? authHeader.substring(7)
-      : cookieToken;
+    return authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : cookieToken;
   }
 }
 
@@ -404,7 +427,7 @@ export class ScopeGuard implements CanActivate {
 
     const explicit = this.reflector.getAllAndOverride<ApiTokenScopeName | undefined>(
       REQUIRED_SCOPE_KEY,
-      [context.getHandler(), context.getClass()],
+      [context.getHandler(), context.getClass()]
     );
 
     const method = (request.method || 'GET').toUpperCase();

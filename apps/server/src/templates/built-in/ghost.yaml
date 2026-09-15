@@ -5,9 +5,9 @@ metadata:
   displayName: Ghost Blog
   description: Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.
   icon: ghost
-  version: "1.0.0"
+  version: '1.0.0'
   category: cms
-  tags: ["blog", "cms", "ghost", "publishing"]
+  tags: ['blog', 'cms', 'ghost', 'publishing']
 
 parameters:
   - name: appName
@@ -17,20 +17,20 @@ parameters:
     default: ghost
     required: true
     validation:
-      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
       message: Must be lowercase alphanumeric with hyphens, 3-60 chars
 
   - name: ghostImage
     displayName: Ghost Image
     type: string
-    default: "ghost:5"
+    default: 'ghost:5'
 
   - name: domain
     displayName: Domain
     description: Public domain for your Ghost blog
     type: string
     required: true
-    placeholder: "blog.example.com"
+    placeholder: 'blog.example.com'
 
   - name: enableTls
     displayName: Enable HTTPS
@@ -41,13 +41,13 @@ resources:
   - name: db
     type: database
     config:
-      name: "{{ params.appName }}-db"
+      name: '{{ params.appName }}-db'
 
   - name: app
     type: deployment
     config:
-      name: "{{ params.appName }}"
-      image: "{{ params.ghostImage }}"
+      name: '{{ params.appName }}'
+      image: '{{ params.ghostImage }}'
       replicas: 1
       ports:
         - name: http
@@ -58,24 +58,24 @@ resources:
         - key: database__client
           value: postgres
         - key: database__connection__host
-          value: "{{ resources.db.host }}"
+          value: '{{ resources.db.host }}'
         - key: database__connection__port
-          value: "{{ resources.db.port }}"
+          value: '{{ resources.db.port }}'
         - key: database__connection__database
-          value: "{{ resources.db.dbName }}"
+          value: '{{ resources.db.dbName }}'
         - key: database__connection__user
-          value: "{{ resources.db.dbUser }}"
+          value: '{{ resources.db.dbUser }}'
         - key: database__connection__password
-          value: "{{ resources.db.dbPassword }}"
+          value: '{{ resources.db.dbPassword }}'
         - key: url
-          value: "https://{{ params.domain }}"
+          value: 'https://{{ params.domain }}'
 
   - name: ingress
     type: ingress
     config:
-      host: "{{ params.domain }}"
-      tlsEnabled: "{{ params.enableTls }}"
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
       routes:
         - path: /
-          serviceName: "{{ resources.app.serviceName }}"
+          serviceName: '{{ resources.app.serviceName }}'
           servicePort: 2368

@@ -19,7 +19,7 @@ const TS_VERSION = '7.0.2';
 const PROJECTS = [
   { name: 'server', config: 'apps/server/tsconfig.check.json' },
   { name: 'frontend', config: 'apps/frontend/tsconfig.json' },
-  { name: 'contracts', config: 'packages/contracts/tsconfig.json' },
+  { name: 'contracts', config: 'packages/contracts/tsconfig.json' }
 ];
 
 const root = resolve(import.meta.dirname, '..');
@@ -41,11 +41,24 @@ function peakRssBytes(stderr) {
 }
 
 function run(project) {
-  const tsc = ['npx', '-y', '-p', `typescript@${TS_VERSION}`, 'tsc', '--noEmit', '-p', project.config];
+  const tsc = [
+    'npx',
+    '-y',
+    '-p',
+    `typescript@${TS_VERSION}`,
+    'tsc',
+    '--noEmit',
+    '-p',
+    project.config
+  ];
   const argv = TIME_FLAG ? ['/usr/bin/time', TIME_FLAG, ...tsc] : tsc;
 
   const started = Date.now();
-  const proc = spawnSync(argv[0], argv.slice(1), { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const proc = spawnSync(argv[0], argv.slice(1), {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
+  });
   const ms = Date.now() - started;
 
   const output = `${proc.stdout ?? ''}${proc.stderr ?? ''}`;
@@ -76,7 +89,7 @@ const status = (r) => {
 };
 
 const rows = results.map(
-  (r) => `| ${r.name} | ${status(r)} | ${secs(r.ms)} | ${mib(r.peak) ?? 'n/a'} |`,
+  (r) => `| ${r.name} | ${status(r)} | ${secs(r.ms)} | ${mib(r.peak) ?? 'n/a'} |`
 );
 
 const summary = [
@@ -89,10 +102,11 @@ const summary = [
   '',
   failed.length === 0
     ? `Checked ${results.length} projects in ${secs(totalMs)}${peak ? ` using at most ${mib(peak)}` : ''}. Nothing to fix.`
-    : `${failed.map((r) => r.name).join(', ')} did not typecheck. Errors are in the job log.`,
+    : `${failed.map((r) => r.name).join(', ')} did not typecheck. Errors are in the job log.`
 ].join('\n');
 
 console.log(`\n${summary}`);
-if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+if (process.env.GITHUB_STEP_SUMMARY)
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
 
 process.exit(failed.length === 0 ? 0 : 1);

@@ -14,7 +14,7 @@ const PUBLIC = [
   '2600::1',
   '2606:4700::1111',
   '::ffff:8.8.8.8',
-  '64:ff9b::808:808',
+  '64:ff9b::808:808'
 ];
 
 const BLOCKED = [
@@ -52,7 +52,7 @@ const BLOCKED = [
   '::ffff:10.0.0.1',
   '::ffff:169.254.169.254',
   'not-an-ip',
-  'example.com',
+  'example.com'
 ];
 
 test('public addresses pass', () => {

@@ -45,7 +45,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
   } catch (err) {
     console.warn(
       '[Terminal] kubeconfig unavailable — pod exec terminal disabled:',
-      (err as Error).message,
+      (err as Error).message
     );
   }
 
@@ -64,9 +64,10 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     // Auth: parse session_token from cookies or Authorization header (for API tokens).
     const cookies = parseCookies(req.headers.cookie || '');
     const authHeader = req.headers['authorization'];
-    const bearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : undefined;
+    const bearer =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : undefined;
     const token = cookies['session_token'] || bearer;
     if (!token) return reject(401, 'Unauthorized');
 
@@ -77,7 +78,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     // SuperAdminGuard → requestAuthStorage; this gateway bypasses that guard
     // and must enter the context itself, otherwise resolveProjectAccess sees
     // an empty store and skips the allow-list entirely.
-    let tokenAuthCtx: { apiTokenId: string; tokenScopes: string[]; tokenProjectIds: string[] } | null = null;
+    let tokenAuthCtx: {
+      apiTokenId: string;
+      tokenScopes: string[];
+      tokenProjectIds: string[];
+    } | null = null;
     try {
       const { payload } = await jwtVerify(token, jwtSecret);
 
@@ -93,7 +98,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       if (externalAuthId) {
         const dbUser = await prisma.user.findUnique({
           where: { externalAuthId },
-          select: { id: true, email: true },
+          select: { id: true, email: true }
         });
         if (dbUser) {
           dbUserId = dbUser.id;
@@ -106,14 +111,17 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         // run with a non-UUID and silently fail closed in confusing ways.
         const dbUser = await prisma.user.findFirst({
           where: { externalAuthId: dbUserId },
-          select: { id: true, email: true },
+          select: { id: true, email: true }
         });
         if (!dbUser) return reject(401, 'Unauthorized');
         dbUserId = dbUser.id;
         actorEmail = dbUser.email;
       }
       if (!actorEmail) {
-        const u = await prisma.user.findUnique({ where: { id: dbUserId }, select: { email: true } });
+        const u = await prisma.user.findUnique({
+          where: { id: dbUserId },
+          select: { email: true }
+        });
         actorEmail = u?.email;
       }
       userId = dbUserId;
@@ -123,7 +131,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       if (!token.startsWith('orch_')) return reject(401, 'Unauthorized');
       const apiToken = await prisma.apiToken.findUnique({
         where: { tokenHash: hashApiToken(token) },
-        include: { user: { select: { id: true, email: true } } },
+        include: { user: { select: { id: true, email: true } } }
       });
       if (!apiToken) return reject(401, 'Unauthorized');
       if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
@@ -142,11 +150,13 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       tokenAuthCtx = {
         apiTokenId: apiToken.id,
         tokenScopes: scopes,
-        tokenProjectIds: restrictedProjectIds,
+        tokenProjectIds: restrictedProjectIds
       };
       userId = apiToken.user.id;
       actorEmail = apiToken.user.email;
-      prisma.apiToken.update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
+      prisma.apiToken
+        .update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } })
+        .catch(() => {});
     }
 
     if (!userId) return reject(401, 'Unauthorized');
@@ -159,7 +169,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     // Resolve namespace → project, then require project-edit (blocks viewers + non-members).
     const project = await prisma.project.findFirst({
       where: { namespace },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true }
     });
     if (!project) return reject(404, 'Not Found');
 
@@ -181,17 +191,19 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     }
 
     // Audit the connection before handing off to the exec session.
-    audit.log({
-      action: 'deployment.pod.exec',
-      actorUserId: userId,
-      actorEmail: actorEmail ?? null,
-      organizationId: project.organizationId,
-      projectId: project.id,
-      targetType: 'pod',
-      targetId: podName,
-      targetLabel: podName,
-      metadata: { namespace, container: container || null },
-    }).catch(() => {});
+    audit
+      .log({
+        action: 'deployment.pod.exec',
+        actorUserId: userId,
+        actorEmail: actorEmail ?? null,
+        organizationId: project.organizationId,
+        projectId: project.id,
+        targetType: 'pod',
+        targetId: podName,
+        targetLabel: podName,
+        metadata: { namespace, container: container || null }
+      })
+      .catch(() => {});
 
     const sessionIdForRecheck = (() => {
       try {
@@ -239,7 +251,7 @@ function handleExecSession(
   namespace: string,
   podName: string,
   container: string,
-  recheckAuth: () => Promise<boolean>,
+  recheckAuth: () => Promise<boolean>
 ) {
   const exec = new k8s.Exec(kc);
 
@@ -315,29 +327,35 @@ function handleExecSession(
   });
 
   // Determine shell: try /bin/bash, fall back to /bin/sh
-  const command = ['/bin/sh', '-c', 'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'];
+  const command = [
+    '/bin/sh',
+    '-c',
+    'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
+  ];
 
-  exec.exec(
-    namespace,
-    podName,
-    container,
-    command,
-    stdout,
-    stderr,
-    stdin,
-    true, // tty
-    (status) => {
-      if (!execClosed && ws.readyState === WebSocket.OPEN) {
-        const reason = status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`;
-        ws.close(1000, reason.length > 123 ? `${reason.slice(0, 120)  }...` : reason);
+  exec
+    .exec(
+      namespace,
+      podName,
+      container,
+      command,
+      stdout,
+      stderr,
+      stdin,
+      true, // tty
+      (status) => {
+        if (!execClosed && ws.readyState === WebSocket.OPEN) {
+          const reason = status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`;
+          ws.close(1000, reason.length > 123 ? `${reason.slice(0, 120)}...` : reason);
+        }
       }
-    },
-  ).catch((err) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(`\r\nError: ${err.message}\r\n`);
-      ws.close(1011, 'exec error');
-    }
-  });
+    )
+    .catch((err) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(`\r\nError: ${err.message}\r\n`);
+        ws.close(1011, 'exec error');
+      }
+    });
 }
 
 function parseCookies(cookieHeader: string): Record<string, string> {

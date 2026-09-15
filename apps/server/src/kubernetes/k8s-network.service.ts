@@ -1,4 +1,10 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+  OnModuleInit
+} from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +15,7 @@ import {
   DeleteDeploymentServiceOptions,
   UpdateServiceExposureOptions,
   UpdateServicePortsOptions,
-  ALLOWED_INGRESS_ANNOTATION_KEYS,
+  ALLOWED_INGRESS_ANNOTATION_KEYS
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
 import { truncateK8sName, platformWildcardDomains } from '../projects/projects.utils';
@@ -48,7 +54,7 @@ export class K8sNetworkService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
-    private readonly leaderElection: LeaderElectionService,
+    private readonly leaderElection: LeaderElectionService
   ) {}
 
   onModuleInit() {
@@ -56,16 +62,22 @@ export class K8sNetworkService implements OnModuleInit {
       void this.reconcileProtectionProxies();
       void this.reconcileWildcardSecrets();
     }, 10_000);
-    setInterval(() => {
-      void this.reconcileProtectionProxies();
-    }, 10 * 60 * 1000).unref();
+    setInterval(
+      () => {
+        void this.reconcileProtectionProxies();
+      },
+      10 * 60 * 1000
+    ).unref();
     // Certificates renew on cert-manager's schedule, not ours, so this is a
     // convergence loop rather than an event handler: whenever the source Secret
     // changes, every tenant copy is stale until it runs again. Five minutes
     // bounds how long a renewed wildcard can be missing from a namespace.
-    setInterval(() => {
-      void this.reconcileWildcardSecrets();
-    }, 5 * 60 * 1000).unref();
+    setInterval(
+      () => {
+        void this.reconcileWildcardSecrets();
+      },
+      5 * 60 * 1000
+    ).unref();
   }
 
   /**
@@ -95,7 +107,7 @@ export class K8sNetworkService implements OnModuleInit {
         const rows = await this.prisma.ingress.findMany({
           where: { tlsSecretName: secretName },
           select: { namespace: true },
-          distinct: ['namespace'],
+          distinct: ['namespace']
         });
         namespaces = rows.map((r) => r.namespace).filter(Boolean);
       } catch (error: any) {
@@ -110,12 +122,12 @@ export class K8sNetworkService implements OnModuleInit {
           const wrote = await syncTlsSecret(
             coreApi,
             { namespace: sourceNamespace, name: secretName },
-            { namespace, name: secretName },
+            { namespace, name: secretName }
           );
           if (wrote) copied += 1;
         } catch (error: any) {
           this.logger.warn(
-            `Failed to copy ${secretName} into ${namespace}: ${k8sErrorMessage(error)}`,
+            `Failed to copy ${secretName} into ${namespace}: ${k8sErrorMessage(error)}`
           );
         }
       }
@@ -135,7 +147,7 @@ export class K8sNetworkService implements OnModuleInit {
       protectedIngresses = await this.prisma.ingress.findMany({
         where: { protectionMode: { not: 'none' } },
         select: { namespace: true, name: true },
-        distinct: ['namespace', 'name'],
+        distinct: ['namespace', 'name']
       });
     } catch (error) {
       this.logger.warn(`Failed to list protected ingresses for reconcile: ${error.message}`);
@@ -152,7 +164,9 @@ export class K8sNetworkService implements OnModuleInit {
       try {
         result = await this.enableProtectionProxy(ingress.namespace, ingress.name);
       } catch (error) {
-        this.logger.error(`Failed to reconcile protection proxy for ${key}: ${k8sErrorMessage(error)}`);
+        this.logger.error(
+          `Failed to reconcile protection proxy for ${key}: ${k8sErrorMessage(error)}`
+        );
         result = 'failed';
       }
       if (result === 'applied') applied += 1;
@@ -166,25 +180,25 @@ export class K8sNetworkService implements OnModuleInit {
     // wall, so that one stays loud.
     if (failed.length > 0) {
       this.logger.error(
-        `Protection proxy NOT applied to ${failed.length} ingress(es): ${failed.join(', ')}`,
+        `Protection proxy NOT applied to ${failed.length} ingress(es): ${failed.join(', ')}`
       );
     }
     if (orphaned.length > 0) {
       const shown = orphaned.slice(0, 10).join(', ');
       const more = orphaned.length > 10 ? ` (+${orphaned.length - 10} more)` : '';
       this.logger.warn(
-        `${orphaned.length} protected ingress row(s) have no Ingress in the cluster and were skipped: ${shown}${more}`,
+        `${orphaned.length} protected ingress row(s) have no Ingress in the cluster and were skipped: ${shown}${more}`
       );
     }
     if (protectedIngresses.length > 0) {
       this.logger.log(
-        `Reconciled protection proxies: ${applied} applied, ${orphaned.length} orphaned rows, ${failed.length} failed`,
+        `Reconciled protection proxies: ${applied} applied, ${orphaned.length} orphaned rows, ${failed.length} failed`
       );
     }
 
     try {
       await this.restoreOrphanedProtectionBackends(
-        new Set(protectedIngresses.map((i) => `${i.namespace}/${i.name}`)),
+        new Set(protectedIngresses.map((i) => `${i.namespace}/${i.name}`))
       );
     } catch (error) {
       this.logger.warn(`Failed to restore orphaned protection backends: ${error.message}`);
@@ -200,7 +214,7 @@ export class K8sNetworkService implements OnModuleInit {
       undefined,
       undefined,
       undefined,
-      'leaf.dev/managed=true',
+      'leaf.dev/managed=true'
     );
 
     for (const ingress of allIngresses.body.items) {
@@ -210,7 +224,7 @@ export class K8sNetworkService implements OnModuleInit {
 
       const rules = ingress.spec?.rules || [];
       const proxied = rules.some((rule) =>
-        (rule.http?.paths || []).some((p) => p.backend?.service?.name === proxyServiceName),
+        (rule.http?.paths || []).some((p) => p.backend?.service?.name === proxyServiceName)
       );
       if (!proxied) continue;
 
@@ -223,7 +237,7 @@ export class K8sNetworkService implements OnModuleInit {
 
       const rows = await this.prisma.ingress.findMany({
         where: { namespace, name },
-        include: { service: { include: { ports: true } } },
+        include: { service: { include: { ports: true } } }
       });
       if (rows.length === 0 || rows.some((r) => r.protectionMode !== 'none')) continue;
 
@@ -234,9 +248,9 @@ export class K8sNetworkService implements OnModuleInit {
             r.path || '/',
             {
               name: r.service!.name,
-              port: Number(r.service!.ports?.[0]?.port ?? r.service!.port),
-            },
-          ]),
+              port: Number(r.service!.ports?.[0]?.port ?? r.service!.port)
+            }
+          ])
       );
 
       let restored = false;
@@ -275,46 +289,53 @@ export class K8sNetworkService implements OnModuleInit {
 
   async listEndpoints(namespace?: string) {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = namespace ? String(namespace).trim() : undefined;
-    
-    console.log('[API] Fetching endpoints', cleanNamespace ? `from namespace: ${cleanNamespace}` : 'from all namespaces');
-    
+
+    console.log(
+      '[API] Fetching endpoints',
+      cleanNamespace ? `from namespace: ${cleanNamespace}` : 'from all namespaces'
+    );
+
     try {
       const api = this.kc.makeApiClient(k8s.CoreV1Api);
-      
+
       let endpointList;
       if (cleanNamespace) {
         endpointList = await api.listNamespacedEndpoints(cleanNamespace);
       } else {
         endpointList = await api.listEndpointsForAllNamespaces();
       }
-      
-      const endpoints = endpointList.body.items.map(endpoint => ({
+
+      const endpoints = endpointList.body.items.map((endpoint) => ({
         name: endpoint.metadata.name,
         namespace: endpoint.metadata.namespace,
-        subsets: endpoint.subsets?.map(subset => ({
-          addresses: subset.addresses?.map(addr => ({
+        subsets: endpoint.subsets?.map((subset) => ({
+          addresses: subset.addresses?.map((addr) => ({
             ip: addr.ip,
             hostname: addr.hostname,
             nodeName: addr.nodeName,
-            targetRef: addr.targetRef ? {
-              kind: addr.targetRef.kind,
-              name: addr.targetRef.name,
-              namespace: addr.targetRef.namespace
-            } : undefined
+            targetRef: addr.targetRef
+              ? {
+                  kind: addr.targetRef.kind,
+                  name: addr.targetRef.name,
+                  namespace: addr.targetRef.namespace
+                }
+              : undefined
           })),
-          notReadyAddresses: subset.notReadyAddresses?.map(addr => ({
+          notReadyAddresses: subset.notReadyAddresses?.map((addr) => ({
             ip: addr.ip,
             hostname: addr.hostname,
             nodeName: addr.nodeName,
-            targetRef: addr.targetRef ? {
-              kind: addr.targetRef.kind,
-              name: addr.targetRef.name,
-              namespace: addr.targetRef.namespace
-            } : undefined
+            targetRef: addr.targetRef
+              ? {
+                  kind: addr.targetRef.kind,
+                  name: addr.targetRef.name,
+                  namespace: addr.targetRef.namespace
+                }
+              : undefined
           })),
-          ports: subset.ports?.map(port => ({
+          ports: subset.ports?.map((port) => ({
             name: port.name,
             port: port.port,
             protocol: port.protocol
@@ -331,7 +352,7 @@ export class K8sNetworkService implements OnModuleInit {
       };
     } catch (error) {
       console.error('Error fetching endpoints:', error);
-      
+
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to fetch endpoints from Kubernetes',
@@ -339,7 +360,7 @@ export class K8sNetworkService implements OnModuleInit {
           details: error.response.body
         });
       }
-      
+
       throw new BadRequestException({
         error: 'Failed to fetch endpoints',
         message: error.message
@@ -347,8 +368,12 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-
-  async createBasicAuthSecret(namespace: string, name: string, username: string, password: string): Promise<void> {
+  async createBasicAuthSecret(
+    namespace: string,
+    name: string,
+    username: string,
+    password: string
+  ): Promise<void> {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
@@ -415,7 +440,7 @@ export class K8sNetworkService implements OnModuleInit {
    */
   async getCertificateStatus(
     namespace: string,
-    secretName: string | null | undefined,
+    secretName: string | null | undefined
   ): Promise<CertificateStatus> {
     const cleanNamespace = String(namespace || '').trim();
     const cleanSecret = String(secretName || '').trim();
@@ -424,13 +449,16 @@ export class K8sNetworkService implements OnModuleInit {
     try {
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
       const list: any = await customApi.listNamespacedCustomObject(
-        'cert-manager.io', 'v1', cleanNamespace, 'certificates',
+        'cert-manager.io',
+        'v1',
+        cleanNamespace,
+        'certificates'
       );
       // Matched on spec.secretName rather than name: the Certificate is named
       // independently of the Secret it produces, and the Ingress only knows the
       // Secret.
       const cert = (list.body?.items || []).find(
-        (item: any) => item?.spec?.secretName === cleanSecret,
+        (item: any) => item?.spec?.secretName === cleanSecret
       );
       if (!cert) return { state: 'unknown' };
 
@@ -458,7 +486,7 @@ export class K8sNetworkService implements OnModuleInit {
       // cannot know", not "broken".
       if (code === 404 || code === 403) return { state: 'unknown' };
       this.logger.warn(
-        `Failed to read certificate status for ${cleanNamespace}/${cleanSecret}: ${k8sErrorMessage(error)}`,
+        `Failed to read certificate status for ${cleanNamespace}/${cleanSecret}: ${k8sErrorMessage(error)}`
       );
       return { state: 'unknown' };
     }
@@ -478,7 +506,10 @@ export class K8sNetworkService implements OnModuleInit {
       await coreApi.deleteNamespacedSecret(cleanName, cleanNamespace);
     } catch (error) {
       if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete basic auth secret ${cleanName} in ${cleanNamespace}:`, error);
+        console.error(
+          `Failed to delete basic auth secret ${cleanName} in ${cleanNamespace}:`,
+          error
+        );
       }
     }
   }
@@ -489,7 +520,7 @@ export class K8sNetworkService implements OnModuleInit {
     username: string,
     password: string,
     serviceName: string,
-    servicePort: number,
+    servicePort: number
   ): Promise<void> {
     this.ensureKubeConfig();
 
@@ -511,13 +542,11 @@ export class K8sNetworkService implements OnModuleInit {
         namespace: cleanNamespace,
         labels: {
           'orchard.my/managed': 'true',
-          'orchard.my/type': 'basic-auth',
-        },
+          'orchard.my/type': 'basic-auth'
+        }
       },
       spec: {
-        services: [
-          { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
-        ],
+        services: [{ name: serviceName, namespace: cleanNamespace, ports: [servicePort] }],
         resources: [
           {
             '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
@@ -528,42 +557,51 @@ export class K8sNetworkService implements OnModuleInit {
                   {
                     name: 'envoy.filters.network.http_connection_manager',
                     typed_config: {
-                      '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
+                      '@type':
+                        'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
                       stat_prefix: `${cleanName}-auth`,
                       route_config: {
                         name: `${cleanName}-auth-route`,
-                        virtual_hosts: [{
-                          name: 'default',
-                          domains: ['*'],
-                          routes: [{
-                            match: { prefix: '/' },
-                            route: { cluster: `${cleanNamespace}:${serviceName}:${servicePort}` },
-                          }],
-                        }],
+                        virtual_hosts: [
+                          {
+                            name: 'default',
+                            domains: ['*'],
+                            routes: [
+                              {
+                                match: { prefix: '/' },
+                                route: {
+                                  cluster: `${cleanNamespace}:${serviceName}:${servicePort}`
+                                }
+                              }
+                            ]
+                          }
+                        ]
                       },
                       http_filters: [
                         {
                           name: 'envoy.filters.http.basic_auth',
                           typed_config: {
-                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.basic_auth.v3.BasicAuth',
-                            users: { inline_string: htpasswd },
-                          },
+                            '@type':
+                              'type.googleapis.com/envoy.extensions.filters.http.basic_auth.v3.BasicAuth',
+                            users: { inline_string: htpasswd }
+                          }
                         },
                         {
                           name: 'envoy.filters.http.router',
                           typed_config: {
-                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router',
-                          },
-                        },
-                      ],
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
+                            '@type':
+                              'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router'
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     };
 
     try {
@@ -589,7 +627,7 @@ export class K8sNetworkService implements OnModuleInit {
       } else {
         throw new BadRequestException({
           error: 'Failed to enable basic auth',
-          message: k8sErrorMessage(error),
+          message: k8sErrorMessage(error)
         });
       }
     }
@@ -608,17 +646,25 @@ export class K8sNetworkService implements OnModuleInit {
     username: string,
     password: string,
     serviceName: string,
-    servicePort: number,
+    servicePort: number
   ): Promise<void> {
     if (!(await this.kubernetes.isCiliumAvailable())) {
       throw new BadRequestException({
         error: 'Basic auth is not available on this cluster',
-        message: 'Basic auth is enforced with a CiliumEnvoyConfig, which needs Cilium as the CNI and the cilium.io rbac granted by cilium.enabled=true. Put the host behind your own reverse proxy instead, or see docs/self-hosting.md.',
+        message:
+          'Basic auth is enforced with a CiliumEnvoyConfig, which needs Cilium as the CNI and the cilium.io rbac granted by cilium.enabled=true. Put the host behind your own reverse proxy instead, or see docs/self-hosting.md.'
       });
     }
 
     await this.createBasicAuthSecret(namespace, secretName, username, password);
-    await this.createBasicAuthMiddleware(namespace, name, username, password, serviceName, servicePort);
+    await this.createBasicAuthMiddleware(
+      namespace,
+      name,
+      username,
+      password,
+      serviceName,
+      servicePort
+    );
   }
 
   async deleteBasicAuthMiddleware(namespace: string, name: string): Promise<void> {
@@ -641,7 +687,10 @@ export class K8sNetworkService implements OnModuleInit {
       );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete basic auth CiliumEnvoyConfig ${cleanName}-auth in ${cleanNamespace}:`, error);
+        console.error(
+          `Failed to delete basic auth CiliumEnvoyConfig ${cleanName}-auth in ${cleanNamespace}:`,
+          error
+        );
       }
     }
   }
@@ -662,15 +711,17 @@ export class K8sNetworkService implements OnModuleInit {
         'v2',
         cleanNamespace,
         'ciliumenvoyconfigs',
-        `${cleanName}-https-redirect`,
+        `${cleanName}-https-redirect`
       );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete HTTPS redirect CiliumEnvoyConfig ${cleanName}-https-redirect in ${cleanNamespace}:`, error);
+        console.error(
+          `Failed to delete HTTPS redirect CiliumEnvoyConfig ${cleanName}-https-redirect in ${cleanNamespace}:`,
+          error
+        );
       }
     }
   }
-
 
   // Reports what actually happened rather than swallowing it. 'ingress-missing'
   // means the row outlived its Ingress and there is nothing to protect;
@@ -678,7 +729,7 @@ export class K8sNetworkService implements OnModuleInit {
   // the case that has to be loud.
   async enableProtectionProxy(
     namespace: string,
-    ingressName: string,
+    ingressName: string
   ): Promise<ProtectionProxyResult> {
     this.ensureKubeConfig();
 
@@ -703,12 +754,14 @@ export class K8sNetworkService implements OnModuleInit {
       metadata: {
         name: proxyServiceName,
         namespace: cleanNamespace,
-        labels: { 'orchard.my/managed': 'true', 'orchard.my/type': 'protection-proxy' },
+        labels: { 'orchard.my/managed': 'true', 'orchard.my/type': 'protection-proxy' }
       },
       spec: {
         clusterIP: 'None',
-        ports: [{ port: authServerPort, targetPort: authServerPort, protocol: 'TCP' } as k8s.V1ServicePort],
-      },
+        ports: [
+          { port: authServerPort, targetPort: authServerPort, protocol: 'TCP' } as k8s.V1ServicePort
+        ]
+      }
     };
 
     try {
@@ -729,20 +782,35 @@ export class K8sNetworkService implements OnModuleInit {
       metadata: {
         name: `${proxyServiceName}-1`,
         namespace: cleanNamespace,
-        labels: { 'kubernetes.io/service-name': proxyServiceName, 'orchard.my/managed': 'true' },
+        labels: { 'kubernetes.io/service-name': proxyServiceName, 'orchard.my/managed': 'true' }
       },
       addressType: 'IPv4',
       ports: [{ port: authServerPort, protocol: 'TCP' }],
-      endpoints: [{ addresses, conditions: { ready: true, serving: true } }],
+      endpoints: [{ addresses, conditions: { ready: true, serving: true } }]
     };
 
     try {
-      await customApi.createNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', endpointSlice);
+      await customApi.createNamespacedCustomObject(
+        'discovery.k8s.io',
+        'v1',
+        cleanNamespace,
+        'endpointslices',
+        endpointSlice
+      );
     } catch (error) {
       if (error.response?.statusCode === 409) {
-        await customApi.replaceNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`, endpointSlice);
+        await customApi.replaceNamespacedCustomObject(
+          'discovery.k8s.io',
+          'v1',
+          cleanNamespace,
+          'endpointslices',
+          `${proxyServiceName}-1`,
+          endpointSlice
+        );
       } else {
-        console.error(`Failed to create protection proxy endpoint slice: ${k8sErrorMessage(error)}`);
+        console.error(
+          `Failed to create protection proxy endpoint slice: ${k8sErrorMessage(error)}`
+        );
       }
     }
 
@@ -755,14 +823,14 @@ export class K8sNetworkService implements OnModuleInit {
       for (const rule of rules) {
         for (const path of rule.http?.paths || []) {
           path.backend = {
-            service: { name: proxyServiceName, port: { number: authServerPort } },
+            service: { name: proxyServiceName, port: { number: authServerPort } }
           };
         }
       }
       const updated = await networkingApi.replaceNamespacedIngress(
         cleanName,
         cleanNamespace,
-        ingress.body,
+        ingress.body
       );
       // The API returns the persisted object, so this confirms the auth wall is
       // really in front of every path instead of assuming the write took.
@@ -772,15 +840,15 @@ export class K8sNetworkService implements OnModuleInit {
       // emptiness check while still serving the app.
       if (paths.length === 0) {
         this.logger.error(
-          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: no rule paths to repoint`,
+          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: no rule paths to repoint`
         );
         return 'failed';
       }
       const stillDirect = paths.filter((path) => path.backend?.service?.name !== proxyServiceName);
       if (stillDirect.length > 0) {
         this.logger.error(
-          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: `
-          + `${stillDirect.length} path(s) still serve the app directly`,
+          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: ` +
+            `${stillDirect.length} path(s) still serve the app directly`
         );
         return 'failed';
       }
@@ -788,7 +856,7 @@ export class K8sNetworkService implements OnModuleInit {
     } catch (error) {
       if (error.response?.statusCode === 404) return 'ingress-missing';
       this.logger.error(
-        `Failed to put ${cleanNamespace}/${cleanName} behind the protection proxy: ${k8sErrorMessage(error)}`,
+        `Failed to put ${cleanNamespace}/${cleanName} behind the protection proxy: ${k8sErrorMessage(error)}`
       );
       return 'failed';
     }
@@ -798,7 +866,7 @@ export class K8sNetworkService implements OnModuleInit {
     namespace: string,
     ingressName: string,
     originalServiceName: string,
-    originalServicePort: number,
+    originalServicePort: number
   ): Promise<void> {
     this.ensureKubeConfig();
 
@@ -813,7 +881,7 @@ export class K8sNetworkService implements OnModuleInit {
       for (const rule of rules) {
         for (const path of rule.http?.paths || []) {
           path.backend = {
-            service: { name: originalServiceName, port: { number: originalServicePort } },
+            service: { name: originalServiceName, port: { number: originalServicePort } }
           };
         }
       }
@@ -834,7 +902,13 @@ export class K8sNetworkService implements OnModuleInit {
 
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     try {
-      await customApi.deleteNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`);
+      await customApi.deleteNamespacedCustomObject(
+        'discovery.k8s.io',
+        'v1',
+        cleanNamespace,
+        'endpointslices',
+        `${proxyServiceName}-1`
+      );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
         console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
@@ -859,7 +933,13 @@ export class K8sNetworkService implements OnModuleInit {
 
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     try {
-      await customApi.deleteNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`);
+      await customApi.deleteNamespacedCustomObject(
+        'discovery.k8s.io',
+        'v1',
+        cleanNamespace,
+        'endpointslices',
+        `${proxyServiceName}-1`
+      );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
         console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
@@ -868,39 +948,55 @@ export class K8sNetworkService implements OnModuleInit {
   }
 
   private async ensureOrchardIngressAllowed(namespace: string): Promise<void> {
-    const orchardSelector = { namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } } };
+    const orchardSelector = {
+      namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }
+    };
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     try {
       const np = await networkingApi.readNamespacedNetworkPolicy('default-deny-all', namespace);
       const from = np.body.spec?.ingress?.[0]?.from || [];
-      const hasOrchard = from.some((f: any) => f.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard');
+      const hasOrchard = from.some(
+        (f: any) => f.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard'
+      );
       if (!hasOrchard) {
         from.push(orchardSelector);
         await networkingApi.replaceNamespacedNetworkPolicy('default-deny-all', namespace, np.body);
       }
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) this.logger.warn(`Failed to patch NetworkPolicy: ${e.message}`);
+      if (e.response?.statusCode !== 404)
+        this.logger.warn(`Failed to patch NetworkPolicy: ${e.message}`);
     }
 
     if (!(await this.kubernetes.isCiliumAvailable())) return;
 
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     try {
-      const cnp: any = await customApi.getNamespacedCustomObject('cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', 'allow-cilium-ingress');
+      const cnp: any = await customApi.getNamespacedCustomObject(
+        'cilium.io',
+        'v2',
+        namespace,
+        'ciliumnetworkpolicies',
+        'allow-cilium-ingress'
+      );
       const ingress = cnp.body?.spec?.ingress || [];
       const hasOrchard = ingress.some((rule: any) =>
-        rule.fromEndpoints?.some((ep: any) => ep.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard'),
+        rule.fromEndpoints?.some(
+          (ep: any) => ep.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard'
+        )
       );
       const hasHaproxy = ingress.some((rule: any) =>
-        rule.fromEndpoints?.some((ep: any) =>
-          ep.matchLabels?.['kubernetes.io/metadata.name'] === 'network' &&
-          ep.matchLabels?.['app.kubernetes.io/name'] === 'kubernetes-ingress',
-        ),
+        rule.fromEndpoints?.some(
+          (ep: any) =>
+            ep.matchLabels?.['kubernetes.io/metadata.name'] === 'network' &&
+            ep.matchLabels?.['app.kubernetes.io/name'] === 'kubernetes-ingress'
+        )
       );
       if (!hasOrchard || !hasHaproxy) {
         if (!hasOrchard) {
-          ingress.push({ fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] });
+          ingress.push({
+            fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }]
+          });
         }
         if (!hasHaproxy) {
           ingress.push({
@@ -908,17 +1004,25 @@ export class K8sNetworkService implements OnModuleInit {
               {
                 matchLabels: {
                   'kubernetes.io/metadata.name': 'network',
-                  'app.kubernetes.io/name': 'kubernetes-ingress',
-                },
-              },
-            ],
+                  'app.kubernetes.io/name': 'kubernetes-ingress'
+                }
+              }
+            ]
           });
         }
         cnp.body.spec.ingress = ingress;
-        await customApi.replaceNamespacedCustomObject('cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', 'allow-cilium-ingress', cnp.body);
+        await customApi.replaceNamespacedCustomObject(
+          'cilium.io',
+          'v2',
+          namespace,
+          'ciliumnetworkpolicies',
+          'allow-cilium-ingress',
+          cnp.body
+        );
       }
     } catch (e: any) {
-      if (e.response?.statusCode !== 404) this.logger.warn(`Failed to patch CiliumNetworkPolicy: ${e.message}`);
+      if (e.response?.statusCode !== 404)
+        this.logger.warn(`Failed to patch CiliumNetworkPolicy: ${e.message}`);
     }
   }
 
@@ -927,9 +1031,10 @@ export class K8sNetworkService implements OnModuleInit {
 
     const namespace = String(options.namespace || '').trim();
     const name = String(options.name || '').trim();
-    const host = String(options.host || '').trim().toLowerCase();
-    const ingressClassName =
-      String(options.ingressClassName || '').trim() || undefined;
+    const host = String(options.host || '')
+      .trim()
+      .toLowerCase();
+    const ingressClassName = String(options.ingressClassName || '').trim() || undefined;
 
     if (!namespace) {
       throw new BadRequestException('Namespace parameter is required');
@@ -943,16 +1048,23 @@ export class K8sNetworkService implements OnModuleInit {
       throw new BadRequestException('Host is required');
     }
 
-    const pathBackends = Array.isArray(options.paths) && options.paths.length > 0
-      ? options.paths
-      : [{
-          path: String(options.path || '/').trim() || '/',
-          pathType: String(options.pathType || 'Prefix').trim() || 'Prefix',
-          serviceName: String(options.serviceName || '').trim(),
-          servicePort: Number(options.servicePort)
-        }];
+    const pathBackends =
+      Array.isArray(options.paths) && options.paths.length > 0
+        ? options.paths
+        : [
+            {
+              path: String(options.path || '/').trim() || '/',
+              pathType: String(options.pathType || 'Prefix').trim() || 'Prefix',
+              serviceName: String(options.serviceName || '').trim(),
+              servicePort: Number(options.servicePort)
+            }
+          ];
 
-    if (!pathBackends[0].serviceName || !Number.isInteger(pathBackends[0].servicePort) || pathBackends[0].servicePort <= 0) {
+    if (
+      !pathBackends[0].serviceName ||
+      !Number.isInteger(pathBackends[0].servicePort) ||
+      pathBackends[0].servicePort <= 0
+    ) {
       throw new BadRequestException('Service name and port are required');
     }
 
@@ -989,7 +1101,7 @@ export class K8sNetworkService implements OnModuleInit {
         options.basicAuth.username,
         options.basicAuth.password,
         String(targetService.serviceName).trim(),
-        Number(targetService.servicePort),
+        Number(targetService.servicePort)
       );
       annotations['orchard.my/basic-auth'] = 'true';
     }
@@ -1002,23 +1114,26 @@ export class K8sNetworkService implements OnModuleInit {
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const requestedTlsHosts = options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
+    const requestedTlsHosts =
+      options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
     const tlsHosts = hasTls ? requestedTlsHosts : [];
 
-    const httpPaths = pathBackends.map((pb) => {
-      const path = String(pb.path || '/').trim() || '/';
-      const pathType = String(pb.pathType || 'Prefix').trim() || 'Prefix';
-      return {
-        path,
-        pathType,
-        backend: {
-          service: {
-            name: String(pb.serviceName).trim(),
-            port: { number: Number(pb.servicePort) }
+    const httpPaths = pathBackends
+      .map((pb) => {
+        const path = String(pb.path || '/').trim() || '/';
+        const pathType = String(pb.pathType || 'Prefix').trim() || 'Prefix';
+        return {
+          path,
+          pathType,
+          backend: {
+            service: {
+              name: String(pb.serviceName).trim(),
+              port: { number: Number(pb.servicePort) }
+            }
           }
-        }
-      };
-    }).sort((a, b) => b.path.length - a.path.length);
+        };
+      })
+      .sort((a, b) => b.path.length - a.path.length);
 
     const ingressBody: k8s.V1Ingress = {
       metadata: {
@@ -1051,10 +1166,7 @@ export class K8sNetworkService implements OnModuleInit {
     }
 
     try {
-      const response = await networkingApi.createNamespacedIngress(
-        namespace,
-        ingressBody
-      );
+      const response = await networkingApi.createNamespacedIngress(namespace, ingressBody);
       return response.body;
     } catch (error) {
       if (error.response?.statusCode === 409) {
@@ -1085,9 +1197,10 @@ export class K8sNetworkService implements OnModuleInit {
 
     const namespace = String(options.namespace || '').trim();
     const name = String(options.name || '').trim();
-    const host = String(options.host || '').trim().toLowerCase();
-    const ingressClassName =
-      String(options.ingressClassName || '').trim() || undefined;
+    const host = String(options.host || '')
+      .trim()
+      .toLowerCase();
+    const ingressClassName = String(options.ingressClassName || '').trim() || undefined;
 
     if (!namespace) {
       throw new BadRequestException('Namespace parameter is required');
@@ -1101,16 +1214,23 @@ export class K8sNetworkService implements OnModuleInit {
       throw new BadRequestException('Host is required');
     }
 
-    const pathBackends = Array.isArray(options.paths) && options.paths.length > 0
-      ? options.paths
-      : [{
-          path: String(options.path || '/').trim() || '/',
-          pathType: String(options.pathType || 'Prefix').trim() || 'Prefix',
-          serviceName: String(options.serviceName || '').trim(),
-          servicePort: Number(options.servicePort)
-        }];
+    const pathBackends =
+      Array.isArray(options.paths) && options.paths.length > 0
+        ? options.paths
+        : [
+            {
+              path: String(options.path || '/').trim() || '/',
+              pathType: String(options.pathType || 'Prefix').trim() || 'Prefix',
+              serviceName: String(options.serviceName || '').trim(),
+              servicePort: Number(options.servicePort)
+            }
+          ];
 
-    if (!pathBackends[0].serviceName || !Number.isInteger(pathBackends[0].servicePort) || pathBackends[0].servicePort <= 0) {
+    if (
+      !pathBackends[0].serviceName ||
+      !Number.isInteger(pathBackends[0].servicePort) ||
+      pathBackends[0].servicePort <= 0
+    ) {
       throw new BadRequestException('Service name and port are required');
     }
 
@@ -1147,7 +1267,7 @@ export class K8sNetworkService implements OnModuleInit {
         options.basicAuth.username,
         options.basicAuth.password,
         String(targetService.serviceName).trim(),
-        Number(targetService.servicePort),
+        Number(targetService.servicePort)
       );
       annotations['orchard.my/basic-auth'] = 'true';
     } else if (options.basicAuth?.enabled === false) {
@@ -1168,23 +1288,26 @@ export class K8sNetworkService implements OnModuleInit {
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const requestedTlsHosts = options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
+    const requestedTlsHosts =
+      options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
     const tlsHosts = hasTls ? requestedTlsHosts : [];
 
-    const httpPaths = pathBackends.map((pb) => {
-      const path = String(pb.path || '/').trim() || '/';
-      const pathType = String(pb.pathType || 'Prefix').trim() || 'Prefix';
-      return {
-        path,
-        pathType,
-        backend: {
-          service: {
-            name: String(pb.serviceName).trim(),
-            port: { number: Number(pb.servicePort) }
+    const httpPaths = pathBackends
+      .map((pb) => {
+        const path = String(pb.path || '/').trim() || '/';
+        const pathType = String(pb.pathType || 'Prefix').trim() || 'Prefix';
+        return {
+          path,
+          pathType,
+          backend: {
+            service: {
+              name: String(pb.serviceName).trim(),
+              port: { number: Number(pb.servicePort) }
+            }
           }
-        }
-      };
-    }).sort((a, b) => b.path.length - a.path.length);
+        };
+      })
+      .sort((a, b) => b.path.length - a.path.length);
 
     const ingressBody: k8s.V1Ingress = {
       metadata: {
@@ -1219,11 +1342,7 @@ export class K8sNetworkService implements OnModuleInit {
     }
 
     try {
-      const response = await networkingApi.replaceNamespacedIngress(
-        name,
-        namespace,
-        ingressBody
-      );
+      const response = await networkingApi.replaceNamespacedIngress(name, namespace, ingressBody);
       return response.body;
     } catch (error) {
       if (error.response?.statusCode === 404) {
@@ -1253,7 +1372,7 @@ export class K8sNetworkService implements OnModuleInit {
     namespace: string,
     ingressName: string,
     path: string,
-    newPort: number,
+    newPort: number
   ) {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
@@ -1268,13 +1387,19 @@ export class K8sNetworkService implements OnModuleInit {
     await networkingApi.patchNamespacedIngress(
       ingressName,
       namespace,
-      [{ op: 'replace', path: `/spec/rules/0/http/paths/${pathIndex}/backend/service/port/number`, value: newPort }],
+      [
+        {
+          op: 'replace',
+          path: `/spec/rules/0/http/paths/${pathIndex}/backend/service/port/number`,
+          value: newPort
+        }
+      ],
       undefined,
       undefined,
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/json-patch+json' } },
+      { headers: { 'Content-Type': 'application/json-patch+json' } }
     );
   }
 
@@ -1289,18 +1414,18 @@ export class K8sNetworkService implements OnModuleInit {
     namespace: string,
     ingressName: string,
     tls: { secretName: string; hosts: string[] } | null,
-    clusterIssuer: string | null,
+    clusterIssuer: string | null
   ): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
     const body = {
       metadata: {
-        annotations: { 'cert-manager.io/cluster-issuer': clusterIssuer ?? null },
+        annotations: { 'cert-manager.io/cluster-issuer': clusterIssuer ?? null }
       },
       spec: {
-        tls: tls ? [{ secretName: tls.secretName, hosts: tls.hosts }] : [],
-      },
+        tls: tls ? [{ secretName: tls.secretName, hosts: tls.hosts }] : []
+      }
     };
 
     await networkingApi.patchNamespacedIngress(
@@ -1312,7 +1437,7 @@ export class K8sNetworkService implements OnModuleInit {
       undefined,
       undefined,
       undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
     );
   }
 
@@ -1357,7 +1482,7 @@ export class K8sNetworkService implements OnModuleInit {
         success: true,
         namespace: cleanNamespace,
         name: cleanName,
-        deleted: true,
+        deleted: true
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {
@@ -1365,7 +1490,7 @@ export class K8sNetworkService implements OnModuleInit {
           success: true,
           namespace: cleanNamespace,
           name: cleanName,
-          deleted: false,
+          deleted: false
         };
       }
 
@@ -1373,13 +1498,13 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to delete ingress',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to delete ingress',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -1409,9 +1534,7 @@ export class K8sNetworkService implements OnModuleInit {
     const namespace = String(options.namespace || '').trim();
     const deploymentName = String(options.deploymentName || '').trim();
     const serviceName = String(options.serviceName || '').trim();
-    const sanitizedPorts = sanitizePortEntries(
-      Array.isArray(options.ports) ? options.ports : []
-    );
+    const sanitizedPorts = sanitizePortEntries(Array.isArray(options.ports) ? options.ports : []);
     const normalizedPorts = ensureUniqueServicePorts(sanitizedPorts);
 
     if (!namespace) {
@@ -1436,7 +1559,7 @@ export class K8sNetworkService implements OnModuleInit {
       if (!containers || containers.length === 0) {
         throw new BadRequestException({
           error: 'No containers found',
-          message: `Deployment "${deploymentName}" has no containers`,
+          message: `Deployment "${deploymentName}" has no containers`
         });
       }
 
@@ -1448,8 +1571,8 @@ export class K8sNetworkService implements OnModuleInit {
         ports: normalizedPorts.map((port) => ({
           name: port.name,
           containerPort: port.containerPort,
-          protocol: port.protocol,
-        })),
+          protocol: port.protocol
+        }))
       };
 
       const deploymentPatch = {
@@ -1457,16 +1580,16 @@ export class K8sNetworkService implements OnModuleInit {
           template: {
             metadata: {
               annotations: {
-                'orchard.my/service-updated-at': new Date().toISOString(),
-              },
+                'orchard.my/service-updated-at': new Date().toISOString()
+              }
             },
             spec: {
               containers: existingDeployment.body.spec.template.spec.containers.map((c: any) =>
                 c.name === containerName ? updatedContainer : c
-              ),
-            },
-          },
-        },
+              )
+            }
+          }
+        }
       };
 
       await appsApi.patchNamespacedDeployment(
@@ -1479,7 +1602,7 @@ export class K8sNetworkService implements OnModuleInit {
         undefined,
         undefined,
         {
-          headers: { 'Content-Type': 'application/merge-patch+json' },
+          headers: { 'Content-Type': 'application/merge-patch+json' }
         }
       );
 
@@ -1527,7 +1650,7 @@ export class K8sNetworkService implements OnModuleInit {
 
         return {
           ...port,
-          nodePort: nodePortValue,
+          nodePort: nodePortValue
         };
       });
 
@@ -1543,30 +1666,26 @@ export class K8sNetworkService implements OnModuleInit {
         metadata: {
           name: serviceName,
           labels: existingService.body.metadata?.labels,
-          annotations: existingService.body.metadata?.annotations,
+          annotations: existingService.body.metadata?.annotations
         },
         spec: {
           type: serviceType,
-          selector:
-            existingService.body.spec?.selector || {
-              'app.kubernetes.io/name': deploymentName,
-            },
+          selector: existingService.body.spec?.selector || {
+            'app.kubernetes.io/name': deploymentName
+          },
           ports: portsForService.map((port) => {
             const entry: k8s.V1ServicePort = {
               name: port.name,
               port: port.servicePort,
               targetPort: port.containerPort,
-              protocol: port.protocol,
+              protocol: port.protocol
             };
-            if (
-              (serviceType === 'NodePort' || serviceType === 'LoadBalancer') &&
-              port.nodePort
-            ) {
+            if ((serviceType === 'NodePort' || serviceType === 'LoadBalancer') && port.nodePort) {
               entry.nodePort = port.nodePort;
             }
             return entry;
-          }),
-        },
+          })
+        }
       };
 
       if (existingService.body.spec?.clusterIP) {
@@ -1588,16 +1707,13 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to recreate service',
           message: createError.response?.body?.message || createError.message,
-          details: createError.response?.body,
+          details: createError.response?.body
         });
       }
 
       const updatedService = await coreApi.readNamespacedService(serviceName, namespace);
       const updatedType = updatedService.body.spec?.type || serviceType;
-      const mappedPorts = mapServicePorts(
-        updatedService.body.spec?.ports,
-        portsForService
-      );
+      const mappedPorts = mapServicePorts(updatedService.body.spec?.ports, portsForService);
 
       let externalIp: string | null = null;
       if (updatedType === 'LoadBalancer') {
@@ -1614,7 +1730,7 @@ export class K8sNetworkService implements OnModuleInit {
         serviceName,
         type: updatedType,
         ports: mappedPorts,
-        externalIp,
+        externalIp
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -1624,7 +1740,7 @@ export class K8sNetworkService implements OnModuleInit {
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Resource not found',
-          message: `Deployment or service not found in namespace ${namespace}`,
+          message: `Deployment or service not found in namespace ${namespace}`
         });
       }
 
@@ -1632,13 +1748,13 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to update service',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to update service',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -1679,14 +1795,12 @@ export class K8sNetworkService implements OnModuleInit {
       if (!containers || containers.length === 0) {
         throw new BadRequestException({
           error: 'Deployment has no containers',
-          message: `Deployment "${deploymentName}" has no containers`,
+          message: `Deployment "${deploymentName}" has no containers`
         });
       }
 
       const targetContainer = containers[0];
-      const existingPorts = Array.isArray(targetContainer.ports)
-        ? targetContainer.ports
-        : [];
+      const existingPorts = Array.isArray(targetContainer.ports) ? targetContainer.ports : [];
       const mergedPorts: k8s.V1ContainerPort[] = [];
       const usedSignatures = new Set<string>();
       const usedNames = new Set<string>();
@@ -1724,7 +1838,7 @@ export class K8sNetworkService implements OnModuleInit {
           mergedPorts.push({
             name: allocateName(port.name || '', index + 1),
             containerPort: port.containerPort,
-            protocol,
+            protocol
           });
         }
       });
@@ -1735,7 +1849,7 @@ export class K8sNetworkService implements OnModuleInit {
           mergedPorts.push({
             name: allocateName(port.name || '', existingPorts.length + index + 1),
             containerPort: port.containerPort,
-            protocol: port.protocol,
+            protocol: port.protocol
           });
           usedSignatures.add(signature);
         }
@@ -1749,21 +1863,21 @@ export class K8sNetworkService implements OnModuleInit {
             template: {
               metadata: {
                 annotations: {
-                  'orchard.my/service-updated-at': new Date().toISOString(),
-                },
+                  'orchard.my/service-updated-at': new Date().toISOString()
+                }
               },
               spec: {
                 containers: containers.map((container) =>
                   container.name === targetContainer.name
                     ? {
                         ...container,
-                        ports: mergedPorts,
+                        ports: mergedPorts
                       }
                     : container
-                ),
-              },
-            },
-          },
+                )
+              }
+            }
+          }
         },
         undefined,
         undefined,
@@ -1771,14 +1885,13 @@ export class K8sNetworkService implements OnModuleInit {
         undefined,
         undefined,
         {
-          headers: { 'Content-Type': 'application/merge-patch+json' },
+          headers: { 'Content-Type': 'application/merge-patch+json' }
         }
       );
 
-      const selectorLabels =
-        deployment.body.spec?.selector?.matchLabels ||
+      const selectorLabels = deployment.body.spec?.selector?.matchLabels ||
         deployment.body.spec?.template?.metadata?.labels || {
-          'app.kubernetes.io/name': deploymentName,
+          'app.kubernetes.io/name': deploymentName
         };
 
       const requestedType = options.type || 'ClusterIP';
@@ -1788,8 +1901,8 @@ export class K8sNetworkService implements OnModuleInit {
           name: serviceName,
           labels: {
             ...(deployment.body.spec?.template?.metadata?.labels || {}),
-            'orchard.my/managed': 'true',
-          },
+            'orchard.my/managed': 'true'
+          }
         },
         spec: {
           type: requestedType,
@@ -1799,7 +1912,7 @@ export class K8sNetworkService implements OnModuleInit {
               name: port.name,
               port: port.servicePort,
               targetPort: port.containerPort,
-              protocol: port.protocol,
+              protocol: port.protocol
             };
             if (
               (requestedType === 'NodePort' || requestedType === 'LoadBalancer') &&
@@ -1808,8 +1921,8 @@ export class K8sNetworkService implements OnModuleInit {
               entry.nodePort = port.nodePort;
             }
             return entry;
-          }),
-        },
+          })
+        }
       };
 
       try {
@@ -1818,15 +1931,12 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to create service',
           message: createError.response?.body?.message || createError.message,
-          details: createError.response?.body,
+          details: createError.response?.body
         });
       }
 
       const createdService = await coreApi.readNamespacedService(serviceName, namespace);
-      const mappedPorts = mapServicePorts(
-        createdService.body.spec?.ports,
-        sanitizedPorts
-      );
+      const mappedPorts = mapServicePorts(createdService.body.spec?.ports, sanitizedPorts);
       const serviceType = createdService.body.spec?.type || requestedType;
 
       let externalIp: string | null = null;
@@ -1840,7 +1950,7 @@ export class K8sNetworkService implements OnModuleInit {
       return {
         type: serviceType,
         ports: mappedPorts,
-        externalIp,
+        externalIp
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -1850,7 +1960,7 @@ export class K8sNetworkService implements OnModuleInit {
       if (error.response?.statusCode === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
-          message: `Deployment ${deploymentName} not found in namespace ${namespace}`,
+          message: `Deployment ${deploymentName} not found in namespace ${namespace}`
         });
       }
 
@@ -1858,13 +1968,13 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to create service',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to create service',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -1899,7 +2009,7 @@ export class K8sNetworkService implements OnModuleInit {
           throw new BadRequestException({
             error: 'Failed to delete service',
             message: deleteError.response?.body?.message || deleteError.message,
-            details: deleteError.response?.body,
+            details: deleteError.response?.body
           });
         }
       }
@@ -1920,8 +2030,8 @@ export class K8sNetworkService implements OnModuleInit {
               ports: sanitizedRemaining.map((port) => ({
                 name: port.name,
                 containerPort: port.containerPort,
-                protocol: port.protocol,
-              })),
+                protocol: port.protocol
+              }))
             };
 
             await appsApi.patchNamespacedDeployment(
@@ -1932,16 +2042,16 @@ export class K8sNetworkService implements OnModuleInit {
                   template: {
                     metadata: {
                       annotations: {
-                        'orchard.my/service-updated-at': new Date().toISOString(),
-                      },
+                        'orchard.my/service-updated-at': new Date().toISOString()
+                      }
                     },
                     spec: {
                       containers: containers.map((container) =>
                         container.name === targetContainer.name ? updatedContainer : container
-                      ),
-                    },
-                  },
-                },
+                      )
+                    }
+                  }
+                }
               },
               undefined,
               undefined,
@@ -1949,7 +2059,7 @@ export class K8sNetworkService implements OnModuleInit {
               undefined,
               undefined,
               {
-                headers: { 'Content-Type': 'application/merge-patch+json' },
+                headers: { 'Content-Type': 'application/merge-patch+json' }
               }
             );
           }
@@ -1958,14 +2068,14 @@ export class K8sNetworkService implements OnModuleInit {
             throw new BadRequestException({
               error: 'Failed to update deployment ports',
               message: deploymentError.response?.body?.message || deploymentError.message,
-              details: deploymentError.response?.body,
+              details: deploymentError.response?.body
             });
           }
         }
       }
 
       return {
-        success: true,
+        success: true
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -1976,13 +2086,13 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to delete service',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to delete service',
-        message: error.message,
+        message: error.message
       });
     }
   }
@@ -2009,8 +2119,8 @@ export class K8sNetworkService implements OnModuleInit {
 
       const patch = {
         spec: {
-          type,
-        },
+          type
+        }
       };
 
       await coreApi.patchNamespacedService(
@@ -2024,8 +2134,8 @@ export class K8sNetworkService implements OnModuleInit {
         undefined,
         {
           headers: {
-            'Content-Type': 'application/strategic-merge-patch+json',
-          },
+            'Content-Type': 'application/strategic-merge-patch+json'
+          }
         }
       );
 
@@ -2045,7 +2155,7 @@ export class K8sNetworkService implements OnModuleInit {
         serviceName,
         type,
         externalIp,
-        ports,
+        ports
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -2056,19 +2166,16 @@ export class K8sNetworkService implements OnModuleInit {
         throw new BadRequestException({
           error: 'Failed to update service exposure',
           message: error.response.body?.message || error.message,
-          details: error.response.body,
+          details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to update service exposure',
-        message: error.message,
+        message: error.message
       });
     }
   }
-
-
-
 
   private publicServiceName(clusterName: string): string {
     return truncateK8sName(`${clusterName}-public`, 63);
@@ -2077,7 +2184,7 @@ export class K8sNetworkService implements OnModuleInit {
   private sharedIpAnnotations(ip: string): Record<string, string> {
     return {
       'lbipam.cilium.io/sharing-key': `shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`,
-      'lbipam.cilium.io/sharing-cross-namespace': '*',
+      'lbipam.cilium.io/sharing-cross-namespace': '*'
     };
   }
 
@@ -2088,8 +2195,7 @@ export class K8sNetworkService implements OnModuleInit {
     const ports = new Set<number>();
     for (const svc of body.items) {
       if (svc.spec?.type !== 'LoadBalancer') continue;
-      const svcIp = svc.spec?.loadBalancerIP
-        || svc.status?.loadBalancer?.ingress?.[0]?.ip;
+      const svcIp = svc.spec?.loadBalancerIP || svc.status?.loadBalancer?.ingress?.[0]?.ip;
       if (svcIp !== loadBalancerIp) continue;
       for (const p of svc.spec?.ports || []) {
         if (typeof p.port === 'number') ports.add(p.port);
@@ -2114,9 +2220,9 @@ export class K8sNetworkService implements OnModuleInit {
         namespace: options.namespace,
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
-          'cnpg.io/cluster': options.clusterName,
+          'cnpg.io/cluster': options.clusterName
         },
-        annotations: this.sharedIpAnnotations(options.loadBalancerIp),
+        annotations: this.sharedIpAnnotations(options.loadBalancerIp)
       },
       spec: {
         type: 'LoadBalancer',
@@ -2124,12 +2230,10 @@ export class K8sNetworkService implements OnModuleInit {
         externalTrafficPolicy: 'Cluster',
         selector: {
           'cnpg.io/cluster': options.clusterName,
-          'cnpg.io/instanceRole': 'primary',
+          'cnpg.io/instanceRole': 'primary'
         },
-        ports: [
-          { name: 'postgres', port: options.port, targetPort: 5432, protocol: 'TCP' },
-        ],
-      },
+        ports: [{ name: 'postgres', port: options.port, targetPort: 5432, protocol: 'TCP' }]
+      }
     };
 
     try {
@@ -2175,24 +2279,24 @@ export class K8sNetworkService implements OnModuleInit {
         namespace,
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
-          'cnpg.io/cluster': clusterName,
-        },
+          'cnpg.io/cluster': clusterName
+        }
       },
       spec: {
         // Target the CNPG primary pod of this cluster.
         podSelector: {
           matchLabels: {
-            'cnpg.io/cluster': clusterName,
-          },
+            'cnpg.io/cluster': clusterName
+          }
         },
         policyTypes: ['Ingress'],
         ingress: [
           {
             from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
-            ports: [{ protocol: 'TCP', port: 5432 }],
-          },
-        ],
-      },
+            ports: [{ protocol: 'TCP', port: 5432 }]
+          }
+        ]
+      }
     };
 
     try {
@@ -2221,14 +2325,18 @@ export class K8sNetworkService implements OnModuleInit {
   // ── Public deployment-port exposure (MetalLB LoadBalancer, TCP/UDP passthrough) ──
 
   private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = optionalDomain(
-    process.env.PUBLIC_DEPLOYMENT_DOMAIN,
+    process.env.PUBLIC_DEPLOYMENT_DOMAIN
   );
 
   publicDeploymentBaseDomain(): string {
     return this.PUBLIC_DEPLOYMENT_BASE_DOMAIN;
   }
 
-  private publicDeploymentServiceName(deploymentName: string, port: number, protocol: string): string {
+  private publicDeploymentServiceName(
+    deploymentName: string,
+    port: number,
+    protocol: string
+  ): string {
     const proto = protocol.toLowerCase() === 'udp' ? 'u' : 't';
     return truncateK8sName(`${deploymentName}-pub-${proto}${port}`, 63);
   }
@@ -2244,7 +2352,11 @@ export class K8sNetworkService implements OnModuleInit {
     this.ensureKubeConfig();
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const protocol = options.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
-    const svcName = this.publicDeploymentServiceName(options.deploymentName, options.publicPort, protocol);
+    const svcName = this.publicDeploymentServiceName(
+      options.deploymentName,
+      options.publicPort,
+      protocol
+    );
 
     const body: k8s.V1Service = {
       metadata: {
@@ -2253,26 +2365,26 @@ export class K8sNetworkService implements OnModuleInit {
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
           'app.kubernetes.io/name': options.deploymentName,
-          'orchard.my/public-deployment': options.deploymentName,
+          'orchard.my/public-deployment': options.deploymentName
         },
-        annotations: this.sharedIpAnnotations(options.loadBalancerIp),
+        annotations: this.sharedIpAnnotations(options.loadBalancerIp)
       },
       spec: {
         type: 'LoadBalancer',
         loadBalancerIP: options.loadBalancerIp,
         externalTrafficPolicy: 'Cluster',
         selector: {
-          'app.kubernetes.io/name': options.deploymentName,
+          'app.kubernetes.io/name': options.deploymentName
         },
         ports: [
           {
             name: `pub-${protocol.toLowerCase()}-${options.publicPort}`,
             port: options.publicPort,
             targetPort: options.targetPort,
-            protocol,
-          },
-        ],
-      },
+            protocol
+          }
+        ]
+      }
     };
 
     try {
@@ -2296,7 +2408,11 @@ export class K8sNetworkService implements OnModuleInit {
     this.ensureKubeConfig();
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const protocol = options.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
-    const svcName = this.publicDeploymentServiceName(options.deploymentName, options.publicPort, protocol);
+    const svcName = this.publicDeploymentServiceName(
+      options.deploymentName,
+      options.publicPort,
+      protocol
+    );
     try {
       await coreApi.deleteNamespacedService(svcName, options.namespace);
     } catch (e: any) {
@@ -2310,13 +2426,21 @@ export class K8sNetworkService implements OnModuleInit {
     try {
       const [current, legacy] = await Promise.all([
         coreApi.listNamespacedService(
-          namespace, undefined, undefined, undefined, undefined,
-          `orchard.my/public-deployment=${deploymentName}`,
+          namespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `orchard.my/public-deployment=${deploymentName}`
         ),
         coreApi.listNamespacedService(
-          namespace, undefined, undefined, undefined, undefined,
-          `orchard.dev/public-deployment=${deploymentName}`,
-        ),
+          namespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `orchard.dev/public-deployment=${deploymentName}`
+        )
       ]);
       const seen = new Set<string>();
       for (const svc of [...current.body.items, ...legacy.body.items]) {
@@ -2341,7 +2465,7 @@ export class K8sNetworkService implements OnModuleInit {
   async upsertPublicDeploymentNetworkPolicy(
     namespace: string,
     deploymentName: string,
-    ports: { port: number; protocol: string }[],
+    ports: { port: number; protocol: string }[]
   ): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
@@ -2358,12 +2482,12 @@ export class K8sNetworkService implements OnModuleInit {
         namespace,
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
-          'app.kubernetes.io/name': deploymentName,
-        },
+          'app.kubernetes.io/name': deploymentName
+        }
       },
       spec: {
         podSelector: {
-          matchLabels: { 'app.kubernetes.io/name': deploymentName },
+          matchLabels: { 'app.kubernetes.io/name': deploymentName }
         },
         policyTypes: ['Ingress'],
         ingress: [
@@ -2371,11 +2495,11 @@ export class K8sNetworkService implements OnModuleInit {
             from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
             ports: ports.map((p) => ({
               protocol: p.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
-              port: p.port,
-            })),
-          },
-        ],
-      },
+              port: p.port
+            }))
+          }
+        ]
+      }
     };
 
     try {
@@ -2390,7 +2514,10 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  async deletePublicDeploymentNetworkPolicy(namespace: string, deploymentName: string): Promise<void> {
+  async deletePublicDeploymentNetworkPolicy(
+    namespace: string,
+    deploymentName: string
+  ): Promise<void> {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     const name = this.publicDeploymentNetworkPolicyName(deploymentName);

@@ -23,9 +23,7 @@ export function bearerApiToken(req: Record<string, any>): string | undefined {
 // SSE-driven refetch without loosening the per-IP limit for everyone else.
 export function apiThrottlerLimit(context: ExecutionContext): number {
   if (context.getType() !== 'http') return IP_RATE_LIMIT;
-  return bearerApiToken(context.switchToHttp().getRequest())
-    ? API_TOKEN_RATE_LIMIT
-    : IP_RATE_LIMIT;
+  return bearerApiToken(context.switchToHttp().getRequest()) ? API_TOKEN_RATE_LIMIT : IP_RATE_LIMIT;
 }
 
 // ThrottlerGuard that keys buckets per API token instead of per IP for

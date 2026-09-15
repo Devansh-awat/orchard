@@ -19,26 +19,25 @@ export class TemplatesController {
 
   @SuperAdmin()
   @Post('templates')
-  async createTemplate(
-    @Body() body: { yaml: string },
-    @Request() req,
-  ) {
+  async createTemplate(@Body() body: { yaml: string }, @Request() req) {
     return this.templatesService.createTemplate(body.yaml, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @SuperAdmin()
   @Put('templates/:id')
-  async updateTemplate(
-    @Param('id') id: string,
-    @Body() body: { yaml: string },
-    @Request() req,
-  ) {
+  async updateTemplate(@Param('id') id: string, @Body() body: { yaml: string }, @Request() req) {
     return this.templatesService.updateTemplate(id, body.yaml, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -46,8 +45,11 @@ export class TemplatesController {
   @Delete('templates/:id')
   async deleteTemplate(@Param('id') id: string, @Request() req) {
     return this.templatesService.deleteTemplate(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -60,7 +62,7 @@ export class TemplatesController {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
     },
-    @Request() req,
+    @Request() req
   ) {
     return this.templatesService.deployTemplate(
       projectId,
@@ -72,28 +74,34 @@ export class TemplatesController {
         username: req.user.username,
         firstName: req.user.firstName || req.user.name?.split(' ')[0],
         lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-        imageUrl: req.user.imageUrl,
+        imageUrl: req.user.imageUrl
       },
       {
         cpuRequestMilli: body.cpuRequestMilli ?? null,
-        memoryRequestBytes: body.memoryRequestBytes ?? null,
-      },
+        memoryRequestBytes: body.memoryRequestBytes ?? null
+      }
     );
   }
 
   @Get('projects/:projectId/template-instances')
   async getProjectTemplateInstances(@Param('projectId') projectId: string, @Request() req) {
     return this.templatesService.getProjectTemplateInstances(projectId, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
   @Get('template-instances/:id')
   async getTemplateInstance(@Param('id') id: string, @Request() req) {
     return this.templatesService.getTemplateInstance(id, req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -101,11 +109,14 @@ export class TemplatesController {
   async renameTemplateInstance(
     @Param('id') id: string,
     @Body() body: { name?: string },
-    @Request() req,
+    @Request() req
   ) {
     return this.templatesService.renameTemplateInstance(id, body?.name ?? '', req.user.sub, {
-      email: req.user.email, username: req.user.username,
-      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
     });
   }
 
@@ -119,8 +130,8 @@ export class TemplatesController {
         username: req.user.username,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      },
+        imageUrl: req.user.imageUrl
+      }
     );
   }
 }

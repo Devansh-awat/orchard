@@ -15,5 +15,4 @@ export const SuperAdmin = () => SetMetadata(REQUIRES_SUPERADMIN_KEY, true);
 // are unaffected — scopes only apply to programmatic token auth.
 export type ApiTokenScopeName = 'read' | 'deploy' | 'exec';
 export const REQUIRED_SCOPE_KEY = 'required_scope';
-export const RequireScope = (scope: ApiTokenScopeName) =>
-  SetMetadata(REQUIRED_SCOPE_KEY, scope);
+export const RequireScope = (scope: ApiTokenScopeName) => SetMetadata(REQUIRED_SCOPE_KEY, scope);

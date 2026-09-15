@@ -25,7 +25,7 @@ export function mapNodeToRow(n: k8s.V1Node): NodeRow | null {
   const taints: NodeTaint[] = (n.spec?.taints || []).map((t) => ({
     key: t.key,
     value: t.value ?? null,
-    effect: t.effect,
+    effect: t.effect
   }));
   const capacity = n.status?.capacity || {};
   return {
@@ -34,6 +34,6 @@ export function mapNodeToRow(n: k8s.V1Node): NodeRow | null {
     taints,
     schedulable: !n.spec?.unschedulable,
     cpuCapacity: typeof capacity.cpu === 'string' ? capacity.cpu : undefined,
-    memoryCapacity: typeof capacity.memory === 'string' ? capacity.memory : undefined,
+    memoryCapacity: typeof capacity.memory === 'string' ? capacity.memory : undefined
   };
 }

@@ -332,9 +332,12 @@
 	function stripLeadingTime(line: string): string {
 		// The Time column already shows this, and ansiToHtml would otherwise
 		// render the same stamp again as an inline pill. Mirrors ISO_TS_RE.
-		return line
-			.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s*/g, '')
-			.replace(/^(?:\x1b\[[0-9;]*m|\s)*\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s+/, '');
+		return (
+			line
+				.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s*/g, '')
+				// oxlint-disable-next-line no-control-regex
+				.replace(/^(?:\x1b\[[0-9;]*m|\s)*\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s+/, '')
+		);
 	}
 
 	function deployLabel(d: ErrorDeploy): string {
@@ -1137,14 +1140,12 @@
 											style="transform: rotate({open ? 90 : 0}deg);"
 										/>
 									{/if}
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<span class="lg-msg">{@html headline}</span>
 									{#if detail.length > 0 && !open}
 										<span class="lg-more">+{detail.length}</span>
 									{/if}
 								</button>
 								{#if detail.length > 0 && open}
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
 								{/if}
 							</div>
@@ -1426,7 +1427,6 @@
 									{#if group.stackTrace}
 										<h4 class="eg-section">Stack trace</h4>
 										<div class="observe-stack-wrapper">
-											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											<pre class="observe-error-stack">{@html highlightStack(
 													group.stackTrace
 												)}</pre>
@@ -1576,7 +1576,6 @@
 										</div>
 									{:else if killedLogs[k.entryId]}
 										<div class="observe-stack-wrapper">
-											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
 													killedLogs[k.entryId]
 												)}</pre>

@@ -382,8 +382,7 @@
 						id="import-json"
 						class="ap-textarea"
 						placeholder="Paste theme JSON here..."
-						bind:value={importJson}
-					></textarea>
+						bind:value={importJson}></textarea>
 				</div>
 
 				{#if importError}

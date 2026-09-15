@@ -3,7 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-  Logger,
+  Logger
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Resolver } from 'dns/promises';
@@ -39,7 +39,7 @@ export class OrgDomainsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly audit: AuditService
   ) {}
 
   normalizeDomain(input: string): string {
@@ -76,14 +76,14 @@ export class OrgDomainsService {
       lastError: row.lastError,
       recordName: `${CHALLENGE_PREFIX}.${row.domain}`,
       recordType: 'TXT',
-      recordValue: row.verificationToken,
+      recordValue: row.verificationToken
     };
   }
 
   async list(organizationId: string): Promise<DomainRecord[]> {
     const rows = await this.prisma.orgDomain.findMany({
       where: { organizationId },
-      orderBy: [{ verifiedAt: 'desc' }, { domain: 'asc' }],
+      orderBy: [{ verifiedAt: 'desc' }, { domain: 'asc' }]
     });
     return rows.map((r) => this.toRecord(r));
   }
@@ -92,7 +92,7 @@ export class OrgDomainsService {
   async verifiedDomains(organizationId: string): Promise<string[]> {
     const rows = await this.prisma.orgDomain.findMany({
       where: { organizationId, verifiedAt: { not: null } },
-      select: { domain: true },
+      select: { domain: true }
     });
     return rows.map((r) => r.domain);
   }
@@ -101,7 +101,7 @@ export class OrgDomainsService {
   async ownerOf(domain: string): Promise<string | null> {
     const row = await this.prisma.orgDomain.findFirst({
       where: { domain: domain.toLowerCase(), verifiedAt: { not: null } },
-      select: { organizationId: true },
+      select: { organizationId: true }
     });
     return row?.organizationId ?? null;
   }
@@ -110,7 +110,7 @@ export class OrgDomainsService {
     if (!domain) return false;
     const row = await this.prisma.orgDomain.findFirst({
       where: { organizationId, domain: domain.toLowerCase(), verifiedAt: { not: null } },
-      select: { id: true },
+      select: { id: true }
     });
     return Boolean(row);
   }
@@ -118,12 +118,12 @@ export class OrgDomainsService {
   async add(
     organizationId: string,
     input: string,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ): Promise<DomainRecord> {
     const domain = this.normalizeDomain(input);
 
     const existing = await this.prisma.orgDomain.findUnique({
-      where: { organizationId_domain: { organizationId, domain } },
+      where: { organizationId_domain: { organizationId, domain } }
     });
     if (existing) return this.toRecord(existing);
 
@@ -138,8 +138,8 @@ export class OrgDomainsService {
       data: {
         organizationId,
         domain,
-        verificationToken: `orchard-verify-${randomBytes(16).toString('hex')}`,
-      },
+        verificationToken: `orchard-verify-${randomBytes(16).toString('hex')}`
+      }
     });
 
     void this.audit.log({
@@ -149,7 +149,7 @@ export class OrgDomainsService {
       organizationId,
       targetType: 'org_domain',
       targetId: created.id,
-      targetLabel: domain,
+      targetLabel: domain
     });
 
     return this.toRecord(created);
@@ -158,7 +158,7 @@ export class OrgDomainsService {
   async remove(
     organizationId: string,
     domainId: string,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ) {
     const row = await this.prisma.orgDomain.findUnique({ where: { id: domainId } });
     if (!row || row.organizationId !== organizationId) {
@@ -174,7 +174,7 @@ export class OrgDomainsService {
       targetType: 'org_domain',
       targetId: domainId,
       targetLabel: row.domain,
-      metadata: { wasVerified: row.verifiedAt !== null },
+      metadata: { wasVerified: row.verifiedAt !== null }
     });
 
     return { success: true };
@@ -198,7 +198,7 @@ export class OrgDomainsService {
   async verify(
     organizationId: string,
     domainId: string,
-    actor: { userId: string; email?: string },
+    actor: { userId: string; email?: string }
   ): Promise<DomainRecord> {
     const row = await this.prisma.orgDomain.findUnique({ where: { id: domainId } });
     if (!row || row.organizationId !== organizationId) {
@@ -231,7 +231,7 @@ export class OrgDomainsService {
     if (failure) {
       const updated = await this.prisma.orgDomain.update({
         where: { id: domainId },
-        data: { lastCheckedAt: new Date(), lastError: failure },
+        data: { lastCheckedAt: new Date(), lastError: failure }
       });
       return this.toRecord(updated);
     }
@@ -243,7 +243,7 @@ export class OrgDomainsService {
     try {
       const verified = await this.prisma.orgDomain.update({
         where: { id: domainId },
-        data: { verifiedAt: new Date(), lastCheckedAt: new Date(), lastError: null },
+        data: { verifiedAt: new Date(), lastCheckedAt: new Date(), lastError: null }
       });
 
       void this.audit.log({
@@ -253,7 +253,7 @@ export class OrgDomainsService {
         organizationId,
         targetType: 'org_domain',
         targetId: domainId,
-        targetLabel: row.domain,
+        targetLabel: row.domain
       });
       this.logger.log(`Domain ${row.domain} verified for org ${organizationId}`);
 

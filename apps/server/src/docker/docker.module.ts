@@ -12,23 +12,23 @@ import { LeaderElectionService } from '../events/leader-election.service';
   imports: [AuthModule, PrismaModule],
   controllers: [DockerController],
   providers: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService],
-  exports: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService],
+  exports: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService]
 })
 export class DockerModule implements OnModuleInit, OnModuleDestroy {
   private reaperInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly buildKitPool: BuildKitPoolService,
-    private readonly leaderElection: LeaderElectionService,
+    private readonly leaderElection: LeaderElectionService
   ) {}
 
   onModuleInit() {
     // Reap idle daemon pods every 5 minutes
     this.reaperInterval = setInterval(() => {
       if (!this.leaderElection.isLeader()) return;
-      this.buildKitPool.reapIdleDaemons().catch(err =>
-        console.error('[DockerModule] reaper error:', err.message),
-      );
+      this.buildKitPool
+        .reapIdleDaemons()
+        .catch((err) => console.error('[DockerModule] reaper error:', err.message));
     }, 5 * 60_000);
   }
 
@@ -36,4 +36,3 @@ export class DockerModule implements OnModuleInit, OnModuleDestroy {
     if (this.reaperInterval) clearInterval(this.reaperInterval);
   }
 }
-

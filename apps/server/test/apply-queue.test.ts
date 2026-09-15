@@ -21,7 +21,7 @@ async function row() {
 async function drain(svc: ApplyQueueService) {
   await prisma.k8sApplyItem.updateMany({
     where: { dedupeKey: { startsWith: 'test:' }, status: 'pending' },
-    data: { notBefore: new Date(Date.now() - 60_000) },
+    data: { notBefore: new Date(Date.now() - 60_000) }
   });
   await (svc as never as { drain(): Promise<void> }).drain();
 }
@@ -76,7 +76,7 @@ test('a retryable failure backs off with attempts counted', async () => {
   const svc = makeService(async () => ({ ok: false, error: 'boom' }));
   await prisma.k8sApplyItem.update({
     where: { dedupeKey: KEY },
-    data: { status: 'pending', notBefore: new Date(), attempts: 0 },
+    data: { status: 'pending', notBefore: new Date(), attempts: 0 }
   });
   await drain(svc);
   const item = await row();
@@ -90,7 +90,7 @@ test('a terminal failure marks the item failed', async () => {
   const svc = makeService(async () => ({ ok: false, terminal: true, error: 'invalid spec' }));
   await prisma.k8sApplyItem.update({
     where: { dedupeKey: KEY },
-    data: { status: 'pending', notBefore: new Date(), attempts: 0 },
+    data: { status: 'pending', notBefore: new Date(), attempts: 0 }
   });
   await drain(svc);
   const item = await row();
@@ -101,7 +101,7 @@ test('a terminal failure marks the item failed', async () => {
 test('two workers cannot claim the same item', async () => {
   await prisma.k8sApplyItem.update({
     where: { dedupeKey: KEY },
-    data: { status: 'pending', notBefore: new Date(), attempts: 0 },
+    data: { status: 'pending', notBefore: new Date(), attempts: 0 }
   });
   let executions = 0;
   const slow = async () => {

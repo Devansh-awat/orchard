@@ -1,77 +1,74 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @font-face {
-  font-family: "Plus Jakarta Sans";
-  src: url("/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf")
-    format("truetype");
-  font-weight: 200 800;
-  font-style: normal;
-  font-display: swap;
+	font-family: 'Plus Jakarta Sans';
+	src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
+	font-weight: 200 800;
+	font-style: normal;
+	font-display: swap;
 }
 
 @font-face {
-  font-family: "Plus Jakarta Sans";
-  src: url("/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.ttf")
-    format("truetype");
-  font-weight: 200 800;
-  font-style: italic;
-  font-display: swap;
+	font-family: 'Plus Jakarta Sans';
+	src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.ttf')
+		format('truetype');
+	font-weight: 200 800;
+	font-style: italic;
+	font-display: swap;
 }
 
 @font-face {
-  font-family: "Space Mono";
-  src: url("/fonts/Space_Mono/SpaceMono-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
+	font-family: 'Space Mono';
+	src: url('/fonts/Space_Mono/SpaceMono-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
 }
 
 @font-face {
-  font-family: "Space Mono";
-  src: url("/fonts/Space_Mono/SpaceMono-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
+	font-family: 'Space Mono';
+	src: url('/fonts/Space_Mono/SpaceMono-Bold.ttf') format('truetype');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
 }
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono:
-    "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    monospace;
+	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-primary-50: #fef5f6;
-  --color-primary-100: #fce8ea;
-  --color-primary-200: #f9d1d6;
-  --color-primary-300: #f3a8b2;
-  --color-primary-400: #e87485;
-  --color-primary-500: #c93a4f;
-  --color-primary-600: #b33346;
-  --color-primary-700: #962b3a;
-  --color-primary-800: #7a2430;
-  --color-primary-900: #5f1c25;
-  --color-primary-950: #3d1118;
+	--color-primary-50: #fef5f6;
+	--color-primary-100: #fce8ea;
+	--color-primary-200: #f9d1d6;
+	--color-primary-300: #f3a8b2;
+	--color-primary-400: #e87485;
+	--color-primary-500: #c93a4f;
+	--color-primary-600: #b33346;
+	--color-primary-700: #962b3a;
+	--color-primary-800: #7a2430;
+	--color-primary-900: #5f1c25;
+	--color-primary-950: #3d1118;
 
-  --color-ink-900: #2c1a1d;
-  --color-ink-700: #5d3a3f;
-  --color-ink-500: #8a6a6f;
+	--color-ink-900: #2c1a1d;
+	--color-ink-700: #5d3a3f;
+	--color-ink-500: #8a6a6f;
 
-  --color-shell-50: #fdf7f8;
-  --color-shell-100: #f8e8ea;
+	--color-shell-50: #fdf7f8;
+	--color-shell-100: #f8e8ea;
 
-  --color-canvas: #fffbfb;
-  --color-panel: #1a0f11;
+	--color-canvas: #fffbfb;
+	--color-panel: #1a0f11;
 }
 
 :root {
-  color-scheme: light;
-  --shot-edge: --alpha(var(--color-ink-900) / 8%);
-  --shot-shadow:
-    0 1px 2px --alpha(var(--color-primary-900) / 6%),
-    0 24px 60px -30px --alpha(var(--color-primary-900) / 30%);
-  --hairline: --alpha(var(--color-ink-900) / 10%);
+	color-scheme: light;
+	--shot-edge: --alpha(var(--color-ink-900) / 8%);
+	--shot-shadow:
+		0 1px 2px --alpha(var(--color-primary-900) / 6%),
+		0 24px 60px -30px --alpha(var(--color-primary-900) / 30%);
+	--hairline: --alpha(var(--color-ink-900) / 10%);
 }
 
 /*
@@ -80,177 +77,177 @@
  * Contrast is rebuilt, not inverted: ink goes light, surfaces go slightly
  * lighter than the canvas, and shadows are dropped for hairlines.
  */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --color-canvas: #131011;
-  --color-shell-50: #1a1618;
-  --color-shell-100: #221c1e;
-  --color-panel: #1a1618;
-  --color-ink-900: #f6eef0;
-  --color-ink-700: #c2adb1;
-  --color-ink-500: #8f7d81;
-  --color-primary-500: #e2596d;
-  --color-primary-600: #ea6b7d;
-  --color-primary-300: #f0919d;
-  --shot-edge: --alpha(#ffffff / 12%);
-  --shot-shadow: none;
-  --hairline: --alpha(#ffffff / 12%);
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--color-canvas: #131011;
+	--color-shell-50: #1a1618;
+	--color-shell-100: #221c1e;
+	--color-panel: #1a1618;
+	--color-ink-900: #f6eef0;
+	--color-ink-700: #c2adb1;
+	--color-ink-500: #8f7d81;
+	--color-primary-500: #e2596d;
+	--color-primary-600: #ea6b7d;
+	--color-primary-300: #f0919d;
+	--shot-edge: --alpha(#ffffff / 12%);
+	--shot-shadow: none;
+	--hairline: --alpha(#ffffff / 12%);
 }
 
 /* Before the inline script resolves a theme, follow the OS. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-    --color-canvas: #131011;
-    --color-shell-50: #1a1618;
-    --color-shell-100: #221c1e;
-    --color-panel: #1a1618;
-    --color-ink-900: #f6eef0;
-    --color-ink-700: #c2adb1;
-    --color-ink-500: #8f7d81;
-    --color-primary-500: #e2596d;
-    --color-primary-600: #ea6b7d;
-    --color-primary-300: #f0919d;
-    --shot-edge: --alpha(#ffffff / 12%);
-    --shot-shadow: none;
-    --hairline: --alpha(#ffffff / 12%);
-  }
+	:root:not([data-theme]) {
+		color-scheme: dark;
+		--color-canvas: #131011;
+		--color-shell-50: #1a1618;
+		--color-shell-100: #221c1e;
+		--color-panel: #1a1618;
+		--color-ink-900: #f6eef0;
+		--color-ink-700: #c2adb1;
+		--color-ink-500: #8f7d81;
+		--color-primary-500: #e2596d;
+		--color-primary-600: #ea6b7d;
+		--color-primary-300: #f0919d;
+		--shot-edge: --alpha(#ffffff / 12%);
+		--shot-shadow: none;
+		--hairline: --alpha(#ffffff / 12%);
+	}
 }
 
 html {
-  scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
 
 body {
-  font-family: var(--font-sans);
-  background: var(--color-canvas);
-  color: var(--color-ink-900);
+	font-family: var(--font-sans);
+	background: var(--color-canvas);
+	color: var(--color-ink-900);
 }
 
 /* Section shell: outer handles background + vertical rhythm, inner handles width. */
 @utility section-y {
-  padding-block: --spacing(20);
-  @variant md {
-    padding-block: --spacing(28);
-  }
+	padding-block: --spacing(20);
+	@variant md {
+		padding-block: --spacing(28);
+	}
 }
 
 @utility section-x {
-  margin-inline: auto;
-  max-width: 76rem;
-  padding-inline: --spacing(6);
-  @variant sm {
-    padding-inline: --spacing(10);
-  }
-  @variant lg {
-    padding-inline: --spacing(14);
-  }
+	margin-inline: auto;
+	max-width: 76rem;
+	padding-inline: --spacing(6);
+	@variant sm {
+		padding-inline: --spacing(10);
+	}
+	@variant lg {
+		padding-inline: --spacing(14);
+	}
 }
 
 /* Screenshots: concentric radius that scales with the viewport, hairline ring, no border. */
 @utility shot {
-  overflow: hidden;
-  border-radius: min(1vw, 14px);
-  outline: 1px solid var(--shot-edge);
-  outline-offset: -1px;
-  background: var(--color-shell-50);
+	overflow: hidden;
+	border-radius: min(1vw, 14px);
+	outline: 1px solid var(--shot-edge);
+	outline-offset: -1px;
+	background: var(--color-shell-50);
 }
 
 @utility shot-lift {
-  box-shadow: var(--shot-shadow);
+	box-shadow: var(--shot-shadow);
 }
 
 /* Surfaces that sit on the canvas: a fill in light, a hairline in dark. */
 @utility tile {
-  border-radius: var(--radius-2xl);
-  background: var(--color-shell-50);
+	border-radius: var(--radius-2xl);
+	background: var(--color-shell-50);
 }
 
 @utility hairline-t {
-  border-top: 1px solid var(--hairline);
+	border-top: 1px solid var(--hairline);
 }
 
 .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 9999px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition:
-    background-color 0.18s ease,
-    color 0.18s ease,
-    outline-color 0.18s ease;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	border-radius: 9999px;
+	font-weight: 600;
+	white-space: nowrap;
+	transition:
+		background-color 0.18s ease,
+		color 0.18s ease,
+		outline-color 0.18s ease;
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--color-primary-500);
-  outline-offset: 2px;
+	outline: 2px solid var(--color-primary-500);
+	outline-offset: 2px;
 }
 
 .btn-md {
-  padding: 0.625rem 1rem;
-  font-size: 0.9375rem;
+	padding: 0.625rem 1rem;
+	font-size: 0.9375rem;
 }
 
 .btn-lg {
-  padding: 0.8125rem 1.25rem;
-  font-size: 1rem;
+	padding: 0.8125rem 1.25rem;
+	font-size: 1rem;
 }
 
 .btn-primary {
-  background: var(--color-primary-500);
-  color: #fff;
+	background: var(--color-primary-500);
+	color: #fff;
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-600);
+	background: var(--color-primary-600);
 }
 
 .btn-outline {
-  color: var(--color-ink-900);
-  outline: 1px solid --alpha(var(--color-ink-900) / 14%);
-  outline-offset: -1px;
+	color: var(--color-ink-900);
+	outline: 1px solid --alpha(var(--color-ink-900) / 14%);
+	outline-offset: -1px;
 }
 
 .btn-outline:hover {
-  background: --alpha(var(--color-ink-900) / 4%);
+	background: --alpha(var(--color-ink-900) / 4%);
 }
 
 /* Always sits on a dark panel, so it must not follow the flipping ink tokens. */
 .btn-onpanel {
-  background: #fff;
-  color: #241a1c;
+	background: #fff;
+	color: #241a1c;
 }
 
 .btn-onpanel:hover {
-  background: #fdeff1;
+	background: #fdeff1;
 }
 
 /* Dark panels keep their own colour in both modes; in dark they need an edge. */
 @utility panel-surface {
-  background: var(--color-panel);
-  @variant dark {
-    outline: 1px solid --alpha(#ffffff / 8%);
-    outline-offset: -1px;
-  }
+	background: var(--color-panel);
+	@variant dark {
+		outline: 1px solid --alpha(#ffffff / 8%);
+		outline-offset: -1px;
+	}
 }
 
 .motion-hidden {
-  opacity: 0;
+	opacity: 0;
 }
 
 /* ui.sh picker: `contents` outranks the UA hidden rule, so hidden options still render. */
 [data-uidotsh-option][hidden] {
-  display: none !important;
+	display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+	html {
+		scroll-behavior: auto;
+	}
 
-  .motion-hidden {
-    opacity: 1;
-  }
+	.motion-hidden {
+		opacity: 1;
+	}
 }

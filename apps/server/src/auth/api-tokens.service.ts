@@ -22,16 +22,13 @@ export class ApiTokensService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly authz: AuthorizationService,
+    private readonly authz: AuthorizationService
   ) {}
 
   // Restrict-list validation: every listed project must be one the creating user
   // can already view, otherwise we'd happily mint tokens for unreachable projects.
   // Returns the deduplicated, normalised list.
-  private async normalizeRestrictedProjects(
-    userId: string,
-    input: unknown,
-  ): Promise<string[]> {
+  private async normalizeRestrictedProjects(userId: string, input: unknown): Promise<string[]> {
     if (input == null) return [];
     if (!Array.isArray(input)) {
       throw new BadRequestException('restrictedProjectIds must be an array');
@@ -42,7 +39,7 @@ export class ApiTokensService {
     // token. Force the caller to omit the field if they want unrestricted.
     if (input.length === 0) {
       throw new BadRequestException(
-        'restrictedProjectIds cannot be an empty array; omit the field for an unrestricted token',
+        'restrictedProjectIds cannot be an empty array; omit the field for an unrestricted token'
       );
     }
     const seen = new Set<string>();
@@ -82,7 +79,7 @@ export class ApiTokensService {
     name: string,
     expiresAt?: Date,
     scopes?: unknown,
-    restrictedProjectIds?: unknown,
+    restrictedProjectIds?: unknown
   ) {
     const now = Date.now();
     const cap = new Date(now + MAX_TOKEN_LIFETIME_MS);
@@ -100,7 +97,10 @@ export class ApiTokensService {
     }
 
     const resolvedScopes = this.normalizeScopes(scopes);
-    const resolvedRestrictedProjects = await this.normalizeRestrictedProjects(userId, restrictedProjectIds);
+    const resolvedRestrictedProjects = await this.normalizeRestrictedProjects(
+      userId,
+      restrictedProjectIds
+    );
     const token = `orch_${randomBytes(32).toString('hex')}`;
     const tokenHash = hashApiToken(token);
 
@@ -111,8 +111,8 @@ export class ApiTokensService {
         scopes: resolvedScopes,
         restrictedProjectIds: resolvedRestrictedProjects,
         userId,
-        expiresAt: resolvedExpiresAt,
-      },
+        expiresAt: resolvedExpiresAt
+      }
     });
 
     void this.audit.log({
@@ -124,8 +124,8 @@ export class ApiTokensService {
       metadata: {
         expiresAt: resolvedExpiresAt.toISOString(),
         scopes: resolvedScopes,
-        restrictedProjectIds: resolvedRestrictedProjects,
-      },
+        restrictedProjectIds: resolvedRestrictedProjects
+      }
     });
 
     return {
@@ -135,7 +135,7 @@ export class ApiTokensService {
       scopes: resolvedScopes,
       restrictedProjectIds: resolvedRestrictedProjects,
       createdAt: apiToken.createdAt,
-      expiresAt: apiToken.expiresAt,
+      expiresAt: apiToken.expiresAt
     };
   }
 
@@ -149,15 +149,15 @@ export class ApiTokensService {
         restrictedProjectIds: true,
         lastUsedAt: true,
         expiresAt: true,
-        createdAt: true,
+        createdAt: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
   async revoke(userId: string, tokenId: string) {
     const token = await this.prisma.apiToken.findFirst({
-      where: { id: tokenId, userId },
+      where: { id: tokenId, userId }
     });
 
     if (!token) {
@@ -171,7 +171,7 @@ export class ApiTokensService {
       actorUserId: userId,
       targetType: 'api_token',
       targetId: tokenId,
-      targetLabel: token.name,
+      targetLabel: token.name
     });
 
     return true;
@@ -183,7 +183,7 @@ export class ApiTokensService {
     if (trimmed.length > 255) throw new BadRequestException('Name is too long');
 
     const token = await this.prisma.apiToken.findFirst({
-      where: { id: tokenId, userId },
+      where: { id: tokenId, userId }
     });
 
     if (!token) {
@@ -200,8 +200,8 @@ export class ApiTokensService {
         restrictedProjectIds: true,
         lastUsedAt: true,
         expiresAt: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     void this.audit.log({
@@ -210,7 +210,7 @@ export class ApiTokensService {
       targetType: 'api_token',
       targetId: tokenId,
       targetLabel: trimmed,
-      metadata: { name: [token.name, trimmed] },
+      metadata: { name: [token.name, trimmed] }
     });
 
     return updated;
@@ -226,7 +226,7 @@ export class ApiTokensService {
         actorUserId: userId,
         targetType: 'user',
         targetId: userId,
-        metadata: { count: res.count },
+        metadata: { count: res.count }
       });
     }
     return res.count;

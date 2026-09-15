@@ -41,8 +41,7 @@ export function objectStorage(): ObjectStorage {
       pick('R2_ENDPOINT', 'endpoint') ??
       (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : null),
     publicUrl:
-      pick('R2_PUBLIC_URL', 'publicUrl') ??
-      (accountId ? `https://pub-${accountId}.r2.dev` : null),
-    buildContextBucket: pick('R2_BUILD_CONTEXT_BUCKET', 'buildContextBucket'),
+      pick('R2_PUBLIC_URL', 'publicUrl') ?? (accountId ? `https://pub-${accountId}.r2.dev` : null),
+    buildContextBucket: pick('R2_BUILD_CONTEXT_BUCKET', 'buildContextBucket')
   };
 }

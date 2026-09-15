@@ -16,7 +16,7 @@ function resolve(env: Record<string, string>) {
   `;
   const out = execFileSync('pnpm', ['exec', 'tsx', '-e', script], {
     env: { ...process.env, PLATFORM_WILDCARD_DOMAINS: '', APP_DOMAIN: '', ...env },
-    encoding: 'utf8',
+    encoding: 'utf8'
   });
   return JSON.parse(out);
 }
@@ -41,11 +41,11 @@ test('an unconfigured instance generates nothing rather than falling back to a l
 test('explicit PLATFORM_WILDCARD_DOMAINS wins over APP_DOMAIN and supports multiple entries', () => {
   const r = resolve({
     APP_DOMAIN: 'ignored.example.com',
-    PLATFORM_WILDCARD_DOMAINS: '.a.example.com=sec-a,.b.example.com=sec-b',
+    PLATFORM_WILDCARD_DOMAINS: '.a.example.com=sec-a,.b.example.com=sec-b'
   });
   assert.deepEqual(r.domains, [
     { suffix: '.a.example.com', secret: 'sec-a' },
-    { suffix: '.b.example.com', secret: 'sec-b' },
+    { suffix: '.b.example.com', secret: 'sec-b' }
   ]);
 });
 
@@ -82,9 +82,9 @@ function optionalFor(env: Record<string, string>) {
       PUBLIC_DB_DOMAIN: '',
       PUBLIC_DEPLOYMENT_DOMAIN: '',
       BASE_DOMAIN: '',
-      ...env,
+      ...env
     },
-    encoding: 'utf8',
+    encoding: 'utf8'
   });
   return JSON.parse(out);
 }
@@ -93,7 +93,7 @@ test('optional domains stay empty when only APP_DOMAIN is set', () => {
   assert.deepEqual(optionalFor({ APP_DOMAIN: 'apps.example.com' }), {
     db: '',
     port: '',
-    vanity: '',
+    vanity: ''
   });
 });
 
@@ -103,9 +103,9 @@ test('optional domains are used verbatim when set, and normalised', () => {
       APP_DOMAIN: 'apps.example.com',
       PUBLIC_DB_DOMAIN: '.DB.example.com.',
       PUBLIC_DEPLOYMENT_DOMAIN: 'ports.example.com',
-      BASE_DOMAIN: 'example.com',
+      BASE_DOMAIN: 'example.com'
     }),
-    { db: 'db.example.com', port: 'ports.example.com', vanity: 'example.com' },
+    { db: 'db.example.com', port: 'ports.example.com', vanity: 'example.com' }
   );
 });
 
@@ -120,20 +120,20 @@ function vanityFor(env: Record<string, string>) {
   `;
   return execFileSync('pnpm', ['exec', 'tsx', '-e', script], {
     env: { ...process.env, BASE_DOMAIN: '', FRONTEND_URL: '', APP_DOMAIN: '', ...env },
-    encoding: 'utf8',
+    encoding: 'utf8'
   });
 }
 
 test('vanity domain is never guessed from the platform host or the app domain', () => {
   assert.equal(
     vanityFor({ FRONTEND_URL: 'https://orchard.infra.hackclub.com', APP_DOMAIN: 'k.hackclub.dev' }),
-    '',
+    ''
   );
 });
 
 test('vanity domain is used verbatim when set, and normalised', () => {
   assert.equal(
     vanityFor({ BASE_DOMAIN: 'Orchard.My.', FRONTEND_URL: 'https://orchard.infra.hackclub.com' }),
-    'orchard.my',
+    'orchard.my'
   );
 });

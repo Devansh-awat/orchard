@@ -25,16 +25,16 @@ const legacyInformers = process.env.MIRROR_DISABLED === 'true' ? [K8sJobInformer
     QuotasModule,
     NotificationsModule,
     EventsModule,
-    AuditModule,
+    AuditModule
   ],
   providers: [
     JobsService,
     JobsOrchestratorService,
     JobMirrorConsumer,
     JobsSyncService,
-    ...legacyInformers,
+    ...legacyInformers
   ],
   controllers: [JobsController],
-  exports: [JobsService, JobsOrchestratorService, JobMirrorConsumer],
+  exports: [JobsService, JobsOrchestratorService, JobMirrorConsumer]
 })
 export class JobsModule {}

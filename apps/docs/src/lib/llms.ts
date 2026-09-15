@@ -1,18 +1,18 @@
-import type { CollectionEntry } from "astro:content";
+import type { CollectionEntry } from 'astro:content';
 
-export const SITE = "https://docs.orchard.my";
+export const SITE = 'https://docs.orchard.my';
 
-type Doc = CollectionEntry<"docs">;
+type Doc = CollectionEntry<'docs'>;
 
 /** Starlight slugs the index page as "", which would produce a bare trailing slash. */
 export function docUrl(entry: Doc): string {
-  const slug = entry.id.replace(/\/?index$/, "");
+  const slug = entry.id.replace(/\/?index$/, '');
   return slug ? `${SITE}/${slug}/` : `${SITE}/`;
 }
 
 /** Raw-markdown URL: the page path without its trailing slash, plus `.md`. */
 export function mdUrl(entry: Doc): string {
-  const slug = entry.id.replace(/\/?index$/, "");
+  const slug = entry.id.replace(/\/?index$/, '');
   return slug ? `${SITE}/${slug}.md` : `${SITE}/index.md`;
 }
 

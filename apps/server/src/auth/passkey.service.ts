@@ -10,7 +10,7 @@ import {
   AuthenticationResponseJSON,
   AuthenticatorTransportFuture,
   PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON
 } from '@simplewebauthn/server';
 import { PrismaService } from '../prisma/prisma.service';
 import { RateLimitService } from './rate-limit.service';
@@ -20,10 +20,7 @@ const CHALLENGE_EXPIRY_MINUTES = 5;
 // WebAuthn RP (Relying Party) configuration
 // These should be configured via environment variables in production
 const getRpConfig = () => {
-  const origin =
-    process.env.WEBAUTHN_ORIGIN ||
-    process.env.FRONTEND_URL ||
-    'http://localhost:3000';
+  const origin = process.env.WEBAUTHN_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000';
 
   let rpID = process.env.WEBAUTHN_RP_ID;
   if (!rpID) {
@@ -38,7 +35,7 @@ const getRpConfig = () => {
   return {
     rpName: process.env.WEBAUTHN_RP_NAME || 'Orchard',
     rpID,
-    origin,
+    origin
   };
 };
 
@@ -46,7 +43,7 @@ const getRpConfig = () => {
 export class PasskeyService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly rateLimitService: RateLimitService,
+    private readonly rateLimitService: RateLimitService
   ) {}
 
   /**
@@ -55,19 +52,19 @@ export class PasskeyService {
    */
   async generateRegistrationOptions(
     userId: string,
-    email: string,
+    email: string
   ): Promise<PublicKeyCredentialCreationOptionsJSON> {
     const { rpName, rpID } = getRpConfig();
 
     // Get user's existing passkeys to exclude from registration
     const existingPasskeys = await this.prisma.passkey.findMany({
       where: { userId },
-      select: { credentialId: true, transports: true },
+      select: { credentialId: true, transports: true }
     });
 
     const excludeCredentials = existingPasskeys.map((passkey) => ({
       id: passkey.credentialId,
-      transports: passkey.transports as AuthenticatorTransportFuture[],
+      transports: passkey.transports as AuthenticatorTransportFuture[]
     }));
 
     const options = await generateRegistrationOptions({
@@ -81,9 +78,9 @@ export class PasskeyService {
       authenticatorSelection: {
         residentKey: 'preferred',
         userVerification: 'preferred',
-        authenticatorAttachment: 'platform', // Prefer platform authenticators (Touch ID, Face ID, Windows Hello)
+        authenticatorAttachment: 'platform' // Prefer platform authenticators (Touch ID, Face ID, Windows Hello)
       },
-      timeout: 60000, // 1 minute
+      timeout: 60000 // 1 minute
     });
 
     // Store the challenge for verification
@@ -99,7 +96,7 @@ export class PasskeyService {
     userId: string,
     email: string,
     response: RegistrationResponseJSON,
-    friendlyName?: string,
+    friendlyName?: string
   ): Promise<{ verified: boolean; passkeyId?: string }> {
     const { rpID, origin } = getRpConfig();
 
@@ -107,7 +104,7 @@ export class PasskeyService {
     const challengeRecord = await this.getAndValidateChallenge(
       response.response.clientDataJSON,
       'registration',
-      email,
+      email
     );
 
     if (!challengeRecord) {
@@ -121,7 +118,7 @@ export class PasskeyService {
         expectedChallenge: challengeRecord.challenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
-        requireUserVerification: false, // Be flexible for compatibility
+        requireUserVerification: false // Be flexible for compatibility
       });
     } catch (error) {
       console.error('Passkey registration verification failed:', error);
@@ -132,12 +129,11 @@ export class PasskeyService {
       throw new BadRequestException('Passkey registration verification failed');
     }
 
-    const { credential, credentialDeviceType, credentialBackedUp } =
-      verification.registrationInfo;
+    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
 
     // Check if this credential already exists
     const existingPasskey = await this.prisma.passkey.findUnique({
-      where: { credentialId: credential.id },
+      where: { credentialId: credential.id }
     });
 
     if (existingPasskey) {
@@ -155,13 +151,13 @@ export class PasskeyService {
         backedUp: credentialBackedUp,
         transports: response.response.transports || [],
         aaguid: verification.registrationInfo.aaguid,
-        friendlyName: friendlyName || 'Passkey',
-      },
+        friendlyName: friendlyName || 'Passkey'
+      }
     });
 
     // Delete the used challenge
     await this.prisma.webAuthnChallenge.delete({
-      where: { id: challengeRecord.id },
+      where: { id: challengeRecord.id }
     });
 
     return { verified: true, passkeyId: passkey.id };
@@ -172,7 +168,7 @@ export class PasskeyService {
    */
   async generateAuthenticationOptions(
     email?: string,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<PublicKeyCredentialRequestOptionsJSON> {
     const { rpID } = getRpConfig();
 
@@ -188,13 +184,13 @@ export class PasskeyService {
     if (email) {
       const user = await this.prisma.user.findUnique({
         where: { email: email.toLowerCase() },
-        include: { passkeys: true },
+        include: { passkeys: true }
       });
 
       if (user && user.passkeys.length > 0) {
         allowCredentials = user.passkeys.map((passkey) => ({
           id: passkey.credentialId,
-          transports: passkey.transports as AuthenticatorTransportFuture[],
+          transports: passkey.transports as AuthenticatorTransportFuture[]
         }));
       }
     }
@@ -203,7 +199,7 @@ export class PasskeyService {
       rpID,
       allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
       userVerification: 'preferred',
-      timeout: 60000, // 1 minute
+      timeout: 60000 // 1 minute
     });
 
     // Store the challenge for verification
@@ -217,14 +213,14 @@ export class PasskeyService {
    */
   async verifyAuthentication(
     response: AuthenticationResponseJSON,
-    ipAddress: string,
+    ipAddress: string
   ): Promise<{ verified: boolean; userId?: string; email?: string }> {
     const { rpID, origin } = getRpConfig();
 
     // Find the passkey by credential ID
     const passkey = await this.prisma.passkey.findUnique({
       where: { credentialId: response.id },
-      include: { user: true },
+      include: { user: true }
     });
 
     if (!passkey) {
@@ -239,7 +235,7 @@ export class PasskeyService {
     // Retrieve and validate the challenge
     const challengeRecord = await this.getAndValidateChallenge(
       response.response.clientDataJSON,
-      'authentication',
+      'authentication'
     );
 
     if (!challengeRecord) {
@@ -259,9 +255,9 @@ export class PasskeyService {
           id: passkey.credentialId,
           publicKey: Buffer.from(passkey.publicKey, 'base64url'),
           counter: Number(passkey.counter),
-          transports: passkey.transports as AuthenticatorTransportFuture[],
+          transports: passkey.transports as AuthenticatorTransportFuture[]
         },
-        requireUserVerification: false,
+        requireUserVerification: false
       });
     } catch (error) {
       console.error('Passkey authentication verification failed:', error);
@@ -281,13 +277,13 @@ export class PasskeyService {
       where: { id: passkey.id },
       data: {
         counter: BigInt(verification.authenticationInfo.newCounter),
-        lastUsedAt: new Date(),
-      },
+        lastUsedAt: new Date()
+      }
     });
 
     // Delete the used challenge
     await this.prisma.webAuthnChallenge.delete({
-      where: { id: challengeRecord.id },
+      where: { id: challengeRecord.id }
     });
 
     // Reset rate limits on success
@@ -297,7 +293,7 @@ export class PasskeyService {
     return {
       verified: true,
       userId: passkey.userId,
-      email: passkey.user.email,
+      email: passkey.user.email
     };
   }
 
@@ -313,9 +309,9 @@ export class PasskeyService {
         deviceType: true,
         backedUp: true,
         lastUsedAt: true,
-        createdAt: true,
+        createdAt: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -324,7 +320,7 @@ export class PasskeyService {
    */
   async deletePasskey(userId: string, passkeyId: string): Promise<void> {
     const passkey = await this.prisma.passkey.findUnique({
-      where: { id: passkeyId },
+      where: { id: passkeyId }
     });
 
     if (!passkey) {
@@ -336,20 +332,16 @@ export class PasskeyService {
     }
 
     await this.prisma.passkey.delete({
-      where: { id: passkeyId },
+      where: { id: passkeyId }
     });
   }
 
   /**
    * Update a passkey's friendly name.
    */
-  async updatePasskeyName(
-    userId: string,
-    passkeyId: string,
-    friendlyName: string,
-  ): Promise<void> {
+  async updatePasskeyName(userId: string, passkeyId: string, friendlyName: string): Promise<void> {
     const passkey = await this.prisma.passkey.findUnique({
-      where: { id: passkeyId },
+      where: { id: passkeyId }
     });
 
     if (!passkey) {
@@ -362,7 +354,7 @@ export class PasskeyService {
 
     await this.prisma.passkey.update({
       where: { id: passkeyId },
-      data: { friendlyName },
+      data: { friendlyName }
     });
   }
 
@@ -372,7 +364,7 @@ export class PasskeyService {
   async userHasPasskeys(email: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { passkeys: { select: { id: true } } },
+      include: { passkeys: { select: { id: true } } }
     });
 
     return user ? user.passkeys.length > 0 : false;
@@ -385,7 +377,7 @@ export class PasskeyService {
     challenge: string,
     type: 'registration' | 'authentication',
     email?: string,
-    userId?: string,
+    userId?: string
   ): Promise<void> {
     const expiresAt = new Date(Date.now() + CHALLENGE_EXPIRY_MINUTES * 60 * 1000);
 
@@ -395,8 +387,8 @@ export class PasskeyService {
         type,
         email: email?.toLowerCase(),
         userId,
-        expiresAt,
-      },
+        expiresAt
+      }
     });
   }
 
@@ -406,12 +398,10 @@ export class PasskeyService {
   private async getAndValidateChallenge(
     clientDataJSON: string,
     type: 'registration' | 'authentication',
-    email?: string,
+    email?: string
   ) {
     // Decode the clientDataJSON to extract the challenge
-    const clientData = JSON.parse(
-      Buffer.from(clientDataJSON, 'base64url').toString('utf-8'),
-    );
+    const clientData = JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString('utf-8'));
     const challengeFromClient = clientData.challenge;
 
     // Find the challenge in the database
@@ -420,8 +410,8 @@ export class PasskeyService {
         challenge: challengeFromClient,
         type,
         expiresAt: { gt: new Date() },
-        ...(email ? { email: email.toLowerCase() } : {}),
-      },
+        ...(email ? { email: email.toLowerCase() } : {})
+      }
     });
 
     return challengeRecord;
@@ -433,8 +423,8 @@ export class PasskeyService {
   async cleanupExpiredChallenges(): Promise<number> {
     const result = await this.prisma.webAuthnChallenge.deleteMany({
       where: {
-        expiresAt: { lt: new Date() },
-      },
+        expiresAt: { lt: new Date() }
+      }
     });
 
     return result.count;

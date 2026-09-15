@@ -11,6 +11,6 @@ import { SetupController } from './setup.controller';
   imports: [PrismaModule, AuthModule, AdminModule, GitHubModule, KubernetesModule],
   controllers: [SetupController],
   providers: [SetupService],
-  exports: [SetupService],
+  exports: [SetupService]
 })
 export class SetupModule {}

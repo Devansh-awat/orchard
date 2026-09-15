@@ -10,7 +10,7 @@ export const NOTIFICATION_EVENTS = [
   'db.crashing',
   'db.recovered',
   'job.succeeded',
-  'job.failed',
+  'job.failed'
 ] as const;
 
 export type NotificationEventName = (typeof NOTIFICATION_EVENTS)[number];
@@ -42,14 +42,14 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
   'db.crashing': 'data',
   'db.recovered': 'data',
   'job.succeeded': 'jobs',
-  'job.failed': 'jobs',
+  'job.failed': 'jobs'
 };
 
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   deploys: 'Deploys',
   health: 'App health',
   jobs: 'Jobs',
-  data: 'Databases and backups',
+  data: 'Databases and backups'
 };
 
 // Scopes a rule or a personal setting can attach to. 'global' is personal-only
@@ -76,7 +76,7 @@ export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeTy
   'db.crashing': 'database',
   'db.recovered': 'database',
   'job.succeeded': 'job',
-  'job.failed': 'job',
+  'job.failed': 'job'
 };
 
 export function eventsForScopeType(scopeType: RuleScopeType): NotificationEventName[] {
@@ -121,12 +121,12 @@ export const EVENT_TONE: Record<NotificationEventName, 'success' | 'failure'> = 
   'db.crashing': 'failure',
   'db.recovered': 'success',
   'job.succeeded': 'success',
-  'job.failed': 'failure',
+  'job.failed': 'failure'
 };
 
 export const TONE_COLORS: Record<'success' | 'failure', number> = {
   success: 0x22c55e,
-  failure: 0xef4444,
+  failure: 0xef4444
 };
 
 export function isNotificationEvent(value: unknown): value is NotificationEventName {

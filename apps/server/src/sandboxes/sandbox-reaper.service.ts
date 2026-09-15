@@ -25,7 +25,7 @@ export class SandboxReaperService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly k8s: SandboxK8sService,
+    private readonly k8s: SandboxK8sService
   ) {}
 
   async tick(): Promise<void> {
@@ -48,7 +48,7 @@ export class SandboxReaperService {
   private async syncWithoutMirror(): Promise<void> {
     if (process.env.MIRROR_DISABLED !== 'true') return;
     const rows = await this.prisma.sandbox.findMany({
-      where: { status: { in: ['creating', 'starting', 'running', 'stopping'] } },
+      where: { status: { in: ['creating', 'starting', 'running', 'stopping'] } }
     });
     for (const row of rows) {
       try {
@@ -59,8 +59,8 @@ export class SandboxReaperService {
             where: { id: row.id },
             data: {
               status: 'error',
-              statusMessage: 'Sandbox resource disappeared from the cluster',
-            },
+              statusMessage: 'Sandbox resource disappeared from the cluster'
+            }
           });
           continue;
         }
@@ -68,7 +68,7 @@ export class SandboxReaperService {
         if (!status || status === row.status) continue;
         await this.prisma.sandbox.update({
           where: { id: row.id },
-          data: { status, statusMessage: null },
+          data: { status, statusMessage: null }
         });
       } catch (e: any) {
         this.logger.warn(`status sync failed for sandbox ${row.id}: ${e?.message}`);
@@ -89,7 +89,7 @@ export class SandboxReaperService {
   private async failStuckTransitions(): Promise<void> {
     const cutoff = new Date(Date.now() - STUCK_TRANSITION_MS);
     const rows = await this.prisma.sandbox.findMany({
-      where: { status: { in: ['creating', 'starting'] }, updatedAt: { lt: cutoff } },
+      where: { status: { in: ['creating', 'starting'] }, updatedAt: { lt: cutoff } }
     });
     if (rows.length === 0) return;
     if (!(await this.k8s.canTrustCrAbsence())) {
@@ -105,8 +105,8 @@ export class SandboxReaperService {
             status: 'error',
             statusMessage: cr.exists
               ? cr.message || 'Sandbox did not become ready in time'
-              : 'Sandbox resource never appeared in the cluster',
-          },
+              : 'Sandbox resource never appeared in the cluster'
+          }
         });
       } catch (e: any) {
         this.logger.warn(`stuck check failed for sandbox ${row.id}: ${e?.message}`);
@@ -119,21 +119,21 @@ export class SandboxReaperService {
     if (!timeout) return;
     const cutoff = new Date(Date.now() - timeout);
     const idle = await this.prisma.sandbox.findMany({
-      where: { status: 'running', lastActiveAt: { lt: cutoff } },
+      where: { status: 'running', lastActiveAt: { lt: cutoff } }
     });
     for (const row of idle) {
       try {
         if (await this.k8s.isAgentBusy(row.id)) {
           await this.prisma.sandbox.update({
             where: { id: row.id },
-            data: { lastActiveAt: new Date() },
+            data: { lastActiveAt: new Date() }
           });
           continue;
         }
         const existed = await this.k8s.suspend(row.podName);
         await this.prisma.sandbox.update({
           where: { id: row.id },
-          data: { status: existed ? 'stopping' : 'stopped' },
+          data: { status: existed ? 'stopping' : 'stopped' }
         });
         this.audit
           .log({
@@ -142,7 +142,7 @@ export class SandboxReaperService {
             targetType: 'sandbox',
             targetId: row.id,
             targetLabel: row.name,
-            metadata: { idleMinutes: Math.round(timeout / 60000) },
+            metadata: { idleMinutes: Math.round(timeout / 60000) }
           })
           .catch(() => {});
       } catch (e: any) {
@@ -156,7 +156,7 @@ export class SandboxReaperService {
     if (!lifetime) return;
     const cutoff = new Date(Date.now() - lifetime);
     const expired = await this.prisma.sandbox.findMany({
-      where: { status: 'running', createdAt: { lt: cutoff } },
+      where: { status: 'running', createdAt: { lt: cutoff } }
     });
     for (const row of expired) {
       try {
@@ -165,8 +165,8 @@ export class SandboxReaperService {
           where: { id: row.id },
           data: {
             status: existed ? 'stopping' : 'stopped',
-            statusMessage: 'Stopped after reaching max lifetime',
-          },
+            statusMessage: 'Stopped after reaching max lifetime'
+          }
         });
       } catch (e: any) {
         this.logger.warn(`lifetime stop failed for sandbox ${row.id}: ${e?.message}`);

@@ -4,10 +4,16 @@ import * as http from 'http';
 import { PassThrough } from 'stream';
 import { ProtectionService } from '../src/auth/protection.service';
 
-function upstreamEchoingHeaders(): Promise<{ port: number; seen: Promise<any>; close: () => void }> {
+function upstreamEchoingHeaders(): Promise<{
+  port: number;
+  seen: Promise<any>;
+  close: () => void;
+}> {
   return new Promise((resolve) => {
     let resolveSeen: (v: any) => void;
-    const seen = new Promise((r) => { resolveSeen = r; });
+    const seen = new Promise((r) => {
+      resolveSeen = r;
+    });
     const server = http.createServer((req, res) => {
       resolveSeen(req.headers);
       res.writeHead(200, { 'content-type': 'text/plain' });
@@ -57,7 +63,7 @@ test('the public Host survives the hop to the upstream', async () => {
 test('the upstream is told who the client was', async () => {
   const seen = await proxyAndCaptureHeaders({
     host: 'staging.attend.hackclub.com',
-    'x-forwarded-for': '198.51.100.4',
+    'x-forwarded-for': '198.51.100.4'
   });
   assert.equal(seen['x-forwarded-for'], '198.51.100.4, 203.0.113.7');
   assert.equal(seen['x-forwarded-host'], 'staging.attend.hackclub.com');
@@ -72,7 +78,7 @@ test('a request with no prior forwarding chain still names its peer', async () =
 test('the bypass secret is never handed to the app', async () => {
   const seen = await proxyAndCaptureHeaders({
     host: 'staging.attend.hackclub.com',
-    'x-orchard-protection-bypass': 'super-secret',
+    'x-orchard-protection-bypass': 'super-secret'
   });
   assert.equal(seen['x-orchard-protection-bypass'], undefined);
 });

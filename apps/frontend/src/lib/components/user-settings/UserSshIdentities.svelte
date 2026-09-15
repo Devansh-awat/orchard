@@ -152,8 +152,7 @@
 					bind:value={newKey}
 					rows="3"
 					placeholder="ssh-ed25519 AAAA..."
-					spellcheck="false"
-				></textarea>
+					spellcheck="false"></textarea>
 			</Field>
 			<div class="usi-add-actions">
 				<Button size="sm" variant="ghost" onclick={() => (showAdd = false)}>Cancel</Button>

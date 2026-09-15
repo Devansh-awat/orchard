@@ -3,19 +3,19 @@ import assert from 'node:assert/strict';
 import {
   resolveRuleLane,
   resolveSettingValue,
-  shouldNotifyUser,
+  shouldNotifyUser
 } from '../src/notifications/notification-resolution';
 import {
   EVENT_CATEGORY,
   NOTIFICATION_EVENTS,
-  eventsForScopeType,
+  eventsForScopeType
 } from '../src/notifications/notification-events';
 import { backupKey, deployKey, jobRunKey, podKey } from '../src/notifications/dedupe-keys';
 import type { ResolvedScope } from '../src/notifications/notification-scope';
 import {
   isChannelVisibleAt,
   ownsChannel,
-  scopeChain,
+  scopeChain
 } from '../src/notifications/notification-scope';
 import { readFile } from 'node:fs/promises';
 
@@ -26,19 +26,19 @@ const PROJECT_SCOPE: ResolvedScope = {
   scopeType: 'project',
   scopeId: 'p1',
   projectId: 'p1',
-  label: 'project',
+  label: 'project'
 };
 const DEPLOYMENT_SCOPE: ResolvedScope = {
   scopeType: 'deployment',
   scopeId: 'd1',
   projectId: 'p1',
-  label: 'app',
+  label: 'app'
 };
 
 test('an org rule delivers to its channel', () => {
   const channels = resolveRuleLane(
     [{ channelId: 'c1', scopeType: 'org', events: [DEPLOY], mode: 'deliver' }],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, ['c1']);
 });
@@ -46,7 +46,7 @@ test('an org rule delivers to its channel', () => {
 test('a rule that does not list the event is ignored', () => {
   const channels = resolveRuleLane(
     [{ channelId: 'c1', scopeType: 'org', events: ['deploy.succeeded'], mode: 'deliver' }],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, []);
 });
@@ -55,9 +55,9 @@ test('two rules pointing at one channel produce a single delivery', () => {
   const channels = resolveRuleLane(
     [
       { channelId: 'c1', scopeType: 'org', events: [DEPLOY], mode: 'deliver' },
-      { channelId: 'c1', scopeType: 'project', events: [DEPLOY], mode: 'deliver' },
+      { channelId: 'c1', scopeType: 'project', events: [DEPLOY], mode: 'deliver' }
     ],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, ['c1']);
 });
@@ -66,9 +66,9 @@ test('a deployment mute beats an org deliver on the same channel', () => {
   const channels = resolveRuleLane(
     [
       { channelId: 'c1', scopeType: 'org', events: [DEPLOY], mode: 'deliver' },
-      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'mute' },
+      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'mute' }
     ],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, []);
 });
@@ -78,9 +78,9 @@ test('a mute only silences the channel it names', () => {
     [
       { channelId: 'c1', scopeType: 'org', events: [DEPLOY], mode: 'deliver' },
       { channelId: 'c2', scopeType: 'org', events: [DEPLOY], mode: 'deliver' },
-      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'mute' },
+      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'mute' }
     ],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, ['c2']);
 });
@@ -89,9 +89,9 @@ test('an org mute does not override a deployment deliver', () => {
   const channels = resolveRuleLane(
     [
       { channelId: 'c1', scopeType: 'org', events: [DEPLOY], mode: 'mute' },
-      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'deliver' },
+      { channelId: 'c1', scopeType: 'deployment', events: [DEPLOY], mode: 'deliver' }
     ],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, ['c1']);
 });
@@ -100,9 +100,9 @@ test('a mute at the same scope wins over a deliver at that scope', () => {
   const channels = resolveRuleLane(
     [
       { channelId: 'c1', scopeType: 'project', events: [DEPLOY], mode: 'deliver' },
-      { channelId: 'c1', scopeType: 'project', events: [DEPLOY], mode: 'mute' },
+      { channelId: 'c1', scopeType: 'project', events: [DEPLOY], mode: 'mute' }
     ],
-    DEPLOY,
+    DEPLOY
   );
   assert.deepEqual(channels, []);
 });
@@ -114,12 +114,12 @@ test('no settings means the system default', () => {
 test('the most specific scope wins', () => {
   const settings = [
     { userId: 'u1', scopeType: 'global', value: 'never' },
-    { userId: 'u1', scopeType: 'project', value: 'always' },
+    { userId: 'u1', scopeType: 'project', value: 'always' }
   ];
   assert.equal(resolveSettingValue(settings, 'u1'), 'always');
   const reversed = [
     { userId: 'u1', scopeType: 'global', value: 'always' },
-    { userId: 'u1', scopeType: 'deployment', value: 'never' },
+    { userId: 'u1', scopeType: 'deployment', value: 'never' }
   ];
   assert.equal(resolveSettingValue(reversed, 'u1'), 'never');
 });
@@ -134,7 +134,7 @@ const NOBODY = { actorUserId: null, resourceCreatorId: null, projectOwnerId: nul
 test('global never plus a project always still delivers', () => {
   const settings = [
     { userId: 'u1', scopeType: 'global', value: 'never' },
-    { userId: 'u1', scopeType: 'project', value: 'always' },
+    { userId: 'u1', scopeType: 'project', value: 'always' }
   ];
   assert.equal(shouldNotifyUser('u1', settings, NOBODY), true);
 });
@@ -164,7 +164,7 @@ test('resource scopes only accept events that can happen there', () => {
     'deploy.failed',
     'deploy.succeeded',
     'pod.crashing',
-    'pod.recovered',
+    'pod.recovered'
   ]);
   assert.ok(eventsForScopeType('database').includes('backup.failed'));
   assert.ok(!eventsForScopeType('database').includes('deploy.failed'));
@@ -193,29 +193,29 @@ test('dedupe keys fit the column', () => {
 test('the personal email destination is seeded disabled', async () => {
   const src = await readFile(
     new URL('../src/notifications/user-notifications.service.ts', import.meta.url),
-    'utf8',
+    'utf8'
   );
   const seeder = src.slice(src.indexOf('async ensureEmailDestination'));
   const body = seeder.slice(0, seeder.indexOf('\n  async ', 1));
   assert.ok(
     /data:\s*\{\s*userId,\s*type:\s*'email',\s*config:\s*\{\},\s*enabled\s*\}/.test(body),
-    'ensureEmailDestination must create the row with the caller-supplied enabled flag',
+    'ensureEmailDestination must create the row with the caller-supplied enabled flag'
   );
   assert.ok(
     /async ensureEmailDestination\(userId: string, enabled = false\)/.test(body),
-    'that flag must default to false, so a GET of the settings page cannot enrol anyone',
+    'that flag must default to false, so a GET of the settings page cannot enrol anyone'
   );
 });
 
 test('fanout only ever delivers to destinations that are enabled', async () => {
   const src = await readFile(
     new URL('../src/notifications/notification-fanout.service.ts', import.meta.url),
-    'utf8',
+    'utf8'
   );
   assert.match(
     src,
     /userNotificationDestination\.findMany\(\{\s*where:\s*\{\s*userId:\s*\{\s*in:\s*wanted\s*\},\s*enabled:\s*true\s*\}/,
-    'the personal lane must filter on enabled: true',
+    'the personal lane must filter on enabled: true'
   );
 });
 
@@ -226,12 +226,12 @@ test('a scope inherits from the org and its project, outermost first', () => {
   assert.deepEqual(scopeChain(ORG_SCOPE), [{ scopeType: 'org', scopeId: null }]);
   assert.deepEqual(scopeChain(PROJECT_SCOPE), [
     { scopeType: 'org', scopeId: null },
-    { scopeType: 'project', scopeId: 'p1' },
+    { scopeType: 'project', scopeId: 'p1' }
   ]);
   assert.deepEqual(scopeChain(DEPLOYMENT_SCOPE), [
     { scopeType: 'org', scopeId: null },
     { scopeType: 'project', scopeId: 'p1' },
-    { scopeType: 'deployment', scopeId: 'd1' },
+    { scopeType: 'deployment', scopeId: 'd1' }
   ]);
 });
 
@@ -260,19 +260,19 @@ test('only the owning scope may edit a destination', () => {
 test('a rule may not point at a destination its scope cannot see', async () => {
   const src = await readFile(
     new URL('../src/notifications/notification-rules.service.ts', import.meta.url),
-    'utf8',
+    'utf8'
   );
   assert.match(
     src,
     /if \(!isChannelVisibleAt\(scope, channel\)\) \{\s*throw new NotFoundException/,
-    'createRule must reject a channel that is not visible at the rule scope',
+    'createRule must reject a channel that is not visible at the rule scope'
   );
 });
 
 test('the scoped destination list never hands out a webhook url', async () => {
   const src = await readFile(
     new URL('../src/notifications/notification-channels.service.ts', import.meta.url),
-    'utf8',
+    'utf8'
   );
   const method = src.slice(src.indexOf('async listChannelsForScope'));
   const body = method.slice(0, method.indexOf('\n  async ', 1));
@@ -282,9 +282,15 @@ test('the scoped destination list never hands out a webhook url', async () => {
 test('writing to a destination is gated by the scope that owns it', async () => {
   const src = await readFile(
     new URL('../src/notifications/notification-channels.controller.ts', import.meta.url),
-    'utf8',
+    'utf8'
   );
-  for (const handler of ['updateChannel', 'deleteChannel', 'testChannel', 'replayChannel', 'listDeliveries']) {
+  for (const handler of [
+    'updateChannel',
+    'deleteChannel',
+    'testChannel',
+    'replayChannel',
+    'listDeliveries'
+  ]) {
     const rest = src.slice(src.indexOf(`async ${handler}(`));
     const end = rest.indexOf('\n  @');
     const body = end === -1 ? rest : rest.slice(0, end);
@@ -292,13 +298,16 @@ test('writing to a destination is gated by the scope that owns it', async () => 
     assert.match(
       body,
       /requireChannelScope\(/,
-      `${handler} must authorize against the channel's own scope`,
+      `${handler} must authorize against the channel's own scope`
     );
-    assert.ok(!/requireAdmin\(/.test(body), `${handler} must not fall back to an org-wide admin check`);
+    assert.ok(
+      !/requireAdmin\(/.test(body),
+      `${handler} must not fall back to an org-wide admin check`
+    );
   }
   assert.match(
     src.slice(src.indexOf('async createChannel(')),
     /assertCanEditScope\(organizationId, scope, user\)/,
-    'creating a destination must check admin on the scope it is being attached to',
+    'creating a destination must check admin on the scope it is being attached to'
   );
 });

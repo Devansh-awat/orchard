@@ -21,7 +21,7 @@ export const TRUSTED_IMAGES: TrustedImagePattern[] = [
   'redis',
   'redis:*',
   'bitnami/redis',
-  'bitnami/redis:*',
+  'bitnami/redis:*'
 ];
 
 const parseRef = (image: string): { repo: string; tag: string } => {
@@ -62,8 +62,17 @@ export const imageRepo = (image: string): string => parseRef(image).repo;
 // will not pick up a new push unless its pull policy is Always, which is the
 // single most common "why is it still serving the old build" report.
 const MUTABLE_TAGS = new Set([
-  'latest', 'main', 'master', 'stable', 'edge', 'dev', 'develop',
-  'nightly', 'prod', 'production', 'release',
+  'latest',
+  'main',
+  'master',
+  'stable',
+  'edge',
+  'dev',
+  'develop',
+  'nightly',
+  'prod',
+  'production',
+  'release'
 ]);
 
 export const isMutableImageTag = (image: string | null | undefined): boolean => {
@@ -83,14 +92,14 @@ export type ImagePullPolicyValue = 'Always' | 'IfNotPresent';
 // move only behaves the way people expect under Always: otherwise the node
 // reuses its cached layer and pushing over the tag silently changes nothing.
 export const defaultPullPolicyForImage = (
-  image: string | null | undefined,
+  image: string | null | undefined
 ): ImagePullPolicyValue => (isMutableImageTag(image) ? 'Always' : 'IfNotPresent');
 
 // `override` is the stored column: null means "derive", anything else is the
 // user's explicit choice and wins.
 export const resolvePullPolicy = (
   override: string | null | undefined,
-  image: string | null | undefined,
+  image: string | null | undefined
 ): ImagePullPolicyValue =>
   override === 'Always' || override === 'IfNotPresent'
     ? override
@@ -113,7 +122,7 @@ export const isTrustedImage = (image: string): boolean => {
 // entrypoint; dropping ALL caps causes `setresuid: Operation not permitted`.
 export const trustedSecurityContext = () => ({
   allowPrivilegeEscalation: false,
-  seccompProfile: { type: 'RuntimeDefault' as const },
+  seccompProfile: { type: 'RuntimeDefault' as const }
 });
 
 // Default hardened context for untrusted tenant code.
@@ -131,7 +140,7 @@ export const hardenedSecurityContext = () => ({
   allowPrivilegeEscalation: false,
   capabilities: {
     drop: ['ALL'],
-    add: ['SETUID', 'SETGID', 'CHOWN', 'FOWNER', 'DAC_OVERRIDE', 'SYS_CHROOT'],
+    add: ['SETUID', 'SETGID', 'CHOWN', 'FOWNER', 'DAC_OVERRIDE', 'SYS_CHROOT']
   },
-  seccompProfile: { type: 'RuntimeDefault' as const },
+  seccompProfile: { type: 'RuntimeDefault' as const }
 });

@@ -12,18 +12,21 @@ type Row = { key: string; value: string; secret: boolean };
 
 function harness(initial: Row[]) {
   const crypto = new SecretCryptoService();
-  let state: Row[] = initial.map((r) => ({ ...r, value: crypto.encryptIfSecret(r.value, r.secret) }));
+  let state: Row[] = initial.map((r) => ({
+    ...r,
+    value: crypto.encryptIfSecret(r.value, r.secret)
+  }));
   const events: any[] = [];
   const prisma: any = {
     environment: {
       findUnique: async () => ({
         id: 'env-1',
         name: 'production',
-        project: { id: 'proj-1', organizationId: 'org-1' },
-      }),
+        project: { id: 'proj-1', organizationId: 'org-1' }
+      })
     },
     environmentSharedVar: {
-      findMany: async () => state.map((r) => ({ ...r })),
+      findMany: async () => state.map((r) => ({ ...r }))
     },
     deployment: { findMany: async () => [] },
     $transaction: async (fn: any) =>
@@ -34,16 +37,16 @@ function harness(initial: Row[]) {
           },
           createMany: async ({ data }: { data: any[] }) => {
             state = data.map((d) => ({ key: d.key, value: d.value, secret: d.secret }));
-          },
-        },
-      }),
+          }
+        }
+      })
   };
   const svc = new EnvironmentSharedVarsService(
     prisma,
     { log: async () => {} } as any,
     { emit: (e: any) => events.push(e) } as any,
     { getKubernetesDeployment: async () => null } as any,
-    crypto,
+    crypto
   );
   return { svc, crypto, events, rows: () => state };
 }
@@ -53,7 +56,7 @@ test('null value keeps an existing secret', async () => {
   const res = await h.svc.updateSharedVars(
     'env-1',
     [{ key: 'API_KEY', value: null, secret: true }],
-    'user-1',
+    'user-1'
   );
   assert.equal(h.rows().length, 1);
   assert.equal(h.crypto.isEncrypted(h.rows()[0].value), true);
@@ -72,7 +75,7 @@ test('a provided value replaces the secret', async () => {
   await h.svc.updateSharedVars(
     'env-1',
     [{ key: 'API_KEY', value: 'rotated', secret: true }],
-    'user-1',
+    'user-1'
   );
   assert.equal(h.crypto.decrypt(h.rows()[0].value), 'rotated');
 });
@@ -113,7 +116,7 @@ test('un-marking a secret without a value is rejected', async () => {
   const h = harness([{ key: 'API_KEY', value: 's3cret', secret: true }]);
   await assert.rejects(
     h.svc.updateSharedVars('env-1', [{ key: 'API_KEY', value: null, secret: false }], 'user-1'),
-    BadRequestException,
+    BadRequestException
   );
   assert.equal(h.crypto.decrypt(h.rows()[0].value), 's3cret');
 });
@@ -121,13 +124,13 @@ test('un-marking a secret without a value is rejected', async () => {
 test('omitted keys are removed and sharedvars.changed still fires', async () => {
   const h = harness([
     { key: 'API_KEY', value: 's3cret', secret: true },
-    { key: 'URL', value: 'https://x', secret: false },
+    { key: 'URL', value: 'https://x', secret: false }
   ]);
   await h.svc.updateSharedVars('env-1', [{ key: 'API_KEY', value: null, secret: true }], 'user-1');
   assert.equal(h.rows().length, 1);
   assert.equal(h.rows()[0].key, 'API_KEY');
   assert.equal(
     h.events.some((e) => e.type === 'sharedvars.changed' && e.id === 'env-1'),
-    true,
+    true
   );
 });

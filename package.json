@@ -9,8 +9,10 @@
     "dev:gateway": "pnpm --filter gateway dev",
     "build": "pnpm --parallel run build",
     "build:server": "pnpm --filter server build",
-    "lint": "eslint apps/server/src apps/frontend/src && node apps/frontend/scripts/check-design.mjs",
-    "lint:fix": "eslint apps/server/src apps/frontend/src --fix",
+    "lint": "oxlint && node apps/frontend/scripts/check-design.mjs",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "prisma:generate": "pnpm --filter server prisma:generate",
     "dev:docs": "pnpm --filter docs dev",
     "dev:landing": "pnpm --filter landing dev",
@@ -27,14 +29,7 @@
     "js-yaml": "^4.3.2"
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.10.0",
-    "eslint": "^10.6.0",
-    "eslint-config-airbnb-extended": "^3.1.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-import-resolver-typescript": "^4.4.5",
-    "eslint-plugin-import-x": "^4.17.1",
-    "eslint-plugin-n": "^18.2.1",
-    "eslint-plugin-svelte": "^3.20.0",
-    "typescript-eslint": "^8.62.1"
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0"
   }
 }

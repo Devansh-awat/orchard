@@ -1,5 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { AdminQuotasController, OrgQuotasController, AdminBackfillController } from './quotas.controller';
+import {
+  AdminQuotasController,
+  OrgQuotasController,
+  AdminBackfillController
+} from './quotas.controller';
 import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -11,6 +15,6 @@ import { OrganizationsModule } from '../organizations/organizations.module';
   imports: [PrismaModule, AuthModule, KubernetesModule, forwardRef(() => OrganizationsModule)],
   controllers: [AdminQuotasController, OrgQuotasController, AdminBackfillController],
   providers: [QuotasService, QuotaBackfillService],
-  exports: [QuotasService],
+  exports: [QuotasService]
 })
 export class QuotasModule {}

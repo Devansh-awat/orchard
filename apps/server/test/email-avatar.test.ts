@@ -26,8 +26,8 @@ function makeService(row: Row, opts: { hit?: boolean; onWrite?: () => void } = {
         Object.assign(row, data);
         writes.push(data);
         return { count: 1 };
-      },
-    },
+      }
+    }
   };
   const svc = new EmailAvatarService(prisma);
   // Stand in for the network: pretend the address always has an avatar.
@@ -39,8 +39,11 @@ function makeService(row: Row, opts: { hit?: boolean; onWrite?: () => void } = {
 
 test('a manual upload is never overwritten', async () => {
   const row: Row = {
-    id: 'u1', email: 'a@example.com',
-    imageUrl: 'https://cdn.example/mine.png', imageSource: 'upload', avatarCheckedAt: null,
+    id: 'u1',
+    email: 'a@example.com',
+    imageUrl: 'https://cdn.example/mine.png',
+    imageSource: 'upload',
+    avatarCheckedAt: null
   };
   const { svc, writes } = makeService(row);
   const result = await svc.ensure(row);
@@ -51,8 +54,11 @@ test('a manual upload is never overwritten', async () => {
 
 test('a deleted picture is not resurrected', async () => {
   const row: Row = {
-    id: 'u2', email: 'b@example.com',
-    imageUrl: null, imageSource: 'none', avatarCheckedAt: null,
+    id: 'u2',
+    email: 'b@example.com',
+    imageUrl: null,
+    imageSource: 'none',
+    avatarCheckedAt: null
   };
   const { svc, writes } = makeService(row);
   assert.equal(await svc.ensure(row), null);
@@ -61,8 +67,11 @@ test('a deleted picture is not resurrected', async () => {
 
 test('an unresolved user does get one imported', async () => {
   const row: Row = {
-    id: 'u3', email: 'c@example.com',
-    imageUrl: null, imageSource: null, avatarCheckedAt: null,
+    id: 'u3',
+    email: 'c@example.com',
+    imageUrl: null,
+    imageSource: null,
+    avatarCheckedAt: null
   };
   const { svc } = makeService(row);
   assert.equal(await svc.ensure(row), 'https://cdn.example/imported.png');
@@ -73,15 +82,18 @@ test('an upload landing mid-probe wins the race', async () => {
   // ensure() reads a row with no picture, then the user uploads one while the
   // fetch is in flight. The conditional write must lose, not clobber them.
   const row: Row = {
-    id: 'u4', email: 'd@example.com',
-    imageUrl: null, imageSource: null, avatarCheckedAt: null,
+    id: 'u4',
+    email: 'd@example.com',
+    imageUrl: null,
+    imageSource: null,
+    avatarCheckedAt: null
   };
   const snapshot = { ...row };
   const { svc } = makeService(row, {
     onWrite: () => {
       row.imageUrl = 'https://cdn.example/just-uploaded.png';
       row.imageSource = 'upload';
-    },
+    }
   });
   const result = await svc.ensure(snapshot);
   assert.equal(result, null, 'import should report that it backed off');
@@ -91,21 +103,29 @@ test('an upload landing mid-probe wins the race', async () => {
 
 test('a recent check is not re-probed', async () => {
   const row: Row = {
-    id: 'u5', email: 'e@example.com',
-    imageUrl: null, imageSource: null, avatarCheckedAt: new Date(),
+    id: 'u5',
+    email: 'e@example.com',
+    imageUrl: null,
+    imageSource: null,
+    avatarCheckedAt: new Date()
   };
   let probed = false;
   const { svc } = makeService(row);
-  (svc as any).fetchFrom = async () => { probed = true; return null; };
+  (svc as any).fetchFrom = async () => {
+    probed = true;
+    return null;
+  };
   await svc.ensure(row);
   assert.equal(probed, false, 'inside the recheck window there should be no request');
 });
 
 test('a stale check is re-probed', async () => {
   const row: Row = {
-    id: 'u6', email: 'f@example.com',
-    imageUrl: null, imageSource: null,
-    avatarCheckedAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+    id: 'u6',
+    email: 'f@example.com',
+    imageUrl: null,
+    imageSource: null,
+    avatarCheckedAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)
   };
   const { svc } = makeService(row);
   assert.equal(await svc.ensure(row), 'https://cdn.example/imported.png');
@@ -116,12 +136,18 @@ test('the lookup can be switched off entirely', async () => {
   process.env.EMAIL_AVATAR_LOOKUP = 'false';
   try {
     const row: Row = {
-      id: 'u7', email: 'g@example.com',
-      imageUrl: null, imageSource: null, avatarCheckedAt: null,
+      id: 'u7',
+      email: 'g@example.com',
+      imageUrl: null,
+      imageSource: null,
+      avatarCheckedAt: null
     };
     let probed = false;
     const { svc } = makeService(row);
-    (svc as any).fetchFrom = async () => { probed = true; return null; };
+    (svc as any).fetchFrom = async () => {
+      probed = true;
+      return null;
+    };
     await svc.ensure(row);
     assert.equal(probed, false);
   } finally {

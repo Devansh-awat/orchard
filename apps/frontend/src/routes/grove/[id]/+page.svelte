@@ -370,8 +370,7 @@
 							rows="2"
 							maxlength={10000}
 							placeholder="Reply"
-							onkeydown={onComposerKeydown}
-						></textarea>
+							onkeydown={onComposerKeydown}></textarea>
 						<div class="gt-composer-actions">
 							<ImageAttach bind:images={replyImages} disabled={replying} />
 							<Button

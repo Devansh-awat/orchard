@@ -603,8 +603,7 @@
 					placeholder={amend ? 'Leave empty to keep the previous message' : 'Commit message'}
 					aria-label="Commit message"
 					bind:value={message}
-					onkeydown={onCommitKey}
-				></textarea>
+					onkeydown={onCommitKey}></textarea>
 				<div class="git-opts">
 					<label class="git-opt">
 						<input type="checkbox" class="git-check" bind:checked={amend} />
@@ -677,8 +676,7 @@
 			rows="4"
 			placeholder="Description (optional)"
 			aria-label="Pull request description"
-			bind:value={prBody}
-		></textarea>
+			bind:value={prBody}></textarea>
 		{#if prError}
 			<p class="git-pr-error">{prError}</p>
 		{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Logo from "./Logo.svelte";
+	import Logo from './Logo.svelte';
 	const groups = [
 		{
 			title: 'Platform',

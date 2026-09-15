@@ -15,11 +15,11 @@ test('every port carries its own in-cluster address', () => {
         port: 80,
         ports: [
           { id: 'p1', port: 80, targetPort: 80, protocol: 'TCP' },
-          { id: 'p2', port: 8443, targetPort: 8443, protocol: 'TCP' },
-        ],
-      },
+          { id: 'p2', port: 8443, targetPort: 8443, protocol: 'TCP' }
+        ]
+      }
     ],
-    'proj-abc',
+    'proj-abc'
   );
 
   assert.equal(svc.ports[0].internalUrl, 'web.proj-abc.svc.cluster.local:80');
@@ -32,7 +32,7 @@ test('the address uses the service port, not the container port', () => {
   // targetPort. Advertising targetPort would hand out an unroutable address.
   const [svc] = addInternalUrls(
     [{ name: 'api', port: 80, ports: [{ id: 'p1', port: 80, targetPort: 3000, protocol: 'TCP' }] }],
-    'ns1',
+    'ns1'
   );
   assert.equal(svc.ports[0].internalUrl, 'api.ns1.svc.cluster.local:80');
 });
@@ -49,10 +49,10 @@ test('existing port fields survive the rewrite', () => {
       {
         name: 'web',
         port: 80,
-        ports: [{ id: 'p1', port: 80, targetPort: 80, protocol: 'UDP', publicPort: 30001 }],
-      },
+        ports: [{ id: 'p1', port: 80, targetPort: 80, protocol: 'UDP', publicPort: 30001 }]
+      }
     ],
-    'ns3',
+    'ns3'
   );
   assert.equal(svc.ports[0].protocol, 'UDP');
   assert.equal(svc.ports[0].publicPort, 30001);
