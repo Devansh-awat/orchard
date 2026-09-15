@@ -72,8 +72,8 @@
     <mj-section padding="24px 0 40px 0">
       <mj-column>
         <mj-text align="center" font-size="12px" color="#a1a1aa">
-          You're receiving this because a notification channel is configured for your organization
-          on Orchard.
+          You're receiving this because of a notification you or your organization turned on in
+          Orchard.
         </mj-text>
       </mj-column>
     </mj-section>

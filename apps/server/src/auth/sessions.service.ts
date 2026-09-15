@@ -120,7 +120,10 @@ export class SessionsService {
       if (!notifications) return;
 
       const app = input.authMethod === MCP_SESSION_AUTH_METHOD;
-      const where = [input.deviceName, input.location].filter(Boolean).join(' · ');
+
+      // The body says what to do; the fields carry the forensics. Keeping them
+      // apart is what stops the device name being read out twice in an app
+      // alert that already names it in the subject line.
       const fields = [
         input.deviceName ? { name: app ? 'App' : 'Device', value: input.deviceName } : null,
         input.location ? { name: 'Location', value: input.location } : null,
@@ -134,8 +137,8 @@ export class SessionsService {
           ? `${input.deviceName || 'An app'} was given access to your account`
           : 'New sign-in to your Orchard account',
         body: app
-          ? `It can act as you until you revoke it${where ? ` · ${where}` : ''}. If this was not you, revoke it and sign out everywhere.`
-          : `${where || 'A new session'} just signed in. If this was not you, change how you sign in and sign out everywhere.`,
+          ? 'It can act as you until you revoke it. If this was not you, revoke it and sign out everywhere.'
+          : 'If this was not you, sign out everywhere and change how you sign in.',
         url: `${this.frontendUrl}/user/settings?tab=security`,
         targetId: input.sessionId,
         targetName: input.deviceName ?? undefined,

@@ -188,7 +188,10 @@ export class NotificationTransport {
       subject,
       title: subject,
       body,
-      contextLine: !digest && first.projectName ? `Project: ${first.projectName}` : '',
+      // Slack and Discord render the fields; email had been dropping them, so
+      // the one line that says which device and which address never reached the
+      // destination most people actually have turned on.
+      contextLine: digest ? '' : detailLine(first),
       ctaUrl: (digest ? undefined : first.url) || this.frontendUrl
     });
     if (!sent) return { ok: false, error: 'Email sending failed or SMTP is not configured' };
@@ -307,6 +310,14 @@ function retryAfterFrom(headers: Record<string, any>): number | undefined {
 
 function toneOf(message: NotificationMessage): EventTone {
   return isNotificationEvent(message.event) ? EVENT_TONE[message.event] : 'success';
+}
+
+function detailLine(message: NotificationMessage): string {
+  if (message.projectName) return `Project: ${message.projectName}`;
+  return (message.fields ?? [])
+    .map((f) => f.value)
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function digestHeadline(messages: NotificationMessage[]): string {
