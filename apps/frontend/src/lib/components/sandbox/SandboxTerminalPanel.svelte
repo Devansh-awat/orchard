@@ -3,6 +3,7 @@
 	import { Skeleton } from '$lib/components/ui';
 	import {
 		buildTerminalTheme,
+		ensureTerminalFont,
 		monoFontFor,
 		applyTerminalTheme,
 		watchTerminalTheme
@@ -156,6 +157,7 @@
 			setStatus(id, 'error', 'Could not load the terminal');
 			return;
 		}
+		await ensureTerminalFont(el, 12);
 		if (handle.disposed || handle.term) return;
 
 		const term = new mod.Terminal({

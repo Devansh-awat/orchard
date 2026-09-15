@@ -3,6 +3,7 @@
 	import {
 		applyTerminalTheme,
 		buildTerminalTheme,
+		ensureTerminalFont,
 		monoFontFor,
 		watchTerminalTheme
 	} from '$lib/utils/terminal-theme';
@@ -44,7 +45,7 @@
 
 		try {
 			ghosttyModule = await import('ghostty-web');
-			await ghosttyModule.init();
+			await Promise.all([ghosttyModule.init(), ensureTerminalFont(terminalRef, 12)]);
 			connectWebSocket();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load terminal';

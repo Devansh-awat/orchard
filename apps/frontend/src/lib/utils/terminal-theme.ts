@@ -83,6 +83,18 @@ export function applyTerminalTheme(terminal: any, theme: TerminalTheme): void {
 	} catch {}
 }
 
+export async function ensureTerminalFont(el: HTMLElement, sizePx: number): Promise<void> {
+	if (typeof document === 'undefined' || !document.fonts?.load) return;
+	const family = monoFontFor(el).split(',')[0].trim();
+	if (!family.startsWith("'") && !family.startsWith('"')) return;
+	try {
+		await Promise.all([
+			document.fonts.load(`${sizePx}px ${family}`),
+			document.fonts.load(`bold ${sizePx}px ${family}`)
+		]);
+	} catch {}
+}
+
 const TERMINAL_MONO =
 	"ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
 
