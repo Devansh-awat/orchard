@@ -10,6 +10,7 @@
 		isSuperAdmin
 	} from '$lib/stores';
 	import { queryClient } from '$lib/query';
+	import { appUrl } from '$lib/appUrl';
 	import { overviewQueryOptions, buildsQueryOptions } from '$lib/queries/overview';
 	import { Plus, Star, ChevronDown, Rocket, FolderPlus } from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
@@ -557,7 +558,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		if (dep.ingresses.length) {
-			navigator.clipboard.writeText(`https://${dep.ingresses[0].host.split('/')[0]}`);
+			navigator.clipboard.writeText(appUrl(dep.ingresses[0].host));
 			toasts.add({ title: 'Copied', color: 'success' });
 		}
 	}
@@ -565,7 +566,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		if (dep.ingresses.length)
-			window.open(`https://${dep.ingresses[0].host.split('/')[0]}`, '_blank');
+			window.open(appUrl(dep.ingresses[0].host), '_blank');
 	}
 </script>
 

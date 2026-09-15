@@ -11,6 +11,10 @@ VALUES_FILE="$STATE_DIR/values.yaml"
 K3S_VERSION=${K3S_VERSION:-v1.31.5+k3s1}
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.2.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
+HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
+HTTPS_PORT=${ORCHARD_HTTPS_PORT:-443}
+HTTP_SUFFIX=''
+HTTPS_SUFFIX=''
 ZOT_NODE_PORT=${ORCHARD_ZOT_NODE_PORT:-30100}
 REGISTRY_HOST=${ORCHARD_REGISTRY_HOST:-registry.orchard.local}
 
@@ -235,6 +239,9 @@ usage() {
                                                         (default: mcp.<your domain>)
     --email <address>            ORCHARD_ACME_EMAIL     Let's Encrypt contact, public mode
     --tunnel-token <token>       ORCHARD_TUNNEL_TOKEN   Cloudflare Tunnel token, tunnel mode
+    --http-port <port>           ORCHARD_HTTP_PORT      where Traefik listens, lan mode only
+                                                        (default: 80)
+    --https-port <port>          ORCHARD_HTTPS_PORT     the same for TLS (default: 443)
 
   Behaviour
     --updates <manual|automatic> ORCHARD_UPDATE_POLICY  run orchard-update yourself, or nightly
@@ -303,6 +310,8 @@ parse_args() {
       --k3s-version) need_value "$1" "${2:-}"; K3S_VERSION=$2; shift 2 ;;
       --gateway-api-version) need_value "$1" "${2:-}"; GATEWAY_API_VERSION=$2; shift 2 ;;
       --node-port-range) need_value "$1" "${2:-}"; NODE_PORT_RANGE=$2; shift 2 ;;
+    --http-port) need_value "$1" "${2:-}"; HTTP_PORT=$2; shift 2 ;;
+    --https-port) need_value "$1" "${2:-}"; HTTPS_PORT=$2; shift 2 ;;
       --registry-port) need_value "$1" "${2:-}"; ZOT_NODE_PORT=$2; shift 2 ;;
       --registry-host) need_value "$1" "${2:-}"; REGISTRY_HOST=$2; shift 2 ;;
       --state-dir) need_value "$1" "${2:-}"; STATE_DIR=$2; VALUES_FILE="$STATE_DIR/values.yaml"; shift 2 ;;
@@ -443,12 +452,21 @@ preflight() {
   [ "$DISK_GB" -ge 60 ] || warn "only ${DISK_GB}G free; build cache and images will fill this quickly"
   info "free disk: ${DISK_GB}G"
 
+  local port
+  for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+    case "$port" in ''|*[!0-9]*) die "ports are numbers, not: $port" ;; esac
+    { [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; } || die "port out of range: $port"
+  done
+  [ "$HTTP_PORT" != "$HTTPS_PORT" ] || die "--http-port and --https-port cannot both be $HTTP_PORT"
+  [ "$HTTP_PORT" = 80 ] || HTTP_SUFFIX=":$HTTP_PORT"
+  [ "$HTTPS_PORT" = 443 ] || HTTPS_SUFFIX=":$HTTPS_PORT"
+
   # Not fatal here: tunnel mode never binds either port, and the mode is not
   # chosen until the next step. choose_ingress_mode stops the run if the mode
   # that gets picked does need them.
   if command -v ss >/dev/null 2>&1; then
     local holder
-    for port in 80 443; do
+    for port in "$HTTP_PORT" "$HTTPS_PORT"; do
       if ss -lnt "sport = :$port" 2>/dev/null | grep -q LISTEN; then
         holder=$(ss -lntp "sport = :$port" 2>/dev/null | tail -1 | sed 's/^ *//')
         PORTS_BUSY="${PORTS_BUSY:+$PORTS_BUSY and }$port"
@@ -459,7 +477,7 @@ preflight() {
       warn "port $PORTS_BUSY already in use:"
       printf '%s' "$PORTS_BUSY_DETAIL" >&2
     else
-      info "ports 80/443 are free"
+      info "ports $HTTP_PORT/$HTTPS_PORT are free"
     fi
   else
     warn "ss not found; skipping port check"
@@ -486,6 +504,11 @@ preflight() {
   if [ "$ZOT_NODE_PORT" -lt "$lo" ] || [ "$ZOT_NODE_PORT" -gt "$hi" ]; then
     die "ORCHARD_ZOT_NODE_PORT ($ZOT_NODE_PORT) must fall inside ORCHARD_NODE_PORT_RANGE ($NODE_PORT_RANGE)"
   fi
+  for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+    if [ "$port" -ge "$lo" ] && [ "$port" -le "$hi" ]; then
+      die "port $port falls inside ORCHARD_NODE_PORT_RANGE ($NODE_PORT_RANGE), where Kubernetes hands out its own"
+    fi
+  done
   info "node ports: $NODE_PORT_RANGE, registry on $ZOT_NODE_PORT"
 }
 
@@ -551,6 +574,19 @@ choose_ingress_mode() {
     *) die "unknown ingress mode: $INGRESS_MODE" ;;
   esac
 
+  if [ "$INGRESS_MODE" != lan ] && { [ "$HTTP_PORT" != 80 ] || [ "$HTTPS_PORT" != 443 ]; }; then
+    case "$INGRESS_MODE" in
+      public)
+        warn "public mode cannot move off 80 and 443."
+        note "80 is fixed by the ACME spec for the HTTP-01 challenge, and a browser"
+        note "reaching an app on anything but 443 has to be told the port by hand."
+        die "custom ports are lan only" ;;
+      tunnel)
+        warn "tunnel mode binds no host port at all, so there is nothing to move."
+        die "custom ports are lan only" ;;
+    esac
+  fi
+
   if [ -n "$PORTS_BUSY" ] && [ "$INGRESS_MODE" != tunnel ]; then
     warn "$INGRESS_MODE mode needs 80 and 443 on this box, and port $PORTS_BUSY is taken:"
     printf '%s' "$PORTS_BUSY_DETAIL" >&2
@@ -574,9 +610,9 @@ collect_domains() {
     ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.${PRIMARY_IP//./-}.sslip.io}
     USE_TLS=false
     CERT_ISSUER=selfsigned
-    info "platform: http://$ORCHARD_DOMAIN"
-    info "apps:     *.$ORCHARD_APP_DOMAIN"
-    if [ "$ORCHARD_MCP" = true ]; then info "agents:   http://$ORCHARD_MCP_DOMAIN"; fi
+    info "platform: http://$ORCHARD_DOMAIN$HTTP_SUFFIX"
+    info "apps:     *.$ORCHARD_APP_DOMAIN$HTTPS_SUFFIX"
+    if [ "$ORCHARD_MCP" = true ]; then info "agents:   http://$ORCHARD_MCP_DOMAIN$HTTP_SUFFIX"; fi
     return
   fi
 
@@ -868,6 +904,8 @@ install_operators() {
     --set providers.kubernetesGateway.enabled=true \
     --set gateway.enabled=false \
     --set service.spec.type="$traefik_service" \
+    --set ports.web.exposedPort="$HTTP_PORT" \
+    --set ports.websecure.exposedPort="$HTTPS_PORT" \
     --wait --timeout 10m
 
   run_step "CloudNativePG" 1m helm upgrade --install cnpg cnpg/cloudnative-pg \
@@ -1110,9 +1148,10 @@ write_values() {
   mkdir -p "$STATE_DIR"
   chmod 700 "$STATE_DIR"
 
+  local url_suffix=$HTTP_SUFFIX
   local scheme=http entrypoint=web tls_enabled=false tls_issuer= mcp_tls_issuer=
   if [ "$USE_TLS" = true ]; then
-    scheme=https; entrypoint=websecure; tls_enabled=true
+    scheme=https; entrypoint=websecure; tls_enabled=true; url_suffix=$HTTPS_SUFFIX
     # Without this the IngressRoute gets a bare `tls:` block and Traefik
     # terminates with its self-signed TRAEFIK DEFAULT CERT, which every browser
     # rejects. The chart issues the real one against the ClusterIssuer above.
@@ -1127,7 +1166,7 @@ write_values() {
         name: $CERT_ISSUER
         kind: ClusterIssuer"
   fi
-  if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; fi
+  if [ "$INGRESS_MODE" = tunnel ]; then scheme=https; url_suffix=''; fi
 
   local cookie_secure=true
   if [ "$scheme" = http ]; then cookie_secure=false; fi
@@ -1167,6 +1206,8 @@ frontend:
     tag: $IMAGE_TAG
   env:
     - { name: PUBLIC_APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
+    - { name: PUBLIC_HTTP_PORT, value: "$HTTP_PORT" }
+    - { name: PUBLIC_HTTPS_PORT, value: "$HTTPS_PORT" }
     - { name: PUBLIC_OAUTH_PROVIDER, value: none }
 
 server:
@@ -1179,7 +1220,7 @@ server:
     - { name: SSO_ENCRYPTION_KEY, value: "$SSO_KEY" }
     - { name: MCP_SERVICE_TOKEN, value: "$MCP_TOKEN" }
     - { name: APP_DOMAIN, value: $ORCHARD_APP_DOMAIN }
-    - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN }
+    - { name: FRONTEND_URL, value: $scheme://$ORCHARD_DOMAIN$url_suffix }
     - { name: SESSION_COOKIE_SECURE, value: "$cookie_secure" }
     - { name: MAX_CONCURRENT_BUILDS, value: "$MAX_BUILDS" }
     - { name: DOCKER_REGISTRY_PUSH, value: zot.orchard.svc.cluster.local:5000 }
@@ -1266,7 +1307,7 @@ mcp:
   # Stated rather than derived from the route: in tunnel mode Traefik answers
   # plaintext in-cluster while the world connects over https, and an OAuth
   # issuer that disagrees with the URL the client typed is rejected.
-  url: $scheme://$ORCHARD_MCP_DOMAIN
+  url: $scheme://$ORCHARD_MCP_DOMAIN$url_suffix
   ingress:
     enabled: true
     host: $ORCHARD_MCP_DOMAIN
@@ -1373,8 +1414,11 @@ EOF
 }
 
 summary() {
-  local scheme=https
-  if [ "$USE_TLS" = false ]; then [ "$INGRESS_MODE" != tunnel ] && scheme=http; fi
+  local scheme=https suffix=$HTTPS_SUFFIX
+  if [ "$USE_TLS" = false ]; then
+    [ "$INGRESS_MODE" != tunnel ] && { scheme=http; suffix=$HTTP_SUFFIX; }
+  fi
+  if [ "$INGRESS_MODE" = tunnel ]; then suffix=''; fi
 
   step
 
@@ -1383,10 +1427,10 @@ summary() {
   pad_line ""
   pad_line "$C_BRIGHT$C_BOLD  Orchard is ready$C_RESET$C_GREY   installed in $(elapsed)$C_RESET"
   pad_line ""
-  pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN"
-  pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN"
+  pad_line "  ${C_GREY}Dashboard${C_RESET}  $scheme://$ORCHARD_DOMAIN$suffix"
+  pad_line "  ${C_GREY}Your apps${C_RESET}  *.$ORCHARD_APP_DOMAIN$HTTPS_SUFFIX"
   if [ "$ORCHARD_MCP" = true ]; then
-    pad_line "  ${C_GREY}Agents${C_RESET}     $scheme://$ORCHARD_MCP_DOMAIN"
+    pad_line "  ${C_GREY}Agents${C_RESET}     $scheme://$ORCHARD_MCP_DOMAIN$suffix"
   fi
   pad_line ""
   pad_line "  ${C_GREY}Upgrade${C_RESET}    sudo orchardctl update"

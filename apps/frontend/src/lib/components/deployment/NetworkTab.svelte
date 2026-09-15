@@ -5,6 +5,7 @@
 	import { slide } from '$lib/utils/transitions';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { env } from '$env/dynamic/public';
+	import { appUrl } from '$lib/appUrl';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN ?? '';
@@ -475,7 +476,7 @@
 					>
 						<div class="svc-port-row flex w-full items-center justify-between gap-3 p-3 text-left">
 							<a
-								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+								href={appUrl(ingress.host, ingress.path, ingress.tlsEnabled)}
 								target="_blank"
 								rel="noopener noreferrer"
 								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
@@ -494,7 +495,7 @@
 									</p>
 								{/if}
 								<p class="text-sm font-medium truncate" style="color: var(--center-channel-color);">
-									{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
+									{appUrl(ingress.host, ingress.path, ingress.tlsEnabled)}
 								</p>
 								{#if ingress.address}
 									<p class="text-xs mt-0.5 truncate" style="color: var(--surface-muted);">

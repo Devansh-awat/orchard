@@ -13,6 +13,7 @@
 		Pencil
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { appUrl } from '$lib/appUrl';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import { Button, StatusBadge, resourceStatus, Skeleton } from '$lib/components/ui';
 
@@ -273,7 +274,7 @@
 					<div class="ti-resource-list">
 						{#each instance.ingresses as ing (ing.id)}
 							<a
-								href="https://{ing.host}{ing.path}"
+								href={appUrl(ing.host, ing.path)}
 								target="_blank"
 								rel="noopener noreferrer"
 								class="ti-resource-card"

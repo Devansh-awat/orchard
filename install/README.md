@@ -122,6 +122,11 @@ builderSandbox: # Kata VMs for build jobs
 
 **Multi-node.** One box only. For multiple nodes, use the Helm chart.
 
+**Custom ports.** `--http-port` and `--https-port` move Traefik off 80 and 443,
+and only `lan` mode accepts them. `public` needs 80 for the ACME HTTP-01
+challenge and 443 for browsers; `tunnel` binds neither. The dashboard's links
+carry the port; the CLI's do not yet.
+
 **Wildcard certificates.** Apps get per-hostname certificates. Wildcards need a
 DNS-01 issuer; see [SETUP-wildcards.md](../infra/charts/orchard/SETUP-wildcards.md).
 

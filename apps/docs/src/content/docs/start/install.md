@@ -68,9 +68,27 @@ Traefik runs on a ClusterIP and nothing binds a host port at all. The installer
 checks both ports in its first step, names the process holding them, and only
 refuses if the mode you pick needs them.
 
-Moving Orchard to a different port instead is not supported: every app gets its
-own hostname under your wildcard domain, and those URLs have nowhere to put a
-port number.
+### Custom ports, `lan` only
+
+If the box needs to keep 80 or 443 for something else, `lan` mode can serve
+somewhere else entirely:
+
+```bash
+sudo bash -c "$(curl -fsSL https://assets.orchard.my/install.sh)" -- \
+  --mode lan --http-port 8080 --https-port 8443
+```
+
+The dashboard then lives at `http://<host>:8080` and apps at
+`https://<app-host>:8443`. Traefik matches on the hostname and ignores the port,
+so routing is unaffected, and the dashboard's own links carry the port.
+
+`public` and `tunnel` reject these flags rather than accepting them and
+misbehaving: `public` cannot move off 80 without giving up HTTP-01, and `tunnel`
+binds no host port for them to change.
+
+One gap worth knowing: the CLI still prints app URLs as `https://<host>` with no
+port, because the API hands it hostnames rather than URLs. The dashboard is
+correct; `orchard open` on a custom-port instance is not.
 
 ### What it asks
 
