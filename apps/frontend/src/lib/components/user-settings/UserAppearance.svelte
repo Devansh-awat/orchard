@@ -1,406 +1,275 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		themeStore,
-		defaultLightTheme,
-		defaultDarkTheme,
-		builtInThemes,
-		type Theme
-	} from '$lib/stores/theme';
-	import { toasts, projectGradientEnabled } from '$lib/stores';
-	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
-	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { Alert, Button, ToggleRow } from '$lib/components/ui';
-	import SettingsSection from './SettingsSection.svelte';
-	import {
-		Plus,
-		Download,
-		Upload,
-		Trash2,
-		Copy,
 		Check,
-		Sun,
-		Moon,
-		Monitor,
+		ChevronDown,
+		Download,
 		Palette,
-		Pencil,
+		Sliders,
 		Sparkles,
+		Trash2,
+		Type,
+		Upload,
 		X
 	} from 'lucide-svelte';
+	import { themeStore, type SavedTheme } from '$lib/stores/theme';
+	import { toasts, projectGradientEnabled } from '$lib/stores';
+	import { specChip } from '$lib/theme/generate';
+	import { specsEqual } from '$lib/theme/spec';
+	import { LEGACY_THEMES } from '$lib/theme/legacy';
+	import ThemeStudio from '$lib/components/theme/ThemeStudio.svelte';
+	import ThemeAdvanced from '$lib/components/theme/ThemeAdvanced.svelte';
+	import FontPicker from '$lib/components/theme/FontPicker.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Alert, Button, Input, ToggleRow } from '$lib/components/ui';
+	import SettingsSection from './SettingsSection.svelte';
 	import { slide } from '$lib/utils/transitions';
 
-	let allThemes = $state<Theme[]>([...builtInThemes]);
-	let activeTheme = $state<Theme>(defaultLightTheme);
-	let activeThemeId = $state<string | null>(null);
+	const activeScheme = themeStore.scheme;
+	const savedThemes = themeStore.saved;
 
-	$effect(() => {
-		const unsubAll = themeStore.allThemes.subscribe((val) => {
-			allThemes = val;
-		});
-		const unsubActive = themeStore.activeTheme.subscribe((val) => {
-			activeTheme = val;
-		});
-		const unsubId = themeStore.activeThemeId.subscribe((val) => {
-			activeThemeId = val;
-		});
-		return () => {
-			unsubAll();
-			unsubActive();
-			unsubId();
-		};
-	});
+	const state = $derived($themeStore);
 
-	let editingTheme = $state<Theme | null>(null);
-	let showDeleteThemeModal = $state(false);
-	let themeToDelete = $state<Theme | null>(null);
-	let showImportModal = $state(false);
+	let naming = $state(false);
+	let draftName = $state('');
+	let advancedOpen = $state(false);
+	let showImport = $state(false);
 	let importJson = $state('');
 	let importError = $state<string | null>(null);
-	let fileInput: HTMLInputElement;
+	let pendingDelete = $state<SavedTheme | null>(null);
+	let showDelete = $state(false);
+	let fileInput = $state<HTMLInputElement | null>(null);
+	let gradientOn = $state(true);
 
 	onMount(() => {
 		themeStore.init();
-	});
-
-	function selectTheme(themeId: string) {
-		themeStore.setActiveTheme(themeId);
-		toasts.add({
-			title: 'Theme applied',
-			color: 'success'
-		});
-	}
-
-	function useSystemTheme() {
-		themeStore.setSystemTheme();
-		toasts.add({
-			title: 'Using system theme',
-			description: 'Theme will follow your system preference',
-			color: 'success'
-		});
-	}
-
-	function startEditing(theme: Theme) {
-		editingTheme = theme;
-	}
-
-	function stopEditing() {
-		editingTheme = null;
-		if (activeTheme) {
-			themeStore.applyTheme(activeTheme);
-		}
-	}
-
-	function duplicateTheme(theme: Theme) {
-		const newTheme = themeStore.duplicateTheme(theme.id, `${theme.name} Copy`);
-		if (newTheme) {
-			toasts.add({
-				title: 'Theme duplicated',
-				description: `"${newTheme.name}" created`,
-				color: 'success'
-			});
-			startEditing(newTheme);
-		}
-	}
-
-	function confirmDeleteTheme(theme: Theme) {
-		if (theme.isBuiltIn) return;
-		themeToDelete = theme;
-		showDeleteThemeModal = true;
-	}
-
-	function deleteTheme(theme: Theme) {
-		themeStore.deleteTheme(theme.id);
-		toasts.add({
-			title: 'Theme deleted',
-			color: 'success'
-		});
-	}
-
-	function exportTheme(theme: Theme) {
-		const json = themeStore.exportTheme(theme.id);
-		if (!json) return;
-
-		const blob = new Blob([json], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${theme.name.toLowerCase().replace(/\s+/g, '-')}-theme.json`;
-		a.click();
-		URL.revokeObjectURL(url);
-
-		toasts.add({
-			title: 'Theme exported',
-			description: 'Downloaded as JSON file',
-			color: 'success'
-		});
-	}
-
-	function openImportModal() {
-		showImportModal = true;
-		importJson = '';
-		importError = null;
-	}
-
-	function closeImportModal() {
-		showImportModal = false;
-		importJson = '';
-		importError = null;
-	}
-
-	function handleImport() {
-		importError = null;
-		const newTheme = themeStore.importTheme(importJson);
-		if (newTheme) {
-			toasts.add({
-				title: 'Theme imported',
-				description: `"${newTheme.name}" has been added`,
-				color: 'success'
-			});
-			closeImportModal();
-			themeStore.setActiveTheme(newTheme.id);
-		} else {
-			importError = 'Invalid theme format. Please check the JSON structure.';
-		}
-	}
-
-	function handleFileImport(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (!file) return;
-
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const content = e.target?.result as string;
-			importJson = content;
-			handleImport();
-		};
-		reader.onerror = () => {
-			importError = 'Failed to read file';
-		};
-		reader.readAsText(file);
-
-		target.value = '';
-	}
-
-	function createNewTheme() {
-		startEditing({
-			...defaultLightTheme,
-			id: 'draft',
-			name: 'New theme',
-			isBuiltIn: false,
-			isDraft: true,
-			simpleColors: { ...defaultLightTheme.simpleColors }
-		});
-	}
-
-	let gradientOn = $state(true);
-
-	$effect(() => {
-		const unsub = projectGradientEnabled.subscribe((v) => {
+		return projectGradientEnabled.subscribe((v) => {
 			gradientOn = v;
 		});
-		return unsub;
 	});
 
-	const customThemes = $derived(allThemes.filter((t) => !t.isBuiltIn));
-	const lightPreview = defaultLightTheme.simpleColors;
-	const darkPreview = defaultDarkTheme.simpleColors;
+	const overrideCount = $derived(Object.keys(state.overrides).length);
+	const activeLegacyId = $derived(themeStore.matchLegacyId(state.overrides));
+
+	function isApplied(theme: SavedTheme) {
+		return specsEqual(theme.spec, state.spec);
+	}
+
+	function startNaming() {
+		draftName = '';
+		naming = true;
+	}
+
+	function saveTheme() {
+		const entry = themeStore.saveCurrent(draftName);
+		naming = false;
+		toasts.add({ title: `Saved "${entry.name}"`, color: 'success' });
+	}
+
+	function exportTheme() {
+		const json = themeStore.exportCurrent(draftName || 'Orchard theme');
+		const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = 'orchard-theme.json';
+		link.click();
+		URL.revokeObjectURL(url);
+		toasts.add({ title: 'Theme exported', color: 'success' });
+	}
+
+	function runImport() {
+		importError = null;
+		const entry = themeStore.importTheme(importJson);
+		if (!entry) {
+			importError = 'That does not look like an Orchard theme file.';
+			return;
+		}
+		showImport = false;
+		importJson = '';
+		toasts.add({ title: `Imported "${entry.name}"`, color: 'success' });
+	}
+
+	function readFile(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			importJson = String(reader.result ?? '');
+			runImport();
+		};
+		reader.onerror = () => {
+			importError = 'Could not read that file.';
+		};
+		reader.readAsText(file);
+		input.value = '';
+	}
 </script>
 
 <div class="settings-body">
-	{#if editingTheme}
-		<div transition:slide={{ duration: 200 }}>
-			<SettingsSection
-				index={0}
-				title={editingTheme.isDraft
-					? 'New theme'
-					: editingTheme.isBuiltIn
-						? `Customize ${editingTheme.name} theme`
-						: `Edit "${editingTheme.name}"`}
-			>
-				{#snippet icon(_hovered)}<Palette class="h-[18px] w-[18px]" />{/snippet}
-				{#snippet actions()}
-					<Button variant="ghost" size="sm" onclick={stopEditing}>
-						<X class="h-4 w-4" />
-						Close
+	<div class="ap-stack">
+		<input
+			type="file"
+			accept=".json,application/json"
+			class="hidden"
+			bind:this={fileInput}
+			onchange={readFile}
+		/>
+
+		<SettingsSection
+			index={0}
+			title="Theme"
+			description="Drag the field to move every colour at once. The palette keeps its own relationships, so it stays readable wherever you land."
+		>
+			{#snippet icon(_hovered)}<Palette class="h-[18px] w-[18px]" />{/snippet}
+			{#snippet actions()}
+				<div class="ap-head-actions">
+					<Button variant="secondary" size="sm" onclick={startNaming}>Save</Button>
+					<Button variant="ghost" size="sm" onclick={exportTheme}>
+						<Download class="h-3.5 w-3.5" /> Export
 					</Button>
-				{/snippet}
-				<ThemeEditor
-					theme={editingTheme}
-					onSave={() => {
-						stopEditing();
-					}}
-					onCancel={stopEditing}
-				/>
-			</SettingsSection>
-		</div>
-	{:else}
-		<div class="ap-stack">
-			<input
-				type="file"
-				accept=".json,application/json"
-				class="hidden"
-				bind:this={fileInput}
-				onchange={handleFileImport}
-			/>
+					<Button variant="ghost" size="sm" onclick={() => (showImport = true)}>
+						<Upload class="h-3.5 w-3.5" /> Import
+					</Button>
+				</div>
+			{/snippet}
 
-			<SettingsSection
-				index={0}
-				title="Themes"
-				description="Pick how Orchard looks for you. Click a theme to apply it."
-			>
-				{#snippet icon(_hovered)}<Palette class="h-[18px] w-[18px]" />{/snippet}
-				{#snippet actions()}
-					<div class="ap-head-actions">
-						<Button variant="secondary" size="sm" onclick={createNewTheme}>
-							<Plus class="h-3.5 w-3.5" /> New theme
-						</Button>
-						<Button variant="ghost" size="sm" onclick={openImportModal}>
-							<Upload class="h-3.5 w-3.5" /> Import
-						</Button>
-					</div>
-				{/snippet}
-				<div class="ap-grid">
-					<div class="ap-swatch" class:ap-swatch--active={!activeThemeId}>
-						<button type="button" class="ap-swatch-main" onclick={useSystemTheme}>
-							<span class="ap-preview ap-preview--split">
-								<span class="ap-preview-half" style="background-color: {lightPreview.background};">
-									<span class="ap-dot" style="background-color: {lightPreview.accent};"></span>
-								</span>
-								<span class="ap-preview-half" style="background-color: {darkPreview.background};">
-									<span class="ap-dot" style="background-color: {darkPreview.accent};"></span>
-								</span>
-							</span>
-							<span class="ap-meta">
-								<Monitor size={13} />
-								<span class="ap-name">System</span>
-								{#if !activeThemeId}<span class="ap-check"><Check size={12} /></span>{/if}
-							</span>
+			<div class="ap-studio">
+				<ThemeStudio />
+			</div>
+
+			{#if naming}
+				<div class="ap-save" transition:slide={{ duration: 180 }}>
+					<Input bind:value={draftName} placeholder="Name this theme" />
+					<Button variant="primary" size="sm" onclick={saveTheme}>Save theme</Button>
+					<Button variant="ghost" size="sm" onclick={() => (naming = false)}>Cancel</Button>
+				</div>
+			{/if}
+
+			<div class="ap-saved">
+				<span class="ap-saved-title">Classic</span>
+				<div class="ap-saved-row">
+					{#each LEGACY_THEMES as theme (theme.id)}
+						{@const active = activeLegacyId === theme.id}
+						<button
+							type="button"
+							class="ap-classic"
+							class:ap-classic--on={active}
+							onclick={() => themeStore.applyLegacy(theme.id)}
+						>
+							<span
+								class="ap-classic-chip"
+								style="background-color: {theme.colours.background}; color: {theme.colours.accent};"
+							></span>
+							<span class="ap-saved-name">{theme.name}</span>
+							{#if active}<Check size={12} />{/if}
 						</button>
-					</div>
-
-					{#each allThemes as theme (theme.id)}
-						{@const c = theme.simpleColors}
-						{@const isActive = activeThemeId === theme.id}
-						<div class="ap-swatch" class:ap-swatch--active={isActive}>
-							<button type="button" class="ap-swatch-main" onclick={() => selectTheme(theme.id)}>
-								<span
-									class="ap-preview"
-									style="background-color: {c.background}; border-color: {c.border};"
-								>
-									<span class="ap-preview-side" style="background-color: {c.sidebarBackground};"
-									></span>
-									<span class="ap-preview-body">
-										<span class="ap-line" style="background-color: {c.foreground};"></span>
-										<span class="ap-line ap-line--dim" style="background-color: {c.muted};"></span>
-										<span class="ap-dot" style="background-color: {c.accent};"></span>
-									</span>
-								</span>
-								<span class="ap-meta">
-									{#if theme.isDark}<Moon size={13} />{:else}<Sun size={13} />{/if}
-									<span class="ap-name">{theme.name}</span>
-									{#if isActive}<span class="ap-check"><Check size={12} /></span>{/if}
-								</span>
-							</button>
-							<div class="ap-actions">
-								<button
-									type="button"
-									class="ap-action"
-									title="Customize"
-									aria-label="Customize {theme.name}"
-									onclick={() => startEditing(theme)}
-								>
-									<Pencil size={13} />
-								</button>
-								<button
-									type="button"
-									class="ap-action"
-									title="Duplicate"
-									aria-label="Duplicate {theme.name}"
-									onclick={() => duplicateTheme(theme)}
-								>
-									<Copy size={13} />
-								</button>
-								<button
-									type="button"
-									class="ap-action"
-									title="Export"
-									aria-label="Export {theme.name}"
-									onclick={() => exportTheme(theme)}
-								>
-									<Download size={13} />
-								</button>
-								{#if !theme.isBuiltIn}
-									<button
-										type="button"
-										class="ap-action ap-action--danger"
-										title="Delete"
-										aria-label="Delete {theme.name}"
-										onclick={() => confirmDeleteTheme(theme)}
-									>
-										<Trash2 size={13} />
-									</button>
-								{/if}
-							</div>
-						</div>
 					{/each}
 				</div>
-				{#if customThemes.length === 0}
-					<p class="ap-footnote">
-						Duplicate a theme or create a new one to start customizing colors.
-					</p>
-				{/if}
-			</SettingsSection>
+			</div>
 
-			<SettingsSection index={1} title="Effects">
-				{#snippet icon(_hovered)}<Sparkles class="h-[18px] w-[18px]" />{/snippet}
-				<ToggleRow
-					bind:checked={gradientOn}
-					label="Project background gradient"
-					hint="Animated gradient on project pages. Turn off to reduce motion or save GPU."
-					onchange={() => projectGradientEnabled.set(gradientOn)}
-				/>
-			</SettingsSection>
-		</div>
-	{/if}
+			{#if $savedThemes.length}
+				<div class="ap-saved">
+					<span class="ap-saved-title">Saved</span>
+					<div class="ap-saved-row">
+						{#each $savedThemes as theme (theme.id)}
+							{@const applied = isApplied(theme)}
+							<div class="ap-saved-item" class:ap-saved-item--on={applied}>
+								<button
+									type="button"
+									class="ap-saved-main"
+									onclick={() => themeStore.applySaved(theme.id)}
+								>
+									<span
+										class="ap-saved-chip"
+										style="background-image: {specChip(theme.spec, $activeScheme)};"
+									></span>
+									<span class="ap-saved-name">{theme.name}</span>
+									{#if applied}<Check size={12} />{/if}
+								</button>
+								<button
+									type="button"
+									class="ap-saved-del"
+									aria-label="Delete {theme.name}"
+									onclick={() => {
+										pendingDelete = theme;
+										showDelete = true;
+									}}
+								>
+									<Trash2 size={13} />
+								</button>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			<div class="ap-advanced">
+				<button
+					type="button"
+					class="ap-advanced-toggle"
+					aria-expanded={advancedOpen}
+					onclick={() => (advancedOpen = !advancedOpen)}
+				>
+					<Sliders size={14} />
+					<span>Advanced colours</span>
+					{#if overrideCount}
+						<span class="ap-advanced-count">{overrideCount} pinned</span>
+					{/if}
+					<ChevronDown size={14} class={advancedOpen ? 'ap-chev ap-chev--open' : 'ap-chev'} />
+				</button>
+				{#if advancedOpen}
+					<div class="ap-advanced-body" transition:slide={{ duration: 200 }}>
+						<ThemeAdvanced />
+					</div>
+				{/if}
+			</div>
+		</SettingsSection>
+
+		<SettingsSection
+			index={1}
+			title="Typeface"
+			description="Changes every piece of interface text. Hyperlegible and Dyslexic are drawn for readability rather than style."
+		>
+			{#snippet icon(_hovered)}<Type class="h-[18px] w-[18px]" />{/snippet}
+			<FontPicker />
+		</SettingsSection>
+
+		<SettingsSection index={2} title="Effects">
+			{#snippet icon(_hovered)}<Sparkles class="h-[18px] w-[18px]" />{/snippet}
+			<ToggleRow
+				bind:checked={gradientOn}
+				label="Project background gradient"
+				hint="Animated gradient on project pages. Turn off to reduce motion or save GPU."
+				onchange={() => projectGradientEnabled.set(gradientOn)}
+			/>
+		</SettingsSection>
+	</div>
 </div>
 
-{#if showImportModal}
-	<div class="ap-overlay" onclick={closeImportModal}>
-		<div class="ap-modal" onclick={(e) => e.stopPropagation()} transition:slide={{ duration: 200 }}>
+{#if showImport}
+	<div class="ap-overlay">
+		<div class="ap-modal" transition:slide={{ duration: 200 }}>
 			<div class="ap-modal-head">
 				<h2 class="ap-modal-title">Import theme</h2>
-				<Button variant="ghost" size="sm" aria-label="Close" onclick={closeImportModal}>
+				<Button variant="ghost" size="sm" aria-label="Close" onclick={() => (showImport = false)}>
 					<X class="h-4 w-4" />
 				</Button>
 			</div>
-
 			<div class="ap-modal-body">
-				<div class="ap-field">
-					<label for="import-json" class="ap-field-label">Theme JSON</label>
-					<textarea
-						id="import-json"
-						class="ap-textarea"
-						placeholder="Paste theme JSON here..."
-						bind:value={importJson}></textarea>
-				</div>
-
+				<label class="ap-field-label" for="import-json">Theme JSON</label>
+				<textarea
+					id="import-json"
+					class="ap-textarea"
+					placeholder="Paste an exported theme here"
+					bind:value={importJson}></textarea>
 				{#if importError}
 					<Alert tone="error">{importError}</Alert>
 				{/if}
-
-				<div class="ap-modal-alt">
-					<p class="ap-modal-alt-text">Or import from file</p>
-					<Button variant="secondary" onclick={() => fileInput?.click()}>
-						<Upload class="h-4 w-4" />
-						Choose file
-					</Button>
-				</div>
-
 				<div class="ap-modal-foot">
-					<Button variant="secondary" onclick={closeImportModal}>Cancel</Button>
-					<Button variant="primary" onclick={handleImport} disabled={!importJson.trim()}>
-						Import theme
+					<Button variant="secondary" onclick={() => fileInput?.click()}>Choose file</Button>
+					<Button variant="primary" disabled={!importJson.trim()} onclick={runImport}>
+						Import
 					</Button>
 				</div>
 			</div>
@@ -408,19 +277,19 @@
 	</div>
 {/if}
 
-{#if themeToDelete}
+{#if pendingDelete}
 	<ConfirmModal
-		bind:open={showDeleteThemeModal}
-		title={`Delete "${themeToDelete.name}"?`}
-		description="This theme will be permanently deleted. This cannot be undone."
-		confirmLabel="Delete theme"
+		bind:open={showDelete}
+		title={`Delete "${pendingDelete.name}"?`}
+		description="This saved theme will be removed. Your current colours stay as they are."
+		confirmLabel="Delete"
 		danger
 		onconfirm={() => {
-			deleteTheme(themeToDelete!);
-			themeToDelete = null;
+			if (pendingDelete) themeStore.deleteSaved(pendingDelete.id);
+			pendingDelete = null;
 		}}
 		oncancel={() => {
-			themeToDelete = null;
+			pendingDelete = null;
 		}}
 	/>
 {/if}
@@ -438,187 +307,182 @@
 		gap: var(--space-2);
 	}
 
-	.ap-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-		gap: var(--space-3);
+	.ap-studio {
+		max-width: 26rem;
+		margin-inline: auto;
 	}
 
-	.ap-swatch {
-		position: relative;
+	.ap-save {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin-top: var(--space-4);
+		max-width: 26rem;
+		margin-inline: auto;
+	}
+
+	.ap-saved {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-top: var(--space-5);
+	}
+
+	.ap-saved-title {
+		text-align: center;
+		font-size: var(--text-caption);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.ap-saved-row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-2);
+	}
+
+	.ap-classic {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3125rem 0.625rem 0.3125rem 0.3125rem;
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		background: var(--bg-raised);
-		overflow: hidden;
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		font-weight: 600;
+		cursor: pointer;
 		transition:
 			border-color var(--dur-fast) ease,
 			box-shadow var(--dur-fast) ease;
 	}
 
-	.ap-swatch:hover {
+	.ap-classic:hover {
 		border-color: var(--border-strong);
 	}
 
-	.ap-swatch--active {
+	.ap-classic--on {
 		border-color: var(--accent);
 		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
 
-	.ap-swatch-main {
-		display: flex;
-		flex-direction: column;
-		width: 100%;
-		border: none;
-		background: transparent;
-		padding: 0;
-		cursor: pointer;
-		text-align: left;
+	.ap-classic-chip {
+		position: relative;
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: 50%;
+		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 
-	.ap-preview {
-		display: flex;
-		width: 100%;
-		height: 4.25rem;
-		border-bottom: 1px solid var(--border-default);
+	.ap-classic-chip::after {
+		content: '';
+		position: absolute;
+		inset: 28%;
+		border-radius: 50%;
+		background: currentColor;
 	}
 
-	.ap-preview--split .ap-preview-half {
-		flex: 1;
+	.ap-saved-item {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-	}
-
-	.ap-preview-side {
-		width: 22%;
-		opacity: 0.9;
-	}
-
-	.ap-preview-body {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		gap: 0.25rem;
-		padding: 0 var(--space-3);
-	}
-
-	.ap-line {
-		display: block;
-		height: 0.25rem;
-		width: 55%;
+		border: 1px solid var(--border-default);
 		border-radius: var(--radius-pill);
-		opacity: 0.85;
+		background: var(--bg-raised);
 	}
 
-	.ap-line--dim {
-		width: 35%;
-		opacity: 0.45;
+	.ap-saved-item--on {
+		border-color: var(--accent);
 	}
 
-	.ap-dot {
-		display: block;
-		height: 0.5rem;
-		width: 1.5rem;
-		border-radius: var(--radius-pill);
-	}
-
-	.ap-meta {
-		display: flex;
+	.ap-saved-main {
+		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		width: 100%;
-		padding: var(--space-2) 0.625rem;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 600;
-		letter-spacing: var(--track-body);
+		padding: 0.3125rem 0.25rem 0.3125rem 0.3125rem;
+		border: none;
+		background: none;
 		color: var(--text-default);
+		font-size: var(--text-footnote);
+		font-weight: 600;
+		cursor: pointer;
 	}
 
-	.ap-meta :global(svg) {
-		color: var(--text-muted);
-		flex-shrink: 0;
+	.ap-saved-chip {
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: 50%;
+		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 
-	.ap-name {
-		flex: 1;
-		min-width: 0;
+	.ap-saved-name {
+		max-width: 10rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.ap-check {
+	.ap-saved-del {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1rem;
-		height: 1rem;
-		border-radius: 50%;
-		background: var(--accent);
-		color: var(--text-on-accent);
-	}
-
-	.ap-check :global(svg) {
-		color: inherit;
-	}
-
-	.ap-actions {
-		position: absolute;
-		top: 0.375rem;
-		right: 0.375rem;
-		display: flex;
-		gap: 0.125rem;
-		padding: 0.125rem;
-		border-radius: var(--radius-sm);
-		background: color-mix(in srgb, var(--bg-raised) 85%, transparent);
-		backdrop-filter: blur(4px);
-		opacity: 0;
-		transition: opacity var(--dur-fast) ease;
-	}
-
-	.ap-swatch:hover .ap-actions,
-	.ap-actions:focus-within {
-		opacity: 1;
-	}
-
-	.ap-action {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
+		margin-right: 0.1875rem;
 		border: none;
-		border-radius: var(--radius-xs);
-		background: transparent;
-		color: var(--text-muted);
+		border-radius: 50%;
+		background: none;
+		color: var(--text-faint);
 		cursor: pointer;
-		transition:
-			background-color var(--dur-fast) ease,
-			color var(--dur-fast) ease;
+		transition: color var(--dur-fast) ease;
 	}
 
-	.ap-action:hover {
-		background: var(--accent-subtle);
-		color: var(--text-default);
-	}
-
-	.ap-action--danger:hover {
+	.ap-saved-del:hover {
 		color: var(--status-error);
 	}
 
-	.ap-footnote {
-		margin-top: var(--space-3);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+	.ap-advanced {
+		margin-top: var(--space-5);
+		border-top: 1px solid var(--rule);
+		padding-top: var(--space-3);
+	}
+
+	.ap-advanced-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0;
+		border: none;
+		background: none;
 		color: var(--text-muted);
+		font-size: var(--text-footnote);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.ap-advanced-toggle:hover {
+		color: var(--text-default);
+	}
+
+	.ap-advanced-count {
+		padding: 0.0625rem 0.375rem;
+		border-radius: var(--radius-pill);
+		background: var(--accent-subtle);
+		color: var(--text-link);
+		font-size: var(--text-caption);
+	}
+
+	.ap-advanced-body {
+		margin-top: var(--space-4);
 	}
 
 	.ap-overlay {
 		position: fixed;
 		inset: 0;
-		z-index: 50;
+		z-index: var(--z-modal);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -630,7 +494,6 @@
 		width: 100%;
 		max-width: 32rem;
 		padding: var(--space-6);
-		border: none;
 		border-radius: var(--radius-2xl);
 		background-color: var(--bg-raised);
 		box-shadow: var(--elev-4);
@@ -649,32 +512,24 @@
 		font-size: var(--text-title-3);
 		line-height: var(--lh-title-3);
 		font-weight: 600;
-		letter-spacing: var(--track-headline);
 		color: var(--text-default);
 	}
 
 	.ap-modal-body {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.ap-field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
+		gap: var(--space-3);
 	}
 
 	.ap-field-label {
 		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.ap-textarea {
 		width: 100%;
-		min-height: 12.5rem;
+		min-height: 11rem;
 		padding: 0.75rem 0.875rem;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
@@ -684,13 +539,6 @@
 		font-size: var(--text-callout);
 		line-height: 1.5;
 		resize: vertical;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
-	}
-
-	.ap-textarea::placeholder {
-		color: var(--text-faint);
 	}
 
 	.ap-textarea:focus {
@@ -699,25 +547,11 @@
 		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
 
-	.ap-modal-alt {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.ap-modal-alt-text {
-		margin: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
-	}
-
 	.ap-modal-foot {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-2);
-		padding-top: var(--space-4);
+		padding-top: var(--space-3);
 		border-top: 1px solid var(--rule);
 	}
 </style>

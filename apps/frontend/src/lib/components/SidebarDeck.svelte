@@ -55,6 +55,7 @@
 		type Organization
 	} from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
+	import type { ThemeMode } from '$lib/theme/spec';
 	import { fade, fly } from '$lib/utils/transitions';
 
 	interface OverviewDep {
@@ -271,22 +272,19 @@
 		}
 	});
 
-	let activeThemeId = $state<string | null>(null);
+	let themeMode = $state<ThemeMode>('auto');
 	$effect(() => {
 		if (browser) themeStore.init();
-		const unsub = themeStore.activeThemeId.subscribe((val) => (activeThemeId = val));
+		const unsub = themeStore.subscribe((val) => (themeMode = val.mode));
 		return unsub;
 	});
 
 	function applyQuickTheme(mode: 'light' | 'dark' | 'system') {
-		if (mode === 'system') themeStore.setSystemTheme();
-		else if (mode === 'light') themeStore.setActiveTheme('light');
-		else themeStore.setActiveTheme('dark');
+		themeStore.setMode(mode === 'system' ? 'auto' : mode);
 	}
 
 	function isThemeActive(mode: 'light' | 'dark' | 'system') {
-		if (mode === 'system') return !activeThemeId;
-		return activeThemeId === mode;
+		return themeMode === (mode === 'system' ? 'auto' : mode);
 	}
 
 	function navStagger(index: number, stride?: number) {
@@ -680,7 +678,7 @@
 		flex-shrink: 0;
 		padding: 0.75rem;
 		border-right: none;
-		background-color: var(--bg-app);
+		background-color: transparent;
 	}
 
 	.deck-scrim {
@@ -691,6 +689,10 @@
 		backdrop-filter: blur(2px);
 	}
 	.deck-host--drawer {
+		background-color: var(--bg-app);
+		background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+		background-size: auto;
+		background-repeat: repeat;
 		position: fixed;
 		top: 0;
 		left: 0;

@@ -23,6 +23,28 @@
 		/>
 		<link rel="manifest" href="%sveltekit.assets%/favicon/site.webmanifest" />
 		<title>Orchard Dashboard</title>
+		<script>
+			(function () {
+				try {
+					var mode = localStorage.getItem('theme');
+					var dark =
+						mode === 'dark' ||
+						(mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+					document.documentElement.classList.toggle('dark', dark);
+					document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+					var boot = JSON.parse(localStorage.getItem('orchard-theme-boot') || 'null');
+					var css = boot && (dark ? boot.dark : boot.light);
+					if (css) {
+						var style = document.createElement('style');
+						style.id = 'theme-boot';
+						style.textContent = ':root{' + css + '}';
+						document.head.appendChild(style);
+					}
+				} catch (e) {
+					// no stored theme yet
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body class="h-full" data-sveltekit-preload-data="hover">

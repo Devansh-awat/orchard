@@ -52,10 +52,11 @@ export {
 export {
 	themeStore,
 	themeColorCategories,
-	defaultLightTheme,
-	defaultDarkTheme,
 	generateThemeColors,
-	type Theme,
+	composeColors,
+	resolveScheme,
+	type SavedTheme,
+	type ThemeState,
 	type ThemeColors,
 	type SimpleThemeColors
 } from './theme';

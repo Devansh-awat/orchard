@@ -83,6 +83,92 @@
 	font-display: swap;
 }
 
+@font-face {
+	font-family: 'Source Serif 4';
+	src: url('/fonts/Source_Serif_4/SourceSerif4-VariableFont_opsz,wght.woff2') format('woff2');
+	font-weight: 200 900;
+	font-style: normal;
+	font-display: swap;
+	size-adjust: 113%;
+}
+
+@font-face {
+	font-family: 'Source Serif 4';
+	src: url('/fonts/Source_Serif_4/SourceSerif4-Italic-VariableFont_opsz,wght.woff2') format('woff2');
+	font-weight: 200 900;
+	font-style: italic;
+	font-display: swap;
+	size-adjust: 113%;
+}
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Next';
+	src: url('/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegibleNext-VariableFont_wght.woff2')
+		format('woff2');
+	font-weight: 200 800;
+	font-style: normal;
+	font-display: swap;
+	size-adjust: 105%;
+}
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Next';
+	src: url('/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2')
+		format('woff2');
+	font-weight: 200 800;
+	font-style: italic;
+	font-display: swap;
+	size-adjust: 105%;
+}
+
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic/OpenDyslexic-Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+	size-adjust: 80%;
+	ascent-override: 112%;
+	descent-override: 28%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic/OpenDyslexic-Bold.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+	size-adjust: 80%;
+	ascent-override: 112%;
+	descent-override: 28%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic/OpenDyslexic-Italic.woff2') format('woff2');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+	size-adjust: 80%;
+	ascent-override: 112%;
+	descent-override: 28%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic/OpenDyslexic-BoldItalic.woff2') format('woff2');
+	font-weight: 700;
+	font-style: italic;
+	font-display: swap;
+	size-adjust: 80%;
+	ascent-override: 112%;
+	descent-override: 28%;
+	line-gap-override: 0%;
+}
+
 @theme {
 	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -233,7 +319,12 @@
 
 body {
 	background-color: var(--center-channel-bg);
+	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+	background-size: auto;
+	background-repeat: repeat;
+	background-attachment: fixed;
 	color: var(--center-channel-color);
+	font-family: var(--font-sans);
 	@apply antialiased;
 	transition:
 		background-color var(--dur-fast) ease,
@@ -241,6 +332,12 @@ body {
 	font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 	font-weight: 450;
 	line-height: 1.5;
+}
+
+html.contrast-high body,
+html.contrast-high main,
+html.contrast-high .deck-host--drawer {
+	background-image: none;
 }
 
 :focus-visible {
@@ -268,6 +365,10 @@ body {
 
 main {
 	background-color: var(--center-channel-bg);
+	background-image: var(--theme-grain, none), var(--theme-chrome-image, none);
+	background-size: auto;
+	background-repeat: repeat;
+	background-attachment: fixed;
 	color: var(--center-channel-color);
 }
 
