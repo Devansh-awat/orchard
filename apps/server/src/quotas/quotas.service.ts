@@ -550,7 +550,8 @@ export class QuotasService {
             name: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
-            replicas: true
+            replicas: true,
+            stopped: true
           }
         },
         databases: {
@@ -585,8 +586,9 @@ export class QuotasService {
     for (const p of projects) {
       for (const d of p.deployments) {
         if (excludeDeploymentId && d.id === excludeDeploymentId) continue;
-        const c = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
-        const m = (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
+        const replicas = d.stopped ? 0 : (d.replicas ?? 1);
+        const c = (d.cpuRequestMilli ?? 0) * replicas;
+        const m = (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * replicas;
         cpu += c;
         mem += m;
         breakdown.push({
@@ -597,7 +599,7 @@ export class QuotasService {
           projectName: p.name,
           cpuMilli: c,
           memoryBytes: m,
-          replicas: d.replicas ?? 1
+          replicas
         });
       }
       for (const db of p.databases) {
@@ -658,7 +660,7 @@ export class QuotasService {
       where: { id: projectId },
       select: {
         deployments: {
-          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true }
+          select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true, stopped: true }
         },
         databases: { select: { cpuRequestMilli: true, memoryRequestBytes: true, replicas: true } }
       }
@@ -666,7 +668,12 @@ export class QuotasService {
     if (!project) return { cpuMilli: 0, memoryBytes: 0 };
     let cpu = 0;
     let mem = 0;
-    for (const row of [...project.deployments, ...project.databases]) {
+    for (const row of project.deployments) {
+      const instances = row.stopped ? 0 : Math.max(1, row.replicas ?? 1);
+      cpu += (row.cpuRequestMilli ?? 0) * instances;
+      mem += (row.memoryRequestBytes ? Number(row.memoryRequestBytes) : 0) * instances;
+    }
+    for (const row of project.databases) {
       const instances = Math.max(1, row.replicas ?? 1);
       cpu += (row.cpuRequestMilli ?? 0) * instances;
       mem += (row.memoryRequestBytes ? Number(row.memoryRequestBytes) : 0) * instances;

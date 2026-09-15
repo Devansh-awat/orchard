@@ -249,6 +249,230 @@
         ]
       }
     },
+    "/admin/instance-config": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-config",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/instance-config/{id}": {
+      "delete": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /admin/instance-config/:id",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-config/:id",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /admin/instance-config/:id",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/instance-settings/mcp": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/mcp",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/mcp",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/userspace-scheduling": {
       "get": {
         "description": "Auth: superadmin",
@@ -312,6 +536,106 @@
           }
         ],
         "summary": "PATCH /admin/instance-settings/userspace-scheduling",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/networking/dns": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/networking/dns",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/networking/tunnel": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/networking/tunnel",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/networking/tunnel/routes": {
+      "post": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /admin/networking/tunnel/routes",
         "tags": [
           "admin"
         ]
@@ -6035,6 +6359,9 @@
                       "status": {
                         "type": "string"
                       },
+                      "stopped": {
+                        "type": "boolean"
+                      },
                       "updatedAt": {
                         "type": "string"
                       }
@@ -6046,6 +6373,7 @@
                       "buildStatus",
                       "updatedAt",
                       "replicas",
+                      "stopped",
                       "ingresses",
                       "project"
                     ],
@@ -6984,6 +7312,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -7088,6 +7419,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -8098,6 +8430,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -8202,6 +8537,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -9182,6 +9518,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -9286,6 +9625,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -10224,6 +10564,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -10328,6 +10671,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -11304,6 +11648,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -11408,6 +11755,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -12363,6 +12711,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -12467,6 +12818,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -13753,6 +14105,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -13869,6 +14224,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -14878,6 +15234,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -14982,6 +15341,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -15936,6 +16296,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -16040,6 +16403,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -17186,6 +17550,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -17302,6 +17669,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -17530,6 +17898,56 @@
           }
         ],
         "summary": "Cancel an in-progress build",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/disruption-budget": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /deployments/:id/disruption-budget",
         "tags": [
           "deployments"
         ]
@@ -18476,6 +18894,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -18580,6 +19001,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -19883,6 +20305,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -19999,6 +20424,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -20371,6 +20797,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -20396,6 +20825,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -21615,6 +22045,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -21719,6 +22152,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -22998,6 +23432,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -23023,6 +23460,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -23963,6 +24401,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -24067,6 +24508,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -24441,6 +24883,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -24466,6 +24911,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -25533,6 +25979,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -25637,6 +26086,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -25708,6 +26158,9 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "success": {
                       "type": "boolean"
                     }
@@ -25716,7 +26169,8 @@
                     "success",
                     "deploymentId",
                     "projectId",
-                    "replicas"
+                    "replicas",
+                    "stopped"
                   ],
                   "type": "object"
                 }
@@ -25734,6 +26188,142 @@
           }
         ],
         "summary": "Scale a deployment to a replica count",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/start": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "replicas": {
+                      "type": "number"
+                    },
+                    "stopped": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "replicas",
+                    "stopped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Start a stopped deployment at its saved replica count",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/stop": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "replicas": {
+                      "type": "number"
+                    },
+                    "stopped": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "replicas",
+                    "stopped"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Stop a deployment while preserving its desired replica count",
         "tags": [
           "deployments"
         ]
@@ -26085,6 +26675,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -26110,6 +26703,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -27093,6 +27687,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -27197,6 +27794,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -29707,6 +30305,9 @@
                         "status": {
                           "type": "string"
                         },
+                        "stopped": {
+                          "type": "boolean"
+                        },
                         "tailscaleExposed": {
                           "type": "boolean"
                         },
@@ -29732,6 +30333,7 @@
                         "name",
                         "namespace",
                         "replicas",
+                        "stopped",
                         "status",
                         "buildStatus",
                         "createdAt",
@@ -30036,6 +30638,36 @@
         "summary": "Get an ingress by id with resolved routes",
         "tags": [
           "ingresses"
+        ]
+      }
+    },
+    "/instance/features": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /instance/features",
+        "tags": [
+          "instance"
         ]
       }
     },
@@ -36057,6 +36689,136 @@
         ]
       }
     },
+    "/project-transfers": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /project-transfers",
+        "tags": [
+          "project-transfers"
+        ]
+      }
+    },
+    "/project-transfers/{id}/accept": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /project-transfers/:id/accept",
+        "tags": [
+          "project-transfers"
+        ]
+      }
+    },
+    "/project-transfers/{id}/decline": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /project-transfers/:id/decline",
+        "tags": [
+          "project-transfers"
+        ]
+      }
+    },
     "/projects": {
       "get": {
         "description": "Auth: authenticated",
@@ -37852,6 +38614,9 @@
                       "status": {
                         "type": "string"
                       },
+                      "stopped": {
+                        "type": "boolean"
+                      },
                       "tailscaleExposed": {
                         "type": "boolean"
                       },
@@ -37956,6 +38721,7 @@
                       "name",
                       "namespace",
                       "replicas",
+                      "stopped",
                       "status",
                       "buildStatus",
                       "createdAt",
@@ -39024,6 +39790,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -39128,6 +39897,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -40248,6 +41018,9 @@
                     "status": {
                       "type": "string"
                     },
+                    "stopped": {
+                      "type": "boolean"
+                    },
                     "tailscaleExposed": {
                       "type": "boolean"
                     },
@@ -40352,6 +41125,7 @@
                     "name",
                     "namespace",
                     "replicas",
+                    "stopped",
                     "status",
                     "buildStatus",
                     "createdAt",
@@ -41220,6 +41994,184 @@
           }
         ],
         "summary": "PATCH /projects/:id/members/:memberId",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/transfer-org": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /projects/:id/transfer-org",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/transfer-org/preview": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /projects/:id/transfer-org/preview",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/transfer-request": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /projects/:id/transfer-request",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /projects/:id/transfer-request",
         "tags": [
           "projects"
         ]
@@ -44642,7 +45594,7 @@
         ]
       }
     },
-    "/sandboxes/{id}/opencode/*": {
+    "/sandboxes/{id}/opencode/{*splat}": {
       "all": {
         "description": "Auth: authenticated",
         "parameters": [
@@ -44676,7 +45628,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "ALL /sandboxes/:id/opencode/*",
+        "summary": "ALL /sandboxes/:id/opencode/{*splat}",
         "tags": [
           "sandboxes"
         ]
@@ -45311,7 +46263,7 @@
         ]
       }
     },
-    "/scim/v2/*": {
+    "/scim/v2/{*splat}": {
       "all": {
         "description": "Auth: public",
         "responses": {
@@ -45327,7 +46279,7 @@
             "description": "OK"
           }
         },
-        "summary": "ALL /scim/v2/*",
+        "summary": "ALL /scim/v2/{*splat}",
         "tags": [
           "scim"
         ]
@@ -45937,6 +46889,98 @@
         ]
       }
     },
+    "/setup/bootstrap": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /setup/bootstrap",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/certificate": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /setup/certificate",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/checklist": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /setup/checklist",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/setup/claim": {
       "post": {
         "description": "Auth: authenticated",
@@ -46094,6 +47138,76 @@
           }
         ],
         "summary": "GET /setup/github-app/status",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/skip": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /setup/skip",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/state": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /setup/state",
         "tags": [
           "setup"
         ]

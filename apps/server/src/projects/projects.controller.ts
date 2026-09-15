@@ -1310,6 +1310,28 @@ export class DeploymentsController {
     });
   }
 
+  @Post(':id/stop')
+  async stopDeployment(@Param('id') id: string, @Request() req) {
+    return this.deployments.stopDeployment(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
+  @Post(':id/start')
+  async startDeployment(@Param('id') id: string, @Request() req) {
+    return this.deployments.startDeployment(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
   @Post(':id/restart')
   async restartDeployment(@Param('id') id: string, @Request() req) {
     return this.deployments.restartDeployment(id, req.user.sub, {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, ExternalLink, EllipsisVertical, Pencil } from 'lucide-svelte';
+	import { Loader2, ExternalLink, EllipsisVertical, Pencil, Square } from 'lucide-svelte';
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
 	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
@@ -15,11 +15,16 @@
 		repoUrl,
 		rebuilding,
 		restarting,
+		stopped,
+		stopping,
+		starting,
 		deleting,
 		actionAnim,
 		_isBuilding,
 		onRebuild,
 		onRestart,
+		onStop,
+		onStart,
 		onRename,
 		onShowDeleteModal,
 		onTriggerActionAnim,
@@ -38,11 +43,16 @@
 		repoUrl: string | undefined;
 		rebuilding: boolean;
 		restarting: boolean;
+		stopped: boolean;
+		stopping: boolean;
+		starting: boolean;
 		deleting: boolean;
 		actionAnim: Record<string, boolean>;
 		_isBuilding: boolean;
 		onRebuild: () => void;
 		onRestart: () => void;
+		onStop: () => void;
+		onStart: () => void;
 		onRename?: () => void;
 		onShowDeleteModal: () => void;
 		onTriggerActionAnim: (id: string) => void;
@@ -101,19 +111,30 @@
 				<span>Redeploy</span>
 			</Button>
 		{/if}
-		<Button
-			variant="secondary"
-			size="sm"
-			onclick={onRestart}
-			disabled={restarting}
-			onmouseenter={() => onTriggerActionAnim('restart')}
-		>
-			{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
-					size={14}
-					animate={actionAnim.restart ?? false}
-				/>{/if}
-			<span>Restart</span>
-		</Button>
+		{#if stopped}
+			<Button variant="primary" size="sm" onclick={onStart} disabled={starting}>
+				{#if starting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play size={14} />{/if}
+				<span>Start</span>
+			</Button>
+		{:else}
+			<Button
+				variant="secondary"
+				size="sm"
+				onclick={onRestart}
+				disabled={restarting || stopping}
+				onmouseenter={() => onTriggerActionAnim('restart')}
+			>
+				{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
+						size={14}
+						animate={actionAnim.restart ?? false}
+					/>{/if}
+				<span>Restart</span>
+			</Button>
+			<Button variant="secondary" size="sm" onclick={onStop} disabled={stopping || restarting}>
+				{#if stopping}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Square size={14} />{/if}
+				<span>Stop</span>
+			</Button>
+		{/if}
 		<Menu placement="bottom-end">
 			{#snippet trigger(props, open)}
 				<button

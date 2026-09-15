@@ -174,6 +174,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       where: { id: deploymentId },
       select: {
         replicas: true,
+        stopped: true,
         image: true,
         cpuRequestMilli: true,
         memoryRequestBytes: true,
@@ -192,7 +193,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     const adopted: string[] = [];
 
     const specReplicas = dep.spec?.replicas;
-    if (specReplicas != null && specReplicas !== row.replicas) {
+    if (!row.stopped && specReplicas != null && specReplicas !== row.replicas) {
       changes.replicas = specReplicas;
       adopted.push(`replicas=${specReplicas}`);
     }

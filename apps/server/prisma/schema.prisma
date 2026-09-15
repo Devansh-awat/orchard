@@ -589,6 +589,7 @@ model Deployment {
   namespace            String             @db.VarChar(100)
   image                String?            @db.VarChar(500)
   replicas             Int                @default(1)
+  stopped              Boolean            @default(false)
   // Per-container resource request (== limit; Guaranteed QoS).
   // Null means fall back to org defaultPodCpuMilli/defaultPodMemoryBytes, then 100m/128Mi.
   cpuRequestMilli      Int?               @map("cpu_request_milli")

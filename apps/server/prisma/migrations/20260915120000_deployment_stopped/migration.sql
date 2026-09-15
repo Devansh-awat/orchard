@@ -1,0 +1,1 @@
+ALTER TABLE "deployments" ADD COLUMN "stopped" BOOLEAN NOT NULL DEFAULT false;

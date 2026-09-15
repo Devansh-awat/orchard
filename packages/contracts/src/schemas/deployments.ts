@@ -236,6 +236,7 @@ const deploymentBase = z
     namespace: z.string(),
     image: z.string().nullable().optional(),
     replicas: z.number(),
+    stopped: z.boolean(),
     cpuRequestMilli: z.number().nullable().optional(),
     // BigInt column, serializes as a string
     memoryRequestBytes: bigIntString.nullable().optional(),
@@ -350,6 +351,7 @@ const deploymentSummary = z
     githubBranch: z.string().nullable().optional(),
     updatedAt: z.string(),
     replicas: z.number(),
+    stopped: z.boolean(),
     ingresses: z.array(z.object({ id: z.string(), host: z.string() }).passthrough()),
     project: projectRef
   })
@@ -667,9 +669,20 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         success: z.boolean(),
         deploymentId: z.string(),
         projectId: z.string(),
-        replicas: z.number()
+        replicas: z.number(),
+        stopped: z.boolean()
       })
       .passthrough()
+  },
+  'POST /deployments/:id/start': {
+    summary: 'Start a stopped deployment at its saved replica count',
+    scope: 'deploy',
+    response: z.object({ success: z.boolean(), replicas: z.number(), stopped: z.literal(false) })
+  },
+  'POST /deployments/:id/stop': {
+    summary: 'Stop a deployment while preserving its desired replica count',
+    scope: 'deploy',
+    response: z.object({ success: z.boolean(), replicas: z.number(), stopped: z.literal(true) })
   },
   'POST /deployments/:id/restart': {
     summary: 'Rolling-restart all pods of a deployment',

@@ -345,6 +345,8 @@
   "POST /deployments/:id/retry-apply": "authenticated",
   "POST /deployments/:id/rollback/:imageHistoryId": "authenticated",
   "POST /deployments/:id/scale": "authenticated",
+  "POST /deployments/:id/start": "authenticated",
+  "POST /deployments/:id/stop": "authenticated",
   "POST /deployments/:id/webhook-tokens": "authenticated",
   "POST /docker/build": "superadmin",
   "POST /environments/:id/set-default": "authenticated",

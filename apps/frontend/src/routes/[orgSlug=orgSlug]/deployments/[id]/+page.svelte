@@ -150,6 +150,7 @@
 		buildStatus?: string;
 		buildStep?: string | null;
 		replicas: number;
+		stopped: boolean;
 		availableReplicas: number;
 		image?: string;
 		namespace?: string;
@@ -408,7 +409,9 @@
 	// that the app is offline, but a sustained zero-ready state must.
 	const APP_DOWN_CONFIRM_MS = 60_000;
 	const noPodsReadyNow = $derived(
-		(deployment?.replicas ?? 0) > 0 && (deployment?.availableReplicas ?? 0) === 0
+		!deployment?.stopped &&
+			(deployment?.replicas ?? 0) > 0 &&
+			(deployment?.availableReplicas ?? 0) === 0
 	);
 	let noPodsReadyConfirmed = $state(false);
 	let noPodsReadyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -477,9 +480,12 @@
 	}
 
 	let restarting = $state(false);
+	let stopping = $state(false);
+	let starting = $state(false);
 	let scaling = $state(false);
 	let deleting = $state(false);
 	let showDeleteModal = $state(false);
+	let showStopModal = $state(false);
 	let rebuilding = $state(false);
 	let renameOpen = $state(false);
 	let renamingApp = $state(false);
@@ -1475,6 +1481,38 @@
 			});
 		} finally {
 			restarting = false;
+		}
+	}
+
+	async function lifecycleAction(kind: 'stop' | 'start') {
+		if (kind === 'stop') stopping = true;
+		else starting = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/${kind}`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || `Failed to ${kind} app`);
+			}
+			toasts.add({
+				title: kind === 'stop' ? 'App stopping' : 'App starting',
+				description:
+					kind === 'stop'
+						? 'All replicas are being spun down'
+						: `Restoring ${deployment?.replicas ?? 1} replica(s)`,
+				color: 'success'
+			});
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : `Failed to ${kind} app`,
+				color: 'error'
+			});
+		} finally {
+			stopping = false;
+			starting = false;
 		}
 	}
 
@@ -2867,11 +2905,16 @@
 				{repoUrl}
 				{rebuilding}
 				{restarting}
+				stopped={deployment.stopped}
+				{stopping}
+				{starting}
 				{deleting}
 				{actionAnim}
 				{_isBuilding}
 				onRebuild={rebuild}
 				onRestart={restart}
+				onStop={() => (showStopModal = true)}
+				onStart={() => lifecycleAction('start')}
 				onRename={() => (renameOpen = true)}
 				onShowDeleteModal={() => (showDeleteModal = true)}
 				onTriggerActionAnim={triggerActionAnim}
@@ -3216,6 +3259,14 @@
 		value={deployment.displayName || deployment.name}
 		saving={renamingApp}
 		onSave={renameApp}
+	/>
+	<ConfirmModal
+		bind:open={showStopModal}
+		title={`Stop "${deployment.displayName || deployment.name}"?`}
+		description={`All ${deployment.replicas} replica${deployment.replicas === 1 ? '' : 's'} will be spun down. You can start the app again with the same replica count.`}
+		confirmLabel="Stop app"
+		onconfirm={() => lifecycleAction('stop')}
+		oncancel={() => {}}
 	/>
 	<ConfirmModal
 		bind:open={showDeleteModal}

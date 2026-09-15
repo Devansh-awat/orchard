@@ -169,7 +169,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async applyScaleToCluster(deploymentId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { name: true, namespace: true, replicas: true }
+      select: { name: true, namespace: true, replicas: true, stopped: true }
     });
     if (!deployment) return;
     const exists = await this.k8sWorkload
@@ -181,7 +181,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
       metadata: { name: deployment.name, namespace: deployment.namespace },
-      spec: { replicas: deployment.replicas }
+      spec: { replicas: deployment.stopped ? 0 : deployment.replicas }
     } as never);
   }
 
@@ -193,7 +193,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async applyDisruptionBudgetToCluster(deploymentId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { name: true, namespace: true, replicas: true, pdbMinAvailable: true }
+      select: { name: true, namespace: true, replicas: true, stopped: true, pdbMinAvailable: true }
     });
     if (!deployment) return;
     const exists = await this.k8sWorkload
@@ -205,7 +205,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       name: deployment.name,
       namespace: deployment.namespace,
       minAvailable: deployment.pdbMinAvailable,
-      replicas: deployment.replicas
+      replicas: deployment.stopped ? 0 : deployment.replicas
     });
   }
 
@@ -758,6 +758,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         githubBranch: true,
         updatedAt: true,
         replicas: true,
+        stopped: true,
         ingresses: {
           select: {
             id: true,
@@ -1477,12 +1478,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
 
-    // Enforce resource quotas when scaling up — N replicas of this deployment
-    // each consume the same per-pod CPU/memory, so a scale to R+Δ adds Δ pods'
-    // worth of usage to the org cap and the project owner's member allowance.
-    // Scaling down or staying flat is always permitted.
-    const currentReplicas = deployment.replicas || 0;
-    const delta = replicas - currentReplicas;
+    if (replicas < 0 || !Number.isInteger(replicas)) {
+      throw new BadRequestException('Replicas must be a non-negative integer');
+    }
+
+    const stopped = replicas === 0;
+    const desiredReplicas = stopped ? Math.max(1, deployment.replicas) : replicas;
+    const currentReplicas = deployment.stopped ? 0 : deployment.replicas;
+    const delta = (stopped ? 0 : desiredReplicas) - currentReplicas;
     if (delta > 0) {
       const perPod = await this.quotasService.resolvePodResources(
         deployment.projectId,
@@ -1508,7 +1511,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (this.applyPipelineEnabled()) {
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { replicas }
+        data: { replicas: desiredReplicas, stopped }
       });
       await this.applyQueue.enqueue({
         dedupeKey: `op:deployment.scale:${deploymentId}`,
@@ -1527,12 +1530,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         .catch(() => false);
 
       if (k8sExistsScale) {
-        await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, replicas);
+        await this.k8sWorkload.scaleDeployment(
+          deployment.name,
+          deployment.namespace,
+          stopped ? 0 : desiredReplicas
+        );
       }
 
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { replicas }
+        data: { replicas: desiredReplicas, stopped }
       });
       await this.syncDisruptionBudget(deploymentId);
     }
@@ -1547,15 +1554,165 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetType: 'deployment',
       targetId: deploymentId,
       targetLabel: deployment.name,
-      metadata: { replicas: [deployment.replicas, replicas] }
+      metadata: {
+        replicas: [deployment.replicas, desiredReplicas],
+        stopped: [deployment.stopped, stopped]
+      }
     });
 
     return {
       success: true,
       deploymentId,
       projectId: deployment.projectId,
-      replicas
+      replicas: desiredReplicas,
+      stopped
     };
+  }
+
+  async stopDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: { include: { organization: true } } }
+    });
+    if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    this.assertNotComposeManaged(deployment, 'Stop');
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'stop deployments');
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { stopped: true }
+    });
+
+    if (this.applyPipelineEnabled()) {
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.scale:${deploymentId}`,
+        opType: 'deployment.scale',
+        deploymentId,
+        requestedById: user.id
+      });
+    } else {
+      const exists = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((value) => value !== null)
+        .catch(() => false);
+      if (exists) {
+        await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, 0);
+      }
+    }
+    await this.syncDisruptionBudget(deploymentId);
+
+    void this.audit.log({
+      action: 'deployment.stopped',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name
+    });
+
+    return { success: true, replicas: deployment.replicas, stopped: true };
+  }
+
+  async startDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: { include: { organization: true } } }
+    });
+    if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    this.assertNotComposeManaged(deployment, 'Start');
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'start deployments');
+
+    const replicas = Math.max(1, deployment.replicas);
+    if (deployment.stopped) {
+      const perPod = await this.quotasService.resolvePodResources(
+        deployment.projectId,
+        {
+          cpuRequestMilli: deployment.cpuRequestMilli ?? null,
+          memoryRequestBytes:
+            deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null
+        },
+        deployment.image
+      );
+      const requested = {
+        cpuMilli: perPod.cpuMilli * replicas,
+        memoryBytes: perPod.memoryBytes * replicas
+      };
+      await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, requested);
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        deployment.project.organizationId,
+        deployment.project.ownerId,
+        requested
+      );
+    }
+
+    if (this.applyPipelineEnabled()) {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas, stopped: false }
+      });
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.scale:${deploymentId}`,
+        opType: 'deployment.scale',
+        deploymentId,
+        requestedById: user.id
+      });
+    } else {
+      const exists = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((value) => value !== null)
+        .catch(() => false);
+      if (exists) {
+        await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, replicas);
+      }
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas, stopped: false }
+      });
+    }
+    await this.syncDisruptionBudget(deploymentId);
+
+    void this.audit.log({
+      action: 'deployment.started',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name
+    });
+
+    return { success: true, replicas, stopped: false };
   }
 
   async restartDeployment(
@@ -1591,6 +1748,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'restart deployments');
+
+    if (deployment.stopped) {
+      throw new BadRequestException('Start the app before restarting it');
+    }
 
     const desiredReplicas = deployment.replicas || 1;
     const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(
@@ -4447,7 +4608,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deployment: any,
     prefetched?: { pods: any[]; warnings: any[] }
   ): Promise<string> {
-    if (deployment.replicas === 0) {
+    if (deployment.stopped || deployment.replicas === 0) {
       return 'stopped';
     }
 
@@ -6852,6 +7013,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             image: true,
             projectId: true,
             replicas: true,
+            stopped: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
             deployStrategy: true,
@@ -6889,7 +7051,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             },
             deploymentRow.image
           );
-          if (!k8sDeploymentExists) {
+          if (!k8sDeploymentExists && !deploymentRow.stopped) {
             await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
               cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
               memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1)
@@ -6932,7 +7094,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             namespace: data.namespace,
             name: data.name,
             image,
-            replicas: data.replicas,
+            replicas: deploymentRow?.stopped ? 0 : data.replicas,
             ports: data.rawPorts,
             env: data.env,
             serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
