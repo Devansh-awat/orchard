@@ -254,6 +254,22 @@ const WS_HIGH_WATER = 1024 * 1024;
 
 const DRAIN_POLL_MS = 50;
 
+const EXEC_FAILED_CODE = 4500;
+
+function clampReason(reason: string): string {
+  return reason.length > 120 ? `${reason.slice(0, 117)}...` : reason;
+}
+
+function describeExecFailure(message: string): string {
+  if (/failed to load \/bin\/sh|no such file or directory/i.test(message)) {
+    return 'This image has no shell, so an interactive session is not possible.';
+  }
+  if (/not found|NotFound/i.test(message)) {
+    return 'That container is no longer running.';
+  }
+  return `Could not start a shell: ${message}`;
+}
+
 class ResizableOutput extends PassThrough {
   columns = 80;
 
@@ -394,10 +410,16 @@ function handleExecSession(
       stdin,
       true, // tty
       (status) => {
-        if (!execClosed && ws.readyState === WebSocket.OPEN) {
-          const reason = status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`;
-          ws.close(1000, reason.length > 123 ? `${reason.slice(0, 120)}...` : reason);
+        if (execClosed || ws.readyState !== WebSocket.OPEN) return;
+        if (status.status === 'Success') {
+          ws.close(1000, 'exited');
+          return;
         }
+        const detail = describeExecFailure(status.message ?? '');
+        try {
+          ws.send(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`);
+        } catch {}
+        ws.close(EXEC_FAILED_CODE, clampReason(detail));
       }
     )
     .then((upstream) => {
@@ -406,10 +428,10 @@ function handleExecSession(
       return upstream;
     })
     .catch((err) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(`\r\nError: ${err.message}\r\n`);
-        ws.close(1011, 'exec error');
-      }
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const detail = describeExecFailure(err?.message ?? 'exec failed');
+      ws.send(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`);
+      ws.close(EXEC_FAILED_CODE, clampReason(detail));
     });
 }
 

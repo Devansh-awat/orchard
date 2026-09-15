@@ -32,6 +32,12 @@
 	let disposed = false;
 
 	const encoder = new TextEncoder();
+	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4500]);
+	const MAX_RETRIES = 6;
+
+	function status(text: string) {
+		terminal?.write(`\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`);
+	}
 
 	async function init() {
 		if (!terminalRef) return;
@@ -66,6 +72,7 @@
 		fitAddon = new ghosttyModule.FitAddon();
 		terminal.loadAddon(fitAddon);
 		terminal.open(terminalRef);
+		terminal.reset();
 		fitAddon.fit();
 
 		resizeObserver = new ResizeObserver(() => {
@@ -107,7 +114,7 @@
 			connected = true;
 			error = null;
 			if (retries > 0 && terminal) {
-				terminal.write('\r\n\x1b[90m--- reconnected ---\x1b[0m\r\n');
+				status('reconnected');
 			}
 			retries = 0;
 			// Now that we're connected, render the terminal
@@ -119,12 +126,18 @@
 			terminal.write(event.data instanceof ArrayBuffer ? new Uint8Array(event.data) : event.data);
 		};
 
-		ws.onclose = () => {
+		ws.onclose = (event: CloseEvent) => {
 			connected = false;
 			if (disposed) return;
-			if (terminal && retries === 0) {
-				terminal.write('\r\n\x1b[90m--- disconnected, reconnecting ---\x1b[0m\r\n');
+			if (PERMANENT_CLOSE_CODES.has(event.code)) {
+				error = event.reason || 'Session ended';
+				return;
 			}
+			if (retries >= MAX_RETRIES) {
+				error = 'Lost connection to the pod';
+				return;
+			}
+			if (terminal && retries === 0) status('disconnected, reconnecting');
 			scheduleReconnect();
 		};
 
@@ -186,6 +199,8 @@
 		resizeObserver?.disconnect();
 		ws?.close();
 		terminal?.dispose();
+		terminal?.wasmTerm?.free?.();
+		terminal = null;
 	});
 </script>
 

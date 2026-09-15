@@ -798,7 +798,7 @@
 
 	function openShell(podName: string, container: string) {
 		terminalCounter++;
-		const id = `term-${Date.now()}`;
+		const id = `term-${terminalCounter}-${crypto.randomUUID()}`;
 		const label = `Shell ${terminalCounter}`;
 		terminalTabs = [...terminalTabs, { id, podName, container, label }];
 		activeConsoleTab = id;
