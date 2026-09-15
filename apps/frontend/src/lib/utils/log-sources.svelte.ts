@@ -58,11 +58,11 @@ export class PodLogSource {
 		this.resetPagination();
 	}
 
-	async refresh() {
+	async refresh(quiet = false) {
 		const pod = this.#opts.podName();
 		const container = this.#opts.container();
 		if (!pod || !container) return;
-		this.loading = true;
+		if (!quiet) this.loading = true;
 		try {
 			const prev = this.#opts.previous?.() ? '&previous=true' : '';
 			const res = await apiFetch(
@@ -78,7 +78,7 @@ export class PodLogSource {
 		} catch {
 			this.error = 'Failed to load logs';
 		} finally {
-			this.loading = false;
+			if (!quiet) this.loading = false;
 		}
 	}
 

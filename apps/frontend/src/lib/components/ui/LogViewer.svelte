@@ -28,16 +28,19 @@
 	let scroller = $state<HTMLDivElement | null>(null);
 	let newWhileScrolled = $state(false);
 	let prevCount = 0;
+	let prevTail = '';
 	let lastLoadMoreAt = 0;
 
 	$effect(() => {
 		const count = lines.length;
-		if (count > prevCount) {
+		const tail = count > 0 ? lines[count - 1].key : '';
+		if (count > prevCount || (count === prevCount && tail !== prevTail)) {
 			if (scrolledUp) newWhileScrolled = true;
 			else if (!loadingMore) requestAnimationFrame(scrollToBottom);
 		}
 		if (!scrolledUp) newWhileScrolled = false;
 		prevCount = count;
+		prevTail = tail;
 	});
 
 	function scrollToBottom() {

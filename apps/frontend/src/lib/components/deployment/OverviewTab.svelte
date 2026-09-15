@@ -144,10 +144,11 @@
 	$effect(() => {
 		if (!liveLogs || activeConsoleTab !== 'logs') return;
 		if (!selectedPod || !selectedContainer) return;
+		logSource.refresh(true);
 		const handle = setInterval(() => {
 			if (document.hidden) return;
-			logSource.refresh();
-		}, 3000);
+			logSource.refresh(true);
+		}, 2000);
 		return () => clearInterval(handle);
 	});
 
