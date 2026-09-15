@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
@@ -118,24 +119,46 @@ func claimBase(values *cli.Values, raw string) (string, error) {
 		return raw, nil
 	}
 
-	tls, _ := values.Get("ingress.tls.enabled").(bool)
-	scheme, standard, portVar := "http", "80", "PUBLIC_HTTP_PORT"
-	if tls {
-		scheme, standard, portVar = "https", "443", "PUBLIC_HTTPS_PORT"
-	}
+	scheme, port := servedOn(values)
 
 	host, err := cleanHostname(raw)
 	if err != nil {
 		return "", err
 	}
-	if _, port, splitErr := net.SplitHostPort(raw); splitErr == nil && port != "" {
-		return fmt.Sprintf("%s://%s:%s", scheme, host, port), nil
+	if _, typed, splitErr := net.SplitHostPort(raw); splitErr == nil && typed != "" {
+		port = typed
 	}
-	port := values.EnvValue("server.env", portVar)
-	if port == "" || port == standard {
+	if port == "" {
 		return fmt.Sprintf("%s://%s", scheme, host), nil
 	}
 	return fmt.Sprintf("%s://%s:%s", scheme, host, port), nil
+}
+
+// The scheme and port this instance is reached on. FRONTEND_URL first, because
+// it is the address the server itself hands out and it is set on every install:
+// the PUBLIC_*_PORT variables only appeared once custom ports did, so reading
+// those alone silently drops the port on anything installed before that and
+// hands back a link to a port nothing is listening on.
+func servedOn(values *cli.Values) (string, string) {
+	if front := values.EnvValue("server.env", "FRONTEND_URL"); front != "" {
+		if u, err := url.Parse(front); err == nil && u.Scheme != "" {
+			return u.Scheme, u.Port()
+		}
+	}
+
+	tls, _ := values.Get("ingress.tls.enabled").(bool)
+	scheme, standard, portVar := "http", "80", "PUBLIC_HTTP_PORT"
+	if tls {
+		scheme, standard, portVar = "https", "443", "PUBLIC_HTTPS_PORT"
+	}
+	port := values.EnvValue("server.env", portVar)
+	if port == "" {
+		port = values.EnvValue("frontend.env", portVar)
+	}
+	if port == standard {
+		port = ""
+	}
+	return scheme, port
 }
 
 func Update() *cli.Command {

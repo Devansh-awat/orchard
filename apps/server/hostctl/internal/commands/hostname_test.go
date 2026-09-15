@@ -42,6 +42,7 @@ ingress:
     enabled: false
 server:
   env:
+    - { name: FRONTEND_URL, value: http://192.168.4.27:8081 }
     - { name: PUBLIC_HTTP_PORT, value: "8081" }
     - { name: PUBLIC_HTTPS_PORT, value: "8443" }
 `)
@@ -62,6 +63,27 @@ server:
 	}
 }
 
+// Installs from before custom ports existed have no PUBLIC_*_PORT at all, and
+// a claim link that quietly drops the port points at nothing.
+func TestClaimBaseTakesThePortFromTheFrontendUrl(t *testing.T) {
+	older := load(t, `
+ingress:
+  host: orchard.192-168-4-27.sslip.io
+  tls:
+    enabled: false
+server:
+  env:
+    - { name: FRONTEND_URL, value: http://orchard.192-168-4-27.sslip.io:8081 }
+`)
+	got, err := claimBase(older, "mango")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://mango:8081" {
+		t.Errorf("claimBase = %q, want http://mango:8081", got)
+	}
+}
+
 func TestClaimBaseLeavesStandardPortsOff(t *testing.T) {
 	public := load(t, `
 ingress:
@@ -70,6 +92,7 @@ ingress:
     enabled: true
 server:
   env:
+    - { name: FRONTEND_URL, value: https://orchard.example.com }
     - { name: PUBLIC_HTTPS_PORT, value: "443" }
 `)
 	got, err := claimBase(public, "orchard.example.com")
