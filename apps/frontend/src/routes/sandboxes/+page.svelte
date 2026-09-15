@@ -23,8 +23,8 @@
 
 	const disabled = $derived(sandboxesQuery.error instanceof SandboxDisabledError);
 	const sandboxes = $derived(sandboxesQuery.data?.sandboxes ?? []);
-	const maxSandboxes = $derived(sandboxesQuery.data?.maxSandboxes ?? 0);
-	const atLimit = $derived(maxSandboxes > 0 && sandboxes.length >= maxSandboxes);
+	const maxSandboxes = $derived(sandboxesQuery.data?.maxSandboxes ?? null);
+	const atLimit = $derived(maxSandboxes !== null && sandboxes.length >= maxSandboxes);
 
 	let createOpen = $state(false);
 	let creating = $state(false);
@@ -65,7 +65,11 @@
 		{#snippet meta()}
 			<span>Isolated cloud dev sandboxes</span>
 			{#if !disabled && sandboxesQuery.data}
-				<span class="sbx-count">{sandboxes.length} of {maxSandboxes} used</span>
+				<span class="sbx-count">
+					{maxSandboxes === null
+						? `${sandboxes.length} used`
+						: `${sandboxes.length} of ${maxSandboxes} used`}
+				</span>
 			{/if}
 		{/snippet}
 		{#snippet actions()}

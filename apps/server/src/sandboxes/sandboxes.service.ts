@@ -91,16 +91,26 @@ export class SandboxesService {
     private readonly k8s: SandboxK8sService
   ) {}
 
+  /** The user's sandbox cap, or null when they are not capped at all. */
+  private async sandboxCap(userId: string): Promise<number | null> {
+    if (await this.authz.isSuperAdmin(userId)) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { maxSandboxes: true }
+    });
+    return user?.maxSandboxes ?? defaultMaxSandboxes();
+  }
+
   async list(
     userId: string,
     organizationId?: string
-  ): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number }> {
+  ): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number | null }> {
     let where: Record<string, unknown> = { userId };
     if (organizationId) {
       const access = await this.authz.requireOrgMember(organizationId, userId);
       where = access.isAdmin ? { organizationId } : { organizationId, userId };
     }
-    const [rows, user] = await Promise.all([
+    const [rows, maxSandboxes] = await Promise.all([
       this.prisma.sandbox.findMany({
         where,
         orderBy: { createdAt: 'asc' },
@@ -109,12 +119,9 @@ export class SandboxesService {
           user: { select: { id: true, username: true, email: true } }
         }
       }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } })
+      this.sandboxCap(userId)
     ]);
-    return {
-      sandboxes: rows.map(toSandboxDto),
-      maxSandboxes: user?.maxSandboxes ?? defaultMaxSandboxes()
-    };
+    return { sandboxes: rows.map(toSandboxDto), maxSandboxes };
   }
 
   async getOwned(id: string, userId: string): Promise<SandboxWithIdentity> {
@@ -331,12 +338,11 @@ export class SandboxesService {
     const organizationId = await this.resolveOrganization(userId, body.organizationId);
     const setupScript = this.validateSetupScript(body.setupScript);
     const identity = await this.resolveIdentity(userId, body.sshIdentityId);
-    const [count, user] = await Promise.all([
+    const [count, cap] = await Promise.all([
       this.prisma.sandbox.count({ where: { userId } }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } })
+      this.sandboxCap(userId)
     ]);
-    const cap = user?.maxSandboxes ?? defaultMaxSandboxes();
-    if (count >= cap) {
+    if (cap !== null && count >= cap) {
       throw new ForbiddenException(
         `Sandbox limit reached (${count} of ${cap}). Ask an admin to raise your limit.`
       );

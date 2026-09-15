@@ -30,7 +30,7 @@ export interface Sandbox {
 
 export interface SandboxListResponse {
 	sandboxes: Sandbox[];
-	maxSandboxes: number;
+	maxSandboxes: number | null;
 }
 
 export interface SandboxCredentials {
