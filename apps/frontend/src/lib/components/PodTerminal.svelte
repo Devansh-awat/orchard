@@ -62,12 +62,12 @@
 		fitAddon.fit();
 
 		resizeObserver = new ResizeObserver(() => {
-			if (fitAddon && visible) fitAddon.fit();
+			if (visible) fitWhenSized();
 		});
 		resizeObserver.observe(terminalRef);
 
 		terminal.onData((data: string) => {
-			if (ws && ws.readyState === WebSocket.OPEN) ws.send(data);
+			if (ws && ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data));
 		});
 
 		terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
@@ -123,9 +123,21 @@
 		connectWebSocket();
 	}
 
+	// A hidden tab is display:none, so its box is 0x0 and a fit() there would
+	// compute a one-cell grid that the next paint draws over itself. Wait for the
+	// element to actually have a size before measuring.
+	function fitWhenSized(attempt = 0) {
+		if (!fitAddon || !terminalRef) return;
+		if (terminalRef.clientWidth > 0 && terminalRef.clientHeight > 0) {
+			fitAddon.fit();
+			return;
+		}
+		if (attempt < 10) requestAnimationFrame(() => fitWhenSized(attempt + 1));
+	}
+
 	$effect(() => {
 		if (visible && fitAddon) {
-			requestAnimationFrame(() => fitAddon?.fit());
+			requestAnimationFrame(() => fitWhenSized());
 		}
 	});
 
@@ -176,10 +188,13 @@
 		padding: 0.75rem;
 	}
 
-	.pod-terminal-canvas :global(.terminal),
-	.pod-terminal-canvas :global(canvas) {
-		height: 100% !important;
-		width: 100% !important;
+	/* The renderer sizes its own backing store for the device pixel ratio.
+	   Stretching the canvas with CSS on top of that resamples every glyph, which
+	   is what made the text look soft on a retina screen. Let it own its size and
+	   fill the box by fitting to a whole number of cells instead. */
+	.pod-terminal-canvas :global(.terminal) {
+		width: 100%;
+		height: 100%;
 	}
 
 	/* Hide the textarea's native blinking text caret */

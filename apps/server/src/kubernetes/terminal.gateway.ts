@@ -1,4 +1,5 @@
 import * as http from 'http';
+import * as net from 'net';
 import WebSocket from 'ws';
 import * as k8s from '@kubernetes/client-node';
 import { jwtVerify } from 'jose';
@@ -51,7 +52,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
   const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '');
 
-  server.on('upgrade', async (req: http.IncomingMessage, socket, head) => {
+  server.on('upgrade', async (req: http.IncomingMessage, socket: net.Socket, head) => {
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const match = url.pathname.match(/^\/apiv1\/pods\/([^/]+)\/exec$/);
     if (!match) return; // Not our route — let other handlers deal with it
@@ -233,6 +234,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         }
       });
 
+    // A shell sends one keystroke per packet. Nagle holds each one back waiting
+    // for company that never comes, which is up to 40ms of latency on every
+    // character typed — the single most noticeable thing about a slow terminal.
+    socket.setNoDelay(true);
+
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
       handleExecSession(ws, kc, namespace, podName, container, recheckAuth);
@@ -245,6 +251,37 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 // DB load is negligible per active terminal.
 const RECHECK_INTERVAL_MS = 15_000;
 
+// An exec session is idle whenever nobody is typing, and an idle WebSocket is
+// exactly what a proxy in front of us reaps. Ping well inside the usual 60s
+// tunnel timeout and drop a peer that misses two in a row.
+const HEARTBEAT_MS = 25_000;
+
+/**
+ * A PassThrough that also looks like a TTY to `@kubernetes/client-node`.
+ *
+ * The client only opens the resize channel when `isResizable(stdout)` is true,
+ * which it tests by looking for `rows`/`columns`. A plain PassThrough has
+ * neither, so the pod's PTY was never told anything and stayed at the 80x24 the
+ * API server defaults to — the browser drew a 200-column grid while the shell
+ * wrapped for 80, which is what makes a re-edited command line overprint
+ * itself. Carrying the size here is what connects the two.
+ */
+class ResizableOutput extends PassThrough {
+  columns = 80;
+
+  rows = 24;
+
+  setSize(columns: number, rows: number): void {
+    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
+    const nextCols = Math.max(1, Math.min(1000, Math.floor(columns)));
+    const nextRows = Math.max(1, Math.min(1000, Math.floor(rows)));
+    if (nextCols === this.columns && nextRows === this.rows) return;
+    this.columns = nextCols;
+    this.rows = nextRows;
+    this.emit('resize');
+  }
+}
+
 function handleExecSession(
   ws: WebSocket,
   kc: k8s.KubeConfig,
@@ -256,7 +293,7 @@ function handleExecSession(
   const exec = new k8s.Exec(kc);
 
   const stdin = new PassThrough();
-  const stdout = new PassThrough();
+  const stdout = new ResizableOutput();
   const stderr = new PassThrough();
 
   // Periodic authorization re-check. Authorization is verified once at upgrade
@@ -293,36 +330,58 @@ function handleExecSession(
     }
   });
 
-  // Forward ws messages → stdin
-  ws.on('message', (data: WebSocket.Data) => {
-    const msg = typeof data === 'string' ? data : data.toString();
-
-    // Handle resize messages: JSON with type "resize"
-    try {
-      const parsed = JSON.parse(msg);
-      if (parsed.type === 'resize') {
-        // k8s exec doesn't support resize on non-tty streams easily,
-        // but the resize is handled by the terminal emulator client-side
-        return;
+  // Keystrokes arrive as binary, control frames as text. Sniffing for JSON
+  // instead would mean a shell where typing {"type":"resize"} silently does
+  // nothing, and would parse-and-throw once per character besides.
+  ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
+    if (isBinary === false || typeof data === 'string') {
+      const msg = typeof data === 'string' ? data : data.toString();
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.type === 'resize') {
+          stdout.setSize(Number(parsed.cols), Number(parsed.rows));
+          return;
+        }
+      } catch {
+        // Not a control frame after all; fall through and type it.
       }
-    } catch {
-      // Not JSON — treat as terminal input
+      stdin.write(msg);
+      return;
     }
-
-    stdin.write(msg);
+    stdin.write(data as Buffer);
   });
+
+  // Heartbeat. `ws` answers pings itself, so this only has to prove the far end
+  // is still there and keep the connection off a proxy's idle list.
+  let alive = true;
+  ws.on('pong', () => {
+    alive = true;
+  });
+  const heartbeat = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    if (!alive) {
+      ws.terminate();
+      return;
+    }
+    alive = false;
+    try {
+      ws.ping();
+    } catch {}
+  }, HEARTBEAT_MS);
 
   let execClosed = false;
 
   ws.on('close', () => {
     execClosed = true;
     stopRecheck();
+    clearInterval(heartbeat);
     stdin.end();
   });
 
   ws.on('error', () => {
     execClosed = true;
     stopRecheck();
+    clearInterval(heartbeat);
     stdin.end();
   });
 
