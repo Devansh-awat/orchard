@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/hackclub/orchard/compare/frontend/v1.32.0...frontend/v1.33.0) (2026-09-15)
+
+
+### Features
+
+* **frontend:** rebuild themes around a collaborative colour wheel ([5f4abfe](https://github.com/hackclub/orchard/commit/5f4abfe5165aba87c0313058971c02ca3040ef03))
+
 ## [1.32.0](https://github.com/hackclub/orchard/compare/frontend/v1.31.0...frontend/v1.32.0) (2026-09-15)
 
 

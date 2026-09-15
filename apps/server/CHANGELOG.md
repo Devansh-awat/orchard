@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.39.0](https://github.com/hackclub/orchard/compare/server/v2.38.2...server/v2.39.0) (2026-09-15)
+
+
+### Features
+
+* **hostctl:** stop, start and restart the instance ([4601393](https://github.com/hackclub/orchard/commit/460139364f7a3da00802880abe2a449e4ab4fd90))
+
+
+### Bug Fixes
+
+* **hostctl:** stop claiming a hostname works before it is deployed ([46a3b89](https://github.com/hackclub/orchard/commit/46a3b898d34da6fa1e03b68cb8056f286dded703))
+
 ## [2.38.2](https://github.com/hackclub/orchard/compare/server/v2.38.1...server/v2.38.2) (2026-09-15)
 
 
