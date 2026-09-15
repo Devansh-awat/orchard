@@ -2256,11 +2256,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     clusterName: string,
     dbName: string,
     sql: string,
-    options: { asSuperuser?: boolean; tuplesOnly?: boolean } = {}
+    options: { tuplesOnly?: boolean } = {}
   ): Promise<{ stdout: string; stderr: string; success: boolean }> {
     const pod = await this.findCnpgPrimaryPod(namespace, clusterName);
-    const user = options.asSuperuser ? 'postgres' : 'postgres';
-    const args = ['psql', '-U', user, '-d', dbName, '-v', 'ON_ERROR_STOP=1'];
+    const args = ['psql', '-U', 'postgres', '-d', dbName, '-v', 'ON_ERROR_STOP=1'];
     if (options.tuplesOnly) args.push('-t', '-A');
     args.push('-c', sql);
     return this.execInPod(namespace, pod, 'postgres', args);
