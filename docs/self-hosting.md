@@ -466,6 +466,28 @@ autoscaling is on, the chart omits `replicas` from that Deployment so a
 `server.workers` moves builds and the apply queue onto their own pods and has
 its own autoscaling block; it's the burstiest tier and benefits most.
 
+### Pod shells across replicas
+
+A pod shell opened from the dashboard is an exec session held in memory by
+the API pod that opened it. If the browser drops (wifi blip, laptop sleep,
+closed tab) the session stays alive for `EXEC_DETACH_GRACE_MS` (10 minutes
+by default) with its output buffered, and the same tab reattaches with that
+output replayed, so a running `vim` or `htop` picks up where it was.
+
+With `server.replicas` above one there is no sticky routing, so a reattach
+can reach a pod that does not hold the session. That pod looks the session
+up in Redis and proxies the connection to the owner over the pod network,
+which is why the chart sets `POD_IP` on the server and why Redis is required
+for this to work across replicas. Set `EXEC_SESSION_PROXY=false` to turn the
+hop off; the browser then gets a fresh shell and a one-line message rather
+than a hang.
+
+Sessions do not survive the API pod being replaced on an upgrade, so keep
+`EXEC_DETACH_GRACE_MS` at or below your rollout's old-pod scale-down delay
+to avoid two different failure modes. If the container image has `tmux`,
+the shell runs inside a tmux session named after the exec session and the
+same tab reattaches to it even after an upgrade.
+
 ## Single sign-on
 
 SSO is configured in the UI, at two levels.
