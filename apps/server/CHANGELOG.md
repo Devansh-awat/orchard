@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.38.0](https://github.com/hackclub/orchard/compare/server/v2.37.0...server/v2.38.0) (2026-09-15)
+
+
+### Features
+
+* allow users to stop apps ([#61](https://github.com/hackclub/orchard/issues/61)) ([d45734a](https://github.com/hackclub/orchard/commit/d45734ad527fa868c0734c2c312c4db002803883))
+
+
+### Bug Fixes
+
+* handle query-statistics bug for JSON ([#60](https://github.com/hackclub/orchard/issues/60)) ([d45d892](https://github.com/hackclub/orchard/commit/d45d892e7d7adb3c0e2cc29c9ab835038fe0d54a))
+* **server:** keep a stopped app stopped through a rebuild ([981dff5](https://github.com/hackclub/orchard/commit/981dff503eff6ff08bc7c5a45f62e1f96ab170bf))
+
 ## [2.37.0](https://github.com/hackclub/orchard/compare/server/v2.36.0...server/v2.37.0) (2026-09-15)
 
 

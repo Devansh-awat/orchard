@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.31.0](https://github.com/hackclub/orchard/compare/frontend/v1.30.0...frontend/v1.31.0) (2026-09-15)
+
+
+### Features
+
+* allow users to stop apps ([#61](https://github.com/hackclub/orchard/issues/61)) ([d45734a](https://github.com/hackclub/orchard/commit/d45734ad527fa868c0734c2c312c4db002803883))
+* **frontend:** add database storage expansion controls ([#59](https://github.com/hackclub/orchard/issues/59)) ([773b815](https://github.com/hackclub/orchard/commit/773b8154ea0b5183f321199974d4414f3ec8ac74))
+
+
+### Bug Fixes
+
+* **frontend:** correct the stop confirm styling and the scale toast ([ef935b0](https://github.com/hackclub/orchard/commit/ef935b0890bacf1c32614df4e9738e355bbcd6cc))
+* **frontend:** survive an empty storage expand response ([76a4c6e](https://github.com/hackclub/orchard/commit/76a4c6e3fbd03179142eca8c87203429e292ba6c))
+
 ## [1.30.0](https://github.com/hackclub/orchard/compare/frontend/v1.29.0...frontend/v1.30.0) (2026-09-15)
 
 
