@@ -28,6 +28,7 @@ import {
 } from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
+import { rollingUpdateStrategy } from './rollout-strategy';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -898,9 +899,7 @@ export class K8sWorkloadService {
         ? 'recreate'
         : (options.deployStrategy ?? 'rollingUpdate');
       const strategy: k8s.V1DeploymentStrategy =
-        effectiveStrategy === 'recreate'
-          ? { type: 'Recreate' }
-          : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+        effectiveStrategy === 'recreate' ? { type: 'Recreate' } : rollingUpdateStrategy();
 
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
@@ -1666,7 +1665,7 @@ export class K8sWorkloadService {
       const strategy: k8s.V1DeploymentStrategy =
         effectiveStrategy === 'recreate'
           ? { type: 'Recreate', rollingUpdate: null as any }
-          : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+          : rollingUpdateStrategy();
 
       const patch = {
         spec: {
@@ -2301,7 +2300,7 @@ export class K8sWorkloadService {
     const body: k8s.V1DeploymentStrategy =
       strategy === 'recreate'
         ? { type: 'Recreate', rollingUpdate: null as any }
-        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
+        : rollingUpdateStrategy();
 
     try {
       await api.patchNamespacedDeployment(
@@ -2387,7 +2386,12 @@ export class K8sWorkloadService {
     return { success: true, deployment: cleanName, namespace: cleanNamespace, policy };
   }
 
-  async updateDeploymentImage(deploymentName: string, namespace: string, image: string) {
+  async updateDeploymentImage(
+    deploymentName: string,
+    namespace: string,
+    image: string,
+    healthCheck?: CreateDeploymentOptions['healthCheck']
+  ) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -2424,17 +2428,33 @@ export class K8sWorkloadService {
         // If the read fails the patch below will fail too and report properly.
       }
 
+      const containerPatch = {
+        name: cleanDeploymentName,
+        image: cleanImage,
+        ...(healthCheck
+          ? {
+              livenessProbe:
+                healthCheck.enabled && healthCheck.livenessEnabled
+                  ? this.buildProbe(healthCheck)
+                  : null,
+              readinessProbe:
+                healthCheck.enabled && healthCheck.readinessEnabled
+                  ? this.buildProbe(healthCheck)
+                  : null,
+              startupProbe:
+                healthCheck.enabled && healthCheck.startupEnabled
+                  ? this.buildProbe(healthCheck, healthCheck.startupFailureThreshold)
+                  : null
+            }
+          : {})
+      };
+
       const patch = {
         spec: {
           ...(forceRecreate ? { strategy: { type: 'Recreate', rollingUpdate: null as any } } : {}),
           template: {
             spec: {
-              containers: [
-                {
-                  name: cleanDeploymentName,
-                  image: cleanImage
-                }
-              ]
+              containers: [containerPatch]
             }
           }
         }
@@ -2509,6 +2529,27 @@ export class K8sWorkloadService {
         message: error.message
       });
     }
+  }
+
+  private buildProbe(
+    healthCheck: NonNullable<CreateDeploymentOptions['healthCheck']>,
+    failureThreshold = healthCheck.retries
+  ): k8s.V1Probe {
+    const probe: k8s.V1Probe = {
+      periodSeconds: healthCheck.interval,
+      timeoutSeconds: healthCheck.timeout,
+      failureThreshold
+    };
+    if (healthCheck.type === 'http') {
+      probe.httpGet = { path: healthCheck.path || '/', port: healthCheck.port || 80 };
+    } else if (healthCheck.type === 'tcp') {
+      probe.tcpSocket = { port: healthCheck.port || 80 };
+    } else if (healthCheck.type === 'exec') {
+      probe.exec = {
+        command: probeExecCommand(healthCheck.command, healthCheck.execCommand)
+      };
+    }
+    return probe;
   }
 
   async getPodEvents(podName: string, namespace: string) {

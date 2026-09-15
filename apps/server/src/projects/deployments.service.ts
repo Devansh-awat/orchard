@@ -534,7 +534,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           where: { id: deployment.id },
           data: { image, buildStep: 'deploying' }
         });
-        await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, image);
+        const healthCheck = await this.resolveStoredHealthCheck(deployment.id);
+        await this.k8sWorkload.updateDeploymentImage(
+          deployment.name,
+          deployment.namespace,
+          image,
+          healthCheck
+        );
         await this.recordRecoveredImageHistory(deployment.id, image).catch((error) => {
           this.logger.warn(
             `[BuildRecovery] Failed to record image history for ${deployment.id}: ${error.message}`
@@ -6961,7 +6967,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       let shouldCreateNew = false;
 
       if (data.isRebuild && k8sDeploymentExists) {
-        await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image);
+        const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
+        await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image, healthCheck);
 
         await this.syncReplicasForRebuild(deploymentId, data.name, data.namespace, data.replicas);
 
@@ -6986,36 +6993,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .catch((err) => {
             console.error('[Projects] re-applying env on rebuild failed:', err.message);
           });
-
-        // Same reasoning for probes: heal deployments whose health checks were
-        // dropped from the live spec. Applied even when nothing is configured,
-        // because a HEALTHCHECK deleted from the Dockerfile has to take its
-        // probes out of the live pod with it. The patch is a no-op when the
-        // spec already matches, so this costs a rebuild nothing.
-        const hc = await this.resolveStoredHealthCheck(deploymentId);
-        if (hc) {
-          await this.k8sWorkload
-            .updateDeploymentHealthCheck({
-              namespace: data.namespace,
-              deploymentName: data.name,
-              enabled: hc.enabled,
-              type: hc.type,
-              path: hc.path,
-              port: hc.port,
-              command: hc.command,
-              execCommand: hc.execCommand,
-              livenessEnabled: hc.livenessEnabled,
-              readinessEnabled: hc.readinessEnabled,
-              startupEnabled: hc.startupEnabled,
-              interval: hc.interval,
-              timeout: hc.timeout,
-              retries: hc.retries,
-              startupFailureThreshold: hc.startupFailureThreshold
-            })
-            .catch((err) => {
-              console.error('[Projects] re-applying health check on rebuild failed:', err.message);
-            });
-        }
 
         const existingDeploymentDb = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
@@ -7146,7 +7123,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             healthCheck
           });
         } else {
-          await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image);
+          const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
+          await this.k8sWorkload.updateDeploymentImage(
+            data.name,
+            data.namespace,
+            image,
+            healthCheck
+          );
           // A rebuild patches the image and nothing else, so it is also the
           // only chance to notice the running spec has drifted from what was
           // configured while a build was in flight.

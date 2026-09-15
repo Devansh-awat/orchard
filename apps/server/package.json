@@ -59,7 +59,8 @@
     "test:env-secret-write-only": "tsx --test test/env-secret-write-only.test.ts",
     "test:email-template": "tsx --test test/email-template.test.ts",
     "test:query-stats": "tsx --test test/query-stats.test.ts",
-    "test:deployment-lifecycle": "tsx --test test/deployment-lifecycle.test.ts"
+    "test:deployment-lifecycle": "tsx --test test/deployment-lifecycle.test.ts",
+    "test:rollout-strategy": "tsx --test test/rollout-strategy.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
