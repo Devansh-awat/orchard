@@ -70,7 +70,11 @@ It also asks how traffic should reach the box:
   terminates TLS, so cert-manager is skipped entirely, Traefik stays on a
   ClusterIP, and nothing binds a port on the host. This is also the answer when
   something else on the box already owns 80 or 443
-- **lan**: LAN only, `sslip.io` hostnames, self-signed certificates
+- **lan**: LAN or Tailscale only, self-signed certificates. The dashboard
+  answers on the box's own addresses, its hostname and its `.local` name, so no
+  DNS has to resolve for it. Generated app hostnames still use `sslip.io`,
+  because a wildcard cannot hang off an IP. `orchardctl hostname add <name>`
+  teaches it a name it did not know about at install time
 
 And whether updates are **manual** (`orchard-update` when you want them) or
 **automatic** (a nightly systemd timer).
@@ -167,7 +171,7 @@ sudo ./install.sh --yes \
 | Flag                           | Environment variable   | Meaning                                                                   |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
 | `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                   |
-| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to an `sslip.io` name in `lan` mode. |
+| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to this box's own IP in `lan` mode.  |
 | `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`.      |
 | `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<your domain>`.           |
 | `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Required in `public` mode.                         |

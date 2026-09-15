@@ -82,7 +82,7 @@ metrics:
 The server deployment gets `DATABASE_URL` injected automatically from the
 CNPG-managed secret `orchard-db-app` (key `uri`).
 
-Routing (Traefik IngressRoute on `Host(ingress.host)`):
+Routing (Traefik IngressRoute on `Host(ingress.host, ...ingress.extraHosts)`):
 
 - `PathPrefix(/apiv1)` → `server:3001`
 - everything else      → `frontend:3000`
@@ -164,14 +164,15 @@ Every key the chart honors, with defaults from `values.yaml`.
 | Key | Default | Description |
 |---|---|---|
 | `ingress.enabled` | `true` | Create the Traefik `IngressRoute`. |
-| `ingress.host` | `orchard.local` | **The domain.** Used in the `Host(...)` match. Set this to your real FQDN. |
+| `ingress.host` | `orchard.local` | **The domain.** Used in the `Host(...)` match, and the one links are generated with. Set this to your real FQDN. |
+| `ingress.extraHosts` | `[]` | Additional names the same routes answer on, joined into the one `Host(...)` match. For a LAN box reachable by IP, machine name and Tailscale name. Matched only: they are not added to the certificate. |
 | `ingress.entryPoints` | `[websecure]` | Traefik entryPoints to bind. Use `[web]` for HTTP-only. |
 | `ingress.tls.enabled` | `true` | Emit a `tls:` block on the IngressRoute. |
 | `ingress.tls.secretName` | `""` | Name of an existing TLS secret. Empty uses Traefik's default cert. |
 | `ingress.tls.issuerRef` | `{}` | Name a ClusterIssuer and the chart issues the control-plane certificate itself, into `{release}-tls`. Without this or `secretName`, Traefik terminates with its self-signed default. |
 | `ingress.middlewares` | `[]` | List of `{name, namespace}` refs applied to both routes. |
 
-Routing is fixed: `PathPrefix(/apiv1)` → server, everything else → frontend, both bound to `Host(ingress.host)`.
+Routing is fixed: `PathPrefix(/apiv1)` → server, everything else → frontend, both bound to `Host(ingress.host, ...ingress.extraHosts)`.
 
 ### MCP (`mcp.*`)
 

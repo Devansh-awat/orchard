@@ -13,9 +13,9 @@ export function hashClaimToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export function claimUrl(token: string): string {
-  const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-  return `${base}/setup/claim?token=${token}`;
+export function claimUrl(token: string, base?: string): string {
+  const origin = (base || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  return `${origin}/setup/claim?token=${token}`;
 }
 
 /**

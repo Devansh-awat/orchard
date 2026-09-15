@@ -247,6 +247,12 @@ postgres:
 ingress:
   enabled: true
   host: orchard.local
+  # Additional hostnames the dashboard answers on. Traefik routes by Host
+  # header, so a name that is not listed here gets a 404 even though the box is
+  # reachable at it: a LAN install wants its IP, its machine name and its
+  # Tailscale name to all work. These are matched, not certified. Adding one to
+  # a TLS install without a certificate that covers it means a browser warning.
+  extraHosts: []
   entryPoints: [websecure]
   tls:
     enabled: true

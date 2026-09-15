@@ -1,6 +1,10 @@
 package commands
 
 import (
+	"fmt"
+	"net"
+	"strings"
+
 	"github.com/hackclub/orchard/orchardctl/internal/cli"
 )
 
@@ -42,6 +46,7 @@ These are the control plane, not your apps. Use the Orchard UI or the
 func Claim() *cli.Command {
 	return &cli.Command{
 		Name:    "claim",
+		Args:    "[--url <address>]",
 		Summary: "print a link to claim the instance and sign in",
 		Root:    true,
 		Usage: `orchardctl claim - claim this instance
@@ -50,11 +55,87 @@ Prints a single-use link that claims the instance and signs you in as the
 superadmin. Use it on a fresh install, or if you have locked yourself out.
 The link is minted inside the server pod, so it works with no email
 configured.
+
+The link is built from the hostname the instance generates links with, which
+is not always the one you can reach it at. --url overrides it:
+
+  orchardctl claim --url mango
+  orchardctl claim --url http://mango:8081
+  orchardctl claim --url 192.168.4.27
+
+A bare name takes the scheme and port this instance serves on. The address
+has to be one Traefik answers on, so add it first if it is new:
+
+  orchardctl hostname add mango --apply
 `,
 		Run: func(c *cli.Context, args []string) error {
-			return c.Kubectl("exec", "deploy/server", "--", "node", "dist/scripts/mint-claim-link.js")
+			raw, err := flagValue(args, "--url")
+			if err != nil {
+				return err
+			}
+			exec := []string{"exec", "deploy/server", "--", "node", "dist/scripts/mint-claim-link.js"}
+			if raw != "" {
+				values, err := cli.LoadValues(c.Env.Values)
+				if err != nil {
+					return err
+				}
+				base, err := claimBase(values, raw)
+				if err != nil {
+					return err
+				}
+				exec = append(exec, "--url", base)
+			}
+			return c.Kubectl(exec...)
 		},
 	}
+}
+
+// flagValue pulls `--name <value>` out of an argument list. The host commands
+// parse their own arguments rather than carrying a flag package.
+func flagValue(args []string, name string) (string, error) {
+	for i, a := range args {
+		if a != name {
+			continue
+		}
+		if i+1 >= len(args) {
+			return "", fmt.Errorf("%s needs a value", name)
+		}
+		return args[i+1], nil
+	}
+	return "", nil
+}
+
+// claimBase turns what someone types into an origin the claim link can use.
+// A full URL is taken as given; a bare name gets the scheme and port this
+// instance actually serves on, which is the whole point of asking here rather
+// than making the operator remember them.
+func claimBase(values *cli.Values, raw string) (string, error) {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return "", fmt.Errorf("--url needs an address")
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw, nil
+	}
+
+	tls, _ := values.Get("ingress.tls.enabled").(bool)
+	scheme, standard, portVar := "http", "80", "PUBLIC_HTTP_PORT"
+	if tls {
+		scheme, standard, portVar = "https", "443", "PUBLIC_HTTPS_PORT"
+	}
+
+	host, err := cleanHostname(raw)
+	if err != nil {
+		return "", err
+	}
+	if _, port, splitErr := net.SplitHostPort(raw); splitErr == nil && port != "" {
+		return fmt.Sprintf("%s://%s:%s", scheme, host, port), nil
+	}
+	port := values.EnvValue("server.env", portVar)
+	if port == "" || port == standard {
+		return fmt.Sprintf("%s://%s", scheme, host), nil
+	}
+	return fmt.Sprintf("%s://%s:%s", scheme, host, port), nil
 }
 
 func Update() *cli.Command {

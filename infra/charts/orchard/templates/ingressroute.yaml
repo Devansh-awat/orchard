@@ -1,4 +1,9 @@
 {{- if .Values.ingress.enabled }}
+{{- $quoted := list }}
+{{- range $host := concat (list .Values.ingress.host) (default (list) .Values.ingress.extraHosts) }}
+{{- $quoted = append $quoted (printf "`%s`" $host) }}
+{{- end }}
+{{- $hostMatch := printf "Host(%s)" (join ", " $quoted) }}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -11,7 +16,7 @@ spec:
     {{- toYaml .Values.ingress.entryPoints | nindent 4 }}
   routes:
     - kind: Rule
-      match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/apiv1`)
+      match: {{ $hostMatch }} && PathPrefix(`/apiv1`)
       services:
         - name: server
           port: {{ .Values.server.service.port }}
@@ -20,7 +25,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     - kind: Rule
-      match: Host(`{{ .Values.ingress.host }}`)
+      match: {{ $hostMatch }}
       services:
         - name: frontend
           port: {{ .Values.frontend.service.port }}

@@ -15,6 +15,7 @@ HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
 HTTPS_PORT=${ORCHARD_HTTPS_PORT:-443}
 HTTP_SUFFIX=''
 HTTPS_SUFFIX=''
+INGRESS_EXTRA_HOSTS='[]'
 ZOT_NODE_PORT=${ORCHARD_ZOT_NODE_PORT:-30100}
 REGISTRY_HOST=${ORCHARD_REGISTRY_HOST:-registry.orchard.local}
 
@@ -596,6 +597,24 @@ choose_ingress_mode() {
   fi
 }
 
+# Every other name this box answers to, so Traefik routes on all of them rather
+# than 404ing on the one the person actually typed. Its own IPs (including the
+# Tailscale one), its hostname, its mDNS name, and the sslip.io name earlier
+# versions used.
+lan_alt_hosts() {
+  local out='' seen=' ' candidate short
+  short=$(hostname 2>/dev/null | cut -d. -f1 || true)
+  for candidate in $LOCAL_IPS $short ${short:+$short.local} \
+    "orchard.${PRIMARY_IP//./-}.sslip.io"; do
+    [ -n "$candidate" ] || continue
+    [ "$candidate" != "$ORCHARD_DOMAIN" ] || continue
+    case "$seen" in *" $candidate "*) continue ;; esac
+    seen="$seen$candidate "
+    out="${out:+$out, }\"$candidate\""
+  done
+  printf '[%s]' "$out"
+}
+
 collect_domains() {
   step
 
@@ -605,12 +624,21 @@ collect_domains() {
   esac
 
   if [ "$INGRESS_MODE" = lan ]; then
-    ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-orchard.${PRIMARY_IP//./-}.sslip.io}
+    # The dashboard answers on this box's own address, so nothing has to resolve
+    # for it: sslip.io is public DNS, and a resolver that will not answer for a
+    # private address (Tailscale's, most often) leaves an install nobody can
+    # reach. Apps still need a wildcard, which an IP cannot have, so their
+    # generated hostnames stay on sslip.io.
+    ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-${PRIMARY_IP:-localhost}}
     ORCHARD_APP_DOMAIN=${ORCHARD_APP_DOMAIN:-apps.${PRIMARY_IP//./-}.sslip.io}
     ORCHARD_MCP_DOMAIN=${ORCHARD_MCP_DOMAIN:-mcp.${PRIMARY_IP//./-}.sslip.io}
     USE_TLS=false
     CERT_ISSUER=selfsigned
+    INGRESS_EXTRA_HOSTS=$(lan_alt_hosts)
     info "platform: http://$ORCHARD_DOMAIN$HTTP_SUFFIX"
+    local alts
+    alts=$(printf '%s' "$INGRESS_EXTRA_HOSTS" | tr -d '[]"')
+    [ -z "$alts" ] || info "also at:  $alts"
     info "apps:     *.$ORCHARD_APP_DOMAIN$HTTPS_SUFFIX"
     if [ "$ORCHARD_MCP" = true ]; then info "agents:   http://$ORCHARD_MCP_DOMAIN$HTTP_SUFFIX"; fi
     return
@@ -1243,6 +1271,7 @@ tenant:
 ingress:
   enabled: true
   host: $ORCHARD_DOMAIN
+  extraHosts: $INGRESS_EXTRA_HOSTS
   entryPoints: [$entrypoint]
   tls:
     enabled: $tls_enabled$tls_issuer

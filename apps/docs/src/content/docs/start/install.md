@@ -132,7 +132,32 @@ It also asks how traffic reaches the box:
 | -------- | ------------------------------------------ | ---------------------------------------------- |
 | `public` | A routable IP, DNS pointed at it           | Let's Encrypt over HTTP-01                     |
 | `tunnel` | Behind NAT or CGNAT, via Cloudflare Tunnel | Cloudflare terminates it, cert-manager skipped |
-| `lan`    | LAN only, `sslip.io` hostnames             | Self-signed                                    |
+| `lan`    | LAN or Tailscale only, reached by address  | Self-signed                                    |
+
+### What `lan` mode is reachable at
+
+The dashboard lives on the box's own address, so nothing has to resolve for it
+to work: `http://192.168.4.27`, plus every other address the machine had at
+install time (the Tailscale one included), its hostname, its `.local` name, and
+an `orchard.<ip>.sslip.io` name for good measure. Traefik matches the `Host`
+header against all of them.
+
+That matters because `sslip.io` is **public DNS** that maps a name back to the
+address inside it. Nothing is exposed by using it, since the address is a
+private one either way, but it does mean a resolver has to answer, and
+Tailscale's will not always answer for a private address. An install whose only
+name was a `sslip.io` one was unreachable exactly when you needed it.
+
+Apps are the exception: a wildcard cannot hang off an IP, so generated app
+hostnames stay on `apps.<ip>.sslip.io`. Pass `--app-domain` to use a wildcard
+you control instead.
+
+Reached it by a name nobody knew about at install time? Add it:
+
+```bash
+sudo orchardctl hostname add mango --apply
+sudo orchardctl claim --url mango
+```
 
 And whether updates are **manual** (`orchard-update` when you want them) or
 **automatic** (a nightly systemd timer).

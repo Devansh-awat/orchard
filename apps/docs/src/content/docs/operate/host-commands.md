@@ -17,6 +17,7 @@ orchardctl registry ...      where builds are allowed to push
 orchardctl policies ...      which namespaces may reach tenant apps
 orchardctl mcp ...           the MCP endpoint agents connect to
 orchardctl public-ip ...     default address for publicly exposed ports
+orchardctl hostname ...      extra names the dashboard answers on
 orchardctl claim             print a link to claim the instance and sign in
 orchardctl logs [service]    follow logs (server, frontend, mcp)
 orchardctl status            show the control-plane pods
@@ -25,7 +26,7 @@ orchardctl sync              refresh these commands from the deployed image
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
 `orchard-config` are the same program. `update`, `config`, `registry`,
-`policies`, `mcp`, `public-ip`, `claim` and `sync` need root, because the values
+`policies`, `mcp`, `public-ip`, `hostname`, `claim` and `sync` need root, because the values
 file is `0600` and the rest runs through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
@@ -174,15 +175,45 @@ Setting it here also locks the matching field at
 **Instance admin → Configuration**, because it becomes an environment variable
 on the server and the environment always wins.
 
+## hostname
+
+```bash
+sudo orchardctl hostname
+sudo orchardctl hostname add mango --apply
+sudo orchardctl hostname remove mango --apply
+```
+
+Traefik routes the dashboard by `Host` header, so a name it was never told
+about returns 404 even though the box is listening on the port. That is what
+happens when you reach a LAN install by a name the installer did not know
+about: a Tailscale name, an mDNS name, a DNS record added afterwards.
+
+A `lan` install starts with every address the machine had at install time, its
+hostname, its `.local` name and the `sslip.io` name, so this is for what
+changed since. The primary hostname, the one generated links use, is not in
+this list; change that one with `orchardctl config set ingress.host <name>
+--apply`.
+
+These names are **matched, not certified**. On an instance that terminates TLS,
+a name with no certificate covering it is a browser warning rather than a
+working address, which is why they suit LAN and Tailscale names best.
+
 ## claim
 
 ```bash
 sudo orchardctl claim
+sudo orchardctl claim --url mango
 ```
 
 Prints a single-use link that claims the instance and signs you in as the
 superadmin. Use it on a fresh install, or if you have locked yourself out. It
 mints the link inside the server pod, so it works with no email configured.
+
+The link is built from the address the instance generates links with, which is
+not always the one you can reach it at. `--url` overrides it, and a bare name
+picks up the scheme and port this instance serves on, so `--url mango` becomes
+`http://mango:8081` on a lan install that moved off port 80. The address has to
+be one Traefik answers on, so `orchardctl hostname add` it first if it is new.
 
 It also works **after** the instance has been claimed, but only when there is
 genuinely no other way in. Claiming a box, skipping the passkey step and then

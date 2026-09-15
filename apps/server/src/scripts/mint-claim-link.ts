@@ -12,7 +12,19 @@ import {
 // hashed, so a lost one cannot be recovered — this mints a replacement and
 // prints it. Reaching this means having exec on the server pod, which is
 // already equivalent to owning the instance, so it grants nothing new.
+// `orchardctl claim --url` passes the address the operator can actually reach,
+// which is not always the one links are generated with: a LAN box answers on
+// its IP, its machine name and whatever else Traefik was told about.
+function baseFromArgs(argv: string[]): string | undefined {
+  const at = argv.indexOf('--url');
+  if (at === -1) return undefined;
+  const value = argv[at + 1];
+  if (!value) return undefined;
+  return /^https?:\/\//.test(value) ? value : `http://${value}`;
+}
+
 async function main() {
+  const base = baseFromArgs(process.argv.slice(2));
   const prisma = new PrismaClient();
   try {
     const state = await recoveryState(prisma);
@@ -53,7 +65,7 @@ async function main() {
       console.log('  Open this to claim the instance and sign in (valid for 24 hours):');
     }
     console.log('');
-    console.log(`    ${claimUrl(token)}`);
+    console.log(`    ${claimUrl(token, base)}`);
     console.log('');
     console.log('  It works once. Add a passkey straight after so you can sign back in.');
     console.log('');
