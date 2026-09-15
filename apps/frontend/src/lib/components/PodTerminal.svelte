@@ -229,10 +229,8 @@
 
 		socket.onmessage = (event) => {
 			if (ws !== socket || !terminal) return;
-			const text =
-				event.data instanceof ArrayBuffer
-					? decoder.decode(event.data, { stream: true })
-					: String(event.data);
+			if (!(event.data instanceof ArrayBuffer)) return;
+			const text = decoder.decode(event.data, { stream: true });
 			lastChunkHadOsc = text.includes('\x1b]');
 			if (predictor) predictor.applyRemote(text);
 			else terminal.write(text);

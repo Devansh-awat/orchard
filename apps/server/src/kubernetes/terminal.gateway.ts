@@ -252,7 +252,11 @@ const HEARTBEAT_MS = 25_000;
 
 const WS_HIGH_WATER = 1024 * 1024;
 
+const WS_LOW_WATER = 256 * 1024;
+
 const DRAIN_POLL_MS = 50;
+
+const FORCE_RESIZE_BOUNCE_MS = 30;
 
 const EXEC_FAILED_CODE = 4500;
 
@@ -284,6 +288,19 @@ class ResizableOutput extends PassThrough {
     this.rows = nextRows;
     this.emit('resize');
   }
+
+  forceResize(columns: number, rows: number): void {
+    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
+    const cols = Math.max(1, Math.min(1000, Math.floor(columns)));
+    const target = Math.max(1, Math.min(1000, Math.floor(rows)));
+    this.columns = cols;
+    this.rows = Math.max(1, target - 1);
+    this.emit('resize');
+    setTimeout(() => {
+      this.rows = target;
+      this.emit('resize');
+    }, FORCE_RESIZE_BOUNCE_MS);
+  }
 }
 
 function handleExecSession(
@@ -299,6 +316,7 @@ function handleExecSession(
   const stdin = new PassThrough();
   const stdout = new ResizableOutput();
   const stderr = new PassThrough();
+  let upstream: WebSocket | null = null;
 
   // Periodic authorization re-check. Authorization is verified once at upgrade
   // time; without this loop, a user whose session is revoked or whose project
@@ -310,7 +328,7 @@ function handleExecSession(
       if (ok) return;
       if (ws.readyState === WebSocket.OPEN) {
         try {
-          ws.send('\r\nSession terminated: access revoked.\r\n');
+          ws.send(Buffer.from('\r\nSession terminated: access revoked.\r\n'), { binary: true });
         } catch {}
         ws.close(4401, 'access revoked');
       }
@@ -325,16 +343,12 @@ function handleExecSession(
       if (ws.readyState !== WebSocket.OPEN) return;
       ws.send(chunk, { binary: true });
       if (ws.bufferedAmount <= WS_HIGH_WATER) return;
-      source.pause();
+      const pausable = upstream ?? source;
+      pausable.pause();
       const drain = setInterval(() => {
-        if (ws.readyState !== WebSocket.OPEN) {
+        if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount <= WS_LOW_WATER) {
           clearInterval(drain);
-          source.resume();
-          return;
-        }
-        if (ws.bufferedAmount <= WS_HIGH_WATER) {
-          clearInterval(drain);
-          source.resume();
+          pausable.resume();
         }
       }, DRAIN_POLL_MS);
     });
@@ -346,13 +360,17 @@ function handleExecSession(
   ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
     if (isBinary === false || typeof data === 'string') {
       const msg = typeof data === 'string' ? data : data.toString();
+      let frame: { type?: unknown; cols?: unknown; rows?: unknown; force?: unknown } | null = null;
       try {
-        const parsed = JSON.parse(msg);
-        if (parsed?.type === 'resize') {
-          stdout.setSize(Number(parsed.cols), Number(parsed.rows));
-          return;
-        }
+        frame = JSON.parse(msg);
       } catch {}
+      if (frame && typeof frame === 'object' && 'type' in frame) {
+        if (frame.type === 'resize') {
+          if (frame.force === true) stdout.forceResize(Number(frame.cols), Number(frame.rows));
+          else stdout.setSize(Number(frame.cols), Number(frame.rows));
+        }
+        return;
+      }
       stdin.write(msg);
       return;
     }
@@ -418,20 +436,21 @@ function handleExecSession(
         }
         const detail = describeExecFailure(status.message ?? '');
         try {
-          ws.send(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`);
+          ws.send(Buffer.from(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`), { binary: true });
         } catch {}
         ws.close(EXEC_FAILED_CODE, clampReason(detail));
       }
     )
-    .then((upstream) => {
-      const socket = (upstream as unknown as { _socket?: net.Socket })._socket;
+    .then((up) => {
+      upstream = up;
+      const socket = (up as unknown as { _socket?: net.Socket })._socket;
       socket?.setNoDelay?.(true);
-      return upstream;
+      return up;
     })
     .catch((err) => {
       if (ws.readyState !== WebSocket.OPEN) return;
       const detail = describeExecFailure(err?.message ?? 'exec failed');
-      ws.send(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`);
+      ws.send(Buffer.from(`\r\n\x1b[2K\x1b[31m${detail}\x1b[0m\r\n`), { binary: true });
       ws.close(EXEC_FAILED_CODE, clampReason(detail));
     });
 }
