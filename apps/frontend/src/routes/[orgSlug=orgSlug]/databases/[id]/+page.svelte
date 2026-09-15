@@ -573,13 +573,14 @@
 			});
 			const payload = await res.json().catch(() => null);
 			if (!res.ok) throw new Error(payload?.message || 'Failed to expand storage');
-			database.storageSize = payload.storageSize;
-			storageSizeDraft = payload.storageSize;
+			const expandedTo = payload?.storageSize ?? storageSizeDraft.trim();
+			database.storageSize = expandedTo;
+			storageSizeDraft = expandedTo;
 			storageDirty = false;
-			storageWarning = payload.warning ?? null;
+			storageWarning = payload?.warning ?? null;
 			toasts.add({
 				title: 'Storage expansion started',
-				description: `Volumes are growing to ${payload.storageSize}.`,
+				description: `Volumes are growing to ${expandedTo}.`,
 				color: 'success'
 			});
 			await fetchDatabase(true);
