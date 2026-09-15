@@ -37,7 +37,8 @@
 		DeleteModal,
 		DatabaseAlerts,
 		QueriesTab,
-		ReplicasCard
+		ReplicasCard,
+		StorageCard
 	} from '$lib/components/database';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import type {
@@ -253,6 +254,10 @@
 	let resourceMemoryBytes = $state<number | null>(null);
 	let resourcesDirty = $state(false);
 	let savingResources = $state(false);
+	let storageSizeDraft = $state('');
+	let storageDirty = $state(false);
+	let expandingStorage = $state(false);
+	let storageWarning = $state<string | null>(null);
 
 	// Replicas. `replicasDirty` guards the same way `resourcesDirty` does: a
 	// silent refetch must not snap the slider back while an edit is pending.
@@ -492,6 +497,9 @@
 			if (!replicasDirty) {
 				scaleReplicas = Math.max(1, database?.replicas ?? 1);
 			}
+			if (!storageDirty) {
+				storageSizeDraft = database?.storageSize ?? '';
+			}
 		} catch (e) {
 			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
 		} finally {
@@ -551,6 +559,38 @@
 			});
 		} finally {
 			savingResources = false;
+		}
+	}
+
+	async function expandStorage() {
+		if (!database) return;
+		expandingStorage = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/storage`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ storageSize: storageSizeDraft.trim() })
+			});
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(payload?.message || 'Failed to expand storage');
+			database.storageSize = payload.storageSize;
+			storageSizeDraft = payload.storageSize;
+			storageDirty = false;
+			storageWarning = payload.warning ?? null;
+			toasts.add({
+				title: 'Storage expansion started',
+				description: `Volumes are growing to ${payload.storageSize}.`,
+				color: 'success'
+			});
+			await fetchDatabase(true);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to expand storage',
+				color: 'error'
+			});
+		} finally {
+			expandingStorage = false;
 		}
 	}
 
@@ -1427,6 +1467,14 @@
 				<section class="tab-panel">
 					{#if database?.mode !== 'shared'}
 						{#if database?.mode === 'cnpg'}
+							<StorageCard
+								{database}
+								bind:value={storageSizeDraft}
+								bind:dirty={storageDirty}
+								saving={expandingStorage}
+								warning={storageWarning}
+								onExpand={expandStorage}
+							/>
 							<ReplicasCard
 								{database}
 								bind:replicas={scaleReplicas}
