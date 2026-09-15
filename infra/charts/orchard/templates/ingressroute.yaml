@@ -1,9 +1,20 @@
 {{- if .Values.ingress.enabled }}
-{{- $quoted := list }}
+{{- /*
+  Traefik v3 dropped the multi-argument form: Host(`a`, `b`) is a v2 rule and
+  v3 refuses to parse it, which drops the whole router rather than falling back
+  to the first host, so every name 404s including the one that worked before.
+  One matcher per host, OR'd, and the parentheses are load-bearing: && binds
+  tighter than ||, so without them the /apiv1 rule matches the first host on
+  every path and the dashboard disappears behind the API.
+*/}}
+{{- $matchers := list }}
 {{- range $host := concat (list .Values.ingress.host) (default (list) .Values.ingress.extraHosts) }}
-{{- $quoted = append $quoted (printf "`%s`" $host) }}
+{{- $matchers = append $matchers (printf "Host(`%s`)" $host) }}
 {{- end }}
-{{- $hostMatch := printf "Host(%s)" (join ", " $quoted) }}
+{{- $hostMatch := first $matchers }}
+{{- if gt (len $matchers) 1 }}
+{{- $hostMatch = printf "(%s)" (join " || " $matchers) }}
+{{- end }}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
