@@ -354,17 +354,12 @@
 	border-radius: var(--radius-lg);
 	overflow: visible;
 	border: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
-	background-color: #0d1117;
-	color: #c9d1d9;
+	background-color: var(--console-bg);
+	color: var(--console-text);
 	display: flex;
 	flex-direction: column;
 	height: 510px;
 	transition: none;
-}
-
-:root:not(.dark) .console-panel {
-	background-color: #1b1f27;
-	color: #d0d7de;
 }
 
 .console-panel.console-expanded {
@@ -393,8 +388,8 @@
 	justify-content: space-between;
 	gap: 0.5rem;
 	padding: 0.5rem 0.5rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-	background: rgba(255, 255, 255, 0.02);
+	border-bottom: 1px solid var(--console-edge);
+	background: var(--console-quiet);
 }
 
 .console-toolbar-left {
@@ -448,7 +443,7 @@
 	line-height: 1.65;
 	font-family: var(--font-mono);
 	font-weight: 400;
-	color: #c9d1d9;
+	color: var(--console-text);
 	margin: 0;
 }
 

@@ -30,6 +30,18 @@ export {
 	type TextScale
 } from './preferences';
 export {
+	logDisplay,
+	setLogDisplay,
+	resetLogDisplay,
+	isLogDisplayDefault,
+	logDisplaySignature,
+	clockOptions,
+	type LogClock,
+	type LogZone,
+	type LogDate,
+	type LogDisplay
+} from './log-display.svelte';
+export {
 	pendingInvitations,
 	invitationsLoading,
 	showPendingInvitationsModal,

@@ -154,12 +154,12 @@
 	}
 
 	.lv-scroll::-webkit-scrollbar-thumb {
-		background: rgba(255, 255, 255, 0.15);
+		background: color-mix(in srgb, var(--console-strong) 18%, transparent);
 		border-radius: var(--radius-xs);
 	}
 
 	.lv-scroll::-webkit-scrollbar-thumb:hover {
-		background: rgba(255, 255, 255, 0.25);
+		background: color-mix(in srgb, var(--console-strong) 30%, transparent);
 	}
 
 	.lv-line {
@@ -227,7 +227,7 @@
 	}
 
 	.lv-newlogs:hover {
-		background: color-mix(in srgb, var(--console-raised) 90%, white);
+		background: color-mix(in srgb, var(--console-raised) 88%, var(--console-strong));
 	}
 
 	.lv-empty {

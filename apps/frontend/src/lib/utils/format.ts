@@ -1,8 +1,9 @@
 import { AnsiUp } from 'ansi_up';
+import { clockOptions, logDisplay, logDisplaySignature } from '$lib/stores/log-display.svelte';
 import { clock } from './clock.svelte';
 
 const ansi = new AnsiUp();
-ansi.use_classes = false;
+ansi.use_classes = true;
 
 export function formatCpu(millicores: number | null | undefined): string {
 	if (millicores == null) return 'N/A';
@@ -60,35 +61,68 @@ export function formatBuildDurationBetween(
 const ANSI_CODE_RE = /\x1b\[[0-9;]*m/g;
 const ISO_TS_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(kind: 'time' | 'date' | 'day', sig: string): Intl.DateTimeFormat {
+	const key = `${kind}:${sig}`;
+	const hit = formatters.get(key);
+	if (hit) return hit;
+	const timeZone = logDisplay.zone === 'utc' ? 'UTC' : undefined;
+	const shapes: Record<typeof kind, Intl.DateTimeFormatOptions> = {
+		time: {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			timeZone,
+			...clockOptions()
+		},
+		date: { month: 'short', day: 'numeric', timeZone },
+		day: { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }
+	};
+	const made = new Intl.DateTimeFormat(undefined, shapes[kind]);
+	formatters.set(key, made);
+	return made;
+}
+
+let todayKey = { sig: '', minute: -1, value: '' };
+
+function today(sig: string): string {
+	const now = Date.now();
+	const minute = Math.floor(now / 60_000);
+	if (todayKey.sig !== sig || todayKey.minute !== minute) {
+		todayKey = { sig, minute, value: formatter('day', sig).format(new Date(now)) };
+	}
+	return todayKey.value;
+}
+
+function timeWithMillis(d: Date, sig: string): string {
+	const parts = formatter('time', sig).formatToParts(d);
+	const ms = logDisplay.milliseconds
+		? `<span class="log-ts-ms">.${d.getMilliseconds().toString().padStart(3, '0')}</span>`
+		: '';
+	let out = '';
+	for (const part of parts) {
+		out += part.value;
+		if (part.type === 'second') out += ms;
+	}
+	return out;
+}
+
 function timestampPill(ts: string): string {
 	try {
 		const d = new Date(ts);
-		const h = d.getHours().toString().padStart(2, '0');
-		const m = d.getMinutes().toString().padStart(2, '0');
-		const s = d.getSeconds().toString().padStart(2, '0');
-		const ms = d.getMilliseconds().toString().padStart(3, '0');
+		if (Number.isNaN(d.getTime())) return ts;
+		const sig = logDisplaySignature();
 
-		const fullLocal = d.toLocaleString(undefined, {
-			weekday: 'short',
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			fractionalSecondDigits: 3
-		});
-		const utcStr = d.toLocaleString(undefined, {
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			timeZone: 'UTC',
-			timeZoneName: 'short'
-		});
-		const ago = formatRelativeTime(d);
-		const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		const showDate =
+			logDisplay.date === 'always' ||
+			(logDisplay.date === 'auto' && formatter('day', sig).format(d) !== today(sig));
+		const date = showDate
+			? `<span class="log-ts-date">${formatter('date', sig).format(d)}</span>`
+			: '';
+		const zone = logDisplay.zone === 'utc' ? '<span class="log-ts-zone">UTC</span>' : '';
 
-		return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
+		return `<span class="log-ts" data-ts="${ts}">${date}${timeWithMillis(d, sig)}${zone}</span>`;
 	} catch {
 		return ts;
 	}
@@ -100,9 +134,6 @@ function timestampPill(ts: string): string {
 const lineCache = new Map<string, string>();
 const LINE_CACHE_MAX = 30_000;
 
-// The ANSI palette assumes a dark terminal, so its greyscale "dim" colours
-// are baked as inline rgb() and stay put when the surface is light. On an
-// adaptive surface we swap greys for tokens so they follow the theme.
 function adaptGreys(html: string): string {
 	return html.replace(/color:\s*rgb\((\d+),\s*(\d+),\s*(\d+)\)/g, (m, r, g, b) => {
 		if (r !== g || g !== b) return m;
@@ -110,33 +141,32 @@ function adaptGreys(html: string): string {
 	});
 }
 
-function ansiLineToHtml(line: string, adaptive = false): string {
-	const key = adaptive ? `a:${line}` : line;
+function ansiLineToHtml(line: string): string {
+	const key = `${logDisplaySignature()}\u0000${line}`;
 	const cached = lineCache.get(key);
 	if (cached !== undefined) return cached;
-	let html = ansi.ansi_to_html(line).replace(ISO_TS_RE, timestampPill);
-	if (adaptive) html = adaptGreys(html);
+	const html = adaptGreys(ansi.ansi_to_html(line).replace(ISO_TS_RE, timestampPill));
 	if (lineCache.size >= LINE_CACHE_MAX) lineCache.clear();
 	lineCache.set(key, html);
 	return html;
 }
 
 /** Convert ANSI log text to per-line HTML fragments, skipping empty lines. */
-export function ansiToHtmlLines(text: string, adaptive = false): string[] {
+export function ansiToHtmlLines(text: string): string[] {
 	if (!text) return [];
 
 	const out: string[] = [];
 	for (const line of text.replace(/\r/g, '').split('\n')) {
 		const stripped = line.replace(ANSI_CODE_RE, '').replace(ISO_TS_RE, '').trim();
 		if (!stripped) continue;
-		out.push(ansiLineToHtml(line, adaptive));
+		out.push(ansiLineToHtml(line));
 	}
 	return out;
 }
 
 /** Convert ANSI escape codes to HTML with color spans and formatted timestamps */
-export function ansiToHtml(text: string, adaptive = false): string {
-	return ansiToHtmlLines(text, adaptive).join('\n');
+export function ansiToHtml(text: string): string {
+	return ansiToHtmlLines(text).join('\n');
 }
 
 /** Redact sensitive tokens from log output */

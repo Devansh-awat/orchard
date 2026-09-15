@@ -2507,18 +2507,6 @@
 		}
 		document.addEventListener('keydown', handleKeydown);
 
-		// Position timestamp tooltips using fixed positioning to escape overflow:auto
-		function handleTsPointer(event: Event) {
-			const target = event.target;
-			if (!(target instanceof HTMLElement)) return;
-			const ts = target.closest('.log-ts') as HTMLElement | null;
-			if (!ts) return;
-			const rect = ts.getBoundingClientRect();
-			ts.style.setProperty('--tt-x', `${rect.left + rect.width / 2 - 130}px`);
-			ts.style.setProperty('--tt-y', `${rect.top - 8}px`);
-		}
-		document.addEventListener('mouseover', handleTsPointer, true);
-
 		// movingicons.dev: by default each icon only animates when its own 14×14 wrapper
 		// is hovered. Re-fire each icon's mouseenter when the user enters the parent
 		// button/link, so the animation plays on parent hover everywhere.
@@ -2551,7 +2539,6 @@
 			if (mainEl) mainEl.style.scrollbarGutter = prevGutter;
 			document.removeEventListener('pointermove', onIconHover);
 			document.removeEventListener('keydown', handleKeydown);
-			document.removeEventListener('mouseover', handleTsPointer, true);
 		};
 	});
 

@@ -1302,6 +1302,177 @@ select.input:focus {
 	animation: spin 1s linear infinite;
 }
 
+.ansi-black-fg {
+	color: var(--text-faint);
+}
+
+.ansi-red-fg {
+	color: var(--status-error);
+}
+
+.ansi-green-fg {
+	color: var(--status-success);
+}
+
+.ansi-yellow-fg {
+	color: var(--status-warning);
+}
+
+.ansi-blue-fg {
+	color: var(--hue-blue);
+}
+
+.ansi-magenta-fg {
+	color: var(--hue-violet);
+}
+
+.ansi-cyan-fg {
+	color: var(--hue-emerald);
+}
+
+.ansi-white-fg {
+	color: var(--text-default);
+}
+
+.ansi-bright-black-fg {
+	color: var(--text-muted);
+}
+
+.ansi-bright-red-fg {
+	color: var(--hue-red);
+}
+
+.ansi-bright-green-fg {
+	color: var(--hue-green);
+}
+
+.ansi-bright-yellow-fg {
+	color: var(--hue-amber);
+}
+
+.ansi-bright-blue-fg {
+	color: var(--hue-blue);
+}
+
+.ansi-bright-magenta-fg {
+	color: var(--hue-pink);
+}
+
+.ansi-bright-cyan-fg {
+	color: var(--hue-emerald);
+}
+
+.ansi-bright-white-fg {
+	color: var(--console-strong);
+}
+
+.ansi-black-bg {
+	background-color: color-mix(in srgb, var(--text-faint) 25%, transparent);
+}
+
+.ansi-red-bg {
+	background-color: color-mix(in srgb, var(--status-error) 25%, transparent);
+}
+
+.ansi-green-bg {
+	background-color: color-mix(in srgb, var(--status-success) 25%, transparent);
+}
+
+.ansi-yellow-bg {
+	background-color: color-mix(in srgb, var(--status-warning) 25%, transparent);
+}
+
+.ansi-blue-bg {
+	background-color: color-mix(in srgb, var(--hue-blue) 25%, transparent);
+}
+
+.ansi-magenta-bg {
+	background-color: color-mix(in srgb, var(--hue-violet) 25%, transparent);
+}
+
+.ansi-cyan-bg {
+	background-color: color-mix(in srgb, var(--hue-emerald) 25%, transparent);
+}
+
+.ansi-white-bg {
+	background-color: color-mix(in srgb, var(--text-default) 25%, transparent);
+}
+
+.ansi-bright-black-bg {
+	background-color: color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+
+.ansi-bright-red-bg {
+	background-color: color-mix(in srgb, var(--hue-red) 25%, transparent);
+}
+
+.ansi-bright-green-bg {
+	background-color: color-mix(in srgb, var(--hue-green) 25%, transparent);
+}
+
+.ansi-bright-yellow-bg {
+	background-color: color-mix(in srgb, var(--hue-amber) 25%, transparent);
+}
+
+.ansi-bright-blue-bg {
+	background-color: color-mix(in srgb, var(--hue-blue) 25%, transparent);
+}
+
+.ansi-bright-magenta-bg {
+	background-color: color-mix(in srgb, var(--hue-pink) 25%, transparent);
+}
+
+.ansi-bright-cyan-bg {
+	background-color: color-mix(in srgb, var(--hue-emerald) 25%, transparent);
+}
+
+.ansi-bright-white-bg {
+	background-color: color-mix(in srgb, var(--console-strong) 25%, transparent);
+}
+
+.log-ts {
+	display: inline-block;
+	margin-right: 0.125rem;
+	padding: 0 0.5rem;
+	border-radius: var(--radius-xs);
+	background: var(--console-quiet);
+	color: var(--console-dim);
+	font-size: var(--text-micro);
+	font-weight: 600;
+	line-height: 1.6;
+	letter-spacing: 0.01em;
+	font-variant-numeric: tabular-nums;
+	vertical-align: baseline;
+	user-select: none;
+	cursor: default;
+	transition:
+		background var(--dur-fast),
+		color var(--dur-fast);
+}
+
+.log-ts:hover {
+	background: var(--console-hover);
+	color: var(--console-text);
+}
+
+.log-ts-date {
+	margin-right: 0.4em;
+	opacity: 0.75;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.log-ts-ms {
+	opacity: 0.5;
+}
+
+.log-ts-zone {
+	margin-left: 0.4em;
+	opacity: 0.6;
+	font-size: 0.9em;
+	letter-spacing: 0.04em;
+}
+
 /* Log viewer */
 .log-viewer {
 	@apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm whitespace-pre-wrap;

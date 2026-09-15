@@ -1,5 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import {
+		applyTerminalTheme,
+		buildTerminalTheme,
+		monoFontFor,
+		watchTerminalTheme
+	} from '$lib/utils/terminal-theme';
 
 	interface Props {
 		podName: string;
@@ -20,6 +26,7 @@
 	let mounted = $state(false);
 
 	let resizeObserver: ResizeObserver | null = null;
+	let stopThemeWatch: (() => void) | null = null;
 
 	async function init() {
 		if (!terminalRef) return;
@@ -39,33 +46,14 @@
 
 		terminal = new ghosttyModule.Terminal({
 			fontSize: 11,
-			fontFamily:
-				'"SF Mono", "Cascadia Code", "Fira Code", Menlo, Monaco, "Courier New", monospace',
+			fontFamily: monoFontFor(terminalRef),
 			cursorBlink: true,
 			cursorStyle: 'bar',
-			theme: {
-				background: '#0d1117',
-				foreground: '#c9d1d9',
-				cursor: '#58a6ff',
-				cursorAccent: '#0d1117',
-				selectionBackground: 'rgba(56, 139, 253, 0.3)',
-				black: '#586069',
-				red: '#f97583',
-				green: '#85e89d',
-				yellow: '#ffea7f',
-				blue: '#79b8ff',
-				magenta: '#b392f0',
-				cyan: '#73e3ff',
-				white: '#d1d5da',
-				brightBlack: '#6a737d',
-				brightRed: '#fdaeb7',
-				brightGreen: '#bef5cb',
-				brightYellow: '#fff5b1',
-				brightBlue: '#c8e1ff',
-				brightMagenta: '#d2b3ff',
-				brightCyan: '#a5f3fc',
-				brightWhite: '#fafbfc'
-			}
+			theme: buildTerminalTheme(terminalRef, { background: '--console-bg' })
+		});
+
+		stopThemeWatch = watchTerminalTheme(terminalRef, (next) => applyTerminalTheme(terminal, next), {
+			background: '--console-bg'
 		});
 
 		fitAddon = new ghosttyModule.FitAddon();
@@ -147,6 +135,7 @@
 	});
 
 	onDestroy(() => {
+		stopThemeWatch?.();
 		resizeObserver?.disconnect();
 		ws?.close();
 		terminal?.dispose();
@@ -174,7 +163,7 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		background: #0d1117;
+		background: var(--console-bg);
 	}
 
 	.pod-terminal--hidden {
@@ -218,9 +207,9 @@
 	}
 
 	.pod-terminal-error {
-		background: rgba(248, 81, 73, 0.12);
-		color: #f85149;
-		border: 1px solid rgba(248, 81, 73, 0.2);
+		background: color-mix(in srgb, var(--status-error) 14%, transparent);
+		color: var(--status-error);
+		border: 1px solid color-mix(in srgb, var(--status-error) 26%, transparent);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -228,20 +217,20 @@
 	.pod-terminal-error button {
 		padding: 0.125rem 0.5rem;
 		border-radius: var(--radius-xs);
-		background: rgba(248, 81, 73, 0.2);
-		color: #f85149;
+		background: color-mix(in srgb, var(--status-error) 22%, transparent);
+		color: var(--status-error);
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		border: none;
 		cursor: pointer;
 	}
 	.pod-terminal-error button:hover {
-		background: rgba(248, 81, 73, 0.3);
+		background: color-mix(in srgb, var(--status-error) 32%, transparent);
 	}
 
 	.pod-terminal-connecting {
-		background: rgba(201, 209, 217, 0.06);
-		color: rgba(201, 209, 217, 0.4);
+		background: var(--console-quiet);
+		color: var(--console-faint);
 		pointer-events: none;
 	}
 </style>

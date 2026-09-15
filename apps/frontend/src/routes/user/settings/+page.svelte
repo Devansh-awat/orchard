@@ -38,7 +38,8 @@
 		UserMcp,
 		UserAppearance,
 		UserNotifications,
-		UserSshIdentities
+		UserSshIdentities,
+		UserLogs
 	} from '$lib/components/user-settings';
 
 	const sandboxOn = sandboxEnabled();
@@ -166,6 +167,7 @@
 					...($notificationsEnabled ? [{ id: 'notifications', label: 'Notifications' }] : []),
 					{ id: 'appearance', label: 'Appearance' },
 					{ id: 'accessibility', label: 'Accessibility' },
+					{ id: 'logs', label: 'Logs' },
 					{ id: 'early-access', label: 'Early access' }
 				]
 			}
@@ -878,6 +880,10 @@
 
 			{#if activeTab === 'accessibility'}
 				<UserAccessibility index={0} />
+			{/if}
+
+			{#if activeTab === 'logs'}
+				<UserLogs index={0} />
 			{/if}
 
 			{#if activeTab === 'early-access'}

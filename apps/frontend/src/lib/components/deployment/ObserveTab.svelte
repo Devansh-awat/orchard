@@ -1145,7 +1145,7 @@
 								</button>
 								{#if detail.length > 0 && open}
 									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'), true)}</pre>
+									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
 								{/if}
 							</div>
 						</div>
@@ -2322,18 +2322,15 @@
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
 		font-size: var(--text-micro);
 		line-height: 1.6;
-		background: #1a1a1e;
-		color: #c8c8cc;
+		background: var(--console-bg);
+		color: var(--console-text);
+		border: 1px solid var(--console-edge);
 		border-radius: var(--radius-sm);
 		padding: 12px 16px;
 		padding-right: 40px;
 		margin: 0;
 		overflow-x: auto;
 		white-space: pre;
-	}
-
-	:global(:root:not(.dark)) .observe-error-stack {
-		background: #1e1e22;
 	}
 
 	.observe-stack-copy {

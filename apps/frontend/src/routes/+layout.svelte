@@ -18,6 +18,7 @@
 	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
 	import MobileTopBar from '$lib/components/MobileTopBar.svelte';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
+	import LogTimestampTooltip from '$lib/components/LogTimestampTooltip.svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { env } from '$env/dynamic/public';
@@ -211,6 +212,7 @@
 		<UpdatesModal />
 	{/if}
 	<QuickSearch />
+	<LogTimestampTooltip />
 </QueryClientProvider>
 
 <style>

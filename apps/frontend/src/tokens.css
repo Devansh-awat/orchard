@@ -132,10 +132,15 @@
 	--dur-fast: 140ms;
 	--dur-base: 220ms;
 
-	--console-bg: #0d1117;
-	--console-text: #c9d1d9;
-	--console-edge: rgba(255, 255, 255, 0.14);
-	--console-raised: rgba(22, 27, 34, 0.95);
+	--console-bg: color-mix(in srgb, var(--bg-surface) 96%, var(--ink));
+	--console-text: var(--text-default);
+	--console-dim: var(--text-muted);
+	--console-faint: var(--text-faint);
+	--console-edge: color-mix(in srgb, var(--ink) 11%, transparent);
+	--console-raised: color-mix(in srgb, var(--bg-raised) 90%, var(--ink));
+	--console-hover: color-mix(in srgb, var(--ink) 7%, transparent);
+	--console-quiet: color-mix(in srgb, var(--ink) 4%, transparent);
+	--console-strong: var(--ink);
 }
 
 html.contrast-high {
@@ -200,6 +205,8 @@ html.reduce-transparency *::after {
 	--hue-pink: #f472b6;
 	--hue-red: #f87171;
 	--hue-amber: #fbbf24;
+
+	--console-bg: color-mix(in srgb, var(--bg-surface) 93%, var(--ink));
 }
 
 @theme inline {

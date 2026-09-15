@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { Check, Copy, Plus, RotateCw, X } from 'lucide-svelte';
 	import { Skeleton } from '$lib/components/ui';
+	import {
+		buildTerminalTheme,
+		monoFontFor,
+		applyTerminalTheme,
+		watchTerminalTheme
+	} from '$lib/utils/terminal-theme';
 
 	let {
 		sandboxId,
@@ -16,7 +22,6 @@
 		active: boolean;
 	} = $props();
 
-	type Rgba = [number, number, number, number];
 	type TermStatus = 'connecting' | 'open' | 'closed' | 'error';
 	type Tab = { id: string; label: string; status: TermStatus; detail: string | null };
 	type Handle = {
@@ -25,6 +30,7 @@
 		fit: any;
 		socket: WebSocket | null;
 		observer: ResizeObserver | null;
+		unwatchTheme: (() => void) | null;
 		disposed: boolean;
 	};
 
@@ -50,64 +56,6 @@
 					? (current.detail ?? 'Shell closed')
 					: ''
 	);
-
-	function readRgba(probe: HTMLElement, token: string): Rgba {
-		probe.style.color = '';
-		probe.style.color = `var(${token})`;
-		const parts = getComputedStyle(probe).color.match(/[\d.]+/g);
-		if (!parts || parts.length < 3) return [0, 0, 0, 1];
-		return [
-			Number(parts[0]),
-			Number(parts[1]),
-			Number(parts[2]),
-			parts[3] === undefined ? 1 : Number(parts[3])
-		];
-	}
-
-	function channel(value: number): string {
-		return Math.max(0, Math.min(255, Math.round(value)))
-			.toString(16)
-			.padStart(2, '0');
-	}
-
-	function flatten(color: Rgba, backdrop: Rgba): string {
-		const alpha = color[3];
-		const mix = (i: number) => color[i] * alpha + backdrop[i] * (1 - alpha);
-		return `#${channel(mix(0))}${channel(mix(1))}${channel(mix(2))}`;
-	}
-
-	function buildTheme(host: HTMLElement) {
-		const probe = document.createElement('span');
-		probe.style.display = 'none';
-		host.appendChild(probe);
-		const backdrop = readRgba(probe, '--bg-app');
-		const pick = (token: string) => flatten(readRgba(probe, token), backdrop);
-		const theme = {
-			background: pick('--bg-app'),
-			foreground: pick('--text-default'),
-			cursor: pick('--accent'),
-			cursorAccent: pick('--bg-app'),
-			selectionBackground: pick('--accent-subtle'),
-			black: pick('--bg-sunken'),
-			red: pick('--status-error'),
-			green: pick('--status-success'),
-			yellow: pick('--status-warning'),
-			blue: pick('--hue-blue'),
-			magenta: pick('--hue-violet'),
-			cyan: pick('--hue-emerald'),
-			white: pick('--text-muted'),
-			brightBlack: pick('--text-faint'),
-			brightRed: pick('--hue-red'),
-			brightGreen: pick('--hue-green'),
-			brightYellow: pick('--hue-amber'),
-			brightBlue: pick('--hue-blue'),
-			brightMagenta: pick('--hue-pink'),
-			brightCyan: pick('--hue-emerald'),
-			brightWhite: pick('--text-default')
-		};
-		probe.remove();
-		return theme;
-	}
 
 	function setStatus(id: string, status: TermStatus, detail: string | null) {
 		const tab = tabs.find((t) => t.id === id);
@@ -210,13 +158,12 @@
 		}
 		if (handle.disposed || handle.term) return;
 
-		const mono = getComputedStyle(el).getPropertyValue('--font-mono').trim();
 		const term = new mod.Terminal({
 			fontSize: 12,
-			fontFamily: mono || 'monospace',
+			fontFamily: monoFontFor(el),
 			cursorBlink: true,
 			cursorStyle: 'bar',
-			theme: buildTheme(el)
+			theme: buildTerminalTheme(el)
 		});
 		const fit = new mod.FitAddon();
 		term.loadAddon(fit);
@@ -247,6 +194,7 @@
 		});
 		observer.observe(el);
 		handle.observer = observer;
+		handle.unwatchTheme = watchTerminalTheme(el, (next) => applyTerminalTheme(term, next));
 
 		connect(id);
 	}
@@ -257,6 +205,8 @@
 		handle.disposed = true;
 		handle.observer?.disconnect();
 		handle.observer = null;
+		handle.unwatchTheme?.();
+		handle.unwatchTheme = null;
 		closeSocket(handle);
 		try {
 			handle.term?.dispose();
@@ -286,6 +236,7 @@
 			fit: null,
 			socket: null,
 			observer: null,
+			unwatchTheme: null,
 			disposed: false
 		});
 		tabs = [...tabs, { id, label: `Shell ${seq}`, status: 'connecting', detail: null }];
