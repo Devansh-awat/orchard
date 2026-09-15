@@ -304,6 +304,10 @@ jobs:
       # counts and which config a deployment resolves to.
       - name: Dockerfile health check tests
         run: pnpm --filter server test:dockerfile-health-check
+      - name: Query statistics tests
+        run: pnpm --filter server test:query-stats
+      - name: Deployment lifecycle tests
+        run: pnpm --filter server test:deployment-lifecycle
 
   e2e:
     needs: changes
