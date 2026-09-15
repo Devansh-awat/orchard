@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.1](https://github.com/hackclub/orchard/compare/server/v2.38.0...server/v2.38.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **api:** return the URL for every ingress instead of letting clients guess it ([41226d7](https://github.com/hackclub/orchard/commit/41226d7f6edbcfe44af39bd06602eaa301fa7cd5))
+
 ## [2.38.0](https://github.com/hackclub/orchard/compare/server/v2.37.0...server/v2.38.0) (2026-09-15)
 
 

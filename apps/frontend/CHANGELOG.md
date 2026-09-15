@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.32.0](https://github.com/hackclub/orchard/compare/frontend/v1.31.0...frontend/v1.32.0) (2026-09-15)
+
+
+### Features
+
+* **install:** let lan mode serve on ports other than 80 and 443 ([76f50ba](https://github.com/hackclub/orchard/commit/76f50ba8f077b67a39a5a228224a2b872214ada4))
+
+
+### Bug Fixes
+
+* **api:** return the URL for every ingress instead of letting clients guess it ([41226d7](https://github.com/hackclub/orchard/commit/41226d7f6edbcfe44af39bd06602eaa301fa7cd5))
+
 ## [1.31.0](https://github.com/hackclub/orchard/compare/frontend/v1.30.0...frontend/v1.31.0) (2026-09-15)
 
 
