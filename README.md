@@ -242,6 +242,6 @@ an open core with the good parts held back.
 
 <div align="center">
 
-_Made with <3 by a leaf_
+_Made with <3 by a leafd_
 
 </div>
