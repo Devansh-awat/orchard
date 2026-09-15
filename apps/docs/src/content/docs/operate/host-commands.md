@@ -183,6 +183,10 @@ sudo orchardctl hostname add mango --apply
 sudo orchardctl hostname remove mango --apply
 ```
 
+Listing reads the values file, not the cluster. A name shows up there the
+moment you add it and stays a 404 until a `helm upgrade` has run, so `add` and
+`remove` say so unless you passed `--apply`.
+
 Traefik routes the dashboard by `Host` header, so a name it was never told
 about returns 404 even though the box is listening on the port. That is what
 happens when you reach a LAN install by a name the installer did not know

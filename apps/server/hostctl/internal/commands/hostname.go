@@ -69,7 +69,10 @@ address, so they suit LAN and Tailscale names best.
 				if len(current) == 0 {
 					c.Printf("\nNo extra names. Add one with:\n")
 					c.Printf("  orchardctl hostname add <name> --apply\n")
+					return nil
 				}
+				c.Printf("\nThis is the values file. What Traefik is serving right now:\n")
+				c.Printf("  kubectl -n %s get ingressroute orchard -o jsonpath='{.spec.routes[0].match}'\n", c.Env.Namespace)
 				return nil
 
 			case "add":
@@ -93,7 +96,8 @@ address, so they suit LAN and Tailscale names best.
 				if err := values.Save(); err != nil {
 					return err
 				}
-				c.Printf("the dashboard now answers on %s\n", name)
+				c.Printf("added %s\n", name)
+				reportPending(c, apply)
 
 			case "remove":
 				if len(args) != 2 {
@@ -117,6 +121,7 @@ address, so they suit LAN and Tailscale names best.
 					return err
 				}
 				c.Printf("removed %s\n", name)
+				reportPending(c, apply)
 
 			default:
 				return fmt.Errorf("unknown hostname command: %s", action)
@@ -125,6 +130,16 @@ address, so they suit LAN and Tailscale names best.
 			return maybeApply(c, apply)
 		},
 	}
+}
+
+// The list is the values file, not the cluster. Saying "the dashboard now
+// answers on mango" before a helm upgrade has run is a lie that costs somebody
+// an afternoon of 404s at a name they were told works.
+func reportPending(c *cli.Context, apply bool) {
+	if apply {
+		return
+	}
+	c.Printf("written, not deployed yet. Run: orchardctl update\n")
 }
 
 func hostList(values *cli.Values) []string {
