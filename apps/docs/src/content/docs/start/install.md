@@ -49,21 +49,26 @@ unavailable, so the kubelet never creates a pod sandbox.
 
 ### Ports 80 and 443
 
-`public` and `lan` mode both serve on 80 and 443, and neither is movable:
+Which ports get bound on the host, and what for:
 
-- **80** is where Let's Encrypt sends the HTTP-01 challenge. The port is fixed by
-  the ACME spec, not by Orchard, so a certificate cannot be issued without it.
-  `lan` mode issues self-signed certificates instead, but still serves there
-  because that is where a browser looks.
-- **443** is the traffic itself.
+| mode     | port 80                                                                                                                | port 443                                       |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `public` | Let's Encrypt HTTP-01 challenges: the dashboard, the MCP endpoint, and every app hostname, at issue and at every renewal | everything, the dashboard and apps alike       |
+| `lan`    | the dashboard and the MCP endpoint, in plain HTTP, since there is no TLS to terminate                                    | deployed apps, on self-signed certificates     |
+| `tunnel` | nothing binds it                                                                                                       | nothing binds it                               |
 
-If something else on the box already owns them, `tunnel` mode is the way out.
+Port 80 in `public` mode is the one that cannot be negotiated. The ACME spec
+fixes the HTTP-01 challenge at port 80, so it is not an Orchard default you can
+change, and it is not only needed during the install: every app that gets a new
+hostname, and every renewal roughly every 60 days, needs it again.
+
+`tunnel` mode is the way out if something else on the box owns those ports.
 Cloudflare terminates TLS and `cloudflared` dials out from inside the cluster, so
 Traefik runs on a ClusterIP and nothing binds a host port at all. The installer
-checks both ports up front, tells you what is holding them, and only refuses if
-the mode you pick needs them.
+checks both ports in its first step, names the process holding them, and only
+refuses if the mode you pick needs them.
 
-Running Orchard on a different port instead is not supported: every app gets its
+Moving Orchard to a different port instead is not supported: every app gets its
 own hostname under your wildcard domain, and those URLs have nowhere to put a
 port number.
 

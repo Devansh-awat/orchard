@@ -47,10 +47,13 @@ it and says so. Turning it on later is one command, and shipping an endpoint for
 a name that does not exist is not: the certificate is issued over HTTP-01, so it
 would retry against nothing and stay quietly broken.
 
-`public` and `lan` mode need ports 80 and 443 free. 80 is not optional and not
-movable: it is where Let's Encrypt sends the HTTP-01 challenge, and the ACME
-spec fixes the port. The installer reports what holds them during its first
-step and stops only if the mode you choose needs them.
+`public` and `lan` mode need ports 80 and 443 free; `tunnel` mode binds neither.
+In `public` mode, 80 carries the Let's Encrypt HTTP-01 challenge for every
+hostname including each new app, at issue and at every renewal, and the ACME
+spec fixes that port. In `lan` mode there is no TLS on the dashboard, so 80 is
+simply where it is served, and 443 carries deployed apps on self-signed
+certificates. The installer reports what holds them during its first step and
+stops only if the mode you choose needs them.
 
 amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
 to run on anything else rather than leave you with apps that cannot start.

@@ -523,10 +523,11 @@ choose_ingress_mode() {
     echo "  3) lan       - LAN only, self-signed certificates"
     if [ -n "$PORTS_BUSY" ]; then
       echo
-      note "port $PORTS_BUSY is taken on this box, and public and lan both need 80"
-      note "and 443: 80 is where Let's Encrypt sends the HTTP-01 challenge and that"
-      note "cannot be moved, 443 is where the traffic goes. Tunnel mode needs"
-      note "neither, because cloudflared dials out from inside the cluster."
+      note "port $PORTS_BUSY is taken on this box, and public and lan both need it."
+      note "public sends the Let's Encrypt HTTP-01 challenge to 80, for every"
+      note "hostname and every renewal, and the ACME spec fixes that port. lan"
+      note "serves the dashboard there in plain HTTP. Tunnel mode needs neither"
+      note "80 nor 443, because cloudflared dials out from inside the cluster."
       echo
     fi
     local default attempt=0
@@ -551,7 +552,7 @@ choose_ingress_mode() {
   esac
 
   if [ -n "$PORTS_BUSY" ] && [ "$INGRESS_MODE" != tunnel ]; then
-    warn "$INGRESS_MODE mode serves on 80 and 443, and port $PORTS_BUSY is taken:"
+    warn "$INGRESS_MODE mode needs 80 and 443 on this box, and port $PORTS_BUSY is taken:"
     printf '%s' "$PORTS_BUSY_DETAIL" >&2
     note "Free it, move whatever holds it, or install in tunnel mode"
     note "(--mode tunnel), which binds nothing on this box."
