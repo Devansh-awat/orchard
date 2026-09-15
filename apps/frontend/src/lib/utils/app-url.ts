@@ -4,7 +4,7 @@ export function formatAppUrl(
 	host: string | null | undefined,
 	path = '',
 	tls = true,
-	ports: AppPorts = {},
+	ports: AppPorts = {}
 ): string {
 	if (!host) return '';
 	const [name, ...rest] = String(host).split('/');

@@ -565,8 +565,7 @@
 	function visit(dep: DeploymentSummary, e: Event) {
 		e.preventDefault();
 		e.stopPropagation();
-		if (dep.ingresses.length)
-			window.open(ingressUrl(dep.ingresses[0]), '_blank');
+		if (dep.ingresses.length) window.open(ingressUrl(dep.ingresses[0]), '_blank');
 	}
 </script>
 

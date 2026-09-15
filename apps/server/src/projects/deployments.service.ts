@@ -944,7 +944,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       active: activeBuilds.map((d) => ({ ...d, ingresses: d.ingresses.map(scrubIngress) })),
       recent: recentBuilds.map((b) =>
         b.deployment
-          ? { ...b, deployment: { ...b.deployment, ingresses: b.deployment.ingresses.map(scrubIngress) } }
+          ? {
+              ...b,
+              deployment: { ...b.deployment, ingresses: b.deployment.ingresses.map(scrubIngress) }
+            }
           : b
       )
     };

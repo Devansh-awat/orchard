@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.2](https://github.com/hackclub/orchard/compare/server/v2.38.1...server/v2.38.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* **install:** make a lan install reachable at the addresses it actually has ([2026400](https://github.com/hackclub/orchard/commit/2026400797c9239aef919e55f368a67cfd4e7247))
+
 ## [2.38.1](https://github.com/hackclub/orchard/compare/server/v2.38.0...server/v2.38.1) (2026-09-15)
 
 

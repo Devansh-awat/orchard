@@ -214,12 +214,7 @@
 	{#if deployment.ingresses?.length}
 		<div class="dh-domains">
 			{#each deployment.ingresses.slice(0, 3) as ingress (ingress.id)}
-				<a
-					href={ingressUrl(ingress)}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="dh-domain"
-				>
+				<a href={ingressUrl(ingress)} target="_blank" rel="noopener noreferrer" class="dh-domain">
 					{ingress.host}
 					<ExternalLink class="dh-domain-icon" size={12} />
 				</a>

@@ -168,14 +168,14 @@ sudo ./install.sh --yes \
 
 ### How traffic gets in
 
-| Flag                           | Environment variable   | Meaning                                                                   |
-| ------------------------------ | ---------------------- | ------------------------------------------------------------------------- |
-| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                   |
-| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to this box's own IP in `lan` mode.  |
-| `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`.      |
-| `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<your domain>`.           |
-| `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Required in `public` mode.                         |
-| `--tunnel-token <token>`       | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode.                       |
+| Flag                           | Environment variable   | Meaning                                                                  |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------ |
+| `--mode <public\|tunnel\|lan>` | `ORCHARD_INGRESS_MODE` | How the internet reaches this box. Detected if omitted.                  |
+| `--domain <host>`              | `ORCHARD_DOMAIN`       | Where the Orchard UI lives. Defaults to this box's own IP in `lan` mode. |
+| `--app-domain <host>`          | `ORCHARD_APP_DOMAIN`   | Wildcard parent for deployed apps. Defaults to `apps.<your domain>`.     |
+| `--mcp-domain <host>`          | `ORCHARD_MCP_DOMAIN`   | Where agents connect over MCP. Defaults to `mcp.<your domain>`.          |
+| `--email <address>`            | `ORCHARD_ACME_EMAIL`   | Let's Encrypt contact. Required in `public` mode.                        |
+| `--tunnel-token <token>`       | `ORCHARD_TUNNEL_TOKEN` | Cloudflare Tunnel token. Required in `tunnel` mode.                      |
 
 ### Behaviour
 

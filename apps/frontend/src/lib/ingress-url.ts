@@ -13,6 +13,6 @@ export function ingressUrl(ingress: IngressLike | null | undefined): string {
 	if (ingress.url) return ingress.url;
 	return formatAppUrl(ingress.host, ingress.path ?? '', ingress.tlsEnabled !== false, {
 		http: env.PUBLIC_HTTP_PORT,
-		https: env.PUBLIC_HTTPS_PORT,
+		https: env.PUBLIC_HTTPS_PORT
 	});
 }
