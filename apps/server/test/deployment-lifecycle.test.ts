@@ -38,7 +38,10 @@ describe('deployment lifecycle', () => {
     };
 
     await consumer.adoptWorkloadSpec('deployment-id', {
-      spec: { replicas: 0, template: { spec: { containers: [{ image: 'example/app:latest' }] } } }
+      spec: {
+        replicas: 0,
+        template: { spec: { containers: [{ image: 'example/app:latest' }] } }
+      }
     });
 
     assert.equal(update, undefined);
@@ -69,5 +72,41 @@ describe('deployment lifecycle', () => {
     await service.applyScaleToCluster('deployment-id');
 
     assert.equal(applied.spec.replicas, 0);
+  });
+
+  test('a rebuild leaves a stopped app at zero replicas', async () => {
+    const patched: number[] = [];
+    const service = Object.create(DeploymentsService.prototype) as any;
+    service.prisma = {
+      deployment: { findUnique: async () => ({ stopped: true }) }
+    };
+    service.k8sWorkload = {
+      getKubernetesDeployment: async () => ({ status: { replicas: 0 } }),
+      patchDeploymentReplicas: async (_name: string, _ns: string, replicas: number) => {
+        patched.push(replicas);
+      }
+    };
+
+    await service.syncReplicasForRebuild('deployment-id', 'web', 'project', 3);
+
+    assert.deepEqual(patched, []);
+  });
+
+  test('a rebuild restores the snapshot count for a running app', async () => {
+    const patched: number[] = [];
+    const service = Object.create(DeploymentsService.prototype) as any;
+    service.prisma = {
+      deployment: { findUnique: async () => ({ stopped: false }) }
+    };
+    service.k8sWorkload = {
+      getKubernetesDeployment: async () => ({ status: { replicas: 1 } }),
+      patchDeploymentReplicas: async (_name: string, _ns: string, replicas: number) => {
+        patched.push(replicas);
+      }
+    };
+
+    await service.syncReplicasForRebuild('deployment-id', 'web', 'project', 3);
+
+    assert.deepEqual(patched, [3]);
   });
 });

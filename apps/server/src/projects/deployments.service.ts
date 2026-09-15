@@ -185,6 +185,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } as never);
   }
 
+  private async syncReplicasForRebuild(
+    deploymentId: string,
+    name: string,
+    namespace: string,
+    snapshotReplicas: number
+  ): Promise<void> {
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { stopped: true }
+    });
+    const desiredReplicas = row?.stopped ? 0 : snapshotReplicas || 1;
+    const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(name, namespace);
+    if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
+      await this.k8sWorkload.patchDeploymentReplicas(name, namespace, desiredReplicas);
+    }
+  }
+
   /**
    * The budget follows both the setting and the replica count, so this runs
    * after a scale as well as after an edit. K8sWorkloadService decides whether
@@ -1652,7 +1669,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'start deployments');
 
     const replicas = Math.max(1, deployment.replicas);
-    if (deployment.stopped) {
+    if (deployment.stopped || deployment.replicas < 1) {
       const perPod = await this.quotasService.resolvePodResources(
         deployment.projectId,
         {
@@ -6919,15 +6936,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       if (data.isRebuild && k8sDeploymentExists) {
         await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image);
 
-        const desiredReplicas = data.replicas || 1;
-        const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
-        if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
-          await this.k8sWorkload.patchDeploymentReplicas(
-            data.name,
-            data.namespace,
-            desiredReplicas
-          );
-        }
+        await this.syncReplicasForRebuild(deploymentId, data.name, data.namespace, data.replicas);
 
         // Image-only rebuild keeps the existing spec, so re-apply the stored
         // env to heal deployments whose pod spec drifted from the config —
