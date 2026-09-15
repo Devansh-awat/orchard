@@ -32,7 +32,7 @@ never reaches it. `bash -c "$(...)"` keeps your terminal attached. If you would
 rather not hand a script to `sudo` sight unseen, download it, read it, then run
 it:
 
-```bash
+````bash
 curl -fsSL https://assets.orchard.my/install.sh -o orchard-install.sh
 less orchard-install.sh
 sudo bash orchard-install.sh
@@ -61,16 +61,19 @@ with `--mcp-domain`, or leave it out entirely with `--mcp false`.
 Before it deploys anything it checks that the MCP hostname resolves, and if it
 does not, it asks:
 
-```
-!  mcp.example.com does not resolve yet.
-   That is where AI agents connect over MCP. Its certificate is issued
-   over HTTP-01, so it cannot be obtained until the name points here.
+````
+
+! mcp.example.com does not resolve yet.
+That is where AI agents connect over MCP. Its certificate is issued
+over HTTP-01, so it cannot be obtained until the name points here.
 
 What would you like to do?
-  1) I have added the record now, check again
-  2) use a different hostname
-  3) skip the MCP for now, I will turn it on later
-```
+
+1. I have added the record now, check again
+2. use a different hostname
+3. skip the MCP for now, I will turn it on later
+
+````
 
 Skipping is safe and reversible: add the record whenever you like and run
 `sudo orchardctl mcp enable --apply`. Under `--yes` there is nobody to ask, so it
@@ -101,7 +104,7 @@ ORCHARD_ACME_EMAIL=me@example.com \
 ORCHARD_INGRESS_MODE=public \
 ORCHARD_UPDATE_POLICY=manual \
   sudo -E bash install.sh
-```
+````
 
 Others: `ORCHARD_VERSION`, `ORCHARD_CHART`, `ORCHARD_IMAGE_REGISTRY`,
 `ORCHARD_IMAGE_REPOSITORY`, `ORCHARD_STATE_DIR`, `ORCHARD_NODE_PORT_RANGE`,

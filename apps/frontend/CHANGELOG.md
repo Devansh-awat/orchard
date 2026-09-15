@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.30.0](https://github.com/hackclub/orchard/compare/frontend/v1.29.0...frontend/v1.30.0) (2026-09-15)
+
+
+### Features
+
+* let superadmins create unlimited sandboxes ([d30164e](https://github.com/hackclub/orchard/commit/d30164e70d2978c7c8aa776d9ef01979b7c11596))
+
+
+### Bug Fixes
+
+* measure sandbox max lifetime from the current run, not the row's age ([f8eb41c](https://github.com/hackclub/orchard/commit/f8eb41c10f87fee6ec68840e7eabc5357c3ed668))
+
 ## [1.29.0](https://github.com/hackclub/orchard/compare/frontend/v1.28.2...frontend/v1.29.0) (2026-09-15)
 
 
