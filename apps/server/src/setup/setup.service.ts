@@ -189,21 +189,30 @@ export class SetupService implements OnModuleInit {
     // path taken while already signed in. Idempotent.
     if (user.email) await this.ensureOrganizationFor(user.id, user.email);
 
-    const [passkeys, named] = await Promise.all([
+    const [passkeys, named, withPassword] = await Promise.all([
       this.prisma.passkey.count({ where: { userId } }),
       this.prisma.organization.findMany({
         where: { members: { some: { userId } } },
         select: { name: true }
-      })
+      }),
+      this.prisma.user.count({ where: { id: userId, passwordHash: { not: null } } })
     ]);
     const orgs = named.length;
+    const hasPassword = withPassword > 0;
 
     const skipped = new Set(user.setupSkipped ?? []);
     const steps: SetupStep[] = [
-      // Unskippable: on an instance with no email transport, a session that
-      // ends with no passkey registered locks the operator out of their own
-      // instance and there is no self-service way back in.
-      { id: 'passkey', done: passkeys > 0, skipped: false, required: true },
+      // Unskippable, because a session that ends with no way back in locks the
+      // operator out of their own instance. A passkey is the good answer and
+      // needs TLS; a password is the one that works on a LAN box served over
+      // plain HTTP, where the passkey API is not available at all. Either
+      // satisfies this, and until one exists the step stands.
+      {
+        id: 'passkey',
+        done: passkeys > 0 || hasPassword,
+        skipped: false,
+        required: true
+      },
       // Not `orgs > 0`: the org is created at claim time, so that is true from
       // the first moment and the step would never render. What is outstanding
       // is that it still carries the name derived from the email domain, and

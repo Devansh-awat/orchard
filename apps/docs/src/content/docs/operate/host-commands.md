@@ -323,7 +323,10 @@ an argument, so it stays out of the shell history and the process list. It is
 stored as a bcrypt hash. Twelve characters minimum, no other rules.
 
 Setting one counts as a way in, so `orchardctl claim` stops minting recovery
-links while it exists, the same as a passkey or configured SMTP would.
+links while it exists, the same as a passkey or configured SMTP would. The
+first-run setup accepts it for the same reason: its opening step asks for a way
+back into the instance, and on a plain-HTTP box a passkey cannot be that, so
+the step offers a password there instead.
 
 :::caution
 On an instance served over plain HTTP the password crosses the network in the

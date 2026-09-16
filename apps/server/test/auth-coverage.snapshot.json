@@ -321,6 +321,7 @@
   "POST /auth/passkey/register/verify": "authenticated",
   "POST /auth/passkeys/:id/rename": "authenticated",
   "POST /auth/password": "public",
+  "POST /auth/password/set": "authenticated",
   "POST /auth/protect/exchange/orchard": "authenticated",
   "POST /auth/protect/exchange/password": "public",
   "POST /auth/sessions/revoke-all": "authenticated",

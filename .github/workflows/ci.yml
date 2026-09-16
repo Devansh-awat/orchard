@@ -214,6 +214,8 @@ jobs:
         run: pnpm --filter server test:ingress-url
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
+      - name: Setup gate test
+        run: pnpm --filter server test:setup-state
       # The auth wall in front of every private domain. Covers the routing
       # layer (is the Ingress actually behind the proxy) and the decision layer
       # (token audience, type, expiry, bypass secret, redirect targets).

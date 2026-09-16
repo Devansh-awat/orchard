@@ -14,7 +14,12 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { OtpService } from './otp.service';
 import { RateLimitService } from './rate-limit.service';
-import { superadminHasPassword, verifySuperadminPassword } from './superadmin-password';
+import {
+  PasswordRefused,
+  setSuperadminPassword,
+  superadminHasPassword,
+  verifySuperadminPassword
+} from './superadmin-password';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
@@ -338,6 +343,48 @@ export class PasswordlessController {
         setupCompleted: user.setupCompleted
       }
     });
+  }
+
+  /**
+   * Set your own password, while signed in as the superadmin. Self-service
+   * only in the sense that the session already owns the instance: it grants
+   * nothing a signed-in superadmin could not do by other means, and it is what
+   * lets the setup flow offer a way back in on a box with no TLS for passkeys.
+   * POST /auth/password/set
+   */
+  @Auth()
+  @Post('password/set')
+  async setOwnPassword(
+    @Body() body: { password: string },
+    @Req() req: any
+  ): Promise<{ success: true }> {
+    const user = await this.resolveInternalUser(req.user.sub);
+    if (!user.isSuperAdmin) {
+      throw new HttpException(
+        'Only the superadmin has a password on this instance',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    try {
+      await setSuperadminPassword(this.prisma, user.email, body?.password ?? '');
+    } catch (err) {
+      if (err instanceof PasswordRefused) {
+        throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
+      }
+      throw err;
+    }
+
+    void this.audit.log({
+      action: 'user.password.set',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email
+    });
+
+    return { success: true };
   }
 
   // =====================================

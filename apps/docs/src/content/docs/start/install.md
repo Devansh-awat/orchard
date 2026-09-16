@@ -267,6 +267,12 @@ quiet rather than loud:
 - **`--yes` skips the questions, not the requirements.** Unattended, a missing
   MCP record leaves the MCP off rather than prompting, and the run reports it.
 
+The first thing setup asks for after you claim is a way back in, since the
+claim link is single use. It offers a **passkey** where the browser allows one,
+and a **password** where it does not, which is any instance served over plain
+HTTP: `lan` mode, mostly. Either satisfies the step; neither can be skipped,
+because an instance you cannot sign into again is not set up.
+
 At the end it prints a **claim link**. That link is the credential: single use,
 and it signs in as the instance superadmin. Treat it like a password, and open
 it yourself rather than letting the agent follow it. If it is lost or used,

@@ -9,6 +9,7 @@ import { SetupService } from '../src/setup/setup.service';
 
 function serviceWith(counts: {
   passkeys?: number;
+  password?: boolean;
   orgs?: number;
   orgName?: string;
   deployments?: number;
@@ -16,6 +17,7 @@ function serviceWith(counts: {
 }) {
   const state = {
     passkeys: counts.passkeys ?? 0,
+    password: counts.password ?? false,
     orgs: counts.orgs ?? 0,
     orgName: counts.orgName ?? 'Leafd',
     deployments: counts.deployments ?? 0,
@@ -30,7 +32,8 @@ function serviceWith(counts: {
       update: async ({ data }: any) => {
         state.skipped = data.setupSkipped;
         return {};
-      }
+      },
+      count: async () => (state.password ? 1 : 0)
     },
     passkey: { count: async () => state.passkeys },
     organization: {
@@ -67,6 +70,24 @@ test('a freshly claimed instance still needs the passkey', async () => {
   assert.equal(s.complete, false);
 });
 
+// Passkeys need TLS, which a LAN install usually does not have, so the rule is
+// "a way back in exists" rather than "a passkey exists". Without this the first
+// step of the first run is impossible to satisfy on a plain-HTTP instance and
+// the gate is a dead end.
+test('a password satisfies the step a passkey cannot on a plain-HTTP box', async () => {
+  const { svc } = serviceWith({ orgs: 1, orgName: 'Renamed', passkeys: 0, password: true });
+  const s = await svc.getSetupState('u1');
+  assert.equal(byId(s, 'passkey').done, true);
+  assert.equal(s.complete, true);
+});
+
+test('neither a passkey nor a password leaves the step outstanding', async () => {
+  const { svc } = serviceWith({ orgs: 1, orgName: 'Renamed', passkeys: 0, password: false });
+  const s = await svc.getSetupState('u1');
+  assert.equal(byId(s, 'passkey').done, false);
+  assert.equal(s.complete, false);
+});
+
 test('the passkey step cannot be skipped, even by calling the API directly', async () => {
   const { svc } = serviceWith({ orgs: 1 });
   await assert.rejects(() => svc.skipSetupStep('u1', 'passkey'), /cannot be skipped/);
@@ -78,21 +99,19 @@ test('an unknown step is rejected rather than silently recorded', async () => {
 });
 
 test('skipping everything skippable still leaves a usable instance', async () => {
-  // Usable means: the org exists. Registering the passkey is the only thing the
-  // operator must do, and after that the gate completes with nothing else set up.
+  // Usable means: the org exists. Setting up a way back in is the only thing
+  // the operator must do, and after that the gate completes with nothing else.
   const { svc, state } = serviceWith({ orgs: 1, passkeys: 1 });
-  await svc.skipSetupStep('u1', 'organization');
-  const s = await svc.skipSetupStep('u1', 'deploy');
+  const s = await svc.skipSetupStep('u1', 'organization');
 
   assert.equal(s.complete, true);
   assert.equal(state.orgs, 1, 'the org survives being skipped');
-  assert.equal(byId(s, 'deploy').skipped, true);
+  assert.equal(byId(s, 'organization').skipped, true);
 });
 
-test('the gate never completes while the passkey is missing', async () => {
+test('the gate never completes while there is no way back in', async () => {
   const { svc } = serviceWith({ orgs: 1 });
-  await svc.skipSetupStep('u1', 'organization');
-  const s = await svc.skipSetupStep('u1', 'deploy');
+  const s = await svc.skipSetupStep('u1', 'organization');
   assert.equal(s.complete, false);
   assert.equal(byId(s, 'passkey').required, true);
 });
@@ -100,10 +119,10 @@ test('the gate never completes while the passkey is missing', async () => {
 // Derived, not stored: deleting your last passkey has to reopen the step rather
 // than leaving a stale "done" behind.
 test('done flags follow reality rather than a stored flag', async () => {
-  const { svc } = serviceWith({ orgs: 1, orgName: 'Renamed', passkeys: 0, deployments: 3 });
+  const { svc } = serviceWith({ orgs: 1, orgName: 'Renamed', passkeys: 0 });
   const s = await svc.getSetupState('u1');
   assert.equal(byId(s, 'passkey').done, false);
-  assert.equal(byId(s, 'deploy').done, true);
+  assert.equal(byId(s, 'organization').done, true);
 });
 
 // The invariant has to hold for accounts that predate the auto-creation and for
@@ -131,14 +150,13 @@ test('setup cannot complete without an organization', async () => {
       throw new Error('nope');
     }
   };
-  await svc.skipSetupStep('u1', 'organization');
-  const s = await svc.skipSetupStep('u1', 'deploy');
+  const s = await svc.skipSetupStep('u1', 'organization');
   assert.equal(s.complete, false);
 });
 
 test('skips are idempotent', async () => {
   const { svc, state } = serviceWith({ orgs: 1 });
-  await svc.skipSetupStep('u1', 'deploy');
-  await svc.skipSetupStep('u1', 'deploy');
-  assert.deepEqual(state.skipped, ['deploy']);
+  await svc.skipSetupStep('u1', 'organization');
+  await svc.skipSetupStep('u1', 'organization');
+  assert.deepEqual(state.skipped, ['organization']);
 });
