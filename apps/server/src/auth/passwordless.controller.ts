@@ -13,6 +13,8 @@ import {
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { OtpService } from './otp.service';
+import { RateLimitService } from './rate-limit.service';
+import { superadminHasPassword, verifySuperadminPassword } from './superadmin-password';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
@@ -33,6 +35,11 @@ interface RequestOtpDto {
 interface VerifyOtpDto {
   email: string;
   code: string;
+}
+
+interface PasswordDto {
+  email: string;
+  password: string;
 }
 
 interface RegisterPasskeyDto {
@@ -59,7 +66,8 @@ export class PasswordlessController {
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly rateLimit: RateLimitService
   ) {}
 
   private getClientIp(req: Request): string {
@@ -226,6 +234,98 @@ export class PasswordlessController {
     // Set cookie and respond
     setSessionCookie(res, token);
 
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        imageUrl: user.imageUrl,
+        setupCompleted: user.setupCompleted
+      }
+    });
+  }
+
+  /**
+   * What this address can sign in with, so the form asks for the right thing
+   * rather than mailing a code to an instance with no SMTP.
+   * GET /auth/methods?email=user@example.com
+   */
+  @Get('methods')
+  async authMethods(@Req() req: Request): Promise<{ passkey: boolean; password: boolean }> {
+    const email = (req.query.email as string) || '';
+    if (!email) return { passkey: false, password: false };
+
+    const [passkey, password] = await Promise.all([
+      this.passkeyService.userHasPasskeys(email),
+      superadminHasPassword(this.prisma, email)
+    ]);
+    return { passkey, password };
+  }
+
+  /**
+   * Sign in with the superadmin password, which only exists on instances where
+   * someone set one from the host. See ./superadmin-password for why it is not
+   * a general password system.
+   * POST /auth/password
+   */
+  @Post('password')
+  async signInWithPassword(
+    @Body() body: PasswordDto,
+    @Req() req: Request,
+    @Res() res: Response
+  ): Promise<void> {
+    const { email, password } = body || ({} as PasswordDto);
+    if (!email || typeof email !== 'string') {
+      throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
+    }
+    if (!password || typeof password !== 'string') {
+      throw new HttpException('Password is required', HttpStatus.BAD_REQUEST);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const ipAddress = this.getClientIp(req);
+
+    await this.rateLimit.checkRateLimit(normalizedEmail, 'email', 'password_signin');
+    await this.rateLimit.checkRateLimit(ipAddress, 'ip', 'password_signin');
+
+    const match = await verifySuperadminPassword(this.prisma, normalizedEmail, password);
+    if (!match) {
+      await this.rateLimit.incrementRateLimit(normalizedEmail, 'email', 'password_signin');
+      await this.rateLimit.incrementRateLimit(ipAddress, 'ip', 'password_signin');
+      throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: match.id } });
+    if (!user) throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+
+    await this.authz.assertSsoNotEnforced(user, 'password');
+
+    const sessionId = await this.sessionsService.createSession({
+      userId: user.id,
+      ipAddress,
+      userAgent: req.headers['user-agent'],
+      authMethod: 'password'
+    });
+
+    const displayName = user.firstName
+      ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+      : user.username;
+
+    const token = await this.oauthService.generateSessionTokenForUser(
+      user.id,
+      user.email,
+      displayName,
+      'password',
+      sessionId
+    );
+
+    await this.rateLimit.resetRateLimit(normalizedEmail, 'email', 'password_signin');
+    await this.rateLimit.resetRateLimit(ipAddress, 'ip', 'password_signin');
+
+    setSessionCookie(res, token);
     res.status(200).json({
       success: true,
       user: {

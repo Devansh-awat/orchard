@@ -8,21 +8,27 @@
 
 	let {
 		email = $bindable(''),
+		initialCode = '',
 		onAuthenticated,
 		onBlocked,
 		onSsoRedirect
 	}: {
 		email?: string;
+		// A code that arrived in the URL, from a link `orchardctl login` minted
+		// on the host. Redeemed on mount so the link is one click, not a
+		// copy-paste into the form.
+		initialCode?: string;
 		onAuthenticated: (message: string, user?: User) => void | Promise<void>;
 		onBlocked?: (reason: 'private_beta' | 'signups_disabled') => void;
 		// Called when the typed address belongs to an org that runs its own IdP.
 		onSsoRedirect?: (email: string) => Promise<boolean>;
 	} = $props();
 
-	type Mode = 'start' | 'passkey' | 'code';
+	type Mode = 'start' | 'passkey' | 'code' | 'password';
 
 	let mode = $state<Mode>('start');
 	let code = $state('');
+	let password = $state('');
 	let checking = $state(false);
 	let requesting = $state(false);
 	let verifying = $state(false);
@@ -34,6 +40,13 @@
 	onMount(() => {
 		passkeySupported =
 			browser && window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
+
+		if (initialCode && email) {
+			code = initialCode;
+			mode = 'code';
+			message = 'Signing you in.';
+			verifyOtp();
+		}
 	});
 
 	function blockedFrom(status: number, data: { message?: string }) {
@@ -89,22 +102,22 @@
 		try {
 			if (onSsoRedirect && (await onSsoRedirect(address))) return;
 
-			let hasPasskeys = false;
-			if (passkeySupported) {
-				try {
-					const response = await apiFetch(
-						`/apiv1/auth/passkey/check?email=${encodeURIComponent(address)}`
-					);
-					const data = await response.json().catch(() => ({}));
-					hasPasskeys = Boolean(data?.hasPasskeys);
-				} catch {
-					hasPasskeys = false;
-				}
+			let methods = { passkey: false, password: false };
+			try {
+				const response = await apiFetch(
+					`/apiv1/auth/methods?email=${encodeURIComponent(address)}`
+				);
+				const data = await response.json().catch(() => ({}));
+				methods = { passkey: Boolean(data?.passkey), password: Boolean(data?.password) };
+			} catch {
+				methods = { passkey: false, password: false };
 			}
 
-			if (hasPasskeys) {
+			if (methods.passkey && passkeySupported) {
 				mode = 'passkey';
 				await signInWithPasskey();
+			} else if (methods.password) {
+				mode = 'password';
 			} else {
 				await requestOtp();
 			}
@@ -140,6 +153,36 @@
 			await onAuthenticated('Signed in with your email', data?.user);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to verify code.';
+		} finally {
+			verifying = false;
+		}
+	}
+
+	async function signInWithPassword() {
+		if (verifying) return;
+		if (!password) {
+			error = 'Enter your password.';
+			return;
+		}
+
+		verifying = true;
+		error = null;
+		try {
+			const response = await apiFetch('/apiv1/auth/password', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				if (blockedFrom(response.status, data)) return;
+				throw new Error(data?.message || 'Invalid email or password.');
+			}
+			const data = await response.json().catch(() => null);
+			password = '';
+			await onAuthenticated('Signed in', data?.user);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Could not sign in.';
 		} finally {
 			verifying = false;
 		}
@@ -196,6 +239,7 @@
 	export function reset() {
 		mode = 'start';
 		code = '';
+		password = '';
 		message = null;
 		error = null;
 	}
@@ -257,6 +301,38 @@
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
 	</div>
+{:else if mode === 'password'}
+	<form
+		class="lg-form"
+		novalidate
+		onsubmit={(e) => {
+			e.preventDefault();
+			signInWithPassword();
+		}}
+	>
+		<div class="lg-step-head">
+			<p class="lg-step-title">{email}</p>
+		</div>
+		<label class="lg-label" for="login-password">Password</label>
+		<Input
+			type="password"
+			name="password"
+			id="login-password"
+			bind:value={password}
+			autocomplete="current-password"
+			class="lg-wide"
+		/>
+		{#if error}
+			<p class="lg-error">{error}</p>
+		{/if}
+		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
+			Sign in
+		</Button>
+		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
+			Email me a code instead
+		</Button>
+		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
+	</form>
 {:else}
 	<form
 		class="lg-form"

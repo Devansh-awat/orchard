@@ -121,6 +121,19 @@ func (c *Context) Run(name string, args ...string) error {
 	return nil
 }
 
+// RunWithInput is Run with the child's stdin fed from a string rather than the
+// terminal, for secrets that must not pass through an argument list.
+func (c *Context) RunWithInput(input string, name string, args ...string) error {
+	cmd := c.command(name, args...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stdout = c.Stdout
+	cmd.Stderr = c.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	return nil
+}
+
 // Capture returns a child process's stdout, with stderr discarded.
 func (c *Context) Capture(name string, args ...string) (string, error) {
 	out, err := c.command(name, args...).Output()

@@ -1,14 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from './rate-limit.service';
+// Shared with the host scripts, which mint a code without an email to send it
+// in. Two implementations of the same hash would drift into a login link the
+// server cannot verify.
+import { OTP_EXPIRY_MINUTES, generateOtpCode, hashOtpCode } from './otp-code';
 
-const OTP_LENGTH = 6;
-const OTP_EXPIRY_MINUTES = 10;
 const MAX_VERIFICATION_ATTEMPTS = 5;
-const OTP_MODULUS = 10 ** OTP_LENGTH;
-const OTP_UNBIASED_CEILING = Math.floor(2 ** 32 / OTP_MODULUS) * OTP_MODULUS;
 
 @Injectable()
 export class OtpService {
@@ -17,29 +16,6 @@ export class OtpService {
     private readonly emailService: EmailService,
     private readonly rateLimitService: RateLimitService
   ) {}
-
-  /**
-   * Generate a cryptographically secure 6-digit OTP code.
-   *
-   * Rejection sampling rather than a bare modulo: 2^32 is not a multiple of
-   * 10^6, so `random % 10^6` would make the first 967296 codes very slightly
-   * likelier than the rest. Draws landing in the short final bucket are
-   * discarded instead, which costs about one retry in every 4400 codes.
-   */
-  private generateOtpCode(): string {
-    let drawn: number;
-    do {
-      drawn = randomBytes(4).readUInt32BE(0);
-    } while (drawn >= OTP_UNBIASED_CEILING);
-    return (drawn % OTP_MODULUS).toString().padStart(OTP_LENGTH, '0');
-  }
-
-  /**
-   * Hash the OTP code using SHA-256 for secure storage.
-   */
-  private hashOtpCode(code: string): string {
-    return createHash('sha256').update(code).digest('hex');
-  }
 
   /**
    * Request an OTP code to be sent to the email address.
@@ -68,8 +44,8 @@ export class OtpService {
     });
 
     // Generate new OTP
-    const plainCode = this.generateOtpCode();
-    const hashedCode = this.hashOtpCode(plainCode);
+    const plainCode = generateOtpCode();
+    const hashedCode = hashOtpCode(plainCode);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     // Store the hashed OTP
@@ -130,7 +106,7 @@ export class OtpService {
     await this.rateLimitService.checkRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.checkRateLimit(ipAddress, 'ip', 'otp_verify');
 
-    const hashedCode = this.hashOtpCode(normalizedCode);
+    const hashedCode = hashOtpCode(normalizedCode);
 
     // Find the most recent valid OTP for this email
     const otpRecord = await this.prisma.otpCode.findFirst({

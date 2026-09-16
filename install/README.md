@@ -93,6 +93,14 @@ kubectl -n orchard logs deploy/server | grep -A2 'no superadmin'
 Sign up with the account you want to own the instance, open that URL, and the
 token is consumed. If it expires, restart the server to mint a new one.
 
+With no SMTP and no TLS there is neither an emailed code nor a passkey to sign
+in with afterwards. Two host commands cover that, and neither needs either:
+
+```bash
+sudo orchardctl login           # a one-time sign-in link, valid ten minutes
+sudo orchardctl password set    # a password on the superadmin account
+```
+
 ## Sizing
 
 Build concurrency, cache size and registry size are derived from the machine:

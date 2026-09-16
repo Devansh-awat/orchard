@@ -108,6 +108,18 @@ yourself, and you sign in with a passkey rather than an emailed code. On a singl
 operator instance that is often the right choice: skip it deliberately rather
 than leaving it half configured.
 
+Passkeys need TLS, which a LAN install usually does not have. There, two host
+commands cover sign-in with neither email nor certificates:
+
+```bash
+sudo orchardctl login           # a one-time link, valid ten minutes
+sudo orchardctl password set    # a password on the superadmin account
+```
+
+Both are documented under [host commands](/operate/host-commands/#login). The
+link is the safer of the two over plain HTTP, since it cannot be reused once
+spent.
+
 ## Add an identity provider
 
 Lets people sign in through your existing SSO instead of a passkey or emailed

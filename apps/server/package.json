@@ -19,6 +19,7 @@
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:ingress-url": "tsx --test test/ingress-url.test.ts",
+    "test:superadmin-password": "tsx --test test/superadmin-password.test.ts",
     "test:cpu-requests": "tsx --test test/cpu-requests.test.ts",
     "test:db-tuning": "tsx --test test/db-tuning.test.ts",
     "test:leader": "tsx --test test/leader-acquired.test.ts",

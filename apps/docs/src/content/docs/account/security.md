@@ -18,8 +18,21 @@ You can register more than one, and rename them so "MacBook" and "YubiKey" are
 distinguishable when you come to remove one. Keep at least two if a passkey is
 your only method, or you are one lost laptop from being locked out.
 
+Passkeys need a secure context, so they are unavailable over plain HTTP and the
+option is hidden there. A self-hosted instance on a LAN address has two
+alternatives below that do not need TLS.
+
 **SSO.** If your organization has it configured, you sign in through your
 identity provider instead. See [SSO](/teams/sso/).
+
+**Superadmin password.** Only on instances where the operator set one from the
+host, and only for the superadmin. It exists for self-hosted boxes that have no
+email to send a code to and no TLS for passkeys, which is most LAN installs.
+See [host commands](/operate/host-commands/#password).
+
+**A link from the host.** `orchardctl login` prints a one-time sign-in link,
+valid for ten minutes. Same code the email flow uses, printed on the machine
+instead of mailed. Anyone running it already has root on the box.
 
 ## Sessions
 

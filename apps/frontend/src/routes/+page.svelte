@@ -78,6 +78,7 @@
 	let providers = $state<LoginProvider[]>([]);
 	let providersLoaded = $state(false);
 	let loginEmail = $state('');
+	let loginCode = $state('');
 	let discovered = $state<DiscoveredOrg | null>(null);
 
 	async function fetchProviders() {
@@ -200,6 +201,17 @@
 		} else {
 			loading = false;
 			fetchProviders();
+
+			// A link minted by `orchardctl login` on the host lands here with
+			// both halves in the query string; redeeming it is the panel's job.
+			const params = new URLSearchParams(window.location.search);
+			const linkEmail = params.get('email');
+			const linkCode = params.get('code');
+			if (linkEmail && linkCode) {
+				loginEmail = linkEmail;
+				loginCode = linkCode;
+				history.replaceState(null, '', window.location.pathname);
+			}
 		}
 	});
 
@@ -302,6 +314,7 @@
 
 					<EmailAuthPanel
 						bind:email={loginEmail}
+						initialCode={loginCode}
 						onAuthenticated={handlePostAuth}
 						onBlocked={(reason) => {
 							blocked = reason;

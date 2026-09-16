@@ -19,6 +19,8 @@ orchardctl mcp ...           the MCP endpoint agents connect to
 orchardctl public-ip ...     default address for publicly exposed ports
 orchardctl hostname ...      extra names the dashboard answers on
 orchardctl claim             print a link to claim the instance and sign in
+orchardctl login             print a one-time link that signs you in
+orchardctl password ...      a password for the superadmin account
 orchardctl stop              stop this instance until you start it again
 orchardctl start             start it back up
 orchardctl restart           both, back to back
@@ -29,8 +31,8 @@ orchardctl sync              refresh these commands from the deployed image
 
 Every subcommand also exists hyphenated, so `orchardctl config` and
 `orchard-config` are the same program. `update`, `config`, `registry`,
-`policies`, `mcp`, `public-ip`, `hostname`, `claim`, `stop`, `start`, `restart`
-and `sync` need root, because the values
+`policies`, `mcp`, `public-ip`, `hostname`, `claim`, `login`, `password`,
+`stop`, `start`, `restart` and `sync` need root, because the values
 file is `0600` and the rest runs through the cluster.
 
 They read `/etc/orchard/env` for paths, falling back to defaults that work
@@ -242,6 +244,10 @@ Prints a single-use link that claims the instance and signs you in as the
 superadmin. Use it on a fresh install, or if you have locked yourself out. It
 mints the link inside the server pod, so it works with no email configured.
 
+For signing in day to day on an instance with no email, use
+[login](#login) instead: `claim` deliberately refuses once there is any other
+way in, and `login` does not.
+
 The link is built from the address the instance generates links with, which is
 not always the one you can reach it at. `--url` overrides it, and a bare name
 picks up the scheme and port this instance serves on, so `--url mango` becomes
@@ -269,6 +275,62 @@ Recovering signs you in as the email you enter, so use the same address as
 before. A different one creates a second superadmin. This grants nothing that
 root on the box did not already have: the same access mints the link, and can
 read the database it is stored in.
+
+## login
+
+```bash
+sudo orchardctl login
+sudo orchardctl login --email me@example.com
+sudo orchardctl login --url mango
+```
+
+Prints a link that signs you in, valid for ten minutes and good once. It is
+the same one-time code the email flow sends, minted on the box and printed
+instead of mailed, which is what makes an instance with no SMTP configured
+something you can sign into repeatedly rather than once.
+
+Running it means having root here, which is already ownership of the instance,
+so it hands out nothing that was not already yours. Minting a link also
+invalidates any earlier one, so a link left in a scrollback stops working the
+moment you print a new one.
+
+`--url` builds the link with an address other than the one the instance
+generates links with, for a box you reach by a different name. That name has to
+be one Traefik answers on: see [hostname](#hostname).
+
+Unlike `claim`, this does not care whether there is another way in. It is the
+normal way to sign in on an instance that has no email, not a recovery path.
+
+## password
+
+```bash
+sudo orchardctl password set
+sudo orchardctl password clear
+```
+
+A password on the **superadmin account only**. Orchard signs people in with an
+email code, a passkey or an identity provider; an instance with none of those
+has nothing to sign in with once its claim link is spent, and passkeys need TLS
+that a LAN install usually does not have.
+
+It is deliberately not a general password system. It is set here rather than in
+the dashboard because root on this box already owns the instance, there is no
+self-service, and there is no reset email: running `set` again is the reset.
+With more than one superadmin, name the one you mean with `--email`.
+
+The password is typed at a prompt with the terminal echo off, never passed as
+an argument, so it stays out of the shell history and the process list. It is
+stored as a bcrypt hash. Twelve characters minimum, no other rules.
+
+Setting one counts as a way in, so `orchardctl claim` stops minting recovery
+links while it exists, the same as a passkey or configured SMTP would.
+
+:::caution
+On an instance served over plain HTTP the password crosses the network in the
+clear on every sign-in. Over Tailscale or a VPN, WireGuard is doing the
+encrypting and that is fine. On an untrusted network, prefer `orchardctl
+login`, whose link cannot be reused once spent.
+:::
 
 ## stop, start and restart
 

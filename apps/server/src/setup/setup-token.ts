@@ -39,11 +39,12 @@ export function claimUrl(token: string, base?: string): string {
 export interface RecoveryState {
   superadmins: number;
   passkeys: number;
+  password: boolean;
   smtp: boolean;
   oauth: boolean;
   claimable: boolean;
   /** The way back in that blocks minting, when one exists. */
-  blockedBy: 'passkey' | 'smtp' | 'oauth' | null;
+  blockedBy: 'passkey' | 'password' | 'smtp' | 'oauth' | null;
 }
 
 interface RecoveryPrisma {
@@ -76,6 +77,7 @@ export async function recoveryState(prisma: RecoveryPrisma): Promise<RecoverySta
     return {
       superadmins,
       passkeys: 0,
+      password: false,
       smtp: false,
       oauth: false,
       claimable: true,
@@ -84,6 +86,10 @@ export async function recoveryState(prisma: RecoveryPrisma): Promise<RecoverySta
   }
 
   const passkeys = await prisma.passkey.count({ where: { user: { isSuperAdmin: true } } });
+  const password =
+    (await prisma.user.count({
+      where: { isSuperAdmin: true, passwordHash: { not: null } }
+    })) > 0;
   const smtp = await smtpConfigured(prisma);
   const oauth =
     envSet('AUTH_OAUTH_CLIENT_ID', 'AUTH_OAUTH_CLIENT_SECRET') ||
@@ -91,8 +97,17 @@ export async function recoveryState(prisma: RecoveryPrisma): Promise<RecoverySta
 
   let blockedBy: RecoveryState['blockedBy'] = null;
   if (passkeys > 0) blockedBy = 'passkey';
+  else if (password) blockedBy = 'password';
   else if (smtp) blockedBy = 'smtp';
   else if (oauth) blockedBy = 'oauth';
 
-  return { superadmins, passkeys, smtp, oauth, claimable: blockedBy === null, blockedBy };
+  return {
+    superadmins,
+    passkeys,
+    password,
+    smtp,
+    oauth,
+    claimable: blockedBy === null,
+    blockedBy
+  };
 }

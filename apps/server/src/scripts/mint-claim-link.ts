@@ -32,6 +32,8 @@ async function main() {
       console.log('This instance already has a superadmin, and a way to sign in as them.');
       if (state.blockedBy === 'passkey') {
         console.log('Use your passkey. This only mints a link when there is no other way in.');
+      } else if (state.blockedBy === 'password') {
+        console.log('Sign in with the superadmin password, or run: orchardctl login');
       } else if (state.blockedBy === 'smtp') {
         console.log('Sign in with an email code. Email is configured on this instance.');
       } else {

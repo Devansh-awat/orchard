@@ -263,14 +263,15 @@ export class OAuthService {
   }
 
   /**
-   * Generate a session token for users authenticated via OTP, passkey, or the
-   * one-time setup claim that bootstraps an instance with no email transport.
+   * Generate a session token for users authenticated via OTP, passkey, the
+   * superadmin password, or the one-time setup claim that bootstraps an
+   * instance with no email transport.
    */
   async generateSessionTokenForUser(
     userId: string,
     email: string,
     name: string,
-    authMethod: 'otp' | 'passkey' | 'setup_claim',
+    authMethod: 'otp' | 'passkey' | 'password' | 'setup_claim',
     sessionId?: string,
     // Confines the session to one organization. Set for sign-ins that came
     // from that org's own identity provider; see RequestAuthContext.

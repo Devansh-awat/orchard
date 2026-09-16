@@ -6,12 +6,19 @@ function prismaWith(
   opts: {
     superadmins?: number;
     passkeys?: number;
+    passwords?: number;
     emailRow?: string | null;
   } = {}
 ) {
   const seen: { passkeyWhere?: any } = {};
   const prisma = {
-    user: { count: async () => opts.superadmins ?? 0 },
+    user: {
+      // Two different counts go through here: how many superadmins exist, and
+      // how many of them have a password. A fake that ignores its arguments
+      // answers the second with the first and reports a password nobody set.
+      count: async (args: any) =>
+        args?.where?.passwordHash ? (opts.passwords ?? 0) : (opts.superadmins ?? 0)
+    },
     passkey: {
       count: async (args: any) => {
         seen.passkeyWhere = args?.where;
@@ -59,6 +66,16 @@ test('a fresh instance is claimable', async () => {
 
 // The reported lockout: claimed, passkey skipped, cookies cleared, no SMTP.
 // Refusing here leaves the operator locked out of their own machine.
+test('a superadmin password is a way back in, so it closes the window', async () => {
+  await withEnv(CLEAR, async () => {
+    const { prisma } = prismaWith({ superadmins: 1, passkeys: 0, passwords: 1 });
+    const state = await recoveryState(prisma);
+    assert.equal(state.password, true);
+    assert.equal(state.claimable, false);
+    assert.equal(state.blockedBy, 'password');
+  });
+});
+
 test('a superadmin with no way back in can mint a recovery link', async () => {
   await withEnv(CLEAR, async () => {
     const { prisma } = prismaWith({ superadmins: 1, passkeys: 0 });
