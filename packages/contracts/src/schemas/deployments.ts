@@ -120,6 +120,11 @@ const ingressRecord = z
     url: z.string().optional(),
     protectionMode: z.enum(['none', 'password', 'orchard']).optional(),
     protectionBypassSecret: z.string().nullable().optional(),
+    redirectTarget: z.string().nullable().optional(),
+    redirectStatus: z
+      .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
+      .nullable()
+      .optional(),
     templateInstanceId: z.string().nullable().optional(),
     environmentId: z.string().nullable().optional(),
     routes: z.array(ingressRouteRecord).optional(),
@@ -432,6 +437,27 @@ const projectIngressRequest = z.object({
   routes: z.array(ingressRouteInput),
   basicAuth: basicAuthInput.optional()
 });
+
+const projectIngressCreateRequest = z
+  .object({
+    host: z.string(),
+    tlsEnabled: z.boolean().optional()
+  })
+  .and(
+    z.union([
+      z.object({
+        routes: z.array(ingressRouteInput).min(1),
+        basicAuth: basicAuthInput.optional()
+      }),
+      z.object({
+        deploymentId: z.string(),
+        redirectTarget: z.string(),
+        redirectStatus: z
+          .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
+          .optional()
+      })
+    ])
+  );
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /deployments': {
@@ -855,7 +881,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /projects/:id/ingresses': {
     summary: 'Create a project-level ingress (returns the full project)',
     scope: 'deploy',
-    request: projectIngressRequest
+    request: projectIngressCreateRequest
   },
   'PUT /projects/:id/ingresses/:ingressId': {
     summary: 'Update a project-level ingress (returns the full project)',
@@ -876,6 +902,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         routes: z.array(ingressRouteRecord),
         basicAuthEnabled: z.boolean(),
         protectionMode: z.enum(['none', 'password', 'orchard']),
+        redirectTarget: z.string().nullable().optional(),
+        redirectStatus: z
+          .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
+          .nullable()
+          .optional(),
         project: projectRef
       })
       .passthrough()

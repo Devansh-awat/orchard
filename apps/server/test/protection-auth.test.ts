@@ -127,6 +127,43 @@ test('garbage in the cookie is rejected, not thrown', async () => {
   }
 });
 
+test('redirects preserve the request path and query string', async () => {
+  const svc = buildService(
+    protectedRow({
+      protectionMode: 'none',
+      redirectTarget: 'https://example.com',
+      redirectStatus: 307
+    })
+  );
+  const headers: Record<string, string> = {};
+  let status = 0;
+  const res = {
+    setHeader(name: string, value: string) {
+      headers[name] = value;
+    },
+    status(value: number) {
+      status = value;
+      return this;
+    },
+    send() {
+      return this;
+    }
+  };
+
+  const handled = await svc.handleProxyRequest(
+    {
+      hostname: HOST,
+      headers: {},
+      originalUrl: '/docs/getting-started?source=www'
+    } as any,
+    res as any
+  );
+
+  assert.equal(handled, true);
+  assert.equal(status, 307);
+  assert.equal(headers.location, 'https://example.com/docs/getting-started?source=www');
+});
+
 test('a valid exchange token sets a cookie and redirects, it does not allow the request', async () => {
   const svc = buildService(protectedRow());
   const token = await sign('protection_exchange', ING);

@@ -210,6 +210,7 @@ function buildRestoreService(opts: { rows: any[]; proxyServiceExists: boolean })
 
 const unprotectedRow = {
   protectionMode: 'none',
+  redirectTarget: null,
   path: '/',
   service: { name: 'app', port: 3000, ports: [{ port: 3000 }] }
 };
@@ -221,6 +222,15 @@ test('restore leaves a PROTECTED domain behind the proxy', async () => {
   });
   await svc.restoreOrphanedProtectionBackends(new Set<string>());
   assert.equal(writes.length, 0, 'a protected ingress must never be repointed at the app');
+});
+
+test('restore leaves a redirect domain behind the proxy', async () => {
+  const { svc, writes } = buildRestoreService({
+    rows: [{ ...unprotectedRow, redirectTarget: 'https://example.com' }],
+    proxyServiceExists: false
+  });
+  await svc.restoreOrphanedProtectionBackends(new Set<string>());
+  assert.equal(writes.length, 0);
 });
 
 test('restore leaves a domain alone when no DB row explains it', async () => {

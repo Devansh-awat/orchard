@@ -104,9 +104,7 @@
 
 			let methods = { passkey: false, password: false };
 			try {
-				const response = await apiFetch(
-					`/apiv1/auth/methods?email=${encodeURIComponent(address)}`
-				);
+				const response = await apiFetch(`/apiv1/auth/methods?email=${encodeURIComponent(address)}`);
 				const data = await response.json().catch(() => ({}));
 				methods = { passkey: Boolean(data?.passkey), password: Boolean(data?.password) };
 			} catch {

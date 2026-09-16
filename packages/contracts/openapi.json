@@ -6785,6 +6785,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -7909,6 +7946,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -9003,6 +9077,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -10054,6 +10165,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -11145,6 +11293,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -12213,6 +12398,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -13614,6 +13836,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -14749,6 +15008,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -15816,6 +16112,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -17076,6 +17409,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -18426,6 +18796,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -19843,6 +20250,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -21589,6 +22033,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -23952,6 +24433,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -25535,6 +26053,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -27249,6 +27804,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -30519,6 +31111,43 @@
                         "orchard"
                       ],
                       "type": "string"
+                    },
+                    "redirectStatus": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            301
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            302
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            307
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            308
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "redirectTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "routes": {
                       "items": {
@@ -38187,6 +38816,43 @@
                               ],
                               "type": "string"
                             },
+                            "redirectStatus": {
+                              "anyOf": [
+                                {
+                                  "enum": [
+                                    301
+                                  ],
+                                  "type": "number"
+                                },
+                                {
+                                  "enum": [
+                                    302
+                                  ],
+                                  "type": "number"
+                                },
+                                {
+                                  "enum": [
+                                    307
+                                  ],
+                                  "type": "number"
+                                },
+                                {
+                                  "enum": [
+                                    308
+                                  ],
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "redirectTarget": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
                             "routes": {
                               "items": {
                                 "properties": {
@@ -39368,6 +40034,43 @@
                               "orchard"
                             ],
                             "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "routes": {
                             "items": {
@@ -40603,6 +41306,43 @@
                             ],
                             "type": "string"
                           },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routes": {
                             "items": {
                               "properties": {
@@ -41387,58 +42127,117 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "basicAuth": {
+                "allOf": [
+                  {
                     "properties": {
-                      "enabled": {
+                      "host": {
+                        "type": "string"
+                      },
+                      "tlsEnabled": {
                         "type": "boolean"
-                      },
-                      "password": {
-                        "type": "string"
-                      },
-                      "username": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "enabled"
+                      "host"
                     ],
                     "type": "object"
                   },
-                  "host": {
-                    "type": "string"
-                  },
-                  "routes": {
-                    "items": {
-                      "properties": {
-                        "path": {
-                          "type": "string"
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "basicAuth": {
+                            "properties": {
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "password": {
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "enabled"
+                            ],
+                            "type": "object"
+                          },
+                          "routes": {
+                            "items": {
+                              "properties": {
+                                "path": {
+                                  "type": "string"
+                                },
+                                "serviceName": {
+                                  "type": "string"
+                                },
+                                "servicePort": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "serviceName",
+                                "servicePort"
+                              ],
+                              "type": "object"
+                            },
+                            "minItems": 1,
+                            "type": "array"
+                          }
                         },
-                        "serviceName": {
-                          "type": "string"
-                        },
-                        "servicePort": {
-                          "type": "integer"
-                        }
+                        "required": [
+                          "routes"
+                        ],
+                        "type": "object"
                       },
-                      "required": [
-                        "path",
-                        "serviceName",
-                        "servicePort"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "tlsEnabled": {
-                    "type": "boolean"
+                      {
+                        "properties": {
+                          "deploymentId": {
+                            "type": "string"
+                          },
+                          "redirectStatus": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  301
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  302
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  307
+                                ],
+                                "type": "number"
+                              },
+                              {
+                                "enum": [
+                                  308
+                                ],
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "redirectTarget": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "deploymentId",
+                          "redirectTarget"
+                        ],
+                        "type": "object"
+                      }
+                    ]
                   }
-                },
-                "required": [
-                  "host",
-                  "routes"
-                ],
-                "type": "object"
+                ]
               }
             }
           }
@@ -41593,6 +42392,43 @@
                         "orchard"
                       ],
                       "type": "string"
+                    },
+                    "redirectStatus": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            301
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            302
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            307
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "enum": [
+                            308
+                          ],
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "redirectTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "routes": {
                       "items": {

@@ -51,6 +51,9 @@
 		newDomainPath = $bindable(),
 		newDomainTlsEnabled = $bindable(),
 		newDomainServiceKey = $bindable(),
+		newDomainRoutingMode = $bindable(),
+		newDomainRedirectTarget = $bindable(),
+		newDomainRedirectStatus = $bindable(),
 		showDomainAdvanced = $bindable(),
 		creatingDomain,
 		domainFormError,
@@ -107,6 +110,9 @@
 		newDomainPath: string;
 		newDomainTlsEnabled: boolean;
 		newDomainServiceKey: string;
+		newDomainRoutingMode: 'service' | 'redirect';
+		newDomainRedirectTarget: string;
+		newDomainRedirectStatus: string;
 		showDomainAdvanced: boolean;
 		creatingDomain: boolean;
 		domainFormError: string | null;
@@ -355,7 +361,42 @@
 					</div>
 				{/if}
 
-				{#if domainServiceOptions.length > 1}
+				<SegmentedControl
+					label="Domain behavior"
+					value={newDomainRoutingMode}
+					onchange={(next) => (newDomainRoutingMode = next as 'service' | 'redirect')}
+					options={[
+						{ value: 'service', label: 'Connect to app' },
+						{ value: 'redirect', label: 'Redirect to domain' }
+					]}
+				/>
+
+				{#if newDomainRoutingMode === 'redirect'}
+					<div class="dom-row">
+						<span class="dom-row-label">Redirect to</span>
+						<input
+							type="text"
+							class="dom-input"
+							placeholder="example.com"
+							aria-label="Redirect destination"
+							bind:value={newDomainRedirectTarget}
+						/>
+						<p class="dom-hint">The original path and query string are preserved.</p>
+					</div>
+					<div class="dom-row">
+						<span class="dom-row-label">Redirect type</span>
+						<Select bind:value={newDomainRedirectStatus} aria-label="Redirect type">
+							<optgroup label="Temporary">
+								<option value="307">307 Temporary Redirect</option>
+								<option value="302">302 Found</option>
+							</optgroup>
+							<optgroup label="Permanent">
+								<option value="308">308 Permanent Redirect</option>
+								<option value="301">301 Moved Permanently</option>
+							</optgroup>
+						</Select>
+					</div>
+				{:else if domainServiceOptions.length > 1}
 					<div class="dom-row">
 						<span class="dom-row-label">Forward to</span>
 						<Select bind:value={newDomainServiceKey} aria-label="Forward to">
@@ -384,20 +425,22 @@
 
 					{#if showDomainAdvanced}
 						<div class="dom-advanced-body" transition:slide={{ duration: 150 }}>
-							<div class="dom-row">
-								<span class="dom-row-label">Path</span>
-								<input
-									type="text"
-									class="dom-input dom-input--mono"
-									placeholder="/"
-									aria-label="Path"
-									bind:value={newDomainPath}
-								/>
-								<p class="dom-hint">
-									Route a specific path here, like <code>/api</code>. Leave it as <code>/</code> to catch
-									everything.
-								</p>
-							</div>
+							{#if newDomainRoutingMode === 'service'}
+								<div class="dom-row">
+									<span class="dom-row-label">Path</span>
+									<input
+										type="text"
+										class="dom-input dom-input--mono"
+										placeholder="/"
+										aria-label="Path"
+										bind:value={newDomainPath}
+									/>
+									<p class="dom-hint">
+										Route a specific path here, like <code>/api</code>. Leave it as <code>/</code> to
+										catch everything.
+									</p>
+								</div>
+							{/if}
 							<label class="dm-toggle-row">
 								<div class="dm-toggle-text">
 									<span class="dm-toggle-label">Enable SSL</span>
@@ -418,7 +461,10 @@
 						class:dom-callout--error={newDomainConflict.pathCollision}
 						role={newDomainConflict.pathCollision ? 'alert' : undefined}
 					>
-						{#if newDomainConflict.pathCollision}
+						{#if newDomainConflict.pathCollision && newDomainRoutingMode === 'redirect'}
+							<strong>Domain in use.</strong>
+							{newDomainNormalizedHost} already has routing configured. Remove it before adding a redirect.
+						{:else if newDomainConflict.pathCollision}
 							<strong>Path in use.</strong>
 							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose
 							a different path under Advanced.
@@ -433,7 +479,7 @@
 					</div>
 				{/if}
 
-				{#if domainServiceOptions.length === 0}
+				{#if newDomainRoutingMode === 'service' && domainServiceOptions.length === 0}
 					<p class="dom-hint">Add a port above first so this domain has somewhere to route.</p>
 				{/if}
 
@@ -459,7 +505,9 @@
 						loading={creatingDomain}
 						disabled={creatingDomain ||
 							!newDomainNormalizedHost ||
-							!newDomainServiceKey ||
+							(newDomainRoutingMode === 'service'
+								? !newDomainServiceKey
+								: !newDomainRedirectTarget.trim()) ||
 							newDomainConflict?.pathCollision}
 					>
 						Add domain
@@ -481,7 +529,11 @@
 								rel="noopener noreferrer"
 								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
 							>
-								{#if ingress.protectionMode && ingress.protectionMode !== 'none'}
+								{#if ingress.redirectTarget}
+									<p class="text-xs mb-1 text-muted">
+										{ingress.redirectStatus} redirect to {ingress.redirectTarget}
+									</p>
+								{:else if ingress.protectionMode && ingress.protectionMode !== 'none'}
 									<p class="text-xs mb-1" style="color: var(--sidebar-text-active-border);">
 										<Shield class="inline h-3 w-3 mr-1" />
 										{ingress.protectionMode === 'password'
@@ -504,7 +556,7 @@
 								{/if}
 							</a>
 							<div class="flex items-center gap-1.5">
-								{#if onUpdateProtection}
+								{#if onUpdateProtection && !ingress.redirectTarget}
 									<Button
 										variant="ghost"
 										size="sm"
@@ -973,7 +1025,7 @@
 				>
 					<div class="flex items-center justify-between gap-3 px-4 py-3">
 						<div class="flex items-center gap-3">
-							<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
+							<Wifi size={16} class="h-4 w-4 shrink-0" style="color: var(--button-bg);" />
 							<div>
 								{#if tailscaleDns}
 									<p class="text-sm font-medium" style="color: var(--center-channel-color);">

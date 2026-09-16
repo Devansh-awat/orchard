@@ -355,6 +355,9 @@
 	let newDomainPath = $state('/');
 	let newDomainTlsEnabled = $state(true);
 	let newDomainServiceKey = $state('');
+	let newDomainRoutingMode = $state<'service' | 'redirect'>('service');
+	let newDomainRedirectTarget = $state('');
+	let newDomainRedirectStatus = $state('307');
 	let showDomainAdvanced = $state(false);
 	let creatingDomain = $state(false);
 	let domainFormError = $state<string | null>(null);
@@ -383,7 +386,10 @@
 		const sameHost = projectIngresses.filter((i) => i.host === newDomainNormalizedHost);
 		if (sameHost.length === 0) return null;
 		const otherDeployment = sameHost.find((i) => i.deploymentId !== deployment?.id);
-		const pathCollision = sameHost.find((i) => (i.path || '/') === newDomainNormalizedPath);
+		const pathCollision =
+			newDomainRoutingMode === 'redirect'
+				? sameHost[0]
+				: sameHost.find((i) => (i.path || '/') === newDomainNormalizedPath);
 		return { otherDeployment: !!otherDeployment, pathCollision: !!pathCollision };
 	});
 
@@ -1745,6 +1751,9 @@
 		newDomainPath = '/';
 		newDomainTlsEnabled = true;
 		newDomainServiceKey = domainServiceOptions[0]?.key ?? '';
+		newDomainRoutingMode = 'service';
+		newDomainRedirectTarget = '';
+		newDomainRedirectStatus = '307';
 		showDomainAdvanced = false;
 		domainFormError = null;
 	}
@@ -1825,8 +1834,12 @@
 			return;
 		}
 		const option = domainServiceOptions.find((o) => o.key === newDomainServiceKey);
-		if (!option) {
+		if (newDomainRoutingMode === 'service' && !option) {
 			domainFormError = 'Select a service';
+			return;
+		}
+		if (newDomainRoutingMode === 'redirect' && !newDomainRedirectTarget.trim()) {
+			domainFormError = 'Redirect destination is required';
 			return;
 		}
 
@@ -1837,17 +1850,27 @@
 			const response = await apiFetch(`/apiv1/projects/${deployment.project.id}/ingresses`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					host: newDomainNormalizedHost,
-					tlsEnabled: newDomainTlsEnabled,
-					routes: [
-						{
-							path: newDomainNormalizedPath,
-							serviceName: option.serviceName,
-							servicePort: option.port
-						}
-					]
-				})
+				body: JSON.stringify(
+					newDomainRoutingMode === 'redirect'
+						? {
+								host: newDomainNormalizedHost,
+								tlsEnabled: newDomainTlsEnabled,
+								deploymentId: deployment.id,
+								redirectTarget: newDomainRedirectTarget.trim(),
+								redirectStatus: Number(newDomainRedirectStatus)
+							}
+						: {
+								host: newDomainNormalizedHost,
+								tlsEnabled: newDomainTlsEnabled,
+								routes: [
+									{
+										path: newDomainNormalizedPath,
+										serviceName: option!.serviceName,
+										servicePort: option!.port
+									}
+								]
+							}
+				)
 			});
 
 			if (!response.ok) {
@@ -1856,7 +1879,12 @@
 			}
 
 			toasts.add({
-				title: newDomainConflict ? 'Route added' : 'Domain added',
+				title:
+					newDomainRoutingMode === 'redirect'
+						? 'Redirect added'
+						: newDomainConflict
+							? 'Route added'
+							: 'Domain added',
 				description: `${newDomainNormalizedHost}${newDomainNormalizedPath === '/' ? '' : newDomainNormalizedPath}`,
 				color: 'success'
 			});
@@ -3100,6 +3128,9 @@
 							bind:newDomainPath
 							bind:newDomainTlsEnabled
 							bind:newDomainServiceKey
+							bind:newDomainRoutingMode
+							bind:newDomainRedirectTarget
+							bind:newDomainRedirectStatus
 							bind:showDomainAdvanced
 							{creatingDomain}
 							{domainFormError}

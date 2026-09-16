@@ -57,7 +57,9 @@ async function main() {
     });
 
     console.log('');
-    console.log(`  Open this to sign in as ${user.email} (valid for ${OTP_EXPIRY_MINUTES} minutes):`);
+    console.log(
+      `  Open this to sign in as ${user.email} (valid for ${OTP_EXPIRY_MINUTES} minutes):`
+    );
     console.log('');
     console.log(`    ${loginUrl(user.email, code, flag('--url'))}`);
     console.log('');

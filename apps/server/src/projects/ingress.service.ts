@@ -48,6 +48,37 @@ const CERT_CLUSTER_ISSUER = process.env.CERT_CLUSTER_ISSUER || 'letsencrypt-prod
 // protected host fall open. Basic auth and shared-password are always offered.
 const ORCHARD_LOGIN_PROTECTION_ENABLED = process.env.PROTECTION_ORCHARD_LOGIN === 'true';
 
+const REDIRECT_STATUSES = new Set([301, 302, 307, 308]);
+
+function normalizeRedirectTarget(value: string, sourceHost: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) throw new BadRequestException('Redirect destination is required');
+
+  let target: URL;
+  try {
+    target = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new BadRequestException('Redirect destination is invalid');
+  }
+
+  if (
+    !['http:', 'https:'].includes(target.protocol) ||
+    target.username ||
+    target.password ||
+    (target.pathname && target.pathname !== '/') ||
+    target.search ||
+    target.hash
+  ) {
+    throw new BadRequestException('Redirect destination must be an HTTP or HTTPS domain');
+  }
+
+  if (target.hostname.toLowerCase() === sourceHost) {
+    throw new BadRequestException('Redirect destination must be different from the source domain');
+  }
+
+  return target.origin;
+}
+
 type BasicAuthPlan =
   | { via: 'none' }
   | { via: 'cilium' }
@@ -1059,12 +1090,168 @@ export class IngressService implements OnModuleInit {
     return this.deployments.addInternalUrlsToDeployment(result);
   }
 
+  private async createProjectRedirectIngress(
+    project: any,
+    rawHost: string,
+    data: {
+      tlsEnabled?: boolean;
+      deploymentId?: string;
+      redirectTarget?: string;
+      redirectStatus?: number;
+    },
+    user: { id: string; email?: string | null },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const redirectTarget = normalizeRedirectTarget(data.redirectTarget || '', rawHost);
+    const redirectStatus = Number(data.redirectStatus ?? 307);
+    if (!REDIRECT_STATUSES.has(redirectStatus)) {
+      throw new BadRequestException('Redirect status must be 301, 302, 307, or 308');
+    }
+
+    const existing = project.deployments
+      .flatMap((deployment) => deployment.ingresses ?? [])
+      .find((ingress) => ingress.host === rawHost);
+    if (existing) {
+      throw new BadRequestException('This domain is already in use by the project');
+    }
+
+    const deployment = data.deploymentId
+      ? project.deployments.find((entry) => entry.id === data.deploymentId)
+      : project.deployments[0];
+    if (!deployment) {
+      throw new BadRequestException('Select an app for this redirect');
+    }
+
+    const proxyServicePort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
+
+    const tlsEnabled = data.tlsEnabled !== false;
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
+    const tlsSecretName = tlsEnabled
+      ? (wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`)
+      : null;
+    const tlsHosts = tlsSecretName ? [rawHost] : [];
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
+    const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
+    const annotations: Record<string, string> = {};
+    if (tlsEnabled) annotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+    if (clusterIssuer) annotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
+
+    const hostSlug = rawHost
+      .split('.')
+      .map((segment) => formatSlug(segment))
+      .filter(Boolean)
+      .join('-');
+    const baseName =
+      truncateK8sName(formatSlug(`${project.slug}-${hostSlug}-redirect`), 48) ||
+      `redirect-${Math.floor(Date.now() / 1000)}`;
+    let ingressName = baseName;
+    let suffixCounter = 1;
+    while (
+      await this.prisma.ingress.findFirst({
+        where: { namespace: project.namespace, name: ingressName }
+      })
+    ) {
+      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
+      if (suffixCounter > 50) {
+        throw new BadRequestException('Failed to generate unique ingress name');
+      }
+    }
+
+    await this.access.assertHostnameAvailable(rawHost, project.id);
+
+    const ingressResult = await this.k8sNetwork.createIngress({
+      namespace: project.namespace,
+      name: ingressName,
+      host: rawHost,
+      path: '/',
+      pathType: 'Prefix',
+      serviceName: 'orchard-protection-proxy',
+      servicePort: proxyServicePort,
+      tlsSecretName: tlsSecretName || undefined,
+      tlsHosts,
+      ingressClassName: TENANT_INGRESS_CLASS,
+      entrypoints,
+      annotations
+    });
+    const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
+      ? ingressResult.status?.loadBalancer?.ingress?.[0] || null
+      : null;
+    const statusAddress = statusRecord?.ip || statusRecord?.hostname || null;
+
+    let created;
+    try {
+      created = await this.prisma.ingress.create({
+        data: {
+          projectId: project.id,
+          deploymentId: deployment.id,
+          name: ingressName,
+          namespace: project.namespace,
+          host: rawHost,
+          path: '/',
+          pathType: 'Prefix',
+          tlsSecretName,
+          tlsHosts,
+          ingressClass: TENANT_INGRESS_CLASS,
+          entrypoints,
+          clusterIssuer,
+          annotations: Object.keys(annotations).length
+            ? (annotations as Prisma.JsonObject)
+            : undefined,
+          statusAddress,
+          redirectTarget,
+          redirectStatus
+        }
+      });
+    } catch (error) {
+      try {
+        await this.k8sNetwork.deleteIngress(project.namespace, ingressName);
+      } catch {}
+      throw error;
+    }
+
+    const proxyResult = await this.k8sNetwork.enableProtectionProxy(project.namespace, ingressName);
+    if (proxyResult !== 'applied') {
+      await this.prisma.ingress.delete({ where: { id: created.id } });
+      try {
+        await this.k8sNetwork.deleteIngress(project.namespace, ingressName);
+      } catch {}
+      throw new BadRequestException(
+        'Could not configure the domain redirect; try again in a moment'
+      );
+    }
+
+    void this.audit.log({
+      action: 'ingress.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId: project.id,
+      deploymentId: deployment.id,
+      targetType: 'ingress',
+      targetId: created.id,
+      targetLabel: rawHost,
+      metadata: { host: rawHost, redirectTarget, redirectStatus }
+    });
+
+    return this.projects.getProject(project.id, clerkId, userData);
+  }
+
   async createProjectIngress(
     projectId: string,
     data: {
       host: string;
       tlsEnabled?: boolean;
-      routes: { path: string; serviceName: string; servicePort: number }[];
+      routes?: { path: string; serviceName: string; servicePort: number }[];
+      deploymentId?: string;
+      redirectTarget?: string;
+      redirectStatus?: number;
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -1118,6 +1305,10 @@ export class IngressService implements OnModuleInit {
       /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
+    }
+
+    if (data.redirectTarget) {
+      return this.createProjectRedirectIngress(project, rawHost, data, user, clerkId, userData);
     }
 
     const routes = Array.isArray(data.routes) && data.routes.length > 0 ? data.routes : null;
@@ -2571,6 +2762,9 @@ export class IngressService implements OnModuleInit {
     });
 
     if (!ingress) throw new NotFoundException('Ingress not found');
+    if (ingress.redirectTarget) {
+      throw new BadRequestException('Access protection is not available for redirect domains');
+    }
 
     const wasProtected = ingress.protectionMode !== 'none';
     const willProtect = mode !== 'none';

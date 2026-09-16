@@ -88,7 +88,11 @@ test('only a superadmin can have one', async () => {
 
 test('with no email it takes the oldest superadmin', async () => {
   const older = superadmin('first@example.com');
-  const newer = { ...superadmin('second@example.com'), id: 'u2', createdAt: new Date('2026-06-01') };
+  const newer = {
+    ...superadmin('second@example.com'),
+    id: 'u2',
+    createdAt: new Date('2026-06-01')
+  };
   const prisma = prismaWith([newer, older]);
 
   const who = await setSuperadminPassword(prisma, '', 'a long enough password');
@@ -100,10 +104,13 @@ test('the right password signs in, a wrong one does not', async () => {
   const prisma = prismaWith([row]);
   await setSuperadminPassword(prisma, '', 'a long enough password');
 
-  assert.deepEqual(await verifySuperadminPassword(prisma, 'boss@example.com', 'a long enough password'), {
-    id: 'u1',
-    email: 'boss@example.com'
-  });
+  assert.deepEqual(
+    await verifySuperadminPassword(prisma, 'boss@example.com', 'a long enough password'),
+    {
+      id: 'u1',
+      email: 'boss@example.com'
+    }
+  );
   assert.equal(await verifySuperadminPassword(prisma, 'boss@example.com', 'wrong'), null);
 });
 
@@ -141,7 +148,10 @@ test('clearing removes it', async () => {
   await clearSuperadminPassword(prisma, '');
   assert.equal(row.passwordHash, null);
   assert.equal(await superadminHasPassword(prisma, 'boss@example.com'), false);
-  assert.equal(await verifySuperadminPassword(prisma, 'boss@example.com', 'a long enough password'), null);
+  assert.equal(
+    await verifySuperadminPassword(prisma, 'boss@example.com', 'a long enough password'),
+    null
+  );
 });
 
 test('email case and whitespace do not matter', async () => {

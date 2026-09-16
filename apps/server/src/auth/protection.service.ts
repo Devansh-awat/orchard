@@ -23,6 +23,8 @@ interface CachedIngress {
   protectionPasswordHash: string | null;
   protectionBypassSecret: string | null;
   protectionBypassPaths: string[];
+  redirectTarget: string | null;
+  redirectStatus: number | null;
   project: { organizationId: string; name: string };
   host: string;
   upstreamHost: string | null;
@@ -132,7 +134,10 @@ export class ProtectionService {
     if (negativeExpiry && negativeExpiry > Date.now()) return null;
 
     const ingress = await this.prisma.ingress.findFirst({
-      where: { host, protectionMode: { not: 'none' } },
+      where: {
+        host,
+        OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+      },
       select: {
         id: true,
         projectId: true,
@@ -142,6 +147,8 @@ export class ProtectionService {
         protectionPasswordHash: true,
         protectionBypassSecret: true,
         protectionBypassPaths: true,
+        redirectTarget: true,
+        redirectStatus: true,
         host: true,
         project: { select: { organizationId: true, name: true } },
         service: { select: { name: true, port: true } }
@@ -378,6 +385,16 @@ export class ProtectionService {
     const ingress = await this.resolveIngressFromHost(host);
     if (!ingress) return false;
 
+    if (ingress.redirectTarget) {
+      const location = new URL(
+        req.originalUrl || req.url || '/',
+        ingress.redirectTarget
+      ).toString();
+      res.setHeader('location', location);
+      res.status(ingress.redirectStatus || 307).send('');
+      return true;
+    }
+
     const cookieHeader = req.headers['cookie']?.toString();
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
     const authorizationHeader = req.headers['authorization']?.toString();
@@ -414,6 +431,26 @@ export class ProtectionService {
       .replace(/:\d+$/, '');
     const ingress = await this.resolveIngressFromHost(host);
     if (!ingress) return false;
+
+    if (ingress.redirectTarget) {
+      const status = ingress.redirectStatus || 307;
+      const label =
+        status === 301
+          ? 'Moved Permanently'
+          : status === 302
+            ? 'Found'
+            : status === 307
+              ? 'Temporary Redirect'
+              : 'Permanent Redirect';
+      const location = new URL(req.url || '/', ingress.redirectTarget).toString();
+      try {
+        socket.write(
+          `HTTP/1.1 ${status} ${label}\r\nLocation: ${location}\r\nConnection: close\r\n\r\n`
+        );
+      } catch {}
+      socket.destroy();
+      return true;
+    }
 
     const reject = (status: string) => {
       try {

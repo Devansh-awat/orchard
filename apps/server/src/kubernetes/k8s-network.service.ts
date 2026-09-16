@@ -145,7 +145,9 @@ export class K8sNetworkService implements OnModuleInit {
     let protectedIngresses: { namespace: string; name: string }[];
     try {
       protectedIngresses = await this.prisma.ingress.findMany({
-        where: { protectionMode: { not: 'none' } },
+        where: {
+          OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+        },
         select: { namespace: true, name: true },
         distinct: ['namespace', 'name']
       });
@@ -239,7 +241,11 @@ export class K8sNetworkService implements OnModuleInit {
         where: { namespace, name },
         include: { service: { include: { ports: true } } }
       });
-      if (rows.length === 0 || rows.some((r) => r.protectionMode !== 'none')) continue;
+      if (
+        rows.length === 0 ||
+        rows.some((r) => r.protectionMode !== 'none' || r.redirectTarget !== null)
+      )
+        continue;
 
       const backendByPath = new Map(
         rows
@@ -916,10 +922,19 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  async cleanupProtectionProxy(namespace: string): Promise<void> {
+  async cleanupProtectionProxy(namespace: string, excludedIngressName?: string): Promise<void> {
     this.ensureKubeConfig();
     const cleanNamespace = String(namespace || '').trim();
     if (!cleanNamespace) return;
+
+    const remaining = await this.prisma.ingress.count({
+      where: {
+        namespace: cleanNamespace,
+        name: excludedIngressName ? { not: excludedIngressName } : undefined,
+        OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+      }
+    });
+    if (remaining > 0) return;
 
     const proxyServiceName = 'orchard-protection-proxy';
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -1476,7 +1491,7 @@ export class K8sNetworkService implements OnModuleInit {
 
       await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
       await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
-      await this.cleanupProtectionProxy(cleanNamespace);
+      await this.cleanupProtectionProxy(cleanNamespace, cleanName);
 
       return {
         success: true,
