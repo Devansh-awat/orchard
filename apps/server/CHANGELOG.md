@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.40.0](https://github.com/hackclub/orchard/compare/server/v2.39.1...server/v2.40.0) (2026-09-16)
+
+
+### Features
+
+* **auth:** sign in with a host-minted link or a superadmin password ([3b6f20c](https://github.com/hackclub/orchard/commit/3b6f20c07bac939e25a0fa11a3eb2fbb8d5bca10))
+* **setup:** offer a password where a passkey cannot be created ([9f9c8c7](https://github.com/hackclub/orchard/commit/9f9c8c7e25cf56c04f5ff17eaf257b12b1d4f8ac))
+
+
+### Bug Fixes
+
+* ensure smooth cutover ([#70](https://github.com/hackclub/orchard/issues/70)) ([63edee2](https://github.com/hackclub/orchard/commit/63edee24a4a1fbf79c406d6d700f4a13bf4889a6))
+
 ## [2.39.1](https://github.com/hackclub/orchard/compare/server/v2.39.0...server/v2.39.1) (2026-09-15)
 
 
