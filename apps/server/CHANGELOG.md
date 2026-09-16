@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.0](https://github.com/hackclub/orchard/compare/server/v2.40.0...server/v2.41.0) (2026-09-16)
+
+
+### Features
+
+* link domains to redirect to ([#72](https://github.com/hackclub/orchard/issues/72)) ([77c1c46](https://github.com/hackclub/orchard/commit/77c1c4682a024d9b6a21168da0097b399a9371f9))
+
 ## [2.40.0](https://github.com/hackclub/orchard/compare/server/v2.39.1...server/v2.40.0) (2026-09-16)
 
 
