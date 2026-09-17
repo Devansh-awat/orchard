@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.2](https://github.com/hackclub/orchard/compare/frontend/v1.35.1...frontend/v1.35.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* resolve namespaces through environments, not just the project ([48c5300](https://github.com/hackclub/orchard/commit/48c5300abde209cbc2a5cbc1c699c44b8c2eca3c))
+
 ## [1.35.1](https://github.com/hackclub/orchard/compare/frontend/v1.35.0...frontend/v1.35.1) (2026-09-17)
 
 

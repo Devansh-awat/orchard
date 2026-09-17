@@ -8,8 +8,7 @@ const PROJECT = { id: 'proj-1', organizationId: 'org-1' };
 function prismaStub() {
   return {
     project: {
-      findFirst: async ({ where }: any) =>
-        where.namespace === 'ysws-crescent' ? PROJECT : null
+      findFirst: async ({ where }: any) => (where.namespace === 'ysws-crescent' ? PROJECT : null)
     },
     environment: {
       findUnique: async ({ where }: any) => {

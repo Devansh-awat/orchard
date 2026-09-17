@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.42.1](https://github.com/hackclub/orchard/compare/server/v2.42.0...server/v2.42.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* resolve namespaces through environments, not just the project ([48c5300](https://github.com/hackclub/orchard/commit/48c5300abde209cbc2a5cbc1c699c44b8c2eca3c))
+
 ## [2.42.0](https://github.com/hackclub/orchard/compare/server/v2.41.1...server/v2.42.0) (2026-09-17)
 
 
