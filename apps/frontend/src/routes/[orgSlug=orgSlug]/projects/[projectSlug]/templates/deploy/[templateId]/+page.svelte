@@ -83,8 +83,6 @@
 			.replace(/-+$/, '');
 	}
 
-	// The server slugifies name params rather than rejecting them, so show the
-	// user what they are actually getting before they hit deploy.
 	function normalizeNameParam(param: ParameterDef) {
 		if (!isNameParam(param)) return;
 		const raw = paramValues[param.name];
