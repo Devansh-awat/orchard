@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.42.0](https://github.com/hackclub/orchard/compare/server/v2.41.1...server/v2.42.0) (2026-09-17)
+
+
+### Features
+
+* allow users to stop apps ([#61](https://github.com/hackclub/orchard/issues/61)) ([d45734a](https://github.com/hackclub/orchard/commit/d45734ad527fa868c0734c2c312c4db002803883))
+* **auth:** sign in with a host-minted link or a superadmin password ([3b6f20c](https://github.com/hackclub/orchard/commit/3b6f20c07bac939e25a0fa11a3eb2fbb8d5bca10))
+* **frontend:** mouse, paste, zoom, titles and a settings menu for the pod shell ([1817925](https://github.com/hackclub/orchard/commit/181792550b2984c93e2be4cd595188145fb7b725))
+* **hostctl:** stop, start and restart the instance ([4601393](https://github.com/hackclub/orchard/commit/460139364f7a3da00802880abe2a449e4ab4fd90))
+* let superadmins create unlimited sandboxes ([d30164e](https://github.com/hackclub/orchard/commit/d30164e70d2978c7c8aa776d9ef01979b7c11596))
+* link domains to redirect to ([#72](https://github.com/hackclub/orchard/issues/72)) ([77c1c46](https://github.com/hackclub/orchard/commit/77c1c4682a024d9b6a21168da0097b399a9371f9))
+* **server:** durable pod shell sessions that survive a dropped connection ([89309ff](https://github.com/hackclub/orchard/commit/89309ff9f0d0a5b8843879ce0b11e63829714be1))
+* **setup:** offer a password where a passkey cannot be created ([9f9c8c7](https://github.com/hackclub/orchard/commit/9f9c8c7e25cf56c04f5ff17eaf257b12b1d4f8ac))
+
+
+### Bug Fixes
+
+* **api:** return the URL for every ingress instead of letting clients guess it ([41226d7](https://github.com/hackclub/orchard/commit/41226d7f6edbcfe44af39bd06602eaa301fa7cd5))
+* ensure smooth cutover ([#70](https://github.com/hackclub/orchard/issues/70)) ([63edee2](https://github.com/hackclub/orchard/commit/63edee24a4a1fbf79c406d6d700f4a13bf4889a6))
+* handle query-statistics bug for JSON ([#60](https://github.com/hackclub/orchard/issues/60)) ([d45d892](https://github.com/hackclub/orchard/commit/d45d892e7d7adb3c0e2cc29c9ab835038fe0d54a))
+* **hostctl:** stop claiming a hostname works before it is deployed ([46a3b89](https://github.com/hackclub/orchard/commit/46a3b898d34da6fa1e03b68cb8056f286dded703))
+* **hostctl:** take the claim link's port from frontend_url ([f8b3ef9](https://github.com/hackclub/orchard/commit/f8b3ef92be902b1fead8862f3c0887600cfc1810))
+* **install:** make a lan install reachable at the addresses it actually has ([2026400](https://github.com/hackclub/orchard/commit/2026400797c9239aef919e55f368a67cfd4e7247))
+* measure sandbox max lifetime from the current run, not the row's age ([f8eb41c](https://github.com/hackclub/orchard/commit/f8eb41c10f87fee6ec68840e7eabc5357c3ed668))
+* **server:** exec text frames are control only, real upstream backpressure, forced resize ([54a88fc](https://github.com/hackclub/orchard/commit/54a88fc52697e4f88d27e6929e0ce4edb0bc7e1f))
+* **server:** keep a stopped app stopped through a rebuild ([981dff5](https://github.com/hackclub/orchard/commit/981dff503eff6ff08bc7c5a45f62e1f96ab170bf))
+* **server:** safely transition health probe handlers ([b786b4e](https://github.com/hackclub/orchard/commit/b786b4e83f3b48ae1e895afba7ff23a6f960ddec))
+* slugify template name params instead of rejecting spaces ([0c856a1](https://github.com/hackclub/orchard/commit/0c856a1267e3a1da927ac87aa8246951c25f102e))
+
 ## [2.41.1](https://github.com/hackclub/orchard/compare/server/v2.41.0...server/v2.41.1) (2026-09-17)
 
 

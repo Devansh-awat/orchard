@@ -1303,8 +1303,7 @@
 										{#snippet children({ close })}
 											<Input
 												value={branchQuery}
-												oninput={(e: Event) =>
-													(branchQuery = (e.target as HTMLInputElement).value)}
+												oninput={(e: Event) => (branchQuery = (e.target as HTMLInputElement).value)}
 												placeholder="Search branches"
 											/>
 											<div class="picker-list">

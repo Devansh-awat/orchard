@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.35.1](https://github.com/hackclub/orchard/compare/frontend/v1.35.0...frontend/v1.35.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* list every branch in the branch pickers, not just the selected one ([0ebbf3c](https://github.com/hackclub/orchard/commit/0ebbf3c30a4fdf0c6d643d8f2463079ea5db05eb))
+* slugify template name params instead of rejecting spaces ([0c856a1](https://github.com/hackclub/orchard/commit/0c856a1267e3a1da927ac87aa8246951c25f102e))
+
 ## [1.35.0](https://github.com/hackclub/orchard/compare/frontend/v1.34.0...frontend/v1.35.0) (2026-09-16)
 
 
