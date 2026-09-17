@@ -6896,10 +6896,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             data: { image, buildStep: 'deploying', buildStepTimestamps: ts }
           });
         })(),
-        this.k8sWorkload
-          .getKubernetesDeployment(data.name, data.namespace)
-          .then((d) => d !== null)
-          .catch(() => false)
+        this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace).then((d) => d !== null)
       ]);
 
       this.prisma.$executeRaw`

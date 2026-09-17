@@ -29,6 +29,7 @@ import {
 import { computePodStatus } from '../mirror/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
 import { rollingUpdateStrategy } from './rollout-strategy';
+import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -270,7 +271,7 @@ export class K8sWorkloadService {
         }
       };
     } catch (error) {
-      if (error.response?.statusCode === 404) {
+      if (k8sHttpException(error)?.getStatus() === 404) {
         return null;
       }
 
@@ -279,14 +280,14 @@ export class K8sWorkloadService {
       if (error.response) {
         throw new BadRequestException({
           error: 'Failed to fetch deployment from Kubernetes',
-          message: error.response.body?.message || error.message,
+          message: k8sErrorMessage(error),
           details: error.response.body
         });
       }
 
       throw new BadRequestException({
         error: 'Failed to fetch deployment',
-        message: error.message
+        message: k8sErrorMessage(error)
       });
     }
   }
@@ -2435,15 +2436,15 @@ export class K8sWorkloadService {
           ? {
               livenessProbe:
                 healthCheck.enabled && healthCheck.livenessEnabled
-                  ? this.buildProbe(healthCheck)
+                  ? this.buildProbePatch(healthCheck)
                   : null,
               readinessProbe:
                 healthCheck.enabled && healthCheck.readinessEnabled
-                  ? this.buildProbe(healthCheck)
+                  ? this.buildProbePatch(healthCheck)
                   : null,
               startupProbe:
                 healthCheck.enabled && healthCheck.startupEnabled
-                  ? this.buildProbe(healthCheck, healthCheck.startupFailureThreshold)
+                  ? this.buildProbePatch(healthCheck, healthCheck.startupFailureThreshold)
                   : null
             }
           : {})
@@ -2517,7 +2518,7 @@ export class K8sWorkloadService {
     } catch (error) {
       console.error('Error updating deployment image:', error);
 
-      if (error.response?.statusCode === 404) {
+      if (k8sHttpException(error)?.getStatus() === 404) {
         throw new NotFoundException({
           error: 'Deployment not found',
           message: `Deployment ${cleanDeploymentName} not found in namespace ${cleanNamespace}`
@@ -2526,7 +2527,7 @@ export class K8sWorkloadService {
 
       throw new BadRequestException({
         error: 'Failed to update deployment image',
-        message: error.message
+        message: k8sErrorMessage(error)
       });
     }
   }
@@ -2550,6 +2551,20 @@ export class K8sWorkloadService {
       };
     }
     return probe;
+  }
+
+  private buildProbePatch(
+    healthCheck: NonNullable<CreateDeploymentOptions['healthCheck']>,
+    failureThreshold = healthCheck.retries
+  ) {
+    const probe = this.buildProbe(healthCheck, failureThreshold);
+    return {
+      ...probe,
+      exec: probe.exec ?? null,
+      httpGet: probe.httpGet ?? null,
+      tcpSocket: probe.tcpSocket ?? null,
+      grpc: probe.grpc ?? null
+    };
   }
 
   async getPodEvents(podName: string, namespace: string) {
