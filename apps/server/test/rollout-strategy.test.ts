@@ -46,5 +46,48 @@ test('an image and its readiness probes land in one pod-template patch', async (
   const container = (applied as any).spec.template.spec.containers[0];
   assert.equal(container.image, 'example/web:v2');
   assert.deepEqual(container.readinessProbe.httpGet, { path: '/up', port: 3000 });
+  assert.equal(container.readinessProbe.exec, null);
+  assert.equal(container.readinessProbe.tcpSocket, null);
+  assert.equal(container.readinessProbe.grpc, null);
   assert.equal(container.startupProbe.failureThreshold, 9);
+});
+
+test('an exec probe patch removes every incompatible probe handler', async () => {
+  let applied: Record<string, unknown> | undefined;
+  const api = {
+    readNamespacedDeployment: async () => ({ body: { spec: { template: { spec: {} } } } }),
+    patchNamespacedDeployment: async (
+      _name: string,
+      _namespace: string,
+      patch: Record<string, unknown>
+    ) => {
+      applied = patch;
+    }
+  };
+  const service = Object.create(K8sWorkloadService.prototype) as any;
+  service.kubernetes = {
+    kc: { makeApiClient: () => api },
+    ensureKubeConfig: () => undefined
+  };
+  service.prisma = { project: { findFirst: async () => null } };
+
+  await service.updateDeploymentImage('web', 'project', 'example/web:v2', {
+    enabled: true,
+    type: 'exec',
+    command: 'node health.js',
+    execCommand: ['node', 'health.js'],
+    livenessEnabled: true,
+    readinessEnabled: true,
+    startupEnabled: true,
+    interval: 30,
+    timeout: 5,
+    retries: 3,
+    startupFailureThreshold: 13
+  });
+
+  const container = (applied as any).spec.template.spec.containers[0];
+  assert.deepEqual(container.livenessProbe.exec, { command: ['node', 'health.js'] });
+  assert.equal(container.livenessProbe.httpGet, null);
+  assert.equal(container.livenessProbe.tcpSocket, null);
+  assert.equal(container.livenessProbe.grpc, null);
 });
