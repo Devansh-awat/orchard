@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.1](https://github.com/hackclub/orchard/compare/server/v2.41.0...server/v2.41.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **server:** safely transition health probe handlers ([b786b4e](https://github.com/hackclub/orchard/commit/b786b4e83f3b48ae1e895afba7ff23a6f960ddec))
+
 ## [2.41.0](https://github.com/hackclub/orchard/compare/server/v2.40.0...server/v2.41.0) (2026-09-16)
 
 
