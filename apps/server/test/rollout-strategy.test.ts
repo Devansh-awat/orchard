@@ -13,7 +13,17 @@ test('rolling updates keep every existing replica available while the replacemen
 test('an image and its readiness probes land in one pod-template patch', async () => {
   let applied: Record<string, unknown> | undefined;
   const api = {
-    readNamespacedDeployment: async () => ({ body: { spec: { template: { spec: {} } } } }),
+    readNamespacedDeployment: async () => ({
+      body: {
+        spec: {
+          strategy: {
+            type: 'RollingUpdate',
+            rollingUpdate: { maxSurge: 0, maxUnavailable: 1 }
+          },
+          template: { spec: {} }
+        }
+      }
+    }),
     patchNamespacedDeployment: async (
       _name: string,
       _namespace: string,
@@ -44,6 +54,7 @@ test('an image and its readiness probes land in one pod-template patch', async (
   });
 
   const container = (applied as any).spec.template.spec.containers[0];
+  assert.deepEqual((applied as any).spec.strategy, rollingUpdateStrategy());
   assert.equal(container.image, 'example/web:v2');
   assert.deepEqual(container.readinessProbe.httpGet, { path: '/up', port: 3000 });
   assert.equal(container.readinessProbe.exec, null);
@@ -90,4 +101,30 @@ test('an exec probe patch removes every incompatible probe handler', async () =>
   assert.equal(container.livenessProbe.httpGet, null);
   assert.equal(container.livenessProbe.tcpSocket, null);
   assert.equal(container.livenessProbe.grpc, null);
+});
+
+test('an image update preserves an intentional recreate strategy', async () => {
+  let applied: Record<string, unknown> | undefined;
+  const api = {
+    readNamespacedDeployment: async () => ({
+      body: { spec: { strategy: { type: 'Recreate' }, template: { spec: {} } } }
+    }),
+    patchNamespacedDeployment: async (
+      _name: string,
+      _namespace: string,
+      patch: Record<string, unknown>
+    ) => {
+      applied = patch;
+    }
+  };
+  const service = Object.create(K8sWorkloadService.prototype) as any;
+  service.kubernetes = {
+    kc: { makeApiClient: () => api },
+    ensureKubeConfig: () => undefined
+  };
+  service.prisma = { project: { findFirst: async () => null } };
+
+  await service.updateDeploymentImage('web', 'project', 'example/web:v2');
+
+  assert.equal((applied as any).spec.strategy, undefined);
 });

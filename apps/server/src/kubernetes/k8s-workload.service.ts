@@ -2425,12 +2425,18 @@ export class K8sWorkloadService {
       // live object that still has RollingUpdate + PVC from before those
       // guards existed.
       let forceRecreate = false;
+      let strategy: k8s.V1DeploymentStrategy | undefined;
       try {
         const live = await api.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
         const hasPvc = (live.body.spec?.template?.spec?.volumes ?? []).some(
           (v) => v.persistentVolumeClaim?.claimName
         );
         forceRecreate = hasPvc && live.body.spec?.strategy?.type !== 'Recreate';
+        if (forceRecreate) {
+          strategy = { type: 'Recreate', rollingUpdate: null as any };
+        } else if (!hasPvc && live.body.spec?.strategy?.type !== 'Recreate') {
+          strategy = rollingUpdateStrategy();
+        }
       } catch {
         // If the read fails the patch below will fail too and report properly.
       }
@@ -2458,7 +2464,7 @@ export class K8sWorkloadService {
 
       const patch = {
         spec: {
-          ...(forceRecreate ? { strategy: { type: 'Recreate', rollingUpdate: null as any } } : {}),
+          ...(strategy ? { strategy } : {}),
           template: {
             spec: {
               containers: [containerPatch]

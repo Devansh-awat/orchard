@@ -404,8 +404,17 @@ function syncFixture(options: { existingRecord: any; env: k8s.V1EnvVar[] }) {
     };
 
   const prisma = {
-    project: { findFirst: async () => ({ id: 'p1', namespace: NAMESPACE }) },
-    environment: { findFirst: async () => ({ id: 'e1' }) },
+    project: {
+      findFirst: async () => ({ id: 'p1', organizationId: 'o1', namespace: NAMESPACE })
+    },
+    environment: {
+      findUnique: async () => ({
+        id: 'e1',
+        projectId: 'p1',
+        project: { organizationId: 'o1' }
+      }),
+      findFirst: async () => ({ id: 'e1' })
+    },
     deployment: {
       findFirst: async () => options.existingRecord,
       update: async () => options.existingRecord,
