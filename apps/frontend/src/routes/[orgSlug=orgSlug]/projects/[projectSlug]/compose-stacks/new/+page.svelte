@@ -46,6 +46,8 @@
 	let selectedBranch = $state<Branch | null>(null);
 	let repoSearch = $state('');
 	let branchSearch = $state('');
+	let branchQuery = $state('');
+	let branchPickerOpen = $state(false);
 
 	let name = $state('');
 	let composePath = $state('docker-compose.yml');
@@ -155,14 +157,29 @@
 	function clearBranchSelection() {
 		selectedBranch = null;
 		branchSearch = '';
+		branchQuery = '';
+	}
+
+	function useCustomBranch(branchName: string) {
+		selectedBranch = null;
+		branchSearch = branchName;
 	}
 
 	const filteredRepos = $derived(
 		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
 	);
 	const filteredBranches = $derived(
-		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
+		branches.filter((b) => b.name.toLowerCase().includes(branchQuery.toLowerCase()))
 	);
+	const customBranch = $derived.by(() => {
+		const typed = branchQuery.trim();
+		if (!typed || branches.some((b) => b.name === typed)) return null;
+		return typed;
+	});
+
+	$effect(() => {
+		if (branchPickerOpen) branchQuery = '';
+	});
 
 	onMount(() => {
 		fetchProjectData();
@@ -357,7 +374,7 @@
 
 					{#if selectedRepo}
 						<Field label="Branch">
-							<PopoverPanel sameWidth>
+							<PopoverPanel sameWidth bind:open={branchPickerOpen}>
 								{#snippet trigger(attrs, open)}
 									<div class="picker-wrap">
 										<button
@@ -391,12 +408,20 @@
 									</div>
 								{/snippet}
 								{#snippet children({ close })}
-									<Input
-										bind:value={branchSearch}
-										placeholder="main"
-										readonly={selectedBranch !== null}
-									/>
+									<Input bind:value={branchQuery} placeholder="Search branches" />
 									<div class="picker-list">
+										{#if customBranch}
+											<button
+												type="button"
+												class="picker-option"
+												onclick={() => {
+													useCustomBranch(customBranch);
+													close();
+												}}
+											>
+												<span class="picker-option-text">Use <strong>{customBranch}</strong></span>
+											</button>
+										{/if}
 										{#each filteredBranches as b (b.name)}
 											<button
 												type="button"
@@ -409,7 +434,13 @@
 												<span class="picker-option-text">{b.name}</span>
 											</button>
 										{:else}
-											<div class="picker-empty">No matching branches</div>
+											{#if !customBranch}
+												<div class="picker-empty">
+													{branches.length
+														? 'No matching branches'
+														: 'No branches found. Type a name to use anyway.'}
+												</div>
+											{/if}
 										{/each}
 									</div>
 								{/snippet}

@@ -105,6 +105,8 @@
 	let selectedBranch = $state<Branch | null>(null);
 	let repoSearch = $state('');
 	let branchSearch = $state('');
+	let branchQuery = $state('');
+	let branchPickerOpen = $state(false);
 	let dockerfileSearch = $state('Dockerfile');
 	let dockerfileStages = $state<string[]>([]);
 	let loadingStages = $state(false);
@@ -651,6 +653,7 @@
 		selectedBranch = null;
 		branch = '';
 		branchSearch = '';
+		branchQuery = '';
 		dockerfiles = [];
 		dockerfilePath = 'Dockerfile';
 		dockerfileSearch = 'Dockerfile';
@@ -659,10 +662,13 @@
 		buildFromRoot = false;
 	}
 
-	function handleBranchSearchInput(value: string) {
-		if (selectedBranch) return;
-		branchSearch = value;
-		branch = value;
+	function useCustomBranch(name: string) {
+		selectedBranch = null;
+		branch = name;
+		branchSearch = name;
+		if (selectedRepo) {
+			fetchDockerfiles(selectedRepo, name);
+		}
 	}
 
 	function addPort() {
@@ -976,8 +982,17 @@
 			)
 	);
 	const filteredBranches = $derived(
-		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
+		branches.filter((b) => b.name.toLowerCase().includes(branchQuery.toLowerCase()))
 	);
+	const customBranch = $derived.by(() => {
+		const typed = branchQuery.trim();
+		if (!typed || branches.some((b) => b.name === typed)) return null;
+		return typed;
+	});
+
+	$effect(() => {
+		if (branchPickerOpen) branchQuery = '';
+	});
 </script>
 
 <div class="nd-page">
@@ -1250,7 +1265,7 @@
 
 							{#if selectedRepo || repoUrl}
 								<Field label="Branch">
-									<PopoverPanel sameWidth>
+									<PopoverPanel sameWidth bind:open={branchPickerOpen}>
 										{#snippet trigger(attrs, open)}
 											<div class="picker-wrap">
 												<button
@@ -1287,13 +1302,26 @@
 										{/snippet}
 										{#snippet children({ close })}
 											<Input
-												value={branchSearch}
+												value={branchQuery}
 												oninput={(e: Event) =>
-													handleBranchSearchInput((e.target as HTMLInputElement).value)}
-												placeholder="main"
-												readonly={selectedBranch !== null}
+													(branchQuery = (e.target as HTMLInputElement).value)}
+												placeholder="Search branches"
 											/>
 											<div class="picker-list">
+												{#if customBranch}
+													<button
+														type="button"
+														class="picker-option"
+														onclick={() => {
+															useCustomBranch(customBranch);
+															close();
+														}}
+													>
+														<span class="picker-option-text">
+															Use <strong>{customBranch}</strong>
+														</span>
+													</button>
+												{/if}
 												{#each filteredBranches as b (b.name)}
 													<button
 														type="button"
@@ -1306,7 +1334,13 @@
 														<span class="picker-option-text">{b.name}</span>
 													</button>
 												{:else}
-													<div class="picker-empty">No matching branches</div>
+													{#if !customBranch}
+														<div class="picker-empty">
+															{branches.length
+																? 'No matching branches'
+																: 'No branches found. Type a name to use anyway.'}
+														</div>
+													{/if}
 												{/each}
 											</div>
 										{/snippet}
