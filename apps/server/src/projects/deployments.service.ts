@@ -4691,6 +4691,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];
       const allPods = (pods ?? []).filter((pod: any) => pod.status?.toLowerCase() !== 'succeeded');
+      // A pod on its way out is not a replica the deployment has. Counting one
+      // against the desired count is only right for the couple of seconds a
+      // rollout takes; a pod whose node died sits Terminating until the node
+      // comes back or is deleted, and every app on that node read "Scaling"
+      // for as long as it did while all of its replicas were up and serving.
+      const livePods = allPods.filter((pod: any) => pod.status?.toLowerCase() !== 'terminating');
       const desiredReplicas = deployment.replicas || 1;
 
       if (allPods.length === 0) {
@@ -4735,8 +4741,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         return hasAnyRestarts ? 'restarting' : 'scaling';
       }
 
-      // More total pods than desired = scaling down or rolling restart in progress
-      if (allPods.length > desiredReplicas) {
+      // More live pods than desired = scaling down or rolling restart in progress
+      if (livePods.length > desiredReplicas) {
         return hasAnyRestarts ? 'restarting' : 'scaling';
       }
 

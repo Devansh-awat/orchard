@@ -501,27 +501,43 @@ export class MirrorInformer {
    * skipped, so a handler that throws — or a process that dies between the
    * write and the handler — is retried on the next pass instead of hiding
    * behind a resourceVersion that already looks up to date.
+   *
+   * `bounded` is the semaphore invariant: a permit is held for exactly one
+   * level of the call stack. The list path arrives here holding none and fans a
+   * whole chunk out under the limit; the watch path already took a permit for
+   * the entire event in `enqueue` and must not ask for a second one. It used
+   * to, and a node going down was enough to wedge the shard for good: once
+   * EVENT_CONCURRENCY pods changed at the same time, every permit was held by
+   * an event waiting on a permit only one of the others could release. Nothing
+   * else moved after that — no updates, no deletes, and the resync that was
+   * supposed to repair it blocked in here too, so the mirror served a snapshot
+   * of the cluster as it was the moment the node died until the process
+   * restarted.
    */
-  private async derive(type: MirrorEventType, entries: PendingWrite[]): Promise<void> {
+  private async derive(
+    type: MirrorEventType,
+    entries: PendingWrite[],
+    bounded = true
+  ): Promise<void> {
     if (!this.config.onEvent || entries.length === 0) return;
     const applied = await Promise.all(
       entries.map((entry) =>
-        this.sem.run(async () => {
-          try {
-            await this.config.onEvent!(type, entry.obj);
-            return entry;
-          } catch (err) {
-            this.logger.warn(
-              `event handler failed for ${entry.obj?.metadata?.name}: ${errorText(err)}`
-            );
-            return null;
-          }
-        })
+        bounded ? this.sem.run(() => this.apply(type, entry)) : this.apply(type, entry)
       )
     );
     const ok = applied.filter((entry): entry is PendingWrite => entry !== null);
     if (ok.length < entries.length) this.scheduleRepair();
     await this.markDerived(ok);
+  }
+
+  private async apply(type: MirrorEventType, entry: PendingWrite): Promise<PendingWrite | null> {
+    try {
+      await this.config.onEvent!(type, entry.obj);
+      return entry;
+    } catch (err) {
+      this.logger.warn(`event handler failed for ${entry.obj?.metadata?.name}: ${errorText(err)}`);
+      return null;
+    }
   }
 
   private async markDerived(entries: PendingWrite[]): Promise<void> {
@@ -611,7 +627,20 @@ export class MirrorInformer {
     if (this.stopped) return;
 
     if (phase === 'DELETED') {
-      await this.prisma.k8sObject.delete({ where: { uid: obj.metadata.uid } }).catch(() => {});
+      try {
+        await this.prisma.k8sObject.delete({ where: { uid: obj.metadata.uid } });
+      } catch (err) {
+        // P2025 is "no such row", which is the state this was asking for.
+        // Anything else left the object in the mirror after the cluster
+        // dropped it, and the watch has already moved past the only event
+        // that would have removed it — a repair list is what clears it.
+        if ((err as { code?: string })?.code !== 'P2025') {
+          this.logger.warn(
+            `delete of ${obj.metadata.namespace}/${obj.metadata.name} failed: ${errorText(err)}`
+          );
+          this.scheduleRepair();
+        }
+      }
       if (this.config.onEvent) await this.config.onEvent('delete', obj);
       return;
     }
@@ -629,7 +658,7 @@ export class MirrorInformer {
     // straight back to read the mirror, so the row has to be there before they
     // are told to look.
     await this.writeRows([this.toRow(obj, resolved.refs)]);
-    await this.derive(phase === 'ADDED' ? 'add' : 'update', [{ obj, refs: resolved.refs }]);
+    await this.derive(phase === 'ADDED' ? 'add' : 'update', [{ obj, refs: resolved.refs }], false);
   }
 
   private onDone(err: unknown): void {

@@ -78,6 +78,15 @@ function listAndSync(informer: MirrorInformer) {
   ).listAndSync(false);
 }
 
+/** The watch's own entry point: queues the event rather than awaiting it. */
+function dispatch(informer: MirrorInformer, phase: string, o: unknown) {
+  (informer as unknown as { dispatch(phase: string, o: unknown): void }).dispatch(phase, o);
+}
+
+function drain(informer: MirrorInformer) {
+  return (informer as unknown as { drain(): Promise<void> }).drain();
+}
+
 function handle(informer: MirrorInformer, phase: string, o: unknown) {
   return (informer as unknown as { handle(phase: string, o: unknown): Promise<void> }).handle(
     phase,
@@ -351,6 +360,34 @@ test('a watch event for a same-name replacement does not collide either', async 
   const rows = await mirrored();
   assert.equal(rows.length, 1);
   assert.equal(rows[0].uid, 'uid-new');
+});
+
+test('a burst of watch events larger than the concurrency limit still drains', async () => {
+  // What a node going down looks like from the pods watch: dozens of objects
+  // changing in the same instant. Each event used to hold a semaphore permit
+  // for its whole lifetime and then ask for a second one to run the consumer,
+  // so once the limit was reached every permit was held by an event waiting on
+  // a permit only one of the others could release. The shard stopped applying
+  // anything from that moment on and served a frozen cluster until it
+  // restarted, which is how deleted pods lived on in the UI for days.
+  const informer = newInformer();
+  const burst = Array.from({ length: 36 }, (_, i) =>
+    obj(`burst-${i}`, `ing-burst-${String(i).padStart(3, '0')}`)
+  );
+
+  for (const o of burst) dispatch(informer, 'ADDED', o);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wedged = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('the event pipeline deadlocked')), 20_000);
+  });
+  try {
+    await Promise.race([drain(informer), wedged]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  assert.equal(seenEvents.length, burst.length);
+  assert.equal(await prisma.k8sObject.count({ where: { shard: SHARD } }), burst.length);
 });
 
 test('objects that leave the cluster are swept and reported as deletes', async () => {
