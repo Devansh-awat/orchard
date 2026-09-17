@@ -29,7 +29,7 @@
 <script lang="ts">
 	import { Timer } from 'lucide-svelte';
 
-	let { updatedAt }: { updatedAt: string } = $props();
+	let { startedAt }: { startedAt: string } = $props();
 
 	$effect(() => subscribe());
 
@@ -40,7 +40,7 @@
 	}
 
 	const elapsed = $derived(
-		Math.max(0, Math.floor((getNow() - new Date(updatedAt).getTime()) / 1000))
+		Math.max(0, Math.floor((getNow() - new Date(startedAt).getTime()) / 1000))
 	);
 </script>
 

@@ -42,6 +42,7 @@ export interface ActiveBuild {
 	status: string;
 	buildStatus: string;
 	buildStep: string | null;
+	buildStartedAt?: string | null;
 	updatedAt: string;
 	githubRepo?: string;
 	githubBranch?: string;

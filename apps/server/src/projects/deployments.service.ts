@@ -60,6 +60,7 @@ const INGRESS_URL_SELECT = {
 import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
 import { isObservedJobStatus } from './build-recovery';
+import { buildStartedAtFrom } from './build-timing';
 
 // Ceiling on the disruption budget. Nothing in Orchard scales anywhere near
 // this, and it keeps a fat-fingered value from being stored as a number the
@@ -910,6 +911,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         status: true,
         buildStatus: true,
         buildStep: true,
+        buildStepTimestamps: true,
         updatedAt: true,
         githubRepo: true,
         githubBranch: true,
@@ -947,7 +949,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     return {
-      active: activeBuilds.map((d) => ({ ...d, ingresses: d.ingresses.map(scrubIngress) })),
+      // The elapsed counter runs off `buildStartedAt`; `updatedAt` is only a
+      // fallback for builds that predate step timestamps.
+      active: activeBuilds.map(({ buildStepTimestamps, ...d }) => ({
+        ...d,
+        buildStartedAt: buildStartedAtFrom(buildStepTimestamps),
+        ingresses: d.ingresses.map(scrubIngress)
+      })),
       recent: recentBuilds.map((b) =>
         b.deployment
           ? {

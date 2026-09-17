@@ -216,6 +216,8 @@ jobs:
         run: pnpm --filter server test:template-params
       - name: Namespace to project resolution test
         run: pnpm --filter server test:namespace-scope
+      - name: Build elapsed timing test
+        run: pnpm --filter server test:build-timing
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
       - name: Setup gate test

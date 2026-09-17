@@ -59,7 +59,7 @@
 						{/if}{b.buildStep ?? 'Building'}</span
 					>
 				</div>
-				<span class="bld-time bld-time--live"><BuildTimer updatedAt={b.updatedAt} /></span>
+				<span class="bld-time bld-time--live"><BuildTimer startedAt={b.buildStartedAt || b.updatedAt} /></span>
 			</a>
 		{/each}
 		{#each recentBuilds as b, i (b.id)}
