@@ -1,24 +1,5 @@
 /* Database page — shared component styles */
 
-.db-back {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5rem;
-	font-size: var(--text-footnote);
-	line-height: var(--lh-footnote);
-	color: var(--surface-muted);
-	background: none;
-	border: none;
-	cursor: pointer;
-	padding: 0;
-	margin-bottom: 1.5rem;
-	transition: color var(--dur-fast);
-}
-
-.db-back:hover {
-	color: var(--center-channel-color);
-}
-
 .db-header {
 	display: flex;
 	align-items: flex-start;

@@ -12,6 +12,7 @@
 	} from '$lib/stores';
 	import type { PageData } from './$types';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import {
 		Loader2,
 		Key,
@@ -1292,9 +1293,22 @@
 			(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
 			(ls?.restartCount ?? 0) >= 5
 		)}
+		<Breadcrumb
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				...(database.project
+					? [
+							{
+								label: database.project.name || database.project.slug,
+								href: `/${orgSlug}/projects/${database.project.slug}`
+							}
+						]
+					: []),
+				{ label: database.name }
+			]}
+		/>
 		<DatabaseHeader
 			{database}
-			{orgSlug}
 			{deleting}
 			onOpenDeleteModal={openDeleteModal}
 			onRename={() => (renameOpen = true)}
@@ -1385,7 +1399,7 @@
 			</div>
 
 			{#if activeTab === 'connection'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					<ConnectionTab
 						{database}
 						{orgSlug}
@@ -1400,7 +1414,7 @@
 					/>
 				</section>
 			{:else if activeTab === 'backups'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					<BackupsTab
 						{database}
 						{orgSlug}
@@ -1423,7 +1437,7 @@
 					/>
 				</section>
 			{:else if activeTab === 'extensions'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					<ExtensionsTab
 						{database}
 						{filteredExtensions}
@@ -1437,7 +1451,7 @@
 					/>
 				</section>
 			{:else if activeTab === 'queries'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					<QueriesTab
 						{database}
 						stats={queryStats}
@@ -1452,7 +1466,7 @@
 					/>
 				</section>
 			{:else if activeTab === 'metrics'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					{#if database?.mode !== 'shared'}
 						<div class="card rounded-2xl p-5">
 							<DeploymentMetrics kind="database" id={database?.id ?? null} />
@@ -1465,7 +1479,7 @@
 					{/if}
 				</section>
 			{:else if activeTab === 'resources'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					{#if database?.mode !== 'shared'}
 						{#if database?.mode === 'cnpg'}
 							<StorageCard
@@ -1504,7 +1518,7 @@
 					{/if}
 				</section>
 			{:else if activeTab === 'settings'}
-				<section class="tab-panel">
+				<section class="db-tab-panel">
 					<SettingsTab
 						{database}
 						paramSchema={PARAM_SCHEMA}
@@ -1524,7 +1538,7 @@
 				</section>
 			{/if}
 			{#if terminalVisited}
-				<section class="tab-panel" hidden={activeTab !== 'terminal'}>
+				<section class="db-tab-panel" hidden={activeTab !== 'terminal'}>
 					<TerminalTab
 						{database}
 						{logs}
@@ -1609,9 +1623,20 @@
 
 <style>
 	.db-page {
-		max-width: 52rem;
+		max-width: 100rem;
 		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
+		padding: 1.5rem;
+	}
+
+	.db-page :global(.bc) {
+		align-self: flex-start;
+		width: fit-content;
+		margin-bottom: 1rem;
+		padding: 0.3125rem 0.75rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+		box-shadow: var(--elev-1);
 	}
 
 	.db-skeleton {
@@ -1723,7 +1748,7 @@
 		margin-bottom: 1.5rem;
 	}
 
-	.tab-panel {
+	.db-tab-panel {
 		color: var(--center-channel-color);
 		animation: tab-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}

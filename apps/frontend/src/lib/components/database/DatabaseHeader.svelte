@@ -1,12 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { ArrowLeft, Database, Pencil, Trash2, Play, RefreshCw, Square } from 'lucide-svelte';
+	import { Database, Pencil, Trash2, Play, RefreshCw, Square } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
 	let {
 		database,
-		orgSlug,
 		deleting,
 		stopped = false,
 		stopping = false,
@@ -20,7 +18,6 @@
 		statusOverride
 	}: {
 		database: DatabaseDetail;
-		orgSlug: string;
 		deleting: boolean;
 		stopped?: boolean;
 		stopping?: boolean;
@@ -37,19 +34,6 @@
 	const effectiveStatus = $derived(statusOverride || database.status);
 	const engineLabel = $derived(database.pgMajor ? `PG ${database.pgMajor}` : 'PostgreSQL');
 </script>
-
-{#if database.project && database.project.workspace}
-	<button
-		onclick={() =>
-			goto(
-				`/${orgSlug}/workspaces/${database.project!.workspace!.slug}/projects/${database.project!.slug}`
-			)}
-		class="db-back"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		{database.project.name}
-	</button>
-{/if}
 
 <div class="dbh-hero">
 	<div class="dbh-hero-icon">
