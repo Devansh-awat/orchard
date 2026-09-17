@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.43.0](https://github.com/hackclub/orchard/compare/server/v2.42.1...server/v2.43.0) (2026-09-17)
+
+
+### Features
+
+* use better deploy strat ([#82](https://github.com/hackclub/orchard/issues/82)) ([5d87aa5](https://github.com/hackclub/orchard/commit/5d87aa54499c72bac03b61a327dab016d4342d74))
+
+
+### Bug Fixes
+
+* anchor the build timer to the build start, not the row's updatedAt ([e245ddf](https://github.com/hackclub/orchard/commit/e245ddff3d6b4769bf66d9b7d6623a1b0aee240e))
+
 ## [2.42.1](https://github.com/hackclub/orchard/compare/server/v2.42.0...server/v2.42.1) (2026-09-17)
 
 

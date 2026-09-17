@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.36.0](https://github.com/hackclub/orchard/compare/frontend/v1.35.2...frontend/v1.36.0) (2026-09-17)
+
+
+### Features
+
+* use better deploy strat ([#82](https://github.com/hackclub/orchard/issues/82)) ([5d87aa5](https://github.com/hackclub/orchard/commit/5d87aa54499c72bac03b61a327dab016d4342d74))
+
+
+### Bug Fixes
+
+* anchor the build timer to the build start, not the row's updatedAt ([e245ddf](https://github.com/hackclub/orchard/commit/e245ddff3d6b4769bf66d9b7d6623a1b0aee240e))
+* database breadcrumbs ([#83](https://github.com/hackclub/orchard/issues/83)) ([0514180](https://github.com/hackclub/orchard/commit/051418067e35928f574b587a9dc09bc2ca896974))
+
 ## [1.35.2](https://github.com/hackclub/orchard/compare/frontend/v1.35.1...frontend/v1.35.2) (2026-09-17)
 
 
