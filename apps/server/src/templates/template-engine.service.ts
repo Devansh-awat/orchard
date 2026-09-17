@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as yaml from 'js-yaml';
 import { randomBytes } from 'crypto';
+import { formatSlug } from '../projects/projects.utils';
 
 export interface ParameterValidation {
   pattern?: string;
@@ -24,6 +25,12 @@ export interface ParameterDef {
   placeholder?: string;
   validation?: ParameterValidation;
   options?: ParameterOption[];
+}
+
+function isNameParam(def: ParameterDef): boolean {
+  const tokens = def.name.split(/(?=[A-Z])|[_\s-]/).map((t) => t.toLowerCase());
+  if (tokens.some((t) => t === 'domain' || t === 'host' || t === 'hostname')) return false;
+  return tokens.some((t) => t === 'name');
 }
 
 export interface ResourceDef {
@@ -173,10 +180,18 @@ export class TemplateEngineService {
             if (def.validation?.pattern) {
               const regex = new RegExp(def.validation.pattern);
               if (!regex.test(value)) {
-                throw new BadRequestException(
-                  def.validation.message ||
-                    `Parameter "${def.displayName}" does not match the required format`
-                );
+                // Name params become k8s object names, and every other create
+                // path slugifies those for the user. Do the same here instead
+                // of rejecting "My Cache".
+                const slug = isNameParam(def) ? formatSlug(value) : '';
+                if (slug && regex.test(slug)) {
+                  value = slug;
+                } else {
+                  throw new BadRequestException(
+                    def.validation.message ||
+                      `Parameter "${def.displayName}" does not match the required format`
+                  );
+                }
               }
             }
             break;

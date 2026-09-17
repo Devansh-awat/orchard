@@ -67,6 +67,36 @@
 		return tokens.some((t) => t === 'domain' || t === 'host' || t === 'hostname');
 	}
 
+	function isNameParam(param: ParameterDef): boolean {
+		if (param.type !== 'string') return false;
+		if (isDomainParam(param)) return false;
+		const tokens = param.name.split(/(?=[A-Z])|[_\s-]/).map((t) => t.toLowerCase());
+		return tokens.some((t) => t === 'name');
+	}
+
+	function slugify(value: string): string {
+		return value
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+/, '')
+			.substring(0, 60)
+			.replace(/-+$/, '');
+	}
+
+	// The server slugifies name params rather than rejecting them, so show the
+	// user what they are actually getting before they hit deploy.
+	function normalizeNameParam(param: ParameterDef) {
+		if (!isNameParam(param)) return;
+		const raw = paramValues[param.name];
+		if (typeof raw !== 'string' || !raw.trim()) return;
+		const pattern = param.validation?.pattern;
+		if (!pattern) return;
+		const regex = new RegExp(pattern);
+		if (regex.test(raw)) return;
+		const slug = slugify(raw);
+		if (slug && regex.test(slug)) paramValues[param.name] = slug;
+	}
+
 	const appNameValue = $derived.by(() => {
 		const nameParam = template?.parameters.find((p) => /name/i.test(p.name) && p.type === 'string');
 		const v = nameParam ? paramValues[nameParam.name] : '';
@@ -326,6 +356,7 @@
 									bind:value={paramValues[param.name]}
 									required={param.required}
 									disabled={deploying}
+									onblur={() => normalizeNameParam(param)}
 								/>
 								{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
 									<button

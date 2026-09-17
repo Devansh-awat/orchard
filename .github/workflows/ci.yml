@@ -212,6 +212,8 @@ jobs:
         run: pnpm --filter server test:scim
       - name: Ingress URL test
         run: pnpm --filter server test:ingress-url
+      - name: Template parameter normalization test
+        run: pnpm --filter server test:template-params
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
       - name: Setup gate test
