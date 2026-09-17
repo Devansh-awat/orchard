@@ -218,9 +218,15 @@ export class ProjectsService {
       const slugInUse = await this.prisma.project.findUnique({
         where: { organizationId_slug: { organizationId, slug } }
       });
+      // Environments own namespaces too, so a project namespace has to clear
+      // both tables or a new project lands in another project's environment.
       const namespaceInUse = slugInUse
         ? null
-        : await this.prisma.project.findFirst({ where: { namespace } });
+        : ((await this.prisma.project.findFirst({ where: { namespace } })) ??
+          (await this.prisma.environment.findUnique({
+            where: { namespace },
+            select: { id: true }
+          })));
 
       if (!slugInUse && !namespaceInUse) {
         break;

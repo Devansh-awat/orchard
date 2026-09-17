@@ -31,6 +31,32 @@ export class NodesService {
     private readonly settings: InstanceSettingsService
   ) {}
 
+  /**
+   * Map the namespaces a set of pods live in to their owning organization.
+   * Namespaces belong to a project directly or through one of its
+   * environments; joining on Project.namespace alone drops every pod outside
+   * the default environment out of the usage numbers.
+   */
+  private async namespaceOrgMap(namespaces: string[]) {
+    type Org = { id: string; name: string; slug: string; avatarUrl: string | null };
+    const nsToOrg = new Map<string, Org>();
+    if (!namespaces.length) return nsToOrg;
+    const orgSelect = { select: { id: true, name: true, slug: true, avatarUrl: true } };
+    const [projects, environments] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { namespace: { in: namespaces } },
+        select: { namespace: true, organization: orgSelect }
+      }),
+      this.prisma.environment.findMany({
+        where: { namespace: { in: namespaces } },
+        select: { namespace: true, project: { select: { organization: orgSelect } } }
+      })
+    ]);
+    for (const env of environments) nsToOrg.set(env.namespace, env.project.organization);
+    for (const project of projects) nsToOrg.set(project.namespace, project.organization);
+    return nsToOrg;
+  }
+
   // Full reconcile against the live cluster. The node informer keeps the table
   // fresh in the steady state; this is the manual/forced-refresh path (and the
   // cold-start fallback when no informer is running).
@@ -126,16 +152,10 @@ export class NodesService {
     // Aggregate per-org usage using the "leaf.project" or namespace label. Namespaces are per-project;
     // we join by project.namespace → project.organizationId.
     const namespaces = Array.from(new Set(onThisNode.map((p) => p.namespace)));
-    const projects = namespaces.length
-      ? await this.prisma.project.findMany({
-          where: { namespace: { in: namespaces } },
-          select: { namespace: true, organizationId: true }
-        })
-      : [];
-    const nsToOrg = new Map(projects.map((p) => [p.namespace, p.organizationId]));
+    const nsToOrg = await this.namespaceOrgMap(namespaces);
     const perOrg = new Map<string, { cpuMilli: number; memBytes: number; pods: number }>();
     for (const p of onThisNode) {
-      const orgId = nsToOrg.get(p.namespace);
+      const orgId = nsToOrg.get(p.namespace)?.id;
       if (!orgId) continue;
       const cur = perOrg.get(orgId) || { cpuMilli: 0, memBytes: 0, pods: 0 };
       cur.cpuMilli += p.cpuRequestMilli;
@@ -222,17 +242,7 @@ export class NodesService {
   async getUsageSummary() {
     const usage = await this.k8s.getClusterPodUsage();
     const namespaces = Array.from(new Set(usage.map((p) => p.namespace)));
-    const projects = namespaces.length
-      ? await this.prisma.project.findMany({
-          where: { namespace: { in: namespaces } },
-          select: {
-            namespace: true,
-            organizationId: true,
-            organization: { select: { id: true, name: true, slug: true, avatarUrl: true } }
-          }
-        })
-      : [];
-    const nsToOrg = new Map(projects.map((p) => [p.namespace, p.organization]));
+    const nsToOrg = await this.namespaceOrgMap(namespaces);
 
     const perOrg = new Map<
       string,

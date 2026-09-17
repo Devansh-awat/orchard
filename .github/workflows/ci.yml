@@ -214,6 +214,8 @@ jobs:
         run: pnpm --filter server test:ingress-url
       - name: Template parameter normalization test
         run: pnpm --filter server test:template-params
+      - name: Namespace to project resolution test
+        run: pnpm --filter server test:namespace-scope
       - name: Superadmin password test
         run: pnpm --filter server test:superadmin-password
       - name: Setup gate test

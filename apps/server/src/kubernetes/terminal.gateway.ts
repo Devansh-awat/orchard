@@ -12,6 +12,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { requestAuthStorage } from '../auth/request-context';
+import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import {
   DETACH_GRACE_MS,
@@ -354,12 +355,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     if (!userId) return reject(401, 'Unauthorized');
     const principal = userId;
 
-    // Resolve namespace → project, then require project-edit (blocks viewers + non-members).
-    const project = await prisma.project.findFirst({
-      where: { namespace },
-      select: { id: true, organizationId: true }
-    });
-    if (!project) return reject(404, 'Not Found');
+    // Resolve namespace → project (directly, or through the environment that
+    // owns it), then require project-edit (blocks viewers + non-members).
+    const scope = await resolveNamespaceScope(prisma, namespace);
+    if (!scope) return reject(404, 'Not Found');
+    const project = { id: scope.projectId, organizationId: scope.organizationId };
 
     // Run authz inside the token context so requestAuthStorage-based scope
     // filtering in AuthorizationService applies. Session auth gets an empty

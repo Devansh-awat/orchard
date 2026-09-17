@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
@@ -445,11 +446,8 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     // Left to throw. Swallowing the error and caching `{}` told the informer
     // this namespace belongs to no project — for the next ten minutes, and for
     // as long afterwards as none of its objects changed.
-    const project = await this.prisma.project.findFirst({
-      where: { namespace },
-      select: { id: true }
-    });
-    const refs: MirrorRefs = project ? { projectId: project.id } : {};
+    const scope = await resolveNamespaceScope(this.prisma, namespace);
+    const refs: MirrorRefs = scope ? { projectId: scope.projectId } : {};
     this.nsRefCache.set(namespace, { refs, exp: Date.now() + NS_REF_TTL_MS });
     return refs;
   }

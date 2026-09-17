@@ -19,6 +19,7 @@
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:template-params": "tsx --test test/template-params.test.ts",
+    "test:namespace-scope": "tsx --test test/namespace-scope.test.ts",
     "test:ingress-url": "tsx --test test/ingress-url.test.ts",
     "test:superadmin-password": "tsx --test test/superadmin-password.test.ts",
     "test:cpu-requests": "tsx --test test/cpu-requests.test.ts",

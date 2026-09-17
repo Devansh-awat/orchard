@@ -73,7 +73,9 @@ export class PodLogSource {
 				this.text = data.logs || '';
 				this.error = null;
 			} else {
-				this.error = 'Failed to load logs';
+				const body = await res.json().catch(() => null);
+				const detail = typeof body?.message === 'string' ? body.message : null;
+				this.error = detail ? `Failed to load logs: ${detail}` : 'Failed to load logs';
 			}
 		} catch {
 			this.error = 'Failed to load logs';

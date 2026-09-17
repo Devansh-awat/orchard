@@ -18,6 +18,7 @@ import { K8sNetworkService } from './k8s-network.service';
 import { Auth, RequireScope } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveNamespaceScope } from '../projects/namespace-scope';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -46,18 +47,15 @@ export class KubernetesController {
     action = 'access this namespace'
   ) {
     if (!namespace) throw new BadRequestException('namespace query parameter is required');
-    const project = await this.prisma.project.findFirst({
-      where: { namespace },
-      select: { id: true }
-    });
-    if (!project) throw new NotFoundException(`Namespace ${namespace} not found`);
+    const scope = await resolveNamespaceScope(this.prisma, namespace);
+    if (!scope) throw new NotFoundException(`Namespace ${namespace} not found`);
     const userId = await this.resolveUserId(req);
     if (mode === 'edit') {
-      await this.authz.requireProjectEdit(project.id, userId, action);
-      return { projectId: project.id, canEdit: true };
+      await this.authz.requireProjectEdit(scope.projectId, userId, action);
+      return { projectId: scope.projectId, canEdit: true };
     }
-    const access = await this.authz.requireProjectView(project.id, userId);
-    return { projectId: project.id, canEdit: access.canEdit };
+    const access = await this.authz.requireProjectView(scope.projectId, userId);
+    return { projectId: scope.projectId, canEdit: access.canEdit };
   }
 
   /**

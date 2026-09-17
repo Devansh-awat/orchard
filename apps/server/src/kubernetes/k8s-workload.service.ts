@@ -4,6 +4,7 @@ import * as https from 'https';
 import { PassThrough } from 'stream';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveNamespaceScope } from '../projects/namespace-scope';
 import {
   KubernetesService,
   CreateDeploymentOptions,
@@ -1808,16 +1809,16 @@ export class K8sWorkloadService {
 
     console.log('[Sync] Syncing namespace to database:', namespace);
 
-    const project = await this.prisma.project.findFirst({
-      where: { namespace }
-    });
+    const scope = await resolveNamespaceScope(this.prisma, namespace);
 
-    if (!project) {
+    if (!scope) {
       throw new NotFoundException({
         error: 'Project not found',
         message: `No project found with namespace ${namespace}`
       });
     }
+
+    const project = { id: scope.projectId };
 
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -1855,10 +1856,15 @@ export class K8sWorkloadService {
             data: { namespace, image, replicas, status }
           });
         } else {
-          const defaultEnv = await this.prisma.environment.findFirst({
-            where: { projectId: project.id, isDefault: true },
-            select: { id: true }
-          });
+          // The namespace being synced belongs to one environment. Adopting
+          // its workloads into the default one would file them under the wrong
+          // namespace the moment anything writes the record back.
+          const defaultEnv = scope.environmentId
+            ? { id: scope.environmentId }
+            : await this.prisma.environment.findFirst({
+                where: { projectId: project.id, isDefault: true },
+                select: { id: true }
+              });
           deploymentRecord = await this.prisma.deployment.create({
             data: {
               projectId: project.id,
