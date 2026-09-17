@@ -434,7 +434,7 @@ export function fieldWheel(scheme: Scheme): string {
 			`${oklch(l, maxChroma(hue, l) * FIELD_CHROMA, hue)} ${Math.round(t * 3600) / 10}deg`
 		);
 	}
-	return `conic-gradient(from 0deg at 50% 50%, ${stops.join(', ')})`;
+	return `conic-gradient(from 90deg at 50% 50%, ${stops.join(', ')})`;
 }
 
 export function specChip(spec: ThemeSpec, scheme: Scheme): string {

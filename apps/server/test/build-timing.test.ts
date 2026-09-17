@@ -4,7 +4,10 @@ import { buildStartedAtFrom } from '../src/projects/build-timing';
 
 test('reads the epoch-ms start a build records when it is triggered', () => {
   const start = Date.UTC(2026, 8, 16, 21, 3, 3);
-  assert.deepEqual(buildStartedAtFrom({ __start: start, pushing: start + 60_000 }), new Date(start));
+  assert.deepEqual(
+    buildStartedAtFrom({ __start: start, pushing: start + 60_000 }),
+    new Date(start)
+  );
 });
 
 test('falls back to null when a build recorded no start', () => {
