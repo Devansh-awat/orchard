@@ -1190,6 +1190,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       ...deploymentWithInternalUrls,
       pods,
       availableReplicas,
+      // What the cluster is actually asked to run, straight off the mirror.
+      // `replicas` on the row is intent, and the two legitimately disagree —
+      // a stopped deployment keeps its count so it can come back to it, and an
+      // external `kubectl scale` is only adopted when nothing is mid-build or
+      // mid-apply. Clients that render `replicas` as if it were state end up
+      // claiming a pod is running when the Deployment sits at zero, so hand
+      // them the observed number and let them say which is which.
+      specReplicas: workload?.specReplicas ?? null,
+      readyReplicas: workload?.readyReplicas ?? null,
+      observedAt: workload?.updatedAt ?? null,
       warnings,
       totalCpuUsage,
       totalMemoryUsage,

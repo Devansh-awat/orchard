@@ -150,8 +150,6 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       update: data
     });
 
-    await this.adoptWorkloadSpec(ctx.deploymentId, dep);
-
     const changed =
       !existing ||
       existing.specReplicas !== data.specReplicas ||
@@ -162,6 +160,12 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     if (changed) {
       this.scheduleEmit(ctx, { workload: data });
     }
+
+    // Last, because it is the only part of this handler allowed to defer. The
+    // mirrored row and the event above are correct either way and clients read
+    // them; adoption is the slower question of whether Kubernetes has out-voted
+    // the stored intent, and it is fine for that to land a pass later.
+    await this.adoptWorkloadSpec(ctx.deploymentId, dep);
   }
 
   // Kubernetes is truth: unambiguous spec fields edited outside Orchard
@@ -183,11 +187,25 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
         buildStatus: true
       }
     });
-    if (!row || row.buildStatus === 'building') return;
+    if (!row) return;
+
+    // A build or a queued apply is about to rewrite the object, so the spec in
+    // hand is not evidence of anything. Thrown rather than returned: the
+    // informer only marks an object derived when the handler succeeds, so this
+    // leaves it `underived` and runs again on the repair pass. Returning
+    // quietly instead drops the adoption for good — the Deployment does not
+    // change again, so the next list sees a matching derived_version and skips
+    // it. That is how a deployment scaled to zero outside Orchard kept
+    // reporting one replica for eleven days.
+    if (row.buildStatus === 'building') {
+      throw new Error(`adoption deferred for ${deploymentId}: build in flight`);
+    }
     const pendingApply = await this.prisma.k8sApplyItem.count({
       where: { deploymentId, status: { in: ['pending', 'applying'] } }
     });
-    if (pendingApply > 0) return;
+    if (pendingApply > 0) {
+      throw new Error(`adoption deferred for ${deploymentId}: ${pendingApply} apply item(s) queued`);
+    }
 
     const changes: Record<string, unknown> = {};
     const adopted: string[] = [];

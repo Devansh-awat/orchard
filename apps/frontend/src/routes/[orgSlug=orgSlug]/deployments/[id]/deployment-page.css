@@ -1182,6 +1182,20 @@ a.dep-meta-lead-link:hover {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+/* Says what Kubernetes is actually running when that differs from the number
+   the slider shows. Tinted fill with a full border rather than a left accent
+   bar, matching the rest of the surface. */
+.replica-drift {
+	margin-top: 0.5rem;
+	padding: 0.4rem 0.55rem;
+	border: 1px solid color-mix(in srgb, var(--status-warning) 28%, transparent);
+	border-radius: var(--radius-sm, 0.5rem);
+	background: color-mix(in srgb, var(--status-warning) 9%, transparent);
+	color: var(--text-muted);
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
+}
+
 .pv-b-age,
 .pv-b-crash,
 .pv-b-why {

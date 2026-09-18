@@ -122,6 +122,12 @@ export interface Deployment {
 	buildStep?: string | null;
 	replicas: number;
 	availableReplicas: number;
+	// Mirrored from the live Deployment: what Kubernetes is asked to run, as
+	// opposed to `replicas`, which is what Orchard intends. Null until the
+	// mirror has seen the object.
+	specReplicas?: number | null;
+	readyReplicas?: number | null;
+	stopped?: boolean;
 	image?: string;
 	namespace?: string;
 	env?: { key: string; value: string }[];

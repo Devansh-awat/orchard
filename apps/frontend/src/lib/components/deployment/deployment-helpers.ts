@@ -218,3 +218,36 @@ export function isMutableTag(image: string | null | undefined): boolean {
 	if (MUTABLE_TAGS.has(tag.toLowerCase())) return true;
 	return /^v?\d+(\.\d+)?$/.test(tag);
 }
+
+export interface ReplicaDrift {
+	/** What Kubernetes is actually asked to run. */
+	observed: number;
+	/** What Orchard intends, and what a restart would come back to. */
+	desired: number;
+	stopped: boolean;
+}
+
+/**
+ * Whether the replica count on screen is the whole story.
+ *
+ * `replicas` is intent and the mirrored `specReplicas` is what the cluster is
+ * running, and the two are allowed to disagree: a stopped deployment keeps its
+ * count so it can return to it, and an external scale is only adopted into the
+ * row when nothing is mid-build or mid-apply. Rendering intent alone is how a
+ * deployment sitting at zero pods reported one replica for eleven days.
+ *
+ * Returns null when there is nothing to explain — either they agree, or the
+ * mirror has not seen the object yet and we have no observation to offer.
+ */
+export function replicaDrift(deployment: {
+	replicas?: number | null;
+	stopped?: boolean | null;
+	specReplicas?: number | null;
+}): ReplicaDrift | null {
+	const desired = deployment.replicas ?? 0;
+	const observed = deployment.specReplicas;
+	if (observed == null) return null;
+	const stopped = Boolean(deployment.stopped);
+	if (!stopped && observed === desired) return null;
+	return { observed, desired, stopped };
+}

@@ -31,6 +31,7 @@
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import TerminalSettings from '$lib/components/TerminalSettings.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
+	import { replicaDrift } from './deployment-helpers';
 
 	let {
 		deployment,
@@ -120,6 +121,7 @@
 
 	const cpuMeter = $derived(meterFor(resourcePressure?.cpuRatio));
 	const memMeter = $derived(meterFor(resourcePressure?.memRatio));
+	const drift = $derived(deployment ? replicaDrift(deployment) : null);
 
 	let showPreviousLogs = $state(false);
 	let liveLogs = $state(false);
@@ -541,6 +543,15 @@
 					>{scaleReplicas}</span
 				>
 			</div>
+			{#if drift}
+				<p class="replica-drift">
+					{#if drift.stopped}
+						Stopped. Kubernetes is running 0 pods; starting it again returns to {drift.desired}.
+					{:else}
+						Kubernetes is running {drift.observed}, not {drift.desired}. Scale to re-apply.
+					{/if}
+				</p>
+			{/if}
 			<div class="slider-container" style="padding: 4px 0;">
 				<div
 					bind:this={sliderRef}

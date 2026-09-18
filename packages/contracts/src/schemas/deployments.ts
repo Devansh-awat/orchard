@@ -334,6 +334,14 @@ const deploymentWithRelations = deploymentBase.extend({
 
 const deploymentDetail = deploymentWithRelations.extend({
   availableReplicas: z.number(),
+  // Mirrored from the live Deployment. `specReplicas` is what Kubernetes is
+  // asked to run and `replicas` is what Orchard intends; render the first as
+  // state and the second as the target. Null means the mirror has not seen the
+  // object yet, which is the case for a deployment whose first build has not
+  // landed.
+  specReplicas: z.number().nullable().optional(),
+  readyReplicas: z.number().nullable().optional(),
+  observedAt: z.coerce.string().nullable().optional(),
   warnings: z.array(podWarning),
   totalCpuUsage: z.number().nullable(),
   totalMemoryUsage: z.number().nullable(),
