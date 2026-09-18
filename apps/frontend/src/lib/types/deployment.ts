@@ -125,6 +125,9 @@ export interface Deployment {
 	// Mirrored from the live Deployment: what Kubernetes is asked to run, as
 	// opposed to `replicas`, which is what Orchard intends. Null until the
 	// mirror has seen the object.
+	// How many pods the usage totals are summed over, which is what the
+	// per-pod requests must be multiplied by to get a budget.
+	meteredPods?: number | null;
 	specReplicas?: number | null;
 	readyReplicas?: number | null;
 	stopped?: boolean;

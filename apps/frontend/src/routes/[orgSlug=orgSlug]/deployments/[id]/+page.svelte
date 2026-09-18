@@ -545,16 +545,25 @@
 	// here). Skip when unlimited (request === 0) or when no live metrics have
 	// arrived yet. The user sees this in the resources tab.
 	const NEAR_LIMIT_RATIO = 0.85;
+	// Above this the CPU reading is not believable rather than alarming; see
+	// resourcePressure below. Generous, because the honest ceiling is 1.0 and
+	// rate smoothing can legitimately overshoot it a little.
+	const CPU_RATIO_IMPLAUSIBLE = 1.5;
 	const resourcePressure = $derived.by(() => {
-		const replicas = deployment?.replicas ?? 1;
 		const cpuReq = deployment?.cpuRequestMilli ?? null;
 		const memReq =
 			deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
 		const cpuUsage = deployment?.totalCpuUsage ?? null;
 		const memUsage = deployment?.totalMemoryUsage ?? null;
 
-		const cpuLimit = cpuReq != null && cpuReq > 0 && replicas > 0 ? cpuReq * replicas : null;
-		const memLimit = memReq != null && memReq > 0 && replicas > 0 ? memReq * replicas : null;
+		// The usage totals are a sum over the pods metrics-server actually
+		// reported, so the budget has to be per-pod times that same count.
+		// Dividing by `replicas` instead is how a single 200m app mid-rollout
+		// reported 737% of its limit: two pods of usage over one pod of budget,
+		// on top of a bad sample.
+		const scale = deployment?.meteredPods ?? deployment?.replicas ?? 1;
+		const cpuLimit = cpuReq != null && cpuReq > 0 && scale > 0 ? cpuReq * scale : null;
+		const memLimit = memReq != null && memReq > 0 && scale > 0 ? memReq * scale : null;
 
 		if (debugAlerts) {
 			return {
@@ -568,8 +577,17 @@
 			};
 		}
 
-		const cpuRatio = cpuLimit != null && cpuUsage != null ? cpuUsage / cpuLimit : null;
+		const rawCpuRatio = cpuLimit != null && cpuUsage != null ? cpuUsage / cpuLimit : null;
 		const memRatio = memLimit != null && memUsage != null ? memUsage / memLimit : null;
+
+		// A CPU limit is enforced by the kernel's CFS quota, so a pod cannot
+		// actually spend more than it. A ratio well past 1 is not an overloaded
+		// app, it is a bad sample — metrics-server derives a rate from two
+		// cAdvisor readings, and a container that restarted between them resets
+		// the counter and produces a garbage spike. Crashlooping pods hit this
+		// constantly, which is exactly when someone is looking at the page.
+		// Drop it rather than render a number that cannot be true.
+		const cpuRatio = rawCpuRatio != null && rawCpuRatio > CPU_RATIO_IMPLAUSIBLE ? null : rawCpuRatio;
 
 		const cpuNear = cpuRatio != null && cpuRatio >= NEAR_LIMIT_RATIO;
 		const memNear = memRatio != null && memRatio >= NEAR_LIMIT_RATIO;
@@ -1226,6 +1244,7 @@
 		const podMetrics = payload.pods ?? {};
 		deployment.totalCpuUsage = payload.totalCpuUsage;
 		deployment.totalMemoryUsage = payload.totalMemoryUsage;
+		deployment.meteredPods = payload.meteredPods ?? null;
 		for (const p of (deployment.pods as any[]) ?? []) {
 			const m = podMetrics[p.name];
 			if (m) {

@@ -72,7 +72,17 @@ export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
           type: 'deployment.metrics',
           id: dep.id,
           projectId: dep.projectId,
-          payload: { totalCpuUsage: totalCpu, totalMemoryUsage: totalMem, pods }
+          // `matched`, not dep.pods.length and not the replica count: the
+          // totals are a sum over exactly these pods, and requests are per
+          // pod, so this is the multiplier a consumer needs to turn them into
+          // a budget. A rollout or a crashloop runs more pods than the
+          // deployment asks for.
+          payload: {
+            totalCpuUsage: totalCpu,
+            totalMemoryUsage: totalMem,
+            meteredPods: matched,
+            pods
+          }
         });
       }
     } catch (err) {

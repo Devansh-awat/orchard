@@ -1248,6 +1248,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     let availableReplicas = 0;
     let totalCpuUsage: number | null = null;
     let totalMemoryUsage: number | null = null;
+    let meteredPods: number | null = null;
 
     if (deployment.name && deployment.namespace) {
       try {
@@ -1259,6 +1260,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         warnings = livePods?.warnings || [];
         totalCpuUsage = livePods?.totalCpuUsage ?? null;
         totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
+        meteredPods = livePods?.meteredPods ?? null;
 
         try {
           const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
@@ -1278,7 +1280,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    return { pods, warnings, availableReplicas, totalCpuUsage, totalMemoryUsage };
+    return { pods, warnings, availableReplicas, totalCpuUsage, totalMemoryUsage, meteredPods };
   }
 
   async cancelDeploymentBuild(

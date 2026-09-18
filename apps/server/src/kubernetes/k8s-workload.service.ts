@@ -3046,7 +3046,13 @@ export class K8sWorkloadService {
         pods: podsWithMetrics,
         warnings: warnings.slice(0, 10),
         totalCpuUsage: hasMetrics ? totalCpuUsage : null,
-        totalMemoryUsage: hasMetrics ? totalMemoryUsage : null
+        totalMemoryUsage: hasMetrics ? totalMemoryUsage : null,
+        // How many pods the totals above are summed over. Requests and limits
+        // are per pod, so a caller comparing the total against a budget has to
+        // multiply by this and not by the replica count: a rollout or a
+        // crashloop runs more pods than the deployment asks for, and dividing
+        // by the smaller number reports pressure that is not there.
+        meteredPods: hasMetrics ? metricsMap.size : null
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {

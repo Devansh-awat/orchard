@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
+import { deploymentPodRegex } from '../metrics/pod-selector';
 
 interface BuildLogMessage {
   id?: string;
@@ -486,7 +487,7 @@ export class ObservabilityService {
     const restarts = pods.reduce((sum, p) => sum + p.restartCount, 0);
 
     const ns = escapeLabel(deployment.namespace);
-    const podRe = `${escapeRegex(deployment.name)}-.*`;
+    const podRe = deploymentPodRegex(deployment.name);
 
     const [cpuMilli, memBytes] = await Promise.all([
       this.queryInstant(

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { deploymentPodRegex } from './pod-selector';
 
 export interface SeriesPoint {
   x: number;
@@ -108,10 +109,10 @@ export class MetricsService {
           (async () => {
             const [cpu, mem] = await Promise.all([
               this.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
               ),
               this.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container="",image=""})[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""})[${rangeSeconds}s:60s])`
               )
             ]);
             const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
@@ -205,7 +206,7 @@ export class MetricsService {
     stepMs: number;
   }): Promise<SeriesBundle> {
     const ns = escapeLabel(args.namespace);
-    const podRe = `${escapeRegex(args.deploymentName)}-.*`;
+    const podRe = deploymentPodRegex(args.deploymentName);
     const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
     // Rate window must be ≥ 2× scrape interval (30s) so derivatives have
     // enough samples; clamp upward when the user picks a coarse step.
@@ -321,7 +322,7 @@ export class MetricsService {
     stepMs: number;
   }): Promise<GroupedBundle> {
     const ns = escapeLabel(args.namespace);
-    const podRe = `${escapeRegex(args.deploymentName)}-.*`;
+    const podRe = deploymentPodRegex(args.deploymentName);
     const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
     const rateWin = Math.max(60, stepSec * 2);
 
