@@ -1324,7 +1324,7 @@
 			mergeInto(deployment, data);
 		}
 		if (showBuildModal || showBuildCard) syncBuildModalFromDeployment();
-		void refreshPodsLive();
+		if (wasUnloaded) void refreshPodsLive();
 
 		tailscale.syncFromDeployment(data);
 
