@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.43.1](https://github.com/hackclub/orchard/compare/server/v2.43.0...server/v2.43.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* unwedge the mirror informer when a burst of watch events hits the concurrency limit ([71ccb8b](https://github.com/hackclub/orchard/commit/71ccb8b4124f360b44b0eb4476612b80a4144bc0))
+
 ## [2.43.0](https://github.com/hackclub/orchard/compare/server/v2.42.1...server/v2.43.0) (2026-09-17)
 
 
