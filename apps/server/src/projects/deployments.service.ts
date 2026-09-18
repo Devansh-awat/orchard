@@ -1664,12 +1664,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     this.assertNotComposeManaged(deployment, 'Stop');
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'stop deployments');
 
-    await this.prisma.deployment.update({
-      where: { id: deploymentId },
-      data: { stopped: true }
-    });
-
     if (this.applyPipelineEnabled()) {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { stopped: true }
+      });
       await this.applyQueue.enqueue({
         dedupeKey: `op:deployment.scale:${deploymentId}`,
         opType: 'deployment.scale',
@@ -1677,13 +1676,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         requestedById: user.id
       });
     } else {
-      const exists = await this.k8sWorkload
-        .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((value) => value !== null)
-        .catch(() => false);
-      if (exists) {
+      const existing = await this.k8sWorkload.getKubernetesDeployment(
+        deployment.name,
+        deployment.namespace
+      );
+      if (existing) {
         await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, 0);
       }
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { stopped: true }
+      });
     }
     await this.syncDisruptionBudget(deploymentId);
 
@@ -1759,11 +1762,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         requestedById: user.id
       });
     } else {
-      const exists = await this.k8sWorkload
-        .getKubernetesDeployment(deployment.name, deployment.namespace)
-        .then((value) => value !== null)
-        .catch(() => false);
-      if (exists) {
+      const existing = await this.k8sWorkload.getKubernetesDeployment(
+        deployment.name,
+        deployment.namespace
+      );
+      if (existing) {
         await this.k8sWorkload.scaleDeployment(deployment.name, deployment.namespace, replicas);
       }
       await this.prisma.deployment.update({
