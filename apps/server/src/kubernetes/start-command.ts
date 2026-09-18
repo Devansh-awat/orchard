@@ -102,9 +102,12 @@ function isExplicitShell(argv: string[]): boolean {
  *
  * A command carrying shell operators goes through `/bin/sh -c` because there
  * is no argv that means `a && b`. Everything else is split into argv and
- * exec'd directly, which matters: a shell that cannot exec its child does not
- * forward SIGTERM to it, and the pod then burns its full termination grace
- * period on every rollout.
+ * exec'd directly, so the app is PID 1 and receives the SIGTERM a rollout
+ * sends. Behind a shell that only mostly holds: `sh -c 'a && b'` tail-execs
+ * `b`, so it is still PID 1 and still signalled, but `sh -c 'a | b'` leaves
+ * the app at PID 2, where it is torn down when the shell exits without ever
+ * being told to stop — no connection draining, no finishing the job in hand.
+ * Measured under gVisor, which is what tenant pods run.
  */
 export function resolveStartArgs(raw: string | null | undefined): string[] | null {
   const command = (raw ?? '').trim();
