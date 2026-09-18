@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.38.0](https://github.com/hackclub/orchard/compare/frontend/v1.37.0...frontend/v1.38.0) (2026-09-18)
+
+
+### Features
+
+* further harden deployment rollout handling ([#85](https://github.com/hackclub/orchard/issues/85)) ([e9787a0](https://github.com/hackclub/orchard/commit/e9787a053ce8a17449d4372d5aef1f55a8bf0ac9))
+
+
+### Bug Fixes
+
+* show the replica count kubernetes is running, not orchard's intent ([35d95e5](https://github.com/hackclub/orchard/commit/35d95e57b556f297d1a2f3954f2d32dc79a30090))
+* stop reporting impossible cpu percentages against the wrong pod budget ([c03e5f1](https://github.com/hackclub/orchard/commit/c03e5f1008bc393afe75fabd291de7797cf9217b))
+
 ## [1.37.0](https://github.com/hackclub/orchard/compare/frontend/v1.36.0...frontend/v1.37.0) (2026-09-18)
 
 

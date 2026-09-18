@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.45.0](https://github.com/hackclub/orchard/compare/server/v2.44.0...server/v2.45.0) (2026-09-18)
+
+
+### Features
+
+* further harden deployment rollout handling ([#85](https://github.com/hackclub/orchard/issues/85)) ([e9787a0](https://github.com/hackclub/orchard/commit/e9787a053ce8a17449d4372d5aef1f55a8bf0ac9))
+
+
+### Bug Fixes
+
+* finish a build when the cluster accepts the image, not when the app is up ([e585024](https://github.com/hackclub/orchard/commit/e585024bee0903fc65c28d9cec7adc41c0d6bce0))
+* keep domain redirects on the destination they were pointed at ([f42a8b0](https://github.com/hackclub/orchard/commit/f42a8b0043afd67659ac709dc108405271539273))
+* report a failed stop or start instead of reporting success ([4699f5d](https://github.com/hackclub/orchard/commit/4699f5d372d1455ecc6a5d3cc9317690cf7c4d3f))
+* show the replica count kubernetes is running, not orchard's intent ([35d95e5](https://github.com/hackclub/orchard/commit/35d95e57b556f297d1a2f3954f2d32dc79a30090))
+* stop reporting impossible cpu percentages against the wrong pod budget ([c03e5f1](https://github.com/hackclub/orchard/commit/c03e5f1008bc393afe75fabd291de7797cf9217b))
+
 ## [2.44.0](https://github.com/hackclub/orchard/compare/server/v2.43.1...server/v2.44.0) (2026-09-18)
 
 
