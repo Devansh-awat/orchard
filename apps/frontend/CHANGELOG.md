@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.37.0](https://github.com/hackclub/orchard/compare/frontend/v1.36.0...frontend/v1.37.0) (2026-09-18)
+
+
+### Features
+
+* persist the dockerfile build stage and expose it in the ui, mcp and cli ([8575b56](https://github.com/hackclub/orchard/commit/8575b566b7460c1f961f6b9a8e98e719b2ddb1b0))
+* run a start command on dockerfile and image deployments ([aea28bd](https://github.com/hackclub/orchard/commit/aea28bd8725d66451a693da7da62c6eb156278d9))
+
 ## [1.36.0](https://github.com/hackclub/orchard/compare/frontend/v1.35.2...frontend/v1.36.0) (2026-09-17)
 
 

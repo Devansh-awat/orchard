@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/hackclub/orchard/compare/cli/v0.15.1...cli/v0.16.0) (2026-09-18)
+
+
+### Features
+
+* persist the dockerfile build stage and expose it in the ui, mcp and cli ([8575b56](https://github.com/hackclub/orchard/commit/8575b566b7460c1f961f6b9a8e98e719b2ddb1b0))
+
 ## [0.15.1](https://github.com/hackclub/orchard/compare/cli/v0.15.0...cli/v0.15.1) (2026-09-15)
 
 

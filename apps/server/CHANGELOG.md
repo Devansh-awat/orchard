@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.44.0](https://github.com/hackclub/orchard/compare/server/v2.43.1...server/v2.44.0) (2026-09-18)
+
+
+### Features
+
+* persist the dockerfile build stage and expose it in the ui, mcp and cli ([8575b56](https://github.com/hackclub/orchard/commit/8575b566b7460c1f961f6b9a8e98e719b2ddb1b0))
+* run a start command on dockerfile and image deployments ([aea28bd](https://github.com/hackclub/orchard/commit/aea28bd8725d66451a693da7da62c6eb156278d9))
+
+
+### Bug Fixes
+
+* correct the start command signal note to what the cluster actually does ([7d714e5](https://github.com/hackclub/orchard/commit/7d714e5c071d76289ac7927d8988f0200e7feddc))
+* keep deliberately set start commands instead of clearing them on release ([00e2565](https://github.com/hackclub/orchard/commit/00e25652c62dbb0569bcb7a921f1de1b4a183ee5))
+
 ## [2.43.1](https://github.com/hackclub/orchard/compare/server/v2.43.0...server/v2.43.1) (2026-09-17)
 
 
