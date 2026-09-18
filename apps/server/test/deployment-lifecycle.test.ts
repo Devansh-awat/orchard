@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { WorkloadMirrorConsumer } from '../src/mirror/consumers/workload-mirror.consumer';
-import { K8sWorkloadService } from '../src/kubernetes/k8s-workload.service';
 import { DeploymentsService } from '../src/projects/deployments.service';
 
 describe('deployment lifecycle', () => {
@@ -109,51 +108,5 @@ describe('deployment lifecycle', () => {
     await service.syncReplicasForRebuild('deployment-id', 'web', 'project', 3);
 
     assert.deepEqual(patched, [3]);
-  });
-
-  test('a rollout is incomplete while an old replica remains', () => {
-    assert.equal(
-      K8sWorkloadService.deploymentRolloutComplete(
-        {
-          metadata: { generation: 8 },
-          spec: {
-            replicas: 1,
-            template: { spec: { containers: [{ name: 'web', image: 'registry/web:new' }] } }
-          },
-          status: {
-            observedGeneration: 8,
-            updatedReplicas: 1,
-            availableReplicas: 1,
-            replicas: 2,
-            unavailableReplicas: 0
-          }
-        },
-        'registry/web:new'
-      ),
-      false
-    );
-  });
-
-  test('a rollout completes only for the expected fully available image', () => {
-    assert.equal(
-      K8sWorkloadService.deploymentRolloutComplete(
-        {
-          metadata: { generation: 8 },
-          spec: {
-            replicas: 1,
-            template: { spec: { containers: [{ name: 'web', image: 'registry/web:new' }] } }
-          },
-          status: {
-            observedGeneration: 8,
-            updatedReplicas: 1,
-            availableReplicas: 1,
-            replicas: 1,
-            unavailableReplicas: 0
-          }
-        },
-        'registry/web:new'
-      ),
-      true
-    );
   });
 });

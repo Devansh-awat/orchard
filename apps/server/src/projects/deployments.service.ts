@@ -7256,7 +7256,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      await this.k8sWorkload.waitForDeploymentRollout(data.name, data.namespace, image);
       await saveImageHistory();
 
       if (!data.isRebuild || shouldCreateNew) {

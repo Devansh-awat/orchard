@@ -2155,35 +2155,6 @@ export class K8sWorkloadService {
     }
   }
 
-  async waitForReady(
-    deploymentName: string,
-    namespace: string,
-    timeoutMs = 120_000,
-    pollMs = 2_000
-  ): Promise<boolean> {
-    this.ensureKubeConfig();
-    const api = this.kc.makeApiClient(k8s.AppsV1Api);
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        const res = await api.readNamespacedDeployment(deploymentName, namespace);
-        const status = res.body.status;
-        const spec = res.body.spec;
-        if (
-          status?.updatedReplicas === spec?.replicas &&
-          status?.readyReplicas === spec?.replicas &&
-          (status?.unavailableReplicas ?? 0) === 0
-        ) {
-          return true;
-        }
-      } catch {}
-      await new Promise((r) => {
-        setTimeout(r, pollMs);
-      });
-    }
-    return false;
-  }
-
   async patchDeploymentReplicas(deploymentName: string, namespace: string, replicas: number) {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -2610,55 +2581,6 @@ export class K8sWorkloadService {
         message: k8sErrorMessage(error)
       });
     }
-  }
-
-  static deploymentRolloutComplete(deployment: k8s.V1Deployment, expectedImage: string): boolean {
-    const desired = deployment.spec?.replicas ?? 0;
-    const generation = deployment.metadata?.generation ?? 0;
-    const status = deployment.status;
-    const container = deployment.spec?.template?.spec?.containers?.find(
-      (entry) => entry.image === expectedImage
-    );
-    return (
-      !!container &&
-      (status?.observedGeneration ?? 0) >= generation &&
-      (status?.updatedReplicas ?? 0) === desired &&
-      (status?.availableReplicas ?? 0) === desired &&
-      (status?.replicas ?? 0) === desired &&
-      (status?.unavailableReplicas ?? 0) === 0
-    );
-  }
-
-  async waitForDeploymentRollout(
-    deploymentName: string,
-    namespace: string,
-    expectedImage: string,
-    timeoutMs = 5 * 60 * 1000
-  ): Promise<void> {
-    this.ensureKubeConfig();
-    const api = this.kc.makeApiClient(k8s.AppsV1Api);
-    const deadline = Date.now() + timeoutMs;
-
-    while (Date.now() < deadline) {
-      const { body } = await api.readNamespacedDeployment(deploymentName, namespace);
-      if (K8sWorkloadService.deploymentRolloutComplete(body, expectedImage)) return;
-      const failed = body.status?.conditions?.find(
-        (condition) =>
-          condition.type === 'Progressing' &&
-          condition.status === 'False' &&
-          condition.reason === 'ProgressDeadlineExceeded'
-      );
-      if (failed) {
-        throw new Error(
-          failed.message || `Deployment ${deploymentName} exceeded its progress deadline`
-        );
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
-    }
-
-    throw new Error(
-      `Timed out waiting for deployment ${deploymentName} to roll out ${expectedImage}`
-    );
   }
 
   private buildProbe(
