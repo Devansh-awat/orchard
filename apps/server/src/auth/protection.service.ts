@@ -52,6 +52,16 @@ export function normalizeRequestPath(originalUrl: string): string {
   return `/${segments.join('/')}`;
 }
 
+export function redirectLocationFor(requestTarget: string, redirectTarget: string): string {
+  const target = new URL(redirectTarget);
+  const incoming = new URL(requestTarget || '/', 'http://orchard.invalid');
+  const prefix = target.pathname.replace(/\/+$/, '');
+  const location = new URL(target.origin);
+  location.pathname = `${prefix}${incoming.pathname}`;
+  location.search = incoming.search;
+  return location.toString();
+}
+
 export function normalizeBypassPath(input: string): string | null {
   if (typeof input !== 'string') return null;
   let value = input.trim();
@@ -386,10 +396,10 @@ export class ProtectionService {
     if (!ingress) return false;
 
     if (ingress.redirectTarget) {
-      const location = new URL(
+      const location = redirectLocationFor(
         req.originalUrl || req.url || '/',
         ingress.redirectTarget
-      ).toString();
+      );
       res.setHeader('location', location);
       res.status(ingress.redirectStatus || 307).send('');
       return true;
@@ -442,7 +452,7 @@ export class ProtectionService {
             : status === 307
               ? 'Temporary Redirect'
               : 'Permanent Redirect';
-      const location = new URL(req.url || '/', ingress.redirectTarget).toString();
+      const location = redirectLocationFor(req.url || '/', ingress.redirectTarget);
       try {
         socket.write(
           `HTTP/1.1 ${status} ${label}\r\nLocation: ${location}\r\nConnection: close\r\n\r\n`
