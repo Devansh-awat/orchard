@@ -1277,6 +1277,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
           error instanceof Error ? error.message : error
         );
+        throw error;
       }
     }
 
@@ -7003,60 +7004,61 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         WHERE "id" = ${deploymentId}::uuid
       `.catch(() => {});
 
-      const imageHistoryPromise = this.prisma
-        .$transaction(async (tx) => {
-          await tx.imageHistory.updateMany({
-            where: { deploymentId, isActive: true },
-            data: { isActive: false }
-          });
+      const saveImageHistory = () =>
+        this.prisma
+          .$transaction(async (tx) => {
+            await tx.imageHistory.updateMany({
+              where: { deploymentId, isActive: true },
+              data: { isActive: false }
+            });
 
-          const deployment = await tx.deployment.findUnique({
-            where: { id: deploymentId },
-            select: { buildLogs: true }
-          });
+            const deployment = await tx.deployment.findUnique({
+              where: { id: deploymentId },
+              select: { buildLogs: true }
+            });
 
-          await tx.imageHistory.create({
-            data: {
-              deploymentId,
-              image,
-              tag: data.tag,
-              commitSha: data.commitSha || null,
-              commitMessage: data.commitMessage || null,
-              commitAuthorName: data.commitAuthorName || null,
-              commitAuthorUsername: data.commitAuthorUsername || null,
-              branch: data.branch,
-              buildLogs: deployment?.buildLogs || null,
-              buildStartedAt: new Date(buildStartTime),
-              buildCompletedAt,
-              triggerType: data.triggerType || null,
-              triggeredById: data.triggeredById || null,
-              isActive: true
+            await tx.imageHistory.create({
+              data: {
+                deploymentId,
+                image,
+                tag: data.tag,
+                commitSha: data.commitSha || null,
+                commitMessage: data.commitMessage || null,
+                commitAuthorName: data.commitAuthorName || null,
+                commitAuthorUsername: data.commitAuthorUsername || null,
+                branch: data.branch,
+                buildLogs: deployment?.buildLogs || null,
+                buildStartedAt: new Date(buildStartTime),
+                buildCompletedAt,
+                triggerType: data.triggerType || null,
+                triggeredById: data.triggeredById || null,
+                isActive: true
+              }
+            });
+
+            const allImages = await tx.imageHistory.findMany({
+              where: { deploymentId },
+              orderBy: { createdAt: 'desc' },
+              select: { id: true, image: true }
+            });
+
+            if (allImages.length > 10) {
+              const imagesToRemove = allImages.slice(10);
+              const idsToRemove = imagesToRemove.map((img) => img.id);
+
+              await tx.imageHistory.deleteMany({
+                where: { id: { in: idsToRemove } }
+              });
+
+              const imageRefs = imagesToRemove.map((img) => img.image);
+              this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
+                console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+              });
             }
+          })
+          .catch((err) => {
+            console.error('[Projects] Image history save failed:', err);
           });
-
-          const allImages = await tx.imageHistory.findMany({
-            where: { deploymentId },
-            orderBy: { createdAt: 'desc' },
-            select: { id: true, image: true }
-          });
-
-          if (allImages.length > 10) {
-            const imagesToRemove = allImages.slice(10);
-            const idsToRemove = imagesToRemove.map((img) => img.id);
-
-            await tx.imageHistory.deleteMany({
-              where: { id: { in: idsToRemove } }
-            });
-
-            const imageRefs = imagesToRemove.map((img) => img.image);
-            this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
-              console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
-            });
-          }
-        })
-        .catch((err) => {
-          console.error('[Projects] Image history save failed:', err);
-        });
 
       let deploymentResult: any;
       let shouldCreateNew = false;
@@ -7254,7 +7256,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      await imageHistoryPromise;
+      await this.k8sWorkload.waitForDeploymentRollout(data.name, data.namespace, image);
+      await saveImageHistory();
 
       if (!data.isRebuild || shouldCreateNew) {
         // Update service records with K8s-assigned values (nodePort, externalIp)

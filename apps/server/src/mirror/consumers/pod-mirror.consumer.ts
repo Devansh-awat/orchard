@@ -75,7 +75,6 @@ export class PodMirrorConsumer implements OnModuleDestroy {
       liveDeploymentIds.push(deploymentId);
       liveNames.push(key.name);
     }
-    if (liveNames.length === 0) return;
     // Keyed on the (deployment, pod name) pair rather than the name alone: pod
     // names are only unique within a namespace, so a bare name match keeps a
     // dead row alive whenever some other deployment happens to run a pod with

@@ -529,6 +529,17 @@ test('the prune drops pod rows the cluster no longer lists and clears their aler
   assert.equal(await prisma.deploymentCrashState.count({ where: { deploymentId } }), 0);
 });
 
+test('an empty complete snapshot prunes every stale pod row', async () => {
+  const consumer = newConsumer();
+  await consumer.onEvent('add', podEvent('web-0', false) as never);
+  await consumer.onEvent('add', podEvent('worker-0', false, 'test-mirror-dep-b') as never);
+
+  await consumer.pruneStalePods([]);
+
+  assert.equal(await prisma.pod.count({ where: { deploymentId } }), 0);
+  assert.equal(await prisma.pod.count({ where: { deploymentId: otherDeploymentId } }), 0);
+});
+
 test('the prune keys on the deployment, not just the pod name', async () => {
   const consumer = newConsumer();
   await consumer.onEvent('add', podEvent('web-0', false) as never);

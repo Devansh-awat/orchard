@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { K8sWorkloadService } from '../src/kubernetes/k8s-workload.service';
-import { rollingUpdateStrategy } from '../src/kubernetes/rollout-strategy';
+import {
+  ROLLOUT_MIN_READY_SECONDS,
+  rollingUpdateStrategy
+} from '../src/kubernetes/rollout-strategy';
 
 test('rolling updates keep every existing replica available while the replacement starts', () => {
   assert.deepEqual(rollingUpdateStrategy(), {
@@ -55,6 +58,7 @@ test('an image and its readiness probes land in one pod-template patch', async (
 
   const container = (applied as any).spec.template.spec.containers[0];
   assert.deepEqual((applied as any).spec.strategy, rollingUpdateStrategy());
+  assert.equal((applied as any).spec.minReadySeconds, ROLLOUT_MIN_READY_SECONDS);
   assert.equal(container.image, 'example/web:v2');
   assert.deepEqual(container.readinessProbe.httpGet, { path: '/up', port: 3000 });
   assert.equal(container.readinessProbe.exec, null);

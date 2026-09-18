@@ -29,7 +29,7 @@ import {
 } from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
-import { rollingUpdateStrategy } from './rollout-strategy';
+import { ROLLOUT_MIN_READY_SECONDS, rollingUpdateStrategy } from './rollout-strategy';
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 
 /**
@@ -912,6 +912,7 @@ export class K8sWorkloadService {
         spec: {
           replicas,
           strategy,
+          minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
           selector: {
             matchLabels: selectorLabels
           },
@@ -2531,6 +2532,7 @@ export class K8sWorkloadService {
       const patch = {
         spec: {
           ...(strategy ? { strategy } : {}),
+          minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
           template: {
             spec: {
               containers: [containerPatch]
@@ -2608,6 +2610,55 @@ export class K8sWorkloadService {
         message: k8sErrorMessage(error)
       });
     }
+  }
+
+  static deploymentRolloutComplete(deployment: k8s.V1Deployment, expectedImage: string): boolean {
+    const desired = deployment.spec?.replicas ?? 0;
+    const generation = deployment.metadata?.generation ?? 0;
+    const status = deployment.status;
+    const container = deployment.spec?.template?.spec?.containers?.find(
+      (entry) => entry.image === expectedImage
+    );
+    return (
+      !!container &&
+      (status?.observedGeneration ?? 0) >= generation &&
+      (status?.updatedReplicas ?? 0) === desired &&
+      (status?.availableReplicas ?? 0) === desired &&
+      (status?.replicas ?? 0) === desired &&
+      (status?.unavailableReplicas ?? 0) === 0
+    );
+  }
+
+  async waitForDeploymentRollout(
+    deploymentName: string,
+    namespace: string,
+    expectedImage: string,
+    timeoutMs = 5 * 60 * 1000
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const { body } = await api.readNamespacedDeployment(deploymentName, namespace);
+      if (K8sWorkloadService.deploymentRolloutComplete(body, expectedImage)) return;
+      const failed = body.status?.conditions?.find(
+        (condition) =>
+          condition.type === 'Progressing' &&
+          condition.status === 'False' &&
+          condition.reason === 'ProgressDeadlineExceeded'
+      );
+      if (failed) {
+        throw new Error(
+          failed.message || `Deployment ${deploymentName} exceeded its progress deadline`
+        );
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+    }
+
+    throw new Error(
+      `Timed out waiting for deployment ${deploymentName} to roll out ${expectedImage}`
+    );
   }
 
   private buildProbe(
