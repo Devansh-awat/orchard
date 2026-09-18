@@ -28,6 +28,7 @@ type DepDetail struct {
 	BuildStep                string   `json:"buildStep"`
 	BuildType                string   `json:"buildType"`
 	DockerfilePath           string   `json:"dockerfilePath"`
+	DockerfileTarget         string   `json:"dockerfileTarget"`
 	GithubRepo               string   `json:"githubRepo"`
 	GithubBranch             string   `json:"githubBranch"`
 	DeployStrategy           string   `json:"deployStrategy"`

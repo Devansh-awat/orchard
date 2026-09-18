@@ -143,6 +143,9 @@ func (s *deploymentScreen) viewAdvanced(height int, strip string) string {
 
 	if d.GithubRepo != "" {
 		row("Build", stMuted.Render(fmt.Sprintf("%s · dockerfile %s", orDash(d.BuildType), orDash(d.DockerfilePath))))
+		if d.DockerfileTarget != "" {
+			row("Build stage", stMuted.Render(d.DockerfileTarget))
+		}
 		row("Build root", onOff(d.BuildFromRoot)+stMuted.Render("  (g)"))
 		row("Depot", onOff(d.BuildWithDepot)+stMuted.Render("  (D)"))
 		row("Build cache", onOff(d.PersistentBuildCache)+stMuted.Render("  (c)"))

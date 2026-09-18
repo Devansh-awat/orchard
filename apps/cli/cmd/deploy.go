@@ -48,6 +48,7 @@ func deployCmd() *cobra.Command {
 		deployPullPolicyCmd(),
 		deployHealthCheckCmd(),
 		deployBuildRootCmd(),
+		deployBuildConfigCmd(),
 		deployKilledCmd(),
 		deployAutoDeployCmd(),
 		deployWebhookTokenCmd(),
@@ -193,6 +194,7 @@ func deployRenderKV(raw map[string]any) {
 		{"github repo", pick(raw, "githubRepo")},
 		{"github branch", pick(raw, "githubBranch")},
 		{"dockerfile", pick(raw, "dockerfilePath")},
+		{"build stage", pick(raw, "dockerfileTarget")},
 		{"build from root", pick(raw, "buildFromRoot")},
 		{"auto-deploy", pick(raw, "autoDeployEnabled")},
 		{"auto-deploy branch", pick(raw, "autoDeployBranch")},
@@ -213,6 +215,7 @@ func deployCreateCmd() *cobra.Command {
 	var (
 		name, image, github, dockerfile, memory, envFile   string
 		rootDir, installCmd, buildCmd, startCmd, outputDir string
+		target                                             string
 		pullPolicy                                         string
 		railpack, buildRoot, autoURL                       bool
 		port, replicas, cpu                                int
@@ -299,6 +302,9 @@ func deployCreateCmd() *cobra.Command {
 				if dockerfile != "" {
 					body["dockerfilePath"] = dockerfile
 				}
+				if target != "" {
+					body["target"] = target
+				}
 				body["buildFromRoot"] = buildRoot
 				for k, v := range map[string]string{
 					"rootDirectory":   rootDir,
@@ -352,6 +358,7 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&pullPolicy, "pull-policy", "", "pin the pull policy instead of deriving it from the tag: always|ifnotpresent (--image only)")
 	c.Flags().StringVar(&github, "github", "", "GitHub source as owner/repo[#branch]")
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
+	c.Flags().StringVar(&target, "target", "", "stage to stop at in a multi-stage Dockerfile; empty builds the final stage")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")
 	c.Flags().BoolVar(&buildRoot, "build-root", false, "use the repo root as the build context")
 	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")

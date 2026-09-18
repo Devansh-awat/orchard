@@ -388,7 +388,7 @@
 				dockerfilePath = det.dockerfilePath;
 				dockerfileSearch = det.dockerfilePath;
 				dockerfileStages = det.stages;
-				selectedStage = det.stages[0] ?? '';
+				selectedStage = '';
 			}
 			if (det.ports.length > 0 && !portsManuallyEdited) {
 				ports = det.ports.map((p, i) => ({
@@ -469,11 +469,7 @@
 
 				// Set stages
 				dockerfileStages = info.stages;
-				if (info.stages.length > 0) {
-					selectedStage = info.stages[0];
-				} else {
-					selectedStage = '';
-				}
+				selectedStage = '';
 
 				// Auto-fill ports from EXPOSE directives (only if user hasn't edited them)
 				if (info.exposedPorts.length > 0 && !portsManuallyEdited) {
@@ -1445,8 +1441,12 @@
 														{/if}
 													</Field>
 													{#if dockerfileStages.length > 0}
-														<Field label="Build stage">
+														<Field
+															label="Build stage"
+															hint="Which stage to stop at. The final stage is the image the Dockerfile produces on its own."
+														>
 															<Select bind:value={selectedStage}>
+																<option value="">Final stage</option>
 																{#each dockerfileStages as stage (stage)}
 																	<option value={stage}>{stage}</option>
 																{/each}

@@ -203,6 +203,57 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
     }
   );
 
+  server.registerTool(
+    'update_deployment_build_config',
+    {
+      description: `Change how an existing deployment is built, without recreating it.
+
+Every field is optional and only what you pass is changed, so you can set one thing without restating the rest. Pass null to clear a value.
+
+- \`dockerfileTarget\`: the stage a multi-stage Dockerfile stops at, as \`docker build --target\`. Null builds the final stage, which is what a single-stage Dockerfile produces anyway. Use this to run several images out of one repo — a web stage and a worker stage — instead of maintaining a Dockerfile per process.
+- \`startCommand\`: on a \`dockerfile\` build this runs instead of the image's CMD, like a command passed to \`docker run\`, and takes effect on save without a rebuild. On a \`railpack\` build it is baked in by the next build instead.
+- \`dockerfilePath\`, \`buildType\`: as at create time. Switching build type clears the settings that only make sense for the other one.
+- \`rootDirectory\`, \`installCommand\`, \`buildCommand\`, \`outputDirectory\`: Railpack-only overrides; null hands the decision back to detection.
+
+Everything except \`startCommand\` applies on the next build, so follow up with \`rebuild_deployment\` if you want it live now.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        buildType: z
+          .enum(['dockerfile', 'railpack'])
+          .optional()
+          .describe('"dockerfile" builds the repo Dockerfile; "railpack" detects and builds itself'),
+        dockerfilePath: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Path to the Dockerfile relative to the repo root'),
+        dockerfileTarget: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Multi-stage build target, or null to build the final stage'),
+        startCommand: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("Command to run instead of the image's CMD, or null to use the image's own"),
+        rootDirectory: z.string().nullable().optional().describe('Railpack: app directory in the repo'),
+        installCommand: z.string().nullable().optional().describe('Railpack: install step override'),
+        buildCommand: z.string().nullable().optional().describe('Railpack: build step override'),
+        outputDirectory: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Railpack: built static files directory, which makes the app a static site')
+      }
+    },
+    async ({ deploymentId, ...body }) => {
+      const result = await client.put(`/deployments/${deploymentId}/build-config`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
   // ── Networking ────────────────────────────────────────────────────
 
   server.registerTool(

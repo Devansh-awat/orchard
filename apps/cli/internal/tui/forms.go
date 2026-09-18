@@ -178,6 +178,7 @@ func newDeployFormGithub(cl *api.Client, p Project) *formScreen {
 			fld("repoUrl", "Repo", "owner/repo or https URL", true),
 			fld("branch", "Branch", "main", false),
 			fld("dockerfilePath", "Dockerfile", "Dockerfile", false),
+			fld("target", "Build stage", "final stage", false),
 			fld("port", "Port", "80", false),
 		},
 		func(v map[string]string) tea.Cmd {
@@ -188,6 +189,9 @@ func newDeployFormGithub(cl *api.Client, p Project) *formScreen {
 				}
 				if v["dockerfilePath"] != "" {
 					body["dockerfilePath"] = v["dockerfilePath"]
+				}
+				if v["target"] != "" {
+					body["target"] = v["target"]
 				}
 				if n, err := strconv.Atoi(v["port"]); err == nil {
 					body["port"] = n

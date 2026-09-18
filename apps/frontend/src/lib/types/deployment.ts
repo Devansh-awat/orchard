@@ -130,6 +130,7 @@ export interface Deployment {
 	services?: Service[];
 	ingresses?: Ingress[];
 	imageHistory?: ImageHistory[];
+	dockerfileTarget?: string | null;
 	githubRepo?: string;
 	githubBranch?: string;
 	buildType?: 'dockerfile' | 'railpack';

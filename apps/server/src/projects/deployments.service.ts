@@ -2032,6 +2032,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string | null;
+      dockerfileTarget?: string | null;
       rootDirectory?: string | null;
       framework?: string | null;
       installCommand?: string | null;
@@ -2130,6 +2131,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         // A Railpack build ignores the Dockerfile path, so clear a stale one on
         // switch; mirror the cross-nulling the create path already does.
         ...(nextBuildType === 'railpack' ? { dockerfilePath: null } : override('dockerfilePath')),
+        // Same reasoning one line up: a Railpack build has no stages to target.
+        ...(nextBuildType === 'railpack'
+          ? { dockerfileTarget: null }
+          : override('dockerfileTarget')),
         ...(rootDirectory !== undefined && { rootDirectory }),
         ...override('framework'),
         ...override('installCommand'),
@@ -2185,6 +2190,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...changed('persistentBuildCache', deployment.persistentBuildCache, persistentBuildCache),
         ...changed('buildType', deployment.buildType, body.buildType),
         ...changed('dockerfilePath', deployment.dockerfilePath, body.dockerfilePath),
+        ...changed('dockerfileTarget', deployment.dockerfileTarget, body.dockerfileTarget),
         ...changed('rootDirectory', deployment.rootDirectory, rootDirectory),
         ...changed('installCommand', deployment.installCommand, body.installCommand),
         ...changed('buildCommand', deployment.buildCommand, body.buildCommand),
@@ -4105,6 +4111,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildWithDepot: deployment.buildWithDepot ?? false,
         persistentBuildCache: deployment.persistentBuildCache ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        target: deployment.dockerfileTarget ?? undefined,
         imageName,
         tag: uniqueTag,
         namespace: deployment.namespace,
@@ -6020,6 +6027,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         githubBranch: branch,
         githubInstallationId: repoInstallation?.installationId ?? null,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
+        // Railpack has no notion of stages, so a target can only mean anything
+        // alongside a Dockerfile.
+        dockerfileTarget: buildType === 'dockerfile' ? data.target?.trim() || null : null,
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,
         persistentBuildCache: data.persistentBuildCache ?? false,
@@ -6202,6 +6212,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       name: string;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string;
+      target?: string;
       rootDirectory?: string | null;
       framework?: string | null;
       installCommand?: string | null;
@@ -6333,6 +6344,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'none',
         buildType,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
+        dockerfileTarget: buildType === 'dockerfile' ? data.target?.trim() || null : null,
         rootDirectory: buildType === 'railpack' ? normalizeRootDirectory(data.rootDirectory) : null,
         framework: data.framework?.trim() || null,
         installCommand: data.installCommand?.trim() || null,
@@ -6541,6 +6553,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         branch: 'local',
         dockerfilePath: deployment.dockerfilePath ?? undefined,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        target: deployment.dockerfileTarget ?? undefined,
         imageName,
         tag: uniqueTag,
         namespace: deployment.namespace,
@@ -7838,6 +7851,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildWithDepot: deployment.buildWithDepot ?? false,
         persistentBuildCache: deployment.persistentBuildCache ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        target: deployment.dockerfileTarget ?? undefined,
         imageName,
         tag: uniqueTag,
         namespace: deployment.namespace,

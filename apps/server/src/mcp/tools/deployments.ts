@@ -147,6 +147,12 @@ Before using this tool:
           .string()
           .optional()
           .describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
+        target: z
+          .string()
+          .optional()
+          .describe(
+            'Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage, which is what a single-stage Dockerfile produces anyway. Stored on the deployment, so rebuilds keep it.'
+          ),
         buildFromRoot: z
           .boolean()
           .optional()
@@ -224,6 +230,7 @@ Before using this tool:
       githubRepo,
       branch,
       dockerfilePath,
+      target,
       buildFromRoot,
       port,
       env,
@@ -242,6 +249,7 @@ Before using this tool:
         githubRepo,
         branch: branch ?? 'main',
         dockerfilePath,
+        ...(target && { target }),
         buildFromRoot: buildFromRoot ?? false,
         ...(buildType && { buildType }),
         ...(rootDirectory && { rootDirectory }),
@@ -290,6 +298,12 @@ Before calling, you should still confirm with list_github_deploy_targets that th
           .string()
           .optional()
           .describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
+        target: z
+          .string()
+          .optional()
+          .describe(
+            'Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage, which is what a single-stage Dockerfile produces anyway. Stored on the deployment, so rebuilds keep it.'
+          ),
         buildFromRoot: z
           .boolean()
           .optional()
@@ -329,6 +343,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
       repoUrl,
       branch,
       dockerfilePath,
+      target,
       buildFromRoot,
       port,
       env,
@@ -362,6 +377,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
         repoUrl: `https://github.com/${owner}/${repo}`,
         branch: resolvedBranch,
         dockerfilePath,
+        ...(target && { target }),
         buildFromRoot: buildFromRoot ?? false,
         ...(port && { port }),
         ...(env && { env }),

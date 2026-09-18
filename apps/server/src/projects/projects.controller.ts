@@ -794,6 +794,7 @@ export class ProjectsController {
       name: string;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string;
+      target?: string;
       rootDirectory?: string | null;
       framework?: string | null;
       installCommand?: string | null;
@@ -1448,6 +1449,7 @@ export class DeploymentsController {
       persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string | null;
+      dockerfileTarget?: string | null;
       rootDirectory?: string | null;
       framework?: string | null;
       installCommand?: string | null;

@@ -16,6 +16,7 @@
 
 	let buildType = $state<'dockerfile' | 'railpack'>('railpack');
 	let dockerfilePath = $state('');
+	let dockerfileTarget = $state('');
 	let rootDirectory = $state('');
 	let installCommand = $state('');
 	let buildCommand = $state('');
@@ -29,6 +30,7 @@
 		hydratedId = d.id;
 		buildType = d.buildType === 'railpack' ? 'railpack' : 'dockerfile';
 		dockerfilePath = d.dockerfilePath ?? '';
+		dockerfileTarget = d.dockerfileTarget ?? '';
 		rootDirectory = d.rootDirectory ?? '';
 		installCommand = d.installCommand ?? '';
 		buildCommand = d.buildCommand ?? '';
@@ -48,6 +50,7 @@
 		Boolean(deployment) &&
 			(buildType !== (deployment?.buildType ?? 'dockerfile') ||
 				dockerfilePath !== (deployment?.dockerfilePath ?? '') ||
+				dockerfileTarget !== (deployment?.dockerfileTarget ?? '') ||
 				rootDirectory !== (deployment?.rootDirectory ?? '') ||
 				installCommand !== (deployment?.installCommand ?? '') ||
 				buildCommand !== (deployment?.buildCommand ?? '') ||
@@ -58,6 +61,7 @@
 	function reset() {
 		buildType = deployment?.buildType === 'railpack' ? 'railpack' : 'dockerfile';
 		dockerfilePath = deployment?.dockerfilePath ?? '';
+		dockerfileTarget = deployment?.dockerfileTarget ?? '';
 		rootDirectory = deployment?.rootDirectory ?? '';
 		installCommand = deployment?.installCommand ?? '';
 		buildCommand = deployment?.buildCommand ?? '';
@@ -70,6 +74,7 @@
 			onSave({
 				buildType: 'dockerfile',
 				dockerfilePath: dockerfilePath.trim() || null,
+				dockerfileTarget: dockerfileTarget.trim() || null,
 				startCommand: startCommand.trim() || null
 			});
 			return;
@@ -111,6 +116,12 @@
 					hint="Path to the Dockerfile, relative to the repository root. Leave empty to use ./Dockerfile."
 				>
 					<Input bind:value={dockerfilePath} placeholder="Dockerfile" class="font-mono" />
+				</Field>
+				<Field
+					label="Build stage"
+					hint="Stage to stop at in a multi-stage Dockerfile. Leave empty to build the final stage, which is what a single-stage Dockerfile does anyway. Applies on the next build."
+				>
+					<Input bind:value={dockerfileTarget} placeholder="Final stage" class="font-mono" />
 				</Field>
 				<Field
 					label="Start command"

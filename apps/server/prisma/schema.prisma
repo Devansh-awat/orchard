@@ -623,6 +623,12 @@ model Deployment {
   githubRepoId         BigInt?            @map("github_repo_id")
   githubBranch         String?            @map("github_branch") @db.VarChar(255)
   dockerfilePath       String?            @map("dockerfile_path") @db.VarChar(500)
+  // The stage a multi-stage Dockerfile stops at (`docker build --target`).
+  // Null builds the final stage, which is both Docker's default and the only
+  // thing a single-stage file can do. Persisted rather than passed per build:
+  // it was create-only before, so every rebuild silently dropped the flag and
+  // built a different image than the one the deployment was created with.
+  dockerfileTarget     String?            @map("dockerfile_target") @db.VarChar(255)
   buildFromRoot        Boolean            @default(false) @map("build_from_root")
   buildWithDepot       Boolean            @default(false) @map("build_with_depot")
   persistentBuildCache Boolean            @default(false) @map("persistent_build_cache")

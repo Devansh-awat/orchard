@@ -266,6 +266,9 @@ const deploymentBase = z
     buildFromRoot: z.boolean().optional(),
     buildWithDepot: z.boolean().optional(),
     persistentBuildCache: z.boolean().optional(),
+    // The stage a multi-stage Dockerfile build stops at. Null builds the final
+    // stage, which is Docker's own default.
+    dockerfileTarget: z.string().nullable().optional(),
     // Zero-config build settings. Null means "use whatever Railpack detected".
     rootDirectory: z.string().nullable().optional(),
     framework: z.string().nullable().optional(),
@@ -570,7 +573,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       githubRepo: z.string().optional(),
       branch: z.string().optional(),
       dockerfilePath: z.string().optional(),
-      target: z.string().optional(),
+      target: z
+        .string()
+        .optional()
+        .describe(
+          "Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage. Stored on the deployment, so rebuilds keep it."
+        ),
       tag: z.string().optional(),
       buildFromRoot: z.boolean().optional(),
       buildWithDepot: z.boolean().optional(),
@@ -685,6 +693,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       buildWithDepot: z.boolean().optional(),
       persistentBuildCache: z.boolean().optional(),
       buildType: z.enum(['dockerfile', 'railpack']).optional(),
+      // Multi-stage build target. Null builds the Dockerfile's final stage.
+      // Takes effect on the next build, not on save.
+      dockerfileTarget: z.string().nullable().optional(),
       // Pass null to clear an override and fall back to Railpack's detection.
       rootDirectory: z.string().nullable().optional(),
       framework: z.string().nullable().optional(),

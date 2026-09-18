@@ -657,6 +657,90 @@ func deployBuildRootSetCmd() *cobra.Command {
 	return c
 }
 
+func deployBuildConfigCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "build-config",
+		Short: "Manage how a deployment is built",
+	}
+	c.AddCommand(deployBuildConfigSetCmd())
+	return c
+}
+
+// Only flags the caller actually typed are sent, so one setting can be changed
+// without restating the rest. Passing a flag with an empty value clears it —
+// `--target ""` goes back to building the Dockerfile's final stage — which is
+// why this reads Changed() rather than testing for "".
+func deployBuildConfigSetCmd() *cobra.Command {
+	var buildType, dockerfile, target, startCmd string
+	var rootDir, installCmd, buildCmd, outputDir string
+	c := &cobra.Command{
+		Use:   "set <id>",
+		Short: "Change build settings for a deployment",
+		Long: `Change build settings for a deployment.
+
+Only the flags you pass are changed. Pass a flag with an empty value to clear
+it, e.g. --target "" to go back to building the Dockerfile's final stage.
+
+Everything except --start-cmd on a Dockerfile build applies to the next build,
+so follow up with "orchard deploy rebuild <id>" to make it live.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			body := map[string]any{}
+			f := cmd.Flags()
+			for flag, val := range map[string]*string{
+				"build-type":  &buildType,
+				"dockerfile":  &dockerfile,
+				"target":      &target,
+				"start-cmd":   &startCmd,
+				"root":        &rootDir,
+				"install-cmd": &installCmd,
+				"build-cmd":   &buildCmd,
+				"output-dir":  &outputDir,
+			} {
+				if !f.Changed(flag) {
+					continue
+				}
+				key := map[string]string{
+					"build-type":  "buildType",
+					"dockerfile":  "dockerfilePath",
+					"target":      "dockerfileTarget",
+					"start-cmd":   "startCommand",
+					"root":        "rootDirectory",
+					"install-cmd": "installCommand",
+					"build-cmd":   "buildCommand",
+					"output-dir":  "outputDirectory",
+				}[flag]
+				if *val == "" && flag != "build-type" {
+					body[key] = nil
+				} else {
+					body[key] = *val
+				}
+			}
+			if len(body) == 0 {
+				return fmt.Errorf("nothing to change: pass at least one flag")
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "build-config"), body, nil); err != nil {
+				return err
+			}
+			output.Successf("updated build settings of %s", args[0])
+			return nil
+		},
+	}
+	c.Flags().StringVar(&buildType, "build-type", "", "dockerfile|railpack")
+	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
+	c.Flags().StringVar(&target, "target", "", `stage to stop at in a multi-stage Dockerfile; "" builds the final stage`)
+	c.Flags().StringVar(&startCmd, "start-cmd", "", `command to run instead of the image CMD; "" uses the image's own`)
+	c.Flags().StringVar(&rootDir, "root", "", "railpack: directory of the app inside the repo")
+	c.Flags().StringVar(&installCmd, "install-cmd", "", "railpack: override the detected install command")
+	c.Flags().StringVar(&buildCmd, "build-cmd", "", "railpack: override the detected build command")
+	c.Flags().StringVar(&outputDir, "output-dir", "", "railpack: directory of built static files")
+	return c
+}
+
 func deployParseOnOff(s string) (bool, error) {
 	switch strings.ToLower(s) {
 	case "on":
