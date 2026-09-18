@@ -17,6 +17,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
 import { resolvePullPolicy } from '../kubernetes/trusted-images';
+import { startArgsFor, resolveStartArgs } from '../kubernetes/start-command';
 import { disruptionBudgetActive } from '../kubernetes/disruption-budget';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
@@ -540,7 +541,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deployment.name,
           deployment.namespace,
           image,
-          healthCheck
+          healthCheck,
+          await this.loadStartArgs(deployment.id)
         );
         await this.recordRecoveredImageHistory(deployment.id, image).catch((error) => {
           this.logger.warn(
@@ -2108,6 +2110,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const override = (key: keyof typeof body) =>
       key in body ? { [key]: (body[key] as string | null)?.trim() || null } : {};
 
+    // The start command means two different things either side of a build-type
+    // switch — a Railpack build bakes it into the image, everything else runs
+    // it as the container's args — so a value carried across the switch would
+    // start behaving differently without anyone touching it. Clear it, the
+    // same way the Dockerfile path is cleared below, unless this same request
+    // is also setting one.
+    const buildTypeSwitched =
+      body.buildType !== undefined && body.buildType !== deployment.buildType;
+    const clearStartCommand = buildTypeSwitched && !('startCommand' in body);
+
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
@@ -2122,10 +2134,37 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...override('framework'),
         ...override('installCommand'),
         ...override('buildCommand'),
-        ...override('startCommand'),
+        ...(clearStartCommand ? { startCommand: null } : override('startCommand')),
         ...override('outputDirectory')
       }
     });
+
+    // Outside Railpack the start command is a runtime setting, so it takes
+    // effect on a rollout rather than waiting for the next build. Patching the
+    // args changes the pod template, which rolls a new ReplicaSet on its own.
+    const nextStartCommand = clearStartCommand
+      ? null
+      : 'startCommand' in body
+        ? body.startCommand?.trim() || null
+        : deployment.startCommand;
+    if (
+      nextStartCommand !== deployment.startCommand ||
+      (buildTypeSwitched && nextBuildType !== 'railpack')
+    ) {
+      await this.k8sWorkload
+        .updateDeploymentStartArgs(
+          deployment.name,
+          deployment.namespace,
+          nextBuildType === 'railpack' ? null : resolveStartArgs(nextStartCommand)
+        )
+        .catch((error) => {
+          // A deployment that has never built has no workload to patch yet;
+          // the next build renders the args from the row either way.
+          console.warn(
+            `[Projects] Start command rollout skipped for ${deploymentId}: ${error.message}`
+          );
+        });
+    }
 
     const changed = (key: string, before: unknown, after: unknown) =>
       after !== undefined && after !== before ? { [key]: [before, after] } : {};
@@ -2532,6 +2571,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<CreateDeploymentOptions['healthCheck'] | undefined> {
     const resolved = await this.resolveStoredHealthCheck(deploymentId);
     return resolved?.enabled ? resolved : undefined;
+  }
+
+  // Same contract as loadHealthCheckOptions: the render path owns the spec, so
+  // every full (re)create re-reads the start command rather than trusting that
+  // an earlier patch survives. Returns null for a Railpack build, where the
+  // command is already baked into the image.
+  private async loadStartArgs(deploymentId: string): Promise<string[] | null> {
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { buildType: true, startCommand: true }
+    });
+    return row ? startArgsFor(row) : null;
   }
 
   // What the deployment actually probes with: the Dockerfile's HEALTHCHECK
@@ -5302,6 +5353,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       placementOverride?: unknown;
       imagePullPolicy?: 'Always' | 'IfNotPresent';
       pdbMinAvailable?: number;
+      // Overrides the image's CMD. An image-source deployment never runs a
+      // builder, so this is the only way to run `redis-server --appendonly
+      // yes` instead of whatever the image starts with.
+      startCommand?: string | null;
     },
     clerkId: string,
     userData?: {
@@ -5461,6 +5516,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       data.imagePullPolicy === 'Always' || data.imagePullPolicy === 'IfNotPresent'
         ? data.imagePullPolicy
         : null;
+    const startCommand = data.startCommand?.trim() || null;
+    const startArgs = resolveStartArgs(startCommand);
     // Every app starts out asking for one pod to survive a drain. It only
     // becomes a real budget once the app runs more than one replica.
     const initialPdbMinAvailable =
@@ -5486,7 +5543,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       resources: podResources,
       deployStrategy: initialStrategy,
       imagePullPolicy: resolvePullPolicy(pullPolicyOverride, image),
-      pdbMinAvailable: initialPdbMinAvailable
+      pdbMinAvailable: initialPdbMinAvailable,
+      args: startArgs
     });
 
     let createdDeployment;
@@ -5508,6 +5566,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deployStrategy: initialStrategy,
             imagePullPolicy: pullPolicyOverride,
             pdbMinAvailable: initialPdbMinAvailable,
+            startCommand,
             nodePoolId: data.nodePoolId ?? null,
             placementOverride: (placementOverride ?? undefined) as
               | Prisma.InputJsonValue
@@ -6979,7 +7038,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       if (data.isRebuild && k8sDeploymentExists) {
         const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
-        await this.k8sWorkload.updateDeploymentImage(data.name, data.namespace, image, healthCheck);
+        await this.k8sWorkload.updateDeploymentImage(
+          data.name,
+          data.namespace,
+          image,
+          healthCheck,
+          await this.loadStartArgs(deploymentId)
+        );
 
         await this.syncReplicasForRebuild(deploymentId, data.name, data.namespace, data.replicas);
 
@@ -7114,10 +7179,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
         if (shouldCreateNew) {
           const healthCheck = await this.loadHealthCheckOptions(deploymentId);
+          const startArgs = await this.loadStartArgs(deploymentId);
           deploymentResult = await this.k8sWorkload.createDeployment({
             namespace: data.namespace,
             name: data.name,
             image,
+            args: startArgs,
             replicas: deploymentRow?.stopped ? 0 : data.replicas,
             ports: data.rawPorts,
             env: data.env,
@@ -7139,7 +7206,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             data.name,
             data.namespace,
             image,
-            healthCheck
+            healthCheck,
+            await this.loadStartArgs(deploymentId)
           );
           // A rebuild patches the image and nothing else, so it is also the
           // only chance to notice the running spec has drifted from what was

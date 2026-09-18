@@ -67,7 +67,11 @@
 
 	function save() {
 		if (buildType === 'dockerfile') {
-			onSave({ buildType: 'dockerfile', dockerfilePath: dockerfilePath.trim() || null });
+			onSave({
+				buildType: 'dockerfile',
+				dockerfilePath: dockerfilePath.trim() || null,
+				startCommand: startCommand.trim() || null
+			});
 			return;
 		}
 		onSave({
@@ -107,6 +111,16 @@
 					hint="Path to the Dockerfile, relative to the repository root. Leave empty to use ./Dockerfile."
 				>
 					<Input bind:value={dockerfilePath} placeholder="Dockerfile" class="font-mono" />
+				</Field>
+				<Field
+					label="Start command"
+					hint="Runs instead of the image's CMD, like a command passed to docker run. Applies on save, without a rebuild. Leave empty to use whatever the image starts."
+				>
+					<Input
+						bind:value={startCommand}
+						placeholder="Whatever the image starts"
+						class="font-mono"
+					/>
 				</Field>
 			{/if}
 		</div>

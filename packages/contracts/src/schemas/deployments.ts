@@ -550,6 +550,13 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .nullish()
         .describe(
           'Omit to derive it from the tag, which already gives a moving tag like :latest the Always behaviour. Pass a value only to pin it.'
+        ),
+      startCommand: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Runs instead of the image's CMD, like a command passed to docker run. Omit to keep the image's own."
         )
     }),
     response: deploymentWithRelations
@@ -683,6 +690,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       framework: z.string().nullable().optional(),
       installCommand: z.string().nullable().optional(),
       buildCommand: z.string().nullable().optional(),
+      // On a Railpack build this is baked into the image by the next build. On
+      // a Dockerfile or image-source deployment it is the container's args and
+      // rolls out on save. Switching build type clears it, because the two
+      // meanings are not interchangeable.
       startCommand: z.string().nullable().optional(),
       outputDirectory: z.string().nullable().optional()
     }),

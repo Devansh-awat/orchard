@@ -39,8 +39,21 @@ interface ParsedComposeService {
   env: { key: string; value: string }[];
   volumes: { name: string; type: 'pvc' | 'emptyDir'; mountPath: string; storageSize?: string }[];
   replicas: number;
+  // Compose `command:`, normalised to the string Orchard stores. A list is
+  // re-encoded as JSON so resolveStartArgs reads it back as an exec form
+  // rather than re-splitting arguments that were already split.
+  command?: string | null;
   cpuRequestMilli?: number | null;
   memoryRequestBytes?: number | null;
+}
+
+function parseComposeCommand(command: unknown): string | null {
+  if (Array.isArray(command)) {
+    const argv = command.map((arg) => String(arg));
+    return argv.length > 0 ? JSON.stringify(argv) : null;
+  }
+  if (typeof command === 'string') return command.trim() || null;
+  return null;
 }
 
 const MEMORY_UNITS: Record<string, number> = {
@@ -212,6 +225,7 @@ export class ComposeStacksService {
         env,
         volumes,
         replicas: typeof svc?.deploy?.replicas === 'number' ? svc.deploy.replicas : 1,
+        command: parseComposeCommand(svc?.command),
         ...this.parseComposeResources(svc)
       });
     }
@@ -405,6 +419,7 @@ export class ComposeStacksService {
             })),
             cpuRequestMilli: svc.cpuRequestMilli ?? null,
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
+            startCommand: svc.command ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
             environmentId: stack.environmentId ?? undefined,
@@ -432,6 +447,7 @@ export class ComposeStacksService {
             })),
             cpuRequestMilli: svc.cpuRequestMilli ?? null,
             memoryRequestBytes: svc.memoryRequestBytes ?? null,
+            startCommand: svc.command ?? null,
             composeStackId: stack.id,
             composeServiceName: svc.name,
             environmentId: stack.environmentId ?? undefined

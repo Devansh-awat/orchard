@@ -180,7 +180,9 @@ Before using this tool:
         startCommand: z
           .string()
           .optional()
-          .describe('Override the container start command. Leave unset to use Railpack detection'),
+          .describe(
+            "Override the container start command. On a railpack build this is what Railpack bakes in; on a dockerfile build it runs instead of the image's CMD, like a command passed to docker run. Leave unset to use detection or the image's own"
+          ),
         outputDirectory: z
           .string()
           .optional()

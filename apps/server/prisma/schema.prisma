@@ -640,6 +640,11 @@ model Deployment {
   framework            String?            @map("framework") @db.VarChar(50)
   installCommand       String?            @map("install_command") @db.VarChar(2000)
   buildCommand         String?            @map("build_command") @db.VarChar(2000)
+  // The exception to the block above: startCommand applies to every build
+  // type, but by two different routes. Railpack bakes it into the image as
+  // RAILPACK_START_CMD; a Dockerfile build or an image-source deployment has
+  // no builder to bake anything, so it becomes the container's args instead
+  // (see kubernetes/start-command.ts) and takes effect on a rollout.
   startCommand         String?            @map("start_command") @db.VarChar(2000)
   // Non-null turns the app into a static site: Railpack builds it, then serves
   // this directory with Caddy on $PORT with index.html fallback.

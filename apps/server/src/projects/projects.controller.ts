@@ -715,6 +715,7 @@ export class ProjectsController {
       placementOverride?: unknown;
       imagePullPolicy?: 'Always' | 'IfNotPresent';
       environmentId?: string;
+      startCommand?: string | null;
     },
     @Request() req
   ) {
@@ -732,7 +733,8 @@ export class ProjectsController {
       nodePoolId,
       placementOverride,
       imagePullPolicy,
-      environmentId
+      environmentId,
+      startCommand
     } = body;
     const result = await this.deployments.createDeployment(
       id,
@@ -750,7 +752,8 @@ export class ProjectsController {
         nodePoolId,
         placementOverride,
         imagePullPolicy,
-        environmentId
+        environmentId,
+        startCommand
       },
       req.user.sub,
       {

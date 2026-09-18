@@ -830,6 +830,7 @@ export class K8sWorkloadService {
           containerPort: port.containerPort,
           protocol: port.protocol
         })),
+        ...(options.args?.length ? { args: options.args } : {}),
         env: envList,
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
         // Defence-in-depth even when the pod runs under gVisor (runsc):
@@ -2393,11 +2394,75 @@ export class K8sWorkloadService {
     return { success: true, deployment: cleanName, namespace: cleanNamespace, policy };
   }
 
+  /**
+   * Apply a changed start command without a rebuild.
+   *
+   * The args live in the pod template, so patching them rolls a new ReplicaSet
+   * the same way a pull-policy change does — and unlike every other build
+   * setting, a start command on a Dockerfile or image-source deployment needs
+   * no builder at all, so it takes effect in seconds instead of a build.
+   *
+   * `args` must be an explicit null to clear: an omitted key would merge away
+   * to "leave whatever is running", which is exactly wrong when the user just
+   * emptied the field to get the image's own CMD back.
+   */
+  async updateDeploymentStartArgs(
+    deploymentName: string,
+    namespace: string,
+    args: string[] | null
+  ) {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const cleanName = String(deploymentName).trim();
+    const cleanNamespace = String(namespace).trim();
+
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: cleanName, args: args?.length ? args : null }]
+          }
+        }
+      }
+    };
+
+    try {
+      await api.patchNamespacedDeployment(
+        cleanName,
+        cleanNamespace,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Deployment not found',
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`
+        });
+      }
+      throw new BadRequestException({
+        error: 'Failed to update start command',
+        message: error.message
+      });
+    }
+
+    return { success: true, deployment: cleanName, namespace: cleanNamespace };
+  }
+
   async updateDeploymentImage(
     deploymentName: string,
     namespace: string,
     image: string,
-    healthCheck?: CreateDeploymentOptions['healthCheck']
+    healthCheck?: CreateDeploymentOptions['healthCheck'],
+    // Tri-state on purpose: undefined leaves the running args alone (callers
+    // that only swap an image), an array sets them, null clears them back to
+    // the image's CMD.
+    args?: string[] | null
   ) {
     this.ensureKubeConfig();
 
@@ -2444,6 +2509,7 @@ export class K8sWorkloadService {
       const containerPatch = {
         name: cleanDeploymentName,
         image: cleanImage,
+        ...(args === undefined ? {} : { args: args?.length ? args : null }),
         ...(healthCheck
           ? {
               livenessProbe:

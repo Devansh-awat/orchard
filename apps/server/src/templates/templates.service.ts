@@ -364,6 +364,7 @@ export class TemplatesService implements OnModuleInit {
                 volumes: config.volumes,
                 exposePublic: config.exposePublic ?? false,
                 templateInstanceId: instance.id,
+                startCommand: config.startCommand ?? null,
                 cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
                 memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null
               };

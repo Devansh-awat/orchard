@@ -118,6 +118,9 @@
 	let name = $state('');
 	let image = $state('');
 	let imagePullPolicy = $state<'Always' | 'IfNotPresent' | 'auto'>('auto');
+	// Deliberately not `startCommand`: that one is prefilled by repo detection,
+	// and an image deployment must not inherit a command detected for a repo.
+	let imageStartCommand = $state('');
 	let repoUrl = $state('');
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
@@ -872,6 +875,7 @@
 				}
 			} else {
 				body.image = image.trim();
+				if (imageStartCommand.trim()) body.startCommand = imageStartCommand.trim();
 				if (imagePullPolicy !== 'auto') body.imagePullPolicy = imagePullPolicy;
 			}
 
@@ -1088,6 +1092,16 @@
 									</p>
 								</div>
 							{/if}
+							<Field
+								label="Start command"
+								hint="Runs instead of the image's CMD, like a command passed to docker run. Leave empty to use whatever the image starts."
+							>
+								<Input
+									bind:value={imageStartCommand}
+									placeholder="Whatever the image starts"
+									class="font-mono"
+								/>
+							</Field>
 						{:else}
 							{#if !githubLinked}
 								<div class="nd-warning" style="margin-bottom: 0.75rem;">

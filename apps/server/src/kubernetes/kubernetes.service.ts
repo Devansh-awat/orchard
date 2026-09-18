@@ -130,6 +130,11 @@ export interface CreateDeploymentOptions {
   replicas: number;
   ports?: DeploymentPortInput[];
   env?: DeploymentEnvVarInput[];
+  // The deployment's start command, already resolved to argv by
+  // resolveStartArgs. Set as the container's `args`, so it lands after the
+  // image's ENTRYPOINT rather than replacing it. Omitted or null leaves the
+  // image's own CMD in place.
+  args?: string[] | null;
   serviceType?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
   allowedNodes?: string[] | null;
   deniedNodes?: string[];
