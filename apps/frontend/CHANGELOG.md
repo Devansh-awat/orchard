@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.1](https://github.com/hackclub/orchard/compare/frontend/v1.38.0...frontend/v1.38.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* refetch live pods when the page loads, not on every deployment update ([b93ff83](https://github.com/hackclub/orchard/commit/b93ff839c7281b9a8cdf7c442c2aae7ec308aca9))
+
 ## [1.38.0](https://github.com/hackclub/orchard/compare/frontend/v1.37.0...frontend/v1.38.0) (2026-09-18)
 
 
