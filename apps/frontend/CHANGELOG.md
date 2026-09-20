@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.2](https://github.com/hackclub/orchard/compare/frontend/v1.38.1...frontend/v1.38.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* enforce ratelimits across the board ([#89](https://github.com/hackclub/orchard/issues/89)) ([145fa8f](https://github.com/hackclub/orchard/commit/145fa8ffe3ae6e1e670064146f5ed6dcc1f56c1f))
+
 ## [1.38.1](https://github.com/hackclub/orchard/compare/frontend/v1.38.0...frontend/v1.38.1) (2026-09-18)
 
 
