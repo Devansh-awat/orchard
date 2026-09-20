@@ -587,7 +587,8 @@
 		// the counter and produces a garbage spike. Crashlooping pods hit this
 		// constantly, which is exactly when someone is looking at the page.
 		// Drop it rather than render a number that cannot be true.
-		const cpuRatio = rawCpuRatio != null && rawCpuRatio > CPU_RATIO_IMPLAUSIBLE ? null : rawCpuRatio;
+		const cpuRatio =
+			rawCpuRatio != null && rawCpuRatio > CPU_RATIO_IMPLAUSIBLE ? null : rawCpuRatio;
 
 		const cpuNear = cpuRatio != null && cpuRatio >= NEAR_LIMIT_RATIO;
 		const memNear = memRatio != null && memRatio >= NEAR_LIMIT_RATIO;

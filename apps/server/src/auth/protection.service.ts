@@ -8,6 +8,7 @@ import { Duplex } from 'stream';
 import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
+import { getClientIp } from './client-ip';
 
 export interface ProtectionDecision {
   allow: boolean;
@@ -86,6 +87,33 @@ export function pathMatchesBypass(requestPath: string, patterns: string[]): bool
 
 const BASIC_AUTH_REALM = 'Restricted';
 
+// Basic auth is checked on every proxied request, so its throttle lives in
+// memory rather than in rate_limit_records: a database round trip per request
+// would cost more than the bcrypt compare it is guarding. Per-pod counters are
+// the trade-off. That is acceptable here because a client that knows the
+// credentials never increments anything, and a client that does not is slowed
+// down by whichever pod it lands on.
+const BASIC_AUTH_MAX_FAILURES = 10;
+const BASIC_AUTH_WINDOW_MS = 15 * 60 * 1000;
+const BASIC_AUTH_BLOCK_MS = 15 * 60 * 1000;
+const BASIC_AUTH_MAX_TRACKED = 10_000;
+
+// handleUpgrade sees a raw IncomingMessage, not an Express Request, so it
+// cannot use getClientIp. Mirror its preference for X-Real-IP: keying on the
+// socket peer alone would file every client behind the proxy under one entry,
+// and a single attacker could then throttle everyone else off the ingress.
+function upgradeClientIp(req: http.IncomingMessage): string {
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.length > 0) return realIp.trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+interface BasicAuthFailures {
+  count: number;
+  windowStart: number;
+  blockedUntil: number;
+}
+
 /**
  * Constant-time string comparison that does not leak length through an early
  * return. `timingSafeEqual` throws on a length mismatch, so hash both sides
@@ -123,6 +151,8 @@ export class ProtectionService {
   private readonly ingressCache = new Map<string, CachedIngress>();
 
   private readonly negativeCache = new Map<string, number>();
+
+  private readonly basicAuthFailures = new Map<string, BasicAuthFailures>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -187,7 +217,8 @@ export class ProtectionService {
     originalPath: string,
     cookieHeader: string | undefined,
     bypassHeader: string | undefined,
-    authorizationHeader?: string | undefined
+    authorizationHeader?: string | undefined,
+    clientIp?: string | undefined
   ): Promise<ProtectionDecision> {
     const ingress = await this.resolveIngressFromHost(host);
     // Fail closed. A host we cannot resolve is not a host we can vouch for,
@@ -214,16 +245,36 @@ export class ProtectionService {
     // for clients that only speak `Authorization: Basic`, on clusters with no
     // Cilium to run the Envoy filter. See docs/self-hosting.md.
     if (ingress.protectionMode === 'basic') {
-      if (await this.verifyBasicAuthHeader(ingress, authorizationHeader)) {
-        return { allow: true };
-      }
-      return {
+      const challenge: ProtectionDecision = {
         allow: false,
         status: 401,
         headers: {
           'www-authenticate': `Basic realm="${BASIC_AUTH_REALM}", charset="UTF-8"`
         }
       };
+
+      // A request with no Authorization header is the browser asking for the
+      // challenge, not a guess, so it must never count against the throttle —
+      // every first visit to the site would otherwise burn an attempt.
+      if (!authorizationHeader) return challenge;
+
+      const failureKey = `${ingress.id}:${clientIp || 'unknown'}`;
+      const retryAfter = this.basicAuthRetryAfter(failureKey);
+      if (retryAfter !== null) {
+        return {
+          allow: false,
+          status: 429,
+          headers: { 'retry-after': String(retryAfter) }
+        };
+      }
+
+      if (await this.verifyBasicAuthHeader(ingress, authorizationHeader)) {
+        this.basicAuthFailures.delete(failureKey);
+        return { allow: true };
+      }
+
+      this.recordBasicAuthFailure(failureKey);
+      return challenge;
     }
 
     const tokenMatch = originalPath.match(/[?&]__orchard_token=([^&]+)/);
@@ -304,6 +355,51 @@ export class ProtectionService {
       return payload as Record<string, unknown>;
     } catch {
       return null;
+    }
+  }
+
+  private basicAuthRetryAfter(key: string): number | null {
+    const entry = this.basicAuthFailures.get(key);
+    if (!entry) return null;
+    const now = Date.now();
+    if (entry.blockedUntil > now) return Math.ceil((entry.blockedUntil - now) / 1000);
+    if (now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
+      this.basicAuthFailures.delete(key);
+      return null;
+    }
+    if (entry.count >= BASIC_AUTH_MAX_FAILURES) return Math.ceil(BASIC_AUTH_BLOCK_MS / 1000);
+    return null;
+  }
+
+  private recordBasicAuthFailure(key: string): void {
+    const now = Date.now();
+    const entry = this.basicAuthFailures.get(key);
+    if (!entry || now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
+      this.pruneBasicAuthFailures(now);
+      this.basicAuthFailures.set(key, { count: 1, windowStart: now, blockedUntil: 0 });
+      return;
+    }
+    entry.count += 1;
+    if (entry.count >= BASIC_AUTH_MAX_FAILURES) {
+      entry.blockedUntil = now + BASIC_AUTH_BLOCK_MS;
+    }
+  }
+
+  // Keyed on client IP, so the map is attacker-growable. Drop entries whose
+  // window and block have both lapsed, and if that is not enough to stay under
+  // the cap, drop the oldest — losing a stale counter costs an attacker at most
+  // one more window, while an unbounded map costs the pod its memory.
+  private pruneBasicAuthFailures(now: number): void {
+    if (this.basicAuthFailures.size < BASIC_AUTH_MAX_TRACKED) return;
+    for (const [key, entry] of this.basicAuthFailures) {
+      if (entry.blockedUntil <= now && now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
+        this.basicAuthFailures.delete(key);
+      }
+    }
+    while (this.basicAuthFailures.size >= BASIC_AUTH_MAX_TRACKED) {
+      const oldest = this.basicAuthFailures.keys().next();
+      if (oldest.done) break;
+      this.basicAuthFailures.delete(oldest.value);
     }
   }
 
@@ -413,7 +509,8 @@ export class ProtectionService {
       req.originalUrl || req.url,
       cookieHeader,
       bypassHeader,
-      authorizationHeader
+      authorizationHeader,
+      getClientIp(req)
     );
 
     if (!decision.allow) {
@@ -483,7 +580,17 @@ export class ProtectionService {
       // Browsers do not send Authorization on a WebSocket handshake, but they
       // do replay it for a same-origin upgrade once the page itself was
       // fetched with credentials, and non-browser clients set it explicitly.
-      allowed = await this.verifyBasicAuthHeader(ingress, req.headers['authorization']?.toString());
+      const authorizationHeader = req.headers['authorization']?.toString();
+      const failureKey = `${ingress.id}:${upgradeClientIp(req)}`;
+      if (authorizationHeader) {
+        if (this.basicAuthRetryAfter(failureKey) !== null) {
+          reject('429 Too Many Requests');
+          return true;
+        }
+        allowed = await this.verifyBasicAuthHeader(ingress, authorizationHeader);
+        if (allowed) this.basicAuthFailures.delete(failureKey);
+        else this.recordBasicAuthFailure(failureKey);
+      }
     }
     if (!allowed && ingress.protectionMode !== 'basic') {
       const cookie = this.extractCookie(req.headers.cookie, '_orchard_protection');

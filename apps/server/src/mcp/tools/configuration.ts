@@ -222,7 +222,9 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
         buildType: z
           .enum(['dockerfile', 'railpack'])
           .optional()
-          .describe('"dockerfile" builds the repo Dockerfile; "railpack" detects and builds itself'),
+          .describe(
+            '"dockerfile" builds the repo Dockerfile; "railpack" detects and builds itself'
+          ),
         dockerfilePath: z
           .string()
           .nullable()
@@ -238,8 +240,16 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
           .nullable()
           .optional()
           .describe("Command to run instead of the image's CMD, or null to use the image's own"),
-        rootDirectory: z.string().nullable().optional().describe('Railpack: app directory in the repo'),
-        installCommand: z.string().nullable().optional().describe('Railpack: install step override'),
+        rootDirectory: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Railpack: app directory in the repo'),
+        installCommand: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Railpack: install step override'),
         buildCommand: z.string().nullable().optional().describe('Railpack: build step override'),
         outputDirectory: z
           .string()

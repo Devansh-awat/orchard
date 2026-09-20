@@ -43,8 +43,30 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     maxAttempts: 50,
     windowMs: 15 * 60 * 1000, // 15 minutes
     blockDurationMs: 60 * 60 * 1000 // 1 hour
+  },
+  password_signin_email: {
+    maxAttempts: 5,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    blockDurationMs: 30 * 60 * 1000 // 30 minutes
+  },
+  password_signin_ip: {
+    maxAttempts: 30,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    blockDurationMs: 60 * 60 * 1000 // 1 hour
+  },
+  protection_password_ip: {
+    maxAttempts: 10,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    blockDurationMs: 15 * 60 * 1000 // 15 minutes
+  },
+  protection_password_ingress: {
+    maxAttempts: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    blockDurationMs: 15 * 60 * 1000 // 15 minutes
   }
 };
+
+export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress';
 
 @Injectable()
 export class RateLimitService {
@@ -54,7 +76,11 @@ export class RateLimitService {
    * Check if an identifier is rate limited for a specific action.
    * Throws an exception if rate limited.
    */
-  async checkRateLimit(identifier: string, type: 'email' | 'ip', action: string): Promise<void> {
+  async checkRateLimit(
+    identifier: string,
+    type: RateLimitIdentifierType,
+    action: string
+  ): Promise<void> {
     const configKey = `${action}_${type}`;
     const config = RATE_LIMIT_CONFIGS[configKey];
 
@@ -116,7 +142,7 @@ export class RateLimitService {
    */
   async incrementRateLimit(
     identifier: string,
-    type: 'email' | 'ip',
+    type: RateLimitIdentifierType,
     action: string
   ): Promise<void> {
     const configKey = `${action}_${type}`;
@@ -184,7 +210,11 @@ export class RateLimitService {
   /**
    * Reset rate limit on successful authentication.
    */
-  async resetRateLimit(identifier: string, type: 'email' | 'ip', action: string): Promise<void> {
+  async resetRateLimit(
+    identifier: string,
+    type: RateLimitIdentifierType,
+    action: string
+  ): Promise<void> {
     await this.prisma.rateLimitRecord.deleteMany({
       where: {
         identifier,

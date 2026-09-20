@@ -13,7 +13,7 @@ test('an unset command leaves the image CMD alone', () => {
   assert.equal(resolveStartArgs('   '), null);
 });
 
-test('a plain command is split into argv and exec\'d directly', () => {
+test("a plain command is split into argv and exec'd directly", () => {
   assert.deepEqual(resolveStartArgs('bundle exec sidekiq'), ['bundle', 'exec', 'sidekiq']);
   assert.deepEqual(resolveStartArgs('  node   server.js  '), ['node', 'server.js']);
 });

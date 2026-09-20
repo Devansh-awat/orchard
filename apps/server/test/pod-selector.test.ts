@@ -27,7 +27,7 @@ test('a deployment does not match a sibling whose name it prefixes', () => {
   assert.ok(!matches('crescent', WORKER));
 });
 
-test('the longer name does not match the shorter one\'s pods either', () => {
+test("the longer name does not match the shorter one's pods either", () => {
   assert.ok(!matches('crescent-ssr', CRESCENT));
   assert.ok(!matches('crescent-worker', CRESCENT));
   assert.ok(!matches('crescent-ssr', WORKER));

@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **309 commands** are available.
+override the saved context. **311 commands** are available.
 
 ## api
 
@@ -767,6 +767,33 @@ Show auto-deploy configuration
 orchard status <id>
 ```
 
+### `orchard deploy build-config`
+
+Manage how a deployment is built
+
+```bash
+orchard build-config
+```
+
+### `orchard deploy build-config set`
+
+Change build settings for a deployment
+
+```bash
+orchard set <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--build-cmd` | string |  | railpack: override the detected build command |
+| `--build-type` | string |  | dockerfile\|railpack |
+| `--dockerfile` | string |  | path to the Dockerfile relative to the repo root |
+| `--install-cmd` | string |  | railpack: override the detected install command |
+| `--output-dir` | string |  | railpack: directory of built static files |
+| `--root` | string |  | railpack: directory of the app inside the repo |
+| `--start-cmd` | string |  | command to run instead of the image CMD; "" uses the image's own |
+| `--target` | string |  | stage to stop at in a multi-stage Dockerfile; "" builds the final stage |
+
 ### `orchard deploy build-root`
 
 Manage the build context of a GitHub deployment
@@ -825,6 +852,7 @@ orchard create
 | `--replicas` | int | `0` | number of replicas (server default 1) |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |
+| `--target` | string |  | stage to stop at in a multi-stage Dockerfile; empty builds the final stage |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
 

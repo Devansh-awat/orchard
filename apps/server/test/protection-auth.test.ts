@@ -24,6 +24,7 @@ function buildService(row: Record<string, unknown> | null) {
   svc.frontendUrl = 'https://orchard.test';
   svc.ingressCache = new Map();
   svc.negativeCache = new Map();
+  svc.basicAuthFailures = new Map();
   svc.prisma = { ingress: { findFirst: async () => row, findUnique: async () => row } };
   svc.authz = { resolveProjectAccess: async () => ({ canView: true }) };
   return svc as ProtectionService;
@@ -565,4 +566,141 @@ test('handleProxyRequest forwards the Authorization header to the check', async 
     true,
     'correct credentials on the real request path must reach the upstream'
   );
+});
+
+test('basic auth stops answering after repeated wrong credentials', async () => {
+  const svc = buildService(basicRow());
+  const wrong = basicHeader('alice', 'wrong');
+
+  for (let i = 0; i < 10; i++) {
+    const d = await svc.checkProtection(
+      HOST,
+      '/secret',
+      undefined,
+      undefined,
+      wrong,
+      '203.0.113.9'
+    );
+    assert.equal(d.status, 401, `attempt ${i + 1} should still be a plain challenge`);
+  }
+
+  const blocked = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    wrong,
+    '203.0.113.9'
+  );
+  assert.equal(blocked.allow, false);
+  assert.equal(blocked.status, 429, 'the eleventh guess must be throttled, not answered');
+  assert.ok(Number(blocked.headers?.['retry-after']) > 0);
+});
+
+test('the basic auth throttle does not answer the right password either', async () => {
+  // Otherwise an attacker learns when they have hit it, which is the one bit
+  // the throttle exists to withhold.
+  const svc = buildService(basicRow());
+  const wrong = basicHeader('alice', 'wrong');
+  for (let i = 0; i < 10; i++) {
+    await svc.checkProtection(HOST, '/secret', undefined, undefined, wrong, '203.0.113.9');
+  }
+
+  const d = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', BCRYPT_SECRET),
+    '203.0.113.9'
+  );
+  assert.equal(d.status, 429);
+  assert.equal(d.allow, false);
+});
+
+test('one throttled address does not lock out another', async () => {
+  const svc = buildService(basicRow());
+  const wrong = basicHeader('alice', 'wrong');
+  for (let i = 0; i < 12; i++) {
+    await svc.checkProtection(HOST, '/secret', undefined, undefined, wrong, '203.0.113.9');
+  }
+
+  const other = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', BCRYPT_SECRET),
+    '198.51.100.4'
+  );
+  assert.equal(other.allow, true, 'a different client must be unaffected');
+});
+
+test('anonymous challenges are never counted against the throttle', async () => {
+  // Every first visit arrives without an Authorization header. If those burned
+  // attempts, an ordinary browser would throttle itself off the site.
+  const svc = buildService(basicRow());
+  for (let i = 0; i < 50; i++) {
+    const d = await svc.checkProtection(
+      HOST,
+      '/secret',
+      undefined,
+      undefined,
+      undefined,
+      '203.0.113.9'
+    );
+    assert.equal(d.status, 401);
+  }
+
+  const d = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', BCRYPT_SECRET),
+    '203.0.113.9'
+  );
+  assert.equal(d.allow, true);
+});
+
+test('a success clears the failures that came before it', async () => {
+  const svc = buildService(basicRow());
+  const wrong = basicHeader('alice', 'wrong');
+  for (let i = 0; i < 9; i++) {
+    await svc.checkProtection(HOST, '/secret', undefined, undefined, wrong, '203.0.113.9');
+  }
+
+  const ok = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    basicHeader('alice', BCRYPT_SECRET),
+    '203.0.113.9'
+  );
+  assert.equal(ok.allow, true);
+
+  const after = await svc.checkProtection(
+    HOST,
+    '/secret',
+    undefined,
+    undefined,
+    wrong,
+    '203.0.113.9'
+  );
+  assert.equal(after.status, 401, 'the counter should have been reset by the success');
+});
+
+test('the throttle map does not grow without bound', async () => {
+  const svc = buildService(basicRow());
+  const wrong = basicHeader('alice', 'wrong');
+  const failures = (svc as any).basicAuthFailures as Map<string, unknown>;
+
+  for (let i = 0; i < 10_050; i++) {
+    (svc as any).recordBasicAuthFailure(`${ING}:10.0.${Math.floor(i / 256)}.${i % 256}`);
+  }
+  assert.ok(failures.size <= 10_000, `map grew to ${failures.size}`);
+
+  const d = await svc.checkProtection(HOST, '/secret', undefined, undefined, wrong, '203.0.113.9');
+  assert.equal(d.status, 401, 'pruning must not break the normal path');
 });

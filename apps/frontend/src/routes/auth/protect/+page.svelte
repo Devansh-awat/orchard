@@ -107,6 +107,13 @@
 				return;
 			}
 
+			if (res.status === 429) {
+				const body = await res.json().catch(() => null);
+				passwordError = body?.message || 'Too many attempts. Please try again later.';
+				exchanging = false;
+				return;
+			}
+
 			if (!res.ok) {
 				passwordError = 'Something went wrong.';
 				exchanging = false;

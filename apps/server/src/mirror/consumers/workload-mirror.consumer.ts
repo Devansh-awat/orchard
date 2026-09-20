@@ -204,7 +204,9 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       where: { deploymentId, status: { in: ['pending', 'applying'] } }
     });
     if (pendingApply > 0) {
-      throw new Error(`adoption deferred for ${deploymentId}: ${pendingApply} apply item(s) queued`);
+      throw new Error(
+        `adoption deferred for ${deploymentId}: ${pendingApply} apply item(s) queued`
+      );
     }
 
     const changes: Record<string, unknown> = {};

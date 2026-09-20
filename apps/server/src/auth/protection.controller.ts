@@ -14,10 +14,15 @@ import {
 import { Response } from 'express';
 import { Public, Auth } from './decorators';
 import { ProtectionService } from './protection.service';
+import { RateLimitService } from './rate-limit.service';
+import { getClientIp } from './client-ip';
 
 @Controller('auth/protect')
 export class ProtectionController {
-  constructor(private readonly protection: ProtectionService) {}
+  constructor(
+    private readonly protection: ProtectionService,
+    private readonly rateLimit: RateLimitService
+  ) {}
 
   @Public()
   @Get('check')
@@ -38,7 +43,8 @@ export class ProtectionController {
       originalPath,
       cookieHeader,
       bypassHeader,
-      authorizationHeader
+      authorizationHeader,
+      getClientIp(req)
     );
 
     if (decision.allow) {
@@ -81,15 +87,38 @@ export class ProtectionController {
 
   @Public()
   @Post('exchange/password')
-  async exchangePassword(@Body() body: { ingressId: string; password: string; returnTo: string }) {
+  async exchangePassword(
+    @Request() req,
+    @Body() body: { ingressId: string; password: string; returnTo: string }
+  ) {
     if (!body.ingressId || !body.password || !body.returnTo) {
       throw new BadRequestException('ingressId, password, and returnTo required');
     }
 
     await this.protection.validateReturnTo(body.ingressId, body.returnTo);
 
+    // One guess costs an attacker one bcrypt compare, which is nowhere near
+    // expensive enough to stand alone: the per-IP bucket throttles a single
+    // script, and the per-ingress bucket bounds the same guess spread across
+    // many addresses. Scoping the IP bucket to the ingress keeps one deployment
+    // under attack from locking a shared NAT out of every other deployment.
+    const ip = getClientIp(req);
+    const ipKey = `${body.ingressId}:${ip}`;
+    await this.rateLimit.checkRateLimit(ipKey, 'ip', 'protection_password');
+    await this.rateLimit.checkRateLimit(body.ingressId, 'ingress', 'protection_password');
+
     const valid = await this.protection.verifyPassword(body.ingressId, body.password);
-    if (!valid) throw new ForbiddenException('Invalid password');
+    if (!valid) {
+      await this.rateLimit.incrementRateLimit(ipKey, 'ip', 'protection_password');
+      await this.rateLimit.incrementRateLimit(body.ingressId, 'ingress', 'protection_password');
+      throw new ForbiddenException('Invalid password');
+    }
+
+    // Only the address that proved it knows the password gets its bucket back.
+    // The per-ingress bucket is left alone on purpose: clearing it would let a
+    // guess run indefinitely on any site whose password is shared widely enough
+    // that somebody signs in successfully every few minutes.
+    await this.rateLimit.resetRateLimit(ipKey, 'ip', 'protection_password');
 
     const token = await this.protection.generateExchangeToken(body.ingressId, 'password');
     const separator = body.returnTo.includes('?') ? '&' : '?';

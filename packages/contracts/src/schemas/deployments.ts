@@ -585,7 +585,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .string()
         .optional()
         .describe(
-          "Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage. Stored on the deployment, so rebuilds keep it."
+          'Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage. Stored on the deployment, so rebuilds keep it.'
         ),
       tag: z.string().optional(),
       buildFromRoot: z.boolean().optional(),
