@@ -155,3 +155,76 @@ test('a header stuffed with entries cannot be used to burn cpu', () => {
     assert.ok(Date.now() - started < 200, 'derivation must stay cheap');
   });
 });
+
+test('a bare install with no proxy at all believes nobody', () => {
+  withEnv({}, () => {
+    const direct = { headers: {}, socket: { remoteAddress: '203.0.113.9' } } as any;
+    assert.equal(getRawClientIp(direct), '203.0.113.9');
+
+    const lying = {
+      headers: {
+        'x-forwarded-for': '1.2.3.4',
+        'x-real-ip': '5.6.7.8',
+        'cf-connecting-ip': '9.9.9.9'
+      },
+      socket: { remoteAddress: '203.0.113.9' }
+    } as any;
+    assert.equal(getRawClientIp(lying), '203.0.113.9', 'headers from the caller are worthless');
+  });
+});
+
+test('nginx or caddy on the same host, no cdn', () => {
+  withEnv({}, () => {
+    const viaLoopback = {
+      headers: xff('203.0.113.9'),
+      socket: { remoteAddress: '127.0.0.1' }
+    } as any;
+    assert.equal(getRawClientIp(viaLoopback), '203.0.113.9');
+  });
+});
+
+test('any in-cluster ingress controller, no cdn', () => {
+  withEnv({}, () => {
+    for (const peer of ['10.244.2.22', '172.17.0.5', '192.168.1.40', '100.64.0.7', 'fd00::1']) {
+      const r = { headers: xff('203.0.113.9'), socket: { remoteAddress: peer } } as any;
+      assert.equal(getRawClientIp(r), '203.0.113.9', `peer ${peer}`);
+    }
+  });
+});
+
+test('a proxy that does not append forwarded-for cannot be told from a caller that forged one', () => {
+  withEnv({}, () => {
+    const r = {
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+      socket: { remoteAddress: '10.244.2.22' }
+    } as any;
+    assert.equal(getRawClientIp(r), '1.2.3.4', 'undecidable, and what the hop count said too');
+  });
+});
+
+test('a reverse proxy on a public address is the one case that needs telling', () => {
+  const LB = '203.0.113.200';
+  const CALLER = '198.18.55.9';
+  withEnv({}, () => {
+    const r = { headers: xff(CALLER), socket: { remoteAddress: LB } } as any;
+    assert.equal(
+      getRawClientIp(r),
+      LB,
+      'undeclared public proxies are indistinguishable from callers'
+    );
+  });
+  withEnv({ TRUSTED_PROXY_RANGES: `${LB}/32` }, () => {
+    const r = { headers: xff(CALLER), socket: { remoteAddress: LB } } as any;
+    assert.equal(getRawClientIp(r), CALLER);
+  });
+});
+
+test('an instance with no cloudflare never consults cloudflare headers', () => {
+  withEnv({}, () => {
+    const r = {
+      headers: { ...xff('203.0.113.9'), 'cf-connecting-ip': '9.9.9.9' },
+      socket: { remoteAddress: '10.244.2.22' }
+    } as any;
+    assert.equal(getRawClientIp(r), '203.0.113.9');
+  });
+});
