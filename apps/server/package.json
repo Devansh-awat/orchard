@@ -65,7 +65,8 @@
     "test:query-stats": "tsx --test test/query-stats.test.ts",
     "test:deployment-lifecycle": "tsx --test test/deployment-lifecycle.test.ts",
     "test:rollout-strategy": "tsx --test test/rollout-strategy.test.ts",
-    "test:start-command": "tsx --test test/start-command.test.ts"
+    "test:start-command": "tsx --test test/start-command.test.ts",
+    "test:turnstile": "tsx --test test/turnstile.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

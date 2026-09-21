@@ -3,7 +3,8 @@
 	import { onMount } from 'svelte';
 	import { KeyRound } from 'lucide-svelte';
 	import { Button, Input } from '$lib/components/ui';
-	import { apiFetch } from '$lib/stores';
+	import Turnstile from '$lib/components/Turnstile.svelte';
+	import { apiFetch, authConfig } from '$lib/stores';
 	import type { User } from '$lib/stores';
 
 	let {
@@ -37,15 +38,60 @@
 	let error = $state<string | null>(null);
 	let passkeySupported = $state(false);
 
+	let siteKey = $state<string | null>(null);
+	let botToken = $state<string | null>(null);
+	let botError = $state<string | null>(null);
+	let widget = $state<{ reset: () => void } | null>(null);
+
+	const botBlocked = $derived(!!siteKey && !botToken);
+
+	let configLoaded = false;
+	let pendingAutoVerify = false;
+
+	function maybeAutoVerify() {
+		if (!pendingAutoVerify || !configLoaded) return;
+		if (siteKey && !botToken) return;
+		pendingAutoVerify = false;
+		verifyOtp();
+	}
+
+	function setMode(next: Mode) {
+		mode = next;
+		botToken = null;
+	}
+
+	function botHeaders(): Record<string, string> {
+		return botToken ? { 'x-turnstile-token': botToken } : {};
+	}
+
+	function spendBotToken() {
+		botToken = null;
+		widget?.reset();
+	}
+
 	onMount(() => {
 		passkeySupported =
 			browser && window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
 
+		authConfig
+			.load()
+			.then((config) => {
+				siteKey = config.turnstileSiteKey;
+			})
+			.catch(() => {
+				siteKey = null;
+			})
+			.finally(() => {
+				configLoaded = true;
+				maybeAutoVerify();
+			});
+
 		if (initialCode && email) {
 			code = initialCode;
-			mode = 'code';
+			setMode('code');
 			message = 'Signing you in.';
-			verifyOtp();
+			pendingAutoVerify = true;
+			maybeAutoVerify();
 		}
 	});
 
@@ -73,13 +119,14 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/request', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...botHeaders() },
 				body: JSON.stringify({ email: address })
 			});
+			spendBotToken();
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) throw new Error(data?.message || 'Could not send the OTP email.');
 
-			mode = 'code';
+			setMode('code');
 			message = data?.message || 'Check your inbox for a 6-digit code.';
 			code = '';
 		} catch (err) {
@@ -112,10 +159,10 @@
 			}
 
 			if (methods.passkey && passkeySupported) {
-				mode = 'passkey';
+				setMode('passkey');
 				await signInWithPasskey();
 			} else if (methods.password) {
-				mode = 'password';
+				setMode('password');
 			} else {
 				await requestOtp();
 			}
@@ -139,9 +186,10 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/verify', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...botHeaders() },
 				body: JSON.stringify({ email: address, code: value })
 			});
+			spendBotToken();
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				if (blockedFrom(response.status, data)) return;
@@ -168,9 +216,10 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/password', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...botHeaders() },
 				body: JSON.stringify({ email: email.trim().toLowerCase(), password })
 			});
+			spendBotToken();
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				if (blockedFrom(response.status, data)) return;
@@ -235,13 +284,29 @@
 	}
 
 	export function reset() {
-		mode = 'start';
+		setMode('start');
 		code = '';
 		password = '';
 		message = null;
 		error = null;
 	}
 </script>
+
+{#snippet botCheck()}
+	{#if siteKey}
+		<Turnstile
+			bind:this={widget}
+			{siteKey}
+			action="signin"
+			bind:token={botToken}
+			bind:error={botError}
+			onsolved={maybeAutoVerify}
+		/>
+		{#if botError}
+			<p class="lg-error">{botError}</p>
+		{/if}
+	{/if}
+{/snippet}
 
 {#if mode === 'start'}
 	<form
@@ -266,10 +331,12 @@
 		{#if error}
 			<p class="lg-error">{error}</p>
 		{/if}
+		{@render botCheck()}
 		<Button
 			variant="secondary"
 			type="submit"
 			loading={checking || requesting}
+			disabled={botBlocked}
 			class="lg-wide lg-action"
 		>
 			Continue
@@ -294,7 +361,14 @@
 		{#if error}
 			<p class="lg-error">{error}</p>
 		{/if}
-		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
+		{@render botCheck()}
+		<Button
+			variant="ghost"
+			class="lg-wide"
+			loading={requesting}
+			disabled={botBlocked}
+			onclick={requestOtp}
+		>
 			Email me a code instead
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
@@ -323,10 +397,23 @@
 		{#if error}
 			<p class="lg-error">{error}</p>
 		{/if}
-		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
+		{@render botCheck()}
+		<Button
+			variant="secondary"
+			type="submit"
+			loading={verifying}
+			disabled={botBlocked}
+			class="lg-wide lg-action"
+		>
 			Sign in
 		</Button>
-		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
+		<Button
+			variant="ghost"
+			class="lg-wide"
+			loading={requesting}
+			disabled={botBlocked}
+			onclick={requestOtp}
+		>
 			Email me a code instead
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
@@ -361,7 +448,14 @@
 		{#if error}
 			<p class="lg-error">{error}</p>
 		{/if}
-		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
+		{@render botCheck()}
+		<Button
+			variant="secondary"
+			type="submit"
+			loading={verifying}
+			disabled={botBlocked}
+			class="lg-wide lg-action"
+		>
 			Verify
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>

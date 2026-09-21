@@ -19,6 +19,7 @@ export interface SectionState {
   values: ConfigValues;
   lockedFields: string[];
   secretFields: string[];
+  boolFields: string[];
 }
 
 /**
@@ -120,6 +121,14 @@ export class InstanceConfigService implements OnModuleInit {
     return InstanceConfigService.env(field.env) ?? this.stored.get(section.id)?.[name] ?? null;
   }
 
+  flag(section: ConfigSection, name: string): boolean {
+    const field = section.fields.find((f) => f.name === name);
+    if (!field) return false;
+    const raw = this.value(section, name);
+    if (raw === null) return field.fallback ?? false;
+    return raw.trim().toLowerCase() === 'true';
+  }
+
   all(section: ConfigSection): ConfigValues {
     const out: ConfigValues = {};
     for (const field of section.fields) out[field.name] = this.value(section, field.name);
@@ -151,12 +160,17 @@ export class InstanceConfigService implements OnModuleInit {
     for (const name of secretFields) {
       if (values[name]) values[name] = '';
     }
+    const boolFields = section.fields.filter((f) => f.bool).map((f) => f.name);
+    for (const name of boolFields) {
+      values[name] = String(this.flag(section, name));
+    }
     return {
       id: section.id,
       configured: this.isConfigured(section),
       values,
       lockedFields: this.lockedFields(section),
-      secretFields
+      secretFields,
+      boolFields
     };
   }
 
@@ -182,8 +196,10 @@ export class InstanceConfigService implements OnModuleInit {
       if (locked.has(field.name)) {
         const pinned = InstanceConfigService.env(field.env) ?? '';
         const proposed = incoming === undefined ? null : String(incoming).trim();
-        const changes =
-          proposed !== null && proposed !== pinned && !(field.secret && proposed === '');
+        const same = field.bool
+          ? proposed?.toLowerCase() === pinned.trim().toLowerCase()
+          : proposed === pinned;
+        const changes = proposed !== null && !same && !(field.secret && proposed === '');
         if (changes) {
           throw new ConflictException(
             `${field.name} is set by the ${field.env} environment variable and cannot be changed here`

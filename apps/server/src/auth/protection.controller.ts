@@ -15,13 +15,15 @@ import { Response } from 'express';
 import { Public, Auth } from './decorators';
 import { ProtectionService } from './protection.service';
 import { RateLimitService } from './rate-limit.service';
+import { TurnstileService } from './turnstile.service';
 import { getClientIp } from './client-ip';
 
 @Controller('auth/protect')
 export class ProtectionController {
   constructor(
     private readonly protection: ProtectionService,
-    private readonly rateLimit: RateLimitService
+    private readonly rateLimit: RateLimitService,
+    private readonly turnstile: TurnstileService
   ) {}
 
   @Public()
@@ -65,7 +67,7 @@ export class ProtectionController {
     if (!ingressId) throw new BadRequestException('ingressId required');
     const info = await this.protection.getIngressInfo(ingressId);
     if (!info) throw new NotFoundException();
-    return info;
+    return { ...info, turnstileSiteKey: this.turnstile.siteKey() };
   }
 
   @Auth()
@@ -106,6 +108,7 @@ export class ProtectionController {
     const ipKey = `${body.ingressId}:${ip}`;
     await this.rateLimit.checkRateLimit(ipKey, 'ip', 'protection_password');
     await this.rateLimit.checkRateLimit(body.ingressId, 'ingress', 'protection_password');
+    await this.turnstile.verifyRequest(req, 'protection', ip);
 
     const valid = await this.protection.verifyPassword(body.ingressId, body.password);
     if (!valid) {

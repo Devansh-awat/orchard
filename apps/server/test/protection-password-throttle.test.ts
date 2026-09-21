@@ -8,6 +8,8 @@ process.env.FRONTEND_URL = 'https://orchard.test';
 import { ProtectionController } from '../src/auth/protection.controller';
 // oxlint-disable-next-line import/first
 import { RateLimitService } from '../src/auth/rate-limit.service';
+// oxlint-disable-next-line import/first
+import { TurnstileService } from '../src/auth/turnstile.service';
 
 const ING = 'aaaaaaaa-0000-0000-0000-000000000001';
 const RETURN_TO = 'https://private.example.test/secret';
@@ -56,7 +58,11 @@ function buildController(correctPassword: string) {
     verifyPassword: async (_id: string, pw: string) => pw === correctPassword,
     generateExchangeToken: async () => 'token'
   };
-  return new ProtectionController(protection as any, rateLimit);
+  const turnstile = new TurnstileService({
+    isConfigured: () => false,
+    value: () => null
+  } as any);
+  return new ProtectionController(protection as any, rateLimit, turnstile);
 }
 
 const req = (ip: string) => ({ headers: { 'x-real-ip': ip }, ip, socket: {} }) as any;

@@ -2,6 +2,8 @@ export interface ConfigField {
   name: string;
   env: string;
   secret?: boolean;
+  bool?: boolean;
+  fallback?: boolean;
 }
 
 export interface ConfigSection {
@@ -113,7 +115,27 @@ export const TUNNEL = section(
   ['apiToken', 'accountId', 'tunnelId']
 );
 
-export const SECTIONS: ConfigSection[] = [STORAGE, EMAIL, INGRESS, WILDCARD, NETWORK, TUNNEL];
+export const TURNSTILE = section(
+  'turnstile',
+  'turnstile',
+  [
+    { name: 'siteKey', env: 'TURNSTILE_SITE_KEY' },
+    { name: 'secretKey', env: 'TURNSTILE_SECRET_KEY', secret: true },
+    { name: 'enabled', env: 'TURNSTILE_ENABLED', bool: true, fallback: true },
+    { name: 'strict', env: 'TURNSTILE_STRICT', bool: true, fallback: false }
+  ],
+  ['siteKey', 'secretKey']
+);
+
+export const SECTIONS: ConfigSection[] = [
+  STORAGE,
+  EMAIL,
+  INGRESS,
+  WILDCARD,
+  NETWORK,
+  TUNNEL,
+  TURNSTILE
+];
 
 export const sectionById = (id: string): ConfigSection | undefined =>
   SECTIONS.find((s) => s.id === id);

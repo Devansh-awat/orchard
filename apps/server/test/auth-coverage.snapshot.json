@@ -82,6 +82,7 @@
   "GET /audit-logs/global": "authenticated",
   "GET /audit-logs/organization/:id": "authenticated",
   "GET /auth/callback": "public",
+  "GET /auth/config": "public",
   "GET /auth/login": "public",
   "GET /auth/logout": "public",
   "GET /auth/me": "authenticated",

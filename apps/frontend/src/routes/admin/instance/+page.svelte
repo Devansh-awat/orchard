@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, instanceChecklist, toasts } from '$lib/stores';
-	import { Alert, Button, Field, Input, SectionCard, Skeleton } from '$lib/components/ui';
+	import {
+		Alert,
+		Button,
+		Field,
+		Input,
+		SectionCard,
+		Skeleton,
+		ToggleRow
+	} from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
 
@@ -11,6 +19,7 @@
 		values: Record<string, string | null>;
 		lockedFields: string[];
 		secretFields: string[];
+		boolFields: string[];
 	};
 
 	// A section with no entry here is not rendered. The Cloudflare tunnel is the
@@ -69,6 +78,17 @@
 			description:
 				'The address raw TCP and UDP ports and public databases are published on. Organizations that set their own override it; the rest inherit this instead of being asked for an IP they do not know.',
 			fields: { publicIp: 'Default public IP' }
+		},
+		turnstile: {
+			title: 'Bot protection',
+			description:
+				'A Cloudflare Turnstile challenge on the sign-in pages and on password-protected deployments. Off until both keys are set. Once set, a sign-in that cannot solve the challenge is refused, so set TURNSTILE_DISABLED=true on the server to get back in if the keys are wrong.',
+			fields: {
+				siteKey: 'Site key',
+				secretKey: 'Secret key',
+				enabled: 'Challenge the sign-in pages',
+				strict: 'Refuse sign-in when Cloudflare is unreachable'
+			}
 		}
 	};
 
@@ -78,7 +98,11 @@
 		endpoint: 'Derived from the account ID when left blank',
 		publicUrl: 'Derived from the account ID when left blank',
 		publicIp:
-			'The routable address of this box, for example 203.0.113.10. Leave blank to require one per organization.'
+			'The routable address of this box, for example 203.0.113.10. Leave blank to require one per organization.',
+		siteKey: 'From the Turnstile widget in your Cloudflare dashboard',
+		secretKey: 'Never leaves the server. Leave blank to keep the stored one.',
+		enabled: 'Ignored until both keys are set. Turning this off keeps the keys.',
+		strict: 'Off lets sign-in through unchallenged if the check cannot be reached, and logs it.'
 	};
 
 	let sections = $state<Section[]>([]);
@@ -103,6 +127,11 @@
 		const all: Section[] = await response.json();
 		sections = all.filter((s) => s.id in META);
 		seed(sections);
+	}
+
+	function toggleFlag(section: Section, name: string) {
+		if (section.lockedFields.includes(name)) return;
+		drafts[section.id][name] = drafts[section.id][name] === 'true' ? 'false' : 'true';
 	}
 
 	async function save(section: Section) {
@@ -155,23 +184,40 @@
 
 				<div class="fields">
 					{#each Object.entries(meta.fields) as [name, label] (name)}
-						{@const locked = section.lockedFields.includes(name)}
-						{@const secret = section.secretFields.includes(name)}
-						<Field
-							{label}
-							for="{section.id}-{name}"
-							hint={locked ? 'Set by the environment' : HINTS[name]}
-						>
-							<Input
-								id="{section.id}-{name}"
-								type={secret ? 'password' : 'text'}
-								disabled={locked}
-								placeholder={secret && section.configured ? 'Unchanged' : ''}
-								bind:value={drafts[section.id][name]}
-							/>
-						</Field>
+						{#if !section.boolFields.includes(name)}
+							{@const locked = section.lockedFields.includes(name)}
+							{@const secret = section.secretFields.includes(name)}
+							<Field
+								{label}
+								for="{section.id}-{name}"
+								hint={locked ? 'Set by the environment' : HINTS[name]}
+							>
+								<Input
+									id="{section.id}-{name}"
+									type={secret ? 'password' : 'text'}
+									disabled={locked}
+									placeholder={secret && section.configured ? 'Unchanged' : ''}
+									bind:value={drafts[section.id][name]}
+								/>
+							</Field>
+						{/if}
 					{/each}
 				</div>
+
+				{#if section.boolFields.length > 0}
+					<div class="switches">
+						{#each section.boolFields as name (name)}
+							{@const locked = section.lockedFields.includes(name)}
+							<ToggleRow
+								label={meta.fields[name] ?? name}
+								hint={locked ? 'Set by the environment' : HINTS[name]}
+								disabled={locked}
+								checked={drafts[section.id][name] === 'true'}
+								onchange={() => toggleFlag(section, name)}
+							/>
+						{/each}
+					</div>
+				{/if}
 
 				{#if !allLocked}
 					<div class="actions">
@@ -194,6 +240,13 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 		gap: 0.85rem;
+	}
+
+	.switches {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		margin-top: 1rem;
 	}
 
 	.actions {

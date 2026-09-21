@@ -2,9 +2,10 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { user, isSignedIn, apiFetch } from '$lib/stores';
+	import { user, isSignedIn, apiFetch, authConfig } from '$lib/stores';
 	import { KeyRound } from 'lucide-svelte';
 	import { Button, Input } from '$lib/components/ui';
+	import Turnstile from '$lib/components/Turnstile.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	let mcpState = $derived($page.url.searchParams.get('mcp_state') || '');
@@ -33,6 +34,22 @@
 	let otpMessage = $state<string | null>(null);
 	let otpError = $state<string | null>(null);
 
+	let siteKey = $state<string | null>(null);
+	let botToken = $state<string | null>(null);
+	let botError = $state<string | null>(null);
+	let widget = $state<{ reset: () => void } | null>(null);
+
+	const botBlocked = $derived(!!siteKey && !botToken);
+
+	function botHeaders(): Record<string, string> {
+		return botToken ? { 'x-turnstile-token': botToken } : {};
+	}
+
+	function spendBotToken() {
+		botToken = null;
+		widget?.reset();
+	}
+
 	// Passkey state
 	let passkeyEmail = $state('');
 	let passkeyLoading = $state(false);
@@ -40,6 +57,15 @@
 	let passkeySupported = $state(false);
 
 	onMount(() => {
+		authConfig
+			.load()
+			.then((config) => {
+				siteKey = config.turnstileSiteKey;
+			})
+			.catch(() => {
+				siteKey = null;
+			});
+
 		if (!mcpState || !mcpServer) {
 			error = 'Invalid authorization request. Missing parameters.';
 			return;
@@ -107,9 +133,10 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/request', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...botHeaders() },
 				body: JSON.stringify({ email })
 			});
+			spendBotToken();
 
 			const data = await response.json().catch(() => ({}));
 
@@ -144,9 +171,10 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/verify', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...botHeaders() },
 				body: JSON.stringify({ email, code })
 			});
+			spendBotToken();
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -345,10 +373,23 @@
 						{#if otpMessage}
 							<p class="consent-success">{otpMessage}</p>
 						{/if}
+						{#if siteKey}
+							<Turnstile
+								bind:this={widget}
+								{siteKey}
+								action="signin"
+								bind:token={botToken}
+								bind:error={botError}
+							/>
+							{#if botError}
+								<p class="consent-error">{botError}</p>
+							{/if}
+						{/if}
 						<Button
 							variant="primary"
 							class="w-full"
 							type="submit"
+							disabled={botBlocked}
 							loading={otpRequesting || otpVerifying}
 						>
 							{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}

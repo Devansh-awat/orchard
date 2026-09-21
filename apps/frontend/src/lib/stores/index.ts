@@ -8,6 +8,7 @@ export {
 	type InstanceChecklistItem
 } from './instance-checklist';
 export { instanceFeatures, type InstanceFeatures } from './instance-features';
+export { authConfig, type AuthConfig } from './auth-config';
 export {
 	organizations,
 	selectedOrganization,

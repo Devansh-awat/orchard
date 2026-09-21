@@ -4,6 +4,7 @@
 	import { browser } from '$app/environment';
 	import { Loader2, Lock, ShieldX } from 'lucide-svelte';
 	import { Button, Input } from '$lib/components/ui';
+	import Turnstile from '$lib/components/Turnstile.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { apiFetch, initApiBase, user, isSignedIn } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
@@ -12,6 +13,7 @@
 		host: string;
 		protectionMode: string;
 		projectName: string;
+		turnstileSiteKey: string | null;
 	}
 
 	let info = $state<IngressInfo | null>(null);
@@ -20,6 +22,12 @@
 	let exchanging = $state(false);
 	let password = $state('');
 	let passwordError = $state<string | null>(null);
+	let botToken = $state<string | null>(null);
+	let botError = $state<string | null>(null);
+	let widget = $state<{ reset: () => void } | null>(null);
+
+	const siteKey = $derived(info?.turnstileSiteKey ?? null);
+	const botBlocked = $derived(!!siteKey && !botToken);
 
 	const ingressId = $derived($page.url.searchParams.get('ingressId') || '');
 	const returnTo = $derived($page.url.searchParams.get('returnTo') || '');
@@ -97,9 +105,14 @@
 		try {
 			const res = await apiFetch('/apiv1/auth/protect/exchange/password', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					...(botToken ? { 'x-turnstile-token': botToken } : {})
+				},
 				body: JSON.stringify({ ingressId, password: password.trim(), returnTo })
 			});
+			botToken = null;
+			widget?.reset();
 
 			if (res.status === 403) {
 				passwordError = 'Wrong password.';
@@ -191,12 +204,24 @@
 						{#if passwordError}
 							<p class="protect-error">{passwordError}</p>
 						{/if}
+						{#if siteKey}
+							<Turnstile
+								bind:this={widget}
+								{siteKey}
+								action="protection"
+								bind:token={botToken}
+								bind:error={botError}
+							/>
+							{#if botError}
+								<p class="protect-error">{botError}</p>
+							{/if}
+						{/if}
 						<Button
 							variant="primary"
 							class="w-full"
 							type="submit"
 							loading={exchanging}
-							disabled={!password.trim()}
+							disabled={!password.trim() || botBlocked}
 						>
 							Continue
 						</Button>

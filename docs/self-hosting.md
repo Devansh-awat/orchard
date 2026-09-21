@@ -308,6 +308,57 @@ reason to keep `signupMode: invite_only` — the chart default. The installer
 sets it too. Switching to `open` on an instance that can send email turns the
 login page into public registration.
 
+### Bot protection on the sign-in pages
+
+An instance reachable from the internet has three forms anyone can post to: the
+sign-in card, the code box, and the password gate on a protected deployment.
+Orchard rate-limits all three per address and per email, which stops one script
+but not a botnet spread thin enough to stay under every bucket while still
+mailing a code to every inbox it has scraped.
+
+Cloudflare Turnstile closes that gap. It is off until you configure it. Create a
+widget in the Cloudflare dashboard, then either set it in **Admin -> Instance ->
+Bot protection**, or pin it from the host:
+
+| Variable               | Default | What it is                                              |
+| ---------------------- | ------- | ------------------------------------------------------- |
+| `TURNSTILE_SITE_KEY`   |         | the public half, rendered in the widget                 |
+| `TURNSTILE_SECRET_KEY` |         | the private half, only ever used server side            |
+| `TURNSTILE_ENABLED`    | on      | `false` stops enforcing without discarding the keys     |
+| `TURNSTILE_STRICT`     | off     | `true` refuses sign-in when the check cannot be reached |
+
+Setting any of these in `server.env` locks that field in the admin panel, the
+same as every other instance setting. Both keys must be present before anything
+is enforced, so a half-finished configuration changes nothing, and turning the
+toggle off is reversible in a way that deleting the keys is not.
+
+Once enabled, these endpoints require a solved token: `POST /auth/otp/request`,
+`POST /auth/otp/verify`, `POST /auth/password` and
+`POST /auth/protect/exchange/password`.
+
+By default verification **fails open**. If Cloudflare's siteverify cannot be
+reached, or answers with an error, the request is allowed through unchallenged
+and the server logs it at error level:
+
+```
+[TurnstileService] siteverify unreachable for signin: ECONNREFUSED
+[TurnstileService] allowing signin unchallenged because the check could not be reached
+```
+
+That keeps a Cloudflare outage or a broken egress rule from taking your sign-in
+page down with it. The trade is that anyone who can break that egress has turned
+the protection off, so an instance that would rather be unavailable than
+unprotected sets `TURNSTILE_STRICT=true` and gets a 503 instead.
+
+Failing open does **not** cover a request that carries no token at all. That is
+indistinguishable from a bot omitting the header, so it is always refused. The
+practical consequence is that a browser extension which blocks the Turnstile
+script leaves that person with a disabled button and "Bot check failed to load."
+If that starts happening, turn the toggle off.
+
+OAuth, SSO and passkey sign-in are untouched: those are challenged, or not, by
+the identity provider that owns them.
+
 ## Host commands
 
 The installer puts these on the host. They operate **this machine's** install

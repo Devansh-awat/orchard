@@ -14,6 +14,7 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { OtpService } from './otp.service';
 import { RateLimitService } from './rate-limit.service';
+import { TurnstileService } from './turnstile.service';
 import {
   PasswordRefused,
   setSuperadminPassword,
@@ -72,7 +73,8 @@ export class PasswordlessController {
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
-    private readonly rateLimit: RateLimitService
+    private readonly rateLimit: RateLimitService,
+    private readonly turnstile: TurnstileService
   ) {}
 
   private getClientIp(req: Request): string {
@@ -161,6 +163,8 @@ export class PasswordlessController {
 
     const ipAddress = this.getClientIp(req);
 
+    await this.turnstile.verifyRequest(req, 'signin', ipAddress);
+
     return this.otpService.requestOtp(email, ipAddress);
   }
 
@@ -185,6 +189,8 @@ export class PasswordlessController {
     }
 
     const ipAddress = this.getClientIp(req);
+
+    await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
     const result = await this.otpService.verifyOtp(email, code, ipAddress);
 
@@ -253,6 +259,11 @@ export class PasswordlessController {
     });
   }
 
+  @Get('config')
+  authConfig(): { turnstileSiteKey: string | null } {
+    return { turnstileSiteKey: this.turnstile.siteKey() };
+  }
+
   /**
    * What this address can sign in with, so the form asks for the right thing
    * rather than mailing a code to an instance with no SMTP.
@@ -295,6 +306,7 @@ export class PasswordlessController {
 
     await this.rateLimit.checkRateLimit(normalizedEmail, 'email', 'password_signin');
     await this.rateLimit.checkRateLimit(ipAddress, 'ip', 'password_signin');
+    await this.turnstile.verifyRequest(req, 'signin', ipAddress);
 
     const match = await verifySuperadminPassword(this.prisma, normalizedEmail, password);
     if (!match) {
