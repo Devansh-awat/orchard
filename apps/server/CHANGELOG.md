@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.46.0](https://github.com/hackclub/orchard/compare/server/v2.45.1...server/v2.46.0) (2026-09-21)
+
+
+### Features
+
+* optional cloudflare turnstile on the auth pages ([4a435dd](https://github.com/hackclub/orchard/commit/4a435dd07b511ca16bbaa82175a3862659412c40))
+
 ## [2.45.1](https://github.com/hackclub/orchard/compare/server/v2.45.0...server/v2.45.1) (2026-09-20)
 
 

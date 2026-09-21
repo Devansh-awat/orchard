@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.0](https://github.com/hackclub/orchard/compare/frontend/v1.38.2...frontend/v1.39.0) (2026-09-21)
+
+
+### Features
+
+* optional cloudflare turnstile on the auth pages ([4a435dd](https://github.com/hackclub/orchard/commit/4a435dd07b511ca16bbaa82175a3862659412c40))
+
 ## [1.38.2](https://github.com/hackclub/orchard/compare/frontend/v1.38.1...frontend/v1.38.2) (2026-09-20)
 
 
