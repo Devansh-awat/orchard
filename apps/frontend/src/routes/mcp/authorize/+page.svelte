@@ -35,19 +35,11 @@
 	let otpError = $state<string | null>(null);
 
 	let siteKey = $state<string | null>(null);
-	let botToken = $state<string | null>(null);
-	let botError = $state<string | null>(null);
-	let widget = $state<{ reset: () => void } | null>(null);
+	let widget = $state<{ execute: () => Promise<string> } | null>(null);
 
-	const botBlocked = $derived(!!siteKey && !botToken);
-
-	function botHeaders(): Record<string, string> {
-		return botToken ? { 'x-turnstile-token': botToken } : {};
-	}
-
-	function spendBotToken() {
-		botToken = null;
-		widget?.reset();
+	async function botHeaders(): Promise<Record<string, string>> {
+		if (!siteKey || !widget) return {};
+		return { 'x-turnstile-token': await widget.execute() };
 	}
 
 	// Passkey state
@@ -133,10 +125,9 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/request', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...botHeaders() },
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ email })
 			});
-			spendBotToken();
 
 			const data = await response.json().catch(() => ({}));
 
@@ -171,10 +162,9 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/verify', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...botHeaders() },
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ email, code })
 			});
-			spendBotToken();
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -374,22 +364,12 @@
 							<p class="consent-success">{otpMessage}</p>
 						{/if}
 						{#if siteKey}
-							<Turnstile
-								bind:this={widget}
-								{siteKey}
-								action="signin"
-								bind:token={botToken}
-								bind:error={botError}
-							/>
-							{#if botError}
-								<p class="consent-error">{botError}</p>
-							{/if}
+							<Turnstile bind:this={widget} {siteKey} action="signin" />
 						{/if}
 						<Button
 							variant="primary"
 							class="w-full"
 							type="submit"
-							disabled={botBlocked}
 							loading={otpRequesting || otpVerifying}
 						>
 							{otpStep === 'email' ? 'Send code' : 'Verify and authorize'}

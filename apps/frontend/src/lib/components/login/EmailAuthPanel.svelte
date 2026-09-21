@@ -39,34 +39,24 @@
 	let passkeySupported = $state(false);
 
 	let siteKey = $state<string | null>(null);
-	let botToken = $state<string | null>(null);
-	let botError = $state<string | null>(null);
-	let widget = $state<{ reset: () => void } | null>(null);
-
-	const botBlocked = $derived(!!siteKey && !botToken);
+	let widget = $state<{ execute: () => Promise<string> } | null>(null);
 
 	let configLoaded = false;
 	let pendingAutoVerify = false;
 
 	function maybeAutoVerify() {
 		if (!pendingAutoVerify || !configLoaded) return;
-		if (siteKey && !botToken) return;
 		pendingAutoVerify = false;
 		verifyOtp();
 	}
 
+	async function botHeaders(): Promise<Record<string, string>> {
+		if (!siteKey || !widget) return {};
+		return { 'x-turnstile-token': await widget.execute() };
+	}
+
 	function setMode(next: Mode) {
 		mode = next;
-		botToken = null;
-	}
-
-	function botHeaders(): Record<string, string> {
-		return botToken ? { 'x-turnstile-token': botToken } : {};
-	}
-
-	function spendBotToken() {
-		botToken = null;
-		widget?.reset();
 	}
 
 	onMount(() => {
@@ -119,10 +109,9 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/request', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...botHeaders() },
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ email: address })
 			});
-			spendBotToken();
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) throw new Error(data?.message || 'Could not send the OTP email.');
 
@@ -186,10 +175,9 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/otp/verify', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...botHeaders() },
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ email: address, code: value })
 			});
-			spendBotToken();
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				if (blockedFrom(response.status, data)) return;
@@ -216,10 +204,9 @@
 		try {
 			const response = await apiFetch('/apiv1/auth/password', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...botHeaders() },
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ email: email.trim().toLowerCase(), password })
 			});
-			spendBotToken();
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				if (blockedFrom(response.status, data)) return;
@@ -294,17 +281,7 @@
 
 {#snippet botCheck()}
 	{#if siteKey}
-		<Turnstile
-			bind:this={widget}
-			{siteKey}
-			action="signin"
-			bind:token={botToken}
-			bind:error={botError}
-			onsolved={maybeAutoVerify}
-		/>
-		{#if botError}
-			<p class="lg-error">{botError}</p>
-		{/if}
+		<Turnstile bind:this={widget} {siteKey} action="signin" />
 	{/if}
 {/snippet}
 
@@ -336,7 +313,6 @@
 			variant="secondary"
 			type="submit"
 			loading={checking || requesting}
-			disabled={botBlocked}
 			class="lg-wide lg-action"
 		>
 			Continue
@@ -362,13 +338,7 @@
 			<p class="lg-error">{error}</p>
 		{/if}
 		{@render botCheck()}
-		<Button
-			variant="ghost"
-			class="lg-wide"
-			loading={requesting}
-			disabled={botBlocked}
-			onclick={requestOtp}
-		>
+		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
@@ -398,22 +368,10 @@
 			<p class="lg-error">{error}</p>
 		{/if}
 		{@render botCheck()}
-		<Button
-			variant="secondary"
-			type="submit"
-			loading={verifying}
-			disabled={botBlocked}
-			class="lg-wide lg-action"
-		>
+		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
 			Sign in
 		</Button>
-		<Button
-			variant="ghost"
-			class="lg-wide"
-			loading={requesting}
-			disabled={botBlocked}
-			onclick={requestOtp}
-		>
+		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
@@ -449,13 +407,7 @@
 			<p class="lg-error">{error}</p>
 		{/if}
 		{@render botCheck()}
-		<Button
-			variant="secondary"
-			type="submit"
-			loading={verifying}
-			disabled={botBlocked}
-			class="lg-wide lg-action"
-		>
+		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
 			Verify
 		</Button>
 		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>

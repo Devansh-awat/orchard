@@ -22,12 +22,14 @@
 	let exchanging = $state(false);
 	let password = $state('');
 	let passwordError = $state<string | null>(null);
-	let botToken = $state<string | null>(null);
-	let botError = $state<string | null>(null);
-	let widget = $state<{ reset: () => void } | null>(null);
+	let widget = $state<{ execute: () => Promise<string> } | null>(null);
 
 	const siteKey = $derived(info?.turnstileSiteKey ?? null);
-	const botBlocked = $derived(!!siteKey && !botToken);
+
+	async function botHeaders(): Promise<Record<string, string>> {
+		if (!siteKey || !widget) return {};
+		return { 'x-turnstile-token': await widget.execute() };
+	}
 
 	const ingressId = $derived($page.url.searchParams.get('ingressId') || '');
 	const returnTo = $derived($page.url.searchParams.get('returnTo') || '');
@@ -105,14 +107,9 @@
 		try {
 			const res = await apiFetch('/apiv1/auth/protect/exchange/password', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...(botToken ? { 'x-turnstile-token': botToken } : {})
-				},
+				headers: { 'Content-Type': 'application/json', ...(await botHeaders()) },
 				body: JSON.stringify({ ingressId, password: password.trim(), returnTo })
 			});
-			botToken = null;
-			widget?.reset();
 
 			if (res.status === 403) {
 				passwordError = 'Wrong password.';
@@ -205,23 +202,14 @@
 							<p class="protect-error">{passwordError}</p>
 						{/if}
 						{#if siteKey}
-							<Turnstile
-								bind:this={widget}
-								{siteKey}
-								action="protection"
-								bind:token={botToken}
-								bind:error={botError}
-							/>
-							{#if botError}
-								<p class="protect-error">{botError}</p>
-							{/if}
+							<Turnstile bind:this={widget} {siteKey} action="protection" />
 						{/if}
 						<Button
 							variant="primary"
 							class="w-full"
 							type="submit"
 							loading={exchanging}
-							disabled={!password.trim() || botBlocked}
+							disabled={!password.trim()}
 						>
 							Continue
 						</Button>

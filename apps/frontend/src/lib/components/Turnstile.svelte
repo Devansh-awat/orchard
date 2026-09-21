@@ -1,17 +1,21 @@
 <script lang="ts" module>
+	interface RenderOptions {
+		sitekey: string;
+		action?: string;
+		theme?: 'light' | 'dark' | 'auto';
+		size?: 'normal' | 'flexible' | 'compact';
+		execution?: 'render' | 'execute';
+		appearance?: 'always' | 'execute' | 'interaction-only';
+		'response-field'?: boolean;
+		callback?: (token: string) => void;
+		'error-callback'?: (code?: string) => void;
+		'expired-callback'?: () => void;
+		'timeout-callback'?: () => void;
+	}
+
 	interface TurnstileApi {
-		render(
-			el: HTMLElement,
-			options: {
-				sitekey: string;
-				action?: string;
-				theme?: 'light' | 'dark' | 'auto';
-				callback?: (token: string) => void;
-				'error-callback'?: (code?: string) => void;
-				'expired-callback'?: () => void;
-				'timeout-callback'?: () => void;
-			}
-		): string;
+		render(el: HTMLElement, options: RenderOptions): string;
+		execute(id: string, options?: { action?: string }): void;
 		reset(id: string): void;
 		remove(id: string): void;
 	}
@@ -45,6 +49,13 @@
 		});
 		return loader;
 	}
+
+	export class ChallengeFailed extends Error {
+		constructor(message = 'Bot check failed. Reload the page and try again.') {
+			super(message);
+			this.name = 'ChallengeFailed';
+		}
+	}
 </script>
 
 <script lang="ts">
@@ -53,77 +64,98 @@
 
 	let {
 		siteKey,
-		action,
-		token = $bindable<string | null>(null),
-		error = $bindable<string | null>(null),
-		onsolved
+		action
 	}: {
 		siteKey: string;
 		action: string;
-		token?: string | null;
-		error?: string | null;
-		onsolved?: (token: string) => void;
 	} = $props();
 
 	let host = $state<HTMLDivElement | null>(null);
+	let visible = $state(false);
 	let widgetId: string | null = null;
 	let api: TurnstileApi | null = null;
+	let ready: Promise<TurnstileApi> | null = null;
+	let pending: { resolve: (token: string) => void; reject: (error: Error) => void } | null = null;
+
+	function settle(token: string | null, error?: Error) {
+		const waiter = pending;
+		pending = null;
+		visible = false;
+		if (!waiter) return;
+		if (token) waiter.resolve(token);
+		else waiter.reject(error ?? new ChallengeFailed());
+	}
 
 	onMount(() => {
 		if (!browser || !host) return;
 
 		let disposed = false;
 
-		loadTurnstile()
-			.then((loaded) => {
-				if (disposed || !host) return;
-				api = loaded;
-				widgetId = loaded.render(host, {
-					sitekey: siteKey,
-					action,
-					theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-					callback: (solved) => {
-						token = solved;
-						error = null;
-						onsolved?.(solved);
-					},
-					'error-callback': () => {
-						token = null;
-						error = 'Bot check failed to load. Reload the page and try again.';
-					},
-					'expired-callback': () => {
-						token = null;
-					},
-					'timeout-callback': () => {
-						token = null;
-					}
-				});
-			})
-			.catch(() => {
-				if (!disposed) error = 'Could not load the bot check. Check your network and reload.';
+		ready = loadTurnstile().then((loaded) => {
+			if (disposed || !host) throw new ChallengeFailed();
+			api = loaded;
+			widgetId = loaded.render(host, {
+				sitekey: siteKey,
+				action,
+				execution: 'execute',
+				appearance: 'interaction-only',
+				size: 'flexible',
+				'response-field': false,
+				theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+				callback: (token) => settle(token),
+				'error-callback': () => settle(null),
+				'expired-callback': () => settle(null),
+				'timeout-callback': () => settle(null)
 			});
+			return loaded;
+		});
+		ready.catch(() => {});
 
 		return () => {
 			disposed = true;
+			settle(null);
 			if (api && widgetId) api.remove(widgetId);
 			widgetId = null;
 		};
 	});
 
-	export function reset() {
-		token = null;
-		if (api && widgetId) api.reset(widgetId);
+	export async function execute(): Promise<string> {
+		const loaded = await (ready ?? Promise.reject(new ChallengeFailed()));
+		if (!widgetId) throw new ChallengeFailed();
+		if (pending) settle(null);
+		loaded.reset(widgetId);
+		visible = true;
+		return new Promise<string>((resolve, reject) => {
+			pending = { resolve, reject };
+			loaded.execute(widgetId!, { action });
+		});
 	}
 </script>
 
-<div class="ts-wrap">
-	<div bind:this={host}></div>
+<div class="ts-wrap" class:ts-wrap--visible={visible}>
+	<div class="ts-host" bind:this={host}></div>
 </div>
 
 <style>
 	.ts-wrap {
+		display: contents;
+	}
+
+	.ts-wrap--visible {
+		display: block;
+		width: 100%;
+		margin: 0.875rem 0;
+	}
+
+	.ts-host {
 		display: flex;
 		justify-content: center;
-		min-height: 65px;
+		width: 100%;
+	}
+
+	.ts-host :global(iframe) {
+		width: 100% !important;
+		max-width: 100%;
+		border-radius: var(--radius-lg);
 	}
 </style>
