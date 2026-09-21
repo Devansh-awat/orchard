@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.1](https://github.com/hackclub/orchard/compare/frontend/v1.39.0...frontend/v1.39.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* only show the turnstile widget when a challenge is actually needed ([e3eac3f](https://github.com/hackclub/orchard/commit/e3eac3f5763f07d2534080d8841738f854b34032))
+
 ## [1.39.0](https://github.com/hackclub/orchard/compare/frontend/v1.38.2...frontend/v1.39.0) (2026-09-21)
 
 
