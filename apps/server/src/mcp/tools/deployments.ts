@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json } from './reply';
 
 export function registerDeploymentTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
@@ -92,7 +93,7 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
         ...(startCommand != null && { startCommand }),
         ...(nodePoolId && { nodePoolId })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+      return json(deployment);
     }
   );
 
@@ -118,23 +119,12 @@ If installations is empty, tell the user to install the Orchard GitHub App on th
           ? 'Use deploy_from_github with githubRepo="owner/repo" where owner matches one of the installation accountLogins. Use list_github_app_repos to see deployable repos.'
           : 'Account linked but no GitHub App installations visible. Ask the user to install the Orchard GitHub App on their account/org via the Orchard UI settings.';
       }
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                linked: status.linked,
-                username: status.username,
-                installations: status.installations,
-                hint
-              },
-              null,
-              2
-            )
-          }
-        ]
-      };
+      return json({
+        linked: status.linked,
+        username: status.username,
+        installations: status.installations,
+        hint
+      });
     }
   );
 
@@ -288,7 +278,7 @@ Before using this tool:
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
         ...(memoryRequestBytes != null && { memoryRequestBytes })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+      return json(deployment);
     }
   );
 
@@ -409,7 +399,7 @@ Before calling, you should still confirm with list_github_deploy_targets that th
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
         ...(memoryRequestBytes != null && { memoryRequestBytes })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+      return json(deployment);
     }
   );
 
@@ -443,7 +433,7 @@ Pass null for either field to clear it and fall back to the project / org defaul
       if (cpuRequestMilli !== undefined) body.cpuRequestMilli = cpuRequestMilli;
       if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
       const result = await client.patch(`/deployments/${deploymentId}/resources`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -459,7 +449,7 @@ Whether this re-pulls the image depends on the deployment's pull policy. That po
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/restart`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -480,7 +470,7 @@ Everything else on the response is the deployment as it stands right now, so whe
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/rebuild`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -498,7 +488,7 @@ Everything else on the response is the deployment as it stands right now, so whe
     },
     async ({ deploymentId, replicas }) => {
       const result = await client.post(`/deployments/${deploymentId}/scale`, { replicas });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -515,7 +505,7 @@ The "turn it off" verb: it sets the deployment's \`stopped\` flag and leaves the
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/stop`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -532,7 +522,7 @@ Coming back re-checks quota, so a start can fail if the org filled up while the 
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/start`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -550,7 +540,7 @@ Only the display name changes. The Kubernetes workload name, service DNS, genera
     },
     async ({ deploymentId, name }) => {
       const result = await client.patch(`/deployments/${deploymentId}/name`, { name });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -579,7 +569,7 @@ Takes effect on the next build, so follow with \`rebuild_deployment\` to make it
         branch,
         ...(dockerfilePath !== undefined ? { dockerfilePath } : {})
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -596,7 +586,7 @@ Returns a \`steps\` array of \`{ id, applicable, done }\` — act on the ones th
     },
     async ({ deploymentId }) => {
       const result = await client.get(`/deployments/${deploymentId}/next-steps`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -613,7 +603,7 @@ Use it when \`get_deployment\` reports \`applyStatus: "failed"\` / a non-null \`
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/retry-apply`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -634,7 +624,7 @@ Pools carry taints, so an app that needs particular hardware has to be placed in
     },
     async ({ deploymentId, nodePoolId }) => {
       const result = await client.patch(`/deployments/${deploymentId}/placement`, { nodePoolId });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -658,7 +648,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
       const result = await client.patch(`/deployments/${deploymentId}/disruption-budget`, {
         minAvailable
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -675,7 +665,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
     },
     async ({ deploymentId, imageHistoryId }) => {
       const result = await client.post(`/deployments/${deploymentId}/rollback/${imageHistoryId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -690,7 +680,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/cancel`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -706,7 +696,7 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
     },
     async ({ deploymentId }) => {
       const tokens = await client.get(`/deployments/${deploymentId}/webhook-tokens`);
-      return { content: [{ type: 'text', text: JSON.stringify(tokens, null, 2) }] };
+      return json(tokens);
     }
   );
 
@@ -731,7 +721,7 @@ The holder POSTs to \`/apiv1/webhooks/deploy\` with \`Authorization: Bearer <tok
       const token = await client.post(`/deployments/${deploymentId}/webhook-tokens`, {
         ...(label ? { label } : {})
       });
-      return { content: [{ type: 'text', text: JSON.stringify(token, null, 2) }] };
+      return json(token);
     }
   );
 
@@ -760,7 +750,7 @@ Check with \`get_auto_deploy_status\` afterwards. If it reports \`deliverable: f
         branch,
         ...(paths !== undefined ? { paths } : {})
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -779,7 +769,7 @@ Use this whenever auto-deploy looks like it is on but pushes are not producing b
     },
     async ({ deploymentId }) => {
       const result = await client.get(`/deployments/${deploymentId}/auto-deploy`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -794,7 +784,7 @@ Use this whenever auto-deploy looks like it is on but pushes are not producing b
     },
     async ({ deploymentId }) => {
       const result = await client.post(`/deployments/${deploymentId}/auto-deploy/disable`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 }

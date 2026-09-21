@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json, text } from './reply';
 
 const YAML_FORMAT_GUIDE = `
 ## Leaf Template YAML Format
@@ -214,7 +215,7 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
     async () => {
       const user = await client.get('/auth/me');
-      return { content: [{ type: 'text', text: JSON.stringify(user, null, 2) }] };
+      return json(user);
     }
   );
 
@@ -227,7 +228,7 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
     async () => {
       const orgs = await client.get('/organizations/user');
-      return { content: [{ type: 'text', text: JSON.stringify(orgs, null, 2) }] };
+      return json(orgs);
     }
   );
 
@@ -327,11 +328,7 @@ Searches organizations, projects, deployments and databases at once and returns 
           }))
       ];
 
-      return {
-        content: [
-          { type: 'text', text: JSON.stringify({ query: query ?? null, results }, null, 2) }
-        ]
-      };
+      return json({ query: query ?? null, results });
     }
   );
 
@@ -354,7 +351,7 @@ Units match the resource tools: \`cpuMilli\` in millicores, \`memoryBytes\` in b
     },
     async ({ organizationId }) => {
       const quota = await client.get(`/organizations/${organizationId}/quota/me`);
-      return { content: [{ type: 'text', text: JSON.stringify(quota, null, 2) }] };
+      return json(quota);
     }
   );
 
@@ -387,7 +384,7 @@ This is how you answer "when did this break" and "who turned that off" — each 
       if (cursor) params.set('cursor', cursor);
       const qs = params.toString();
       const logs = await client.get(`/audit-logs/${scope}${qs ? `?${qs}` : ''}`);
-      return { content: [{ type: 'text', text: JSON.stringify(logs, null, 2) }] };
+      return json(logs);
     }
   );
 
@@ -402,7 +399,7 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     },
     async () => {
       const pools = await client.get('/node-pools');
-      return { content: [{ type: 'text', text: JSON.stringify(pools, null, 2) }] };
+      return json(pools);
     }
   );
 
@@ -421,7 +418,7 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     async ({ organizationId }) => {
       const url = organizationId ? `/projects?orgId=${organizationId}` : '/projects';
       const projects = await client.get(url);
-      return { content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }] };
+      return json(projects);
     }
   );
 
@@ -436,7 +433,7 @@ Only pools an administrator marked user-selectable show up. On an instance that 
     },
     async ({ projectId }) => {
       const project = await client.get(`/projects/${projectId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
+      return json(project);
     }
   );
 
@@ -465,7 +462,7 @@ Use \`find\` instead when you know the app by name and want its UUID.`,
         ? `/projects/${projectId}/deployments`
         : `/deployments${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
       const deployments = await client.get(path);
-      return { content: [{ type: 'text', text: JSON.stringify(deployments, null, 2) }] };
+      return json(deployments);
     }
   );
 
@@ -490,7 +487,7 @@ The build log is omitted here because it is often megabytes — read it with \`g
         ...rest,
         ...(buildLogs ? { buildLogs: '<omitted — call get_build_logs>' } : {})
       };
-      return { content: [{ type: 'text', text: JSON.stringify(slim, null, 2) }] };
+      return json(slim);
     }
   );
 
@@ -505,7 +502,7 @@ The build log is omitted here because it is often megabytes — read it with \`g
     },
     async ({ deploymentId }) => {
       const history = await client.get(`/deployments/${deploymentId}/image-history`);
-      return { content: [{ type: 'text', text: JSON.stringify(history, null, 2) }] };
+      return json(history);
     }
   );
 
@@ -525,7 +522,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const envVars = deployment.envVars || [];
-      return { content: [{ type: 'text', text: JSON.stringify(envVars, null, 2) }] };
+      return json(envVars);
     }
   );
 
@@ -543,7 +540,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const ingresses = deployment.ingresses || [];
-      return { content: [{ type: 'text', text: JSON.stringify(ingresses, null, 2) }] };
+      return json(ingresses);
     }
   );
 
@@ -558,7 +555,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     },
     async ({ ingressId }) => {
       const ingress = await client.get(`/ingresses/${ingressId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
+      return json(ingress);
     }
   );
 
@@ -579,7 +576,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     },
     async ({ projectId, domain }) => {
       const result = await client.post('/projects/ingresses/validate-dns', { projectId, domain });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -595,7 +592,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
       const services = deployment.services || [];
-      return { content: [{ type: 'text', text: JSON.stringify(services, null, 2) }] };
+      return json(services);
     }
   );
 
@@ -623,7 +620,7 @@ Secret vars come back with \`secret: true\` and a null value — the value is wr
         ? `/projects/${projectId}/databases`
         : `/databases${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
       const databases = await client.get(path);
-      return { content: [{ type: 'text', text: JSON.stringify(databases, null, 2) }] };
+      return json(databases);
     }
   );
 
@@ -651,7 +648,7 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
     },
     async ({ databaseId }) => {
       const database = await client.get(`/databases/${databaseId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(database, null, 2) }] };
+      return json(database);
     }
   );
 
@@ -688,7 +685,7 @@ Filter with \`level\` to see only errors, or \`search\` to grep. Both are applie
       const logs = await client.get(
         `/observe/deployments/${deploymentId}/logs/structured${qs ? `?${qs}` : ''}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(logs, null, 2) }] };
+      return json(logs);
     }
   );
 
@@ -715,7 +712,7 @@ Answers "is it actually serving traffic", "did latency regress after that deploy
       const metrics = await client.get(
         `/observe/deployments/${deploymentId}/http-metrics${qs ? `?${qs}` : ''}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+      return json(metrics);
     }
   );
 
@@ -753,26 +750,15 @@ For the running app's output use \`get_deployment_logs\`.`,
       const truncated = !full && lines.length > limit;
       const body = truncated ? lines.slice(-limit).join('\n') : raw;
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                buildStatus: typeof res === 'string' ? undefined : res?.status,
-                buildError: typeof res === 'string' ? undefined : res?.buildError,
-                totalLines: lines.length,
-                ...(truncated
-                  ? { showing: `last ${limit} of ${lines.length} lines`, truncated: true }
-                  : {}),
-                logs: body
-              },
-              null,
-              2
-            )
-          }
-        ]
-      };
+      return json({
+        buildStatus: typeof res === 'string' ? undefined : res?.status,
+        buildError: typeof res === 'string' ? undefined : res?.buildError,
+        totalLines: lines.length,
+        ...(truncated
+          ? { showing: `last ${limit} of ${lines.length} lines`, truncated: true }
+          : {}),
+        logs: body
+      });
     }
   );
 
@@ -795,7 +781,7 @@ For the running app's output use \`get_deployment_logs\`.`,
         namespace: deployment?.namespace,
         pods
       };
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -829,11 +815,7 @@ For the running app's output use \`get_deployment_logs\`.`,
       if (previous) params.set('previous', 'true');
       const qs = params.toString();
       const logs = await client.get(`/pods/${podName}/logs${qs ? `?${qs}` : ''}`);
-      return {
-        content: [
-          { type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }
-        ]
-      };
+      return typeof logs === 'string' ? text(logs) : json(logs);
     }
   );
 
@@ -849,7 +831,7 @@ For the running app's output use \`get_deployment_logs\`.`,
     },
     async ({ deploymentId }) => {
       const entries = await client.get(`/deployments/${deploymentId}/killed-containers`);
-      return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
+      return json(entries);
     }
   );
 
@@ -868,7 +850,7 @@ For the running app's output use \`get_deployment_logs\`.`,
       const entry = await client.get(
         `/deployments/${deploymentId}/killed-containers/${encodeURIComponent(entryId)}/logs`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
+      return json(entry);
     }
   );
 
@@ -886,7 +868,7 @@ For the running app's output use \`get_deployment_logs\`.`,
     async ({ deploymentId, window }) => {
       const qs = window ? `?window=${window}` : '';
       const groups = await client.get(`/observe/deployments/${deploymentId}/errors${qs}`);
-      return { content: [{ type: 'text', text: JSON.stringify(groups, null, 2) }] };
+      return json(groups);
     }
   );
 
@@ -920,7 +902,7 @@ For the running app's output use \`get_deployment_logs\`.`,
         `/observe/deployments/${deploymentId}/errors/${encodeURIComponent(fingerprint)}`,
         body
       );
-      return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
+      return json(res);
     }
   );
 
@@ -936,7 +918,7 @@ For the running app's output use \`get_deployment_logs\`.`,
     },
     async ({ podName }) => {
       const pod = await client.get(`/pods/${podName}`);
-      return { content: [{ type: 'text', text: JSON.stringify(pod, null, 2) }] };
+      return json(pod);
     }
   );
 
@@ -981,7 +963,7 @@ Not for long-running interactive sessions — the call times out (default 60s, m
         ...(container && { container }),
         ...(timeoutMs && { timeoutMs })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -1009,7 +991,7 @@ Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To
       if (step) params.set('step', String(step));
       const qs = params.toString();
       const metrics = await client.get(`/deployments/${deploymentId}/metrics${qs ? `?${qs}` : ''}`);
-      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+      return json(metrics);
     }
   );
 
@@ -1037,7 +1019,7 @@ To diagnose an OOMKill, look for memory rising to the request/limit ceiling righ
       if (step) params.set('step', String(step));
       const qs = params.toString();
       const metrics = await client.get(`/databases/${databaseId}/metrics${qs ? `?${qs}` : ''}`);
-      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+      return json(metrics);
     }
   );
 
@@ -1091,7 +1073,7 @@ Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking d
             ? 'Usage is near limits — consider increasing CPU/memory requests, the pod may behave unexpectedly under load.'
             : 'Within healthy bounds.'
       };
-      return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
+      return json(summary);
     }
   );
 
@@ -1126,7 +1108,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
             ? `This deployment has ${pvcCount} PVC volume(s); k8s update strategy is forced to Recreate so rolling deploys are disabled.`
             : undefined
       };
-      return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
+      return json(payload);
     }
   );
 
@@ -1142,7 +1124,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     },
     async () => {
       const status = await client.get('/github/status');
-      return { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] };
+      return json(status);
     }
   );
 
@@ -1155,7 +1137,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     },
     async () => {
       const repos = await client.get('/github/repositories');
-      return { content: [{ type: 'text', text: JSON.stringify(repos, null, 2) }] };
+      return json(repos);
     }
   );
 
@@ -1171,7 +1153,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     },
     async ({ owner, repo }) => {
       const branches = await client.get(`/github/repositories/${owner}/${repo}/branches`);
-      return { content: [{ type: 'text', text: JSON.stringify(branches, null, 2) }] };
+      return json(branches);
     }
   );
 
@@ -1188,7 +1170,7 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
     },
     async ({ owner, repo }) => {
       const dockerfiles = await client.get(`/github/repositories/${owner}/${repo}/dockerfiles`);
-      return { content: [{ type: 'text', text: JSON.stringify(dockerfiles, null, 2) }] };
+      return json(dockerfiles);
     }
   );
 
@@ -1213,7 +1195,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     async ({ owner, repo, branch }) => {
       const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
       const detected = await client.get(`/github/repositories/${owner}/${repo}/detect${query}`);
-      return { content: [{ type: 'text', text: JSON.stringify(detected, null, 2) }] };
+      return json(detected);
     }
   );
 
@@ -1230,7 +1212,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     },
     async ({ owner, repo }) => {
       const contents = await client.get(`/github/repositories/${owner}/${repo}/contents`);
-      return { content: [{ type: 'text', text: JSON.stringify(contents, null, 2) }] };
+      return json(contents);
     }
   );
 
@@ -1245,7 +1227,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     },
     async () => {
       const templates = await client.get('/templates');
-      return { content: [{ type: 'text', text: JSON.stringify(templates, null, 2) }] };
+      return json(templates);
     }
   );
 
@@ -1260,7 +1242,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     },
     async ({ templateId }) => {
       const template = await client.get(`/templates/${templateId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
+      return json(template);
     }
   );
 
@@ -1275,7 +1257,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     },
     async ({ projectId }) => {
       const instances = await client.get(`/projects/${projectId}/template-instances`);
-      return { content: [{ type: 'text', text: JSON.stringify(instances, null, 2) }] };
+      return json(instances);
     }
   );
 
@@ -1290,7 +1272,7 @@ Use this to answer "can I deploy this repo" and "which app in this monorepo did 
     },
     async ({ instanceId }) => {
       const instance = await client.get(`/template-instances/${instanceId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(instance, null, 2) }] };
+      return json(instance);
     }
   );
 

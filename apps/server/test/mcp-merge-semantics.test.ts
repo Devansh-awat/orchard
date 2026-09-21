@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdir, readFile } from 'node:fs/promises';
 import { registerConfigurationTools } from '../src/mcp/tools/configuration';
 import { registerEnvironmentTools } from '../src/mcp/tools/environments';
 import { registerQueryTools } from '../src/mcp/tools/query';
@@ -318,4 +319,26 @@ test('get_resource_quota reads the caller-scoped headroom endpoint', async () =>
   });
   await tools.get('get_resource_quota')!.handler({ organizationId: 'o1' });
   assert.deepEqual(calls, [{ method: 'GET', path: '/organizations/o1/quota/me' }]);
+});
+
+test('tool results are serialised compactly, and stay that way', async () => {
+  const { tools } = harness(registerQueryTools, {
+    '/organizations/user': [{ id: 'o1', name: 'Hack Club' }]
+  });
+  const out = (await tools.get('list_organizations')!.handler({})).content[0].text;
+  assert.equal(out, '[{"id":"o1","name":"Hack Club"}]');
+  assert.ok(!out.includes('\n'), 'no indentation in tool output');
+
+  // Indenting responses costs ~23-34% more tokens for nothing, so every tool
+  // goes through reply.ts. Catch a hand-rolled JSON.stringify creeping back in.
+  const dir = new URL('../src/mcp/tools/', import.meta.url);
+  const files = (await readdir(dir)).filter((f) => f.endsWith('.ts') && f !== 'reply.ts');
+  assert.ok(files.length > 5, 'found the tool files');
+  for (const f of files) {
+    const src = await readFile(new URL(f, dir), 'utf8');
+    assert.ok(
+      !src.includes('JSON.stringify'),
+      `${f} should return through reply.ts json()/text(), not JSON.stringify`
+    );
+  }
 });

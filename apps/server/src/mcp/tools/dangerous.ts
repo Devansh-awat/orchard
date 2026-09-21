@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json, text } from './reply';
 
 export function registerDangerousTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
@@ -14,7 +15,7 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
     },
     async ({ projectId }) => {
       await client.delete(`/projects/${projectId}`);
-      return { content: [{ type: 'text', text: 'Project deleted successfully.' }] };
+      return text('Project deleted successfully.');
     }
   );
 
@@ -29,7 +30,7 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
     },
     async ({ deploymentId }) => {
       await client.delete(`/deployments/${deploymentId}`);
-      return { content: [{ type: 'text', text: 'Deployment deleted successfully.' }] };
+      return text('Deployment deleted successfully.');
     }
   );
 
@@ -46,7 +47,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
     },
     async ({ environmentId }) => {
       const result = await client.delete(`/environments/${environmentId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -61,7 +62,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
     },
     async ({ databaseId }) => {
       await client.delete(`/databases/${databaseId}`);
-      return { content: [{ type: 'text', text: 'Database deleted successfully.' }] };
+      return text('Database deleted successfully.');
     }
   );
 
@@ -84,7 +85,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
       const body: Record<string, unknown> = {};
       if (backupId) body.backupId = backupId;
       const result = await client.post(`/databases/${databaseId}/restore`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -118,7 +119,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
           ]
         };
       }
-      return { content: [{ type: 'text', text: 'Ingress deleted successfully.' }] };
+      return text('Ingress deleted successfully.');
     }
   );
 
@@ -134,7 +135,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
     },
     async ({ deploymentId, serviceId }) => {
       await client.delete(`/deployments/${deploymentId}/services/${serviceId}`);
-      return { content: [{ type: 'text', text: 'Service deleted successfully.' }] };
+      return text('Service deleted successfully.');
     }
   );
 
@@ -149,7 +150,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
     },
     async ({ templateId }) => {
       await client.delete(`/templates/${templateId}`);
-      return { content: [{ type: 'text', text: 'Template deleted successfully.' }] };
+      return text('Template deleted successfully.');
     }
   );
 
@@ -165,7 +166,7 @@ List what is in it with \`list_deployments\` / \`list_databases\` and confirm wi
     },
     async ({ instanceId }) => {
       const result = await client.delete(`/template-instances/${instanceId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -200,22 +201,11 @@ Only the keys you name are touched, so this is safe to use for a targeted remova
       const notFound = keys.filter((k) => !existing.some((v) => v.key === k));
 
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: filtered });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                removed,
-                notFound: notFound.length > 0 ? notFound : undefined,
-                deployment: result
-              },
-              null,
-              2
-            )
-          }
-        ]
-      };
+      return json({
+        removed,
+        notFound: notFound.length > 0 ? notFound : undefined,
+        deployment: result
+      });
     }
   );
 
@@ -232,7 +222,7 @@ Only the keys you name are touched, so this is safe to use for a targeted remova
     },
     async ({ deploymentId, tokenId }) => {
       const result = await client.delete(`/deployments/${deploymentId}/webhook-tokens/${tokenId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -250,7 +240,7 @@ Only the keys you name are touched, so this is safe to use for a targeted remova
       const result = await client.delete(
         `/organizations/${organizationId}/notification-channels/${channelId}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 }

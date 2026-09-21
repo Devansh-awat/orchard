@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json } from './reply';
 
 const stepSchema = z.object({
   name: z.string().max(255).optional().describe('Step display name'),
@@ -59,7 +60,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ organizationId }) => {
       const result = await client.get(`/organizations/${organizationId}/jobs`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -74,7 +75,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ jobId }) => {
       const result = await client.get(`/jobs/${jobId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -103,7 +104,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ projectId, ...body }) => {
       const result = await client.post(`/projects/${projectId}/jobs`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -131,7 +132,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
         if (v !== undefined) patch[k] = v;
       }
       const result = await client.patch(`/jobs/${jobId}`, patch);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -147,7 +148,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ jobId, steps }) => {
       const result = await client.put(`/jobs/${jobId}/steps`, { steps });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -163,7 +164,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ jobId, allowConcurrent }) => {
       const result = await client.post(`/jobs/${jobId}/runs`, { allowConcurrent });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -184,7 +185,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
       if (limit) params.set('limit', String(limit));
       const qs = params.toString();
       const result = await client.get(`/jobs/${jobId}/runs${qs ? `?${qs}` : ''}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -199,7 +200,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ runId }) => {
       const result = await client.get(`/job-runs/${runId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -215,7 +216,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ runId, stepOrder }) => {
       const result = await client.get(`/job-runs/${runId}/steps/${stepOrder}/logs`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -230,7 +231,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ runId }) => {
       const result = await client.post(`/job-runs/${runId}/cancel`, {});
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -245,7 +246,7 @@ export function registerJobTools(server: McpServer, client: OrchardClient) {
     },
     async ({ jobId }) => {
       const result = await client.delete(`/jobs/${jobId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 }

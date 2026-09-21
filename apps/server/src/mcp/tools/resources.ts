@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json, text } from './reply';
 
 export function registerResourceTools(server: McpServer, client: OrchardClient) {
   // ── Projects ──────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ export function registerResourceTools(server: McpServer, client: OrchardClient) 
     },
     async ({ organizationId, name, description }) => {
       const project = await client.post('/projects', { organizationId, name, description });
-      return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
+      return json(project);
     }
   );
 
@@ -67,7 +68,7 @@ Only the fields you pass are changed — leave the rest undefined to keep them a
         );
       }
       const project = await client.patch(`/projects/${projectId}`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
+      return json(project);
     }
   );
 
@@ -136,7 +137,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       if (memoryRequestBytes != null) body.memoryRequestBytes = memoryRequestBytes;
       if (replicas != null) body.replicas = replicas;
       const database = await client.post(`/projects/${projectId}/databases`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(database, null, 2) }] };
+      return json(database);
     }
   );
 
@@ -152,7 +153,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
     },
     async ({ databaseId }) => {
       const backups = await client.get(`/databases/${databaseId}/backups`);
-      return { content: [{ type: 'text', text: JSON.stringify(backups, null, 2) }] };
+      return json(backups);
     }
   );
 
@@ -176,7 +177,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
       if (label) body.label = label;
       if (type) body.type = type;
       const backup = await client.post(`/databases/${databaseId}/backups`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(backup, null, 2) }] };
+      return json(backup);
     }
   );
 
@@ -191,7 +192,7 @@ be reachable from the cluster and use the postgres:// or postgresql:// scheme.`,
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/public`, {});
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -225,7 +226,7 @@ Pass null for either field to clear it and fall back to the default.`,
       if (cpuRequestMilli !== undefined) body.cpuRequestMilli = cpuRequestMilli;
       if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
       const result = await client.patch(`/databases/${databaseId}/resources`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -239,7 +240,7 @@ Pass null for either field to clear it and fall back to the default.`,
     },
     async () => {
       const limits = await client.get('/databases/limits');
-      return { content: [{ type: 'text', text: JSON.stringify(limits, null, 2) }] };
+      return json(limits);
     }
   );
 
@@ -261,7 +262,7 @@ Scaling up is not instant — a new replica has to clone the primary before it r
     },
     async ({ databaseId, replicas }) => {
       const result = await client.patch(`/databases/${databaseId}/replicas`, { replicas });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -278,7 +279,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/stop`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -294,7 +295,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/start`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -310,7 +311,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/restart`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -327,7 +328,7 @@ Use it to park a database you are not using without losing it — \`delete_datab
     },
     async ({ databaseId, name }) => {
       const result = await client.patch(`/databases/${databaseId}/name`, { name });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -344,7 +345,7 @@ The first stop for "the database is slow" — it tells you which statement is ac
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/query-stats`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -360,7 +361,7 @@ The first stop for "the database is slow" — it tells you which statement is ac
     },
     async ({ databaseId }) => {
       const result = await client.post(`/databases/${databaseId}/query-stats/reset`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -382,7 +383,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
     },
     async ({ databaseId, storageSize }) => {
       const result = await client.patch(`/databases/${databaseId}/storage`, { storageSize });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -398,7 +399,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/extensions`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -425,7 +426,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
         name,
         ...(addToPreload != null && { addToPreload })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -448,7 +449,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
       const result = await client.delete(
         `/databases/${databaseId}/extensions/${encodeURIComponent(name)}${qs}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -465,7 +466,7 @@ IMPORTANT: if the disk filled because WAL archiving is failing, expansion only b
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/settings`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -500,7 +501,7 @@ Values are applied exactly as given and are never clamped, but a dangerous one c
         parameters,
         ...(backupCompression !== undefined ? { backupCompression } : {})
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -516,7 +517,7 @@ Values are applied exactly as given and are never clamped, but a dangerous one c
     },
     async ({ databaseId }) => {
       const result = await client.get(`/databases/${databaseId}/backup-schedule`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -537,7 +538,7 @@ Common values:
     },
     async ({ databaseId, cron }) => {
       const result = await client.put(`/databases/${databaseId}/backup-schedule`, { cron });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -553,7 +554,7 @@ Common values:
     },
     async ({ databaseId }) => {
       await client.delete(`/databases/${databaseId}/backup-schedule`);
-      return { content: [{ type: 'text', text: 'Backup schedule cleared.' }] };
+      return text('Backup schedule cleared.');
     }
   );
 
@@ -569,7 +570,7 @@ Common values:
     },
     async ({ databaseId }) => {
       await client.delete(`/databases/${databaseId}/public`);
-      return { content: [{ type: 'text', text: 'Public access disabled.' }] };
+      return text('Public access disabled.');
     }
   );
 
@@ -587,7 +588,7 @@ Common values:
     },
     async ({ yaml }) => {
       const template = await client.post('/templates', { yaml });
-      return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
+      return json(template);
     }
   );
 
@@ -604,7 +605,7 @@ Common values:
     },
     async ({ templateId, yaml }) => {
       const template = await client.put(`/templates/${templateId}`, { yaml });
-      return { content: [{ type: 'text', text: JSON.stringify(template, null, 2) }] };
+      return json(template);
     }
   );
 
@@ -635,7 +636,7 @@ The template engine will validate parameters and create resources in order, wiri
         templateId,
         parameters
       });
-      return { content: [{ type: 'text', text: JSON.stringify(instance, null, 2) }] };
+      return json(instance);
     }
   );
 }

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json } from './reply';
 import { NOTIFICATION_EVENTS, RULE_SCOPE_TYPES } from '../../notifications/notification-events';
 
 // Sourced from the server's own list rather than redeclared, which is how the
@@ -33,7 +34,7 @@ With a scope it is what that project or resource may route to (its own destinati
       const result = await client.get(
         `/organizations/${organizationId}/notification-channels${query ? `?${query}` : ''}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -69,7 +70,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         scopeType: scopeType ?? 'org',
         scopeId: scopeId ?? null
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -104,7 +105,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
         `/organizations/${organizationId}/notification-channels/${channelId}`,
         body
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -130,7 +131,7 @@ A destination belongs to a scope: org-wide (the default) needs org admin, and a 
       const result = await client.get(
         `/organizations/${organizationId}/notification-rules${query ? `?${query}` : ''}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -158,7 +159,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         events,
         mode: mode ?? 'deliver'
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -184,7 +185,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         `/organizations/${organizationId}/notification-rules/${ruleId}`,
         body
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -202,7 +203,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       const result = await client.delete(
         `/organizations/${organizationId}/notification-rules/${ruleId}`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -221,7 +222,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         `/organizations/${organizationId}/notification-channels/${channelId}/test`,
         {}
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -246,7 +247,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
         `/organizations/${organizationId}/notification-channels/${channelId}/replay`,
         { sinceHours: sinceHours ?? 24 }
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -264,7 +265,7 @@ Events must be possible at the scope (a database cannot emit deploy events). Org
       const result = await client.get(
         `/organizations/${organizationId}/notification-channels/${channelId}/deliveries`
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 }

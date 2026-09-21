@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json } from './reply';
 
 interface EnvVarInput {
   key: string;
@@ -48,7 +49,7 @@ Secrets read back with a null value, so you cannot round-trip them through this 
     },
     async ({ deploymentId, envVars }) => {
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: envVars });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -100,7 +101,7 @@ Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env
       const merged = [...existing.filter((v) => !newKeys.has(v.key)), ...envVars];
 
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -213,7 +214,7 @@ Applies immediately and rolls the pods.`,
       };
 
       const result = await client.put(`/deployments/${deploymentId}/health-check`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -257,7 +258,7 @@ To remove all volumes, pass an empty array.`,
     },
     async ({ deploymentId, volumes }) => {
       const result = await client.put(`/deployments/${deploymentId}/volumes`, { volumes });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -278,7 +279,7 @@ Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_d
     },
     async ({ deploymentId, image }) => {
       const result = await client.patch(`/deployments/${deploymentId}/image`, { image });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -298,7 +299,7 @@ When the deployment has a PVC attached, the backend forces \`recreate\` and reje
     },
     async ({ deploymentId, strategy }) => {
       const result = await client.patch(`/deployments/${deploymentId}/strategy`, { strategy });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -330,7 +331,7 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
       const result = await client.patch(`/deployments/${deploymentId}/pull-policy`, {
         imagePullPolicy
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -391,7 +392,7 @@ Everything except \`startCommand\` applies on the next build, so follow up with 
     },
     async ({ deploymentId, ...body }) => {
       const result = await client.put(`/deployments/${deploymentId}/build-config`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -416,7 +417,7 @@ The user must point their domain's DNS to the cluster before creating the ingres
         path: path ?? '/',
         servicePort: servicePort ?? 80
       });
-      return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
+      return json(ingress);
     }
   );
 
@@ -438,7 +439,7 @@ The user must point their domain's DNS to the cluster before creating the ingres
       if (path !== undefined) body.path = path;
       if (servicePort !== undefined) body.servicePort = servicePort;
       const ingress = await client.put(`/deployments/${deploymentId}/ingresses/${ingressId}`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
+      return json(ingress);
     }
   );
 
@@ -481,7 +482,7 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
       if (ports !== undefined) body.ports = ports;
       if (domain !== undefined) body.domain = domain;
       const result = await client.put(`/deployments/${deploymentId}/services/${serviceId}`, body);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -502,7 +503,7 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
         `/deployments/${deploymentId}/services/${serviceId}/exposure`,
         { exposePublic }
       );
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -522,7 +523,7 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     async ({ deploymentId, serviceId, portId, public: isPublic }) => {
       const path = `/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`;
       const result = isPublic ? await client.post(path) : await client.delete(path);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -539,7 +540,7 @@ To make a service reachable from outside the cluster use \`set_service_exposure\
     },
     async ({ projectId, ingressId }) => {
       const result = await client.get(`/projects/${projectId}/ingresses/${ingressId}/protection`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -577,7 +578,7 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
         ...(password !== undefined ? { password } : {}),
         ...(bypassPaths !== undefined ? { bypassPaths } : {})
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -609,7 +610,7 @@ Not available on redirect domains. Switching away from \`password\`/\`basic\` di
           }
         ]
       });
-      return { content: [{ type: 'text', text: JSON.stringify(service, null, 2) }] };
+      return json(service);
     }
   );
 }

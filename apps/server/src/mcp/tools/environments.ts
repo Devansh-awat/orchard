@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod4';
 import { OrchardClient } from '../client';
+import { json } from './reply';
 
 interface SharedVar {
   key: string;
@@ -24,7 +25,7 @@ Each environment is its own Kubernetes namespace with its own deployments, datab
     },
     async ({ projectId }) => {
       const environments = await client.get(`/projects/${projectId}/environments`);
-      return { content: [{ type: 'text', text: JSON.stringify(environments, null, 2) }] };
+      return json(environments);
     }
   );
 
@@ -49,7 +50,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
         name,
         ...(slug && { slug })
       });
-      return { content: [{ type: 'text', text: JSON.stringify(environment, null, 2) }] };
+      return json(environment);
     }
   );
 
@@ -66,7 +67,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
     },
     async ({ environmentId, name }) => {
       const result = await client.patch(`/environments/${environmentId}`, { name });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -82,7 +83,7 @@ Provisions a fresh namespace. Nothing is copied from production: the new environ
     },
     async ({ environmentId }) => {
       const result = await client.post(`/environments/${environmentId}/set-default`);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -103,7 +104,7 @@ Secrets come back here with a null value — they are write-only.`,
     },
     async ({ environmentId }) => {
       const vars = await client.get(`/environments/${environmentId}/shared-vars`);
-      return { content: [{ type: 'text', text: JSON.stringify(vars, null, 2) }] };
+      return json(vars);
     }
   );
 
@@ -151,7 +152,7 @@ Related: \`delete_shared_env_vars\` to remove keys, \`set_shared_env_vars\` only
       const result = await client.put(`/environments/${environmentId}/shared-vars`, {
         vars: merged
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -183,7 +184,7 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
     },
     async ({ environmentId, vars }) => {
       const result = await client.put(`/environments/${environmentId}/shared-vars`, { vars });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return json(result);
     }
   );
 
@@ -214,22 +215,11 @@ Use \`add_shared_env_vars\` to change a few, \`delete_shared_env_vars\` to remov
       const result = await client.put(`/environments/${environmentId}/shared-vars`, {
         vars: kept
       });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                removed,
-                notFound: notFound.length > 0 ? notFound : undefined,
-                vars: result
-              },
-              null,
-              2
-            )
-          }
-        ]
-      };
+      return json({
+        removed,
+        notFound: notFound.length > 0 ? notFound : undefined,
+        vars: result
+      });
     }
   );
 }
