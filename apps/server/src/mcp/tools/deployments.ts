@@ -51,7 +51,18 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           .optional()
           .describe(
             'Leave unset: the policy is derived from the tag, so a moving tag like latest already gets Always. Only pass this to override that.'
-          )
+          ),
+        environmentId: z
+          .string()
+          .optional()
+          .describe(
+            "Environment to create this in (from list_environments). Omit for the project's default environment."
+          ),
+        startCommand: z.string().optional().describe("Command to run instead of the image's CMD"),
+        nodePoolId: z
+          .string()
+          .optional()
+          .describe('Node pool to pin the deployment to. Omit to schedule anywhere.')
       }
     },
     async ({
@@ -63,7 +74,10 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
       env,
       cpuRequestMilli,
       memoryRequestBytes,
-      imagePullPolicy
+      imagePullPolicy,
+      environmentId,
+      startCommand,
+      nodePoolId
     }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments`, {
         name,
@@ -73,7 +87,10 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),
         ...(memoryRequestBytes != null && { memoryRequestBytes }),
-        ...(imagePullPolicy != null && { imagePullPolicy })
+        ...(imagePullPolicy != null && { imagePullPolicy }),
+        ...(environmentId && { environmentId }),
+        ...(startCommand != null && { startCommand }),
+        ...(nodePoolId && { nodePoolId })
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
     }
@@ -221,7 +238,13 @@ Before using this tool:
           .int()
           .positive()
           .optional()
-          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.')
+          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
+        environmentId: z
+          .string()
+          .optional()
+          .describe(
+            "Environment to deploy into (from list_environments). Omit for the project's default environment."
+          )
       }
     },
     async ({
@@ -242,9 +265,11 @@ Before using this tool:
       installCommand,
       buildCommand,
       startCommand,
-      outputDirectory
+      outputDirectory,
+      environmentId
     }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
+        ...(environmentId && { environmentId }),
         name,
         githubRepo,
         branch: branch ?? 'main',
@@ -462,7 +487,9 @@ Everything else on the response is the deployment as it stands right now, so whe
   server.registerTool(
     'scale_deployment',
     {
-      description: 'Scale a deployment to a specific number of replicas',
+      description: `Set how many replicas a deployment runs.
+
+\`replicas: 0\` is the same thing as \`stop_deployment\` — it marks the deployment stopped and remembers the old count, so the next rebuild will not bring it back. Scaling to any positive number un-stops it. Prefer \`stop_deployment\` / \`start_deployment\` when the intent is "turn it off / back on"; they read clearly in the audit log and do not make you guess a count to restore.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
@@ -471,6 +498,166 @@ Everything else on the response is the deployment as it stands right now, so whe
     },
     async ({ deploymentId, replicas }) => {
       const result = await client.post(`/deployments/${deploymentId}/scale`, { replicas });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'stop_deployment',
+    {
+      description: `Take a deployment offline. Pods are drained and it stays down — a rebuild deploys it at zero replicas — until \`start_deployment\`.
+
+The "turn it off" verb: it sets the deployment's \`stopped\` flag and leaves the replica count alone, so \`start_deployment\` brings it back at the size it was. Nothing is destroyed — build, env vars, domains, volumes and data all stay. (\`scale_deployment(0)\` reaches the same state; this is the clearer way to ask for it.)`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID')
+      }
+    },
+    async ({ deploymentId }) => {
+      const result = await client.post(`/deployments/${deploymentId}/stop`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'start_deployment',
+    {
+      description: `Bring a stopped deployment back online at its previous replica count (at least 1). The inverse of \`stop_deployment\`; a no-op on one that is already running.
+
+Coming back re-checks quota, so a start can fail if the org filled up while the app was parked — scale it down first in that case.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID')
+      }
+    },
+    async ({ deploymentId }) => {
+      const result = await client.post(`/deployments/${deploymentId}/start`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'rename_deployment',
+    {
+      description: `Rename a deployment.
+
+Only the display name changes. The Kubernetes workload name, service DNS, generated \`.orchard\` URL and any ingress hosts keep pointing where they did, so nothing that talks to this app has to be updated.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        name: z.string().describe('The new name')
+      }
+    },
+    async ({ deploymentId, name }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/name`, { name });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'update_deployment_github_repo',
+    {
+      description: `Point a deployment at a different GitHub repository or branch without recreating it.
+
+Takes effect on the next build, so follow with \`rebuild_deployment\` to make it live. Auto-deploy survives only if the GitHub App is installed on the new repo — otherwise it is switched off, silently, because pushes could never reach Orchard. Check \`get_auto_deploy_status\` afterwards.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        repoUrl: z
+          .string()
+          .describe('Repository, as owner/repo or a full https://github.com/... URL'),
+        branch: z.string().describe('Branch to build from (e.g. main)'),
+        dockerfilePath: z
+          .string()
+          .optional()
+          .describe('Path to the Dockerfile in the new repo, if it moved')
+      }
+    },
+    async ({ deploymentId, repoUrl, branch, dockerfilePath }) => {
+      const result = await client.put(`/deployments/${deploymentId}/github-repo`, {
+        repoUrl,
+        branch,
+        ...(dockerfilePath !== undefined ? { dockerfilePath } : {})
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'get_deployment_next_steps',
+    {
+      description: `Ask Orchard what this deployment has not been set up with yet: auto-deploy, a custom domain, explicit resource requests, notifications, a health check.
+
+Returns a \`steps\` array of \`{ id, applicable, done }\` — act on the ones that are applicable and not done. Cheap, and the right follow-up after creating a deployment or when a user asks "what else do I need to do". \`applicable: false\` means the step cannot apply here (no repo linked, no public port, compose-managed), not that it passed.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID')
+      }
+    },
+    async ({ deploymentId }) => {
+      const result = await client.get(`/deployments/${deploymentId}/next-steps`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'retry_deployment_apply',
+    {
+      description: `Requeue the Kubernetes applies that failed for this deployment, so a config change that saved but never reached the cluster gets another attempt.
+
+Use it when \`get_deployment\` reports \`applyStatus: "failed"\` / a non-null \`applyError\`. It only touches work already marked failed, so the response's \`retried: 0\` means there was nothing stuck and the problem is elsewhere. It does not rebuild the image (\`rebuild_deployment\`) or bounce healthy pods (\`restart_deployment\`).`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID')
+      }
+    },
+    async ({ deploymentId }) => {
+      const result = await client.post(`/deployments/${deploymentId}/retry-apply`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'update_deployment_placement',
+    {
+      description: `Pin a deployment to a node pool, or clear the pin so it schedules anywhere.
+
+Pools carry taints, so an app that needs particular hardware has to be placed into the matching pool to land there at all. Pass \`nodePoolId: null\` to unpin. Changing this rolls the pods.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        nodePoolId: z
+          .string()
+          .nullable()
+          .describe('Node pool UUID to pin to, or null to schedule anywhere')
+      }
+    },
+    async ({ deploymentId, nodePoolId }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/placement`, { nodePoolId });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'update_deployment_disruption_budget',
+    {
+      description: `Set how many replicas must stay available while Kubernetes drains a node.
+
+Only meaningful above one replica: a budget equal to the replica count blocks voluntary evictions entirely and can wedge a node drain, so keep it below \`replicas\`.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        minAvailable: z
+          .number()
+          .int()
+          .min(0)
+          .describe('Minimum replicas that must stay up during a voluntary disruption')
+      }
+    },
+    async ({ deploymentId, minAvailable }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/disruption-budget`, {
+        minAvailable
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );

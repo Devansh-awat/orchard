@@ -266,6 +266,105 @@ Scaling up is not instant — a new replica has to clone the primary before it r
   );
 
   server.registerTool(
+    'stop_database',
+    {
+      description: `Hibernate a database: the Postgres instances shut down, the volume and all its data stay. Anything connected to it starts failing immediately.
+
+Use it to park a database you are not using without losing it — \`delete_database\` is the one that destroys data. CNPG-backed databases only. Bring it back with \`start_database\`.`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.post(`/databases/${databaseId}/stop`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'start_database',
+    {
+      description:
+        'Bring a stopped database back up on its existing volume. It is not immediately connectable — Postgres has to recover and report ready, so poll `get_database` and watch `liveStatus.ready`.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.post(`/databases/${databaseId}/start`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'restart_database',
+    {
+      description:
+        'Restart a database cluster. Drops every open connection, so apps talking to it see errors until they reconnect. Use it to apply a setting that needs a restart, or to clear a wedged instance.',
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.post(`/databases/${databaseId}/restart`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'rename_database',
+    {
+      description:
+        'Rename a database. This is the Orchard display name only — the Postgres database name, cluster name, credentials and connection endpoints are unchanged, so nothing connected to it needs updating.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID'),
+        name: z.string().describe('The new name')
+      }
+    },
+    async ({ databaseId, name }) => {
+      const result = await client.patch(`/databases/${databaseId}/name`, { name });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'get_database_query_stats',
+    {
+      description: `The slowest queries on a database, from \`pg_stat_statements\`: normalised query text, call count, total and mean execution time, rows.
+
+The first stop for "the database is slow" — it tells you which statement is actually spending the time. Requires the \`pg_stat_statements\` extension; install it with \`install_database_extension\` (\`addToPreload: true\`, which needs a restart) if the call comes back empty. Cached for 15s server-side, so polling it in a tight loop tells you nothing new.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.get(`/databases/${databaseId}/query-stats`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'reset_database_query_stats',
+    {
+      description:
+        'Zero the pg_stat_statements counters so the next `get_database_query_stats` measures only what happens from now on. Use it to isolate the cost of one workload instead of reading lifetime totals.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID')
+      }
+    },
+    async ({ databaseId }) => {
+      const result = await client.post(`/databases/${databaseId}/query-stats/reset`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'expand_database_storage',
     {
       description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 200Gi.

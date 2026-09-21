@@ -6,6 +6,7 @@ import { registerConfigurationTools } from './tools/configuration';
 import { registerResourceTools } from './tools/resources';
 import { registerNotificationTools } from './tools/notifications';
 import { registerJobTools } from './tools/jobs';
+import { registerEnvironmentTools } from './tools/environments';
 import { registerDangerousTools } from './tools/dangerous';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
@@ -39,6 +40,9 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
 
   // Jobs (scheduled/on-demand pipelines: CRUD, run, history, logs)
   registerJobTools(server, client);
+
+  // Environments (namespaces per project) and their shared variables
+  registerEnvironmentTools(server, client);
 
   // Destructive operations (all deletes)
   registerDangerousTools(server, client);

@@ -231,12 +231,165 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     }
   );
 
+  // ── Resolution ────────────────────────────────────────────────────
+
+  server.registerTool(
+    'find',
+    {
+      description: `Turn a name into a UUID. **Start here** whenever the user names something ("restart hackatime", "the leaf db") instead of walking list_organizations → list_projects → list_deployments.
+
+Searches organizations, projects, deployments and databases at once and returns compact matches with the ids every other tool wants. Matching is case-insensitive substring over names, slugs, GitHub repos and ingress hosts. Call it with no query to get an inventory of everything the user can see.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        query: z
+          .string()
+          .optional()
+          .describe('Substring to match. Omit to return everything the user can see.'),
+        kinds: z
+          .array(z.enum(['organization', 'project', 'deployment', 'database']))
+          .optional()
+          .describe('Restrict the search to these kinds. Default: all four.'),
+        organizationId: z.string().optional().describe('Restrict the search to one organization')
+      }
+    },
+    async ({ query, kinds, organizationId }) => {
+      const wanted = new Set(kinds ?? ['organization', 'project', 'deployment', 'database']);
+      const orgQs = organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : '';
+      const needle = (query ?? '').trim().toLowerCase();
+      const hit = (...fields: unknown[]) =>
+        !needle || fields.some((f) => typeof f === 'string' && f.toLowerCase().includes(needle));
+
+      const [orgs, projects, deployments, databases] = await Promise.all([
+        wanted.has('organization') ? client.get('/organizations/user').catch(() => []) : [],
+        wanted.has('project') ? client.get(`/projects${orgQs}`).catch(() => []) : [],
+        wanted.has('deployment') ? client.get(`/deployments${orgQs}`).catch(() => []) : [],
+        wanted.has('database') ? client.get(`/databases${orgQs}`).catch(() => []) : []
+      ]);
+
+      const hostsOf = (d: any): string[] => [
+        ...(d.ingresses ?? []).map((i: any) => i.host),
+        ...(d.services ?? []).flatMap((s: any) => (s.ingresses ?? []).map((i: any) => i.host))
+      ];
+
+      const results = [
+        ...(Array.isArray(orgs) ? orgs : [])
+          .filter((o: any) => hit(o.name, o.slug))
+          .map((o: any) => ({
+            kind: 'organization',
+            id: o.id,
+            name: o.name,
+            slug: o.slug
+          })),
+        ...(Array.isArray(projects) ? projects : [])
+          .filter((p: any) => organizationId == null || p.organizationId === organizationId)
+          .filter((p: any) => hit(p.name, p.slug))
+          .map((p: any) => ({
+            kind: 'project',
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            organizationId: p.organizationId
+          })),
+        ...(Array.isArray(deployments) ? deployments : [])
+          .filter((d: any) =>
+            hit(
+              d.name,
+              d.displayName,
+              d.githubRepo,
+              d.project?.name,
+              d.project?.slug,
+              ...hostsOf(d)
+            )
+          )
+          .map((d: any) => ({
+            kind: 'deployment',
+            id: d.id,
+            name: d.displayName || d.name,
+            status: d.status,
+            stopped: d.stopped,
+            replicas: d.replicas,
+            projectId: d.project?.id,
+            projectName: d.project?.name,
+            organizationId: d.project?.organizationId,
+            githubRepo: d.githubRepo,
+            hosts: hostsOf(d).filter(Boolean)
+          })),
+        ...(Array.isArray(databases) ? databases : [])
+          .filter((db: any) => hit(db.name, db.dbName, db.project?.name, db.project?.slug))
+          .map((db: any) => ({
+            kind: 'database',
+            id: db.id,
+            name: db.name,
+            status: db.status,
+            projectId: db.project?.id,
+            projectName: db.project?.name,
+            organizationId: db.project?.organizationId
+          }))
+      ];
+
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ query: query ?? null, results }, null, 2) }
+        ]
+      };
+    }
+  );
+
+  server.registerTool(
+    'get_audit_log',
+    {
+      description: `Who changed what, and when. Pass a deploymentId for one app's history, or an organizationId for everything in the org (org admins only).
+
+This is how you answer "when did this break" and "who turned that off" — each entry records the actor, a timestamp, the action (\`deployment.env.updated\`, \`deployment.scaled\`, \`deployment.stopped\`, \`environment.sharedvars.updated\`, …) and a \`metadata\` object that usually carries the \`[before, after]\` of whatever moved. Paginated: feed \`nextCursor\` back as \`cursor\` for the next page.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().optional().describe("One deployment's history"),
+        organizationId: z
+          .string()
+          .optional()
+          .describe('Everything in an organization. Requires org admin.'),
+        action: z.string().optional().describe('Filter to one action, e.g. deployment.env.updated'),
+        limit: z.number().optional().describe('Entries per page'),
+        cursor: z.string().optional().describe('Cursor from a previous page')
+      }
+    },
+    async ({ deploymentId, organizationId, action, limit, cursor }) => {
+      if (!deploymentId && !organizationId) {
+        throw new Error('Pass either deploymentId or organizationId');
+      }
+      const scope = deploymentId ? `deployment/${deploymentId}` : `organization/${organizationId}`;
+      const params = new URLSearchParams();
+      if (action) params.set('action', action);
+      if (limit) params.set('limit', String(limit));
+      if (cursor) params.set('cursor', cursor);
+      const qs = params.toString();
+      const logs = await client.get(`/audit-logs/${scope}${qs ? `?${qs}` : ''}`);
+      return { content: [{ type: 'text', text: JSON.stringify(logs, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'list_node_pools',
+    {
+      description: `List the node pools a deployment can be pinned to, for \`update_deployment_placement\` or \`create_deployment\`'s \`nodePoolId\`.
+
+Only pools an administrator marked user-selectable show up. On an instance that has not enabled userspace scheduling the call 404s, which just means placement is not a knob here — schedule anywhere and move on.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {}
+    },
+    async () => {
+      const pools = await client.get('/node-pools');
+      return { content: [{ type: 'text', text: JSON.stringify(pools, null, 2) }] };
+    }
+  );
+
   // ── Projects ──────────────────────────────────────────────────────
 
   server.registerTool(
     'list_projects',
     {
-      description: 'List all projects in an organization',
+      description:
+        'List projects. With no arguments this returns every project the user can see across all their organizations, so you do not need to walk `list_organizations` first. Pass an organizationId only to narrow it.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         organizationId: z.string().optional().describe('Organization UUID to filter by (optional)')
@@ -269,14 +422,26 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'list_deployments',
     {
-      description: 'List all deployments in a project',
+      description: `List deployments. Pass a projectId for one project's deployments, or nothing at all to get every deployment the user can see (optionally narrowed to one organization).
+
+Use \`find\` instead when you know the app by name and want its UUID.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z
+          .string()
+          .optional()
+          .describe('The project UUID. Omit to list across every project the user can see.'),
+        organizationId: z
+          .string()
+          .optional()
+          .describe('Narrow the cross-project listing to one organization. Ignored with projectId.')
       }
     },
-    async ({ projectId }) => {
-      const deployments = await client.get(`/projects/${projectId}/deployments`);
+    async ({ projectId, organizationId }) => {
+      const path = projectId
+        ? `/projects/${projectId}/deployments`
+        : `/deployments${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
+      const deployments = await client.get(path);
       return { content: [{ type: 'text', text: JSON.stringify(deployments, null, 2) }] };
     }
   );
@@ -284,8 +449,9 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'get_deployment',
     {
-      description:
-        'Get deployment details including status, image, replicas, env vars, services, and ingresses',
+      description: `Get deployment details: status, image, replicas, env vars, services, ingresses, volumes, health check, build config, placement and recent image history.
+
+The build log is omitted here because it is often megabytes — read it with \`get_build_logs\`. Runtime logs are \`get_deployment_logs\`.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID')
@@ -293,7 +459,15 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+      // buildLogs is the raw BuildKit transcript and routinely dwarfs everything
+      // else on the record. Shipping it on every read burns the caller's context
+      // for something they did not ask for; get_build_logs exists for that.
+      const { buildLogs, ...rest } = deployment ?? {};
+      const slim = {
+        ...rest,
+        ...(buildLogs ? { buildLogs: '<omitted — call get_build_logs>' } : {})
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(slim, null, 2) }] };
     }
   );
 
@@ -317,7 +491,9 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'get_env_vars',
     {
-      description: 'Get the current environment variables for a deployment',
+      description: `Get the current environment variables for a deployment.
+
+Secret vars come back with \`secret: true\` and a null value — the value is write-only and never readable. To change one, use \`add_env_vars\`; you do not need to read it first.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID')
@@ -405,14 +581,25 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'list_databases',
     {
-      description: 'List all PostgreSQL databases in a project',
+      description:
+        "List PostgreSQL databases. Pass a projectId for one project's databases, or nothing at all to get every database the user can see (optionally narrowed to one organization).",
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID')
+        projectId: z
+          .string()
+          .optional()
+          .describe('The project UUID. Omit to list across every project the user can see.'),
+        organizationId: z
+          .string()
+          .optional()
+          .describe('Narrow the cross-project listing to one organization. Ignored with projectId.')
       }
     },
-    async ({ projectId }) => {
-      const databases = await client.get(`/projects/${projectId}/databases`);
+    async ({ projectId, organizationId }) => {
+      const path = projectId
+        ? `/projects/${projectId}/databases`
+        : `/databases${organizationId ? `?orgId=${encodeURIComponent(organizationId)}` : ''}`;
+      const databases = await client.get(path);
       return { content: [{ type: 'text', text: JSON.stringify(databases, null, 2) }] };
     }
   );
@@ -448,9 +635,72 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
   // ── Logs & Pods ───────────────────────────────────────────────────
 
   server.registerTool(
+    'get_deployment_logs',
+    {
+      description: `Read an app's runtime logs. **This is the tool you want for "why is my app broken"** — it takes a deploymentId, merges every replica, and parses each line into a level, timestamp and message.
+
+\`get_pod_logs\` is the lower-level escape hatch for when you need one specific pod (or its previous, crashed container). This one saves you the \`list_pods\` round trip and works across a rolling deploy.
+
+Filter with \`level\` to see only errors, or \`search\` to grep. Both are applied server-side, so narrowing costs you nothing. Levels are inferred from the line, so a line the parser could not classify has no level and is dropped by any \`level\` filter — drop the filter if a search comes back emptier than you expect.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        tailLines: z
+          .number()
+          .optional()
+          .describe('How many lines to return per pod before filtering (default 200, max 20000)'),
+        level: z
+          .enum(['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'])
+          .optional()
+          .describe('Return only lines parsed at exactly this level'),
+        search: z.string().optional().describe('Only return lines containing this substring')
+      }
+    },
+    async ({ deploymentId, tailLines, level, search }) => {
+      const params = new URLSearchParams();
+      if (tailLines) params.set('tailLines', String(tailLines));
+      if (level) params.set('level', level);
+      if (search) params.set('search', search);
+      const qs = params.toString();
+      const logs = await client.get(
+        `/observe/deployments/${deploymentId}/logs/structured${qs ? `?${qs}` : ''}`
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(logs, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'get_deployment_http_metrics',
+    {
+      description: `Request rate, latency percentiles and status-code breakdown for a deployment, as served through its ingress.
+
+Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check \`get_deployment.ingresses\` first if that surprises you.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
+        end: z.number().optional().describe('Window end (unix-ms). Default: now'),
+        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000')
+      }
+    },
+    async ({ deploymentId, start, end, step }) => {
+      const params = new URLSearchParams();
+      if (start) params.set('start', String(start));
+      if (end) params.set('end', String(end));
+      if (step) params.set('step', String(step));
+      const qs = params.toString();
+      const metrics = await client.get(
+        `/observe/deployments/${deploymentId}/http-metrics${qs ? `?${qs}` : ''}`
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'get_build_logs',
     {
-      description: 'Get the build logs for a deployment (Docker build output)',
+      description:
+        "Get the build logs for a deployment (Docker/BuildKit output from the most recent build). For the running app's output use `get_deployment_logs`.",
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID')

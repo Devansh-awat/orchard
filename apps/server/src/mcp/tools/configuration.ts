@@ -14,17 +14,27 @@ export function registerConfigurationTools(server: McpServer, client: OrchardCli
   server.registerTool(
     'set_env_vars',
     {
-      description: `Set or update environment variables on a deployment. This will restart the deployment to apply changes.
-Provide the full list of env vars — any existing vars not included will be removed.
-Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, etc.`,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      description: `Replace the ENTIRE environment of a deployment with the list you pass. Anything you leave out is deleted. Restarts the deployment.
+
+**This is almost never the tool you want.** Reach for it only when you are deliberately declaring the whole environment, e.g. seeding a brand new deployment.
+- Changing or adding a few vars → \`add_env_vars\` (merges, leaves everything else alone).
+- Removing a few vars → \`delete_env_vars\`.
+- Seeing what is there now → \`get_env_vars\`.
+
+Secrets read back with a null value, so you cannot round-trip them through this tool by hand: pass \`value: null\` with \`secret: true\` to keep the stored value, or omit the key entirely to delete the secret.`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         envVars: z
           .array(
             z.object({
               key: z.string().describe('Environment variable name'),
-              value: z.string().describe('Environment variable value'),
+              value: z
+                .string()
+                .nullable()
+                .describe(
+                  'Environment variable value. Null keeps whatever is already stored under this key — the only way to carry an existing secret through a full replace.'
+                ),
               secret: z
                 .boolean()
                 .optional()
@@ -33,7 +43,7 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
                 )
             })
           )
-          .describe('Array of environment variable key-value pairs')
+          .describe('The complete environment. Omitted keys are deleted.')
       }
     },
     async ({ deploymentId, envVars }) => {
@@ -45,16 +55,24 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
   server.registerTool(
     'add_env_vars',
     {
-      description: `Add or update specific environment variables on a deployment without affecting other existing vars.
-This fetches the current env vars, merges in the provided ones (overwriting any with the same key), and applies the result. The deployment will restart.`,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      description: `**The default way to change environment variables.** Adds or overwrites the keys you pass and leaves every other var on the deployment untouched. The deployment restarts to pick them up.
+
+Fixing one typo'd value, adding a new key, flipping a var to secret — all of them are this tool. You do not need to read the current env first; the merge happens here.
+
+Related: \`delete_env_vars\` to remove keys, \`get_env_vars\` to read, \`set_env_vars\` only when you mean to replace the whole environment.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         envVars: z
           .array(
             z.object({
               key: z.string().describe('Environment variable name'),
-              value: z.string().describe('Environment variable value'),
+              value: z
+                .string()
+                .nullable()
+                .describe(
+                  'Environment variable value. Null keeps the stored value — use it to flip an existing secret without knowing it.'
+                ),
               secret: z
                 .boolean()
                 .optional()
@@ -82,6 +100,119 @@ This fetches the current env vars, merges in the provided ones (overwriting any 
       const merged = [...existing.filter((v) => !newKeys.has(v.key)), ...envVars];
 
       const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // ── Health checks ─────────────────────────────────────────────────
+
+  server.registerTool(
+    'update_deployment_health_check',
+    {
+      description: `Configure the health probes Kubernetes runs against a deployment.
+
+Every field is optional and merges into what is already stored, so turning a check on is one field — you do not have to restate the timings. Read the current values off \`get_deployment\` (the \`healthCheck*\`, \`livenessEnabled\`, \`readinessEnabled\`, \`startupEnabled\` fields).
+
+The three probes do different jobs:
+- **readiness** keeps an unhealthy pod out of the load balancer without killing it. Turn this on first; it is what makes a rolling deploy zero-downtime.
+- **liveness** restarts a pod that fails. Powerful and dangerous — a liveness probe that is stricter than the app's real startup time turns a slow boot into a crash loop.
+- **startup** suspends liveness until the app has come up, which is how you give a slow starter room without loosening liveness forever. \`startupFailureThreshold × healthCheckInterval\` is the grace period.
+
+If the image's Dockerfile declares its own HEALTHCHECK, that wins unless you set \`healthCheckOverride: true\`.
+
+Applies immediately and rolls the pods.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        healthCheckEnabled: z.boolean().optional().describe('Master switch for probes'),
+        healthCheckType: z
+          .enum(['http', 'tcp', 'exec'])
+          .optional()
+          .describe('http hits a path, tcp opens the port, exec runs a command in the container'),
+        healthCheckPath: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('HTTP path to probe, e.g. /health (http type only)'),
+        healthCheckPort: z
+          .number()
+          .int()
+          .nullable()
+          .optional()
+          .describe("Container port to probe. Defaults to the deployment's port."),
+        healthCheckCommand: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Command to run inside the container (exec type only)'),
+        livenessEnabled: z.boolean().optional().describe('Restart the pod when the probe fails'),
+        readinessEnabled: z
+          .boolean()
+          .optional()
+          .describe('Pull the pod out of the load balancer when the probe fails'),
+        startupEnabled: z
+          .boolean()
+          .optional()
+          .describe('Hold liveness off until the app has started once'),
+        healthCheckInterval: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Seconds between probes (default 30)'),
+        healthCheckTimeout: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Seconds to wait for a response (default 5)'),
+        healthCheckRetries: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Consecutive failures before the probe is considered failed (default 3)'),
+        startupFailureThreshold: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Startup probe attempts before giving up (default 30)'),
+        healthCheckOverride: z
+          .boolean()
+          .optional()
+          .describe("Use this config instead of the image's own Dockerfile HEALTHCHECK")
+      }
+    },
+    async ({ deploymentId, ...patch }) => {
+      // The API is a full replace across thirteen fields. Reading the current
+      // record and merging here is what lets a caller flip one switch without
+      // silently resetting the other twelve to defaults.
+      const current = await client.get(`/deployments/${deploymentId}`);
+      const pick = <T>(next: T | undefined, stored: T, fallback: T): T =>
+        next !== undefined ? next : (stored ?? fallback);
+
+      const body = {
+        healthCheckEnabled: pick(patch.healthCheckEnabled, current.healthCheckEnabled, false),
+        healthCheckType: pick(patch.healthCheckType, current.healthCheckType, 'http'),
+        healthCheckPath: pick(patch.healthCheckPath, current.healthCheckPath, null),
+        healthCheckPort: pick(patch.healthCheckPort, current.healthCheckPort, null),
+        healthCheckCommand: pick(patch.healthCheckCommand, current.healthCheckCommand, null),
+        livenessEnabled: pick(patch.livenessEnabled, current.livenessEnabled, true),
+        readinessEnabled: pick(patch.readinessEnabled, current.readinessEnabled, true),
+        startupEnabled: pick(patch.startupEnabled, current.startupEnabled, false),
+        healthCheckInterval: pick(patch.healthCheckInterval, current.healthCheckInterval, 30),
+        healthCheckTimeout: pick(patch.healthCheckTimeout, current.healthCheckTimeout, 5),
+        healthCheckRetries: pick(patch.healthCheckRetries, current.healthCheckRetries, 3),
+        startupFailureThreshold: pick(
+          patch.startupFailureThreshold,
+          current.startupFailureThreshold,
+          30
+        ),
+        healthCheckOverride: pick(patch.healthCheckOverride, current.healthCheckOverride, false)
+      };
+
+      const result = await client.put(`/deployments/${deploymentId}/health-check`, body);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -312,9 +443,149 @@ The user must point their domain's DNS to the cluster before creating the ingres
   );
 
   server.registerTool(
+    'update_service',
+    {
+      description: `Change the ports a service exposes, or the internal domain it answers on.
+
+\`ports\` is a full replace of that service's port list — a port you leave out is removed, so restate the ones you want to keep (read them off \`list_services\`). Pass \`domain: null\` to clear the internal domain. At least one of \`ports\` / \`domain\` is required.
+
+To make a service reachable from outside the cluster use \`set_service_exposure\`, not this.`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        serviceId: z.string().describe('The service UUID (from list_services)'),
+        ports: z
+          .array(
+            z.object({
+              name: z.string().optional().describe('Port name'),
+              containerPort: z.number().describe('Port the container listens on'),
+              servicePort: z.number().describe('Port the service exposes'),
+              protocol: z.string().optional().describe('TCP or UDP (default TCP)'),
+              nodePort: z
+                .number()
+                .optional()
+                .describe('Fixed node port, for an externally exposed service')
+            })
+          )
+          .optional()
+          .describe('The complete port list for this service. Omitted ports are removed.'),
+        domain: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Internal domain for the service, or null to clear it')
+      }
+    },
+    async ({ deploymentId, serviceId, ports, domain }) => {
+      const body: Record<string, unknown> = {};
+      if (ports !== undefined) body.ports = ports;
+      if (domain !== undefined) body.domain = domain;
+      const result = await client.put(`/deployments/${deploymentId}/services/${serviceId}`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'set_service_exposure',
+    {
+      description:
+        'Flip a service between internal (ClusterIP, reachable only inside the cluster) and external (reachable from outside). This is the "make my app reachable" switch at the service layer; a custom domain on top of it is `create_ingress`.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        serviceId: z.string().describe('The service UUID (from list_services)'),
+        exposePublic: z.boolean().describe('true to expose externally, false for cluster-internal')
+      }
+    },
+    async ({ deploymentId, serviceId, exposePublic }) => {
+      const result = await client.patch(
+        `/deployments/${deploymentId}/services/${serviceId}/exposure`,
+        { exposePublic }
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'set_service_port_public',
+    {
+      description:
+        'Expose or unexpose a single port on a service, for the case where a service carries several ports and only some should be reachable from outside. To expose the whole service use `set_service_exposure`.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        serviceId: z.string().describe('The service UUID (from list_services)'),
+        portId: z.string().describe('The port UUID (from list_services)'),
+        public: z.boolean().describe('true to expose this port, false to take it private')
+      }
+    },
+    async ({ deploymentId, serviceId, portId, public: isPublic }) => {
+      const path = `/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`;
+      const result = isPublic ? await client.post(path) : await client.delete(path);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'get_ingress_protection',
+    {
+      description:
+        'Read the access protection on a domain: which mode is active, the basic-auth username if any, and the bypass secret that lets automated callers through a protected domain. Requires edit access on the project.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID that owns the ingress'),
+        ingressId: z.string().describe('The ingress UUID')
+      }
+    },
+    async ({ projectId, ingressId }) => {
+      const result = await client.get(`/projects/${projectId}/ingresses/${ingressId}/protection`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'set_ingress_protection',
+    {
+      description: `Put a domain behind a login, or take it back off.
+
+Modes:
+- \`none\`: public.
+- \`password\`: one shared password, no username. Requires \`password\`.
+- \`basic\`: HTTP basic auth. Requires \`username\` and \`password\`.
+- \`orchard\`: sign in with an Orchard account that has access to the project. No credential to share or leak, so prefer it for internal tools — but the instance can have it disabled, in which case the call fails and says so.
+
+\`bypassPaths\` stay reachable without auth, which is how you keep a webhook endpoint or \`/health\` working behind protection.
+
+Not available on redirect domains. Switching away from \`password\`/\`basic\` discards the stored credential, so re-enabling means setting a new one.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID that owns the ingress'),
+        ingressId: z.string().describe('The ingress UUID'),
+        mode: z.enum(['none', 'basic', 'password', 'orchard']).describe('Protection mode to apply'),
+        username: z.string().optional().describe('Basic-auth username (required for `basic`)'),
+        password: z.string().optional().describe('Password (required for `basic` and `password`)'),
+        bypassPaths: z
+          .array(z.string())
+          .optional()
+          .describe('Path prefixes that stay public, e.g. ["/api/webhooks", "/health"]')
+      }
+    },
+    async ({ projectId, ingressId, mode, username, password, bypassPaths }) => {
+      const result = await client.put(`/projects/${projectId}/ingresses/${ingressId}/protection`, {
+        mode,
+        ...(username !== undefined ? { username } : {}),
+        ...(password !== undefined ? { password } : {}),
+        ...(bypassPaths !== undefined ? { bypassPaths } : {})
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'create_service',
     {
-      description: 'Create an internal or external service for a deployment to expose ports',
+      description:
+        'Create an internal or external service for a deployment to expose ports. Use `update_service` to change an existing one; creating a second service for the same port will not replace the first.',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),

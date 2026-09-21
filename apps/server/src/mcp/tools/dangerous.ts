@@ -34,6 +34,23 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
   );
 
   server.registerTool(
+    'delete_environment',
+    {
+      description: `DANGEROUS: Delete an environment. This deletes its whole Kubernetes namespace, so every deployment, database, ingress and shared variable inside it goes with it. Databases in that environment are destroyed with their data.
+
+List what is in it with \`list_deployments\` / \`list_databases\` and confirm with the user before calling. The default production environment cannot be deleted, and neither can the last environment in a project.`,
+      annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
+      inputSchema: {
+        environmentId: z.string().describe('The environment UUID to delete')
+      }
+    },
+    async ({ environmentId }) => {
+      const result = await client.delete(`/environments/${environmentId}`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'delete_database',
     {
       description: 'DANGEROUS: Delete a PostgreSQL database. This permanently destroys all data.',
@@ -155,7 +172,9 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
   server.registerTool(
     'delete_env_vars',
     {
-      description: `DANGEROUS: Delete specific environment variables from a deployment by key name. The deployment will restart.`,
+      description: `Remove specific environment variables from a deployment by key name, leaving every other var alone. The deployment restarts.
+
+Only the keys you name are touched, so this is safe to use for a targeted removal — it is filed here because deleting a var an app reads will break it. To change a value instead of removing it, use \`add_env_vars\`.`,
       annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),

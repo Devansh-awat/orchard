@@ -38,6 +38,7 @@
     "test:auto-deploy-match": "tsx --test test/auto-deploy-match.test.ts",
     "test:build-recovery": "tsx --test test/build-recovery.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
+    "test:mcp-tools": "tsx --test test/mcp-validate-dns.test.ts test/mcp-merge-semantics.test.ts",
     "test:email-avatar": "tsx --test test/email-avatar.test.ts",
     "test:internal-urls": "tsx --test test/internal-urls.test.ts",
     "test:domains": "tsx --test test/domain-derivation.test.ts",
