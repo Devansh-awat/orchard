@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.46.1](https://github.com/hackclub/orchard/compare/server/v2.46.0...server/v2.46.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* detect proxy hops instead of counting them when reading client ip ([ec65eeb](https://github.com/hackclub/orchard/commit/ec65eeb642ccaf06f0f0753934bdaf55be415ed9))
+* share rate limit counters in redis and read the real client ip ([4758b4f](https://github.com/hackclub/orchard/commit/4758b4fa37a6aba48663b41b675e1f1c7dcfdee1))
+
 ## [2.46.0](https://github.com/hackclub/orchard/compare/server/v2.45.1...server/v2.46.0) (2026-09-21)
 
 
