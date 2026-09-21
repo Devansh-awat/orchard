@@ -18,6 +18,17 @@ const ING = 'aaaaaaaa-0000-0000-0000-000000000001';
 const OTHER = 'bbbbbbbb-0000-0000-0000-000000000002';
 const HOST = 'private.example.test';
 
+// No REDIS_URL under test, so the service takes its per-pod fallback path and
+// these exercise the same counters a single-replica instance would use.
+function offlineThrottle() {
+  return {
+    available: false,
+    retryAfter: async () => null,
+    hit: async () => false,
+    clear: async () => false
+  };
+}
+
 function buildService(row: Record<string, unknown> | null) {
   const svc = Object.create(ProtectionService.prototype) as any;
   svc.jwtSecret = SECRET;
@@ -25,6 +36,7 @@ function buildService(row: Record<string, unknown> | null) {
   svc.ingressCache = new Map();
   svc.negativeCache = new Map();
   svc.basicAuthFailures = new Map();
+  svc.throttle = offlineThrottle();
   svc.prisma = { ingress: { findFirst: async () => row, findUnique: async () => row } };
   svc.authz = { resolveProjectAccess: async () => ({ canView: true }) };
   return svc as ProtectionService;

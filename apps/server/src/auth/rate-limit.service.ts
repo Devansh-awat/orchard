@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisThrottleService } from './redis-throttle.service';
 
 export interface RateLimitConfig {
   maxAttempts: number;
@@ -70,7 +71,29 @@ export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress';
 
 @Injectable()
 export class RateLimitService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly throttle: RedisThrottleService
+  ) {}
+
+  private static throttleKey(
+    identifier: string,
+    type: RateLimitIdentifierType,
+    action: string
+  ): string {
+    return `${action}:${type}:${identifier}`;
+  }
+
+  private static tooMany(retryAfterSeconds: number): HttpException {
+    return new HttpException(
+      {
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        message: `Too many attempts. Please try again in ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} minutes.`,
+        retryAfter: retryAfterSeconds
+      },
+      HttpStatus.TOO_MANY_REQUESTS
+    );
+  }
 
   /**
    * Check if an identifier is rate limited for a specific action.
@@ -86,6 +109,15 @@ export class RateLimitService {
 
     if (!config) {
       console.warn(`No rate limit config found for ${configKey}`);
+      return;
+    }
+
+    const seconds = await this.throttle.retryAfter(
+      RateLimitService.throttleKey(identifier, type, action),
+      config
+    );
+    if (seconds !== null) {
+      if (seconds > 0) throw RateLimitService.tooMany(seconds);
       return;
     }
 
@@ -152,6 +184,10 @@ export class RateLimitService {
       return;
     }
 
+    if (await this.throttle.hit(RateLimitService.throttleKey(identifier, type, action), config)) {
+      return;
+    }
+
     const now = new Date();
 
     const existing = await this.prisma.rateLimitRecord.findUnique({
@@ -215,6 +251,10 @@ export class RateLimitService {
     type: RateLimitIdentifierType,
     action: string
   ): Promise<void> {
+    if (await this.throttle.clear(RateLimitService.throttleKey(identifier, type, action))) {
+      return;
+    }
+
     await this.prisma.rateLimitRecord.deleteMany({
       where: {
         identifier,

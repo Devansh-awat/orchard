@@ -8,7 +8,8 @@ import { Duplex } from 'stream';
 import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
-import { getClientIp } from './client-ip';
+import { getClientIp, getRawClientIp } from './client-ip';
+import { RedisThrottleService, type ThrottleWindow } from './redis-throttle.service';
 
 export interface ProtectionDecision {
   allow: boolean;
@@ -87,26 +88,21 @@ export function pathMatchesBypass(requestPath: string, patterns: string[]): bool
 
 const BASIC_AUTH_REALM = 'Restricted';
 
-// Basic auth is checked on every proxied request, so its throttle lives in
-// memory rather than in rate_limit_records: a database round trip per request
-// would cost more than the bcrypt compare it is guarding. Per-pod counters are
-// the trade-off. That is acceptable here because a client that knows the
-// credentials never increments anything, and a client that does not is slowed
-// down by whichever pod it lands on.
+// Basic auth is checked on every proxied request, so its throttle goes to Redis
+// rather than rate_limit_records: a database round trip per request would cost
+// more than the bcrypt compare it is guarding. Without REDIS_URL it falls back
+// to a per-pod map, which multiplies the budget by the replica count -- a
+// degraded mode, not the intended one.
 const BASIC_AUTH_MAX_FAILURES = 10;
 const BASIC_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const BASIC_AUTH_BLOCK_MS = 15 * 60 * 1000;
 const BASIC_AUTH_MAX_TRACKED = 10_000;
 
-// handleUpgrade sees a raw IncomingMessage, not an Express Request, so it
-// cannot use getClientIp. Mirror its preference for X-Real-IP: keying on the
-// socket peer alone would file every client behind the proxy under one entry,
-// and a single attacker could then throttle everyone else off the ingress.
-function upgradeClientIp(req: http.IncomingMessage): string {
-  const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp.length > 0) return realIp.trim();
-  return req.socket?.remoteAddress || 'unknown';
-}
+const BASIC_AUTH_WINDOW: ThrottleWindow = {
+  maxAttempts: BASIC_AUTH_MAX_FAILURES,
+  windowMs: BASIC_AUTH_WINDOW_MS,
+  blockDurationMs: BASIC_AUTH_BLOCK_MS
+};
 
 interface BasicAuthFailures {
   count: number;
@@ -156,7 +152,8 @@ export class ProtectionService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authz: AuthorizationService
+    private readonly authz: AuthorizationService,
+    private readonly throttle: RedisThrottleService
   ) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
@@ -259,8 +256,8 @@ export class ProtectionService {
       if (!authorizationHeader) return challenge;
 
       const failureKey = `${ingress.id}:${clientIp || 'unknown'}`;
-      const retryAfter = this.basicAuthRetryAfter(failureKey);
-      if (retryAfter !== null) {
+      const retryAfter = await this.basicAuthRetryAfter(failureKey);
+      if (retryAfter > 0) {
         return {
           allow: false,
           status: 429,
@@ -269,11 +266,11 @@ export class ProtectionService {
       }
 
       if (await this.verifyBasicAuthHeader(ingress, authorizationHeader)) {
-        this.basicAuthFailures.delete(failureKey);
+        await this.clearBasicAuthFailures(failureKey);
         return { allow: true };
       }
 
-      this.recordBasicAuthFailure(failureKey);
+      await this.recordBasicAuthFailure(failureKey);
       return challenge;
     }
 
@@ -358,24 +355,41 @@ export class ProtectionService {
     }
   }
 
-  private basicAuthRetryAfter(key: string): number | null {
+  private async basicAuthRetryAfter(key: string): Promise<number> {
+    const shared = await this.throttle.retryAfter(`basic_auth:${key}`, BASIC_AUTH_WINDOW);
+    if (shared !== null) return shared;
+    return this.localBasicAuthRetryAfter(key);
+  }
+
+  private async recordBasicAuthFailure(key: string): Promise<void> {
+    if (await this.throttle.hit(`basic_auth:${key}`, BASIC_AUTH_WINDOW)) return;
+    this.recordLocalBasicAuthFailure(key);
+  }
+
+  private async clearBasicAuthFailures(key: string): Promise<void> {
+    if (await this.throttle.clear(`basic_auth:${key}`)) return;
+    this.basicAuthFailures.delete(key);
+  }
+
+  private localBasicAuthRetryAfter(key: string): number {
     const entry = this.basicAuthFailures.get(key);
-    if (!entry) return null;
+    if (!entry) return 0;
     const now = Date.now();
     if (entry.blockedUntil > now) return Math.ceil((entry.blockedUntil - now) / 1000);
     if (now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
       this.basicAuthFailures.delete(key);
-      return null;
+      return 0;
     }
     if (entry.count >= BASIC_AUTH_MAX_FAILURES) return Math.ceil(BASIC_AUTH_BLOCK_MS / 1000);
-    return null;
+    return 0;
   }
 
-  private recordBasicAuthFailure(key: string): void {
+  private recordLocalBasicAuthFailure(key: string): void {
     const now = Date.now();
     const entry = this.basicAuthFailures.get(key);
     if (!entry || now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
-      this.pruneBasicAuthFailures(now);
+      this.basicAuthFailures.delete(key);
+      this.pruneLocalBasicAuthFailures(now);
       this.basicAuthFailures.set(key, { count: 1, windowStart: now, blockedUntil: 0 });
       return;
     }
@@ -387,9 +401,10 @@ export class ProtectionService {
 
   // Keyed on client IP, so the map is attacker-growable. Drop entries whose
   // window and block have both lapsed, and if that is not enough to stay under
-  // the cap, drop the oldest — losing a stale counter costs an attacker at most
-  // one more window, while an unbounded map costs the pod its memory.
-  private pruneBasicAuthFailures(now: number): void {
+  // the cap, drop the least recently active -- insertion order would evict a
+  // live block in favour of a stale counter, because Map.set on an existing key
+  // does not reorder.
+  private pruneLocalBasicAuthFailures(now: number): void {
     if (this.basicAuthFailures.size < BASIC_AUTH_MAX_TRACKED) return;
     for (const [key, entry] of this.basicAuthFailures) {
       if (entry.blockedUntil <= now && now - entry.windowStart > BASIC_AUTH_WINDOW_MS) {
@@ -397,9 +412,17 @@ export class ProtectionService {
       }
     }
     while (this.basicAuthFailures.size >= BASIC_AUTH_MAX_TRACKED) {
-      const oldest = this.basicAuthFailures.keys().next();
-      if (oldest.done) break;
-      this.basicAuthFailures.delete(oldest.value);
+      let victim: string | null = null;
+      let victimStart = Infinity;
+      for (const [key, entry] of this.basicAuthFailures) {
+        const activeUntil = Math.max(entry.blockedUntil, entry.windowStart);
+        if (activeUntil < victimStart) {
+          victimStart = activeUntil;
+          victim = key;
+        }
+      }
+      if (victim === null) break;
+      this.basicAuthFailures.delete(victim);
     }
   }
 
@@ -581,15 +604,15 @@ export class ProtectionService {
       // do replay it for a same-origin upgrade once the page itself was
       // fetched with credentials, and non-browser clients set it explicitly.
       const authorizationHeader = req.headers['authorization']?.toString();
-      const failureKey = `${ingress.id}:${upgradeClientIp(req)}`;
+      const failureKey = `${ingress.id}:${getRawClientIp(req)}`;
       if (authorizationHeader) {
-        if (this.basicAuthRetryAfter(failureKey) !== null) {
+        if ((await this.basicAuthRetryAfter(failureKey)) > 0) {
           reject('429 Too Many Requests');
           return true;
         }
         allowed = await this.verifyBasicAuthHeader(ingress, authorizationHeader);
-        if (allowed) this.basicAuthFailures.delete(failureKey);
-        else this.recordBasicAuthFailure(failureKey);
+        if (allowed) await this.clearBasicAuthFailures(failureKey);
+        else await this.recordBasicAuthFailure(failureKey);
       }
     }
     if (!allowed && ingress.protectionMode !== 'basic') {

@@ -308,6 +308,38 @@ reason to keep `signupMode: invite_only` — the chart default. The installer
 sets it too. Switching to `open` on an instance that can send email turns the
 login page into public registration.
 
+### Rate limits, replicas and client addresses
+
+Every sign-in limit is keyed on an address, so two things have to be true for
+them to mean anything.
+
+**The counters have to be shared.** Set `REDIS_URL` on the server. Attempt
+counters live in Redis so one limit covers the whole instance; without it they
+fall back to Postgres for the auth endpoints and to a per-pod map for the basic
+auth gate, and that map multiplies the budget by `server.replicas`. The server
+logs which mode it is in at boot:
+
+```
+[RedisThrottleService] REDIS_URL not set: attempt counters are per-pod, so every limit multiplies by replica count
+```
+
+**The address has to be the caller's, not a proxy's.** Only position relative to
+the socket tells us who wrote a header, so `X-Forwarded-For` plus `TRUST_PROXY`
+is the primary source. `TRUST_PROXY` is the number of proxies in front of the
+server and defaults to `1`. Count them all: a CDN in front of an ingress
+controller is two, and undercounting files every user of that CDN's edge under
+one bucket.
+
+`X-Real-IP` still wins when present, because Traefik overwrites it. If your CDN
+overwrites a header of its own, name it in `CLIENT_IP_HEADER`, for example
+`CLIENT_IP_HEADER=CF-Connecting-IP` behind Cloudflare.
+
+Only set `CLIENT_IP_HEADER` if the origin refuses traffic that did not come
+through that CDN. A header carries no proof of who wrote it, so anyone who can
+reach the ingress directly can send whatever value they like and get a fresh
+bucket per request. Restrict the origin to the CDN's address ranges first,
+either at the load balancer or with a network policy.
+
 ### Bot protection on the sign-in pages
 
 An instance reachable from the internet has three forms anyone can post to: the

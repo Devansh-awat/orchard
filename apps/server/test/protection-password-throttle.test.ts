@@ -51,8 +51,15 @@ function fakePrisma() {
   };
 }
 
+const offlineThrottle = {
+  available: false,
+  retryAfter: async () => null,
+  hit: async () => false,
+  clear: async () => false
+};
+
 function buildController(correctPassword: string) {
-  const rateLimit = new RateLimitService(fakePrisma() as any);
+  const rateLimit = new RateLimitService(fakePrisma() as any, offlineThrottle as any);
   const protection = {
     validateReturnTo: async () => {},
     verifyPassword: async (_id: string, pw: string) => pw === correctPassword,
