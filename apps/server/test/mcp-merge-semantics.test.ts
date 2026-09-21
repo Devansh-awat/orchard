@@ -269,3 +269,53 @@ test('find can be narrowed to one kind and skips the other fetches', async () =>
     ['/databases']
   );
 });
+
+test('get_build_logs tails a long transcript and leads with the error', async () => {
+  const lines = Array.from({ length: 5000 }, (_, i) => `step ${i}`);
+  const { tools } = harness(registerQueryTools, {
+    '/deployments/d1/logs': {
+      logs: lines.join('\n'),
+      status: 'failed',
+      buildError: 'npm ERR! missing script: build'
+    }
+  });
+
+  const res = await tools.get('get_build_logs')!.handler({ deploymentId: 'd1' });
+  const payload = JSON.parse(res.content[0].text);
+
+  assert.equal(payload.buildError, 'npm ERR! missing script: build');
+  assert.equal(payload.totalLines, 5000);
+  assert.equal(payload.truncated, true);
+  const returned = payload.logs.split('\n');
+  assert.equal(returned.length, 400);
+  assert.equal(returned.at(-1), 'step 4999');
+});
+
+test('get_build_logs returns everything when full is set or the log is short', async () => {
+  const { tools } = harness(registerQueryTools, {
+    '/deployments/d1/logs': { logs: 'a\nb\nc', status: 'success', buildError: null }
+  });
+
+  const short = JSON.parse(
+    (await tools.get('get_build_logs')!.handler({ deploymentId: 'd1' })).content[0].text
+  );
+  assert.equal(short.truncated, undefined);
+  assert.equal(short.logs, 'a\nb\nc');
+
+  const { tools: t2 } = harness(registerQueryTools, {
+    '/deployments/d1/logs': { logs: 'x\ny\nz', status: 'success' }
+  });
+  const full = JSON.parse(
+    (await t2.get('get_build_logs')!.handler({ deploymentId: 'd1', full: true, tailLines: 1 }))
+      .content[0].text
+  );
+  assert.equal(full.logs, 'x\ny\nz');
+});
+
+test('get_resource_quota reads the caller-scoped headroom endpoint', async () => {
+  const { tools, calls } = harness(registerQueryTools, {
+    '/organizations/o1/quota/me': { effectiveLimit: { cpuMilli: 2000, memoryBytes: 1 } }
+  });
+  await tools.get('get_resource_quota')!.handler({ organizationId: 'o1' });
+  assert.deepEqual(calls, [{ method: 'GET', path: '/organizations/o1/quota/me' }]);
+});

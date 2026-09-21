@@ -220,6 +220,23 @@ Only the keys you name are touched, so this is safe to use for a targeted remova
   );
 
   server.registerTool(
+    'delete_deploy_webhook_token',
+    {
+      description:
+        'Revoke a deploy webhook token. Whatever CI is using it starts failing on its next run, so check `lastUsedAt` on `list_deploy_webhook_tokens` before revoking one you did not create.',
+      annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        tokenId: z.string().describe('The webhook token UUID (from list_deploy_webhook_tokens)')
+      }
+    },
+    async ({ deploymentId, tokenId }) => {
+      const result = await client.delete(`/deployments/${deploymentId}/webhook-tokens/${tokenId}`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'delete_notification_channel',
     {
       description: `DANGEROUS: Permanently delete a notification channel, along with every rule that routes to it. Alerts stop immediately and a webhook channel's signing secret is lost. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,

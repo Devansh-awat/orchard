@@ -336,6 +336,29 @@ Searches organizations, projects, deployments and databases at once and returns 
   );
 
   server.registerTool(
+    'get_resource_quota',
+    {
+      description: `How much CPU and memory the caller can still hand out in an organization.
+
+**Check this before sizing anything.** \`create_deployment\`, \`update_deployment_resources\`, \`scale_deployment\`, \`scale_database\` and \`start_deployment\` are all quota-checked server-side and simply fail when the numbers do not fit; this is the only way to know the ceiling in advance instead of guessing and retrying.
+
+\`effectiveLimit\` is the number you want: the most that can go on a single deployment right now, already reduced to \`min(what this member has left, what the org has left)\`. A null means unlimited on that axis. \`allowance\` / \`usage\` / \`orgCap\` show the working.
+
+Units match the resource tools: \`cpuMilli\` in millicores, \`memoryBytes\` in bytes.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        organizationId: z
+          .string()
+          .describe('The organization UUID (from list_organizations, or find)')
+      }
+    },
+    async ({ organizationId }) => {
+      const quota = await client.get(`/organizations/${organizationId}/quota/me`);
+      return { content: [{ type: 'text', text: JSON.stringify(quota, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'get_audit_log',
     {
       description: `Who changed what, and when. Pass a deploymentId for one app's history, or an organizationId for everything in the org (org admins only).
@@ -699,18 +722,55 @@ Answers "is it actually serving traffic", "did latency regress after that deploy
   server.registerTool(
     'get_build_logs',
     {
-      description:
-        "Get the build logs for a deployment (Docker/BuildKit output from the most recent build). For the running app's output use `get_deployment_logs`.",
+      description: `BuildKit output from the deployment's most recent build, plus \`buildStatus\` and the \`buildError\` summary if it failed.
+
+Returns the **last** \`tailLines\` lines by default, because a build that failed failed at the end and the transcript of a large repo runs to hundreds of KB. Read \`buildError\` first — it is usually the whole answer. Raise \`tailLines\`, or pass \`full: true\`, only when you actually need earlier stages.
+
+For the running app's output use \`get_deployment_logs\`.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID')
+        deploymentId: z.string().describe('The deployment UUID'),
+        tailLines: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Lines to return from the end of the log (default 400)'),
+        full: z
+          .boolean()
+          .optional()
+          .describe('Return the entire log. Can be very large — prefer raising tailLines.')
       }
     },
-    async ({ deploymentId }) => {
-      const logs = await client.get(`/deployments/${deploymentId}/logs`);
+    async ({ deploymentId, tailLines, full }) => {
+      const res = await client.get(`/deployments/${deploymentId}/logs`);
+      // The API hands back the whole unbounded build_logs column. Trimming to
+      // the tail here is what keeps a failed monorepo build from evicting the
+      // rest of the caller's context; the failure is at the end anyway.
+      const raw = typeof res === 'string' ? res : (res?.logs ?? '');
+      const lines = raw ? raw.split('\n') : [];
+      const limit = tailLines ?? 400;
+      const truncated = !full && lines.length > limit;
+      const body = truncated ? lines.slice(-limit).join('\n') : raw;
+
       return {
         content: [
-          { type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                buildStatus: typeof res === 'string' ? undefined : res?.status,
+                buildError: typeof res === 'string' ? undefined : res?.buildError,
+                totalLines: lines.length,
+                ...(truncated
+                  ? { showing: `last ${limit} of ${lines.length} lines`, truncated: true }
+                  : {}),
+                logs: body
+              },
+              null,
+              2
+            )
+          }
         ]
       };
     }

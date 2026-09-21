@@ -695,6 +695,47 @@ Only meaningful above one replica: a budget equal to the replica count blocks vo
   );
 
   server.registerTool(
+    'list_deploy_webhook_tokens',
+    {
+      description:
+        'List the deploy webhook tokens on a deployment: label, when it was created, when it was last used. The token values themselves are hashed and never readable after creation, so a lost one has to be replaced.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID')
+      }
+    },
+    async ({ deploymentId }) => {
+      const tokens = await client.get(`/deployments/${deploymentId}/webhook-tokens`);
+      return { content: [{ type: 'text', text: JSON.stringify(tokens, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'create_deploy_webhook_token',
+    {
+      description: `Mint a token that lets an outside system trigger a deploy over HTTP, for CI that builds elsewhere and pushes to Orchard.
+
+The holder POSTs to \`/apiv1/webhooks/deploy\` with \`Authorization: Bearer <token>\`. On an image-source deployment they may send \`{ "image": "...", "tag": "..." }\` to roll a new image; on a GitHub-built deployment that is rejected and the POST just rebuilds from the repo.
+
+**The plaintext token is in this response and nowhere else** — it is stored hashed, so hand it to the user now or it is gone. It inherits the creator's project access and is revoked automatically if they lose it.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        label: z
+          .string()
+          .optional()
+          .describe('What this token is for, e.g. "github actions". Shows up in the audit log.')
+      }
+    },
+    async ({ deploymentId, label }) => {
+      const token = await client.post(`/deployments/${deploymentId}/webhook-tokens`, {
+        ...(label ? { label } : {})
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(token, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     'enable_auto_deploy',
     {
       description: `Enable auto-deploy for a deployment. When enabled, pushes to the configured branch automatically trigger a rebuild.
