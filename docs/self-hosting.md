@@ -314,31 +314,45 @@ Every sign-in limit is keyed on an address, so two things have to be true for
 them to mean anything.
 
 **The counters have to be shared.** Set `REDIS_URL` on the server. Attempt
-counters live in Redis so one limit covers the whole instance; without it they
+counters live in Redis so one limit covers the whole instance. Without it they
 fall back to Postgres for the auth endpoints and to a per-pod map for the basic
 auth gate, and that map multiplies the budget by `server.replicas`. The server
-logs which mode it is in at boot:
+says which mode it is in at boot:
 
 ```
 [RedisThrottleService] REDIS_URL not set: attempt counters are per-pod, so every limit multiplies by replica count
 ```
 
-**The address has to be the caller's, not a proxy's.** Only position relative to
-the socket tells us who wrote a header, so `X-Forwarded-For` plus `TRUST_PROXY`
-is the primary source. `TRUST_PROXY` is the number of proxies in front of the
-server and defaults to `1`. Count them all: a CDN in front of an ingress
-controller is two, and undercounting files every user of that CDN's edge under
-one bucket.
+**The address has to be the caller's, not a proxy's.** This needs no
+configuration. A header carries no proof of who wrote it, so the only thing worth
+trusting is position: Orchard walks the hops from the one nearest itself and
+keeps going while each address is infrastructure it recognises. The first address
+that is not is the caller.
 
-`X-Real-IP` still wins when present, because Traefik overwrites it. If your CDN
-overwrites a header of its own, name it in `CLIENT_IP_HEADER`, for example
-`CLIENT_IP_HEADER=CF-Connecting-IP` behind Cloudflare.
+Recognised without being told: loopback, private, link-local, unique-local and
+carrier-grade NAT, which covers an in-cluster ingress controller of any flavour,
+plus Cloudflare's published ranges. So a plain install behind ingress-nginx,
+HAProxy or Traefik gets the right address, and so does the same install once you
+put Cloudflare in front of it.
 
-Only set `CLIENT_IP_HEADER` if the origin refuses traffic that did not come
-through that CDN. A header carries no proof of who wrote it, so anyone who can
-reach the ingress directly can send whatever value they like and get a fresh
-bucket per request. Restrict the origin to the CDN's address ranges first,
-either at the load balancer or with a network policy.
+Counting hops instead would not survive that second step, and it is why
+`TRUST_PROXY` is no longer the mechanism. It still works if you set it, pinning
+an exact hop count the way Express does, and `TRUST_PROXY=0` still refuses to
+read `X-Forwarded-For` at all.
+
+| Variable               | When you need it                                        |
+| ---------------------- | ------------------------------------------------------- |
+| `TRUSTED_PROXY_RANGES` | a CDN or load balancer Orchard does not ship, as CIDRs  |
+| `TRUST_CLOUDFLARE`     | `false` to stop treating Cloudflare's ranges as a proxy |
+| `TRUST_PROXY`          | pin an exact hop count instead of detecting             |
+
+`CF-Connecting-IP` is read only after an address Cloudflare itself must have
+written has already been seen in the chain, so a request that reaches the origin
+directly cannot forge it. What that does not defend against is a caller whose own
+address is inside Cloudflare's ranges: reaching the origin directly from there,
+they could name someone else and throttle that person instead. Restrict the
+origin to your CDN's address ranges, at the load balancer or with a network
+policy, and that goes away along with every other direct-to-origin concern.
 
 ### Bot protection on the sign-in pages
 

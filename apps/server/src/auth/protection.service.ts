@@ -88,11 +88,6 @@ export function pathMatchesBypass(requestPath: string, patterns: string[]): bool
 
 const BASIC_AUTH_REALM = 'Restricted';
 
-// Basic auth is checked on every proxied request, so its throttle goes to Redis
-// rather than rate_limit_records: a database round trip per request would cost
-// more than the bcrypt compare it is guarding. Without REDIS_URL it falls back
-// to a per-pod map, which multiplies the budget by the replica count -- a
-// degraded mode, not the intended one.
 const BASIC_AUTH_MAX_FAILURES = 10;
 const BASIC_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const BASIC_AUTH_BLOCK_MS = 15 * 60 * 1000;
@@ -399,11 +394,6 @@ export class ProtectionService {
     }
   }
 
-  // Keyed on client IP, so the map is attacker-growable. Drop entries whose
-  // window and block have both lapsed, and if that is not enough to stay under
-  // the cap, drop the least recently active -- insertion order would evict a
-  // live block in favour of a stale counter, because Map.set on an existing key
-  // does not reorder.
   private pruneLocalBasicAuthFailures(now: number): void {
     if (this.basicAuthFailures.size < BASIC_AUTH_MAX_TRACKED) return;
     for (const [key, entry] of this.basicAuthFailures) {

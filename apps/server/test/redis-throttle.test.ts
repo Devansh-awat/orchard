@@ -82,8 +82,6 @@ redisTest('clearing gives the budget back', async () => {
   }
 });
 
-// The reason this exists. Two instances stand in for two replicas: the budget
-// has to be spent once between them, not once each.
 redisTest('the budget does not multiply across replicas', async () => {
   const podA = build();
   const podB = build();

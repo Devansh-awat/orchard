@@ -12,6 +12,7 @@ import { Public, Auth } from '../auth/decorators';
 import { SessionsService } from '../auth/sessions.service';
 import { OAuthService } from '../auth/oauth.service';
 import { setSessionCookie } from '../auth/cookies';
+import { getClientIp } from '../auth/client-ip';
 import { SetupService } from './setup.service';
 
 @Controller('setup')
@@ -77,7 +78,7 @@ export class SetupController {
 
     const sessionId = await this.sessions.createSession({
       userId: user.id,
-      ipAddress: req.ip,
+      ipAddress: getClientIp(req),
       userAgent: req.headers['user-agent'],
       authMethod: 'setup_claim'
     });
