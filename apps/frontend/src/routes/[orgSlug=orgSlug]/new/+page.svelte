@@ -9,19 +9,21 @@
 		Container,
 		Database,
 		Globe,
+		Ghost,
+		Slack,
+		Newspaper,
 		LayoutTemplate,
-		Server,
 		Search
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
-	import { Badge, SectionHeader } from '$lib/components/ui';
+	import { Badge, SectionHeader, Skeleton } from '$lib/components/ui';
+	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const selectedOrgId = $derived($selectedOrganization?.id ?? '');
 
 	const preselectedType = $derived($page.url.searchParams.get('type') as ResourceType | null);
 	const preselectedProjectSlug = $derived($page.url.searchParams.get('projectSlug'));
-	const autoCreateProject = $derived($page.url.searchParams.get('autoCreate') === '1');
 
 	interface Template {
 		id: string;
@@ -42,37 +44,45 @@
 	type ResourceType = 'deployment-github' | 'deployment-image' | 'database';
 	let selectedResource = $state<ResourceType | null>(null);
 
-	const resourceOptions: Array<{
+	const sources: Array<{
 		id: ResourceType;
 		label: string;
 		desc: string;
 		icon: typeof Github;
-		color: string;
-		recommended?: boolean;
+		hue: string;
+		featured?: boolean;
 	}> = [
 		{
 			id: 'deployment-github',
-			label: 'GitHub Repository',
-			desc: 'Pick a repo. We detect the build, deploy it, and give it a URL.',
+			label: 'GitHub repo',
+			desc: 'Deploy straight from your code',
 			icon: Github,
-			color: '#6e5494',
-			recommended: true
+			hue: 'violet',
+			featured: true
 		},
 		{
 			id: 'deployment-image',
-			label: 'Docker Image',
-			desc: 'Deploy a container image',
+			label: 'Docker image',
+			desc: 'Deploy a published container',
 			icon: Container,
-			color: '#2496ed'
+			hue: 'blue'
 		},
 		{
 			id: 'database',
 			label: 'Database',
-			desc: 'Create a managed PostgreSQL database',
+			desc: 'Managed PostgreSQL',
 			icon: Database,
-			color: '#f59e0b'
+			hue: 'amber'
 		}
 	];
+
+	const CATEGORY_HUE: Record<string, string> = {
+		cms: 'violet',
+		bot: 'emerald',
+		backend: 'blue',
+		database: 'amber',
+		frontend: 'pink'
+	};
 
 	const CATEGORY_LABELS: Record<string, string> = {
 		cms: 'CMS',
@@ -81,23 +91,49 @@
 		database: 'Database'
 	};
 
+	const TECH_ART: Record<string, string> = {
+		nodejs: 'nodejs-original',
+		node: 'nodejs-original',
+		redis: 'redis-original',
+		postgres: 'postgresql-original',
+		postgresql: 'postgresql-original',
+		nginx: 'nginx-original',
+		python: 'python-original',
+		go: 'go-original',
+		rust: 'rust-original',
+		mongodb: 'mongodb-original',
+		mysql: 'mysql-original',
+		grafana: 'grafana-original'
+	};
+
+	const BRAND_GLYPHS: Record<string, typeof Github> = {
+		ghost: Ghost,
+		slack: Slack,
+		wordpress: Newspaper
+	};
+
+	const GENERIC_GLYPHS: Record<string, typeof Github> = {
+		globe: Globe,
+		database: Database
+	};
+
 	function formatCategory(category: string) {
 		return CATEGORY_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1);
 	}
 
-	function getIconForTemplate(icon?: string) {
-		switch (icon) {
-			case 'database':
-				return Database;
-			case 'globe':
-				return Globe;
-			case 'wordpress':
-			case 'ghost':
-			case 'nodejs':
-				return Server;
-			default:
-				return LayoutTemplate;
+	function templateArt(t: Template): string | null {
+		const icon = t.icon?.toLowerCase() ?? '';
+		if (BRAND_GLYPHS[icon]) return null;
+		for (const key of [icon, t.name, ...t.tags]) {
+			const art = key && TECH_ART[key.toLowerCase()];
+			if (art) return `/icons/tech/${art}.svg`;
 		}
+		return null;
+	}
+
+	function templateGlyph(t: Template) {
+		const icon = t.icon?.toLowerCase() ?? '';
+		return BRAND_GLYPHS[icon] ?? GENERIC_GLYPHS[icon] ?? LayoutTemplate;
 	}
 
 	const filteredTemplates = $derived.by(() => {
@@ -130,7 +166,7 @@
 				templates = await tplRes.json();
 			}
 
-			if (preselectedType && resourceOptions.find((r) => r.id === preselectedType)) {
+			if (preselectedType && sources.find((r) => r.id === preselectedType)) {
 				selectedResource = preselectedType;
 			}
 		} catch {
@@ -231,382 +267,330 @@
 	onMount(fetchProjects);
 </script>
 
-<div class="nr-page">
-	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New resource' }]} />
+<div class="nw-page">
+	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New' }]} />
+	<h1 class="nw-pagetitle">Add something new</h1>
 
-	<div class="nr-header">
-		<h1 class="nr-title">Create a new resource</h1>
-		<p class="nr-subtitle">What do you want to create?</p>
-	</div>
-
-	{#if loading}
-		<div class="nr-type-grid">
-			{#each Array(4) as _, i (i)}
-				<div class="nr-type-card nr-type-skeleton">
-					<div
-						class="skeleton"
-						style="width: 2.25rem; height: 2.25rem; border-radius: var(--radius-sm); flex-shrink: 0;"
-					></div>
-					<div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
-						<div class="skeleton" style="height: 0.8125rem; width: 60%;"></div>
-						<div class="skeleton" style="height: 0.625rem; width: 85%;"></div>
-					</div>
-				</div>
-			{/each}
-		</div>
-	{:else}
-		<div class="nr-type-grid">
-			{#each resourceOptions as opt (opt.id)}
-				{@const Icon = opt.icon}
+	<section class="nw-row" {@attach motionStagger({ index: 1, from: { y: 8 } })}>
+		<SectionHeader title="Start from scratch" />
+		<div class="nw-sources">
+			{#each sources as source (source.id)}
+				{@const Icon = source.icon}
 				<button
-					class="nr-type-card"
-					class:nr-type-active={selectedResource === opt.id}
+					class="nw-card nw-source"
+					class:nw-card--featured={source.featured}
 					disabled={navigating}
-					onclick={() => selectResourceAndGo(opt.id)}
+					onclick={() => selectResourceAndGo(source.id)}
+					{@attach springHover({ lift: -2 })}
 				>
-					<div class="nr-type-icon">
-						<Icon size={18} />
-					</div>
-					<div class="nr-type-text">
-						<span class="nr-type-label">
-							{opt.label}
-							{#if opt.recommended}<Badge tone="info">Fastest</Badge>{/if}
+					<span class="nw-ic">
+						{#if navigating && selectedResource === source.id}
+							<Loader2 size={18} class="animate-spin" />
+						{:else}
+							<Icon size={18} />
+						{/if}
+					</span>
+					<span class="nw-card-text">
+						<span class="nw-card-name">
+							{source.label}
+							{#if source.featured}<Badge tone="info">Fastest</Badge>{/if}
 						</span>
-						<span class="nr-type-desc">{opt.desc}</span>
-					</div>
-					{#if selectedResource === opt.id && navigating}
-						<Loader2
-							size={16}
-							class="animate-spin"
-							style="color: var(--sidebar-text-active-border); flex-shrink: 0;"
-						/>
-					{/if}
+						<span class="nw-card-sub">{source.desc}</span>
+					</span>
 				</button>
 			{/each}
 		</div>
-		<!-- Templates -->
-		{#if templates.length > 0}
-			<div class="nr-tpl-section">
-				<div class="nr-tpl-header">
-					<SectionHeader title="Templates" count={templates.length} flush />
+	</section>
+
+	{#if loading}
+		<section class="nw-row">
+			<SectionHeader title="Templates" />
+			<div class="nw-grid">
+				{#each Array(5) as _, i (i)}
+					<div class="nw-card nw-card--skel">
+						<Skeleton width="2.25rem" height="2.25rem" rounded="var(--radius-sm)" />
+						<Skeleton height="0.85rem" width="70%" />
+						<Skeleton height="0.7rem" width="45%" />
+					</div>
+				{/each}
+			</div>
+		</section>
+	{:else if templates.length > 0}
+		<section class="nw-row" {@attach motionStagger({ index: 2, from: { y: 8 } })}>
+			<SectionHeader title="Templates" count={templates.length}>
+				{#snippet actions()}
 					{#if templates.length > 6}
-						<div class="nr-tpl-search-wrap">
-							<Search size={14} class="nr-tpl-search-icon" />
+						<div class="nw-search">
+							<Search size={14} />
 							<input
 								type="search"
-								placeholder="Search templates..."
-								class="nr-tpl-search"
+								placeholder="Search templates"
+								aria-label="Search templates"
 								bind:value={templateSearch}
 							/>
 						</div>
 					{/if}
-				</div>
+				{/snippet}
+			</SectionHeader>
 
-				{#if filteredTemplates.length === 0}
-					<p class="nr-tpl-empty">No templates match your search</p>
-				{:else}
-					<div class="nr-tpl-grid">
-						{#each filteredTemplates as template (template.id)}
-							{@const Icon = getIconForTemplate(template.icon)}
-							<button
-								class="nr-tpl-card"
-								disabled={navigating}
-								onclick={() => deployTemplate(template.id)}
-							>
-								<div class="nr-tpl-icon">
-									<Icon size={16} />
-								</div>
-								<div class="nr-tpl-text">
-									<span class="nr-tpl-name">{template.displayName}</span>
-									{#if template.description}
-										<span class="nr-tpl-desc">{template.description}</span>
+			{#if filteredTemplates.length === 0}
+				<p class="nw-empty">No templates match that search</p>
+			{:else}
+				<div class="nw-grid">
+					{#each filteredTemplates as template (template.id)}
+						{@const art = templateArt(template)}
+						{@const Glyph = templateGlyph(template)}
+						<button
+							class="nw-card nw-tpl"
+							style="--tile-hue: var(--hue-{CATEGORY_HUE[template.category ?? ''] ?? 'slate'});"
+							disabled={navigating}
+							onclick={() => deployTemplate(template.id)}
+							{@attach springHover({ lift: -2 })}
+						>
+							<span class="nw-tpl-top">
+								<span class="nw-ic nw-ic--tpl">
+									{#if art}
+										<img src={art} alt="" loading="lazy" />
+									{:else}
+										<Glyph size={18} />
 									{/if}
-								</div>
+								</span>
 								{#if template.category}
-									<span class="nr-tpl-badge">{formatCategory(template.category)}</span>
+									<span class="nw-tpl-cat">{formatCategory(template.category)}</span>
 								{/if}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		{/if}
+							</span>
+							<span class="nw-card-text">
+								<span class="nw-card-name">{template.displayName}</span>
+								<span class="nw-card-sub">{template.tags.slice(0, 3).join(' · ')}</span>
+							</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</section>
 	{/if}
 </div>
 
 <style>
-	.nr-page {
-		max-width: 40rem;
+	.nw-page {
+		--gutter: 2.5rem;
+		max-width: 72rem;
 		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
+		padding: var(--space-8) var(--gutter) var(--space-12);
 	}
 
-	.nr-header {
-		margin-bottom: 1.5rem;
-	}
-
-	.nr-title {
+	.nw-pagetitle {
+		margin: var(--space-4) 0 var(--space-6);
 		font-size: var(--text-title-2);
 		line-height: var(--lh-title-2);
-		font-weight: 700;
-		color: var(--center-channel-color);
-		margin: 0;
-		letter-spacing: -0.02em;
+		font-weight: 650;
+		letter-spacing: var(--track-title);
+		color: var(--text-default);
 	}
 
-	.nr-subtitle {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		color: var(--surface-muted);
-		margin: 0.5rem 0 0;
+	.nw-row {
+		margin-top: var(--space-8);
 	}
 
-	/* Resource type grid */
-	.nr-type-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-3);
-		align-items: stretch;
-	}
-	@media (max-width: 720px) {
-		.nr-type-grid {
-			grid-template-columns: minmax(0, 1fr);
-		}
-	}
-
-	.nr-type-card {
+	.nw-search {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
+		gap: var(--space-2);
+		padding: 0.3125rem var(--space-3);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-sunken);
+		box-shadow: inset 0 0 0 1px var(--rule);
+		color: var(--text-faint);
+	}
+
+	.nw-search input {
+		border: 0;
+		outline: none;
+		background: transparent;
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		width: 9rem;
+	}
+
+	.nw-arrows {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.nw-arrows button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-raised);
+		box-shadow: inset 0 0 0 1px var(--rule);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			opacity var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
+	}
+
+	.nw-arrows button:hover:not(:disabled) {
+		background-color: var(--bg-hover);
+	}
+
+	.nw-arrows button:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.nw-card {
+		position: relative;
+		display: flex;
+		align-items: center;
 		gap: var(--space-3);
 		padding: var(--space-4);
 		border-radius: var(--radius-lg);
-		text-align: left;
-		border: 1px solid var(--border-default);
 		background-color: var(--bg-raised);
 		box-shadow: var(--elev-1);
+		text-align: left;
+		color: var(--text-default);
 		cursor: pointer;
-		transition:
-			border-color var(--dur-fast),
-			box-shadow var(--dur-fast);
 	}
 
-	.nr-type-card:hover:not(:disabled) {
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
+	.nw-card::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.06),
+			0 8px 22px rgb(0 0 0 / 0.09);
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+		pointer-events: none;
 	}
 
-	.nr-type-card:disabled {
+	.nw-card:hover:not(:disabled)::after {
+		opacity: 1;
+	}
+
+	.nw-card:disabled {
 		opacity: 0.6;
 		cursor: wait;
 	}
 
-	.nr-type-active {
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
+	.nw-card--featured {
+		box-shadow:
+			0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent),
+			0 1px 2px rgb(0 0 0 / 0.04),
+			0 3px 8px rgb(0 0 0 / 0.03);
 	}
 
-	.nr-type-skeleton {
+	.nw-card--skel {
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-2);
 		pointer-events: none;
 	}
 
-	.nr-type-icon {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: var(--radius-md);
-		flex-shrink: 0;
-		display: flex;
+	.nw-ic {
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		width: 2.375rem;
+		height: 2.375rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-sm);
 		background-color: var(--fill-soft);
-		color: var(--text-default);
+		box-shadow: inset 0 0 0 1px var(--rule);
+		color: var(--text-muted);
 	}
 
-	.nr-type-text {
+	.nw-ic--tpl {
+		color: var(--tile-hue);
+	}
+
+	.nw-ic img {
+		width: 1.375rem;
+		height: 1.375rem;
+		object-fit: contain;
+	}
+
+	.nw-card-text {
+		display: block;
 		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
 		min-width: 0;
 	}
 
-	.nr-type-label {
+	.nw-card-name {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: 600;
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.nw-card-sub {
+		display: block;
+		margin-top: 0.125rem;
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
-		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-faint);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	.nr-type-badge {
-		display: inline-block;
-		margin-left: 0.5rem;
-		padding: 0.0625rem 0.5rem;
-		border-radius: var(--radius-pill);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--accent);
-		background: var(--accent-subtle);
+	.nw-sources {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		gap: var(--space-3);
 	}
 
-	.nr-type-desc {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		color: var(--surface-muted);
+	.nw-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		gap: var(--space-3);
 	}
 
-	/* Templates section */
-	.nr-tpl-section {
-		margin-top: 2rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid var(--surface-border);
+	.nw-tpl {
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-3);
+		min-height: 7.5rem;
+		justify-content: space-between;
 	}
 
-	.nr-tpl-header {
+	.nw-tpl-top {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 0.75rem;
+		gap: var(--space-2);
 	}
 
-	.nr-section-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	.nr-tpl-search-wrap {
-		position: relative;
-	}
-
-	:global(.nr-tpl-search-icon) {
-		position: absolute;
-		left: 0.625rem;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--surface-muted);
-		pointer-events: none;
-	}
-
-	.nr-tpl-search {
-		padding: 0.3125rem 0.75rem 0.3125rem 1.75rem;
-		border-radius: var(--radius-xs);
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
+	.nw-tpl-cat {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		width: 12rem;
-	}
-
-	.nr-tpl-search::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.nr-tpl-search:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.nr-tpl-grid {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-
-	.nr-tpl-card {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-3);
-		padding: var(--space-3);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-lg);
-		background-color: var(--bg-raised);
-		cursor: pointer;
-		transition:
-			background-color var(--dur-fast),
-			border-color var(--dur-fast);
-		text-align: left;
-		width: 100%;
-	}
-
-	.nr-tpl-card:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
-		border-color: var(--surface-border);
-	}
-
-	.nr-tpl-card:disabled {
-		opacity: 0.5;
-		cursor: wait;
-	}
-
-	.nr-tpl-icon {
-		background-color: var(--fill-soft);
-		color: var(--text-default);
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-sm);
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.nr-tpl-text {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-	}
-
-	.nr-tpl-name {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-faint);
 	}
 
-	.nr-tpl-desc {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-		white-space: normal;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+	.nw-empty {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
-		overflow: hidden;
-	}
-
-	.nr-tpl-badge {
-		flex-shrink: 0;
-		align-self: center;
-		padding: 0.125rem 0.5rem;
-		border-radius: var(--radius-pill);
-		background-color: var(--fill-soft);
-		color: var(--text-muted);
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-	}
-
-	.nr-tpl-empty {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--surface-muted);
-		text-align: center;
-		padding: 1rem 0;
 		margin: 0;
 	}
 
-	@media (max-width: 640px) {
-		.nr-type-grid {
-			grid-template-columns: 1fr;
+	@media (max-width: 720px) {
+		.nw-page {
+			--gutter: 1.25rem;
 		}
 	}
 </style>
