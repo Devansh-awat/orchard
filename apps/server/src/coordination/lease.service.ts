@@ -35,6 +35,16 @@ export class LeaseService implements OnApplicationShutdown {
     return this.identity;
   }
 
+  // Whether this process is a member of the cluster it is pointed at: it has a
+  // cluster to talk to, and a namespace whose leases it can contend for. A dev
+  // process holding a real kubeconfig but no control namespace fails this, and
+  // that is the whole point — it cannot see the leases, so it can neither win
+  // nor lose them, and anything cluster-wide it runs is a second uncoordinated
+  // actor on someone else's infrastructure.
+  get canCoordinate(): boolean {
+    return !!this.kubernetes.kc && !!this.namespace;
+  }
+
   register(
     name: string,
     opts?: {
@@ -48,7 +58,14 @@ export class LeaseService implements OnApplicationShutdown {
     if (existing) return existing;
     let elector: Elector;
     if (!this.kubernetes.kc || !this.namespace) {
-      const holder = process.env.NODE_ENV !== 'production';
+      // Acting as sole holder is only safe with no cluster to contend with. A
+      // kubeconfig means we are pointed at a real cluster whose own replicas
+      // already hold these leases, so a dev process that merely lacks a control
+      // namespace must stay out of leader-only work rather than appoint itself
+      // a second leader: it cannot see the lease, so it cannot lose it, and it
+      // would run reconcilers (build recovery, the mirror shards) against live
+      // infrastructure in parallel with production.
+      const holder = !this.kubernetes.kc && process.env.NODE_ENV !== 'production';
       if (!holder) {
         this.logger.error(
           `lease ${name} cannot be held (no ${!this.kubernetes.kc ? 'kubeconfig' : 'control namespace — set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments'}); leader-only work is disabled on this replica`

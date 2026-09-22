@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApplyExecutorService } from './apply-executor.service';
+import { LeaseService } from '../coordination/lease.service';
 
 const TICK_MS = 2_000;
 const RECLAIM_MS = 30_000;
@@ -39,14 +40,28 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
 
   private draining = false;
 
+  private outsider = false;
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly executor: ApplyExecutorService
+    private readonly executor: ApplyExecutorService,
+    private readonly lease: LeaseService
   ) {}
 
   onModuleInit() {
     if (process.env.APPLY_WORKER_DISABLED === 'true') {
       this.logger.log('APPLY_WORKER_DISABLED=true — enqueue-only on this replica');
+      return;
+    }
+    // This queue applies real changes to the cluster, and it is drained by every
+    // worker that can reach the database rather than by an elected one. A process
+    // that is not a member of the cluster the database describes has no business
+    // taking items off it.
+    if (!this.lease.canCoordinate) {
+      this.outsider = true;
+      this.logger.warn(
+        'not a member of the cluster this database belongs to (no control namespace); enqueue-only on this replica'
+      );
       return;
     }
     this.timers = [
@@ -120,7 +135,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   kick(): void {
-    if (process.env.APPLY_WORKER_DISABLED === 'true') return;
+    if (process.env.APPLY_WORKER_DISABLED === 'true' || this.outsider) return;
     setImmediate(() => {
       void this.drain();
     });

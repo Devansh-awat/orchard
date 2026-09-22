@@ -1002,8 +1002,10 @@ function detectFromBuildLogs(buildLogs: string | null): DetectedRuntime | null {
 const DOCKER_FROM_RE =
   /(?:^|\s)FROM\s+(?:docker\.io\/library\/)?(?:mcr\.microsoft\.com\/dotnet\/(?:aspnet|sdk|runtime)[:@]|([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*)[:@])/i;
 
+// Step ids are BuildKit's plain-output counter or the digest-derived hex id
+// the rawjson transcoder assigns; both prefix the same `[stage] FROM …` line.
 const BUILDKIT_FROM_RE =
-  /^#\d+\s+\[.*\]\s+FROM\s+(?:docker\.io\/library\/)?(?:mcr\.microsoft\.com\/dotnet\/(?:aspnet|sdk|runtime)[:@]|([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*)[:@])/i;
+  /^#(?:[0-9a-f]{8}|\d+)\s+\[.*\]\s+FROM\s+(?:docker\.io\/library\/)?(?:mcr\.microsoft\.com\/dotnet\/(?:aspnet|sdk|runtime)[:@]|([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*)[:@])/i;
 
 const FROM_IMAGE_MAP: { re: RegExp; language: string }[] = [
   { re: /^node(?=[:\-@])/, language: 'node' },

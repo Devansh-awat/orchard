@@ -92,6 +92,16 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('no kubeconfig; mirror disabled');
       return;
     }
+    // Presence is written before any lease is held, so gating only on the lease
+    // would still let an outsider register itself as a replica and shrink every
+    // real replica's shard cap, leaving shards unheld and the engine reported
+    // down. A process that cannot coordinate stays out of the table entirely.
+    if (!this.lease.canCoordinate) {
+      this.logger.warn(
+        'no control namespace (set ORCHARD_CONTROL_NAMESPACE for out-of-cluster deployments); mirror disabled so this replica cannot claim shards or presence in a cluster it is not part of'
+      );
+      return;
+    }
     this.enabled = true;
 
     const defs = buildMirrorShards({

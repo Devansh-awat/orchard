@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from './deployments.service';
 import { GitHubService } from '../github/github.service';
 import { canTrustDeploymentStatus } from './build-recovery';
+import { LeaseService } from '../coordination/lease.service';
 
 export interface QueueSnapshot {
   running: number;
@@ -67,6 +68,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   );
   private readonly LOCK_KEY = 528491;
   private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';
+
+  private outsider = false;
   private readonly txOpts = { maxWait: 10_000, timeout: 20_000 };
   private draining = false;
   private drainAgain = false;
@@ -76,13 +79,26 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly lease: LeaseService
   ) {}
 
   onModuleInit() {
     if (this.workerDisabled) {
       this.logger.log(
         'BUILD_WORKER_DISABLED=true; this instance will enqueue builds but never claim or run them'
+      );
+      return;
+    }
+    // The queue is drained with SKIP LOCKED across every worker that can reach
+    // the database, which is the whole cluster plus anything else pointed at it.
+    // A process that is not a member of that cluster must not take work off it:
+    // it would run somebody else's build on a laptop, against a checkout and a
+    // Docker daemon that have nothing to do with the deployment.
+    if (!this.lease.canCoordinate) {
+      this.outsider = true;
+      this.logger.warn(
+        'not a member of the cluster this database belongs to (no control namespace); enqueueing builds but never claiming them'
       );
       return;
     }
@@ -397,7 +413,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   kick() {
-    if (this.workerDisabled) return;
+    if (this.workerDisabled || this.outsider) return;
     if (this.draining) {
       this.drainAgain = true;
       return;
