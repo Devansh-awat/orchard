@@ -152,6 +152,12 @@
 }
 .search::placeholder {
 	color: color-mix(in srgb, var(--center-channel-color) 40%, transparent);
+	transition: color var(--dur-fast) ease;
+}
+/* The prompt has done its job once the field has focus, and leaving it under a
+   caret reads as text that will not go away. */
+.search:focus::placeholder {
+	color: transparent;
 }
 .search:focus {
 	outline: none;
