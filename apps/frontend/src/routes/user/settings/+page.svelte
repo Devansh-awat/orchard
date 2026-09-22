@@ -24,6 +24,7 @@
 	import { page } from '$app/stores';
 	import { sandboxEnabled } from '$lib/flags';
 	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
+	import { scrollFade } from '$lib/utils/scroll-fade';
 	import { SandboxCredentialsPanel } from '$lib/components/sandbox';
 	import {
 		UserIdentityHero,
@@ -793,9 +794,11 @@
 	{/if}
 
 	<div class="usp-grid">
-		<SettingsRail groups={RAIL_GROUPS} activeId={activeTab} label="Account settings sections" />
+		<div class="usp-rail" {@attach scrollFade()}>
+			<SettingsRail groups={RAIL_GROUPS} activeId={activeTab} label="Account settings sections" />
+		</div>
 
-		<div class="usp-stack">
+		<div class="usp-stack" {@attach scrollFade()}>
 			{#if activeTab === 'connections'}
 				<UserGitHub
 					index={0}
@@ -989,6 +992,9 @@
 		align-items: start;
 		margin-top: var(--space-5);
 	}
+	.usp-rail {
+		min-width: 0;
+	}
 	.usp-stack {
 		display: flex;
 		flex-direction: column;
@@ -1003,6 +1009,58 @@
 		margin: var(--space-8) 0 0;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: var(--track-body);
+	}
+	@media (min-width: 901px) {
+		.usp-page {
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			min-height: 0;
+			padding-bottom: var(--space-6);
+		}
+		.usp-grid {
+			flex: 1;
+			align-items: stretch;
+			min-height: 0;
+		}
+		.usp-rail,
+		.usp-stack {
+			--fade-top: 0;
+			--fade-bottom: 0;
+			--fade-size: 3.5rem;
+			overflow-y: auto;
+			overscroll-behavior-y: contain;
+			min-height: 0;
+			scrollbar-width: thin;
+			-webkit-mask-image: linear-gradient(
+				to bottom,
+				rgba(0, 0, 0, calc(1 - var(--fade-top))) 0,
+				rgba(0, 0, 0, 1) calc(var(--fade-size) * var(--fade-top)),
+				rgba(0, 0, 0, 1) calc(100% - var(--fade-size) * var(--fade-bottom)),
+				rgba(0, 0, 0, calc(1 - var(--fade-bottom))) 100%
+			);
+			mask-image: linear-gradient(
+				to bottom,
+				rgba(0, 0, 0, calc(1 - var(--fade-top))) 0,
+				rgba(0, 0, 0, 1) calc(var(--fade-size) * var(--fade-top)),
+				rgba(0, 0, 0, 1) calc(100% - var(--fade-size) * var(--fade-bottom)),
+				rgba(0, 0, 0, calc(1 - var(--fade-bottom))) 100%
+			);
+		}
+		.usp-rail :global(.ui-rail) {
+			position: static;
+		}
+		.usp-stack {
+			padding: var(--space-1) var(--space-2);
+			margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+		}
+		.usp-stack > :global(*) {
+			flex-shrink: 0;
+		}
+		.usp-version {
+			margin-top: var(--space-4);
+			flex-shrink: 0;
+		}
 	}
 	@media (max-width: 900px) {
 		.usp-grid {
