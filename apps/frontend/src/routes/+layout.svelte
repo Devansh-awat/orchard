@@ -107,6 +107,15 @@
 		goto('/', { replaceState: true });
 	});
 
+	onMount(() => {
+		if (!dev || !browser) return;
+		let unmount: (() => void) | undefined;
+		import('$lib/dev/ui-picker').then((m) => {
+			unmount = m.mountUiPicker();
+		});
+		return () => unmount?.();
+	});
+
 	onMount(async () => {
 		if (!browser) return;
 		try {
