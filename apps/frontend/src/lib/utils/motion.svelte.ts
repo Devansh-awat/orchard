@@ -858,6 +858,52 @@ export function springRotate(active: () => boolean, opts: { rest?: number; on?: 
 	};
 }
 
+export function springScaleX(
+	active: () => boolean,
+	opts: { rest?: number; on?: number; name?: SpringName } = {}
+) {
+	const rest = opts.rest ?? 0;
+	const on = opts.on ?? 1;
+	// `smooth` rather than the `snappy` the body and tiles use: landing together
+	// with them hides the draw inside the same beat, and the rule reads as having
+	// appeared rather than been drawn. A little longer is what makes it visible.
+	const name = opts.name ?? 'smooth';
+	// Progress lives out here, in the factory closure, rather than per element.
+	// Svelte re-creates the element this is attached to when the surrounding
+	// markup re-renders, and a per-element value would restart each fresh node at
+	// the resting value for the state it is being created into, which is the
+	// finished position: the line would blink rather than draw.
+	let current = active() ? on : rest;
+	let prev = active();
+	let running: { stop: () => void } | null = null;
+	return (el: Element) => {
+		const target = el as HTMLElement;
+		const write = (v: number) => {
+			// The spring undershoots past the floor on the way closed, and a
+			// negative scale is a mirrored line rather than a shorter one.
+			current = v < 0 ? 0 : v;
+			target.style.transform = `scaleX(${current})`;
+		};
+		write(current);
+		$effect(() => {
+			const next = active();
+			if (next === prev) return;
+			prev = next;
+			running?.stop();
+			running = null;
+			const to = next ? on : rest;
+			if (!motionEnabled()) {
+				write(to);
+				return;
+			}
+			running = animate(current, to, {
+				...(transition(name) as object),
+				onUpdate: write
+			} as never) as unknown as { stop: () => void };
+		});
+	};
+}
+
 export function springWidth(active: () => boolean, opts: { rest: number; on: number }) {
 	return (el: Element) => {
 		const target = el as HTMLElement;

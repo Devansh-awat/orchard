@@ -8,7 +8,7 @@
 		Container,
 		Ellipsis
 	} from 'lucide-svelte';
-	import { originBurst, springRotate, centerOf } from '$lib/utils/motion.svelte';
+	import { originBurst, springRotate, springScaleX, centerOf } from '$lib/utils/motion.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 	import {
 		projectStatusSummary,
@@ -96,6 +96,12 @@
 
 	// Stable attachment — rebuilding it on every `group` identity change would
 	// re-run the mount animation (height 0 → auto) on each overview refetch.
+	// Lives outside the head element and is hoisted, both for the same reason:
+	// `svelte:element` rebuilds its subtree when the card toggles, and a rebuilt
+	// springScaleX writes the new resting value straight to the element instead
+	// of animating to it, so the rule would snap rather than draw.
+	const ruleAttachment = springScaleX(() => expanded);
+
 	const bodyAttachment = bodyAttach(
 		group.id,
 		() => expanded,
@@ -253,6 +259,8 @@
 			<ArrowRight size={14} />
 		</a>
 	</svelte:element>
+	<span class="proj-rule" class:proj-rule--off={isEmpty} aria-hidden="true" {@attach ruleAttachment}
+	></span>
 	{#if rendered && !isEmpty}
 		<div class="proj-body" {@attach bodyAttachment}>
 			<div class="od-grid">

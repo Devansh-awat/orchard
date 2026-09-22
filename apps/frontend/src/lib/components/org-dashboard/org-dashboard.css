@@ -663,11 +663,17 @@
 	padding: var(--space-4) var(--space-4) var(--space-4);
 	box-sizing: border-box;
 }
-.proj-card--expanded .proj-head {
-	box-shadow: inset 0 -1px 0 var(--rule);
+.proj-rule {
+	display: block;
+	height: 1px;
+	margin-top: -1px;
+	background: var(--rule);
+	transform-origin: center;
+	pointer-events: none;
 }
-.proj-card--hasbg.proj-card--expanded .proj-head {
-	box-shadow: none;
+.proj-card--hasbg .proj-rule,
+.proj-rule--off {
+	visibility: hidden;
 }
 
 /* Card grid */
