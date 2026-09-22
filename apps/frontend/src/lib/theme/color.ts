@@ -147,3 +147,80 @@ export function mixHex(a: string, b: string, weight: number): string {
 		b: ca.b * w + cb.b * (1 - w)
 	});
 }
+
+export function contrastOver(fg: string, bg: string, alpha = 1): number {
+	return contrastRatio(alpha >= 1 ? fg : mixHex(fg, bg, alpha), bg);
+}
+
+export function ensureContrastAll(fg: string, bgs: string[], target: number, alpha = 1): string {
+	const worst = (hex: string) =>
+		bgs.reduce((low, bg) => Math.min(low, contrastOver(hex, bg, alpha)), Infinity);
+	if (bgs.length === 0 || worst(fg) >= target) return fg;
+
+	const { l, c, h } = hexToOklch(fg);
+	const at = (v: number) => oklch(v, c, h);
+	const solve = (pole: number) => {
+		if (worst(at(pole)) < target) return null;
+		let near = l;
+		let far = pole;
+		for (let i = 0; i < 24; i++) {
+			const mid = (near + far) / 2;
+			if (worst(at(mid)) >= target) far = mid;
+			else near = mid;
+		}
+		return far;
+	};
+
+	const darker = solve(0);
+	const lighter = solve(1);
+	if (darker !== null && lighter !== null) return at(l - darker <= lighter - l ? darker : lighter);
+	if (darker !== null) return at(darker);
+	if (lighter !== null) return at(lighter);
+
+	let best = fg;
+	let bestWorst = worst(fg);
+	for (let step = 0; step <= 64; step++) {
+		const candidate = oklch(step / 64, 0, h);
+		const score = worst(candidate);
+		if (score > bestWorst) {
+			bestWorst = score;
+			best = candidate;
+		}
+	}
+	return best;
+}
+
+export function ensureContrast(fg: string, bg: string, target: number, alpha = 1): string {
+	return ensureContrastAll(fg, [bg], target, alpha);
+}
+
+export function fitBackground(
+	bg: string,
+	fgs: { hex: string; alpha?: number }[],
+	target: number
+): string {
+	const worst = (hex: string) =>
+		fgs.reduce((low, fg) => Math.min(low, contrastOver(fg.hex, hex, fg.alpha ?? 1)), Infinity);
+	if (fgs.length === 0 || worst(bg) >= target) return bg;
+
+	const { l, c, h } = hexToOklch(bg);
+	const at = (v: number) => oklch(v, c, h);
+	const solve = (pole: number) => {
+		if (worst(at(pole)) < target) return null;
+		let near = l;
+		let far = pole;
+		for (let i = 0; i < 24; i++) {
+			const mid = (near + far) / 2;
+			if (worst(at(mid)) >= target) far = mid;
+			else near = mid;
+		}
+		return far;
+	};
+
+	const darker = solve(0);
+	const lighter = solve(1);
+	if (darker !== null && lighter !== null) return at(l - darker <= lighter - l ? darker : lighter);
+	if (darker !== null) return at(darker);
+	if (lighter !== null) return at(lighter);
+	return bg;
+}

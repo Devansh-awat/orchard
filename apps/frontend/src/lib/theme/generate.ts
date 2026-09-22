@@ -1,4 +1,15 @@
-import { clamp, contrastRatio, hexToOklch, hexToRgb, mixHex, oklch, oklchAlpha } from './color';
+import {
+	clamp,
+	contrastOver,
+	contrastRatio,
+	ensureContrastAll,
+	fitBackground,
+	hexToOklch,
+	hexToRgb,
+	mixHex,
+	oklch,
+	oklchAlpha
+} from './color';
 import {
 	angleToHue,
 	maxChroma,
@@ -62,9 +73,11 @@ export interface ThemeColors {
 	linkColor: string;
 
 	buttonBg: string;
+	buttonHoverBg: string;
 	buttonColor: string;
 
 	errorTextColor: string;
+	dangerColor: string;
 
 	surfaceBg: string;
 	surfaceBorder: string;
@@ -170,6 +183,40 @@ const LADDERS: Record<Scheme, Ladder> = {
 	}
 };
 
+export const CONTRAST = { text: 4.5, faintAlpha: 0.86, defaultAlpha: 0.88 };
+
+const HOVER_STEP = 0.04;
+
+// A hover fill is a step off the surface it covers, not a position on the neutral
+// ladder. Read absolutely it can land on the wrong side: a theme whose surfaces
+// sit near white computes a hover lighter than the panel under it, and the row
+// reads as a hole punched in the menu rather than a highlight. Stepping from the
+// surface itself fixes the direction on every theme, and an oklch delta keeps the
+// step perceptually even at both ends of the range.
+function steppedFrom(
+	surface: string,
+	fgs: { hex: string; alpha?: number }[] = [],
+	target = CONTRAST.text
+): string {
+	const { l, c, h } = hexToOklch(surface);
+	const dir = l > 0.5 ? -1 : 1;
+	const at = (step: number) => oklch(clamp(l + dir * step, 0.02, 0.999), c, h);
+	const carries = (hex: string) =>
+		fgs.every((fg) => contrastOver(fg.hex, hex, fg.alpha ?? 1) >= target);
+	if (carries(at(HOVER_STEP))) return at(HOVER_STEP);
+	// A mid-tone surface can leave the ink already at its own limit, with no
+	// contrast left to spend on the step. Shrinking it keeps the hover on the
+	// correct side of the surface instead of trading readability for visibility.
+	let lo = 0;
+	let hi = HOVER_STEP;
+	for (let i = 0; i < 18; i++) {
+		const mid = (lo + hi) / 2;
+		if (carries(at(mid))) lo = mid;
+		else hi = mid;
+	}
+	return at(lo);
+}
+
 const RAMP_CHROMA = [0.1, 0.34, 0.62, 0.85, 0.96, 1, 1, 0.95, 0.88, 0.8, 0.55];
 
 const STATUS_HUES = { success: 165, warning: 62, error: 22 };
@@ -192,10 +239,13 @@ function tone(l: number, hue: number, vividness: number, scale: number): string 
 	return oklch(l, maxChroma(hue, l) * clamp(vividness * scale, 0, 1), hue);
 }
 
-function readableOn(fill: string): string {
+function readableOn(fill: string, target = CONTRAST.text): string {
 	const white = '#ffffff';
 	const ink = oklch(0.185, 0.012, hexToOklch(fill).h);
-	return contrastRatio(fill, white) >= contrastRatio(fill, ink) ? white : ink;
+	const onWhite = contrastRatio(fill, white);
+	const onInk = contrastRatio(fill, ink);
+	if (Math.max(onWhite, onInk) >= target) return onWhite >= onInk ? white : ink;
+	return ensureContrastAll(ink, [fill], target);
 }
 
 export type PaletteSample = { hue: number; vividness: number };
@@ -266,14 +316,20 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 	const accentTint = (l: number, scale: number) =>
 		oklch(l, maxChroma(acc.h, l) * clamp(accentVividness * scale, 0, 1), acc.h);
 
-	const hoverBg = neutral(L.hoverBg, L.surface.card * 1.3);
+	const sidebarL = hexToOklch(simple.sidebarBackground).l;
+	const sidebarHoverBg = steppedFrom(simple.sidebarBackground);
+	const sidebarActiveBg = accentTint(
+		clamp(L.tintedBg + (sidebarL - L.sidebar), 0.02, 0.999),
+		scheme === 'dark' ? 0.24 : 0.2
+	);
 	const activeBg = accentTint(
 		clamp(L.tintedBg + shift, 0.02, 0.999),
 		scheme === 'dark' ? 0.24 : 0.2
 	);
+	const dangerBg = mixHex(simple.error, '#000000', 0.9);
 	const onAccent = simple.accentForeground || readableOn(simple.accent);
 
-	return {
+	const colors: ThemeColors = {
 		primary50: p50,
 		primary100: p100,
 		primary200: p200,
@@ -289,10 +345,10 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 		sidebarBg: simple.sidebarBackground,
 		sidebarText: simple.sidebarForeground,
 		sidebarUnreadText: neutral(L.inkStrong, L.surface.ink, 0),
-		sidebarTextHoverBg: hoverBg,
+		sidebarTextHoverBg: sidebarHoverBg,
 		sidebarTextActiveBorder: simple.accent,
 		sidebarTextActiveColor: scheme === 'dark' ? neutral(L.inkStrong, L.surface.ink, 0) : p700,
-		sidebarTextActiveBg: activeBg,
+		sidebarTextActiveBg: sidebarActiveBg,
 		sidebarHeaderBg: simple.sidebarBackground,
 		sidebarHeaderText: simple.sidebarForeground,
 		sidebarTeamBarBg: simple.sidebarBackground,
@@ -312,9 +368,11 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 		linkColor: scheme === 'dark' ? p300 : p700,
 
 		buttonBg: p600,
-		buttonColor: onAccent,
+		buttonHoverBg: p700,
+		buttonColor: readableOn(p600),
 
 		errorTextColor: simple.error,
+		dangerColor: readableOn(dangerBg),
 
 		surfaceBg: simple.background,
 		surfaceBorder: simple.border,
@@ -322,17 +380,152 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 		cardBg: simple.card,
 
 		controlBg: neutral(L.control, L.surface.card),
-		controlHoverBg: neutral(L.controlHover, L.surface.card * 1.45),
+		controlHoverBg: steppedFrom(neutral(L.control, L.surface.card)),
 		controlText: simple.foreground,
 
 		dropdownBg: neutral(L.overlay, L.surface.card),
 		dropdownBorder: simple.border,
-		dropdownHoverBg: hoverBg,
+		dropdownHoverBg: steppedFrom(neutral(L.overlay, L.surface.card)),
 
 		dividerColor: simple.border,
 		orgTriggerBg: simple.card,
-		orgTriggerHoverBg: neutral(L.controlHover, L.surface.card * 1.45)
+		orgTriggerHoverBg: steppedFrom(simple.card)
 	};
+
+	return enforceReadability(colors, dangerBg);
+}
+
+type TextPair = {
+	fg: keyof ThemeColors;
+	anchor: keyof ThemeColors;
+	also?: (keyof ThemeColors)[];
+	alpha?: number;
+};
+
+const SURFACES: (keyof ThemeColors)[] = [
+	'surfaceBg',
+	'cardBg',
+	'dropdownBg',
+	'dropdownHoverBg',
+	'controlBg',
+	'controlHoverBg',
+	'orgTriggerBg',
+	'orgTriggerHoverBg'
+];
+
+const TEXT_PAIRS: TextPair[] = [
+	{
+		fg: 'centerChannelColor',
+		anchor: 'centerChannelBg',
+		also: SURFACES,
+		alpha: CONTRAST.defaultAlpha
+	},
+	{
+		// Muted and faint text sit on hovered rows as much as resting ones, and a
+		// hover fill that only clears the ink leaves the secondary line of a menu
+		// item unreadable the moment the pointer lands on it.
+		fg: 'surfaceMuted',
+		anchor: 'centerChannelBg',
+		also: SURFACES,
+		alpha: CONTRAST.faintAlpha
+	},
+	{
+		fg: 'linkColor',
+		anchor: 'centerChannelBg',
+		also: ['surfaceBg', 'cardBg', 'dropdownBg']
+	},
+	{ fg: 'errorTextColor', anchor: 'centerChannelBg', also: ['surfaceBg', 'cardBg'] },
+	{ fg: 'controlText', anchor: 'controlBg', also: ['controlHoverBg'] },
+	{ fg: 'buttonColor', anchor: 'buttonBg', also: ['buttonHoverBg'] },
+	{ fg: 'mentionColor', anchor: 'mentionBg' },
+	{ fg: 'mentionHighlightLink', anchor: 'mentionHighlightBg' },
+	{ fg: 'sidebarText', anchor: 'sidebarBg', also: ['sidebarTextHoverBg'] },
+	{ fg: 'sidebarUnreadText', anchor: 'sidebarBg', also: ['sidebarTextHoverBg'] },
+	{ fg: 'sidebarHeaderText', anchor: 'sidebarHeaderBg' },
+	{ fg: 'sidebarTextActiveColor', anchor: 'sidebarTextActiveBg' }
+];
+
+export function readabilityChecks(): TextPair[] {
+	return TEXT_PAIRS;
+}
+
+type HoverPair = { hover: keyof ThemeColors; base: keyof ThemeColors };
+
+const HOVER_PAIRS: HoverPair[] = [
+	{ hover: 'controlHoverBg', base: 'controlBg' },
+	{ hover: 'dropdownHoverBg', base: 'dropdownBg' },
+	{ hover: 'orgTriggerHoverBg', base: 'orgTriggerBg' },
+	{ hover: 'sidebarTextHoverBg', base: 'sidebarBg' }
+];
+
+export function hoverChecks(): HoverPair[] {
+	return HOVER_PAIRS;
+}
+
+function enforceReadability(colors: ThemeColors, dangerBg: string): ThemeColors {
+	const out = { ...colors };
+
+	for (const pair of TEXT_PAIRS) {
+		out[pair.fg] = ensureContrastAll(
+			out[pair.fg],
+			[out[pair.anchor]],
+			CONTRAST.text,
+			pair.alpha ?? 1
+		);
+	}
+
+	const load = new Map<keyof ThemeColors, { hex: string; alpha?: number }[]>();
+	for (const pair of TEXT_PAIRS) {
+		for (const key of pair.also ?? []) {
+			const list = load.get(key) ?? [];
+			list.push({ hex: out[pair.fg], alpha: pair.alpha });
+			load.set(key, list);
+		}
+	}
+	// Hover fills are derived from their base below, so fitting them here would
+	// only move them back onto the base the step exists to lift them off.
+	const derived = new Set<keyof ThemeColors>(HOVER_PAIRS.map((pair) => pair.hover));
+	for (const [key, fgs] of load) {
+		if (derived.has(key)) continue;
+		out[key] = fitBackground(out[key], fgs, CONTRAST.text);
+	}
+
+	// Re-stepped after the surface pass, which fits each surface for its text on
+	// its own and can leave a hover sitting exactly on the base it is supposed to
+	// lift off.
+	for (const pair of HOVER_PAIRS) {
+		out[pair.hover] = steppedFrom(out[pair.base]);
+	}
+
+	// The step moves a hover toward the ink, which costs the text on it a little
+	// contrast. Text absorbs that rather than the surface: pushing the fill back
+	// is what would undo the step and return the hover to invisibility.
+	for (const pair of TEXT_PAIRS) {
+		out[pair.fg] = ensureContrastAll(
+			out[pair.fg],
+			[out[pair.anchor], ...(pair.also ?? []).map((key) => out[key])],
+			CONTRAST.text,
+			pair.alpha ?? 1
+		);
+	}
+
+	// Only now, with the text refitted, is the step trimmed if it still cannot be
+	// carried. Doing this before the refit would clamp against the old text and
+	// shrink every step to nothing.
+	for (const pair of HOVER_PAIRS) {
+		out[pair.hover] = steppedFrom(out[pair.base], [
+			{ hex: out.centerChannelColor, alpha: CONTRAST.defaultAlpha },
+			{ hex: out.surfaceMuted, alpha: CONTRAST.faintAlpha }
+		]);
+	}
+
+	out.dangerColor = ensureContrastAll(
+		out.dangerColor,
+		[dangerBg, out.errorTextColor],
+		CONTRAST.text
+	);
+
+	return out;
 }
 
 const BLOBS = [

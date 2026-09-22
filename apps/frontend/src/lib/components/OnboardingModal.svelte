@@ -141,7 +141,7 @@
 					<div
 						class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors"
 						class:bg-primary-600={getStepIndex(currentStep) >= i}
-						class:text-white={getStepIndex(currentStep) >= i}
+						class:text-on-accent={getStepIndex(currentStep) >= i}
 						style={getStepIndex(currentStep) < i
 							? 'background-color: var(--control-bg); color: var(--surface-muted);'
 							: ''}
@@ -354,21 +354,21 @@
 							<ul class="mt-2 space-y-2 text-sm" style="color: var(--surface-muted);">
 								<li class="flex items-start gap-2">
 									<span
-										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-white"
+										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-on-accent"
 										>1</span
 									>
 									Create a workspace to organize your projects
 								</li>
 								<li class="flex items-start gap-2">
 									<span
-										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-white"
+										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-on-accent"
 										>2</span
 									>
 									Add a project and configure your app
 								</li>
 								<li class="flex items-start gap-2">
 									<span
-										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-white"
+										class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-on-accent"
 										>3</span
 									>
 									Deploy and watch your app go live

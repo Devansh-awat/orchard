@@ -762,7 +762,7 @@
 		transition: background-color var(--dur-fast);
 	}
 	.deck-org-trigger:hover {
-		background-color: color-mix(in srgb, currentColor 7%, transparent);
+		background-color: var(--bg-hover);
 	}
 	.deck-org-avatar {
 		display: flex;
