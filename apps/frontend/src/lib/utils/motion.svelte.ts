@@ -279,7 +279,7 @@ const burstClosing = new WeakMap<Element, boolean>();
  * which is the difference between the two-tile case looking right and the
  * ten-tile case looking like a slow scan down the page.
  */
-const BURST_WINDOW = 0.08;
+const BURST_WINDOW = 0.06;
 
 /** How far back toward the origin a tile pulls on close, and how far it shrinks. */
 const EXIT_DRIFT = 0.4;
@@ -374,6 +374,10 @@ export function centerOf(el: Element): Point {
  * The stagger stride shrinks as the group grows so the whole fan is always
  * choreographed inside `BURST_WINDOW`. A fixed per-item stride is what turns a
  * ten-item group into a slow top-to-bottom wave.
+ *
+ * Opens on `snappy`, matching the close. On `smooth` the last tile of a six-tile
+ * project was only readable 300ms after the click, which read as the card
+ * hesitating rather than opening.
  */
 export function originBurst(opts: {
 	origin: () => Point | null;
@@ -432,7 +436,7 @@ export function originBurst(opts: {
 						y: [entryLaunch.y, 0],
 						scale: [collapsed, 1]
 					},
-					'smooth',
+					'snappy',
 					{ delay: index * stride }
 				)?.finished.then(() => target.classList.remove('motion-entering'));
 			} else {
@@ -457,7 +461,7 @@ export function originBurst(opts: {
 			// Reopened mid-flight. The element never unmounted, so nothing else
 			// would ever bring it back from collapsed-and-invisible.
 			if (!closing) {
-				motion(target, { opacity: 1, x: 0, y: 0, scale: 1 }, 'smooth', {
+				motion(target, { opacity: 1, x: 0, y: 0, scale: 1 }, 'snappy', {
 					delay: index * stride
 				});
 				return;

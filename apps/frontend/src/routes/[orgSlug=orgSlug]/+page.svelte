@@ -106,57 +106,91 @@
 		return [...kept, ...fresh];
 	}
 
-	function shallowEq(a: any, b: any): boolean {
+	// Compares all the way down, not one level. The stored copies live in `$state`,
+	// so every nested object read back out is a fresh proxy and never reference-equal
+	// to the raw payload. A one-level `!==` therefore reported every value holding a
+	// nested array or object as changed: `ingresses` was rewritten on all ~200 rows
+	// of every refetch because each one carries `entrypoints: ['websecure']`, and each
+	// of those writes re-proxied a subtree and invalidated everything reading it.
+	function valueEq(a: any, b: any): boolean {
 		if (a === b) return true;
 		if (a == null || b == null) return false;
+		if (Array.isArray(a) !== Array.isArray(b)) return false;
 		if (Array.isArray(a) && Array.isArray(b)) {
 			if (a.length !== b.length) return false;
-			for (let i = 0; i < a.length; i++) if (!shallowEq(a[i], b[i])) return false;
+			for (let i = 0; i < a.length; i++) if (!valueEq(a[i], b[i])) return false;
 			return true;
 		}
 		if (typeof a === 'object' && typeof b === 'object') {
 			const ka = Object.keys(a);
-			const kb = Object.keys(b);
-			if (ka.length !== kb.length) return false;
-			for (const k of ka) if ((a as any)[k] !== (b as any)[k]) return false;
+			if (ka.length !== Object.keys(b).length) return false;
+			for (const k of ka) if (!valueEq((a as any)[k], (b as any)[k])) return false;
 			return true;
 		}
 		return false;
 	}
 
-	function syncList<T extends { id: string }>(list: T[], next: T[]) {
+	// The row objects we last copied in, by id. TanStack's structural sharing hands
+	// back the previous object untouched when a row is unchanged, so identity alone
+	// settles it and the per-key walk is skipped. Nothing else writes these rows:
+	// SSE only touches `liveMetrics` and invalidates the query.
+	const appliedDeployments = new Map<string, unknown>();
+	const appliedDatabases = new Map<string, unknown>();
+	const appliedProjects = new Map<string, unknown>();
+	const appliedActiveBuilds = new Map<string, unknown>();
+	const appliedRecentBuilds = new Map<string, unknown>();
+
+	function syncList<T extends { id: string }>(list: T[], next: T[], applied: Map<string, unknown>) {
 		const nextById = new Map(next.map((x) => [x.id, x]));
 		for (let i = list.length - 1; i >= 0; i--) {
-			if (!nextById.has(list[i].id)) list.splice(i, 1);
+			if (!nextById.has(list[i].id)) {
+				applied.delete(list[i].id);
+				list.splice(i, 1);
+			}
 		}
 		const curById = new Map<string, T>();
 		for (const x of list) curById.set(x.id, x);
 		for (const n of next) {
 			const cur = curById.get(n.id);
 			if (cur) {
+				if (applied.get(n.id) === n) continue;
+				applied.set(n.id, n);
 				for (const k of Object.keys(n) as Array<keyof T>) {
-					if (!shallowEq(cur[k], n[k])) cur[k] = n[k];
+					if (!valueEq(cur[k], n[k])) cur[k] = n[k];
 				}
 			} else {
 				list.push(n);
 				curById.set(n.id, n);
+				applied.set(n.id, n);
 			}
 		}
 	}
 
-	function syncMap<V extends { id: string }>(map: Map<string, V>, next: V[]) {
+	function syncMap<V extends { id: string }>(
+		map: Map<string, V>,
+		next: V[],
+		applied: Map<string, unknown>
+	) {
 		const nextIds = new Set<string>();
 		for (const v of next) nextIds.add(v.id);
-		for (const id of [...map.keys()]) if (!nextIds.has(id)) map.delete(id);
+		for (const id of [...map.keys()]) {
+			if (!nextIds.has(id)) {
+				map.delete(id);
+				applied.delete(id);
+			}
+		}
 		for (const v of next) {
 			const cur = map.get(v.id);
 			if (!cur) {
 				map.set(v.id, v);
+				applied.set(v.id, v);
 				continue;
 			}
+			if (applied.get(v.id) === v) continue;
+			applied.set(v.id, v);
 			let changed = false;
 			for (const k of Object.keys(v) as Array<keyof V>) {
-				if (!shallowEq(cur[k], v[k])) {
+				if (!valueEq(cur[k], v[k])) {
 					cur[k] = v[k];
 					changed = true;
 				}
@@ -190,9 +224,9 @@
 			lastDataRef = qData;
 			loadError = null;
 
-			syncList(deployments, qData.deployments ?? []);
-			syncList(databases, qData.databases ?? []);
-			syncMap(projectMetas, qData.projects ?? []);
+			syncList(deployments, qData.deployments ?? [], appliedDeployments);
+			syncList(databases, qData.databases ?? [], appliedDatabases);
+			syncMap(projectMetas, qData.projects ?? [], appliedProjects);
 
 			const newOrgId = qData.organization?.id ?? null;
 			if (newOrgId && newOrgId !== orgId) orgId = newOrgId;
@@ -239,8 +273,8 @@
 				return;
 			}
 			lastBuildsRef = qData;
-			syncList(activeBuilds, qData.active ?? []);
-			syncList(recentBuilds, qData.recent ?? []);
+			syncList(activeBuilds, qData.active ?? [], appliedActiveBuilds);
+			syncList(recentBuilds, qData.recent ?? [], appliedRecentBuilds);
 			buildsLoading = false;
 		});
 	});
