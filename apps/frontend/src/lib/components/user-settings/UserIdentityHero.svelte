@@ -2,8 +2,7 @@
 	import { Loader2, Camera, X, Pencil } from 'lucide-svelte';
 	import { Eye, EyeOff } from '@jis3r/icons';
 	import { motionStagger, iconAnimation } from '$lib/utils/motion.svelte';
-	import { fade } from '$lib/utils/transitions';
-	import { Button, Input } from '$lib/components/ui';
+	import { Button, Field, Input, Modal } from '$lib/components/ui';
 	import { avatarUrl, avatarFilter } from '$lib/avatar';
 
 	interface UserData {
@@ -153,74 +152,72 @@
 		</div>
 
 		<div class="uh-id">
-			{#if !isEditing}
-				<div class="uh-titlerow">
-					<div class="uh-titlegroup">
-						<h2 class="uh-name">{displayName}</h2>
-						<p class="uh-sub">
-							{#if user?.username}<span class="uh-username">{user.username}</span>
-								<span class="uh-dot">·</span>{/if}
-							<span class="uh-email-wrap">
-								<span class="uh-email">{displayEmail}</span>
-								<button
-									type="button"
-									class="uh-reveal"
-									onclick={() => (emailRevealed = !emailRevealed)}
-									aria-label={emailRevealed ? 'Hide email' : 'Show email'}
-									onmouseenter={() => (revealHovered = true)}
-									onmouseleave={() => (revealHovered = false)}
-								>
-									{#if emailRevealed}<EyeOff size={13} animate={revealAnim} />{:else}<Eye
-											size={13}
-											animate={revealAnim}
-										/>{/if}
-								</button>
-							</span>
-						</p>
-					</div>
-					<Button variant="ghost" size="sm" onclick={onStartEditing}>
-						<Pencil class="h-3.5 w-3.5" />
-						Edit
-					</Button>
+			<div class="uh-titlerow">
+				<div class="uh-titlegroup">
+					<h2 class="uh-name">{displayName}</h2>
+					<p class="uh-sub">
+						{#if user?.username}<span class="uh-username">{user.username}</span>
+							<span class="uh-dot">·</span>{/if}
+						<span class="uh-email-wrap">
+							<span class="uh-email">{displayEmail}</span>
+							<button
+								type="button"
+								class="uh-reveal"
+								onclick={() => (emailRevealed = !emailRevealed)}
+								aria-label={emailRevealed ? 'Hide email' : 'Show email'}
+								onmouseenter={() => (revealHovered = true)}
+								onmouseleave={() => (revealHovered = false)}
+							>
+								{#if emailRevealed}<EyeOff size={13} animate={revealAnim} />{:else}<Eye
+										size={13}
+										animate={revealAnim}
+									/>{/if}
+							</button>
+						</span>
+					</p>
 				</div>
-				<div class="uh-chips">
-					{#each chips as chip (chip.id)}
-						<a class="uh-chip" href={chip.href}>
-							{#if chip.valueFirst}
-								<span class="uh-chip-value">{chip.value}</span>
-								<span class="uh-chip-label">{chip.label}</span>
-							{:else}
-								<span class="uh-chip-label">{chip.label}</span>
-								<span class="uh-chip-value">{chip.value}</span>
-							{/if}
-						</a>
-					{/each}
-				</div>
-			{:else}
-				<div class="uh-edit" transition:fade={{ duration: 150 }}>
-					<div class="uh-edit-grid">
-						<div class="uh-field">
-							<label for="uh-first-name" class="uh-field-label">First name</label>
-							<Input id="uh-first-name" name="firstName" bind:value={editFirstName} />
-						</div>
-						<div class="uh-field">
-							<label for="uh-last-name" class="uh-field-label">Last name</label>
-							<Input id="uh-last-name" name="lastName" bind:value={editLastName} />
-						</div>
-						<div class="uh-field">
-							<label for="uh-username" class="uh-field-label">Username</label>
-							<Input id="uh-username" name="username" bind:value={editUsername} />
-						</div>
-					</div>
-					<div class="uh-edit-actions">
-						<Button variant="secondary" size="sm" onclick={onCancelEditing}>Cancel</Button>
-						<Button variant="primary" size="sm" onclick={onSave} loading={saving}>Save</Button>
-					</div>
-				</div>
-			{/if}
+				<Button variant="ghost" size="sm" onclick={onStartEditing}>
+					<Pencil class="h-3.5 w-3.5" />
+					Edit
+				</Button>
+			</div>
+			<div class="uh-chips">
+				{#each chips as chip (chip.id)}
+					<a class="uh-chip" href={chip.href}>
+						{#if chip.valueFirst}
+							<span class="uh-chip-value">{chip.value}</span>
+							<span class="uh-chip-label">{chip.label}</span>
+						{:else}
+							<span class="uh-chip-label">{chip.label}</span>
+							<span class="uh-chip-value">{chip.value}</span>
+						{/if}
+					</a>
+				{/each}
+			</div>
 		</div>
 	</div>
 </section>
+
+<Modal bind:open={isEditing} size="sm" title="Edit profile" onclose={onCancelEditing}>
+	<div class="uh-form">
+		<div class="uh-form-row">
+			<Field label="First name" for="uh-first-name">
+				<Input id="uh-first-name" name="firstName" bind:value={editFirstName} />
+			</Field>
+			<Field label="Last name" for="uh-last-name">
+				<Input id="uh-last-name" name="lastName" bind:value={editLastName} />
+			</Field>
+		</div>
+		<Field label="Username" for="uh-username" hint="Used in URLs and mentions">
+			<Input id="uh-username" name="username" bind:value={editUsername} />
+		</Field>
+	</div>
+
+	{#snippet footer()}
+		<Button variant="secondary" onclick={onCancelEditing}>Cancel</Button>
+		<Button variant="primary" onclick={onSave} loading={saving}>Save</Button>
+	{/snippet}
+</Modal>
 
 <style>
 	.uh-sr-only {
@@ -408,32 +405,15 @@
 		font-weight: 600;
 		color: var(--text-default);
 	}
-	.uh-edit {
+	.uh-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
+		gap: var(--space-4);
 	}
-	.uh-edit-grid {
+	.uh-form-row {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-3);
-	}
-	.uh-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		min-width: 0;
-	}
-	.uh-field-label {
-		font-size: var(--text-callout);
-		line-height: var(--lh-callout);
-		font-weight: 600;
-		color: var(--text-default);
-	}
-	.uh-edit-actions {
-		display: flex;
-		gap: var(--space-2);
-		justify-content: flex-end;
 	}
 	@media (max-width: 640px) {
 		.uh-top {
@@ -453,7 +433,7 @@
 		.uh-dot {
 			display: none;
 		}
-		.uh-edit-grid {
+		.uh-form-row {
 			grid-template-columns: 1fr;
 		}
 	}
