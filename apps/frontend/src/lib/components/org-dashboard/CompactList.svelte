@@ -3,8 +3,15 @@
 	import { StatusDot, resourceStatus, RemoteImg } from '$lib/components/ui';
 	import { formatCpu, formatMemory } from '$lib/utils/format';
 	import { slide } from '$lib/utils/transitions';
-	import { timeAgo, projectSwatch, knownIcon, favUrl, IMG_ICONS } from './helpers.svelte';
-	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
+	import {
+		timeAgo,
+		projectSwatch,
+		knownIcon,
+		favUrl,
+		IMG_ICONS,
+		projectStatusSummary
+	} from './helpers.svelte';
+	import { motionStagger, springRotate, springScaleX } from '$lib/utils/motion.svelte';
 	import type { ProjectGroup, ProjectMeta, DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
@@ -54,6 +61,26 @@
 		return `${formatCpu(m.cpuMilli)} · ${formatMemory(m.memoryBytes)}`;
 	}
 
+	// One attachment per project, created once and reused: springScaleX keeps the
+	// rule's progress in its own closure, so handing out a fresh one on re-render
+	// would restart the line at its finished position instead of drawing it.
+	const ruleAttachments = new Map<string, (el: Element) => void>();
+	function ruleFor(id: string) {
+		let attachment = ruleAttachments.get(id);
+		if (!attachment) {
+			attachment = springScaleX(() => expandedProjects.has(id));
+			ruleAttachments.set(id, attachment);
+		}
+		return attachment;
+	}
+
+	function groupActivity(g: ProjectGroup): string {
+		let newest = 0;
+		for (const d of g.deps) newest = Math.max(newest, new Date(d.updatedAt).getTime());
+		for (const d of g.dbs) newest = Math.max(newest, new Date(d.updatedAt).getTime());
+		return newest ? timeAgo(new Date(newest).toISOString()) : '';
+	}
+
 	function groupIcons(group: ProjectGroup): { id: string; src: string }[] {
 		const icons: { id: string; src: string }[] = [];
 		for (const dep of group.deps) {
@@ -88,6 +115,9 @@
 		{@const isOpen = expandedProjects.has(group.id)}
 		{@const icons = groupIcons(group)}
 		{@const projectIcon = metas.get(group.id)?.icon ?? null}
+		{@const summary = projectStatusSummary(group)}
+		{@const owner = metas.get(group.id)?.owner?.username}
+		{@const activity = groupActivity(group)}
 		<section
 			class="cl-group"
 			class:cl-group--open={isOpen}
@@ -116,8 +146,43 @@
 					{:else}
 						<span class="cl-swatch" style={projectSwatch(group.slug)}></span>
 					{/if}
-					<span class="cl-gname">{group.name}</span>
-					<span class="cl-gcount">{group.deps.length + group.dbs.length}</span>
+					<span class="cl-text">
+						<span class="cl-gname">{group.name}</span>
+						<span class="cl-meta">
+							{#if owner}
+								<span class="cl-owner">{owner}</span>
+								<span class="cl-dot" aria-hidden="true"></span>
+							{/if}
+							<span>{group.deps.length} deployment{group.deps.length === 1 ? '' : 's'}</span>
+							{#if group.dbs.length > 0}
+								<span class="cl-dot" aria-hidden="true"></span>
+								<span>{group.dbs.length} database{group.dbs.length === 1 ? '' : 's'}</span>
+							{/if}
+							{#if activity}
+								<span class="cl-dot" aria-hidden="true"></span>
+								<span>{activity}</span>
+							{/if}
+						</span>
+					</span>
+					{#if summary}
+						<span class="cl-stats">
+							{#if summary.red > 0}
+								<span class="cl-pill cl-pill--error">
+									<span class="dot status--error"></span>{summary.red}
+								</span>
+							{/if}
+							{#if summary.amber > 0}
+								<span class="cl-pill cl-pill--warning">
+									<span class="dot status--warning"></span>{summary.amber}
+								</span>
+							{/if}
+							{#if summary.green > 0}
+								<span class="cl-pill cl-pill--success">
+									<span class="dot status--success"></span>{summary.green}
+								</span>
+							{/if}
+						</span>
+					{/if}
 				</button>
 				<span class="cl-acts">
 					<a
@@ -138,6 +203,7 @@
 					</a>
 				</span>
 			</div>
+			<span class="cl-rule" aria-hidden="true" {@attach ruleFor(group.id)}></span>
 			{#if isOpen}
 				<div class="cl-rows" transition:slide={{ duration: 140 }}>
 					{#each group.deps as dep (dep.id)}
@@ -180,19 +246,16 @@
 	.cl {
 		display: flex;
 		flex-direction: column;
-		border-radius: var(--radius-xl);
-		background: var(--bg-raised);
-		box-shadow: var(--elev-1);
-		overflow: hidden;
+		gap: var(--space-1);
 	}
 
 	.cl-group {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.cl-group + .cl-group {
-		box-shadow: inset 0 1px 0 var(--rule);
+		border-radius: var(--radius-lg);
+		background: var(--bg-raised);
+		box-shadow: var(--elev-1);
+		overflow: hidden;
 	}
 
 	.cl-headrow {
@@ -207,16 +270,12 @@
 		background-color: var(--fill-quiet);
 	}
 
-	.cl-group--open .cl-headrow {
-		background-color: var(--fill-quiet);
-	}
-
 	.cl-head {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		height: 2.75rem;
-		padding: 0 var(--space-2) 0 var(--space-4);
+		min-height: 2.5rem;
+		padding: var(--space-1) var(--space-2);
 		border: none;
 		background: none;
 		font: inherit;
@@ -243,12 +302,72 @@
 		color: var(--text-muted);
 	}
 
+	.cl-rule {
+		display: block;
+		height: 1px;
+		background: var(--rule);
+		transform-origin: center;
+		pointer-events: none;
+	}
+
 	.cl-rows {
 		display: flex;
 		flex-direction: column;
-		padding: var(--space-1) 0 var(--space-2);
-		background-color: var(--fill-quiet);
-		box-shadow: inset 0 1px 0 var(--rule);
+		padding: var(--space-1) var(--space-2) var(--space-2);
+		gap: 0;
+	}
+
+	.cl-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.0625rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.cl-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.cl-owner {
+		color: var(--text-muted);
+	}
+
+	.cl-dot {
+		width: 2px;
+		height: 2px;
+		border-radius: var(--radius-pill);
+		background: currentColor;
+		opacity: 0.6;
+		flex-shrink: 0;
+	}
+
+	.cl-stats {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+
+	.cl-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
+		background: var(--fill-soft);
 	}
 
 	.cl-acts {
@@ -269,8 +388,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
+		width: 1.5rem;
+		height: 1.5rem;
 		border-radius: var(--radius-pill);
 		color: var(--text-muted);
 		flex-shrink: 0;
@@ -285,22 +404,22 @@
 	}
 
 	.cl-swatch {
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.125rem;
+		height: 1.125rem;
 		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 	}
 
 	.cl-cluster {
 		position: relative;
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.125rem;
+		height: 1.125rem;
 		flex-shrink: 0;
 	}
 
 	:global(.cl-icon) {
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.125rem;
+		height: 1.125rem;
 		flex-shrink: 0;
 		object-fit: contain;
 		border-radius: var(--radius-xs);
@@ -310,8 +429,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.125rem;
+		height: 1.125rem;
 		flex-shrink: 0;
 		font-size: var(--text-body);
 		line-height: 1;
@@ -372,7 +491,7 @@
 	}
 
 	.cl-gname {
-		font-size: var(--text-body);
+		font-size: var(--text-callout);
 		line-height: var(--lh-body);
 		font-weight: 600;
 		letter-spacing: var(--track-headline);
@@ -403,13 +522,14 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		height: 2.25rem;
-		padding: 0 var(--space-4) 0 3.125rem;
-		margin: 0 var(--space-2);
+		height: 1.875rem;
+		padding: 0 var(--space-2);
+		margin: 0;
 		border-radius: var(--radius-sm);
 		text-decoration: none;
 		color: inherit;
 		min-width: 0;
+		overflow: hidden;
 		transition: background-color var(--dur-fast) ease;
 	}
 
@@ -447,13 +567,16 @@
 		letter-spacing: var(--track-body);
 		color: var(--text-default);
 		white-space: nowrap;
-		flex-shrink: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		flex-shrink: 1;
+		min-width: 0;
 	}
 
+	/* Block rather than a flex row so the host truncates instead of running past
+	   the card; the database rows put a glyph in here, which inlines alongside. */
 	.cl-sub {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
+		display: block;
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		font-family: var(--font-mono);
@@ -463,6 +586,11 @@
 		text-overflow: ellipsis;
 		min-width: 0;
 		flex: 1;
+	}
+
+	.cl-sub :global(svg) {
+		display: inline;
+		vertical-align: -0.1em;
 	}
 
 	.cl-metrics {
