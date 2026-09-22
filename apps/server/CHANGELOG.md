@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.47.0](https://github.com/hackclub/orchard/compare/server/v2.46.1...server/v2.47.0) (2026-09-22)
+
+
+### Features
+
+* transcode buildkit rawjson progress into the build log ([c4afb30](https://github.com/hackclub/orchard/commit/c4afb30f270d4ff484e87875a4f5b12c2a34bba8))
+
+
+### Bug Fixes
+
+* build recovery decides from the k8s job informer instead of our own rows ([bf972a0](https://github.com/hackclub/orchard/commit/bf972a0628074ebb23244f104338fb68780e5b81))
+* stop a dev server from doing a production instance's background work ([538a916](https://github.com/hackclub/orchard/commit/538a916632c3a15bcd41e8f02400a29c5349f1e6))
+
 ## [2.46.1](https://github.com/hackclub/orchard/compare/server/v2.46.0...server/v2.46.1) (2026-09-21)
 
 

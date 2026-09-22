@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.40.0](https://github.com/hackclub/orchard/compare/frontend/v1.39.1...frontend/v1.40.0) (2026-09-22)
+
+
+### Features
+
+* add a dev-only picker for pointing at ui source ([d8764e0](https://github.com/hackclub/orchard/commit/d8764e02fd7fede0ac001dfdcfb184c7c276e339))
+* draw the project card divider open and closed from the centre ([54724b0](https://github.com/hackclub/orchard/commit/54724b0ab67072385b5c6ecfa770616d40fa808f))
+* fade the settings columns as they scroll ([8d2b993](https://github.com/hackclub/orchard/commit/8d2b993acee7a11e9502834d71c16a1d9849d606))
+* move project transfer and deletion into a settings tab ([16872b9](https://github.com/hackclub/orchard/commit/16872b92acb59d53f065dc11fcea58f65ee77806))
+* rebuild the compact list as a denser version of the expanded cards ([f185a00](https://github.com/hackclub/orchard/commit/f185a0066a9a73deea3fa51175600fbe21cc402b))
+* rebuild the customize project modal ([0c10f50](https://github.com/hackclub/orchard/commit/0c10f508ed6c81b7993ee247bbf063355cb775d8))
+* rebuild the new project page around the source cards ([f2b9554](https://github.com/hackclub/orchard/commit/f2b9554bf8918567292028589a401fdca4d5a1ce))
+* rebuild the settings identity header ([ff131b6](https://github.com/hackclub/orchard/commit/ff131b6d66215750f1b8a719a736cd493259fae8))
+* transcode buildkit rawjson progress into the build log ([c4afb30](https://github.com/hackclub/orchard/commit/c4afb30f270d4ff484e87875a4f5b12c2a34bba8))
+
+
+### Bug Fixes
+
+* guarantee readable contrast on every generated theme ([6b67c50](https://github.com/hackclub/orchard/commit/6b67c50cb59337367a6bef25543333c160d94548))
+* hide the search placeholder while the field has focus ([e301bd1](https://github.com/hackclub/orchard/commit/e301bd1e23b0edc8c0aae92cd0a2434cdf67125c))
+* stop pinned colours from outvoting the light and dark modes ([e483c5f](https://github.com/hackclub/orchard/commit/e483c5f2249c17df369438bc77115d5bccd8881c))
+* stop rewriting unchanged dashboard rows on every refetch ([6ffdfa2](https://github.com/hackclub/orchard/commit/6ffdfa2cd945c49bd54f1331e189a6477bf632f5))
+
 ## [1.39.1](https://github.com/hackclub/orchard/compare/frontend/v1.39.0...frontend/v1.39.1) (2026-09-21)
 
 
