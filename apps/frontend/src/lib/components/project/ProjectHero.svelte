@@ -2,7 +2,7 @@
 	import { animate } from 'motion';
 	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { tick } from 'svelte';
-	import { Palette, Trash2, Loader2, Ellipsis, Crown, FolderInput } from 'lucide-svelte';
+	import { Palette, Ellipsis } from 'lucide-svelte';
 	import { Menu, MenuItem } from '$lib/components/ui';
 	import type { Project } from './types';
 
@@ -10,30 +10,14 @@
 		project,
 		activeTab,
 		canEdit = false,
-		canDelete = false,
-		canTransferOwnership = false,
-		canMoveToOrg = false,
-		transferPending = false,
-		deleting = false,
 		heroImgReady = $bindable(false),
-		onCustomize,
-		onDelete,
-		onTransferOwnership,
-		onMoveToOrg
+		onCustomize
 	}: {
 		project: Project;
 		activeTab: string;
 		canEdit?: boolean;
-		canDelete?: boolean;
-		canTransferOwnership?: boolean;
-		canMoveToOrg?: boolean;
-		transferPending?: boolean;
-		deleting?: boolean;
 		heroImgReady?: boolean;
 		onCustomize?: () => void;
-		onDelete?: () => void;
-		onTransferOwnership?: () => void;
-		onMoveToOrg?: () => void;
 	} = $props();
 
 	let heroEl = $state<HTMLElement | null>(null);
@@ -114,7 +98,7 @@
 			{/if}
 		</div>
 		<div class="pj-header-actions">
-			{#if canEdit || canDelete || canTransferOwnership || canMoveToOrg}
+			{#if canEdit}
 				<Menu placement="bottom-end">
 					{#snippet trigger(attrs, open)}
 						<button
@@ -128,32 +112,10 @@
 							<Ellipsis class="h-4 w-4" />
 						</button>
 					{/snippet}
-					{#if canEdit}
-						<MenuItem onclick={() => onCustomize?.()}>
-							<Palette size={14} />
-							Customize appearance
-						</MenuItem>
-					{/if}
-					{#if canTransferOwnership}
-						<MenuItem danger disabled={transferPending} onclick={() => onTransferOwnership?.()}>
-							<Crown size={14} />
-							{transferPending ? 'Transfer already requested' : 'Transfer ownership'}
-						</MenuItem>
-					{/if}
-					{#if canMoveToOrg}
-						<MenuItem onclick={() => onMoveToOrg?.()}>
-							<FolderInput size={14} />
-							Move to organization
-						</MenuItem>
-					{/if}
-					{#if canDelete}
-						<MenuItem danger disabled={deleting} onclick={() => onDelete?.()}>
-							{#if deleting}<Loader2 size={14} class="animate-spin" />{:else}<Trash2
-									size={14}
-								/>{/if}
-							Delete project
-						</MenuItem>
-					{/if}
+					<MenuItem onclick={() => onCustomize?.()}>
+						<Palette size={14} />
+						Customize appearance
+					</MenuItem>
 				</Menu>
 			{/if}
 		</div>

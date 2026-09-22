@@ -1,13 +1,22 @@
 <script lang="ts">
 	import { animate } from 'motion';
 	import { tick } from 'svelte';
-	import { Server, FileText, Users, KeyRound, ExternalLink, Plus } from 'lucide-svelte';
+	import {
+		Server,
+		FileText,
+		Users,
+		KeyRound,
+		ExternalLink,
+		Plus,
+		SlidersHorizontal
+	} from 'lucide-svelte';
 	import { springPop } from '$lib/utils/motion.svelte';
 	import { SpatialMenu } from 'melt/builders';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 
 	let {
 		activeTab = $bindable('resources'),
+		showSettings = false,
 		resourceCount = 0,
 		composeCount = 0,
 		membersCount = 0,
@@ -20,7 +29,8 @@
 		projectId = '',
 		selectedEnvId = $bindable('')
 	}: {
-		activeTab?: 'resources' | 'variables' | 'compose' | 'members';
+		activeTab?: 'resources' | 'variables' | 'compose' | 'members' | 'settings';
+		showSettings?: boolean;
 		resourceCount?: number;
 		composeCount?: number;
 		membersCount?: number;
@@ -94,6 +104,20 @@
 			Members
 			{#if membersCount > 0}<span class="pj-tab-count">{membersCount}</span>{/if}
 		</button>
+		{#if showSettings}
+			<button
+				type="button"
+				role="tab"
+				aria-selected={activeTab === 'settings'}
+				class="pj-tab"
+				class:is-active={activeTab === 'settings'}
+				onclick={() => (activeTab = 'settings')}
+				{@attach springPop(() => activeTab === 'settings')}
+			>
+				<SlidersHorizontal class="h-3.5 w-3.5" />
+				Settings
+			</button>
+		{/if}
 	</div>
 	<div class="pj-tabs-actions">
 		{#if repositoryUrl}

@@ -304,6 +304,25 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 }
 
 /* Header */
+.pj-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4375rem;
+	margin: var(--space-2) 0 0;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
+	color: var(--text-faint);
+}
+.pj-meta-dot {
+	width: 2px;
+	height: 2px;
+	border-radius: var(--radius-pill);
+	background: currentColor;
+	opacity: 0.6;
+	flex-shrink: 0;
+}
+
 .pj-header {
 	margin-top: var(--space-5);
 	margin-bottom: 1.5rem;

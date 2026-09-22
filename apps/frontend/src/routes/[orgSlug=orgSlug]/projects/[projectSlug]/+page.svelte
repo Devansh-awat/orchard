@@ -18,6 +18,7 @@
 		ProjectHero,
 		ProjectHeader,
 		ProjectTabs,
+		ProjectSettingsTab,
 		ResourcesTab,
 		ComposeTab,
 		MembersTab,
@@ -96,7 +97,9 @@
 		!!pendingTransfer && !!$user?.id && pendingTransfer.to.id === $user.id
 	);
 	let openRoleMenuId = $state<string | null>(null);
-	let activeTab = $state<'resources' | 'compose' | 'members'>('resources');
+	let activeTab = $state<'resources' | 'variables' | 'compose' | 'members' | 'settings'>(
+		'resources'
+	);
 	let memberSearch = $state('');
 
 	// Compose stacks — keyed by project id so SSE-driven project refetches
@@ -780,31 +783,11 @@
 					{project}
 					{activeTab}
 					{canEdit}
-					{canDelete}
-					{canTransferOwnership}
-					{canMoveToOrg}
-					transferPending={!!pendingTransfer}
-					{deleting}
 					bind:heroImgReady
 					onCustomize={() => (showCustomize = true)}
-					onDelete={() => (showDeleteModal = true)}
-					onTransferOwnership={() => (showTransferModal = true)}
-					onMoveToOrg={() => (showMoveModal = true)}
 				/>
 			{:else}
-				<ProjectHeader
-					{project}
-					{canEdit}
-					{canDelete}
-					{canTransferOwnership}
-					{canMoveToOrg}
-					transferPending={!!pendingTransfer}
-					{deleting}
-					onCustomize={() => (showCustomize = true)}
-					onDelete={() => (showDeleteModal = true)}
-					onTransferOwnership={() => (showTransferModal = true)}
-					onMoveToOrg={() => (showMoveModal = true)}
-				/>
+				<ProjectHeader {project} {canEdit} onCustomize={() => (showCustomize = true)} />
 			{/if}
 
 			{#if pendingTransfer && $user}
@@ -837,6 +820,7 @@
 				{deploymentMenu}
 				projectId={project.id}
 				bind:selectedEnvId
+				showSettings={canDelete || canTransferOwnership || canMoveToOrg}
 			/>
 
 			{#if activeTab === 'resources'}
@@ -904,6 +888,21 @@
 						onRemoveMember={removeMember}
 						onRevokeInvitation={revokeInvitation}
 						onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
+					/>
+				</div>
+			{/if}
+
+			{#if activeTab === 'settings'}
+				<div class="pj-tab-panel" {@attach tabPanelEnter}>
+					<ProjectSettingsTab
+						{canDelete}
+						{canTransferOwnership}
+						{canMoveToOrg}
+						transferPending={!!pendingTransfer}
+						{deleting}
+						onDelete={() => (showDeleteModal = true)}
+						onTransferOwnership={() => (showTransferModal = true)}
+						onMoveToOrg={() => (showMoveModal = true)}
 					/>
 				</div>
 			{/if}
