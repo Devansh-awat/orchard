@@ -36,7 +36,7 @@
     "test:github-access": "tsx --test test/github-repo-access.test.ts",
     "test:watch-paths": "tsx --test test/watch-paths.test.ts",
     "test:auto-deploy-match": "tsx --test test/auto-deploy-match.test.ts",
-    "test:build-recovery": "tsx --test test/build-recovery.test.ts",
+    "test:build-recovery": "tsx --test test/build-recovery.test.ts test/build-recovery-decision.test.ts test/build-job-informer-list.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
     "test:mcp-tools": "tsx --test test/mcp-validate-dns.test.ts test/mcp-merge-semantics.test.ts",
     "test:email-avatar": "tsx --test test/email-avatar.test.ts",

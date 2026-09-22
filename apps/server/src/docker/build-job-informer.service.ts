@@ -8,6 +8,8 @@ export interface BuildJobObservation {
   reason: string | null;
   image: string | null;
   deploymentId: string | null;
+  /** The Job's own creationTimestamp, so callers can pick the newest attempt. */
+  createdAt: number | null;
   at: number;
 }
 
@@ -46,7 +48,17 @@ export function observationFromJob(job: k8s.V1Job): BuildJobObservation {
     job.metadata?.labels?.['orchard.dev/deployment-id'] ??
     null;
 
-  return { phase, reason: outcome.reason, image, deploymentId, at: Date.now() };
+  const created = job.metadata?.creationTimestamp;
+  const createdAt = created ? new Date(created).getTime() : null;
+
+  return {
+    phase,
+    reason: outcome.reason,
+    image,
+    deploymentId,
+    createdAt: Number.isFinite(createdAt) ? createdAt : null,
+    at: Date.now()
+  };
 }
 
 @Injectable()
@@ -180,6 +192,7 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
       reason: 'JobDeleted',
       image: known?.image ?? null,
       deploymentId: known?.deploymentId ?? observationFromJob(job).deploymentId,
+      createdAt: known?.createdAt ?? observationFromJob(job).createdAt,
       at: Date.now()
     };
     this.latest.set(name, observation);
@@ -216,11 +229,59 @@ export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
     return this.connected && !!this.informer;
   }
 
+  /**
+   * Whether a watch was ever set up. Distinct from `isHealthy`: an instance
+   * with no cluster config never starts one and callers should fall back, while
+   * a watch that started and broke must not be read as "no jobs exist".
+   */
+  isEnabled(): boolean {
+    return !!this.informer;
+  }
+
+  /**
+   * Has the watch ever held this job, including as a deletion? Lets a caller
+   * tell "the cluster told us this job went away" from "we have never heard of
+   * it", so only the second is worth a direct read.
+   */
+  hasSeen(jobName: string): boolean {
+    return this.latest.has(jobName);
+  }
+
   get(jobName: string): BuildJobObservation | null {
     if (!this.isHealthy()) return null;
     const known = this.latest.get(jobName);
     if (known) return known;
-    return { phase: 'gone', reason: 'NotFound', image: null, deploymentId: null, at: Date.now() };
+    return {
+      phase: 'gone',
+      reason: 'NotFound',
+      image: null,
+      deploymentId: null,
+      createdAt: null,
+      at: Date.now()
+    };
+  }
+
+  /**
+   * Every build Job the cluster currently has for this deployment, newest
+   * first. This is the canonical answer to "is a build running" — the watch
+   * cache is a mirror of the Job list, so it beats inferring liveness from
+   * our own rows, which lag the cluster by however long a build takes to set
+   * them.
+   *
+   * `null` means "the cluster did not tell us" (informer down or still doing
+   * its initial list). Callers must defer on null rather than read it as an
+   * empty list: an unhealthy watch looks exactly like a deployment with no
+   * jobs, and that mistake fails live builds.
+   */
+  listForDeployment(deploymentId: string): BuildJobTerminalEvent[] | null {
+    if (!this.isHealthy()) return null;
+    const jobs: BuildJobTerminalEvent[] = [];
+    for (const [jobName, observation] of this.latest) {
+      if (observation.deploymentId !== deploymentId) continue;
+      if (observation.phase === 'gone') continue;
+      jobs.push({ ...observation, jobName });
+    }
+    return jobs.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
   }
 
   waitForTerminal(jobName: string, timeoutMs: number): Promise<BuildJobObservation | null> {

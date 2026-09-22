@@ -4,6 +4,7 @@ import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from './deployments.service';
 import { GitHubService } from '../github/github.service';
+import { canTrustDeploymentStatus } from './build-recovery';
 
 export interface QueueSnapshot {
   running: number;
@@ -11,6 +12,40 @@ export interface QueueSnapshot {
   waiting: number;
   blockedByOwnBuild: boolean;
   pool: 'depot' | 'cluster';
+}
+
+/**
+ * Flip a deployment to `building` in the same transaction that claims its run.
+ *
+ * These two writes used to be as much as a minute apart: the run went
+ * `building` at claim, and the deployment only followed once the build path
+ * had resolved a GitHub installation, minted an installation token and opened
+ * a check run. Everything that reads one of them to judge the other — the
+ * reclaim sweep below, the recovery sweep, this file's own "is a build already
+ * running" test — was wrong for the length of that gap. The reclaim sweep saw
+ * a run in `building` whose deployment still read `succeeded` from the
+ * *previous* build, concluded the run, and left the deployment `building` with
+ * no run to own it; the recovery sweep then failed the live build.
+ *
+ * Clearing `buildStepTimestamps` matters as much as the status. It carries the
+ * last build's `__jobName` and `__image`, and a sweep landing in this window
+ * would otherwise adopt the previous build's job and deploy its image.
+ */
+async function markDeploymentBuilding(
+  tx: Pick<PrismaService, 'deployment'>,
+  deploymentId: string
+): Promise<void> {
+  // updateMany, not update: a deployment deleted between being read and its
+  // run being claimed must not abort the claim transaction.
+  await tx.deployment.updateMany({
+    where: { id: deploymentId },
+    data: {
+      buildStatus: 'building',
+      buildStep: null,
+      buildStepTimestamps: { __start: Date.now() },
+      buildError: null
+    }
+  });
 }
 
 @Injectable()
@@ -157,6 +192,8 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
           heartbeatAt: startNow ? now : null
         }
       });
+      if (startNow) await markDeploymentBuilding(tx, opts.deploymentId);
+
       const queue: QueueSnapshot = {
         running: buildingInPool,
         limit,
@@ -243,6 +280,57 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       .catch(() => {});
   }
 
+  /**
+   * Put a concluded run's work back on the queue as a fresh scheduled run.
+   *
+   * Takes the same advisory lock the claim path holds, because the caller
+   * reached here precisely because no run was `building` — which is also the
+   * moment a claim is most likely to land. Without the lock the insert could
+   * race a claim and knock the deployment back to `pending` underneath a build
+   * that had just started. Answers `false` when something else already owns
+   * this deployment's next build, which is not a failure.
+   */
+  async scheduleRetryForConcludedRun(
+    deploymentId: string,
+    source: {
+      triggerType: string;
+      commitSha: string | null;
+      commitMessage: string | null;
+      commitAuthorName: string | null;
+      commitAuthorUsername: string | null;
+      branch: string | null;
+      triggeredById: string | null;
+    },
+    detail: string
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
+      const live = await tx.buildRun.count({
+        where: { deploymentId, status: { in: ['building', 'scheduled'] } }
+      });
+      if (live > 0) return false;
+      await tx.buildRun.create({
+        data: {
+          deploymentId,
+          status: 'scheduled',
+          detail,
+          triggerType: source.triggerType,
+          commitSha: source.commitSha,
+          commitMessage: source.commitMessage,
+          commitAuthorName: source.commitAuthorName,
+          commitAuthorUsername: source.commitAuthorUsername,
+          branch: source.branch,
+          triggeredById: source.triggeredById
+        }
+      });
+      await tx.deployment.updateMany({
+        where: { id: deploymentId, buildStatus: 'building' },
+        data: { buildStatus: 'pending' }
+      });
+      return true;
+    }, this.txOpts);
+  }
+
   async adoptRun(deploymentId: string): Promise<void> {
     await this.prisma.buildRun
       .updateMany({
@@ -294,7 +382,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       await this.prisma.$executeRaw`
         UPDATE "build_runs" br
         SET "status" = ${ok ? 'succeeded' : 'failed'},
-            "finished_at" = NOW(),
+            "finished_at" = (NOW() AT TIME ZONE 'UTC'),
             "worker_id" = NULL,
             "logs" = d."build_logs"
         FROM "deployments" d
@@ -380,10 +468,12 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       if (rows.length === 0) return null;
       const id = rows[0].id;
       const now = new Date();
-      return tx.buildRun.update({
+      const claimed = await tx.buildRun.update({
         where: { id },
         data: { status: 'building', workerId: this.workerId, startedAt: now, heartbeatAt: now }
       });
+      await markDeploymentBuilding(tx, claimed.deploymentId);
+      return claimed;
     }, this.txOpts);
   }
 
@@ -487,15 +577,38 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         where: { id: run.deploymentId },
         select: { buildStatus: true }
       });
-      if (!dep || dep.buildStatus === 'succeeded' || dep.buildStatus === 'failed') {
+      // A deployment that is gone takes its runs with it, whatever their age.
+      if (!dep) {
         await this.prisma.buildRun.updateMany({
           where: { id: run.id, status: 'building' },
-          data: {
-            status: dep?.buildStatus === 'succeeded' ? 'succeeded' : 'failed',
-            finishedAt: new Date(),
-            workerId: null
-          }
+          data: { status: 'failed', finishedAt: new Date(), workerId: null }
         });
+        continue;
+      }
+      // Conclude a run from its deployment's status only once the two are
+      // describing the same build. Claim writes them together now, but a run
+      // claimed by an older build of this service — or mid-rollout by a pod
+      // that still wrote them apart — has a deployment status left over from
+      // the *previous* build, and reading it here concluded live builds.
+      const settled = canTrustDeploymentStatus({
+        now,
+        startedAt: run.startedAt?.getTime() ?? null
+      });
+      if (settled && (dep.buildStatus === 'succeeded' || dep.buildStatus === 'failed')) {
+        // Copy the build log onto the run as `onBuildFinished` does. A run
+        // concluded here is still a run someone will open in the build
+        // history, and one concluded without its logs shows up empty.
+        await this.prisma.$executeRaw`
+          UPDATE "build_runs" br
+          SET "status" = ${dep.buildStatus === 'succeeded' ? 'succeeded' : 'failed'},
+              "finished_at" = (NOW() AT TIME ZONE 'UTC'),
+              "worker_id" = NULL,
+              "logs" = COALESCE(br."logs", d."build_logs")
+          FROM "deployments" d
+          WHERE d."id" = br."deployment_id"
+            AND br."id" = ${run.id}::uuid
+            AND br."status" = 'building'
+        `;
         continue;
       }
       // A dead worker's run is NOT failed here: builds run as in-cluster
@@ -508,7 +621,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const claimed = await this.prisma.$executeRaw`
         UPDATE "build_runs" br
         SET "status" = 'failed',
-            "finished_at" = NOW(),
+            "finished_at" = (NOW() AT TIME ZONE 'UTC'),
             "detail" = ${detail},
             "worker_id" = NULL,
             "logs" = d."build_logs"

@@ -58,15 +58,47 @@ const INGRESS_URL_SELECT = {
   tlsSecretName: true,
   entrypoints: true
 } as const;
-import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
+import {
+  startBuildTrace,
+  recordBuildOutcome,
+  recordRecoveryDecision,
+  type BuildOutcomeReason
+} from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
-import { isObservedJobStatus } from './build-recovery';
+import {
+  isObservedJobStatus,
+  decideBuildRecovery,
+  needsRegistryProbe,
+  isRequeueable,
+  REQUEUE_DETAIL,
+  type ObservedJobStatus,
+  type RecoveryDeployment,
+  type RecoveryJob,
+  type RecoveryReason,
+  type RecoveryRun
+} from './build-recovery';
 import { buildStartedAtFrom } from './build-timing';
 
 // Ceiling on the disruption budget. Nothing in Orchard scales anywhere near
 // this, and it keeps a fat-fingered value from being stored as a number the
 // replica count can never satisfy.
 const MAX_PDB_MIN_AVAILABLE = 100;
+
+/**
+ * Recovery's own vocabulary for why it acted, mapped onto the build-outcome
+ * reasons dashboards already group by. Only the decisions that can end a build
+ * appear here; anything else falls back to `internal`.
+ */
+const RECOVERY_OUTCOME_REASON: Partial<
+  Record<RecoveryReason | BuildOutcomeReason, BuildOutcomeReason>
+> = {
+  build_error: 'build_error',
+  image_unknown: 'image_unknown',
+  job_never_created: 'job_never_created',
+  job_missing: 'job_missing',
+  k8s_missing: 'k8s_missing',
+  internal: 'internal'
+};
 
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
@@ -363,9 +395,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (this.activeRecoveries.has(deployment.id)) return;
 
     const staleCutoff = new Date(Date.now() - 15_000);
+    // `updated_at` is a bare timestamp column, so NOW() would write the
+    // session's local time here while every Prisma write puts UTC in it. On an
+    // install whose Postgres is not UTC that skews the staleness comparison on
+    // the next line by the offset, and the sweep either never fires or fires
+    // constantly.
     const claimed: number = await this.prisma.$executeRaw`
       UPDATE "deployments"
-      SET "updated_at" = NOW()
+      SET "updated_at" = (NOW() AT TIME ZONE 'UTC')
       WHERE "id" = ${deployment.id}::uuid
         AND "build_status" = 'building'
         AND "updated_at" < ${staleCutoff}
@@ -396,106 +433,202 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     projectId: string;
   }) {
     const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
+    const now = Date.now();
 
-    const activeRun = await this.prisma.buildRun.findFirst({
+    // The run in `building` if there is one. If there is not, the newest run
+    // still matters: a run concluded out from under a live build is the row
+    // that says whether this build can be retried, and reading "no building
+    // run" as "no build" is how a running build got failed.
+    const buildingRun = await this.prisma.buildRun.findFirst({
       where: { deploymentId: deployment.id, status: 'building' },
       orderBy: { startedAt: 'desc' },
-      select: { workerId: true, heartbeatAt: true }
+      select: { workerId: true, heartbeatAt: true, triggerType: true, detail: true }
     });
-    if (
-      activeRun?.workerId &&
-      activeRun.heartbeatAt &&
-      Date.now() - activeRun.heartbeatAt.getTime() < 30_000
-    ) {
-      const workerAlive = await this.isWorkerPodAlive(activeRun.workerId);
-      if (workerAlive !== false) {
-        return;
-      }
+    const fallbackRun = buildingRun
+      ? null
+      : await this.prisma.buildRun.findFirst({
+          where: { deploymentId: deployment.id },
+          orderBy: { createdAt: 'desc' },
+          select: { workerId: true, heartbeatAt: true, triggerType: true, detail: true }
+        });
+    const runRow = buildingRun ?? fallbackRun;
+    const run: RecoveryRun | null = runRow
+      ? {
+          isBuilding: buildingRun !== null,
+          workerId: runRow.workerId,
+          heartbeatAt: runRow.heartbeatAt?.getTime() ?? null,
+          triggerType: runRow.triggerType,
+          detail: runRow.detail
+        }
+      : null;
+
+    const workerAlive =
+      run?.isBuilding && run.workerId ? await this.isWorkerPodAlive(run.workerId) : null;
+
+    // A run already waiting for a slot is a retry in flight. Concluding this
+    // build now would end the attempt that is about to replace it.
+    const retryPending =
+      !buildingRun &&
+      (await this.prisma.buildRun.count({
+        where: { deploymentId: deployment.id, status: 'scheduled' }
+      })) > 0;
+
+    const recoveryDeployment: RecoveryDeployment = {
+      buildStep: deployment.buildStep,
+      image: deployment.image,
+      startedAt: buildStartedAtFrom(deployment.buildStepTimestamps)?.getTime() ?? null,
+      jobName: (metadata.__jobName as string | undefined) ?? null,
+      expectedImage: (metadata.__image as string | undefined) ?? null
+    };
+
+    const jobs = await this.listClusterBuildJobs(deployment.id, recoveryDeployment.jobName);
+
+    // Only spend a registry round-trip on the one branch that turns on it.
+    const imagePushed =
+      needsRegistryProbe({ deployment: recoveryDeployment, jobs }) &&
+      recoveryDeployment.expectedImage
+        ? await this.dockerService.imageExistsInRegistry(recoveryDeployment.expectedImage)
+        : null;
+
+    const decision = decideBuildRecovery({
+      now,
+      deployment: recoveryDeployment,
+      run,
+      retryPending,
+      jobs,
+      workerAlive,
+      imagePushed
+    });
+
+    recordRecoveryDecision({
+      action: decision.action,
+      reason: decision.reason,
+      deploymentId: deployment.id,
+      deploymentName: deployment.name,
+      namespace: deployment.namespace,
+      buildStep: deployment.buildStep,
+      jobName: decision.jobName ?? recoveryDeployment.jobName,
+      jobCount: jobs === null ? -1 : jobs.length,
+      informerHealthy: jobs !== null,
+      buildAgeMs: recoveryDeployment.startedAt === null ? null : now - recoveryDeployment.startedAt,
+      hadBuildingRun: buildingRun !== null,
+      detail: decision.detail
+    });
+
+    if (decision.action === 'skip') return;
+
+    if (decision.action === 'defer') {
       this.logger.log(
-        `[BuildRecovery] Worker pod for ${deployment.id} is gone; adopting immediately`
+        `[BuildRecovery] Deferring ${deployment.id} (${decision.reason}); retrying next scan`
       );
+      return;
     }
 
     this.logger.log(
-      `[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`
+      `[BuildRecovery] ${deployment.id} (step: ${deployment.buildStep}): ${decision.action} (${decision.reason})`
     );
 
-    if (deployment.buildStep === 'deploying' && deployment.image) {
-      await this.finishRecoveredBuild(deployment, deployment.image);
-      return;
-    }
+    switch (decision.action) {
+      case 'adopt':
+        await this.buildQueue.adoptRun(deployment.id);
+        if (decision.jobName) this.streamAdoptedBuildLogs(deployment.id, decision.jobName);
+        return;
 
-    const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
-    if (jobs === null) {
-      this.logger.warn(
-        `[BuildRecovery] Could not list build jobs for ${deployment.id}; retrying next scan`
-      );
-      return;
-    }
-    const jobName = metadata.__jobName as string | undefined;
-    let foundJob: { name: string; image: string | null; status: string } | null = null;
+      case 'finish':
+        await this.finishRecoveredBuild(deployment, decision.image!);
+        if (decision.jobName) this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        return;
 
-    if (jobName) {
-      const fromLabel = jobs.find((j) => j.name === jobName);
-      if (fromLabel) {
-        foundJob = fromLabel;
-      } else {
-        const status = await this.dockerService.getBuildJobStatus(jobName);
-        if (status && isObservedJobStatus(status.status)) {
-          foundJob = { name: jobName, image: null, status: status.status };
-        }
-      }
-    }
-
-    if (!foundJob && jobs.length > 0) {
-      foundJob = jobs[0];
-    }
-
-    const expectedImage = (metadata.__image as string | undefined) || null;
-
-    if (!foundJob) {
-      if (expectedImage) {
-        const pushed = await this.dockerService.imageExistsInRegistry(expectedImage);
-        if (pushed === true) {
-          this.logger.log(
-            `[BuildRecovery] Build job for ${deployment.id} is gone but ${expectedImage} exists in the registry; finishing deploy`
-          );
-          await this.finishRecoveredBuild(deployment, expectedImage);
-          return;
-        }
-        if (pushed === null) {
-          this.logger.warn(
-            `[BuildRecovery] Could not check registry for ${deployment.id}; retrying next scan`
-          );
-          return;
-        }
-      }
-      const requeued = await this.requeueOrphanedBuild(deployment.id);
-      if (requeued) {
-        this.logger.log(
-          `[BuildRecovery] No build job or pushed image found for ${deployment.id}; requeued the build`
+      case 'requeue': {
+        const outcome = await this.requeueOrphanedBuild(deployment.id);
+        // `superseded` means a build or retry claimed this deployment while we
+        // were deciding. That build owns the row now; ending it here would be
+        // the original bug wearing a different hat.
+        if (outcome === 'requeued' || outcome === 'superseded') return;
+        await this.markBuildFailed(
+          deployment.id,
+          decision.detail ?? 'The build could not be resumed or requeued',
+          decision.reason
         );
-      } else {
-        await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
+        return;
       }
-      return;
+
+      case 'fail':
+        await this.markBuildFailed(deployment.id, decision.detail!, decision.reason);
+        if (decision.jobName) this.dockerService.deleteBuildJob(decision.jobName).catch(() => {});
+        return;
+
+      default: {
+        // A new action with no arm here would silently leave the deployment
+        // `building` forever. The sweep would retry it, but make it loud.
+        const unhandled: never = decision.action;
+        this.logger.error(`[BuildRecovery] Unhandled recovery action: ${String(unhandled)}`);
+      }
+    }
+  }
+
+  /**
+   * Build jobs for this deployment as the cluster currently holds them, read
+   * from the same Job watch cache the build watcher concludes from — so
+   * recovery and the build path can never disagree about whether a build is
+   * alive.
+   *
+   * `null` means the cluster did not answer, which the caller must treat as
+   * "come back later" rather than "there are no jobs". A live list call is
+   * only used when there is no informer at all (dev, no cluster config); a
+   * *broken* informer reports null, because silence from a watch that should
+   * be running looks exactly like an orphaned build and is not one.
+   */
+  private async listClusterBuildJobs(
+    deploymentId: string,
+    recordedJobName: string | null
+  ): Promise<RecoveryJob[] | null> {
+    if (this.buildJobInformer?.isEnabled()) {
+      const observed = this.buildJobInformer.listForDeployment(deploymentId);
+      if (observed === null) return null;
+      const jobs: RecoveryJob[] = observed
+        .filter((o) => isObservedJobStatus(o.phase))
+        .map((o) => ({
+          jobName: o.jobName,
+          phase: o.phase as ObservedJobStatus,
+          reason: o.reason,
+          image: o.image
+        }));
+      // A cache that has only just listed may not hold a job we recorded by
+      // name yet. Ask for that one directly instead of calling it gone — but
+      // only if the watch has never heard of it. If the watch saw it deleted,
+      // that is the answer, and re-reading it every pass would hammer the API
+      // for the whole time a stuck deployment sits in `building`.
+      if (
+        recordedJobName &&
+        !jobs.some((j) => j.jobName === recordedJobName) &&
+        !this.buildJobInformer.hasSeen(recordedJobName)
+      ) {
+        const direct = await this.dockerService
+          .getBuildJobStatus(recordedJobName)
+          .catch(() => null);
+        if (direct && isObservedJobStatus(direct.status)) {
+          jobs.unshift({
+            jobName: recordedJobName,
+            phase: direct.status,
+            reason: null,
+            image: null
+          });
+        }
+      }
+      return jobs;
     }
 
-    if (foundJob.status === 'succeeded') {
-      const image = foundJob.image || expectedImage;
-      if (!image) {
-        await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
-      } else {
-        await this.finishRecoveredBuild(deployment, image);
-      }
-      this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
-    } else if (foundJob.status === 'failed') {
-      await this.markBuildFailed(deployment.id, 'Build job failed');
-      this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
-    } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
-      await this.buildQueue.adoptRun(deployment.id);
-      this.streamAdoptedBuildLogs(deployment.id, foundJob.name);
-    }
+    const listed = await this.dockerService.findBuildJobsForDeployment(deploymentId);
+    if (listed === null) return null;
+    return listed
+      .filter((j) => isObservedJobStatus(j.status))
+      .map((j) => ({
+        jobName: j.name,
+        phase: j.status as ObservedJobStatus,
+        reason: null,
+        image: j.image
+      }));
   }
 
   private streamAdoptedBuildLogs(deploymentId: string, jobName: string) {
@@ -549,16 +682,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             `[BuildRecovery] Failed to record image history for ${deployment.id}: ${error.message}`
           );
         });
-        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+        await this.markBuildSucceeded(deployment.id, 'Build recovered and deployed.');
         this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
       } else {
         await this.markBuildFailed(
           deployment.id,
-          'Build succeeded but k8s deployment not found. Please redeploy.'
+          'Build succeeded but k8s deployment not found. Please redeploy.',
+          'k8s_missing'
         );
       }
     } catch (error) {
-      await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
+      await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`, 'internal');
     }
   }
 
@@ -683,44 +817,86 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private static readonly REQUEUE_DETAIL = 'Requeued after server restart';
-
-  private async requeueOrphanedBuild(deploymentId: string): Promise<boolean> {
-    const run = await this.prisma.buildRun.findFirst({
+  /**
+   * `superseded` is not a failure: something else already owns this
+   * deployment's next build, so there is nothing to requeue and nothing to
+   * fail. Only `ineligible` means this build has run out of chances.
+   */
+  private async requeueOrphanedBuild(
+    deploymentId: string
+  ): Promise<'requeued' | 'superseded' | 'ineligible'> {
+    const building = await this.prisma.buildRun.findFirst({
       where: { deploymentId, status: 'building' },
       orderBy: { startedAt: 'desc' }
     });
-    if (!run) return false;
-    if (run.detail === DeploymentsService.REQUEUE_DETAIL) return false;
-    if (run.triggerType !== 'auto' && run.triggerType !== 'manual') return false;
-
-    await this.prisma.buildRun.update({
-      where: { id: run.id },
-      data: {
-        status: 'scheduled',
-        detail: DeploymentsService.REQUEUE_DETAIL,
-        workerId: null,
-        startedAt: null,
+    // With no run in `building` the newest run is still the record of what
+    // this build was meant to do — most often because it was concluded out
+    // from under a build that was still starting.
+    const source =
+      building ??
+      (await this.prisma.buildRun.findFirst({
+        where: { deploymentId },
+        orderBy: { createdAt: 'desc' }
+      }));
+    if (!source) return 'ineligible';
+    if (
+      !isRequeueable({
+        isBuilding: building !== null,
+        workerId: source.workerId,
         heartbeatAt: null,
-        checkRunId: null,
-        githubInstallationId: null,
-        repoFullName: null
-      }
-    });
-    await this.prisma.deployment.updateMany({
-      where: { id: deploymentId, buildStatus: 'building' },
-      data: { buildStatus: 'pending' }
-    });
+        triggerType: source.triggerType,
+        detail: source.detail
+      })
+    ) {
+      return 'ineligible';
+    }
+
+    if (building) {
+      // The ids are cleared so the retry's own check run can be attached to
+      // this row: attachGitHubContext only writes onto a run whose checkRunId
+      // is still null.
+      await this.prisma.buildRun.update({
+        where: { id: building.id },
+        data: {
+          status: 'scheduled',
+          detail: REQUEUE_DETAIL,
+          workerId: null,
+          startedAt: null,
+          heartbeatAt: null,
+          checkRunId: null,
+          githubInstallationId: null,
+          repoFullName: null
+        }
+      });
+      await this.prisma.deployment.updateMany({
+        where: { id: deploymentId, buildStatus: 'building' },
+        data: { buildStatus: 'pending' }
+      });
+    } else {
+      // Nothing to reset: the run that owned this build is already concluded.
+      // Schedule a fresh attempt carrying the same commit rather than
+      // rewriting a row the build history already shows as finished.
+      const scheduled = await this.buildQueue.scheduleRetryForConcludedRun(
+        deploymentId,
+        source,
+        REQUEUE_DETAIL
+      );
+      if (!scheduled) return 'superseded';
+    }
     await this.prisma.$executeRaw`
       UPDATE "deployments"
-      SET "build_logs" = COALESCE("build_logs", '') || ${`\n[INFO] Server restarted before the build job was created; the build was requeued automatically.\n`}
+      SET "build_logs" = COALESCE("build_logs", '') || ${`\n[INFO] This build lost track of its build job before one was created; it was requeued automatically.\n`}
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
     this.buildQueue.kick();
-    return true;
+    return 'requeued';
   }
 
-  private async markBuildFailed(deploymentId: string, reason: string) {
+  private async markBuildFailed(
+    deploymentId: string,
+    reason: string,
+    cause: RecoveryReason | BuildOutcomeReason = 'internal'
+  ) {
     const { count } = await this.prisma.deployment.updateMany({
       where: { id: deploymentId, buildStatus: { not: 'succeeded' } },
       data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason }
@@ -739,6 +915,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
+    // This used to be written to a column and appended to the build log and
+    // nowhere else, so a build the sweep killed left no trace in Datadog —
+    // not a log line, not a metric, not a span. Ending someone's build is the
+    // loudest thing this service does; it logs and reports like it.
+    this.logger.error(`[BuildRecovery] Failed ${deploymentId}: ${reason} (${cause})`);
+    recordBuildOutcome({
+      outcome: 'failed',
+      source: 'recovery',
+      reason: RECOVERY_OUTCOME_REASON[cause] ?? 'internal',
+      deploymentId,
+      detail: reason
+    });
     await this.prisma.$executeRaw`
       UPDATE "deployments"
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n[ERROR] ${reason}\n`}

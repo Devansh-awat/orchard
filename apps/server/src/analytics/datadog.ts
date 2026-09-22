@@ -196,6 +196,7 @@ export type BuildOutcomeReason =
   | 'pod_start_failed'
   | 'job_missing'
   | 'job_deleted'
+  | 'job_never_created'
   | 'watch_timeout'
   | 'image_unknown'
   | 'k8s_missing'
@@ -274,6 +275,89 @@ export function recordBuildOutcome(meta: {
     span.finish();
   } catch {
     /* telemetry must never break builds */
+  }
+}
+
+/**
+ * Every pass the build recovery sweep takes over a stuck build, with the facts
+ * it decided on. This exists because the failure it used to produce was
+ * invisible: the reason was written to a Postgres column and appended to build
+ * logs, and nowhere else, so "Build job not found after server restart" could
+ * not be found in Datadog at all — not as a log line, not as a metric, not as
+ * a span. There was no way to ask how often it fired or what it saw.
+ *
+ * Emitted on every decision, not just failures, so the denominator is there:
+ * `defer` dominating is healthy, `fail` climbing is not, and the tags say
+ * which fact drove it.
+ */
+export function recordRecoveryDecision(meta: {
+  action: string;
+  reason: string;
+  deploymentId: string;
+  deploymentName?: string;
+  namespace?: string;
+  buildStep?: string | null;
+  jobName?: string | null;
+  /** How many jobs the cluster listed; -1 when it did not answer. */
+  jobCount: number;
+  informerHealthy: boolean;
+  /** Age of the build when the sweep looked, in ms. */
+  buildAgeMs?: number | null;
+  hadBuildingRun: boolean;
+  detail?: string;
+}): void {
+  try {
+    const tags = [
+      `action:${meta.action}`,
+      `reason:${meta.reason}`,
+      `build_step:${meta.buildStep ?? 'unknown'}`,
+      `informer:${meta.informerHealthy ? 'healthy' : 'unhealthy'}`,
+      `had_building_run:${meta.hadBuildingRun}`
+    ];
+    const statsd = (
+      tracer as unknown as {
+        dogstatsd?: {
+          increment(name: string, value?: number, tags?: string[]): void;
+          distribution(name: string, value: number, tags?: string[]): void;
+        };
+      }
+    ).dogstatsd;
+    statsd?.increment('orchard.build.recovery.decision', 1, tags);
+    if (typeof meta.buildAgeMs === 'number' && Number.isFinite(meta.buildAgeMs)) {
+      statsd?.distribution('orchard.build.recovery.build_age_ms', meta.buildAgeMs, tags);
+    }
+  } catch {
+    /* telemetry must never break recovery */
+  }
+
+  try {
+    const span = tracer.startSpan('build.recovery', {
+      childOf: tracer.scope().active() ?? undefined,
+      tags: {
+        'service.name': 'orchard-builds',
+        'resource.name': `build.recovery.${meta.action}`,
+        'recovery.action': meta.action,
+        'recovery.reason': meta.reason,
+        'recovery.job_count': meta.jobCount,
+        'recovery.informer_healthy': meta.informerHealthy,
+        'recovery.had_building_run': meta.hadBuildingRun,
+        'recovery.build_age_ms': meta.buildAgeMs ?? undefined,
+        'build.deployment_id': meta.deploymentId,
+        'build.deployment_name': meta.deploymentName,
+        'build.namespace': meta.namespace,
+        'build.last_phase': meta.buildStep ?? 'unknown',
+        'build.job_name': meta.jobName ?? undefined,
+        'build.detail': meta.detail?.slice(0, 4000)
+      }
+    });
+    // Only a decision that ends a build the user did not ask to end is an
+    // error. Adopting, deferring and requeueing are the sweep working.
+    if (meta.action === 'fail') {
+      span.setTag('error', new Error(meta.detail || `build recovery failed: ${meta.reason}`));
+    }
+    span.finish();
+  } catch {
+    /* telemetry must never break recovery */
   }
 }
 

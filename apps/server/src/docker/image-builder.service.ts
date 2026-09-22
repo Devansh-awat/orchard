@@ -414,7 +414,7 @@ export class ImageBuilderService {
       await this.prisma.$executeRaw`
         UPDATE "deployments"
         SET "build_logs" = COALESCE("build_logs", '') || ${line},
-            "updated_at" = NOW()
+            "updated_at" = (NOW() AT TIME ZONE 'UTC')
         WHERE "id" = ${deploymentId}::uuid
       `;
     } catch (error) {
@@ -516,7 +516,7 @@ export class ImageBuilderService {
             to_jsonb(${offsetValue}::bigint),
             true
           ),
-          "updated_at" = NOW()
+          "updated_at" = (NOW() AT TIME ZONE 'UTC')
           WHERE "id" = ${deploymentId}::uuid
         `;
         return;
@@ -528,7 +528,7 @@ export class ImageBuilderService {
           WHEN RIGHT("build_logs", 1) = E'\n' THEN "build_logs" || ${sanitized}
           ELSE "build_logs" || E'\n' || ${sanitized}
         END,
-        "updated_at" = NOW()
+        "updated_at" = (NOW() AT TIME ZONE 'UTC')
         WHERE "id" = ${deploymentId}::uuid
       `;
     } catch (error) {
@@ -2178,7 +2178,7 @@ exit $rc`
                 '{__image}',
                 ${JSON.stringify(`${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`)}::jsonb
               ),
-              "updated_at" = NOW()
+              "updated_at" = (NOW() AT TIME ZONE 'UTC')
           WHERE "id" = ${deploymentId}::uuid
         `;
         this.emitBuildChanged(deploymentId).catch(() => {});
@@ -2563,7 +2563,7 @@ exit $rc`
       await this.prisma.$executeRaw`
         UPDATE "deployments"
         SET "build_logs" = COALESCE("build_logs", '') || ${block},
-            "updated_at" = NOW()
+            "updated_at" = (NOW() AT TIME ZONE 'UTC')
         WHERE "id" = ${deploymentId}::uuid
       `;
     } catch (error) {
@@ -3082,7 +3082,7 @@ exit $rc`
           }
         } else if (deploymentId) {
           this.prisma.$executeRaw`
-            UPDATE "deployments" SET "updated_at" = NOW() WHERE "id" = ${deploymentId}::uuid
+            UPDATE "deployments" SET "updated_at" = (NOW() AT TIME ZONE 'UTC') WHERE "id" = ${deploymentId}::uuid
           `.catch(() => {});
         }
 
@@ -3410,7 +3410,7 @@ exit $rc`
                 '{cloning}',
                 ${now}::text::jsonb
               ),
-              "updated_at" = NOW()
+              "updated_at" = (NOW() AT TIME ZONE 'UTC')
           WHERE "id" = ${deploymentId}::uuid
         `;
         this.emitBuildChanged(deploymentId).catch(() => {});

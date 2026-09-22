@@ -818,7 +818,7 @@ model BuildRun {
   deploymentId String @map("deployment_id") @db.Uuid
   // scheduled | building | succeeded | failed | skipped | canceled
   status       String @default("scheduled") @db.VarChar(20)
-  // auto | manual | rebuild
+  // auto | manual | initial
   triggerType  String @map("trigger_type") @db.VarChar(20)
 
   commitSha            String? @map("commit_sha") @db.VarChar(255)
