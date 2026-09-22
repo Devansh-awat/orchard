@@ -229,7 +229,7 @@
 		<SettingsSection
 			index={1}
 			title="Typeface"
-			description="Changes every piece of interface text. Hyperlegible and Dyslexic are drawn for readability rather than style."
+			description="Hyperlegible and Dyslexic are drawn for readability rather than style."
 		>
 			{#snippet icon(_hovered)}<Type class="h-[18px] w-[18px]" />{/snippet}
 			<FontPicker />

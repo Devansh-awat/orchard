@@ -63,11 +63,7 @@
 	}
 </script>
 
-<SettingsSection
-	{index}
-	title="Active sessions"
-	description="Devices where you're currently signed in"
->
+<SettingsSection {index} title="Active sessions">
 	{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
 	{#snippet badge()}
 		{#if !sessionsLoading && sessions.length > 0}

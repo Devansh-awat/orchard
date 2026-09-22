@@ -5,12 +5,10 @@
 
 	let {
 		label,
-		hint = '',
 		icon,
 		onclick
 	}: {
 		label: string;
-		hint?: string;
 		icon?: Snippet;
 		onclick: () => void;
 	} = $props();
@@ -30,12 +28,7 @@
 			{@render icon()}
 		</div>
 	{/if}
-	<div class="cp-text">
-		<span class="cp-label">{label}</span>
-		{#if hint}
-			<span class="cp-hint">{hint}</span>
-		{/if}
-	</div>
+	<span class="cp-label">{label}</span>
 	<div class="cp-arrow">
 		<ChevronRight size={16} animate={iconAnimation(hovered)} />
 	</div>
@@ -78,21 +71,11 @@
 		color: var(--text-default);
 		flex-shrink: 0;
 	}
-	.cp-text {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 0.0625rem;
-	}
 	.cp-label {
+		flex: 1;
 		font-size: var(--text-body);
 		line-height: var(--lh-body);
 		font-weight: 600;
-	}
-	.cp-hint {
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
 	}
 	.cp-arrow {
 		color: var(--text-muted);

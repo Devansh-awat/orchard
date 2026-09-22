@@ -105,11 +105,7 @@
 			</div>
 		</div>
 	{:else}
-		<ConnectPrompt
-			label="Connect Tailscale"
-			hint="Expose deployments directly to your Tailscale network"
-			onclick={() => (showTailscaleForm = true)}
-		>
+		<ConnectPrompt label="Connect Tailscale" onclick={() => (showTailscaleForm = true)}>
 			{#snippet icon()}<Globe class="h-5 w-5" />{/snippet}
 		</ConnectPrompt>
 	{/if}

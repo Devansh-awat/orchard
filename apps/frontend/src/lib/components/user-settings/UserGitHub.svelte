@@ -39,7 +39,7 @@
 	} = $props();
 </script>
 
-<SettingsSection {index} title="GitHub" description="Connect to deploy from your repositories">
+<SettingsSection {index} title="GitHub" description="Deploy from your repositories">
 	{#snippet icon(_hovered)}<Github class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
 		{#if !loading}
@@ -55,11 +55,7 @@
 	{#if loading}
 		<div class="ug-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
 	{:else if !githubLinked}
-		<ConnectPrompt
-			label="Sign in with GitHub"
-			hint="We verify your identity to confirm which repositories you can deploy. No extra scopes requested."
-			onclick={onLink}
-		>
+		<ConnectPrompt label="Connect GitHub" onclick={onLink}>
 			{#snippet icon()}<Github class="h-5 w-5" />{/snippet}
 		</ConnectPrompt>
 	{:else}

@@ -285,7 +285,7 @@
 					{/each}
 				</div>
 			{:else if tokens.length === 0}
-				<EmptyState title="No API tokens yet" description="Create one to get started.">
+				<EmptyState title="No API tokens yet">
 					{#snippet icon()}<KeyRound class="h-6 w-6" />{/snippet}
 				</EmptyState>
 			{:else}

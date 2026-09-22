@@ -199,11 +199,7 @@
 	const webhookCount = $derived(destinations.filter((d) => d.type !== 'email').length);
 </script>
 
-<SettingsSection
-	title="Notifications"
-	description="What Orchard tells you about, and where. Only affects you"
-	{index}
->
+<SettingsSection title="Notifications" description="Only affects your account" {index}>
 	{#snippet icon(hovered)}<Bell size={18} animate={hovered} />{/snippet}
 
 	{#if loading}
