@@ -19,6 +19,11 @@ import { parseRepoUrl, withGitHubCredentials } from './repo-url';
 import { injectBuildArgsScript } from './build-args';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
+import {
+  createRawjsonTranscoder,
+  transcodeRawjson,
+  type RawjsonTranscoder
+} from './buildkit-rawjson';
 import { builderContainerEnv, buildSafeEnv } from '../env/reserved-env';
 import {
   dockerConfigJson,
@@ -91,7 +96,7 @@ export interface BuildJobStatus {
 const BUILDKIT_PUSH_PHASE_RE =
   /exporting to [^\n]*image|exporting layers|sending tarball|pushing manifest/i;
 
-const BUILDKIT_STEP_RE = /(?:^|\n)#\d+\s/;
+const BUILDKIT_STEP_RE = /(?:^|\n)#(?:[0-9a-f]{8}|\d+)\s/;
 
 /** Main container of a super build Job; BuildKit jobs use `buildkit`. */
 const DEPOT_CONTAINER = 'depot-build';
@@ -101,6 +106,8 @@ export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
 
   private buildkitLogOffsets = new Map<string, number>();
+
+  private buildkitTranscoders = new Map<string, RawjsonTranscoder>();
 
   private buildkitPushDetected = new Set<string>();
 
@@ -157,6 +164,11 @@ export class ImageBuilderService {
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
 
   private readonly buildkitImage = process.env.BUILDKIT_IMAGE || 'moby/buildkit:v0.31.1';
+
+  // rawjson landed in BuildKit v0.15. The escape hatch is for anyone pinning
+  // BUILDKIT_IMAGE to something older, where buildctl rejects the mode
+  // outright; `plain` still parses, just with BuildKit's own display lag.
+  private readonly buildkitProgress = process.env.BUILDKIT_PROGRESS || 'rawjson';
 
   // Railpack ships three artefacts on independent version lines: the CLI that
   // writes the plan, the BuildKit gateway frontend that executes it, and the
@@ -425,15 +437,20 @@ export class ImageBuilderService {
   // Stream raw BuildKit pod output into deployment.buildLogs, appending only
   // the new chunk since last poll (so the frontend can parse the full #N step
   // history). Tracks offset per job so re-polling the full pod log doesn't
-  // duplicate content.
+  // duplicate content. The pod emits rawjson, which is transcoded to the `#id`
+  // text format here; super builds emit plain text and pass straight through.
   private async streamBuildkitOutput(
     deploymentId: string | undefined,
     jobName: string,
-    fullLogs: string | undefined
+    fullLogs: string | undefined,
+    final = false
   ) {
     if (!deploymentId || !fullLogs) return;
-    const chunk = this.takeLogChunk(jobName, fullLogs);
-    if (chunk === null) return;
+    const raw = this.takeLogChunk(jobName, fullLogs);
+    const transcoder = this.transcoderFor(jobName);
+    let chunk = raw === null ? '' : transcoder.feed(raw);
+    if (final) chunk += transcoder.flush();
+    if (!chunk) return;
 
     await this.appendStreamedChunk(deploymentId, chunk, jobName, fullLogs.length);
 
@@ -448,6 +465,25 @@ export class ImageBuilderService {
     }
 
     this.emitBuildChanged(deploymentId).catch(() => {});
+  }
+
+  // Close every step still open on a build that will never report again.
+  private async flushBuildkitSteps(deploymentId: string | undefined, jobName: string) {
+    const transcoder = this.buildkitTranscoders.get(jobName);
+    if (!deploymentId || !transcoder) return;
+    const chunk = transcoder.flush();
+    if (!chunk) return;
+    await this.appendStreamedChunk(deploymentId, chunk);
+    this.emitBuildChanged(deploymentId).catch(() => {});
+  }
+
+  private transcoderFor(jobName: string): RawjsonTranscoder {
+    let transcoder = this.buildkitTranscoders.get(jobName);
+    if (!transcoder) {
+      transcoder = createRawjsonTranscoder();
+      this.buildkitTranscoders.set(jobName, transcoder);
+    }
+    return transcoder;
   }
 
   private async streamPusherOutput(
@@ -539,6 +575,7 @@ export class ImageBuilderService {
   private clearBuildkitOffset(jobName: string) {
     this.buildkitLogOffsets.delete(jobName);
     this.buildkitLogOffsets.delete(`${jobName}:pusher`);
+    this.buildkitTranscoders.delete(jobName);
   }
 
   private async setBuildStep(deploymentId: string | undefined, step: string) {
@@ -2236,7 +2273,7 @@ exit $rc`
     const args: string[] = [
       'build',
       '--progress',
-      'plain',
+      this.buildkitProgress,
       '--frontend',
       'dockerfile.v0',
       '--local',
@@ -2305,7 +2342,7 @@ exit $rc`
     const args: string[] = [
       'build',
       '--progress',
-      'plain',
+      this.buildkitProgress,
       '--frontend',
       'gateway.v0',
       '--opt',
@@ -2964,6 +3001,9 @@ exit $rc`
           if (missingFor >= missingGraceMs) {
             lastKnownPhase = 'gone';
             scheduleSpan.finish({ 'build.schedule_outcome': 'gone' });
+            // The pod is unreachable, so no step will ever report back. Close
+            // out whatever was open rather than leaving it spinning forever.
+            await this.flushBuildkitSteps(deploymentId, jobName);
             this.clearBuildkitOffset(jobName);
             this.buildkitPushDetected.delete(jobName);
             this.buildkitBuildingDetected.delete(jobName);
@@ -3015,7 +3055,7 @@ exit $rc`
           console.log(
             `[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`
           );
-          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
+          await this.streamBuildkitOutput(deploymentId, jobName, status.logs, true);
           await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
           this.appendLog(deploymentId, `Build job ${jobName} completed successfully`).catch(
             () => {}
@@ -3035,11 +3075,12 @@ exit $rc`
         }
 
         if (status.status === 'failed') {
-          const errorMsg = status.logs || 'Unknown error - no logs available';
+          const failureLogs = transcodeRawjson(status.logs);
+          const errorMsg = failureLogs || 'Unknown error - no logs available';
           console.error(
             `[ImageBuilder] Build job ${jobName} failed after ${elapsedSeconds}s. Error: ${errorMsg.substring(0, 500)}`
           );
-          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
+          await this.streamBuildkitOutput(deploymentId, jobName, status.logs, true);
           await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
           await this.appendLog(deploymentId, `Build job ${jobName} failed`, 'ERROR');
 
@@ -3057,7 +3098,7 @@ exit $rc`
           await this.emitBuildPhaseSpans(jobName, deploymentId);
 
           this.jobInformer?.release(jobName);
-          const summary = summarizeBuildFailure(status.logs, status.pusherLogs);
+          const summary = summarizeBuildFailure(failureLogs, status.pusherLogs);
           recordBuildOutcome({
             outcome: 'failed',
             source: 'watch',
@@ -3204,7 +3245,7 @@ exit $rc`
     try {
       const finalStatus = await this.getBuildJobStatus(jobName);
       finalPhase = finalStatus.status;
-      await this.streamBuildkitOutput(deploymentId, jobName, finalStatus.logs);
+      await this.streamBuildkitOutput(deploymentId, jobName, finalStatus.logs, true);
       await this.streamPusherOutput(deploymentId, jobName, finalStatus.pusherLogs);
       await this.appendLog(deploymentId, `Final status: ${finalStatus.status}`, 'ERROR');
     } catch (finalCheckError) {

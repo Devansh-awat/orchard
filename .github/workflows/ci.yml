@@ -255,6 +255,10 @@ jobs:
       # real build error is never mistaken for a Kata start race.
       - name: Sandbox start fault tests
         run: pnpm --filter server test:build-faults
+      # Every build step the UI draws comes out of this transcoder, and a step
+      # whose completion it drops is one the user watches spin forever.
+      - name: BuildKit rawjson transcoder tests
+        run: pnpm --filter server test:buildkit-rawjson
       # A PodDisruptionBudget that covers every replica blocks node drains
       # outright, so the rule deciding when one is written is pinned here.
       - name: Disruption budget tests

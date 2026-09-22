@@ -1,6 +1,12 @@
-// Parser for BuildKit `--progress=plain` output. Groups raw log lines by
-// their `#N` step id and extracts stage labels, durations, cache hits, and
-// per-step output so the UI can render a Depot-style stepped log view.
+// Parser for the server's BuildKit step stream. Groups raw log lines by their
+// `#id` step id and extracts stage labels, durations, cache hits, and per-step
+// output so the UI can render a Depot-style stepped log view.
+//
+// Two producers write this format. The server transcodes BuildKit's
+// `--progress=rawjson` stream into it (stable 8-hex step ids, and lifecycle
+// lines emitted the instant they are true), and super builds still emit
+// BuildKit's own `--progress=plain` display output (`#12` counter ids, with
+// BuildKit's display buffering, so a step can look busy after it finished).
 
 export type StepStatus = 'pending' | 'running' | 'done' | 'cached' | 'error' | 'canceled';
 
@@ -32,15 +38,17 @@ export interface ParsedBuildLogs {
 // Match `[1747...] [INFO] msg` prefix produced by appendLog.
 const PREFIX_RE = /^\[(\d{10,})\]\s*\[(INFO|ERROR|WARNING)\]\s?/;
 
+// A step id is a plain-output counter (`#5`) or a transcoded digest (`#a91f0c3e`).
+const ID = '[0-9a-f]{8}|\\d+';
 // `#5 [base 1/3] FROM docker.io/…`
-const STEP_HEADER_RE = /^#(\d+)\s+\[([^\]]+)\]\s*(.*)$/;
+const STEP_HEADER_RE = new RegExp(`^#(${ID})\\s+\\[([^\\]]+)\\]\\s*(.*)$`);
 // `#5 DONE 0.4s` / `#5 CACHED` / `#5 ERROR: …` / `#5 CANCELED`
-const STEP_DONE_RE = /^#(\d+)\s+DONE\s+([\d.]+)s\s*$/;
-const STEP_CACHED_RE = /^#(\d+)\s+CACHED\s*$/;
-const STEP_ERROR_RE = /^#(\d+)\s+ERROR:?\s*(.*)$/;
-const STEP_CANCELED_RE = /^#(\d+)\s+CANCELED\s*$/;
+const STEP_DONE_RE = new RegExp(`^#(${ID})\\s+DONE\\s+([\\d.]+)s\\s*$`);
+const STEP_CACHED_RE = new RegExp(`^#(${ID})\\s+CACHED\\s*$`);
+const STEP_ERROR_RE = new RegExp(`^#(${ID})\\s+ERROR:?\\s*(.*)$`);
+const STEP_CANCELED_RE = new RegExp(`^#(${ID})\\s+CANCELED\\s*$`);
 // Any other `#5 …` substep line
-const STEP_SUBLINE_RE = /^#(\d+)\s+(.*)$/;
+const STEP_SUBLINE_RE = new RegExp(`^#(${ID})\\s+(.*)$`);
 // `transferring …: 14.30MB done` or `… 1.7kB`
 const TRANSFER_RE = /(?:transferring\b[^:]*:\s*|\s)([\d.]+\s?[KMG]?B)(?:\s+done)?\s*$/i;
 
@@ -210,8 +218,11 @@ function parseLineInto(state: ParserState, rawLine: string) {
 			return;
 		}
 		// Capture transferred sizes shown next to the stage badge in Depot.
+		// Always take the latest reading: the first one is whatever happened to be
+		// in flight when the step was sighted, which left rows stuck showing
+		// "0.04 kB" for the whole build.
 		const tm = body.match(TRANSFER_RE);
-		if (tm && !step.transferred) step.transferred = tm[1].replace(/\s+/, ' ');
+		if (tm) step.transferred = tm[1].replace(/\s+/, ' ');
 		step.output.push(body);
 	}
 }

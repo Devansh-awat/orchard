@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronRight, Check, X, Loader2, Database, Info } from 'lucide-svelte';
+	import { ChevronRight, Check, X, Loader2, Database, Info, Ban } from 'lucide-svelte';
 	import {
 		createBuildkitParser,
 		formatDuration,
@@ -126,6 +126,8 @@
 								<X class="h-3 w-3" />
 							{:else if step.status === 'running'}
 								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else if step.status === 'canceled'}
+								<Ban class="h-3 w-3" />
 							{:else}
 								<span class="bs-dot"></span>
 							{/if}
@@ -151,6 +153,8 @@
 						<span class="bs-right">
 							{#if step.status === 'cached'}
 								<span class="bs-cached-pill">cached</span>
+							{:else if step.status === 'canceled'}
+								<span class="bs-canceled-pill">canceled</span>
 							{:else if step.durationSec !== null}
 								<AnimatedNumber
 									value={step.durationSec}
@@ -409,9 +413,14 @@
 		color: var(--button-bg, rgb(59, 130, 246));
 	}
 
-	.bs-status[data-status='pending'],
+	.bs-status[data-status='pending'] {
+		background-color: transparent;
+	}
+
 	.bs-status[data-status='canceled'] {
 		background-color: transparent;
+		color: var(--text-muted);
+		opacity: 0.7;
 	}
 
 	.bs-dot {
@@ -507,6 +516,16 @@
 		border-radius: var(--radius-xs);
 		background-color: rgba(34, 197, 94, 0.15);
 		color: rgb(34, 197, 94);
+	}
+
+	.bs-canceled-pill {
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		padding: 0.1rem 0.4rem;
+		border-radius: var(--radius-xs);
+		background-color: var(--surface-subtle, rgba(148, 163, 184, 0.15));
+		color: var(--text-muted);
 	}
 
 	.bs-chevron {

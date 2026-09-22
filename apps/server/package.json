@@ -30,6 +30,7 @@
     "test:build-args": "tsx --test test/build-arg-injection.test.ts",
     "test:build-pacing": "tsx --test test/build-poll-pacing.test.ts",
     "test:build-faults": "tsx --test test/build-faults.test.ts",
+    "test:buildkit-rawjson": "tsx --test test/buildkit-rawjson.test.ts",
     "test:disruption-budget": "tsx --test test/disruption-budget.test.ts",
     "test:dockerfile-env": "tsx --test test/dockerfile-env-scrape.test.ts",
     "test:registry-pull-auth": "tsx --test test/registry-pull-auth.test.ts",

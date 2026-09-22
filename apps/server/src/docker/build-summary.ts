@@ -1,3 +1,8 @@
+// Step ids are BuildKit's own `#12` counter on plain output, or the stable
+// digest-derived hex id the rawjson transcoder assigns.
+const STEP_ERROR_RE = /^#([0-9a-f]{8}|\d+) ERROR:/;
+const STEP_ERROR_PREFIX_RE = /^#(?:[0-9a-f]{8}|\d+) ERROR: /;
+
 /**
  * Distill a failed build's log dump into the few lines a user needs. The full
  * logs already stream into buildLogs; the summary must stay short because the
@@ -16,7 +21,7 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
 
   const lines = (logs ?? '').split('\n');
   const solveError = lines.filter((l) => l.startsWith('error: failed to solve:')).pop();
-  const stepErrors = lines.filter((l) => /^#\d+ ERROR:/.test(l)).slice(-2);
+  const stepErrors = lines.filter((l) => STEP_ERROR_RE.test(l)).slice(-2);
   parts.push(...stepErrors);
 
   // The "#N ERROR: process ... exit code: 1" line says a step failed, never why.
@@ -24,17 +29,20 @@ export function summarizeBuildFailure(logs?: string | null, pusherLogs?: string 
   // dropped: a user saw "pnpm run build did not complete successfully" with no
   // mention of the Vite error that actually broke the build. Carry the tail of
   // the failing step's output so the headline says the cause.
-  const failingStep = stepErrors[stepErrors.length - 1]?.match(/^#(\d+) ERROR:/)?.[1];
+  const failingStep = stepErrors[stepErrors.length - 1]?.match(STEP_ERROR_RE)?.[1];
   if (failingStep) {
     const prefix = new RegExp(`^#${failingStep} (?:\\d+\\.\\d+ )?`);
     const own = lines
-      .filter((l) => prefix.test(l) && !/^#\d+ ERROR:/.test(l))
+      .filter((l) => prefix.test(l) && !STEP_ERROR_RE.test(l))
       .map((l) => l.replace(prefix, '').trimEnd())
       .filter((l) => l.trim().length > 0);
     parts.push(...own.slice(-6));
   }
 
-  if (solveError && !stepErrors.some((e) => solveError.includes(e.replace(/^#\d+ ERROR: /, '')))) {
+  if (
+    solveError &&
+    !stepErrors.some((e) => solveError.includes(e.replace(STEP_ERROR_PREFIX_RE, '')))
+  ) {
     parts.push(solveError);
   }
 
