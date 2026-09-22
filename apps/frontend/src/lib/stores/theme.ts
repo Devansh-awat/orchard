@@ -16,6 +16,7 @@ import {
 	type SimpleThemeColors,
 	type ThemeColors
 } from '$lib/theme/generate';
+import { hexToOklch } from '$lib/theme/color';
 import { DEFAULT_FONT, fontById, type FontId } from '$lib/theme/fonts';
 import { legacyById, LEGACY_THEMES } from '$lib/theme/legacy';
 
@@ -58,6 +59,19 @@ const OVERRIDE_KEYS: (keyof SimpleThemeColors)[] = [
 	'success',
 	'warning'
 ];
+
+// Pinned colours win over the generated palette, so a pin from the other scheme
+// makes Light/Dark look broken: the mode flips but the page does not. These two
+// groups are the ones that carry the scheme, and they get dropped when they
+// contradict it. Accent and status colours read fine either way, so they stay.
+const SURFACE_OVERRIDES: (keyof SimpleThemeColors)[] = [
+	'background',
+	'card',
+	'border',
+	'sidebarBackground'
+];
+
+const INK_OVERRIDES: (keyof SimpleThemeColors)[] = ['foreground', 'muted', 'sidebarForeground'];
 
 export const themeColorCategories = [
 	{
@@ -130,6 +144,23 @@ function sanitizeOverrides(input: unknown): Partial<SimpleThemeColors> {
 	return out;
 }
 
+function pruneOverrides(
+	overrides: Partial<SimpleThemeColors>,
+	scheme: Scheme
+): Partial<SimpleThemeColors> {
+	const wantsLight = scheme === 'light';
+	const next = { ...overrides };
+	for (const key of SURFACE_OVERRIDES) {
+		const hex = next[key];
+		if (hex && hexToOklch(hex).l > 0.5 !== wantsLight) delete next[key];
+	}
+	for (const key of INK_OVERRIDES) {
+		const hex = next[key];
+		if (hex && hexToOklch(hex).l > 0.5 === wantsLight) delete next[key];
+	}
+	return next;
+}
+
 function defaultState(): ThemeState {
 	const preset = presetById(DEFAULT_PRESET_ID);
 	return {
@@ -183,7 +214,10 @@ function loadState(): ThemeState {
 	return {
 		mode,
 		spec,
-		overrides: sanitizeOverrides(stored.overrides),
+		overrides: pruneOverrides(
+			sanitizeOverrides(stored.overrides),
+			resolveScheme(mode, prefersDark())
+		),
 		presetId: matchPresetId(spec),
 		font: fontById(stored.font).id
 	};
@@ -354,6 +388,11 @@ function createThemeStore() {
 		if (patch.spec && patch.overrides === undefined && matchLegacy(next.overrides)) {
 			next.overrides = {};
 		}
+		if (patch.mode && patch.overrides === undefined) {
+			next.overrides = matchLegacy(next.overrides)
+				? {}
+				: pruneOverrides(next.overrides, resolveScheme(next.mode, prefersDark()));
+		}
 		commit(next, options);
 	}
 
@@ -378,7 +417,12 @@ function createThemeStore() {
 			commit(next);
 			window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
 				systemDark.set(event.matches);
-				if (get(state).mode === 'auto') commit(get(state));
+				const current = get(state);
+				if (current.mode !== 'auto') return;
+				commit({
+					...current,
+					overrides: pruneOverrides(current.overrides, event.matches ? 'dark' : 'light')
+				});
 			});
 		},
 
