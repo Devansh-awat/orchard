@@ -613,8 +613,7 @@
 		if (!deployment || savingStrategy || next === strategyValue) return;
 		if (hasPvcVolume && next !== 'recreate') {
 			toasts.add({
-				title: 'Only recreate works with a PVC',
-				description: 'Remove the PVC volume to use rolling updates or blue/green.',
+				title: 'A PVC volume needs recreate',
 				color: 'warning'
 			});
 			return;

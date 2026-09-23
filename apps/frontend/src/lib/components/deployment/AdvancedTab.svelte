@@ -225,9 +225,7 @@
 							<Check size={14} class="text-primary-500" />
 						{/if}
 					</div>
-					<p class="strategy-card-desc">
-						Bring up new pods, then drain the old ones, with zero downtime.
-					</p>
+					<p class="strategy-card-desc">New pods first, then the old ones drain.</p>
 				</button>
 				<button
 					type="button"
@@ -242,9 +240,7 @@
 							<Check size={14} class="text-primary-500" />
 						{/if}
 					</div>
-					<p class="strategy-card-desc">
-						Tear down all pods first, then start the new ones. Expect brief downtime.
-					</p>
+					<p class="strategy-card-desc">Stop everything, then start the new. Brief downtime.</p>
 				</button>
 				<button
 					type="button"
@@ -260,18 +256,14 @@
 						{/if}
 					</div>
 					<p class="strategy-card-desc">
-						Start the new release beside the old one and move traffic only once every pod is ready.
-						If it never is, nothing moves.
+						Traffic moves once the new pods are ready. If they never are, nothing moves.
 					</p>
 				</button>
 			</div>
 			{#if hasPvcVolume}
 				<div class="strategy-note mt-3">
 					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
-					<span
-						>This app has a PVC volume, so rolling updates and blue/green are unavailable. Pods
-						can't share a ReadWriteOnce volume while two copies run.</span
-					>
+					<span>A PVC volume needs recreate.</span>
 				</div>
 			{/if}
 		</SectionCard>
@@ -288,10 +280,7 @@
 					Save
 				</Button>
 			{/snippet}
-			<p class="strategy-card-desc">
-				How many pods Kubernetes must keep ready while it drains the node underneath them, during a
-				cluster upgrade or a maintenance move. Set it to 0 to let the app go all the way down.
-			</p>
+			<p class="strategy-card-desc">Pods kept ready while a node drains. 0 lets the app go down.</p>
 			<div class="hc-field mt-3">
 				<label class="hc-label" for="pdb-min-available">Keep ready during a drain</label>
 				<div class="hc-num-wrap">
@@ -309,17 +298,13 @@
 			{#if Number(pdbMinAvailable) <= 0}
 				<div class="strategy-note mt-3">
 					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
-					<span>No budget is set, so a node drain may take every pod of this app down at once.</span
-					>
+					<span>A drain can take every pod down at once.</span>
 				</div>
 			{:else if !pdbActive}
 				<div class="strategy-note mt-3">
 					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 					<span
-						>This app runs {replicaCount}
-						{replicaCount === 1 ? 'replica' : 'replicas'}, so the budget is kept as a setting but
-						not enforced: one that covers every pod you have would block node drains forever instead
-						of moving the app. It starts applying above {pdbMinAvailable} replicas.</span
+						>Applies above {pdbMinAvailable} replicas. Covering every pod would block drains.</span
 					>
 				</div>
 			{/if}

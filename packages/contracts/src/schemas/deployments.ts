@@ -631,8 +631,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: deploymentBase
   },
   'PATCH /deployments/:id/strategy': {
-    summary:
-      'Change the deploy strategy. blueGreen brings the new image up beside the old one, moves traffic only once it is ready, and rolls back on its own if it never is',
+    summary: 'Change the deploy strategy',
     scope: 'deploy',
     request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate', 'blueGreen']) }),
     response: deploymentBase

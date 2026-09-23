@@ -46,7 +46,7 @@
 
 	const SOUND_OPTIONS = [
 		{ value: 'off', label: 'Off', hint: 'Silent' },
-		{ value: 'on', label: 'On', hint: 'A short cue when a build you are waiting on finishes' }
+		{ value: 'on', label: 'On', hint: 'A cue when a build finishes' }
 	];
 
 	const soundHint = $derived(

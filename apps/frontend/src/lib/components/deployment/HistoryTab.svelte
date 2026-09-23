@@ -204,25 +204,25 @@
 			return {
 				title: 'No deploys yet',
 				description: deployment.githubRepo
-					? `Push to ${deployment.githubBranch || 'main'} or hit Redeploy to ship the first one.`
-					: 'The first deploy will show up here.'
+					? `Push to ${deployment.githubBranch || 'main'} to deploy.`
+					: ''
 			};
 		}
 		if (f === 'changes') {
 			return {
 				title: 'No changes yet',
-				description: 'Settings edits and actions by people land here.'
+				description: ''
 			};
 		}
 		if (f === 'pods') {
 			return {
 				title: 'No pod events yet',
-				description: 'Pods starting, stopping and crashing land here.'
+				description: ''
 			};
 		}
 		return {
 			title: 'No errors seen',
-			description: 'New error groups from the app logs land here.'
+			description: ''
 		};
 	}
 </script>

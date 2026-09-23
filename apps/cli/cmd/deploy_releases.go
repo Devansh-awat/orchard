@@ -11,7 +11,7 @@ func deployReleasesCmd() *cobra.Command {
 	var limit int
 	c := &cobra.Command{
 		Use:   "releases <id>",
-		Short: "Releases that took traffic, newest first, with what shipped alongside the image",
+		Short: "List releases, newest first",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()

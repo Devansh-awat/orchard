@@ -43,7 +43,7 @@ func observeActivityCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "activity <deploymentId>",
 		Aliases: []string{"timeline"},
-		Short:   "Merged activity feed: releases, builds, changes by people, pod transitions, new errors",
+		Short:   "Activity feed for a deployment",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
