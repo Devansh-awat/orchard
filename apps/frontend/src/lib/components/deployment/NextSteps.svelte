@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { X, ArrowRight } from 'lucide-svelte';
+	import { X, ChevronRight, Zap, Globe, Gauge, Bell, HeartPulse, Terminal } from 'lucide-svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { slide } from '$lib/utils/transitions';
 	import { apiFetch } from '$lib/stores';
 	import { dismissedSteps, dismissStep, dismissAllSteps } from '$lib/stores/checklist';
+	import { SectionCard, Eyebrow } from '$lib/components/ui';
 	import CliModal from '$lib/components/CliModal.svelte';
 
 	let {
@@ -21,50 +23,54 @@
 
 	const COPY: Record<
 		string,
-		{ title: string; body: string; cta: string; tab?: string; settings?: string }
+		{
+			title: string;
+			hint: string;
+			icon: typeof Zap;
+			tab?: string;
+			settings?: string;
+		}
 	> = {
 		'auto-deploy': {
-			title: 'Deploy on every push',
-			body: 'Orchard can build and roll out whenever you push to your branch, so you never come back here to click rebuild.',
-			cta: 'Turn it on',
+			title: 'Deploy on push',
+			hint: 'Build on every push',
+			icon: Zap,
 			settings: 'source'
 		},
 		domain: {
-			title: 'Put it on your own domain',
-			body: 'Right now this only answers on the URL Orchard generated. Point a domain at it and the certificate is handled for you.',
-			cta: 'Add a domain',
+			title: 'Add your domain',
+			hint: 'Certificate included',
+			icon: Globe,
 			tab: 'network'
 		},
 		resources: {
-			title: 'Give it the right amount of memory',
-			body: 'This app is running on the organization default. Set CPU and memory deliberately so it neither gets throttled nor holds space it never uses.',
-			cta: 'Set resources',
+			title: 'Set CPU and memory',
+			hint: 'Running on the org default',
+			icon: Gauge,
 			settings: 'resources'
 		},
 		notifications: {
-			title: 'Find out when it breaks',
-			body: 'Nothing will tell you if this app starts crashing at 3am. Send failures to Slack, Discord, a webhook, or your inbox.',
-			cta: 'Set up alerts',
+			title: 'Get alerted',
+			hint: 'Slack, Discord, webhook, email',
+			icon: Bell,
 			settings: 'notifications'
 		},
 		'health-check': {
-			title: 'Let Orchard know when it is really up',
-			body: 'Without a health check a container that started but cannot serve still counts as ready, and a bad deploy rolls out anyway.',
-			cta: 'Add a check',
+			title: 'Add a health check',
+			hint: 'So a bad deploy never rolls out',
+			icon: HeartPulse,
 			settings: 'health'
 		},
 		cli: {
-			title: 'Do all of this from the terminal',
-			body: 'Deploy the directory you are standing in, tail logs, and scale without opening a browser.',
-			cta: 'Show me'
+			title: 'Use the terminal',
+			hint: 'Deploy, logs and scale',
+			icon: Terminal
 		}
 	};
 
 	let steps = $state<Step[]>([]);
 	let dismissed = $state<string[]>([]);
 	let cliOpen = $state(false);
-	// Plain let, not $state: this only guards the fetch effect from re-running,
-	// and reading a $state inside the effect that sets it would loop.
 	let fetchedFor = '';
 
 	const visible = $derived(
@@ -85,7 +91,7 @@
 			const data = await res.json();
 			steps = data.steps ?? [];
 		} catch {
-			/* the card is a nudge, not a feature: silence is the right failure */
+			/* a nudge, not a feature */
 		}
 	}
 
@@ -107,69 +113,60 @@
 	function hideAll() {
 		const ids = visible.map((s) => s.id);
 		dismissAllSteps(deploymentId, ids);
-		// 'cli' is a per-user dismissal, so it has to go through the global path
-		// too or it comes back on the next app.
 		if (ids.includes('cli')) dismissStep(deploymentId, 'cli', true);
 		dismissed = [...dismissed, ...ids];
 	}
 </script>
 
 {#if visible.length > 0}
-	<div class="ns-card" {@attach motionStagger({ index: 0, from: { y: -6, opacity: 0 } })}>
+	<SectionCard class="ns">
 		<div class="ns-head">
-			<span class="ns-title">Worth doing next</span>
+			<Eyebrow>Next up</Eyebrow>
 			<button class="ns-dismiss-all" type="button" onclick={hideAll}>Dismiss all</button>
 		</div>
 		<ul class="ns-list">
 			{#each visible as step, i (step.id)}
 				{@const copy = COPY[step.id]}
-				<li class="ns-item" {@attach motionStagger({ index: i, from: { y: 4, opacity: 0 } })}>
-					<div class="ns-item-body">
-						<span class="ns-item-title">{copy.title}</span>
-						<span class="ns-item-desc">{copy.body}</span>
-					</div>
-					<div class="ns-item-actions">
-						<button class="ns-cta" type="button" onclick={() => act(step)}>
-							{copy.cta}
-							<ArrowRight class="h-3 w-3" />
-						</button>
-						<button
-							class="ns-hide"
-							type="button"
-							onclick={() => hide(step.id)}
-							aria-label={`Dismiss: ${copy.title}`}
-						>
-							<X class="h-3 w-3" />
-						</button>
-					</div>
+				<li
+					class="ns-item"
+					transition:slide={{ duration: 160 }}
+					{@attach motionStagger({ index: i, from: { y: 6 } })}
+				>
+					<button class="ns-row" type="button" onclick={() => act(step)}>
+						<span class="ns-icon" aria-hidden="true"><copy.icon class="h-4 w-4" /></span>
+						<span class="ns-text">
+							<span class="ns-title">{copy.title}</span>
+							<span class="ns-hint">{copy.hint}</span>
+						</span>
+						<ChevronRight class="ns-chevron h-3.5 w-3.5" />
+					</button>
+					<button
+						class="ns-hide"
+						type="button"
+						onclick={() => hide(step.id)}
+						aria-label={`Dismiss ${copy.title}`}
+					>
+						<X class="h-3 w-3" />
+					</button>
 				</li>
 			{/each}
 		</ul>
-	</div>
+	</SectionCard>
 {/if}
 
 <CliModal bind:open={cliOpen} />
 
 <style>
-	.ns-card {
-		border: 1px solid var(--border-edge);
-		border-radius: var(--radius-lg);
-		background-color: var(--bg-raised);
-		padding: 0.75rem 0.875rem;
-		margin-bottom: 1rem;
+	:global(.ns) {
+		padding: var(--space-3) !important;
+		flex-shrink: 0;
 	}
 	.ns-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		margin-bottom: 0.5rem;
-	}
-	.ns-title {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-fg);
+		gap: var(--space-2);
+		padding: 0 var(--space-2) var(--space-2);
 	}
 	.ns-dismiss-all {
 		font-size: var(--text-micro);
@@ -192,75 +189,99 @@
 		padding: 0;
 	}
 	.ns-item {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.5rem 0;
-		border-top: 1px solid var(--border-subtle);
-	}
-	.ns-item:first-child {
-		border-top: none;
-	}
-	.ns-item-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-	.ns-item-title {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: var(--text-fg);
-	}
-	.ns-item-desc {
-		font-size: var(--text-micro);
-		line-height: var(--lh-caption);
-		color: var(--text-muted);
-	}
-	.ns-item-actions {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
-		flex-shrink: 0;
 	}
-	.ns-cta {
+	.ns-row {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 0;
+		padding: 0.375rem var(--space-2);
+		border: none;
+		background: none;
+		border-radius: var(--radius-md);
+		text-align: left;
+		cursor: pointer;
+		color: var(--text-default);
+		transition: background-color var(--dur-fast);
+	}
+	.ns-row:hover,
+	.ns-row:focus-visible {
+		background-color: var(--bg-hover);
+	}
+	.ns-icon {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		white-space: nowrap;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		color: var(--accent);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0.25rem 0.375rem;
-		border-radius: var(--radius-sm);
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		flex-shrink: 0;
+		color: var(--text-muted);
+		transition: color var(--dur-fast);
 	}
-	.ns-cta:hover {
-		background-color: var(--fill-soft);
+	.ns-row:hover .ns-icon {
+		color: var(--text-default);
+	}
+	.ns-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.0625rem;
+		min-width: 0;
+		flex: 1;
+	}
+	.ns-title {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.ns-hint {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.ns-row :global(.ns-chevron) {
+		color: var(--text-faint);
+		flex-shrink: 0;
+		transition:
+			transform var(--dur-fast),
+			color var(--dur-fast);
+	}
+	.ns-row:hover :global(.ns-chevron) {
+		color: var(--text-muted);
+		transform: translateX(2px);
 	}
 	.ns-hide {
+		position: absolute;
+		right: 0.375rem;
+		top: 50%;
+		transform: translateY(-50%);
 		display: inline-flex;
 		align-items: center;
 		color: var(--text-faint);
-		background: none;
+		background: var(--bg-raised);
 		border: none;
 		cursor: pointer;
 		padding: 0.25rem;
 		border-radius: var(--radius-sm);
 		opacity: 0;
-		transition: opacity var(--dur-fast) ease;
+		transition: opacity var(--dur-fast);
 	}
 	.ns-item:hover .ns-hide,
 	.ns-hide:focus-visible {
 		opacity: 1;
 	}
 	.ns-hide:hover {
-		color: var(--text-fg);
+		color: var(--text-default);
 		background-color: var(--fill-soft);
 	}
 </style>

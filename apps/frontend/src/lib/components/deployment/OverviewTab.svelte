@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Loader2, MemoryStick } from 'lucide-svelte';
 	import {
 		Activity,
@@ -67,7 +68,8 @@
 		onTrackClick,
 		onSetTabMetrics,
 		onKeydownSlider,
-		podLabel
+		podLabel,
+		aside = undefined
 	}: {
 		deployment: any;
 		activePods: Pod[];
@@ -108,6 +110,7 @@
 		onSetTabMetrics: () => void;
 		onKeydownSlider: (e: KeyboardEvent) => void;
 		podLabel: (podName: string) => string;
+		aside?: Snippet;
 	} = $props();
 
 	function meterFor(ratio: number | null | undefined) {
@@ -459,6 +462,7 @@
 
 	<!-- Right sidebar: stats + scale + pods -->
 	<div class="flex flex-col gap-4 overview-right min-h-0">
+		{#if aside}{@render aside()}{/if}
 		<!-- Resource stats as compact cards. Charts moved to the Metrics tab. -->
 		<button
 			type="button"
