@@ -40,6 +40,18 @@ export const projectGradientEnabled = {
 	}
 };
 
+const SOUND_CUES_KEY = 'sound-cues';
+
+const soundCuesStore = writable<boolean>(loadBool(SOUND_CUES_KEY, false));
+
+export const soundCues = {
+	subscribe: soundCuesStore.subscribe,
+	set(value: boolean) {
+		soundCuesStore.set(value);
+		saveBool(SOUND_CUES_KEY, value);
+	}
+};
+
 export type DashboardDensity = 'compact' | 'normal';
 
 const DENSITY_KEY = 'dashboard-density';

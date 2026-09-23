@@ -31,6 +31,7 @@
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
 	import { featureFlag } from '$lib/posthog';
+	import { focusDeployment, watchBuild } from '$lib/utils/sound';
 	import type { PageData } from './$types';
 	import {
 		Loader2,
@@ -1585,6 +1586,7 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to redeploy');
 			}
+			watchBuild(deploymentId);
 			toasts.add({
 				title: 'Deployment started',
 				description: 'Building new image from repository',
@@ -2570,6 +2572,11 @@
 		projectIngressesFetched = false;
 
 		if ($tailscaleEnabled) tailscale.checkStatus();
+	});
+
+	$effect(() => {
+		focusDeployment(deploymentId);
+		return () => focusDeployment(null);
 	});
 
 	// SSE subscription — invalidates the TanStack query instead of fetching directly.

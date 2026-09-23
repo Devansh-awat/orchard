@@ -7,10 +7,12 @@
 		contrastLevel,
 		textScale,
 		reduceTransparency,
+		soundCues,
 		type AnimationLevel,
 		type ContrastLevel,
 		type TextScale
 	} from '$lib/stores';
+	import { previewCue } from '$lib/utils/sound';
 
 	let { index = 0 }: { index?: number } = $props();
 
@@ -41,6 +43,21 @@
 		{ value: 'off', label: 'Off' },
 		{ value: 'on', label: 'On' }
 	];
+
+	const SOUND_OPTIONS = [
+		{ value: 'off', label: 'Off', hint: 'Silent' },
+		{ value: 'on', label: 'On', hint: 'A short cue when a build you are waiting on finishes' }
+	];
+
+	const soundHint = $derived(
+		SOUND_OPTIONS.find((o) => o.value === ($soundCues ? 'on' : 'off'))?.hint ?? ''
+	);
+
+	function setSound(v: string) {
+		const on = v === 'on';
+		soundCues.set(on);
+		if (on) previewCue();
+	}
 
 	const animationHint = $derived(
 		ANIMATION_OPTIONS.find((o) => o.value === $animationLevel)?.hint ?? ''
@@ -91,6 +108,19 @@
 				value={$textScale}
 				label="Text size"
 				onchange={(v) => textScale.set(v as TextScale)}
+			/>
+		</div>
+
+		<div class="ua-row">
+			<div class="ua-text">
+				<span class="ua-title">Sound</span>
+				<span class="ua-hint">{soundHint}</span>
+			</div>
+			<SegmentedControl
+				options={SOUND_OPTIONS}
+				value={$soundCues ? 'on' : 'off'}
+				label="Sound"
+				onchange={setSound}
 			/>
 		</div>
 

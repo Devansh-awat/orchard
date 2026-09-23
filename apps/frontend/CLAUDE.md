@@ -212,6 +212,21 @@ snippet passes it straight to the icon:
 - `StatusPill` — connected/not connected indicator
 - `IconButton` — small action button with springHover + icon animation via snippet param
 
+## Sound
+
+Interaction sounds come from `cuelume`, imported in exactly one place: `$lib/utils/sound.ts`.
+Everything else calls `cue(name)`, which checks the user's Sound setting (Accessibility,
+off by default) and a per-cue 2s gate so a burst of SSE events cannot stack.
+
+A cue is reserved for something that **finished happening to a thing you were waiting on**:
+a build succeeding or failing on the app on screen, or one this browser started. Never
+hover, press, toggle, palette open, navigation, pod transitions, or rows arriving. Those
+would train people to mute the whole thing. Sound is never the only channel for a change.
+
+A background tab is where cues matter most, so `cue()` does not check page visibility.
+Browser autoplay policy means the first sound needs a gesture, which is why switching the
+setting on plays a preview.
+
 ## Svelte 5 patterns
 
 - Use `$state` for component-local reactive state

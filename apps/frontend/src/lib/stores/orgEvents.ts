@@ -2,6 +2,7 @@ import { get, writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { apiBase } from './api';
 import { queryClient } from '../query';
+import { cueForEvent } from '../utils/sound';
 
 export type OrgEventType =
 	| 'deployment.changed'
@@ -74,6 +75,7 @@ const RECONNECT_MAX_MS = 30_000;
 
 function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 	if (ev.type === 'heartbeat' || ev.type === 'deployment.metrics') return;
+	if (ev.type === 'build.changed') cueForEvent(ev);
 	const qc = queryClient;
 	switch (ev.type) {
 		case 'deployment.changed':

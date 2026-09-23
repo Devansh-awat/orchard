@@ -54,6 +54,7 @@
 		"blobatar": "^2.7.0",
 		"chart.js": "^4.5.1",
 		"codemirror": "^6.0.2",
+		"cuelume": "0.2.2",
 		"dompurify": "^3.4.14",
 		"ghostty-web": "^0.4.0",
 		"lucide-svelte": "^0.510.0",

@@ -26,6 +26,7 @@ export {
 	contrastLevel,
 	textScale,
 	reduceTransparency,
+	soundCues,
 	type AnimationLevel,
 	type DashboardDensity,
 	type ContrastLevel,
