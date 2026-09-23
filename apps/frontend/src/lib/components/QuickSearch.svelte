@@ -2,14 +2,35 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { selectedOrganization } from '$lib/stores';
+	import { selectedOrganization, apiFetch, toasts } from '$lib/stores';
+	import { registerShortcut } from '$lib/utils/shortcuts';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { Search, CornerDownLeft, Database, LayoutTemplate, X } from 'lucide-svelte';
+	import {
+		Search,
+		CornerDownLeft,
+		Database,
+		LayoutTemplate,
+		X,
+		Command,
+		Clock
+	} from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { IconTile } from '$lib/components/ui';
 	import { avatarUrl } from '$lib/avatar';
 	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
-	import { searchResults, segments, type Person, type TreeItem } from './quick-search';
+	import {
+		actionsFor,
+		rankedResults,
+		recentItems,
+		recordUse,
+		segments,
+		type Action,
+		type Frecency,
+		type Group,
+		type Hit,
+		type Person,
+		type TreeItem
+	} from './quick-search';
 	import {
 		motionPopover as motionPopoverBase,
 		motionBackdrop as motionBackdropBase,
@@ -20,6 +41,28 @@
 	let open = $state(false);
 	let query = $state('');
 	let selectedIndex = $state(0);
+	let panelOpen = $state(false);
+	let actionIndex = $state(0);
+	let busy = $state(false);
+
+	const FRECENCY_KEY = 'quick-search-frecency';
+	function loadFrecency(): Frecency {
+		if (typeof localStorage === 'undefined') return {};
+		try {
+			return JSON.parse(localStorage.getItem(FRECENCY_KEY) ?? '{}') as Frecency;
+		} catch {
+			return {};
+		}
+	}
+	let frecency = $state<Frecency>(loadFrecency());
+	function touch(id: string) {
+		frecency = recordUse(frecency, id, Date.now());
+		try {
+			localStorage.setItem(FRECENCY_KEY, JSON.stringify(frecency));
+		} catch {
+			/* storage full or blocked: frecency is a convenience */
+		}
+	}
 
 	const orgSlug = $derived($page.params.orgSlug ?? $selectedOrganization?.slug);
 
@@ -129,20 +172,67 @@
 		}
 	}
 
-	const result = $derived(searchResults(searchTree, query));
+	const result = $derived.by<{ groups: Group[]; flat: Hit[] }>(() => {
+		if (query.trim()) return rankedResults(searchTree, query, frecency, Date.now());
+		const recent = recentItems(searchTree, frecency, Date.now());
+		if (recent.length === 0) return { groups: [], flat: [] };
+		const items: Hit[] = recent.map((item) => ({ item, score: 0, spans: [], via: 'self' }));
+		return {
+			groups: [{ key: '__recent', projectMatched: false, items, topScore: 0 }],
+			flat: items
+		};
+	});
+
+	const selectedHit = $derived(result.flat[selectedIndex] ?? null);
+	const actions = $derived(selectedHit ? actionsFor(selectedHit.item) : []);
 
 	const totalCount = $derived(result.flat.length);
 
+	function togglePanel() {
+		if (!selectedHit) return;
+		panelOpen = !panelOpen;
+		actionIndex = 0;
+	}
+
 	function handleKeydown(event: KeyboardEvent) {
-		if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-			event.preventDefault();
-			if (open) closeSearch();
-			else openSearch();
+		if (!open) return;
+		if (panelOpen) {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				panelOpen = false;
+				return;
+			}
+			if (event.key === 'ArrowDown') {
+				event.preventDefault();
+				actionIndex = Math.min(actionIndex + 1, actions.length - 1);
+				return;
+			}
+			if (event.key === 'ArrowUp') {
+				event.preventDefault();
+				actionIndex = Math.max(actionIndex - 1, 0);
+				return;
+			}
+			if (event.key === 'Enter' && selectedHit && actions[actionIndex]) {
+				event.preventDefault();
+				void runAction(selectedHit, actions[actionIndex]);
+				return;
+			}
+			if (!event.metaKey && !event.ctrlKey && event.key.length === 1 && selectedHit) {
+				const hit = actions.find((a) => a.key?.toLowerCase() === event.key.toLowerCase());
+				if (hit) {
+					event.preventDefault();
+					void runAction(selectedHit, hit);
+				}
+			}
 			return;
 		}
-		if (!open) return;
 		if (event.key === 'Escape') {
 			closeSearch();
+			return;
+		}
+		if ((event.key === 'ArrowRight' || event.key === 'Tab') && selectedHit) {
+			event.preventDefault();
+			togglePanel();
 			return;
 		}
 		if (event.key === 'ArrowDown') {
@@ -173,13 +263,62 @@
 
 	function closeSearch() {
 		open = false;
+		panelOpen = false;
 		query = '';
 		selectedIndex = 0;
 	}
 
 	function handleSelect(item: TreeItem) {
+		touch(item.id);
 		closeSearch();
 		goto(item.href);
+	}
+
+	async function runAction(hit: Hit, action: Action) {
+		const { item } = hit;
+		if (busy) return;
+		touch(item.id);
+		if (action.kind === 'navigate' && action.href) {
+			closeSearch();
+			await goto(action.href);
+			return;
+		}
+		if (action.kind === 'open' && action.href) {
+			closeSearch();
+			window.open(action.href, '_blank', 'noopener');
+			return;
+		}
+		busy = true;
+		try {
+			if (action.kind === 'copy') {
+				let text = '';
+				if (action.copyField === 'url' && item.ingressHost) text = `https://${item.ingressHost}`;
+				if (action.copyField === 'connectionString') {
+					const res = await apiFetch(`/apiv1/databases/${item.id}`);
+					if (!res.ok) throw new Error('Could not load the database');
+					const data = await res.json();
+					text = data.connectionString ?? '';
+				}
+				if (!text) throw new Error('Nothing to copy');
+				await navigator.clipboard.writeText(text);
+				toasts.add({ title: 'Copied', color: 'success' });
+			} else if (action.kind === 'call' && action.path) {
+				const res = await apiFetch(action.path, { method: action.method ?? 'POST' });
+				if (!res.ok) {
+					const data = await res.json().catch(() => null);
+					throw new Error(data?.message || `${action.label} failed`);
+				}
+				toasts.add({ title: `${action.label}: ${item.name}`, color: 'success' });
+			}
+			closeSearch();
+		} catch (e) {
+			toasts.add({
+				title: e instanceof Error ? e.message : `${action.label} failed`,
+				color: 'error'
+			});
+		} finally {
+			busy = false;
+		}
 	}
 
 	$effect(() => {
@@ -191,14 +330,28 @@
 	$effect(() => {
 		query;
 		selectedIndex = 0;
+		panelOpen = false;
 	});
 
 	onMount(() => {
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('open-quick-search', openSearch);
+		const unregister = registerShortcut({
+			id: 'palette',
+			key: 'k',
+			mod: true,
+			label: 'Search and actions',
+			allowInInputs: true,
+			run: () => {
+				if (!open) openSearch();
+				else if (selectedHit) togglePanel();
+				else closeSearch();
+			}
+		});
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			window.removeEventListener('open-quick-search', openSearch);
+			unregister();
 		};
 	});
 
@@ -236,7 +389,7 @@
 		result.flat.length;
 		// Clear synchronously when there is nothing to point at, so the cursor
 		// disappears the instant the query is emptied instead of lingering.
-		if (!open || !query.trim() || totalCount === 0) {
+		if (!open || totalCount === 0) {
 			selectedEl = null;
 			return;
 		}
@@ -307,19 +460,15 @@
 				{/if}
 			</div>
 
-			<div class="quick-search-results">
+			<div class="quick-search-results" class:has-panel={panelOpen}>
 				<div class="quick-search-list">
 					<div class="qs-pill" {@attach magneticHighlight(() => selectedEl)}>
 						<CornerDownLeft class="qs-pill-enter" size={14} />
 					</div>
-					{#if !query.trim()}
+					{#if !query.trim() && totalCount === 0}
 						<div class="quick-search-empty">
 							<span class="quick-search-empty-glyph"><Search size={18} /></span>
 							<p class="quick-search-empty-text">Search everything in this org</p>
-							<p class="quick-search-empty-hint">
-								Type a project, app, database or person. A project name reveals everything inside
-								it, and a name or username reveals everything they built.
-							</p>
 						</div>
 					{:else if totalCount === 0}
 						<div class="quick-search-empty">
@@ -344,6 +493,11 @@
 										</span>
 									{/if}
 									<span class="quick-search-group-pill">person</span>
+								</div>
+							{:else if group.key === '__recent'}
+								<div class="quick-search-group-header">
+									<Clock size={12} class="qs-recent-glyph" />
+									<span class="quick-search-group-label">Recent</span>
 								</div>
 							{:else if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
 								<div class="quick-search-group-header">
@@ -392,6 +546,30 @@
 				</div>
 			</div>
 
+			{#if panelOpen && selectedHit}
+				<div class="qs-actions" role="menu" aria-label="Actions for {selectedHit.item.name}">
+					<div class="qs-actions-head">
+						{@render itemVisual(selectedHit.item)}
+						<span class="qs-actions-name">{selectedHit.item.name}</span>
+					</div>
+					{#each actions as action, ai (action.id)}
+						<button
+							type="button"
+							role="menuitem"
+							class="qs-action"
+							class:is-selected={ai === actionIndex}
+							class:is-danger={action.danger}
+							disabled={busy}
+							onclick={() => runAction(selectedHit, action)}
+							onmouseenter={() => (actionIndex = ai)}
+						>
+							<span class="qs-action-label">{action.label}</span>
+							{#if action.key}<kbd class="qs-kbd">{action.key}</kbd>{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+
 			<div class="quick-search-footer">
 				<div class="quick-search-hint">
 					<kbd class="qs-kbd">↑</kbd><kbd class="qs-kbd">↓</kbd>
@@ -401,6 +579,12 @@
 					<kbd class="qs-kbd"><CornerDownLeft size={11} /></kbd>
 					<span class="quick-search-hint-text">open</span>
 				</div>
+				{#if selectedHit}
+					<button type="button" class="quick-search-hint qs-hint-btn" onclick={togglePanel}>
+						<kbd class="qs-kbd"><Command size={10} />K</kbd>
+						<span class="quick-search-hint-text">actions</span>
+					</button>
+				{/if}
 				{#if totalCount > 0}
 					<div class="quick-search-count">
 						{totalCount} result{totalCount === 1 ? '' : 's'}
@@ -759,5 +943,83 @@
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-faint);
+	}
+
+	.quick-search-results.has-panel {
+		min-height: 20rem;
+	}
+
+	.qs-actions {
+		position: absolute;
+		right: 0.75rem;
+		bottom: 3rem;
+		max-height: calc(100% - 4rem);
+		overflow-y: auto;
+		z-index: 3;
+		width: 16rem;
+		padding: 0.375rem;
+		background: var(--bg-raised);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--elev-3);
+	}
+
+	.qs-actions-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.375rem 0.5rem 0.5rem;
+		border-bottom: 1px solid var(--rule);
+		margin-bottom: 0.25rem;
+	}
+
+	.qs-actions-head :global(.qs-ic) {
+		width: 1.125rem;
+		height: 1.125rem;
+	}
+
+	.qs-actions-name {
+		font-size: var(--text-caption);
+		font-weight: 600;
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.qs-action {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.375rem 0.5rem;
+		border: none;
+		background: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.qs-action.is-selected {
+		background: var(--fill-soft);
+	}
+
+	.qs-action.is-danger {
+		color: var(--status-error);
+	}
+
+	.qs-hint-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		color: inherit;
+	}
+
+	.quick-search-modal {
+		position: relative;
 	}
 </style>

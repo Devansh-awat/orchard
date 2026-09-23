@@ -32,6 +32,7 @@
 	import { invalidate } from '$app/navigation';
 	import { featureFlag } from '$lib/posthog';
 	import { focusDeployment, watchBuild } from '$lib/utils/sound';
+	import { registerShortcut } from '$lib/utils/shortcuts';
 	import type { PageData } from './$types';
 	import {
 		Loader2,
@@ -2611,12 +2612,14 @@
 		const prevGutter = mainEl?.style.scrollbarGutter ?? '';
 		if (mainEl) mainEl.style.scrollbarGutter = 'stable';
 
-		function handleKeydown(event: KeyboardEvent) {
-			if (event.key === 'Escape' && consoleExpanded) {
-				toggleConsoleExpand();
-			}
-		}
-		document.addEventListener('keydown', handleKeydown);
+		const unregisterEscape = registerShortcut({
+			id: 'console-collapse',
+			key: 'Escape',
+			label: 'Collapse the console',
+			allowInInputs: true,
+			when: () => consoleExpanded,
+			run: toggleConsoleExpand
+		});
 
 		// movingicons.dev: by default each icon only animates when its own 14×14 wrapper
 		// is hovered. Re-fire each icon's mouseenter when the user enters the parent
@@ -2649,7 +2652,7 @@
 			detachPress();
 			if (mainEl) mainEl.style.scrollbarGutter = prevGutter;
 			document.removeEventListener('pointermove', onIconHover);
-			document.removeEventListener('keydown', handleKeydown);
+			unregisterEscape();
 		};
 	});
 

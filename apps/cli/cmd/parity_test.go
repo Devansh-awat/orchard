@@ -124,6 +124,8 @@ var routeCoverage = map[string]string{
 
 	// databases: post-mortem capture
 	"GET /databases/:id/killed-containers":               "db killed list",
+	"GET /databases/:id/live":                            "top --db",
+	"GET /databases/:id/query-stats":                     "top --db",
 	"GET /databases/:id/killed-containers/:entryId/logs": "db killed logs",
 	"PUT /deployments/:id/health-check":                  "deploy health-check set",
 	"PUT /deployments/:id/build-config":                  "deploy build-root set",
@@ -460,8 +462,6 @@ var routeExclusions = map[string]string{
 	"GET /users/me/notification-settings/:scopeType/:scopeId":         "no CLI command yet: personal notification settings",
 	"PUT /users/me/notification-settings/:scopeType/:scopeId":         "no CLI command yet: personal notification settings",
 	"DELETE /users/me/notification-settings/:scopeType/:scopeId":      "no CLI command yet: personal notification settings",
-	"GET /databases/:id/live":                                         "no CLI command yet: live database pod view",
-	"GET /databases/:id/query-stats":                                  "no CLI command yet: database query stats",
 	"POST /databases/:id/query-stats/reset":                           "no CLI command yet: database query stats",
 	"POST /databases/:id/start":                                       "no CLI command yet: database lifecycle start/stop",
 	"POST /databases/:id/stop":                                        "no CLI command yet: database lifecycle start/stop",

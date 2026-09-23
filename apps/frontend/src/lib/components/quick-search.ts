@@ -239,3 +239,192 @@ export function segments(
 	if (cursor < name.length) out.push({ text: name.slice(cursor), hit: false });
 	return out;
 }
+
+export type ActionKind = 'navigate' | 'call' | 'copy' | 'open';
+
+export interface Action {
+	id: string;
+	label: string;
+	kind: ActionKind;
+	href?: string;
+	method?: 'POST';
+	path?: string;
+	copyField?: 'href' | 'url' | 'connectionString';
+	danger?: boolean;
+	key?: string;
+}
+
+export function actionsFor(item: TreeItem): Action[] {
+	const open: Action = { id: 'open', label: 'Open', kind: 'navigate', href: item.href, key: '↵' };
+	switch (item.type) {
+		case 'deployment': {
+			const actions: Action[] = [
+				open,
+				{
+					id: 'logs',
+					label: 'Logs',
+					kind: 'navigate',
+					href: `${item.href}?tab=observe&view=logs`,
+					key: 'L'
+				},
+				{
+					id: 'metrics',
+					label: 'Metrics',
+					kind: 'navigate',
+					href: `${item.href}?tab=observe&view=metrics`,
+					key: 'M'
+				},
+				{
+					id: 'activity',
+					label: 'Activity',
+					kind: 'navigate',
+					href: `${item.href}?tab=deploys`,
+					key: 'A'
+				},
+				{
+					id: 'settings',
+					label: 'Settings',
+					kind: 'navigate',
+					href: `${item.href}?tab=settings`,
+					key: ','
+				},
+				{
+					id: 'restart',
+					label: 'Restart',
+					kind: 'call',
+					method: 'POST',
+					path: `/apiv1/deployments/${item.id}/restart`,
+					key: 'R'
+				},
+				{
+					id: 'redeploy',
+					label: 'Redeploy',
+					kind: 'call',
+					method: 'POST',
+					path: `/apiv1/deployments/${item.id}/rebuild`,
+					key: 'D'
+				}
+			];
+			if (item.ingressHost) {
+				actions.push(
+					{
+						id: 'visit',
+						label: 'Open in browser',
+						kind: 'open',
+						href: `https://${item.ingressHost}`,
+						key: 'O'
+					},
+					{ id: 'copy-url', label: 'Copy URL', kind: 'copy', copyField: 'url', key: 'C' }
+				);
+			}
+			return actions;
+		}
+		case 'database':
+			return [
+				open,
+				{
+					id: 'connection',
+					label: 'Connection',
+					kind: 'navigate',
+					href: `${item.href}?tab=connection`,
+					key: 'N'
+				},
+				{
+					id: 'queries',
+					label: 'Queries',
+					kind: 'navigate',
+					href: `${item.href}?tab=queries`,
+					key: 'Q'
+				},
+				{
+					id: 'copy-connection',
+					label: 'Copy connection string',
+					kind: 'copy',
+					copyField: 'connectionString',
+					key: 'C'
+				},
+				{
+					id: 'restart',
+					label: 'Restart',
+					kind: 'call',
+					method: 'POST',
+					path: `/apiv1/databases/${item.id}/restart`,
+					key: 'R'
+				}
+			];
+		case 'project': {
+			const org = item.href.split('/')[1] ?? '';
+			return [
+				open,
+				{
+					id: 'new-app',
+					label: 'New app here',
+					kind: 'navigate',
+					href: `/${org}/deployments/new?project=${encodeURIComponent(item.slug ?? item.name)}`,
+					key: 'N'
+				}
+			];
+		}
+		default:
+			return [open];
+	}
+}
+
+export interface FrecencyEntry {
+	count: number;
+	last: number;
+}
+
+export type Frecency = Record<string, FrecencyEntry>;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FRECENCY_MAX = 160;
+const FRECENCY_PER_USE = 45;
+const FRECENCY_HALF_LIFE_DAYS = 7;
+
+export function frecencyScore(entry: FrecencyEntry | undefined, now: number): number {
+	if (!entry || entry.count <= 0) return 0;
+	const ageDays = Math.max(0, now - entry.last) / DAY_MS;
+	const decay = Math.pow(0.5, ageDays / FRECENCY_HALF_LIFE_DAYS);
+	return Math.min(FRECENCY_MAX, FRECENCY_PER_USE * entry.count) * decay;
+}
+
+export function recordUse(frecency: Frecency, id: string, now: number): Frecency {
+	const prev = frecency[id];
+	return { ...frecency, [id]: { count: (prev?.count ?? 0) + 1, last: now } };
+}
+
+export function recentItems(
+	tree: TreeItem[],
+	frecency: Frecency,
+	now: number,
+	limit = 6
+): TreeItem[] {
+	const byId = new Map<string, TreeItem>();
+	for (const { item } of flatten(tree)) byId.set(item.id, item);
+	return Object.entries(frecency)
+		.map(([id, entry]) => ({ item: byId.get(id), score: frecencyScore(entry, now) }))
+		.filter((x): x is { item: TreeItem; score: number } => !!x.item && x.score > 0)
+		.sort((a, b) => b.score - a.score)
+		.slice(0, limit)
+		.map((x) => x.item);
+}
+
+export function rankedResults(
+	tree: TreeItem[],
+	query: string,
+	frecency: Frecency,
+	now: number
+): { groups: Group[]; flat: Hit[] } {
+	const base = searchResults(tree, query);
+	if (base.flat.length === 0) return base;
+	for (const group of base.groups) {
+		for (const hit of group.items) hit.score += frecencyScore(frecency[hit.item.id], now);
+		group.items.sort((a, b) => b.score - a.score);
+		group.topScore = group.items[0]?.score ?? 0;
+	}
+	base.groups.sort((a, b) => b.topScore - a.topScore);
+	const flat: Hit[] = [];
+	for (const g of base.groups) for (const h of g.items) flat.push(h);
+	return { groups: base.groups, flat };
+}

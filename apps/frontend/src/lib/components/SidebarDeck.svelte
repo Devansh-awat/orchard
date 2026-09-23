@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { registerShortcut } from '$lib/utils/shortcuts';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -238,15 +239,15 @@
 		}).finished.then(done, done);
 	});
 
-	function onWindowKeydown(e: KeyboardEvent) {
-		if (e.key !== 'b') return;
-		if (isMac ? !e.metaKey || e.ctrlKey : !e.ctrlKey) return;
-		if (e.shiftKey || e.altKey) return;
-		const t = e.target as HTMLElement | null;
-		if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-		e.preventDefault();
-		toggleCollapsed();
-	}
+	$effect(() =>
+		registerShortcut({
+			id: 'sidebar',
+			key: 'b',
+			mod: true,
+			label: 'Toggle sidebar',
+			run: toggleCollapsed
+		})
+	);
 
 	function onStripClick() {
 		attentionOpen = !attentionOpen;
@@ -328,8 +329,6 @@
 		<Avatar user={$user} alive />
 	</span>
 {/snippet}
-
-<svelte:window onkeydown={onWindowKeydown} />
 
 {#if isMobile && $mobileNavOpen}
 	<div

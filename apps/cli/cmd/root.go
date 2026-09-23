@@ -126,6 +126,8 @@ func rootCmd() *cobra.Command {
 		openCmd(),
 		userCmd(),
 		uiCmd(),
+		topCmd(),
+		consoleCmd(),
 		commandsCmd(),
 		exitCodesCmd(),
 	)
