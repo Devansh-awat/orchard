@@ -322,7 +322,7 @@ function clampIntoContent(origin: Point, content: Element | null): Point {
  * Survives `reduced` as a plain fade, because it carries information and moves
  * nothing. Silent at `off`.
  */
-export function stateEcho(key: () => unknown) {
+export function stateEcho(key: () => unknown, opts: { arrival?: () => boolean } = {}) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
 		const ring = document.createElement('span');
@@ -335,7 +335,7 @@ export function stateEcho(key: () => unknown) {
 			const seen = echoSeen.has(target);
 			const prev = echoSeen.get(target);
 			echoSeen.set(target, next);
-			if (!seen || Object.is(next, prev)) return;
+			if (seen ? Object.is(next, prev) : !opts.arrival?.()) return;
 			if (!motionEnabled()) return;
 			running?.stop();
 			target.style.setProperty('--echo', '1');

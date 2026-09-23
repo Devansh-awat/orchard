@@ -287,6 +287,7 @@ var routeCoverage = map[string]string{
 	"GET /observe/deployments/:id/errors":            "observe errors",
 	"GET /observe/deployments/:id/runtime":           "observe runtime",
 	"GET /observe/deployments/:id/capabilities":      "observe capabilities",
+	"GET /observe/deployments/:id/timeline":          "observe activity",
 	"GET /observe/deployments/:id/logs/stream":       "deploy logs --follow (SSE)",
 	"GET /observe/deployments/:id/build-logs/stream": "deploy logs --build --follow (SSE)",
 

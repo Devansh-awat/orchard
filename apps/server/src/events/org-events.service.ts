@@ -15,7 +15,8 @@ export type OrgEventType =
   | 'jobrun.changed'
   | 'environment.changed'
   | 'sharedvars.changed'
-  | 'engine.changed';
+  | 'engine.changed'
+  | 'audit.created';
 
 export interface OrgEvent {
   organizationId: string;

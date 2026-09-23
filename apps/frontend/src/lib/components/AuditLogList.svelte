@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { Loader2, ScrollText, User, ArrowDown, RefreshCw } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
 
@@ -124,6 +124,25 @@
 
 	onMount(() => {
 		void load(true);
+	});
+
+	function matchesScope(payload: { deploymentId?: string | null } | undefined): boolean {
+		if (scope === 'global' || 'organizationId' in scope) return true;
+		return payload?.deploymentId === scope.deploymentId;
+	}
+
+	let liveTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const orgId = $selectedOrganization?.id ?? null;
+		if (!orgId) return;
+		return subscribeOrgEvents(orgId, (ev) => {
+			if (ev.type !== 'audit.created' || !matchesScope(ev.payload)) return;
+			if (liveTimer) clearTimeout(liveTimer);
+			liveTimer = setTimeout(() => {
+				liveTimer = null;
+				void load(true);
+			}, 400);
+		});
 	});
 </script>
 

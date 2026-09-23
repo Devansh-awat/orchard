@@ -6,7 +6,6 @@
 	import BuildTab from './BuildTab.svelte';
 	import ResourcesTab from './ResourcesTab.svelte';
 	import VolumesTab from './VolumesTab.svelte';
-	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
 
 	let {
@@ -188,10 +187,7 @@
 		},
 		{
 			label: 'Admin',
-			items: [
-				{ id: 'audit', label: 'Audit log', href: hrefFor('audit') },
-				{ id: 'danger', label: 'Danger zone', href: hrefFor('danger') }
-			]
+			items: [{ id: 'danger', label: 'Danger zone', href: hrefFor('danger') }]
 		}
 	]);
 </script>
@@ -392,10 +388,6 @@
 				<SectionCard title="Notifications">
 					<ResourceNotifications {organizationId} scopeType="deployment" scopeId={deployment.id} />
 				</SectionCard>
-			{/if}
-		{:else if activeSection === 'audit'}
-			{#if deployment?.id}
-				<AuditLogList scope={{ deploymentId: deployment.id }} title="Recent activity" />
 			{/if}
 		{:else if activeSection === 'danger'}
 			<SectionCard

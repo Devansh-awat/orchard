@@ -134,10 +134,16 @@ export class PrismaEventsBridge implements OnModuleInit {
     const data = params?.args?.data ?? {};
     const isBuild = 'buildStatus' in data || 'buildStep' in data;
     const type: OrgEventType = isBuild ? 'build.changed' : 'deployment.changed';
-    this.orgEvents.emit({ organizationId: ctx.orgId, type, id, projectId: ctx.projectId });
-
     const buildStatus =
       typeof data.buildStatus === 'string' ? data.buildStatus : data.buildStatus?.set;
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type,
+      id,
+      projectId: ctx.projectId,
+      ...(isBuild && typeof buildStatus === 'string' ? { payload: { buildStatus } } : {})
+    });
+
     if (buildStatus === 'succeeded' || buildStatus === 'failed') {
       this.notifications
         .notifyDeploy(id!, buildStatus)

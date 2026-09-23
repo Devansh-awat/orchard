@@ -82,7 +82,6 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
@@ -210,7 +209,7 @@
 	const tabSections = [
 		{ id: 'overview', label: 'Overview', icon: ServerCog },
 		{ id: 'variables', label: 'Variables', icon: Settings },
-		{ id: 'deploys', label: 'Deploys', icon: History },
+		{ id: 'deploys', label: 'Activity', icon: History },
 		{ id: 'observe', label: 'Observe', icon: Eye },
 		{ id: 'network', label: 'Network', icon: Wifi },
 		{ id: 'settings', label: 'Settings', icon: SlidersHorizontal }

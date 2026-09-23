@@ -16,6 +16,7 @@ export type OrgEventType =
 	| 'environment.changed'
 	| 'sharedvars.changed'
 	| 'engine.changed'
+	| 'audit.created'
 	| 'heartbeat';
 
 export interface OrgEvent {
@@ -112,6 +113,11 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'engine.changed':
 			qc.invalidateQueries({ queryKey: ['engine-health'] });
 			break;
+		case 'audit.created': {
+			const deploymentId = ev.payload?.deploymentId;
+			if (deploymentId) qc.invalidateQueries({ queryKey: ['timeline', deploymentId] });
+			break;
+		}
 		default:
 			break;
 	}

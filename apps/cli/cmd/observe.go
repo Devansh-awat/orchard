@@ -30,7 +30,82 @@ func observeCmd() *cobra.Command {
 		observeErrorsCmd(),
 		observeRuntimeCmd(),
 		observeCapabilitiesCmd(),
+		observeActivityCmd(),
 	)
+	return c
+}
+
+func observeActivityCmd() *cobra.Command {
+	var kinds string
+	var limit *int
+	var cursor *string
+	var all *bool
+	c := &cobra.Command{
+		Use:     "activity <deploymentId>",
+		Aliases: []string{"timeline"},
+		Short:   "Merged activity feed: releases, builds, changes by people, pod transitions, new errors",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			entries := []map[string]any{}
+			next := *cursor
+			for page := 0; ; page++ {
+				if page >= maxPages {
+					return errors.New("--all hit the 100-page safety cap")
+				}
+				q := url.Values{}
+				if kinds != "" {
+					q.Set("kinds", kinds)
+				}
+				if *limit > 0 {
+					q.Set("limit", strconv.Itoa(*limit))
+				}
+				if next != "" {
+					q.Set("cursor", next)
+				}
+				var raw map[string]any
+				if err := cl.GetJSON(cmd.Context(), observePath(args[0], "timeline")+"?"+q.Encode(), &raw); err != nil {
+					return err
+				}
+				entries = append(entries, asList(raw["entries"])...)
+				next = pick(raw, "nextCursor")
+				if next == "" || !*all {
+					break
+				}
+			}
+			if fmtFlag() == output.FormatJSON {
+				out := map[string]any{"entries": entries}
+				if next != "" {
+					out["nextCursor"] = next
+				}
+				return output.JSON(out)
+			}
+			rows := [][]string{}
+			for _, e := range entries {
+				who := ""
+				if a, ok := e["actor"].(map[string]any); ok {
+					who = pick(a, "username", "email")
+				}
+				rows = append(rows, []string{
+					pick(e, "at"),
+					pick(e, "kind"),
+					pick(e, "title"),
+					observeTruncate(pick(e, "detail"), 60),
+					who,
+				})
+			}
+			output.Table([]string{"at", "kind", "what", "detail", "who"}, rows)
+			if next != "" {
+				output.Warnf("more entries available: resume with --cursor %s", next)
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&kinds, "kinds", "", "comma list of audit,build,release,pod,error (default: all)")
+	limit, cursor, all = addPageFlags(c)
 	return c
 }
 

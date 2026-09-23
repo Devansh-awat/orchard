@@ -324,6 +324,13 @@ jobs:
         run: pnpm --filter server test:query-stats
       - name: Deployment lifecycle tests
         run: pnpm --filter server test:deployment-lifecycle
+      # The activity feed is five tables merged by timestamp with a composite
+      # cursor. Two pod transitions landing in the same millisecond used to be
+      # either served twice or skipped depending on which side of the page
+      # boundary they fell, and a cursor that looked valid but was not sent the
+      # client back to page one silently.
+      - name: Activity timeline tests
+        run: pnpm --filter server test:timeline
 
   e2e:
     needs: changes

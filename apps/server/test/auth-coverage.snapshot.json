@@ -163,6 +163,7 @@
   "GET /observe/deployments/:id/logs/structured": "authenticated",
   "GET /observe/deployments/:id/overview": "authenticated",
   "GET /observe/deployments/:id/runtime": "authenticated",
+  "GET /observe/deployments/:id/timeline": "authenticated",
   "GET /organizations/:id": "authenticated",
   "GET /organizations/:id/backup-settings": "authenticated",
   "GET /organizations/:id/invitations": "authenticated",

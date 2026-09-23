@@ -12,8 +12,32 @@ const orgEventType = z.enum([
   'job.changed',
   'jobrun.changed',
   'environment.changed',
-  'sharedvars.changed'
+  'sharedvars.changed',
+  'engine.changed',
+  'audit.created'
 ]);
+
+export const auditCreatedPayload = z
+  .object({
+    action: z.string(),
+    deploymentId: z.string().nullable(),
+    projectId: z.string().nullable(),
+    targetType: z.string().nullable(),
+    targetId: z.string().nullable(),
+    targetLabel: z.string().nullable(),
+    actorUserId: z.string().nullable()
+  })
+  .passthrough()
+  .describe('Payload for audit.created events; id on the envelope is the audit log row id');
+
+export const buildChangedPayload = z
+  .object({
+    buildStatus: z.string().optional()
+  })
+  .passthrough()
+  .describe(
+    'Payload for build.changed events when the write carried a build status; absent for other build writes'
+  );
 
 export const jobRunChangedPayload = z
   .object({
@@ -48,10 +72,16 @@ export const orgEvent = z
     projectId: z.string().optional(),
     ts: z.number().describe('Emit time, Unix epoch milliseconds'),
     payload: z
-      .union([jobRunChangedPayload, deploymentMetricsPayload, z.unknown()])
+      .union([
+        jobRunChangedPayload,
+        deploymentMetricsPayload,
+        auditCreatedPayload,
+        buildChangedPayload,
+        z.unknown()
+      ])
       .optional()
       .describe(
-        'Event-specific payload: structured for jobrun.changed and deployment.metrics, informer-derived data for pod.changed and database.changed, absent otherwise'
+        'Event-specific payload: structured for jobrun.changed, deployment.metrics, audit.created and build.changed, informer-derived data for pod.changed and database.changed, absent otherwise'
       )
   })
   .passthrough();

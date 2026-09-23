@@ -15,6 +15,8 @@ import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ObservabilityService } from './observability.service';
 import { ErrorIngestService } from './error-ingest.service';
+import { TimelineService } from './timeline.service';
+import { parseKinds } from './timeline-entries';
 
 @Auth()
 @Controller('observe')
@@ -22,8 +24,25 @@ export class ObservabilityController {
   constructor(
     private readonly observability: ObservabilityService,
     private readonly errorIngest: ErrorIngestService,
+    private readonly timeline: TimelineService,
     private readonly projectAccess: ProjectAccessService
   ) {}
+
+  @Get('deployments/:id/timeline')
+  async getTimeline(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limitStr?: string,
+    @Query('kinds') kinds?: string
+  ) {
+    await this.assertAccess(id, req);
+    return this.timeline.list(id, {
+      cursor: cursor || null,
+      limit: Number(limitStr) || undefined,
+      kinds: parseKinds(kinds)
+    });
+  }
 
   @Get('deployments/:id/capabilities')
   async getCapabilities(@Param('id') id: string, @Request() req) {

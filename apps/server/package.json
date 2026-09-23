@@ -70,7 +70,8 @@
     "test:start-command": "tsx --test test/start-command.test.ts",
     "test:turnstile": "tsx --test test/turnstile.test.ts",
     "test:client-ip": "tsx --test test/client-ip.test.ts",
-    "test:redis-throttle": "tsx --test test/redis-throttle.test.ts"
+    "test:redis-throttle": "tsx --test test/redis-throttle.test.ts",
+    "test:timeline": "tsx --test test/timeline.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

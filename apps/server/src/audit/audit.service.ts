@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { OrgEventsService } from '../events/org-events.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 export type AuditMetadataValue = string | number | boolean | null | readonly unknown[];
@@ -50,7 +51,8 @@ export class AuditService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
-    @Optional() private readonly leaderElection?: LeaderElectionService
+    @Optional() private readonly leaderElection?: LeaderElectionService,
+    @Optional() private readonly orgEvents?: OrgEventsService
   ) {}
 
   /**
@@ -59,7 +61,7 @@ export class AuditService {
   async log(input: AuditLogInput): Promise<void> {
     try {
       const sanitized = this.sanitizeMetadata(input.metadata);
-      await this.prisma.auditLog.create({
+      const row = await this.prisma.auditLog.create({
         data: {
           action: input.action,
           actorUserId: input.actorUserId ?? null,
@@ -74,11 +76,69 @@ export class AuditService {
         }
       });
       this.forwardToAnalytics(input, sanitized);
+      this.emitCreated(row).catch((err) =>
+        this.logger.warn(
+          `Failed to emit audit.created for "${input.action}": ${err instanceof Error ? err.message : err}`
+        )
+      );
     } catch (err) {
       this.logger.warn(
         `Failed to record audit log "${input.action}": ${err instanceof Error ? err.message : err}`
       );
     }
+  }
+
+  /**
+   * Push the new row onto the org event stream so activity views update live.
+   * The envelope must carry projectId: scoped SSE subscribers drop any event
+   * without one, so a deployment-scoped entry that only named its deployment
+   * would never reach a plain project member.
+   */
+  private async emitCreated(row: {
+    id: string;
+    action: string;
+    actorUserId: string | null;
+    organizationId: string | null;
+    projectId: string | null;
+    deploymentId: string | null;
+    targetType: string | null;
+    targetId: string | null;
+    targetLabel: string | null;
+  }): Promise<void> {
+    if (!this.orgEvents) return;
+    let { organizationId, projectId } = row;
+    if ((!organizationId || !projectId) && row.deploymentId) {
+      const dep = await this.prisma.deployment.findUnique({
+        where: { id: row.deploymentId },
+        select: { projectId: true, project: { select: { organizationId: true } } }
+      });
+      if (dep) {
+        projectId = projectId ?? dep.projectId;
+        organizationId = organizationId ?? dep.project.organizationId;
+      }
+    } else if (!organizationId && projectId) {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { organizationId: true }
+      });
+      organizationId = project?.organizationId ?? null;
+    }
+    if (!organizationId) return;
+    this.orgEvents.emit({
+      organizationId,
+      type: 'audit.created',
+      id: row.id,
+      projectId: projectId ?? undefined,
+      payload: {
+        action: row.action,
+        deploymentId: row.deploymentId,
+        projectId,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        targetLabel: row.targetLabel,
+        actorUserId: row.actorUserId
+      }
+    });
   }
 
   private forwardToAnalytics(
