@@ -78,6 +78,10 @@ import {
   type RecoveryRun
 } from './build-recovery';
 import { buildStartedAtFrom } from './build-timing';
+import { ReleasesService } from './releases.service';
+import type { DeployStrategy } from '../kubernetes/rollout-strategy';
+
+const ROLLBACK_GATE_TIMEOUT_MS = 90_000;
 
 // Ceiling on the disruption budget. Nothing in Orchard scales anywhere near
 // this, and it keeps a fat-fingered value from being stored as a number the
@@ -141,6 +145,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly applyQueue: ApplyQueueService,
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
+    private readonly releases: ReleasesService,
     @Optional() private readonly buildJobInformer?: BuildJobInformerService
   ) {}
 
@@ -2787,6 +2792,111 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   // every full (re)create re-reads the start command rather than trusting that
   // an earlier patch survives. Returns null for a Railpack build, where the
   // command is already baked into the image.
+  async listReleases(deploymentId: string, limit: number) {
+    return this.releases.list(deploymentId, limit);
+  }
+
+  // What a rollout of this app is patched with besides the image. Shared by
+  // the deploy path, rollback and the blue/green settle sweep so none of them
+  // can leave the container with the image's own CMD and no probes.
+  async rolloutInputs(deploymentId: string) {
+    const [healthCheck, args] = await Promise.all([
+      this.resolveStoredHealthCheck(deploymentId),
+      this.loadStartArgs(deploymentId)
+    ]);
+    return { healthCheck, args };
+  }
+
+  private async appendBuildLog(deploymentId: string, line: string): Promise<void> {
+    await this.prisma
+      .$executeRaw`UPDATE "deployments" SET "build_logs" = COALESCE("build_logs", '') || ${`\n${line}`} WHERE "id" = ${deploymentId}::uuid`.catch(
+      () => {}
+    );
+  }
+
+  // The deploy is not done when the image is patched; it is done when the
+  // pods that run it are ready. A rollout that crashloops or exceeds its
+  // deadline is put back on the previous image and reported as a failure,
+  // so "succeeded" means what it says.
+  private async gateRollout(
+    deploymentId: string,
+    name: string,
+    namespace: string,
+    opts: {
+      sinceMs: number;
+      image: string;
+      previousImage: string | null;
+      strategy: DeployStrategy;
+    }
+  ): Promise<void> {
+    await this.appendBuildLog(deploymentId, 'Waiting for the new pods to become ready');
+    const verdict = await this.k8sWorkload.waitForRollout(name, namespace, {
+      sinceMs: opts.sinceMs,
+      onProgress: (detail) => void this.appendBuildLog(deploymentId, `rollout: ${detail}`)
+    });
+    if (verdict.state === 'ready') {
+      await this.appendBuildLog(deploymentId, 'All pods are ready');
+      return;
+    }
+    const reason = verdict.state === 'failed' ? verdict.reason : 'pods were not ready';
+    await this.releases.record(deploymentId, {
+      image: opts.image,
+      strategy: opts.strategy,
+      status: 'failed',
+      reason
+    });
+    if (opts.previousImage && opts.previousImage !== opts.image) {
+      await this.appendBuildLog(
+        deploymentId,
+        `Deploy failed: ${reason}. Rolling back to ${opts.previousImage}`
+      );
+      const { healthCheck, args } = await this.rolloutInputs(deploymentId);
+      await this.k8sWorkload
+        .updateDeploymentImage(name, namespace, opts.previousImage, healthCheck, args)
+        .catch((err) =>
+          this.logger.error(
+            `rollback after a failed rollout failed for ${deploymentId}: ${err?.message ?? err}`
+          )
+        );
+      throw new Error(`Deploy failed: ${reason}. Rolled back to the previous release.`);
+    }
+    throw new Error(`Deploy failed: ${reason}.`);
+  }
+
+  private async runBlueGreen(
+    deploymentId: string,
+    name: string,
+    namespace: string,
+    image: string,
+    healthCheck: ResolvedHealthCheck | undefined,
+    args: string[] | null
+  ): Promise<void> {
+    const result = await this.k8sWorkload.deployBlueGreen({
+      deploymentName: name,
+      namespace,
+      image,
+      healthCheck,
+      args,
+      log: (line) => void this.appendBuildLog(deploymentId, line)
+    });
+    if (result.ok === false) {
+      const { reason } = result;
+      await this.releases.record(deploymentId, {
+        image,
+        strategy: 'blueGreen',
+        status: 'failed',
+        reason
+      });
+      throw new Error(`Deploy failed: ${reason}. The previous release kept serving.`);
+    }
+    if (!result.settled) {
+      await this.appendBuildLog(
+        deploymentId,
+        'Green is serving; blue follows as soon as it settles'
+      );
+    }
+  }
+
   private async loadStartArgs(deploymentId: string): Promise<string[] | null> {
     const row = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -5150,12 +5260,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return mapped;
   }
 
-  async updateDeploymentStrategy(
-    deploymentId: string,
-    strategy: 'rollingUpdate' | 'recreate',
-    userId?: string
-  ) {
-    if (strategy !== 'rollingUpdate' && strategy !== 'recreate') {
+  async updateDeploymentStrategy(deploymentId: string, strategy: DeployStrategy, userId?: string) {
+    if (strategy !== 'rollingUpdate' && strategy !== 'recreate' && strategy !== 'blueGreen') {
       throw new BadRequestException('Invalid deploy strategy');
     }
 
@@ -5174,9 +5280,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // PVC volumes pin the strategy to Recreate — ReadWriteOnce can't satisfy
     // a rolling cutover.
     const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
-    if (hasPvc && strategy === 'rollingUpdate') {
+    if (hasPvc && strategy !== 'recreate') {
       throw new BadRequestException(
-        'This deployment has a PVC volume — rolling updates are not supported. Remove the PVC to switch back to rolling updates.'
+        'This deployment has a PVC volume, so only recreate is supported. Remove the PVC to use rolling updates or blue/green.'
       );
     }
 
@@ -6957,7 +7063,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     deploymentId: string,
     name: string,
     namespace: string,
-    deployStrategy: 'rollingUpdate' | 'recreate'
+    deployStrategy: DeployStrategy
   ): Promise<void> {
     try {
       const desired = await this.currentVolumes(deploymentId);
@@ -6972,7 +7078,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         namespace,
         deploymentName: name,
         volumes: desired,
-        deployStrategy: desired.some((v) => v.type === 'pvc') ? 'recreate' : deployStrategy
+        deployStrategy:
+          desired.some((v) => v.type === 'pvc') || deployStrategy === 'recreate'
+            ? 'recreate'
+            : 'rollingUpdate'
       });
     } catch (e: any) {
       console.error(`[Deployment/volumes] could not reconcile ${namespace}/${name}: ${e?.message}`);
@@ -7255,15 +7364,38 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       let deploymentResult: any;
       let shouldCreateNew = false;
 
+      const rolloutStartedAt = Date.now();
+      const rolloutRow = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { image: true, deployStrategy: true }
+      });
+      const rolloutStrategy: DeployStrategy =
+        (rolloutRow?.deployStrategy as DeployStrategy | undefined) ?? 'rollingUpdate';
+      const previousImage = rolloutRow?.image ?? null;
+      let rolloutGated = false;
+
       if (data.isRebuild && k8sDeploymentExists) {
         const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
-        await this.k8sWorkload.updateDeploymentImage(
-          data.name,
-          data.namespace,
-          image,
-          healthCheck,
-          await this.loadStartArgs(deploymentId)
-        );
+        const startArgs = await this.loadStartArgs(deploymentId);
+        if (rolloutStrategy === 'blueGreen') {
+          await this.runBlueGreen(
+            deploymentId,
+            data.name,
+            data.namespace,
+            image,
+            healthCheck,
+            startArgs
+          );
+          rolloutGated = true;
+        } else {
+          await this.k8sWorkload.updateDeploymentImage(
+            data.name,
+            data.namespace,
+            image,
+            healthCheck,
+            startArgs
+          );
+        }
 
         await this.syncReplicasForRebuild(deploymentId, data.name, data.namespace, data.replicas);
 
@@ -7332,8 +7464,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             project: { select: { organizationId: true, ownerId: true } }
           }
         });
-        const buildStrategy: 'rollingUpdate' | 'recreate' =
-          (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+        const buildStrategy: DeployStrategy =
+          (deploymentRow?.deployStrategy as DeployStrategy | undefined) ?? 'rollingUpdate';
         const buildPullPolicy = resolvePullPolicy(deploymentRow?.imagePullPolicy, image);
         const deployPlacement = deploymentRow
           ? await this.resolvePlacementForProject(deploymentRow.projectId)
@@ -7421,13 +7553,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           });
         } else {
           const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
-          await this.k8sWorkload.updateDeploymentImage(
-            data.name,
-            data.namespace,
-            image,
-            healthCheck,
-            await this.loadStartArgs(deploymentId)
-          );
+          const startArgs = await this.loadStartArgs(deploymentId);
+          if (rolloutStrategy === 'blueGreen') {
+            await this.runBlueGreen(
+              deploymentId,
+              data.name,
+              data.namespace,
+              image,
+              healthCheck,
+              startArgs
+            );
+            rolloutGated = true;
+          } else {
+            await this.k8sWorkload.updateDeploymentImage(
+              data.name,
+              data.namespace,
+              image,
+              healthCheck,
+              startArgs
+            );
+          }
           // A rebuild patches the image and nothing else, so it is also the
           // only chance to notice the running spec has drifted from what was
           // configured while a build was in flight.
@@ -7448,7 +7593,28 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      if (!rolloutGated) {
+        await this.gateRollout(deploymentId, data.name, data.namespace, {
+          sinceMs: rolloutStartedAt,
+          image,
+          previousImage: shouldCreateNew ? null : previousImage,
+          strategy: rolloutStrategy
+        });
+      }
+
       await saveImageHistory();
+      const liveHistory = await this.prisma.imageHistory.findFirst({
+        where: { deploymentId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true }
+      });
+      await this.releases.record(deploymentId, {
+        image,
+        imageHistoryId: liveHistory?.id ?? null,
+        strategy: rolloutStrategy,
+        status: 'live',
+        createdById: data.triggeredById ?? null
+      });
 
       if (!data.isRebuild || shouldCreateNew) {
         // Update service records with K8s-assigned values (nodePort, externalIp)
@@ -8190,12 +8356,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Image history not found');
     }
 
-    // Update Kubernetes deployment with the old image
+    // The probes and start command belong to the app, not the image. A
+    // rollback that dropped them left the older image running the container's
+    // own CMD with no readiness gate.
+    const { healthCheck, args } = await this.rolloutInputs(deploymentId);
+    const rollbackStartedAt = Date.now();
     await this.k8sWorkload.updateDeploymentImage(
       deployment.name,
       deployment.namespace,
-      imageHistory.image
+      imageHistory.image,
+      healthCheck,
+      args
     );
+    const verdict = await this.k8sWorkload.waitForRollout(deployment.name, deployment.namespace, {
+      sinceMs: rollbackStartedAt,
+      timeoutMs: ROLLBACK_GATE_TIMEOUT_MS
+    });
+    if (verdict.state === 'failed') {
+      if (deployment.image && deployment.image !== imageHistory.image) {
+        await this.k8sWorkload
+          .updateDeploymentImage(
+            deployment.name,
+            deployment.namespace,
+            deployment.image,
+            healthCheck,
+            args
+          )
+          .catch(() => {});
+      }
+      throw new BadRequestException(`Rollback did not become ready: ${verdict.reason}`);
+    }
 
     // Update database
     await this.prisma.$transaction(async (tx) => {
@@ -8219,6 +8409,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           status: 'running'
         }
       });
+    });
+
+    await this.releases.markRolledBack(deploymentId, `rolled back to ${imageHistory.image}`);
+    await this.releases.record(deploymentId, {
+      image: imageHistory.image,
+      imageHistoryId: imageHistory.id,
+      strategy: (deployment.deployStrategy as DeployStrategy) ?? 'rollingUpdate',
+      status: 'live',
+      reason: 'rollback',
+      createdById: user.id
     });
 
     const result = await this.prisma.deployment.findUnique({

@@ -38,6 +38,7 @@ func deployCmd() *cobra.Command {
 		deployRollbackCmd(),
 		deployImageCmd(),
 		deployHistoryCmd(),
+		deployReleasesCmd(),
 		deployLogsCmd(),
 		deployPodsCmd(),
 		deployMetricsCmd(),

@@ -289,12 +289,17 @@ Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_d
       description: `Set the Kubernetes update strategy for a deployment.
 - \`rollingUpdate\`: bring up new pods before draining old ones — zero downtime.
 - \`recreate\`: tear down all pods first, then start new ones — brief downtime, required for ReadWriteOnce PVCs.
+- \`blueGreen\`: start the new image as a second copy, move traffic to it only once every pod is ready, then bring the original copy to the same image behind the scenes. A copy that never becomes ready is removed and the deploy is reported as failed with the old release untouched.
 
-When the deployment has a PVC attached, the backend forces \`recreate\` and rejects attempts to set \`rollingUpdate\` (the response will say so). If you must switch back, remove the PVC first via \`update_deployment_volumes\`.`,
+When the deployment has a PVC attached, the backend forces \`recreate\` and rejects \`rollingUpdate\` and \`blueGreen\` (the response will say so). If you must switch back, remove the PVC first via \`update_deployment_volumes\`.
+
+Every strategy now waits for the new pods to be ready before the deploy is reported as succeeded; a rollout that crashloops or exceeds the deadline is rolled back to the previous image and reported as failed.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
-        strategy: z.enum(['rollingUpdate', 'recreate']).describe('The new update strategy')
+        strategy: z
+          .enum(['rollingUpdate', 'recreate', 'blueGreen'])
+          .describe('The new update strategy')
       }
     },
     async ({ deploymentId, strategy }) => {

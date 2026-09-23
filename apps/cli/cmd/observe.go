@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

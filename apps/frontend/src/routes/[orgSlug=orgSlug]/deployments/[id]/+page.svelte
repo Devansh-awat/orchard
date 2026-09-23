@@ -191,7 +191,7 @@
 		memoryRequestBytes?: number | null;
 		totalCpuUsage?: number | null;
 		totalMemoryUsage?: number | null;
-		deployStrategy?: 'rollingUpdate' | 'recreate';
+		deployStrategy?: 'rollingUpdate' | 'recreate' | 'blueGreen';
 		imagePullPolicy?: 'Always' | 'IfNotPresent' | null;
 		effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
@@ -605,16 +605,16 @@
 
 	// Deploy update strategy (RollingUpdate vs Recreate). PVC volumes force
 	// Recreate; the picker disables RollingUpdate in that case.
-	let strategyValue = $state<'rollingUpdate' | 'recreate'>('rollingUpdate');
+	let strategyValue = $state<'rollingUpdate' | 'recreate' | 'blueGreen'>('rollingUpdate');
 	let savingStrategy = $state(false);
 	const hasPvcVolume = $derived(volumes.some((v) => v.type === 'pvc'));
 
-	async function saveStrategy(next: 'rollingUpdate' | 'recreate') {
+	async function saveStrategy(next: 'rollingUpdate' | 'recreate' | 'blueGreen') {
 		if (!deployment || savingStrategy || next === strategyValue) return;
-		if (hasPvcVolume && next === 'rollingUpdate') {
+		if (hasPvcVolume && next !== 'recreate') {
 			toasts.add({
-				title: 'Rolling updates unavailable',
-				description: 'Remove the PVC volume to switch back to rolling updates.',
+				title: 'Only recreate works with a PVC',
+				description: 'Remove the PVC volume to use rolling updates or blue/green.',
 				color: 'warning'
 			});
 			return;
@@ -1424,7 +1424,8 @@
 
 			// Seed deploy strategy from the persisted value.
 			if (!savingStrategy) {
-				strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+				strategyValue =
+					(data.deployStrategy as 'rollingUpdate' | 'recreate' | 'blueGreen') ?? 'rollingUpdate';
 			}
 
 			if (!savingPdb) {

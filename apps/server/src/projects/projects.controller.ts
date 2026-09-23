@@ -955,6 +955,18 @@ export class DeploymentsController {
     return this.deployments.listBuildRuns(id, Number(limitStr) || 20);
   }
 
+  @Get(':id/releases')
+  async getReleases(@Param('id') id: string, @Request() req, @Query('limit') limitStr?: string) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+    return this.deployments.listReleases(id, Number(limitStr) || 20);
+  }
+
   @Get(':id/build-runs/:runId/logs')
   async getBuildRunLogs(@Param('id') id: string, @Param('runId') runId: string, @Request() req) {
     await this.projectAccess.assertDeploymentView(id, req.user.sub, {
@@ -1017,7 +1029,7 @@ export class DeploymentsController {
   @Patch(':id/strategy')
   async updateDeploymentStrategy(
     @Param('id') id: string,
-    @Body() body: { strategy: 'rollingUpdate' | 'recreate' },
+    @Body() body: { strategy: 'rollingUpdate' | 'recreate' | 'blueGreen' },
     @Request() req
   ) {
     const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {

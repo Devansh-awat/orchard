@@ -17,7 +17,7 @@
 		onDeploymentUpdated,
 		onRebuild,
 		rebuilding,
-		strategyValue = $bindable<'rollingUpdate' | 'recreate'>('rollingUpdate'),
+		strategyValue = $bindable<'rollingUpdate' | 'recreate' | 'blueGreen'>('rollingUpdate'),
 		savingStrategy,
 		pdbMinAvailable = $bindable(1),
 		savingPdb,
@@ -94,13 +94,13 @@
 		onDeploymentUpdated?: (updated: any) => void;
 		onRebuild: () => void;
 		rebuilding: boolean;
-		strategyValue: 'rollingUpdate' | 'recreate';
+		strategyValue: 'rollingUpdate' | 'recreate' | 'blueGreen';
 		savingStrategy: boolean;
 		pdbMinAvailable: number;
 		savingPdb: boolean;
 		onSavePdb: () => void;
 		hasPvcVolume: boolean;
-		onSaveStrategy: (next: 'rollingUpdate' | 'recreate') => void;
+		onSaveStrategy: (next: 'rollingUpdate' | 'recreate' | 'blueGreen') => void;
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
 		persistentBuildCache: boolean;

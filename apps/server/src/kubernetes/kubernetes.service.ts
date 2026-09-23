@@ -172,10 +172,11 @@ export interface CreateDeploymentOptions {
     retries: number;
     startupFailureThreshold: number;
   };
-  // 'rollingUpdate' | 'recreate' — when omitted, the cluster default
-  // (RollingUpdate) is used. Caller is responsible for forcing 'recreate' when
-  // a PVC volume is attached.
-  deployStrategy?: 'rollingUpdate' | 'recreate';
+  // When omitted, the cluster default (RollingUpdate) is used. Caller is
+  // responsible for forcing 'recreate' when a PVC volume is attached.
+  // 'blueGreen' is orchestrated above Kubernetes and renders as RollingUpdate
+  // on the object itself.
+  deployStrategy?: 'rollingUpdate' | 'recreate' | 'blueGreen';
   // Whether the kubelet re-pulls the image on every pod start. Omitted means
   // IfNotPresent, which is right for the unique per-build tags a GitHub deploy
   // produces and wrong for an image-source app pinned to a mutable tag.

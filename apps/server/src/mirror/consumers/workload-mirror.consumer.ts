@@ -239,8 +239,14 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       adopted.push(`memory=${memoryBytes}`);
     }
 
+    // Blue/green is orchestrated above Kubernetes: the blue object legitimately
+    // carries RollingUpdate, so reading it back would demote the setting.
     const strategy = dep.spec?.strategy?.type === 'Recreate' ? 'recreate' : 'rollingUpdate';
-    if (dep.spec?.strategy?.type && strategy !== row.deployStrategy) {
+    if (
+      dep.spec?.strategy?.type &&
+      row.deployStrategy !== 'blueGreen' &&
+      strategy !== row.deployStrategy
+    ) {
       changes.deployStrategy = strategy;
       adopted.push(`strategy=${strategy}`);
     }

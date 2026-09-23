@@ -61,6 +61,7 @@ model User {
   assignedErrorGroups        ErrorGroup[]             @relation("ErrorGroupAssignee")
   resolvedErrorGroups        ErrorGroup[]             @relation("ErrorGroupResolver")
   triggeredBuildRuns         BuildRun[]               @relation("BuildRunTrigger")
+  releases                   Release[]                @relation("ReleaseCreator")
   createdWebhookTokens       DeploymentWebhookToken[] @relation("WebhookTokenCreator")
   tailscaleConnection        TailscaleConnection?
   createdJobs                Job[]                    @relation("JobCreator")
@@ -740,6 +741,7 @@ model Deployment {
   webhookTokens     DeploymentWebhookToken[]
   jobSteps          JobStep[]
   crashState        DeploymentCrashState?
+  releases          Release[]
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -799,6 +801,7 @@ model ImageHistory {
   triggeredBy          User?             @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
   errorGroupsFirstSeen ErrorGroup[]
   errorOccurrences     ErrorOccurrence[]
+  releases             Release[]
 
   @@index([deploymentId], map: "idx_image_history_deployment")
   @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")
@@ -859,6 +862,42 @@ model BuildRun {
   @@index([deploymentId, createdAt(sort: Desc)], map: "idx_build_runs_deployment_recent")
   @@index([status, heartbeatAt], map: "idx_build_runs_reclaim")
   @@map("build_runs")
+}
+
+// What actually shipped, frozen at the moment traffic moved to it. ImageHistory
+// is image plus git provenance and is capped at 10 with older images deleted
+// from the registry; a Release keeps the configuration that ran alongside the
+// image (env keys, resources, probes, start command, replica count) so a
+// rollback can put back the whole thing, and a failed rollout leaves a row
+// saying why nothing moved.
+model Release {
+  id                  String             @id @default(uuid()) @db.Uuid
+  deploymentId        String             @map("deployment_id") @db.Uuid
+  imageHistoryId      String?            @map("image_history_id") @db.Uuid
+  image               String             @db.VarChar(500)
+  strategy            DeploymentStrategy @default(rollingUpdate)
+  // live | superseded | failed | rolled_back
+  status              String             @default("live") @db.VarChar(20)
+  // Why a failed release never took traffic, or what a rollback returned to.
+  reason              String?            @db.Text
+  // Secret values are never snapshotted: entries carry {key, secret: true}.
+  envSnapshot         Json               @map("env_snapshot") @db.JsonB
+  resourceSnapshot    Json               @map("resource_snapshot") @db.JsonB
+  healthCheckSnapshot Json?              @map("health_check_snapshot") @db.JsonB
+  startCommand        String?            @map("start_command") @db.VarChar(2000)
+  replicas            Int                @default(1)
+  createdById         String?            @map("created_by_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  promotedAt          DateTime?          @map("promoted_at") @db.Timestamp(6)
+  supersededAt        DateTime?          @map("superseded_at") @db.Timestamp(6)
+
+  deployment   Deployment    @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  imageHistory ImageHistory? @relation(fields: [imageHistoryId], references: [id], onDelete: SetNull)
+  createdBy    User?         @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([deploymentId, createdAt(sort: Desc)], map: "idx_releases_deployment_recent")
+  @@index([deploymentId, status], map: "idx_releases_deployment_status")
+  @@map("releases")
 }
 
 model DeploymentWebhookToken {
@@ -1216,6 +1255,7 @@ enum BuildType {
 enum DeploymentStrategy {
   rollingUpdate
   recreate
+  blueGreen
 
   @@map("deployment_strategy")
 }

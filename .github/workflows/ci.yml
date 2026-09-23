@@ -331,6 +331,13 @@ jobs:
       # client back to page one silently.
       - name: Activity timeline tests
         run: pnpm --filter server test:timeline
+      # A deploy used to report success the moment the image was patched, so
+      # an image that crashlooped on boot was announced as live and the
+      # previous release was already gone. The gate decides what "landed"
+      # means, and blue/green must never move traffic to pods it has not seen
+      # ready, nor touch blue when green fails.
+      - name: Rollout gate and blue/green tests
+        run: pnpm --filter server test:rollout-gate
 
   e2e:
     needs: changes

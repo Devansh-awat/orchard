@@ -186,7 +186,7 @@ export interface Deployment {
 	memoryRequestBytes?: number | null;
 	totalCpuUsage?: number | null;
 	totalMemoryUsage?: number | null;
-	deployStrategy?: 'rollingUpdate' | 'recreate';
+	deployStrategy?: 'rollingUpdate' | 'recreate' | 'blueGreen';
 	pdbMinAvailable?: number;
 	imagePullPolicy?: 'Always' | 'IfNotPresent' | null;
 	effectiveImagePullPolicy?: 'Always' | 'IfNotPresent';

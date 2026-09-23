@@ -19,6 +19,8 @@ import { DatabasesService } from './databases.service';
 import { BackupSyncService } from './backup-sync.service';
 import { ImportSettleService } from './import-settle.service';
 import { DeploymentsService } from './deployments.service';
+import { ReleasesService } from './releases.service';
+import { BlueGreenSettleService } from './blue-green-settle.service';
 import { ProjectOrgTransferService } from './project-org-transfer.service';
 import { BuildQueueService } from './build-queue.service';
 import { IngressService } from './ingress.service';
@@ -57,6 +59,8 @@ import { ProjectTransfersController } from './project-transfers.controller';
     BackupSyncService,
     ImportSettleService,
     DeploymentsService,
+    ReleasesService,
+    BlueGreenSettleService,
     ProjectOrgTransferService,
     BuildQueueService,
     IngressService,

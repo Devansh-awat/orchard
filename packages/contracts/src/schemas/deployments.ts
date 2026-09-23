@@ -251,7 +251,7 @@ const deploymentBase = z
     buildStatus: z.string(),
     buildStep: z.string().nullable().optional(),
     buildType: z.enum(['dockerfile', 'railpack']).optional(),
-    deployStrategy: z.enum(['rollingUpdate', 'recreate']).optional(),
+    deployStrategy: z.enum(['rollingUpdate', 'recreate', 'blueGreen']).optional(),
     imagePullPolicy: z
       .enum(['Always', 'IfNotPresent'])
       .nullish()
@@ -631,9 +631,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: deploymentBase
   },
   'PATCH /deployments/:id/strategy': {
-    summary: 'Change the deploy strategy',
+    summary:
+      'Change the deploy strategy. blueGreen brings the new image up beside the old one, moves traffic only once it is ready, and rolls back on its own if it never is',
     scope: 'deploy',
-    request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate']) }),
+    request: z.object({ strategy: z.enum(['rollingUpdate', 'recreate', 'blueGreen']) }),
     response: deploymentBase
   },
   'GET /deployments/:id/next-steps': {

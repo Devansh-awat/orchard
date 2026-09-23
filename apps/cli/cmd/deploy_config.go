@@ -407,8 +407,10 @@ func deployStrategySetCmd() *cobra.Command {
 				strategy = "rollingUpdate"
 			case "recreate":
 				strategy = "recreate"
+			case "bluegreen", "blue-green", "blue_green":
+				strategy = "blueGreen"
 			default:
-				return fmt.Errorf("--type must be rollingupdate or recreate, got %q", typ)
+				return fmt.Errorf("--type must be rollingupdate, recreate or bluegreen, got %q", typ)
 			}
 			cl, _, err := client()
 			if err != nil {
@@ -422,7 +424,7 @@ func deployStrategySetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&typ, "type", "", "update strategy: rollingupdate|recreate (required)")
+	c.Flags().StringVar(&typ, "type", "", "update strategy: rollingupdate|recreate|bluegreen (required)")
 	_ = c.MarkFlagRequired("type")
 	return c
 }

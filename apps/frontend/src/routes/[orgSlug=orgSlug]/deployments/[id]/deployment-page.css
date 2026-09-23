@@ -1390,13 +1390,13 @@ a.dep-meta-lead-link:hover {
 
 /* ===== Advanced tab ===== */
 
-/* Strategy picker — two big tappable cards */
+/* Strategy picker — three tappable cards */
 .strategy-grid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 0.75rem;
 }
-@media (max-width: 540px) {
+@media (max-width: 760px) {
 	.strategy-grid {
 		grid-template-columns: 1fr;
 	}

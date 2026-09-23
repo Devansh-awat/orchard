@@ -123,6 +123,7 @@
   "GET /deployments/:id/next-steps": "authenticated",
   "GET /deployments/:id/pods": "authenticated",
   "GET /deployments/:id/pods-live": "authenticated",
+  "GET /deployments/:id/releases": "authenticated",
   "GET /deployments/:id/webhook-tokens": "authenticated",
   "GET /deployments/favicon": "authenticated",
   "GET /deployments/recent-builds": "authenticated",

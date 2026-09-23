@@ -119,6 +119,7 @@ var routeCoverage = map[string]string{
 	"PATCH /deployments/:id/resources":   "deploy resources set",
 	"PUT /deployments/:id/volumes":       "deploy volumes set",
 	"PATCH /deployments/:id/strategy":    "deploy strategy set",
+	"GET /deployments/:id/releases":      "deploy releases",
 	"PATCH /deployments/:id/pull-policy": "deploy pull-policy set",
 
 	// databases: post-mortem capture

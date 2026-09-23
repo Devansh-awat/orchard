@@ -29,7 +29,22 @@ import {
 } from './disruption-budget';
 import { computePodStatus } from '../mirror/pod-status';
 import { isPullAuthEnvKey } from '../env/reserved-env';
-import { ROLLOUT_MIN_READY_SECONDS, rollingUpdateStrategy } from './rollout-strategy';
+import {
+  ROLLOUT_GATE_POLL_MS,
+  ROLLOUT_GATE_TIMEOUT_MS,
+  ROLLOUT_MIN_READY_SECONDS,
+  ROLLOUT_PROGRESS_DEADLINE_SECONDS,
+  assessRollout,
+  blueGreenBlocker,
+  buildGreenDeployment,
+  greenName,
+  k8sStrategyFor,
+  rollingUpdateStrategy,
+  selectorPointsAt,
+  slotSelector,
+  type DeployStrategy,
+  type RolloutAssessment
+} from './rollout-strategy';
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 
 /**
@@ -913,6 +928,7 @@ export class K8sWorkloadService {
           replicas,
           strategy,
           minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
+          progressDeadlineSeconds: ROLLOUT_PROGRESS_DEADLINE_SECONDS,
           selector: {
             matchLabels: selectorLabels
           },
@@ -2267,7 +2283,7 @@ export class K8sWorkloadService {
   async updateDeploymentStrategy(
     deploymentName: string,
     namespace: string,
-    strategy: 'rollingUpdate' | 'recreate'
+    strategy: DeployStrategy
   ) {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -2276,11 +2292,9 @@ export class K8sWorkloadService {
 
     // Setting `rollingUpdate: null` clears any prior rolling config when
     // switching to Recreate. K8s rejects strategy.rollingUpdate alongside
-    // type=Recreate, so we have to actively wipe it.
-    const body: k8s.V1DeploymentStrategy =
-      strategy === 'recreate'
-        ? { type: 'Recreate', rollingUpdate: null as any }
-        : rollingUpdateStrategy();
+    // type=Recreate, so we have to actively wipe it. Blue/green is orchestrated
+    // above Kubernetes, so the blue object simply rolls.
+    const body = k8sStrategyFor(strategy);
 
     try {
       await api.patchNamespacedDeployment(
@@ -2504,6 +2518,7 @@ export class K8sWorkloadService {
         spec: {
           ...(strategy ? { strategy } : {}),
           minReadySeconds: ROLLOUT_MIN_READY_SECONDS,
+          progressDeadlineSeconds: ROLLOUT_PROGRESS_DEADLINE_SECONDS,
           template: {
             spec: {
               containers: [containerPatch]
@@ -2602,6 +2617,259 @@ export class K8sWorkloadService {
       };
     }
     return probe;
+  }
+
+  /**
+   * Block until the rollout that began at `sinceMs` has landed or provably
+   * cannot. Polls the live Deployment and its pods rather than the mirror, so
+   * it works for the transient green object too, which no mirror row tracks.
+   */
+  async waitForRollout(
+    deploymentName: string,
+    namespace: string,
+    opts: {
+      sinceMs: number;
+      timeoutMs?: number;
+      pollMs?: number;
+      onProgress?: (detail: string) => void;
+    }
+  ): Promise<RolloutAssessment> {
+    this.ensureKubeConfig();
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const cleanName = String(deploymentName).trim();
+    const cleanNamespace = String(namespace).trim();
+    const timeoutMs = opts.timeoutMs ?? ROLLOUT_GATE_TIMEOUT_MS;
+    const pollMs = opts.pollMs ?? ROLLOUT_GATE_POLL_MS;
+    const deadline = Date.now() + timeoutMs;
+    let lastDetail = '';
+    for (;;) {
+      let dep: k8s.V1Deployment;
+      try {
+        dep = (await appsApi.readNamespacedDeployment(cleanName, cleanNamespace)).body;
+      } catch (error) {
+        if (error?.response?.statusCode === 404) {
+          return { state: 'failed', reason: 'the Deployment disappeared during the rollout' };
+        }
+        throw error;
+      }
+      const pods = (
+        await coreApi.listNamespacedPod(
+          cleanNamespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `app.kubernetes.io/name=${cleanName}`
+        )
+      ).body.items;
+      const verdict = assessRollout(dep, pods, opts.sinceMs);
+      if (verdict.state !== 'progressing') return verdict;
+      if (verdict.detail !== lastDetail) {
+        lastDetail = verdict.detail;
+        opts.onProgress?.(verdict.detail);
+      }
+      if (Date.now() >= deadline) {
+        return {
+          state: 'failed',
+          reason: `pods were not ready after ${Math.max(1, Math.round(timeoutMs / 60_000))} minutes (${verdict.detail})`
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+
+  /**
+   * Blue/green with a transient green: clone blue with the candidate image,
+   * wait for it to be ready, move the Service's selector to it, then bring blue
+   * to the same image behind the scenes and move the selector back. Traffic
+   * only ever points at pods that have already proved ready, and the canonical
+   * object keeps its name, so nothing else in Orchard has to learn about slots.
+   */
+  async deployBlueGreen(opts: {
+    deploymentName: string;
+    namespace: string;
+    image: string;
+    healthCheck?: CreateDeploymentOptions['healthCheck'];
+    args?: string[] | null;
+    timeoutMs?: number;
+    pollMs?: number;
+    log?: (line: string) => void;
+  }): Promise<{ ok: true; settled: boolean } | { ok: false; reason: string }> {
+    this.ensureKubeConfig();
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const name = String(opts.deploymentName).trim();
+    const namespace = String(opts.namespace).trim();
+    const green = greenName(name);
+    const log = opts.log ?? (() => {});
+
+    const blue = (await appsApi.readNamespacedDeployment(name, namespace)).body;
+    const blocker = blueGreenBlocker(blue);
+    if (blocker) return { ok: false, reason: blocker };
+    if ((blue.spec?.replicas ?? 1) === 0) {
+      await this.updateDeploymentImage(name, namespace, opts.image, opts.healthCheck, opts.args);
+      return { ok: true, settled: true };
+    }
+
+    await this.removeGreen(appsApi, green, namespace);
+    const body = buildGreenDeployment(blue, { image: opts.image, args: opts.args });
+    this.applyProbesTo(body, opts.healthCheck);
+    log(`Starting ${green} with ${opts.image}`);
+    const sinceMs = Date.now();
+    await appsApi.createNamespacedDeployment(namespace, body);
+    const verdict = await this.waitForRollout(green, namespace, {
+      sinceMs,
+      timeoutMs: opts.timeoutMs,
+      pollMs: opts.pollMs,
+      onProgress: (detail) => log(`green: ${detail}`)
+    });
+    if (verdict.state !== 'ready') {
+      const reason = verdict.state === 'failed' ? verdict.reason : 'not ready';
+      log(`Green never became ready: ${reason}. Removing it; blue keeps serving.`);
+      await this.removeGreen(appsApi, green, namespace);
+      return { ok: false, reason };
+    }
+
+    await this.pointServiceAt(name, namespace, 'green');
+    log('Traffic moved to green');
+    const settled = await this.settleBlueGreen({
+      deploymentName: name,
+      namespace,
+      image: opts.image,
+      healthCheck: opts.healthCheck,
+      args: opts.args,
+      timeoutMs: opts.timeoutMs,
+      pollMs: opts.pollMs,
+      log
+    });
+    return { ok: true, settled };
+  }
+
+  /**
+   * Second half of a blue/green rollout, and the whole of the healing sweep:
+   * bring blue to the image green is serving, wait for it, move traffic back,
+   * remove green. Idempotent, so a process that died between the two selector
+   * writes is finished by whichever replica notices the leftover green.
+   */
+  async settleBlueGreen(opts: {
+    deploymentName: string;
+    namespace: string;
+    image: string;
+    healthCheck?: CreateDeploymentOptions['healthCheck'];
+    args?: string[] | null;
+    timeoutMs?: number;
+    pollMs?: number;
+    log?: (line: string) => void;
+  }): Promise<boolean> {
+    this.ensureKubeConfig();
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const name = String(opts.deploymentName).trim();
+    const namespace = String(opts.namespace).trim();
+    const log = opts.log ?? (() => {});
+    const sinceMs = Date.now();
+    await this.updateDeploymentImage(name, namespace, opts.image, opts.healthCheck, opts.args);
+    const verdict = await this.waitForRollout(name, namespace, {
+      sinceMs,
+      timeoutMs: opts.timeoutMs,
+      pollMs: opts.pollMs,
+      onProgress: (detail) => log(`blue: ${detail}`)
+    });
+    if (verdict.state !== 'ready') {
+      const reason = verdict.state === 'failed' ? verdict.reason : 'not ready';
+      log(`Blue has not settled (${reason}); green keeps serving until it does.`);
+      return false;
+    }
+    await this.pointServiceAt(name, namespace, 'blue');
+    await this.removeGreen(appsApi, greenName(name), namespace);
+    log('Traffic back on blue, green removed');
+    return true;
+  }
+
+  /** The image a leftover green is serving, or null when there is no green. */
+  async findGreen(deploymentName: string, namespace: string): Promise<{ image: string } | null> {
+    this.ensureKubeConfig();
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    try {
+      const green = (
+        await appsApi.readNamespacedDeployment(greenName(String(deploymentName).trim()), namespace)
+      ).body;
+      const image = green.spec?.template?.spec?.containers?.[0]?.image;
+      return image ? { image } : null;
+    } catch (error) {
+      if (error?.response?.statusCode === 404) return null;
+      throw error;
+    }
+  }
+
+  private async pointServiceAt(name: string, namespace: string, slot: 'blue' | 'green') {
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const selector = slotSelector(name, slot);
+    await coreApi.patchNamespacedService(
+      name,
+      namespace,
+      { spec: { selector } },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
+    );
+    const service = (await coreApi.readNamespacedService(name, namespace)).body;
+    if (!selectorPointsAt(service, name, slot)) {
+      throw new Error(
+        `Service ${namespace}/${name} does not select the ${slot} pods after the write`
+      );
+    }
+  }
+
+  private async removeGreen(appsApi: k8s.AppsV1Api, green: string, namespace: string) {
+    try {
+      await appsApi.deleteNamespacedDeployment(
+        green,
+        namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'Foreground'
+      );
+    } catch (error) {
+      if (error?.response?.statusCode === 404) return;
+      throw error;
+    }
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      try {
+        await appsApi.readNamespacedDeployment(green, namespace);
+      } catch (error) {
+        if (error?.response?.statusCode === 404) return;
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  private applyProbesTo(
+    body: k8s.V1Deployment,
+    healthCheck: CreateDeploymentOptions['healthCheck'] | undefined
+  ) {
+    if (!healthCheck) return;
+    const container = body.spec?.template?.spec?.containers?.[0];
+    if (!container) return;
+    const on = healthCheck.enabled;
+    container.livenessProbe =
+      on && healthCheck.livenessEnabled
+        ? this.buildProbe(healthCheck, healthCheck.retries)
+        : undefined;
+    container.readinessProbe =
+      on && healthCheck.readinessEnabled
+        ? this.buildProbe(healthCheck, healthCheck.retries)
+        : undefined;
+    container.startupProbe =
+      on && healthCheck.startupEnabled
+        ? this.buildProbe(healthCheck, healthCheck.startupFailureThreshold)
+        : undefined;
   }
 
   private buildProbePatch(

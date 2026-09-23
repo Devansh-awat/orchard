@@ -82,10 +82,10 @@
 		onDeploymentUpdated?: (updated: any) => void;
 		onRebuild: () => void;
 		rebuilding: boolean;
-		strategyValue: 'rollingUpdate' | 'recreate';
+		strategyValue: 'rollingUpdate' | 'recreate' | 'blueGreen';
 		savingStrategy: boolean;
 		hasPvcVolume: boolean;
-		onSaveStrategy: (next: 'rollingUpdate' | 'recreate') => void;
+		onSaveStrategy: (next: 'rollingUpdate' | 'recreate' | 'blueGreen') => void;
 		pdbMinAvailable: number;
 		savingPdb: boolean;
 		onSavePdb: () => void;
@@ -246,13 +246,31 @@
 						Tear down all pods first, then start the new ones. Expect brief downtime.
 					</p>
 				</button>
+				<button
+					type="button"
+					class="strategy-card"
+					class:strategy-card--active={strategyValue === 'blueGreen'}
+					disabled={savingStrategy || hasPvcVolume}
+					onclick={() => onSaveStrategy('blueGreen')}
+				>
+					<div class="flex items-center justify-between gap-2">
+						<span class="strategy-card-title">Blue/green</span>
+						{#if strategyValue === 'blueGreen'}
+							<Check size={14} class="text-primary-500" />
+						{/if}
+					</div>
+					<p class="strategy-card-desc">
+						Start the new release beside the old one and move traffic only once every pod is ready.
+						If it never is, nothing moves.
+					</p>
+				</button>
 			</div>
 			{#if hasPvcVolume}
 				<div class="strategy-note mt-3">
 					<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 					<span
-						>This app has a PVC volume, so rolling updates are unavailable. Pods can't share a
-						ReadWriteOnce volume during a rolling cutover.</span
+						>This app has a PVC volume, so rolling updates and blue/green are unavailable. Pods
+						can't share a ReadWriteOnce volume while two copies run.</span
 					>
 				</div>
 			{/if}
