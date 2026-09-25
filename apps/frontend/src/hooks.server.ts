@@ -28,7 +28,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			// runs: login lives at /<org-slug> on the main domain. The apex
 			// serves everything, so nothing here needs a per-subdomain
 			// allowlist any more — the whole host forwards.
-			if (!pathname.startsWith('/apiv1/')) {
+			if (!pathname.startsWith('/apiv1/') && !event.route.id?.startsWith('/status')) {
 				const target =
 					pathname === '/'
 						? `https://${BASE_DOMAIN}/sso?org=${encodeURIComponent(subdomain)}`

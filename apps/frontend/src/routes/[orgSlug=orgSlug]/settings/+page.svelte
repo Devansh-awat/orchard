@@ -14,6 +14,7 @@
 		OrgDatabaseTab,
 		OrgBackupsTab,
 		OrgSsoTab,
+		OrgStatusTab,
 		OrgScimTab,
 		OrgNotificationsTab,
 		OrgHero
@@ -178,6 +179,7 @@
 						href: `/${organizationSlug}/settings?tab=database`
 					},
 					{ id: 'backups', label: 'Backups', href: `/${organizationSlug}/settings?tab=backups` },
+					{ id: 'status', label: 'Status page', href: `/${organizationSlug}/settings?tab=status` },
 					...($notificationsEnabled
 						? [
 								{
@@ -1011,6 +1013,9 @@
 						onTestChannel={testNotificationChannel}
 						onToggleChannel={toggleNotificationChannel}
 					/>
+				{/if}
+				{#if activeTab === 'status'}
+					<OrgStatusTab {organization} {isOwner} {baseDomain} />
 				{/if}
 				{#if activeTab === 'sso'}
 					<OrgSsoTab

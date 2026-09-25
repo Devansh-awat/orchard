@@ -124,8 +124,11 @@ async function bootstrap() {
       .filter(Boolean)
   ]);
 
-  app.enableCors({
-    origin: (origin, callback) => {
+  const corsForPlatform = {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void
+    ) => {
       // No-origin requests (curl, server-to-server) cannot ride a session
       // cookie cross-origin, so accepting them is harmless.
       if (!origin) return callback(null, true);
@@ -140,6 +143,16 @@ async function bootstrap() {
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true
+  };
+  // A public status page is read from its own host by anyone, with no
+  // session, so it gets an open origin with credentials off. Everything
+  // else keeps the platform allowlist and credentials on.
+  app.enableCors((req: { url?: string }, callback) => {
+    if ((req.url ?? '').startsWith('/apiv1/status/')) {
+      callback(null, { origin: true, credentials: false, methods: ['GET'] });
+      return;
+    }
+    callback(null, corsForPlatform);
   });
 
   const port = process.env.PORT || 3001;

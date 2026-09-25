@@ -314,6 +314,7 @@ model Organization {
   notificationRules    NotificationRule[]
   notificationEvents   NotificationEvent[]
   metricAlertRules     MetricAlertRule[]
+  statusPages          StatusPage[]
   sandboxes            Sandbox[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
@@ -1843,6 +1844,33 @@ model MetricAlertState {
   @@unique([ruleId, targetId], map: "uq_metric_alert_state_rule_target")
   @@index([targetId], map: "idx_metric_alert_states_target")
   @@map("metric_alert_states")
+}
+
+// A public page that reads an org's apps and databases as a list of
+// components with a status. Nothing on it is stored as state: every field a
+// visitor sees is derived at read time from the crash states, the mirrored
+// workloads, the alert states and the pod transitions, so it can never say
+// "operational" about something the platform already knows is down.
+model StatusPage {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  slug           String   @unique @db.VarChar(64)
+  title          String   @db.VarChar(120)
+  description    String?  @db.VarChar(500)
+  // Optional host under BASE_DOMAIN; the ingress is created after the row
+  // commits, as the vanity domain does.
+  subdomain      String?  @unique @db.VarChar(100)
+  isPublic       Boolean  @default(true) @map("is_public")
+  // Ordered [{ id, kind: 'deployment' | 'database', resourceId, name }]
+  components     Json     @default("[]") @db.JsonB
+  createdById    String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "idx_status_pages_org")
+  @@map("status_pages")
 }
 
 // Personal preference, Sentry-style fine tuning. One row per (user, scope,

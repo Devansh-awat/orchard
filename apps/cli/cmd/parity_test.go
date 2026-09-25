@@ -310,6 +310,15 @@ var routeCoverage = map[string]string{
 	"PATCH /organizations/:id/metric-alerts/:ruleId":  "alert update",
 	"DELETE /organizations/:id/metric-alerts/:ruleId": "alert delete",
 
+	// status pages
+	"GET /status/resolve":                            "status-page show --host",
+	"GET /status/:slug":                              "status-page show",
+	"GET /organizations/:id/status-pages":            "status-page list",
+	"GET /organizations/:id/status-pages/options":    "status-page options",
+	"POST /organizations/:id/status-pages":           "status-page create",
+	"PATCH /organizations/:id/status-pages/:pageId":  "status-page update",
+	"DELETE /organizations/:id/status-pages/:pageId": "status-page delete",
+
 	// audit
 	"GET /audit-logs/organization/:id": "audit list",
 	"GET /audit-logs/deployment/:id":   "audit list --deployment",

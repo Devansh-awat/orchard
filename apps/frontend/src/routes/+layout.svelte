@@ -46,6 +46,7 @@
 	// email transport it is the only way to make the first account, so bouncing
 	// it to the login page is a deadlock. The rest of /setup stays gated.
 	const publicRoutes = [
+		'/status',
 		'/invite',
 		'/oauth/callback',
 		'/sso',
@@ -96,7 +97,7 @@
 	$effect(() => {
 		if (loading || $isSignedIn) return;
 		const path = $page.url.pathname;
-		if (isPublicPath(path)) return;
+		if (isPublicPath(path) || $page.route.id?.startsWith('/status')) return;
 		// Anything under an org's own tree bounces to that org's login page
 		// rather than the platform one, so an SSO-only tenant lands where it
 		// can actually sign in. The route id is what matched, so this can't
@@ -198,7 +199,7 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect'))}
+	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.route.id?.startsWith('/status'))}
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="app-shell">

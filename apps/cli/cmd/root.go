@@ -121,6 +121,7 @@ func rootCmd() *cobra.Command {
 		invitationCmd(),
 		notifyCmd(),
 		alertCmd(),
+		statusPageCmd(),
 		auditCmd(),
 		quotaCmd(),
 		overviewCmd(),

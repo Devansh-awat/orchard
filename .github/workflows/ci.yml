@@ -344,6 +344,12 @@ jobs:
       # metrics store did not answer" as unknown rather than as a recovery.
       - name: Metric alert tests
         run: pnpm --filter server test:metric-alerts
+      # A public status page must never say "operational" about something the
+      # platform already knows is down, and must never read "no data yet" as
+      # green. Pins the derivation from crash state, mirrored replicas and
+      # alert states, and the incident reconstruction from pod transitions.
+      - name: Status page tests
+        run: pnpm --filter server test:status-page
 
   e2e:
     needs: changes
