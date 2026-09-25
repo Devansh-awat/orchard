@@ -362,6 +362,12 @@ jobs:
       # and the push adapters for GitHub, GitLab, Gitea and Bitbucket.
       - name: Git provider tests
         run: pnpm --filter server test:git-providers
+      # A committed score.yaml is a workload, not a build: it must map onto an
+      # app, its ports and a managed database, reach that database as a live
+      # reference rather than a copied password, and never be trusted when it
+      # is not a Score file at all.
+      - name: Score tests
+        run: pnpm --filter server test:score
 
   e2e:
     needs: changes

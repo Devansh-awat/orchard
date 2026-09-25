@@ -19,6 +19,7 @@ import {
   type RepoRef
 } from './git-provider';
 import { providerFor } from './providers';
+import { SCORE_FILES, parseScore, summarize, type ScoreSummary } from '../score/score-parse';
 import {
   GitOauthService,
   needsRefresh,
@@ -64,6 +65,7 @@ export interface RepoDetection {
   buildCommand: string | null;
   startCommand: string | null;
   outputDirectory: string | null;
+  score: ScoreSummary | null;
 }
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$/;
@@ -392,13 +394,23 @@ export class GitConnectionsService {
     const ref = String(branch || '').trim() || (await provider.defaultBranch(repoPath)) || 'HEAD';
     const tree = await provider.listTree(repoPath, ref);
     const read = (path: string) => provider.readFile(repoPath, path, ref).catch(() => null);
+    let score: ScoreSummary | null = null;
+    for (const file of SCORE_FILES) {
+      if (tree && !tree.includes(file)) continue;
+      const plan = parseScore(await read(file));
+      if (plan) {
+        score = summarize(file, plan);
+        break;
+      }
+    }
     const empty = {
       apps: [] as DetectedApp[],
       rootDirectory: null,
       installCommand: null,
       buildCommand: null,
       startCommand: null,
-      outputDirectory: null
+      outputDirectory: null,
+      score
     };
     const dockerfiles = (tree ?? []).filter((p) => {
       if (p.includes('node_modules/') || p.includes('.git/')) return false;
@@ -450,7 +462,8 @@ export class GitConnectionsService {
       installCommand: primary?.installCommand ?? null,
       buildCommand: primary?.buildCommand ?? null,
       startCommand: primary?.startCommand ?? null,
-      outputDirectory: primary?.outputDirectory ?? null
+      outputDirectory: primary?.outputDirectory ?? null,
+      score
     };
   }
 

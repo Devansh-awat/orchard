@@ -149,6 +149,14 @@
 	let detectedFramework = $state<string | null>(null);
 	let detectedApps = $state<DetectedApp[]>([]);
 	let isWorkspace = $state(false);
+	let detectedScore = $state<{
+		file: string;
+		name: string;
+		ports: number[];
+		resources: { name: string; type: string }[];
+		domain: string | null;
+		warnings: string[];
+	} | null>(null);
 	let rootDirectory = $state('');
 	let rootDirectoryTouched = false;
 	let installCommand = $state('');
@@ -368,6 +376,14 @@
 		framework: string | null;
 		apps?: DetectedApp[];
 		workspace?: { isWorkspace: boolean; packageManager: string };
+		score?: {
+			file: string;
+			name: string;
+			ports: number[];
+			resources: { name: string; type: string }[];
+			domain: string | null;
+			warnings: string[];
+		} | null;
 		rootDirectory?: string | null;
 	};
 
@@ -376,6 +392,7 @@
 		detectedFramework = det.framework;
 		detectedApps = det.apps ?? [];
 		isWorkspace = det.workspace?.isWorkspace ?? false;
+		detectedScore = det.score ?? null;
 		if (!buildTypeTouched) {
 			buildType = det.buildType;
 		}
@@ -1568,6 +1585,28 @@
 						{/if}
 					</div>
 				{/key}
+				{#if detectedScore && deploymentSource !== 'image'}
+					<div class="nd-score">
+						<span class="nd-score-file">{detectedScore.file}</span>
+						<span class="nd-score-text">
+							{#if detectedScore.resources.filter((r) => r.type === 'postgres').length > 0}
+								Provisions {detectedScore.resources
+									.filter((r) => r.type === 'postgres')
+									.map((r) => `Postgres “${r.name}”`)
+									.join(', ')} and connects it.
+							{/if}
+							{#if detectedScore.ports.length > 0}
+								Ports {detectedScore.ports.join(', ')}.
+							{/if}
+							{#if detectedScore.domain}
+								Routes {detectedScore.domain}.
+							{/if}
+						</span>
+						{#if detectedScore.warnings.length > 0}
+							<span class="nd-score-warn">{detectedScore.warnings[0]}</span>
+						{/if}
+					</div>
+				{/if}
 			</div>
 
 			<div class="nd-owner-row nd-owner-row--after">
@@ -2820,5 +2859,27 @@
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
 		margin-bottom: 1rem;
+	}
+	.nd-score {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+		padding: 0.625rem 0.875rem;
+		border-radius: var(--radius-md);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+	}
+	.nd-score-file {
+		font-family: var(--font-mono);
+		font-weight: 600;
+		color: var(--accent);
+	}
+	.nd-score-warn {
+		flex-basis: 100%;
+		color: var(--status-warning);
 	}
 </style>

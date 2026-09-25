@@ -44,6 +44,7 @@ import {
 } from '../env/env-resolver';
 import { ResourceBindingsService } from './resource-bindings.service';
 import { GitConnectionsService } from '../git/git-connections.service';
+import { ScoreService } from '../score/score.service';
 import { hostOf } from '../git/git-provider';
 import { parseRepoUrl } from '../docker/repo-url';
 import { computePodStatus } from '../mirror/pod-status';
@@ -155,6 +156,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly resourceBindings: ResourceBindingsService,
     @Inject(forwardRef(() => GitConnectionsService))
     private readonly gitConnections: GitConnectionsService,
+    @Inject(forwardRef(() => ScoreService))
+    private readonly score: ScoreService,
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly releases: ReleasesService,
@@ -364,6 +367,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     });
     return bound.map((d) => d.name);
+  }
+
+  /**
+   * A push re-reads score.yaml at the new ref. There is no person in the
+   * request, so the app's creator stands in, the same identity the GitHub
+   * user-token path already builds with.
+   */
+  private async reconcileScoreAsCreator(deploymentId: string, createdBy: string | null) {
+    if (!createdBy) return;
+    const creator = await this.prisma.user.findUnique({
+      where: { id: createdBy },
+      select: { id: true, externalAuthId: true, email: true, username: true }
+    });
+    if (!creator?.externalAuthId) return;
+    await this.score
+      .applyForDeployment(deploymentId, {
+        clerkId: creator.externalAuthId,
+        userId: creator.id,
+        userData: { email: creator.email, username: creator.username ?? undefined }
+      })
+      .catch((e) => console.warn(`[Score] reconcile on push failed: ${(e as Error).message}`));
   }
 
   async getDeploymentEnvKeys(deploymentId: string): Promise<{ key: string; secret: boolean }[]> {
@@ -4305,6 +4329,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!fromQueueRunId) {
+      await this.reconcileScoreAsCreator(deployment.id, deployment.createdBy);
+    }
+
+    if (!fromQueueRunId) {
       const { startNow } = await this.buildQueue.enqueue({
         deploymentId,
         triggerType: 'auto',
@@ -6529,6 +6557,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     console.log(`[Projects] Created deployment record ${deployment.id}, starting async build`);
+
+    // A committed score.yaml is applied before the first build so the env
+    // and ports it declares are what the build lands with. Failures here are
+    // warnings in the log, never a failed create.
+    await this.score
+      .applyForDeployment(deployment.id, {
+        clerkId,
+        userId: user.id,
+        userData,
+        accessToken: null
+      })
+      .catch((e) => console.warn(`[Score] apply on create failed: ${(e as Error).message}`));
 
     await this.buildQueue
       .recordActiveBuild({

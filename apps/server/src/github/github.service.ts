@@ -23,6 +23,8 @@ import {
 } from './framework-detect';
 
 /** What the create form and the CLI get back from a detection run. */
+import { SCORE_FILES, parseScore, summarize, type ScoreSummary } from '../score/score-parse';
+
 export interface RepoConfigDetection {
   buildType: 'dockerfile' | 'railpack';
   dockerfilePath: string | null;
@@ -40,6 +42,7 @@ export interface RepoConfigDetection {
   buildCommand: string | null;
   startCommand: string | null;
   outputDirectory: string | null;
+  score: ScoreSummary | null;
 }
 
 /** Long enough to cover the create form's repeated detects, short enough that a
@@ -849,6 +852,17 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       ? this.dockerfilesFromTree(tree)
       : await this.findDockerfiles(accessToken, owner, repo, branch).catch(() => [] as string[]);
 
+    const read = this.repoFileReader(accessToken, owner, repo, branch);
+    let score: ScoreSummary | null = null;
+    for (const file of SCORE_FILES) {
+      if (tree && !tree.includes(file)) continue;
+      const plan = parseScore(await read(file));
+      if (plan) {
+        score = summarize(file, plan);
+        break;
+      }
+    }
+
     const empty = {
       apps: [] as DetectedApp[],
       workspace: { isWorkspace: false, packageManager: 'npm' } as WorkspaceInfo,
@@ -857,7 +871,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       installCommand: null,
       buildCommand: null,
       startCommand: null,
-      outputDirectory: null
+      outputDirectory: null,
+      score
     };
 
     if (dockerfiles.length > 0) {
@@ -927,7 +942,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       installCommand: primary?.installCommand ?? null,
       buildCommand: primary?.buildCommand ?? null,
       startCommand: primary?.startCommand ?? null,
-      outputDirectory: primary?.outputDirectory ?? null
+      outputDirectory: primary?.outputDirectory ?? null,
+      score
     };
   }
 
