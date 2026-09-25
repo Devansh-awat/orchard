@@ -5,6 +5,7 @@
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
 	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import Select from '$lib/components/ui/Select.svelte';
 
 	let {
 		projectMembers,
@@ -13,6 +14,7 @@
 		canEdit = false,
 		ownerId = null,
 		memberSearch = $bindable(''),
+		newMemberRole = $bindable<'admin' | 'member' | 'viewer'>('member'),
 		filteredOrgMembers,
 		addingMember = false,
 		removingMemberId = null as string | null,
@@ -31,6 +33,7 @@
 		canEdit?: boolean;
 		ownerId?: string | null;
 		memberSearch?: string;
+		newMemberRole?: 'admin' | 'member' | 'viewer';
 		filteredOrgMembers: OrgMember[];
 		addingMember?: boolean;
 		removingMemberId?: string | null;
@@ -127,6 +130,13 @@
 				<span class="pj-members-count">{projectMembers.length}</span>
 			</div>
 			{#if canManageMembers}
+				<div class="pj-add-member-controls">
+					<Select bind:value={newMemberRole} aria-label="Role for new project member">
+						{#each ROLE_OPTIONS as opt (opt.value)}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</Select>
+				</div>
 				<div class="pj-picker">
 					<input
 						type="text"

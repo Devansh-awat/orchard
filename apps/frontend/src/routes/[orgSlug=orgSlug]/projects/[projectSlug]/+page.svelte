@@ -877,6 +877,7 @@
 						{canTransferOwnership}
 						ownerId={project.ownerId ?? null}
 						bind:memberSearch
+						bind:newMemberRole
 						{filteredOrgMembers}
 						{addingMember}
 						{removingMemberId}

@@ -1229,11 +1229,19 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	color: var(--pj-text-secondary);
 }
 
+.pj-add-member-controls {
+	width: 8rem;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+.pj-add-member-controls .ui-select {
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
+}
 .pj-picker {
 	position: relative;
 	flex: 1;
 	max-width: 18rem;
-	margin-left: auto;
 }
 .pj-invite-input {
 	width: 100%;
