@@ -1,6 +1,7 @@
 export { default as UserIdentityHero } from './UserIdentityHero.svelte';
 export { default as UserInvitations } from './UserInvitations.svelte';
 export { default as UserGitHub } from './UserGitHub.svelte';
+export { default as UserGitProviders } from './UserGitProviders.svelte';
 export { default as UserTailscale } from './UserTailscale.svelte';
 export { default as UserPasskeys } from './UserPasskeys.svelte';
 export { default as UserSessions } from './UserSessions.svelte';

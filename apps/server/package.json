@@ -75,7 +75,8 @@
     "test:rollout-gate": "tsx --test test/rollout-gate.test.ts",
     "test:metric-alerts": "tsx --test test/metric-alerts.test.ts",
     "test:status-page": "tsx --test test/status-page.test.ts",
-    "test:resource-bindings": "tsx --test test/resource-binding-resolve.test.ts test/binding-reapply.test.ts"
+    "test:resource-bindings": "tsx --test test/resource-binding-resolve.test.ts test/binding-reapply.test.ts",
+    "test:git-providers": "tsx --test test/git-provider-webhook.test.ts test/git-provider-parse-push.test.ts test/git-oauth.test.ts test/log-redaction.test.ts test/repo-url.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

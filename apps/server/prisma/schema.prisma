@@ -53,6 +53,7 @@ model User {
   passkeys                   Passkey[]
   sessions                   Session[]
   githubAppInstallations     GitHubAppInstallation[]
+  gitConnections             GitConnection[]
   createdDatabases           Database[]               @relation("DatabaseCreator")
   apiTokens                  ApiToken[]
   createdTemplateInstances   TemplateInstance[]       @relation("TemplateInstanceCreator")
@@ -689,6 +690,13 @@ model Deployment {
   // be matched against this id to prevent another installation impersonating
   // a repo by full_name.
   githubInstallationId BigInt? @map("github_installation_id")
+  // A git provider other than the GitHub App: the connection that owns the
+  // repo's credentials and webhook secret. When set, `githubInstallationId`
+  // is null and auto-deploy is scoped to this connection instead.
+  gitConnectionId String? @map("git_connection_id") @db.Uuid
+  // The provider's own id for the repo, a string because Bitbucket uses
+  // UUIDs. Matched first on push so a rename does not detach the app.
+  externalRepoId  String? @map("external_repo_id") @db.VarChar(120)
 
   // A push that arrives while a build is in flight parks its commit here
   // instead of being dropped. Coalesces to the latest push (newer supersedes),
@@ -746,6 +754,7 @@ model Deployment {
   crashState        DeploymentCrashState?
   releases          Release[]
   resourceBindings  ResourceBinding[]
+  gitConnection     GitConnection?           @relation(fields: [gitConnectionId], references: [id], onDelete: SetNull)
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -937,6 +946,38 @@ model DeploymentWebhookToken {
 // A live link from a deployment to a resource it reads credentials off.
 // Env values reference it as ${{resource.<name>.<field>}}; the value is
 // composed at inject time, so nothing here is a snapshot of a password.
+// A forge other than the GitHub App (GitLab, Gitea, Forgejo, Bitbucket, a
+// self-hosted GitHub, or any https git host), linked by one person with
+// their own token, the way the GitHub link is. Orchard only ever shows them
+// what that token can see. The webhook secret is the boundary on the push
+// path. When the person goes, apps built from it say so and someone else
+// re-points them.
+model GitConnection {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  provider      String   @db.VarChar(20)
+  name          String   @db.VarChar(80)
+  baseUrl       String   @map("base_url") @db.VarChar(500)
+  username      String?  @db.VarChar(255)
+  token         String   @db.Text
+  webhookSecret String   @map("webhook_secret") @db.VarChar(128)
+  // Set when the token came from an OAuth app the instance admin registered
+  // rather than a pasted token. Refreshed before it expires; the refresh
+  // token is encrypted like the access token.
+  oauth          Boolean   @default(false)
+  refreshToken   String?   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime? @map("token_expires_at") @db.Timestamp(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deployments Deployment[]
+
+  @@unique([userId, name])
+  @@index([userId], map: "idx_git_connections_user")
+  @@map("git_connections")
+}
+
 model ResourceBinding {
   id           String   @id @default(uuid()) @db.Uuid
   deploymentId String   @map("deployment_id") @db.Uuid

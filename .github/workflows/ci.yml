@@ -356,6 +356,12 @@ jobs:
       # or password changes. Pins the resolver and the re-apply fan-out.
       - name: Resource binding tests
         run: pnpm --filter server test:resource-bindings
+      # A webhook signed with one connection's secret must never reach another
+      # connection's apps, a clone credential must never leave its own host,
+      # and userinfo must never survive into a build log. Pins those three
+      # and the push adapters for GitHub, GitLab, Gitea and Bitbucket.
+      - name: Git provider tests
+        run: pnpm --filter server test:git-providers
 
   e2e:
     needs: changes

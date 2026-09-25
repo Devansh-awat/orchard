@@ -127,6 +127,38 @@ export const TURNSTILE = section(
   ['siteKey', 'secretKey']
 );
 
+/**
+ * OAuth apps for the forges people connect with one click, registered once
+ * by the instance admin the way the GitHub App is. A self-hosted GitLab is
+ * the same app registered against its own base URL.
+ */
+export const GIT_GITLAB = section(
+  'git-gitlab',
+  'git_oauth_gitlab',
+  [
+    { name: 'baseUrl', env: 'GITLAB_OAUTH_BASE_URL' },
+    { name: 'clientId', env: 'GITLAB_OAUTH_CLIENT_ID' },
+    { name: 'clientSecret', env: 'GITLAB_OAUTH_CLIENT_SECRET', secret: true }
+  ],
+  ['clientId', 'clientSecret'],
+  (values) => {
+    const base = (values.baseUrl || '').trim();
+    if (base && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(base)) {
+      throw new Error('baseUrl must be a plain https:// address');
+    }
+  }
+);
+
+export const GIT_BITBUCKET = section(
+  'git-bitbucket',
+  'git_oauth_bitbucket',
+  [
+    { name: 'key', env: 'BITBUCKET_OAUTH_KEY' },
+    { name: 'secret', env: 'BITBUCKET_OAUTH_SECRET', secret: true }
+  ],
+  ['key', 'secret']
+);
+
 export const SECTIONS: ConfigSection[] = [
   STORAGE,
   EMAIL,
@@ -134,7 +166,9 @@ export const SECTIONS: ConfigSection[] = [
   WILDCARD,
   NETWORK,
   TUNNEL,
-  TURNSTILE
+  TURNSTILE,
+  GIT_GITLAB,
+  GIT_BITBUCKET
 ];
 
 export const sectionById = (id: string): ConfigSection | undefined =>

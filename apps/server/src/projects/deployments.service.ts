@@ -43,6 +43,9 @@ import {
   type ResourceValues
 } from '../env/env-resolver';
 import { ResourceBindingsService } from './resource-bindings.service';
+import { GitConnectionsService } from '../git/git-connections.service';
+import { hostOf } from '../git/git-provider';
+import { parseRepoUrl } from '../docker/repo-url';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
 import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
@@ -150,6 +153,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly storage: StorageService,
     private readonly applyQueue: ApplyQueueService,
     private readonly resourceBindings: ResourceBindingsService,
+    @Inject(forwardRef(() => GitConnectionsService))
+    private readonly gitConnections: GitConnectionsService,
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly releases: ReleasesService,
@@ -4090,21 +4095,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
-    // Parse the repo URL to get owner and repo
-    const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
-    if (!repoInfo) {
-      throw new BadRequestException('Invalid GitHub repository URL');
-    }
-
-    // Check if the GitHub App has access to this repository
-    const installation = await this.githubService.findInstallationForRepo(
-      repoInfo.owner,
-      repoInfo.repo
-    );
-    if (!installation) {
-      throw new BadRequestException(
-        this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
+    // A connection-sourced app is matched by its connection on the webhook
+    // path, so it needs no GitHub App installation.
+    let installation: { installationId: bigint } | null = null;
+    if (!deployment.gitConnectionId) {
+      const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+      if (!repoInfo) {
+        throw new BadRequestException('Invalid GitHub repository URL');
+      }
+      installation = await this.githubService.findInstallationForRepo(
+        repoInfo.owner,
+        repoInfo.repo
       );
+      if (!installation) {
+        throw new BadRequestException(
+          this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
+        );
+      }
     }
 
     const previousBranch = deployment.autoDeployBranch;
@@ -4134,7 +4141,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       data: {
         autoDeployEnabled: true,
         autoDeployBranch: branch,
-        githubInstallationId: installation.installationId,
+        githubInstallationId: installation?.installationId ?? null,
         ...(watchPaths !== undefined ? { autoDeployPaths: watchPaths } : {})
       },
       include: {
@@ -4316,13 +4323,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Parse repo info for GitHub API calls
-    const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+    const repoInfo = deployment.gitConnectionId
+      ? null
+      : this.githubService.parseRepoUrl(deployment.githubRepo);
 
     // Find GitHub App installation for this repo (uses app token, not user token)
     let installationId: bigint | null = null;
     let checkRunId: number | null = null;
     let installationAccessToken: string | null = null;
     let logUrl: string | null = null;
+
+    if (deployment.gitConnectionId) {
+      installationAccessToken = await this.gitConnections.cloneTokenForDeployment(deploymentId);
+    }
 
     if (repoInfo) {
       try {
@@ -6099,6 +6112,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       name: string;
       repoUrl?: string;
       githubRepo?: string;
+      gitConnectionId?: string | null;
+      externalRepoId?: string | null;
       branch?: string;
       dockerfilePath?: string;
       target?: string;
@@ -6239,48 +6254,63 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Verify the requesting user can actually access this repo on GitHub.
-    const parsed = this.githubService.parseRepoUrl(repoUrl);
-    if (!parsed) {
-      throw new BadRequestException('Could not parse repository URL');
-    }
-    const canAccess = await this.githubService.verifyUserCanAccessRepo(
-      user.id,
-      parsed.owner,
-      parsed.repo
-    );
-    if (!canAccess) {
-      // If the user can't access via their token, check if the repo is public
-      const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
-      if (!isPublic) {
-        throw new ForbiddenException(
-          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+    const connectionId = String(data.gitConnectionId || '').trim() || null;
+    let gitConnection: Awaited<ReturnType<GitConnectionsService['forDeploy']>> | null = null;
+    let repoInstallation: { installationId: bigint } | null = null;
+    if (connectionId) {
+      gitConnection = await this.gitConnections.forDeploy(user.id, connectionId);
+      const parsedUrl = parseRepoUrl(repoUrl);
+      if (!parsedUrl) throw new BadRequestException('Repository URL must be a plain https:// URL');
+      if (parsedUrl.host.toLowerCase() !== hostOf(gitConnection.baseUrl).toLowerCase()) {
+        throw new BadRequestException(
+          `${gitConnection.name} is for ${hostOf(gitConnection.baseUrl)}, not ${parsedUrl.host}`
         );
       }
-    }
-
-    // Bind the deployment to the specific GitHub App installation that owns
-    // the repo. Auto-deploy webhooks will refuse to fire unless the incoming
-    // installation id matches this one, preventing impersonation by another
-    // installation with a colliding repo full_name.
-    // For public repos without the app installed, installationId will be null
-    // (auto-deploy won't work, but manual builds can clone without auth).
-    const repoInstallation = await this.githubService.findInstallationForRepo(
-      parsed.owner,
-      parsed.repo
-    );
-
-    // Auto-deploy defaults ON when the installation covers the repo, because
-    // push webhooks can then actually fire. Asking for it without one used to
-    // be honoured anyway, which is the worst of both: the row says enabled,
-    // nothing is bound to an installation, every push is dropped, and the only
-    // symptom is a commit that never queues.
-    if (data.autoDeployEnabled === true && !repoInstallation) {
-      throw new BadRequestException(
-        this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo)
+    } else {
+      const parsed = this.githubService.parseRepoUrl(repoUrl);
+      if (!parsed) {
+        throw new BadRequestException('Could not parse repository URL');
+      }
+      const canAccess = await this.githubService.verifyUserCanAccessRepo(
+        user.id,
+        parsed.owner,
+        parsed.repo
       );
+      if (!canAccess) {
+        // If the user can't access via their token, check if the repo is public
+        const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
+        if (!isPublic) {
+          throw new ForbiddenException(
+            'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+          );
+        }
+      }
+
+      // Bind the deployment to the specific GitHub App installation that owns
+      // the repo. Auto-deploy webhooks will refuse to fire unless the incoming
+      // installation id matches this one, preventing impersonation by another
+      // installation with a colliding repo full_name.
+      // For public repos without the app installed, installationId will be null
+      // (auto-deploy won't work, but manual builds can clone without auth).
+      repoInstallation = await this.githubService.findInstallationForRepo(
+        parsed.owner,
+        parsed.repo
+      );
+
+      // Auto-deploy defaults ON when the installation covers the repo, because
+      // push webhooks can then actually fire. Asking for it without one used to
+      // be honoured anyway, which is the worst of both: the row says enabled,
+      // nothing is bound to an installation, every push is dropped, and the only
+      // symptom is a commit that never queues.
+      if (data.autoDeployEnabled === true && !repoInstallation) {
+        throw new BadRequestException(
+          this.githubService.autoDeployUnavailableMessage(parsed.owner, parsed.repo)
+        );
+      }
+
+      // Dockerfile path is only required for dockerfile builds
     }
 
-    // Dockerfile path is only required for dockerfile builds
     if (buildType === 'dockerfile' && !dockerfilePath) {
       throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
     }
@@ -6403,6 +6433,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         githubRepo: repoUrl,
         githubBranch: branch,
         githubInstallationId: repoInstallation?.installationId ?? null,
+        gitConnectionId: gitConnection?.id ?? null,
+        externalRepoId: gitConnection ? String(data.externalRepoId || '').trim() || null : null,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         // Railpack has no notion of stages, so a target can only mean anything
         // alongside a Dockerfile.
@@ -7272,6 +7304,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }, 10000);
     }
 
+    const cloneToken =
+      githubAccessToken ??
+      data.githubAccessToken ??
+      (data.localContextKey
+        ? undefined
+        : ((await this.gitConnections.cloneTokenForDeployment(deploymentId)) ?? undefined));
+
     try {
       const buildTypeLabel = data.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
       console.log(
@@ -7280,7 +7319,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId,
           dockerfilePath: data.dockerfilePath,
           buildFromRoot: data.buildFromRoot,
-          hasAccessToken: !!githubAccessToken,
+          hasAccessToken: !!cloneToken,
           isRebuild: data.isRebuild
         }
       );
@@ -7294,7 +7333,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId,
           data.repoUrl,
           data.branch,
-          githubAccessToken ?? data.githubAccessToken
+          cloneToken
         );
       }
 
@@ -7313,7 +7352,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               branch: data.branch,
               dockerfilePath: data.dockerfilePath || 'Dockerfile',
               target: data.target,
-              accessToken: githubAccessToken ?? data.githubAccessToken
+              accessToken: cloneToken
             }
           : null
       );
@@ -7339,7 +7378,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           imageName: data.imageName,
           tag: data.tag,
           deploymentId,
-          accessToken: githubAccessToken,
+          accessToken: cloneToken,
           // Scope this build's slice of the shared buildkit-cache PVC to the
           // project namespace. Kata's mount surface ⇒ the build VM only sees
           // this directory and can't reach other tenants' cache entries.

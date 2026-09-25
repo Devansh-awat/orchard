@@ -20,6 +20,7 @@ import { BackupSyncService } from './backup-sync.service';
 import { ImportSettleService } from './import-settle.service';
 import { DeploymentsService } from './deployments.service';
 import { ReleasesService } from './releases.service';
+import { GitModule } from '../git/git.module';
 import { ResourceBindingsService } from './resource-bindings.service';
 import { ResourceBindingsController } from './resource-bindings.controller';
 import { BlueGreenSettleService } from './blue-green-settle.service';
@@ -39,6 +40,7 @@ import { ProjectTransfersController } from './project-transfers.controller';
 
 @Module({
   imports: [
+    forwardRef(() => GitModule),
     KubernetesModule,
     UsersModule,
     forwardRef(() => GitHubModule),

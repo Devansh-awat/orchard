@@ -30,6 +30,7 @@
 		UserIdentityHero,
 		UserInvitations,
 		UserGitHub,
+		UserGitProviders,
 		UserTailscale,
 		UserPasskeys,
 		UserSessions,
@@ -812,6 +813,7 @@
 					onLink={linkGitHub}
 					onUnlink={unlinkGitHub}
 				/>
+				<UserGitProviders index={1} />
 				{#if $tailscaleEnabled}
 					<UserTailscale
 						index={1}

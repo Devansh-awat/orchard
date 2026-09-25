@@ -5,7 +5,8 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { parseRepoUrl, withGitHubCredentials } from './repo-url';
+import { parseRepoUrl, withCloneCredentials } from './repo-url';
+import { decodeCloneCredential, redactUrlUserinfo } from '../git/clone-credential';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { resolveEnvVars } from '../env/env-resolver';
@@ -336,8 +337,10 @@ export class DockerService {
   // Anything derived from clone output must pass through here before it can
   // reach build logs, which are mirrored to GitHub check runs on the repo.
   private redactCloneSecrets(text: string, accessToken?: string): string {
-    let out = text.replace(/https:\/\/[^@/\s']+@/g, 'https://');
+    let out = redactUrlUserinfo(text);
     if (accessToken) out = out.split(accessToken).join('***');
+    const cred = decodeCloneCredential(accessToken);
+    if (cred?.password) out = out.split(cred.password).join('***');
     return out;
   }
 
@@ -361,7 +364,7 @@ export class DockerService {
     }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchard-build-'));
 
-    const cloneUrl = withGitHubCredentials(parsedRepo, accessToken);
+    const cloneUrl = withCloneCredentials(parsedRepo, accessToken);
 
     const startTime = Date.now();
     await this.setBuildStep(deploymentId, 'cloning');

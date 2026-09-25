@@ -15,7 +15,8 @@ import {
   resolveScratchMode
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
-import { parseRepoUrl, withGitHubCredentials } from './repo-url';
+import { parseRepoUrl, withCloneCredentials } from './repo-url';
+import { redactUrlUserinfo } from '../git/clone-credential';
 import { injectBuildArgsScript } from './build-args';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
@@ -370,6 +371,7 @@ export class ImageBuilderService {
       '***REDACTED***'
     );
 
+    sanitized = redactUrlUserinfo(sanitized);
     sanitized = sanitized.replace(
       /https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi,
       'https://***@github.com'
@@ -1315,7 +1317,7 @@ exit $EXIT_CODE
     if (!localContextUrl && !parsedRepo) {
       throw new BadRequestException('Repository URL must be a plain https:// URL');
     }
-    const cloneUrl = parsedRepo ? withGitHubCredentials(parsedRepo, accessToken) : repoUrl;
+    const cloneUrl = parsedRepo ? withCloneCredentials(parsedRepo, accessToken) : repoUrl;
 
     // Compute secrets hash for Railpack layer invalidation
     const secretsHash = this.computeSecretsHash(envVars);
@@ -1385,10 +1387,7 @@ ls -la /workspace
           args: [
             `set -e
 echo "=== Cloning repository ==="
-MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/://x-access-token:***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/://***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/ghp_*@/://***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/://***@}"
+MASKED_URL="$(printf '%s' "$CLONE_URL" | sed -E 's#://[^@/]+@#://***@#')"
 echo "Repository: $MASKED_URL"
 echo "Branch: ${branch}"
 

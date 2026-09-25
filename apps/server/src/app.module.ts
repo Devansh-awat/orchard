@@ -35,6 +35,7 @@ import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { StatusPagesModule } from './status-pages/status-pages.module';
+import { GitModule } from './git/git.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
@@ -86,6 +87,7 @@ import { ApplyModule } from './apply/apply.module';
     ObservabilityModule,
     AlertsModule,
     StatusPagesModule,
+    GitModule,
     NotificationsModule,
     JobsModule,
     ForumModule,

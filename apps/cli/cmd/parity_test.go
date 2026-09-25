@@ -324,6 +324,17 @@ var routeCoverage = map[string]string{
 	"PATCH /organizations/:id/status-pages/:pageId":  "status-page update",
 	"DELETE /organizations/:id/status-pages/:pageId": "status-page delete",
 
+	// git providers
+	"GET /users/me/git-connections":                              "git list",
+	"GET /users/me/git-connections/oauth":                        "git list",
+	"POST /users/me/git-connections":                             "git add",
+	"PATCH /users/me/git-connections/:connectionId":              "git add (rotate via API)",
+	"DELETE /users/me/git-connections/:connectionId":             "git remove",
+	"GET /users/me/git-connections/:connectionId/webhook-secret": "git webhook",
+	"GET /users/me/git-connections/:connectionId/repositories":   "git repos",
+	"GET /users/me/git-connections/:connectionId/branches":       "git branches",
+	"GET /users/me/git-connections/:connectionId/detect":         "git detect",
+
 	// audit
 	"GET /audit-logs/organization/:id": "audit list",
 	"GET /audit-logs/deployment/:id":   "audit list --deployment",
@@ -346,6 +357,11 @@ var routeExclusions = map[string]string{
 	// dashboard affordance: returns booleans that drive a dismissible card, and
 	// every underlying setting already has its own CLI command
 	"GET /deployments/:id/next-steps": "UI-only checklist card",
+
+	// forge to server, signed with the connection secret; never driven by a person
+	"POST /git/webhooks/:connectionId":  "webhook receiver for git providers",
+	"GET /git/oauth/:provider/start":    "browser OAuth ceremony for GitLab and Bitbucket",
+	"GET /git/oauth/:provider/callback": "browser OAuth ceremony (callback)",
 
 	// browser login ceremonies: driven by redirects and cookies, not tokens
 	"GET /auth/login":        "browser login ceremony",

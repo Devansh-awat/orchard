@@ -13,6 +13,7 @@
 		type ProjectContext
 	} from '$lib/stores';
 	import {
+		GitBranch,
 		Loader2,
 		Container,
 		Github,
@@ -29,6 +30,7 @@
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import { EnvironmentSwitcher } from '$lib/components/environment';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
+	import GitSourcePane from '$lib/components/deployment/GitSourcePane.svelte';
 	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import {
@@ -82,9 +84,20 @@
 
 	// Deployment source — read from ?source= query param, default to 'image'
 	const initialSource = $derived(
-		$page.url.searchParams.get('source') === 'github' ? ('github' as const) : ('image' as const)
+		$page.url.searchParams.get('source') === 'github'
+			? ('github' as const)
+			: $page.url.searchParams.get('source') === 'git'
+				? ('git' as const)
+				: ('image' as const)
 	);
-	let deploymentSource = $state<'image' | 'github'>('image');
+	let deploymentSource = $state<'image' | 'github' | 'git'>('image');
+	let gitSelection = $state<{
+		connectionId: string;
+		repoUrl: string;
+		repoPath: string;
+		branch: string;
+		externalRepoId: string | null;
+	} | null>(null);
 	// Environment the deployment lands in. Seeded from ?env= (the env the user
 	// was viewing when they opened this form); the switcher falls back to the
 	// project default when absent or invalid.
@@ -345,6 +358,52 @@
 		if (!buildSettingsTouched) applyDetectedApp(app);
 	}
 
+	type DetectionResult = {
+		buildType: 'dockerfile' | 'railpack';
+		dockerfilePath: string | null;
+		dockerfiles: string[];
+		stages: string[];
+		ports: number[];
+		env: { key: string; value: string }[];
+		framework: string | null;
+		apps?: DetectedApp[];
+		workspace?: { isWorkspace: boolean; packageManager: string };
+		rootDirectory?: string | null;
+	};
+
+	function applyDetection(det: DetectionResult) {
+		dockerfiles = det.dockerfiles;
+		detectedFramework = det.framework;
+		detectedApps = det.apps ?? [];
+		isWorkspace = det.workspace?.isWorkspace ?? false;
+		if (!buildTypeTouched) {
+			buildType = det.buildType;
+		}
+		if (!rootDirectoryTouched) {
+			rootDirectory = det.rootDirectory ?? '';
+		}
+		if (!buildSettingsTouched) {
+			applyDetectedApp(detectedApps.find((a) => a.dir === rootDirectory));
+		}
+		if (det.buildType === 'dockerfile' && det.dockerfilePath) {
+			dockerfilePath = det.dockerfilePath;
+			dockerfileSearch = det.dockerfilePath;
+			dockerfileStages = det.stages;
+			selectedStage = '';
+		}
+		if (det.ports.length > 0 && !portsManuallyEdited) {
+			ports = det.ports.map((p, i) => ({
+				name: `port-${i + 1}`,
+				containerPort: p,
+				servicePort: p,
+				protocol: 'TCP'
+			}));
+		}
+		if (det.env.length > 0 && !envsManuallyEdited) {
+			envVars = det.env.map((e) => ({ key: e.key, value: e.value }));
+		}
+	}
+
 	async function fetchDockerfiles(repo: Repository, branchName: string) {
 		// Detection starts before the branch list lands, so two runs can overlap.
 		// Only the newest one is allowed to write to the form.
@@ -358,49 +417,7 @@
 				`/apiv1/github/repositories/${owner}/${repoName}/detect?branch=${encodeURIComponent(branchName)}`
 			);
 			if (!response.ok || run !== detectRun) return;
-			const det: {
-				buildType: 'dockerfile' | 'railpack';
-				dockerfilePath: string | null;
-				dockerfiles: string[];
-				stages: string[];
-				ports: number[];
-				env: { key: string; value: string }[];
-				framework: string | null;
-				apps?: DetectedApp[];
-				workspace?: { isWorkspace: boolean; packageManager: string };
-				rootDirectory?: string | null;
-			} = await response.json();
-
-			dockerfiles = det.dockerfiles;
-			detectedFramework = det.framework;
-			detectedApps = det.apps ?? [];
-			isWorkspace = det.workspace?.isWorkspace ?? false;
-			if (!buildTypeTouched) {
-				buildType = det.buildType;
-			}
-			if (!rootDirectoryTouched) {
-				rootDirectory = det.rootDirectory ?? '';
-			}
-			if (!buildSettingsTouched) {
-				applyDetectedApp(detectedApps.find((a) => a.dir === rootDirectory));
-			}
-			if (det.buildType === 'dockerfile' && det.dockerfilePath) {
-				dockerfilePath = det.dockerfilePath;
-				dockerfileSearch = det.dockerfilePath;
-				dockerfileStages = det.stages;
-				selectedStage = '';
-			}
-			if (det.ports.length > 0 && !portsManuallyEdited) {
-				ports = det.ports.map((p, i) => ({
-					name: `port-${i + 1}`,
-					containerPort: p,
-					servicePort: p,
-					protocol: 'TCP'
-				}));
-			}
-			if (det.env.length > 0 && !envsManuallyEdited) {
-				envVars = det.env.map((e) => ({ key: e.key, value: e.value }));
-			}
+			applyDetection(await response.json());
 		} catch (e) {
 			console.error('Failed to detect repo config:', e);
 		} finally {
@@ -755,7 +772,11 @@
 			return;
 		}
 
-		if (deploymentSource === 'github') {
+		if (deploymentSource === 'git' && !gitSelection) {
+			formError = 'Pick a repository and branch';
+			return;
+		}
+		if (deploymentSource === 'github' || deploymentSource === 'git') {
 			if (!repoUrl.trim()) {
 				formError = 'Repository is required';
 				return;
@@ -829,7 +850,7 @@
 			}
 
 			const endpoint =
-				deploymentSource === 'github'
+				deploymentSource === 'github' || deploymentSource === 'git'
 					? `/apiv1/projects/${targetProjectId}/deployments/from-github`
 					: `/apiv1/projects/${targetProjectId}/deployments`;
 
@@ -847,9 +868,14 @@
 
 			if (selectedEnvId) body.environmentId = selectedEnvId;
 
-			if (deploymentSource === 'github') {
-				body.repoUrl = repoUrl;
-				body.branch = branch;
+			if (deploymentSource === 'git') {
+				if (!gitSelection) throw new Error('Pick a repository and branch');
+				body.gitConnectionId = gitSelection.connectionId;
+				body.externalRepoId = gitSelection.externalRepoId;
+			}
+			if (deploymentSource === 'github' || deploymentSource === 'git') {
+				body.repoUrl = deploymentSource === 'git' ? gitSelection!.repoUrl : repoUrl;
+				body.branch = deploymentSource === 'git' ? gitSelection!.branch : branch;
 				body.buildType = buildType;
 				body.buildWithDepot = buildWithDepot;
 				if (buildType === 'railpack') {
@@ -891,12 +917,12 @@
 			toasts.add({
 				title: 'App created',
 				description:
-					deploymentSource === 'github' ? 'Building image from GitHub...' : 'Provisioning started',
+					deploymentSource === 'image' ? 'Provisioning started' : 'Building from the repository',
 				color: 'success'
 			});
 
-			// Redirect to progress page for GitHub deployments, main page for image deployments
-			if (deploymentSource === 'github') {
+			// Redirect to progress page for repository deployments, main page for image deployments
+			if (deploymentSource !== 'image') {
 				goto(`/${orgSlug}/deployments/${deployment.id}/progress`);
 			} else {
 				goto(`/${orgSlug}/deployments/${deployment.id}`);
@@ -1046,6 +1072,13 @@
 					>
 						<Github class="h-3.5 w-3.5" /> GitHub
 					</button>
+					<button
+						class="nd-pill"
+						class:nd-pill-active={deploymentSource === 'git'}
+						onclick={() => (deploymentSource = 'git')}
+					>
+						<GitBranch class="h-3.5 w-3.5" /> Git
+					</button>
 				</div>
 			</div>
 
@@ -1098,6 +1131,18 @@
 									class="font-mono"
 								/>
 							</Field>
+						{:else if deploymentSource === 'git'}
+							<GitSourcePane
+								onSelect={(sel) => {
+									gitSelection = sel;
+									if (sel) {
+										repoUrl = sel.repoUrl;
+										branch = sel.branch;
+										if (!name.trim()) name = sel.repoPath.split('/').pop() ?? '';
+									}
+								}}
+								onDetect={(det) => applyDetection(det as DetectionResult)}
+							/>
 						{:else}
 							{#if !githubLinked}
 								<div class="nd-warning" style="margin-bottom: 0.75rem;">

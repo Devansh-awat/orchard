@@ -79,6 +79,18 @@
 				'The address raw TCP and UDP ports and public databases are published on. Organizations that set their own override it; the rest inherit this instead of being asked for an IP they do not know.',
 			fields: { publicIp: 'Default public IP' }
 		},
+		'git-gitlab': {
+			title: 'GitLab sign-in',
+			description:
+				'An OAuth application on GitLab so people can connect their account with one click. Register it with the callback URL below. For a self-hosted GitLab, set the base URL.',
+			fields: { baseUrl: 'GitLab URL', clientId: 'Application ID', clientSecret: 'Secret' }
+		},
+		'git-bitbucket': {
+			title: 'Bitbucket sign-in',
+			description:
+				'An OAuth consumer on Bitbucket Cloud so people can connect their account with one click. Grant it repository read and give it the callback URL below.',
+			fields: { key: 'Key', secret: 'Secret' }
+		},
 		turnstile: {
 			title: 'Bot protection',
 			description:
@@ -102,7 +114,10 @@
 		siteKey: 'From the Turnstile widget in your Cloudflare dashboard',
 		secretKey: 'Never leaves the server. Leave blank to keep the stored one.',
 		enabled: 'Ignored until both keys are set. Turning this off keeps the keys.',
-		strict: 'Off lets sign-in through unchallenged if the check cannot be reached, and logs it.'
+		strict: 'Off lets sign-in through unchallenged if the check cannot be reached, and logs it.',
+		baseUrl: 'Leave blank for gitlab.com. Callback URL: <origin>/apiv1/git/oauth/gitlab/callback',
+		clientId: 'Scopes: read_api, read_repository, read_user',
+		key: 'Callback URL: <origin>/apiv1/git/oauth/bitbucket/callback'
 	};
 
 	let sections = $state<Section[]>([]);

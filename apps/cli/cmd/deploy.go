@@ -216,6 +216,7 @@ func deployRenderKV(raw map[string]any) {
 func deployCreateCmd() *cobra.Command {
 	var (
 		name, image, github, dockerfile, memory, envFile   string
+		gitProvider, gitRepo                               string
 		rootDir, installCmd, buildCmd, startCmd, outputDir string
 		target                                             string
 		pullPolicy                                         string
@@ -230,15 +231,24 @@ func deployCreateCmd() *cobra.Command {
 		Short: "Create a deployment from a Docker image or a GitHub repo",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if (image == "") == (github == "") {
-				return errors.New("exactly one of --image or --github is required")
+			sources := 0
+			for _, v := range []string{image, github, gitRepo} {
+				if v != "" {
+					sources++
+				}
+			}
+			if sources != 1 {
+				return errors.New("exactly one of --image, --github or --repo is required")
+			}
+			if (gitRepo == "") != (gitProvider == "") {
+				return errors.New("--repo and --git go together: --git <provider name> --repo <https url>")
 			}
 			if image != "" && (dockerfile != "" || railpack || buildRoot) {
-				return errors.New("--dockerfile, --railpack and --build-root only apply to --github deployments")
+				return errors.New("--dockerfile, --railpack and --build-root only apply to repository deployments")
 			}
 			// GitHub builds get a unique tag per build, so the policy is
 			// meaningless there and accepting it would just be misleading.
-			if pullPolicy != "" && github != "" {
+			if pullPolicy != "" && (github != "" || gitRepo != "") {
 				return errors.New("--pull-policy only applies to --image deployments")
 			}
 			var normalizedPullPolicy string
@@ -289,6 +299,19 @@ func deployCreateCmd() *cobra.Command {
 			}
 
 			path := "/projects/" + url.PathEscape(projectID) + "/deployments"
+			if gitRepo != "" {
+				conn, cerr := gitResolve(cmd, gitProvider)
+				if cerr != nil {
+					return cerr
+				}
+				repo, branch, _ := strings.Cut(gitRepo, "#")
+				body["gitConnectionId"] = pick(conn, "id")
+				body["repoUrl"] = repo
+				if branch != "" {
+					body["branch"] = branch
+				}
+				path += "/from-github"
+			}
 			if github != "" {
 				repo, branch, _ := strings.Cut(github, "#")
 				if !strings.Contains(repo, "/") {
@@ -359,6 +382,8 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&image, "image", "", "Docker image reference (e.g. nginx:latest)")
 	c.Flags().StringVar(&pullPolicy, "pull-policy", "", "pin the pull policy instead of deriving it from the tag: always|ifnotpresent (--image only)")
 	c.Flags().StringVar(&github, "github", "", "GitHub source as owner/repo[#branch]")
+	c.Flags().StringVar(&gitProvider, "git", "", "git provider name (see: orchard git list), used with --repo")
+	c.Flags().StringVar(&gitRepo, "repo", "", "repository https URL on that provider, with an optional #branch")
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
 	c.Flags().StringVar(&target, "target", "", "stage to stop at in a multi-stage Dockerfile; empty builds the final stage")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")

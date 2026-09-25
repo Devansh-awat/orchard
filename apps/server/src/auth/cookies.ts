@@ -53,3 +53,20 @@ export function setGithubOauthStateCookie(res: Response, state: string): void {
 export function clearGithubOauthStateCookie(res: Response): void {
   res.clearCookie(GITHUB_OAUTH_STATE_COOKIE, { path: GITHUB_OAUTH_STATE_PATH });
 }
+
+const GIT_OAUTH_STATE_COOKIE = 'git_oauth_state';
+const GIT_OAUTH_STATE_PATH = '/apiv1/git/oauth';
+
+export function setGitOauthStateCookie(res: Response, state: string): void {
+  res.cookie(GIT_OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: isSessionCookieSecure(),
+    sameSite: 'lax',
+    maxAge: TEN_MINUTES_MS,
+    path: GIT_OAUTH_STATE_PATH
+  });
+}
+
+export function clearGitOauthStateCookie(res: Response): void {
+  res.clearCookie(GIT_OAUTH_STATE_COOKIE, { path: GIT_OAUTH_STATE_PATH });
+}

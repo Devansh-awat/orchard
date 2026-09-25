@@ -847,6 +847,8 @@ export class ProjectsController {
     @Body()
     body: {
       name: string;
+      gitConnectionId?: string | null;
+      externalRepoId?: string | null;
       repoUrl?: string;
       githubRepo?: string;
       branch?: string;
