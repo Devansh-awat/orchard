@@ -3,7 +3,7 @@
 	import { Eye, EyeOff } from '@jis3r/icons';
 	import { motionStagger, iconAnimation } from '$lib/utils/motion.svelte';
 	import { Button, Field, Input, Modal } from '$lib/components/ui';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 
 	interface UserData {
 		firstName?: string;
@@ -114,12 +114,7 @@
 	<div class="uh-top">
 		<div class="uh-avatar-wrap">
 			<div class="uh-avatar">
-				<img
-					src={avatarUrl(user)}
-					style="filter: {avatarFilter(user)}"
-					alt={displayName}
-					class="uh-avatar-img"
-				/>
+				<img src={avatarUrl(user)} alt={displayName} class="uh-avatar-img" />
 			</div>
 			<div class="uh-avatar-actions">
 				<button

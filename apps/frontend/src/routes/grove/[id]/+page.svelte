@@ -18,7 +18,7 @@
 		type GroveReply
 	} from '$lib/components/grove/grove';
 	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 
 	type FullThread = GroveThread & { body: string; replies: GroveReply[] };
 
@@ -239,7 +239,6 @@
 				<div class="gt-author-row">
 					<img
 						src={avatarUrl(thread.author)}
-						style="filter: {avatarFilter(thread.author)}"
 						alt=""
 						class="gt-av"
 						loading="lazy"
@@ -320,7 +319,6 @@
 					<div class="gt-reply" {@attach motionStagger({ index: i, from: { y: 8 } })}>
 						<img
 							src={avatarUrl(reply.author)}
-							style="filter: {avatarFilter(reply.author)}"
 							alt=""
 							class="gt-av"
 							loading="lazy"

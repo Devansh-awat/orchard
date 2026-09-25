@@ -3,7 +3,7 @@
 	import { user, showOnboarding, lastAcceptedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { Loader2, User, Github, PartyPopper, ArrowRight, Check, Link2 } from 'lucide-svelte';
 	import { Modal, Button, Field, Input } from '$lib/components/ui';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 
 	type Step = 'profile' | 'github' | 'welcome';
 
@@ -202,7 +202,6 @@
 							>
 								<img
 									src={avatarUrl(currentUser)}
-									style="filter: {avatarFilter(currentUser)}"
 									alt="Profile"
 									class="h-14 w-14 rounded-2xl object-cover ring-2 ring-[var(--surface-border)]"
 								/>

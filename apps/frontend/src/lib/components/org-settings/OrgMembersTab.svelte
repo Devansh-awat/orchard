@@ -4,7 +4,7 @@
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import { Button, Badge, Menu, MenuItem, PopoverPanel } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 
 	interface MemberProject {
 		projectMemberId: string;
@@ -266,12 +266,7 @@
 			{#each visibleMembers as member (member.user.id)}
 				<div class="om-tr">
 					<div class="om-td om-td--member">
-						<img
-							src={avatarUrl(member.user)}
-							style="filter: {avatarFilter(member.user)}"
-							alt=""
-							class="om-avatar"
-						/>
+						<img src={avatarUrl(member.user)} alt="" class="om-avatar" />
 						<div class="om-member-info">
 							<p class="om-member-name">{memberName(member) || member.user.email}</p>
 							<p class="om-member-email">{member.user.email}</p>

@@ -21,7 +21,7 @@
 		PartyPopper
 	} from 'lucide-svelte';
 	import { Button, Field, Input } from '$lib/components/ui';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 
 	type Step = 'loading' | 'profile' | 'github' | 'done';
 
@@ -311,12 +311,7 @@
 
 							{#if currentUser}
 								<div class="setup-profile-preview">
-									<img
-										src={avatarUrl(currentUser)}
-										style="filter: {avatarFilter(currentUser)}"
-										alt="Profile"
-										class="setup-profile-avatar"
-									/>
+									<img src={avatarUrl(currentUser)} alt="Profile" class="setup-profile-avatar" />
 									<div>
 										<p class="setup-profile-name">
 											{firstName || 'First'}

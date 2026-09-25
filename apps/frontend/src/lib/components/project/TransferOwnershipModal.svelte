@@ -2,7 +2,7 @@
 	import { Crown, Loader2, Check } from 'lucide-svelte';
 	import { Modal, Button, Alert } from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
-	import { avatarUrl, avatarFilter } from '$lib/avatar';
+	import { avatarUrl } from '$lib/avatar';
 	import type { ProjectMember } from './types';
 
 	let {
@@ -57,12 +57,7 @@
 						aria-pressed={selectedUserId === m.user.id}
 						onclick={() => (selectedUserId = m.user.id)}
 					>
-						<img
-							src={avatarUrl(m.user)}
-							style="filter: {avatarFilter(m.user)}"
-							alt=""
-							class="tf-avatar"
-						/>
+						<img src={avatarUrl(m.user)} alt="" class="tf-avatar" />
 						<span class="tf-option-text">
 							<span class="tf-option-name">{displayName(m)}</span>
 							<span class="tf-option-email">{m.user.email}</span>
