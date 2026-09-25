@@ -142,8 +142,9 @@ Changing this rolls the pods on its own; no separate restart is needed.
 Set the Kubernetes update strategy for a deployment.
 - `rollingUpdate`: bring up new pods before draining old ones — zero downtime.
 - `recreate`: tear down all pods first, then start new ones — brief downtime, required for ReadWriteOnce PVCs.
+- `blueGreen`: the new image runs beside the old one and takes traffic only once every pod is ready; if it never is, nothing moves.
 
-When the deployment has a PVC attached, the backend forces `recreate` and rejects attempts to set `rollingUpdate` (the response will say so). If you must switch back, remove the PVC first via `update_deployment_volumes`.
+A deployment with a PVC attached only accepts `recreate`. Every strategy waits for the new pods to be ready and rolls back if they never are.
 
 ### `update_deployment_volumes`
 
@@ -730,7 +731,7 @@ The build log is omitted here because it is often megabytes — read it with `ge
 
 **read-only**
 
-Request rate, latency percentiles and status-code breakdown for a deployment, as served through its ingress.
+Request rate, average and max latency, and 5xx rate for a deployment, as served through its ingress. Latency is the load balancer's average and max, not a percentile.
 
 Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check `get_deployment.ingresses` first if that surprises you.
 

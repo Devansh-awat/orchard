@@ -15,7 +15,94 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **311 commands** are available.
+override the saved context. **343 commands** are available.
+
+## alert
+
+### `orchard alert`
+
+Threshold alerts on app metrics
+
+```bash
+orchard alert
+```
+
+Aliases: `alerts`
+
+### `orchard alert create`
+
+Add a rule: --metric cpu_percent --above 85 --for 300
+
+```bash
+orchard create
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--comparator` | string | `gt` | gt or lt |
+| `--deployment` | string |  | scope to a deployment id |
+| `--for` | int | `300` | seconds the condition must hold before it fires |
+| `--metric` | string |  | metric id (see `orchard alert metrics`) (required) |
+| `--min-request-rate` | float64 | `0` | skip evaluation below this many requests per second (traffic metrics) |
+| `--project` | string |  | scope to a project id |
+| `--threshold` | float64 | `0` | threshold in the metric's unit (required) |
+
+### `orchard alert delete`
+
+Delete a rule
+
+```bash
+orchard delete <ruleId>
+```
+
+Aliases: `rm`
+
+### `orchard alert list`
+
+List alert rules, including the ones inherited from above
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--deployment` | string |  | scope to a deployment id |
+| `--project` | string |  | scope to a project id |
+
+### `orchard alert metrics`
+
+The metrics a rule can watch
+
+```bash
+orchard metrics
+```
+
+### `orchard alert status`
+
+Every rule that applies to an app and whether it is firing
+
+```bash
+orchard status <deploymentId>
+```
+
+### `orchard alert update`
+
+Change a rule's threshold, window, or enabled state
+
+```bash
+orchard update <ruleId>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--disabled` | bool | `false` | turn the rule off |
+| `--enabled` | bool | `false` | turn the rule on |
+| `--for` | int | `0` | new window in seconds |
+| `--min-request-rate` | float64 | `0` | new minimum request rate |
+| `--threshold` | float64 | `0` | new threshold |
 
 ## api
 
@@ -342,6 +429,23 @@ Re-pull the compose file and recreate every service deployment
 ```bash
 orchard redeploy <stackId>
 ```
+
+## console
+
+### `orchard console`
+
+Open the app's language REPL inside a running pod
+
+```bash
+orchard console <deploymentId>
+```
+
+Aliases: `repl`
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--pod` | string |  | pod to use (default: the first ready pod) |
+| `--repl` | string |  | REPL command to run (default: detected from the app's language) |
 
 ## context
 
@@ -674,6 +778,18 @@ orchard set <id>
 | `--cpu` | int | `0` | CPU request in millicores (0 clears back to default) |
 | `--memory` | string |  | memory request in bytes or with unit ("512Mi"; 0 clears) |
 
+### `orchard db rotate-password`
+
+Set a new password and push it to every bound app
+
+```bash
+orchard rotate-password <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `-y`, `--yes` | bool | `false` | skip the confirmation |
+
 ### `orchard db settings`
 
 Read or update PostgreSQL parameters
@@ -767,6 +883,54 @@ Show auto-deploy configuration
 orchard status <id>
 ```
 
+### `orchard deploy bindings`
+
+Databases and apps this app is connected to
+
+```bash
+orchard bindings
+```
+
+### `orchard deploy bindings add`
+
+Connect a database or another app and add the obvious variable
+
+```bash
+orchard add <id> (--database <name|id> | --app <name|id>)
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--app` | string |  | app name or id on the same project |
+| `--as` | string |  | binding name used in $&#123;&#123;resource.&lt;name&gt;.*&#125;&#125; (default: derived from the database name) |
+| `--database` | string |  | database name or id on the same project |
+| `--env` | string |  | env key to add (default DATABASE_URL for a database, &lt;NAME&gt;_URL for an app) |
+| `--no-env` | bool | `false` | bind only, do not add an env var |
+
+### `orchard deploy bindings list`
+
+List bindings
+
+```bash
+orchard list <id>
+```
+
+### `orchard deploy bindings options`
+
+Databases and apps on the project that can still be connected
+
+```bash
+orchard options <id>
+```
+
+### `orchard deploy bindings remove`
+
+Disconnect a resource
+
+```bash
+orchard remove <id> <name>
+```
+
 ### `orchard deploy build-config`
 
 Manage how a deployment is built
@@ -840,6 +1004,7 @@ orchard create
 | `--dockerfile` | string |  | path to the Dockerfile relative to the repo root |
 | `--env` | stringArray | `[]` | environment variable KEY=VAL (repeatable) |
 | `--env-file` | string |  | read environment variables from a dotenv-style file |
+| `--git` | string |  | git provider name (see: orchard git list), used with --repo |
 | `--github` | string |  | GitHub source as owner/repo[#branch] |
 | `--image` | string |  | Docker image reference (e.g. nginx:latest) |
 | `--install-cmd` | string |  | override the detected install command |
@@ -850,6 +1015,7 @@ orchard create
 | `--pull-policy` | string |  | pin the pull policy instead of deriving it from the tag: always\|ifnotpresent (--image only) |
 | `--railpack` | bool | `false` | build with railpack instead of a Dockerfile |
 | `--replicas` | int | `0` | number of replicas (server default 1) |
+| `--repo` | string |  | repository https URL on that provider, with an optional #branch |
 | `--root` | string |  | directory of the app inside the repo (monorepos) |
 | `--start-cmd` | string |  | override the detected start command |
 | `--target` | string |  | stage to stop at in a multi-stage Dockerfile; empty builds the final stage |
@@ -1090,6 +1256,18 @@ orchard rebuild <id>
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
 
+### `orchard deploy releases`
+
+List releases, newest first
+
+```bash
+orchard releases <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--limit` | int | `20` | how many releases to show |
+
 ### `orchard deploy resources`
 
 Manage a deployment's CPU/memory requests
@@ -1176,7 +1354,7 @@ orchard set <id>
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--type` | string |  | update strategy: rollingupdate\|recreate (required) |
+| `--type` | string |  | update strategy: rollingupdate\|recreate\|bluegreen (required) |
 
 ### `orchard deploy volumes`
 
@@ -1500,6 +1678,86 @@ orchard tail
 | --- | --- | --- | --- |
 | `--since-id` | string |  | replay events newer than this event id before going live |
 | `--types` | string |  | only show these event types (comma-separated, e.g. deployment.changed,build.changed) |
+
+## git
+
+### `orchard git`
+
+Git providers you have linked with your own token
+
+```bash
+orchard git
+```
+
+Aliases: `git-providers`, `providers`
+
+### `orchard git add`
+
+Connect a git provider
+
+```bash
+orchard add --provider <kind> --name <name> --token <token>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--name` | string |  | short name used with --git on deploy create |
+| `--provider` | string |  | github \| gitlab \| gitea \| bitbucket \| generic |
+| `--token` | string |  | token or password |
+| `--url` | string |  | base URL of the host (default: the public instance of the provider) |
+| `--username` | string |  | username for bitbucket app passwords and generic hosts |
+
+### `orchard git branches`
+
+List branches of a repository
+
+```bash
+orchard branches <name> <owner/repo>
+```
+
+### `orchard git detect`
+
+Inspect a repository the way the new app form does
+
+```bash
+orchard detect <name> <owner/repo>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--branch` | string |  | branch to inspect (default: the repository default) |
+
+### `orchard git list`
+
+List git providers
+
+```bash
+orchard list
+```
+
+### `orchard git remove`
+
+Disconnect a git provider
+
+```bash
+orchard remove <name>
+```
+
+### `orchard git repos`
+
+List repositories the token can see
+
+```bash
+orchard repos <name>
+```
+
+### `orchard git webhook`
+
+Show the webhook URL and secret to paste into the forge
+
+```bash
+orchard webhook <name>
+```
 
 ## github
 
@@ -2091,6 +2349,23 @@ orchard observe
 ```
 
 Aliases: `obs`
+
+### `orchard observe activity`
+
+Activity feed for a deployment
+
+```bash
+orchard activity <deploymentId>
+```
+
+Aliases: `timeline`
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--all` | bool | `false` | fetch every page (capped at 100 pages) |
+| `--cursor` | string |  | resume from a previous nextCursor |
+| `--kinds` | string |  | comma list of audit,build,release,pod,error (default: all) |
+| `--limit` | int | `50` | page size |
 
 ### `orchard observe capabilities`
 
@@ -3065,6 +3340,94 @@ orchard remove <name>
 
 Aliases: `rm`
 
+## status-page
+
+### `orchard status-page`
+
+Public status pages for an org
+
+```bash
+orchard status-page
+```
+
+Aliases: `status-pages`, `statuspage`
+
+### `orchard status-page create`
+
+Create a page: --title 'Acme status' --slug acme --component deployment:&lt;id&gt;
+
+```bash
+orchard create
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--component` | stringSlice | `[]` | deployment:&lt;id&gt; or database:&lt;id&gt;, in order (repeatable) |
+| `--description` | string |  | one line under the title |
+| `--private` | bool | `false` | create hidden; nothing renders until it is public |
+| `--slug` | string |  | path slug (default: the org slug) |
+| `--subdomain` | string |  | host under the platform domain |
+| `--title` | string |  | page title (default: '&lt;org&gt; status') |
+
+### `orchard status-page delete`
+
+Delete a page and its host
+
+```bash
+orchard delete <pageId>
+```
+
+Aliases: `rm`
+
+### `orchard status-page list`
+
+List the org's status pages
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+### `orchard status-page options`
+
+Apps and databases a page can list
+
+```bash
+orchard options
+```
+
+### `orchard status-page show`
+
+Read a public status page the way a visitor does
+
+```bash
+orchard show [slug]
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--host` | string |  | resolve the page from its host instead of a slug |
+
+### `orchard status-page update`
+
+Change a page's title, slug, host, visibility or components
+
+```bash
+orchard update <pageId>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--component` | stringSlice | `[]` | replace the components with deployment:&lt;id&gt; or database:&lt;id&gt; (repeatable) |
+| `--description` | string |  | new description |
+| `--no-subdomain` | bool | `false` | remove the host |
+| `--private` | bool | `false` | hide the page |
+| `--public` | bool | `false` | make the page public |
+| `--slug` | string |  | new slug |
+| `--subdomain` | string |  | new host under the platform domain |
+| `--title` | string |  | new title |
+
 ## tailscale
 
 ### `orchard tailscale`
@@ -3244,6 +3607,21 @@ orchard list
 ```
 
 Aliases: `ls`
+
+## top
+
+### `orchard top`
+
+Live pods, resources and traffic for one app, or one database with --db
+
+```bash
+orchard top <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--db` | bool | `false` | the id is a database |
+| `--once` | bool | `false` | print one snapshot and exit |
 
 ## ui
 

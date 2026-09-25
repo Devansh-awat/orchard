@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Loader2, ExternalLink, TriangleAlert } from 'lucide-svelte';
+	import { Loader2, ExternalLink, TriangleAlert, Copy, Eye } from 'lucide-svelte';
+	import { fetchWebhookSecret } from '$lib/components/user-settings/git-connections';
 	import {
 		Activity,
 		Check,
@@ -141,6 +142,29 @@
 	}
 
 	const savedWatchPaths = $derived(watchPathLines((autoDeployStatus?.paths ?? []).join('\n')));
+
+	let hookSecret = $state<string | null>(null);
+	let copiedHook = $state<string | null>(null);
+	async function revealHookSecret() {
+		const provider = autoDeployStatus?.provider;
+		if (!provider) return;
+		try {
+			hookSecret = await fetchWebhookSecret(provider.id);
+		} catch {
+			hookSecret = null;
+		}
+	}
+	async function copyHook(key: string, text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			copiedHook = key;
+			setTimeout(() => {
+				if (copiedHook === key) copiedHook = null;
+			}, 1500);
+		} catch {
+			/* clipboard unavailable */
+		}
+	}
 
 	const watchPathsDirty = $derived(watchPathLines(autoDeployPaths ?? '') !== savedWatchPaths);
 
@@ -470,7 +494,83 @@
 							</Button>
 						</div>
 					</div>
-					{#if !autoDeployStatus?.appInstalled}
+					{#if autoDeployStatus?.provider}
+						{@const provider = autoDeployStatus.provider}
+						<div class="adv-hook" class:adv-hook--missing={provider.hookPresent !== true}>
+							<div class="adv-hook-main">
+								<p class="adv-hook-title">
+									{#if provider.hookPresent === true}
+										Webhook registered on {provider.host}
+									{:else if provider.hookPresent === false}
+										No webhook on {provider.host} yet
+									{:else if provider.canRegister}
+										Webhook on {provider.host} could not be checked
+									{:else}
+										Add the webhook on {provider.host}
+									{/if}
+								</p>
+								<p class="adv-hook-desc">
+									{#if provider.hookPresent === true}
+										Pushes from {provider.name} reach Orchard signed with this connection's secret.
+									{:else if provider.hookPresent === false}
+										Reconnect to register it with {provider.name}, or add it by hand.
+									{:else if provider.canRegister}
+										{provider.name} did not answer. Reconnect to try again, or add it by hand.
+									{:else}
+										This host has no API Orchard can register with. Paste the URL and secret into
+										the repository's webhook settings for push events.
+									{/if}
+								</p>
+								{#if provider.hookPresent !== true}
+									<div class="adv-hook-fields">
+										<button
+											type="button"
+											class="adv-hook-copy"
+											onclick={() => copyHook('url', provider.webhookUrl)}
+										>
+											<code>{provider.webhookUrl}</code>
+											{#if copiedHook === 'url'}<Check size={12} />{:else}<Copy size={12} />{/if}
+										</button>
+										{#if provider.ownedByMe}
+											{#if hookSecret}
+												<button
+													type="button"
+													class="adv-hook-copy"
+													onclick={() => copyHook('secret', hookSecret ?? '')}
+												>
+													<code>{hookSecret}</code>
+													{#if copiedHook === 'secret'}<Check size={12} />{:else}<Copy
+															size={12}
+														/>{/if}
+												</button>
+											{:else}
+												<button type="button" class="adv-hook-reveal" onclick={revealHookSecret}>
+													<Eye size={12} />
+													<span>Show secret</span>
+												</button>
+											{/if}
+										{:else}
+											<span class="adv-hook-note"
+												>The secret is with whoever linked {provider.name}.</span
+											>
+										{/if}
+									</div>
+								{/if}
+							</div>
+							{#if provider.hookPresent !== true && provider.canRegister}
+								<Button
+									variant="primary"
+									size="sm"
+									class="shrink-0"
+									onclick={onEnableAutoDeploy}
+									disabled={enablingAutoDeploy || !autoDeployBranch}
+								>
+									{#if enablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+									<span>Reconnect</span>
+								</Button>
+							{/if}
+						</div>
+					{:else if !autoDeployStatus?.appInstalled}
 						<div
 							class="mt-3 flex items-center justify-between gap-3 rounded-xl p-4"
 							style="background-color: var(--control-bg); border: 1px dashed var(--error-text-color);"
@@ -878,3 +978,69 @@
 		</SectionCard>
 	{/if}
 </div>
+
+<style>
+	.adv-hook {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: color-mix(in srgb, var(--status-success) 8%, transparent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-success) 22%, transparent);
+	}
+	.adv-hook--missing {
+		background: var(--status-warning-bg);
+		box-shadow: inset 0 0 0 1px var(--status-warning-border);
+	}
+	.adv-hook-main {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+	.adv-hook-title {
+		margin: 0;
+		font-size: var(--text-callout);
+		font-weight: 600;
+		color: var(--text-default);
+	}
+	.adv-hook-desc {
+		margin: 0;
+		font-size: var(--text-caption);
+		color: var(--text-muted);
+	}
+	.adv-hook-fields {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		margin-top: 0.375rem;
+	}
+	.adv-hook-copy,
+	.adv-hook-reveal {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		border: 0;
+		background: var(--fill-quiet);
+		border-radius: var(--radius-pill);
+		padding: 0.125rem 0.625rem;
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		cursor: pointer;
+		max-width: 100%;
+	}
+	.adv-hook-copy code {
+		font-family: var(--font-mono);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.adv-hook-note {
+		font-size: var(--text-caption);
+		color: var(--text-faint);
+	}
+</style>

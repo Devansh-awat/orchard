@@ -52,6 +52,7 @@ export default defineConfig({
           label: 'Deploying',
           items: [
             { label: 'From GitHub', slug: 'deploy/github' },
+            { label: 'From GitLab, Gitea and others', slug: 'deploy/git-providers' },
             { label: 'From an image', slug: 'deploy/image' },
             { label: 'Builds', slug: 'deploy/builds' },
             { label: 'Domains and HTTPS', slug: 'deploy/domains' },
@@ -59,7 +60,8 @@ export default defineConfig({
             { label: 'Scaling and resources', slug: 'deploy/scaling' },
             { label: 'Storage', slug: 'deploy/storage' },
             { label: 'Rollbacks', slug: 'deploy/rollbacks' },
-            { label: 'Protection', slug: 'deploy/protection' }
+            { label: 'Protection', slug: 'deploy/protection' },
+            { label: 'score.yaml', slug: 'deploy/score' }
           ]
         },
         {
@@ -82,6 +84,7 @@ export default defineConfig({
             { label: 'Metrics and alerts', slug: 'run/observability' },
             { label: 'Notifications', slug: 'run/notifications' },
             { label: 'Webhooks', slug: 'run/webhooks' },
+            { label: 'Terraform and OpenTofu', slug: 'run/terraform' },
             { label: 'Sandboxes', slug: 'run/sandboxes' },
             { label: 'The Grove', slug: 'run/grove' }
           ]

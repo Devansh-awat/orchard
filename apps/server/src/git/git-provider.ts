@@ -78,7 +78,12 @@ export interface GitProvider {
   cloneCredential(): CloneCredential;
   verifyWebhook(rawBody: string, headers: WebhookHeaders): boolean;
   parsePush(headers: WebhookHeaders, body: unknown): PushEvent | null;
+  /** Register a push hook at `url` on the repo, or find the one already there. */
+  ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration>;
+  hasWebhook(repo: string, url: string): Promise<boolean | null>;
 }
+
+export type WebhookRegistration = 'registered' | 'exists' | 'unsupported';
 
 export class GitProviderError extends Error {
   constructor(

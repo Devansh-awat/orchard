@@ -164,6 +164,13 @@ export interface Deployment {
 	buildStepTimestamps?: Record<string, number> | null;
 	autoDeployEnabled?: boolean;
 	autoDeployBranch?: string;
+	gitConnection?: {
+		id: string;
+		name: string;
+		provider: string;
+		baseUrl: string;
+		userId: string;
+	} | null;
 	queuedCommitSha?: string | null;
 	queuedCommitMessage?: string | null;
 	queuedCommitAuthorUsername?: string | null;
@@ -211,6 +218,19 @@ export interface AutoDeployStatus {
 	appInstalled: boolean;
 	/** This deployment is bound to a live installation, so pushes actually reach it. */
 	linked?: boolean;
+	deliverable?: boolean;
+	message?: string | null;
+	/** Set when the app comes from a git provider rather than the GitHub App. */
+	provider?: {
+		id: string;
+		name: string;
+		kind: string;
+		host: string;
+		webhookUrl: string;
+		hookPresent: boolean | null;
+		canRegister: boolean;
+		ownedByMe: boolean;
+	} | null;
 }
 
 export interface GitHubAppInstallation {

@@ -1324,6 +1324,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         environment: {
           select: { id: true, name: true, slug: true, isDefault: true }
         },
+        gitConnection: {
+          select: { id: true, name: true, provider: true, baseUrl: true, userId: true }
+        },
         services: {
           include: {
             ports: true
@@ -2670,6 +2673,76 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (deployment.buildType === 'dockerfile' && !dockerfilePath) {
       throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
+    }
+
+    // An app from a git provider moves only within that provider's host, and
+    // only by the person whose token it clones with. Anything else would let
+    // a project editor aim someone else's credential at a repository of
+    // their choosing.
+    if (deployment.gitConnectionId) {
+      const connection = await this.prisma.gitConnection.findUnique({
+        where: { id: deployment.gitConnectionId },
+        select: { id: true, name: true, baseUrl: true, userId: true }
+      });
+      if (!connection) {
+        throw new BadRequestException(
+          'The git provider this app was created from is gone. Create the app again from yours.'
+        );
+      }
+      if (connection.userId !== user.id) {
+        throw new ForbiddenException(
+          `Only the person who linked ${connection.name} can change this app's repository`
+        );
+      }
+      if (!this.gitConnections.repoPathFor(connection.baseUrl, repoUrl)) {
+        throw new BadRequestException(
+          `${connection.name} is for ${hostOf(connection.baseUrl)}. Use a repository on that host, or create a new app from another provider.`
+        );
+      }
+      const moved = repoUrl !== deployment.githubRepo;
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          githubRepo: repoUrl,
+          githubBranch: branch,
+          dockerfilePath: dockerfilePath || null,
+          externalRepoId: moved ? null : undefined,
+          autoDeployBranch: deployment.autoDeployEnabled
+            ? moved
+              ? branch
+              : deployment.autoDeployBranch
+            : null,
+          ...(moved
+            ? {
+                queuedCommitSha: null,
+                queuedCommitMessage: null,
+                queuedCommitAuthorName: null,
+                queuedCommitAuthorUsername: null,
+                queuedAt: null
+              }
+            : {})
+        }
+      });
+      if (moved && deployment.autoDeployEnabled) {
+        void this.gitConnections.registerWebhook(connection.id, repoUrl).catch(() => undefined);
+      }
+      void this.audit.log({
+        action: 'deployment.github_repo.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId,
+        targetType: 'deployment',
+        targetId: deploymentId,
+        targetLabel: deployment.name,
+        metadata: {
+          provider: connection.name,
+          githubRepo: [deployment.githubRepo, repoUrl],
+          githubBranch: [deployment.githubBranch, branch]
+        }
+      });
+      return this.getDeployment(deploymentId);
     }
 
     const parsed = this.githubService.parseRepoUrl(repoUrl);
@@ -4120,8 +4193,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
     // A connection-sourced app is matched by its connection on the webhook
-    // path, so it needs no GitHub App installation.
+    // path, so it needs no GitHub App installation. The hook itself is put on
+    // the forge here, best effort; the status endpoint says whether it took.
     let installation: { installationId: bigint } | null = null;
+    let webhook: Awaited<ReturnType<GitConnectionsService['registerWebhook']>> | null = null;
+    if (deployment.gitConnectionId) {
+      webhook = await this.gitConnections.registerWebhook(
+        deployment.gitConnectionId,
+        deployment.githubRepo
+      );
+    }
     if (!deployment.gitConnectionId) {
       const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
       if (!repoInfo) {
@@ -4207,7 +4288,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    return this.addInternalUrlsToDeployment(updated);
+    const enabledView = this.addInternalUrlsToDeployment(updated);
+    return { ...enabledView, webhook };
   }
 
   async disableAutoDeploy(
@@ -4616,7 +4698,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployPaths: true,
         githubRepo: true,
         githubBranch: true,
-        githubInstallationId: true
+        githubInstallationId: true,
+        gitConnection: {
+          select: { id: true, name: true, provider: true, baseUrl: true, userId: true }
+        }
       }
     });
 
@@ -4625,6 +4710,42 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Check if GitHub App has access to this repo
+    if (deployment.gitConnection) {
+      const me = await this.usersService.findOrCreateByClerkId(clerkId);
+      const hookPresent = deployment.githubRepo
+        ? await this.gitConnections.webhookPresent(
+            deployment.gitConnection.id,
+            deployment.githubRepo
+          )
+        : null;
+      const canRegister = deployment.gitConnection.provider !== 'generic';
+      let message: string | null = null;
+      if (deployment.autoDeployEnabled && hookPresent === false) {
+        message = `${deployment.gitConnection.name} has no webhook for this app yet. Turn auto-deploy off and on to add it, or add it by hand.`;
+      } else if (deployment.autoDeployEnabled && !canRegister) {
+        message = `Add the webhook on ${hostOf(deployment.gitConnection.baseUrl)} by hand; pushes cannot reach Orchard until it exists.`;
+      }
+      return {
+        enabled: deployment.autoDeployEnabled,
+        branch: deployment.autoDeployBranch || deployment.githubBranch,
+        paths: deployment.autoDeployPaths ?? [],
+        appInstalled: true,
+        linked: true,
+        deliverable: deployment.autoDeployEnabled && hookPresent !== false,
+        message,
+        provider: {
+          id: deployment.gitConnection.id,
+          name: deployment.gitConnection.name,
+          kind: deployment.gitConnection.provider,
+          host: hostOf(deployment.gitConnection.baseUrl),
+          webhookUrl: this.gitConnections.webhookUrlFor(deployment.gitConnection.id),
+          hookPresent,
+          canRegister,
+          ownedByMe: Boolean(me && me.id === deployment.gitConnection.userId)
+        }
+      };
+    }
+
     let appInstalled = false;
     if (deployment.githubRepo) {
       const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
@@ -4678,7 +4799,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       appInstalled,
       linked,
       deliverable,
-      message
+      message,
+      provider: null
     };
   }
 

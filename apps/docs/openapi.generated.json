@@ -2187,6 +2187,28 @@
         ]
       }
     },
+    "/auth/config": {
+      "get": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /auth/config",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/login": {
       "get": {
         "description": "Auth: public",
@@ -2442,6 +2464,28 @@
           }
         ],
         "summary": "POST /auth/me/seen-updates",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/methods": {
+      "get": {
+        "description": "Auth: public",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "GET /auth/methods",
         "tags": [
           "auth"
         ]
@@ -2792,6 +2836,78 @@
           }
         ],
         "summary": "POST /auth/passkeys/:id/rename",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /auth/password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/password/set": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /auth/password/set",
         "tags": [
           "auth"
         ]
@@ -6469,6 +6585,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -7630,6 +7752,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -8761,6 +8889,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -9845,6 +9979,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -10977,6 +11117,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -12078,6 +12224,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -13370,6 +13522,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -14006,6 +14164,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "observedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "outputDirectory": {
                       "type": [
                         "string",
@@ -14157,6 +14321,12 @@
                     "readinessEnabled": {
                       "type": "boolean"
                     },
+                    "readyReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
                     "replicas": {
                       "type": "number"
                     },
@@ -14294,6 +14464,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "specReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "startCommand": {
                       "type": [
@@ -14687,6 +14863,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -15797,6 +15979,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -16758,6 +16946,12 @@
                   "buildWithDepot": {
                     "type": "boolean"
                   },
+                  "dockerfileTarget": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "framework": {
                     "type": [
                       "string",
@@ -16939,6 +17133,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -17580,6 +17780,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "observedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "outputDirectory": {
                       "type": [
                         "string",
@@ -17731,6 +17937,12 @@
                     "readinessEnabled": {
                       "type": "boolean"
                     },
+                    "readyReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
                     "replicas": {
                       "type": "number"
                     },
@@ -17868,6 +18080,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "specReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "startCommand": {
                       "type": [
@@ -18476,6 +18694,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -19785,6 +20009,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -20421,6 +20651,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "observedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "outputDirectory": {
                       "type": [
                         "string",
@@ -20572,6 +20808,12 @@
                     "readinessEnabled": {
                       "type": "boolean"
                     },
+                    "readyReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
                     "replicas": {
                       "type": "number"
                     },
@@ -20709,6 +20951,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "specReplicas": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "startCommand": {
                       "type": [
@@ -21044,6 +21292,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -21713,6 +21967,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -23727,6 +23987,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -24112,6 +24378,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -25221,6 +25493,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -25733,6 +26011,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -27056,6 +27340,12 @@
                         "null"
                       ]
                     },
+                    "dockerfileTarget": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "effectiveImagePullPolicy": {
                       "description": "What the cluster is actually doing, after deriving. Render this.",
                       "enum": [
@@ -27484,6 +27774,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -30724,6 +31020,12 @@
                           ]
                         },
                         "dockerfilePath": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dockerfileTarget": {
                           "type": [
                             "string",
                             "null"
@@ -38500,6 +38802,12 @@
                           "null"
                         ]
                       },
+                      "dockerfileTarget": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "effectiveImagePullPolicy": {
                         "description": "What the cluster is actually doing, after deriving. Render this.",
                         "enum": [
@@ -39526,6 +39834,13 @@
                   "replicas": {
                     "type": "integer"
                   },
+                  "startCommand": {
+                    "description": "Runs instead of the image's CMD, like a command passed to docker run. Omit to keep the image's own.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "volumes": {
                     "items": {
                       "properties": {
@@ -39714,6 +40029,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"
@@ -40796,6 +41117,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Stage to stop at in a multi-stage Dockerfile, as `docker build --target`. Omit to build the final stage. Stored on the deployment, so rebuilds keep it.",
                     "type": "string"
                   },
                   "volumes": {
@@ -40985,6 +41307,12 @@
                       ]
                     },
                     "dockerfilePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dockerfileTarget": {
                       "type": [
                         "string",
                         "null"

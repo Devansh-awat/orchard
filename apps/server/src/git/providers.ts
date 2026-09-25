@@ -8,7 +8,8 @@ import {
   type GitProviderKind,
   type PushEvent,
   type RepoRef,
-  type WebhookHeaders
+  type WebhookHeaders,
+  type WebhookRegistration
 } from './git-provider';
 import {
   parseBitbucketPush,
@@ -27,6 +28,22 @@ async function getJson<T>(url: string, headers: Record<string, string>): Promise
     throw new GitProviderError(`${new URL(url).host} answered ${res.status}`, res.status);
   }
   return (await res.json()) as T;
+}
+
+async function postJson<T>(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown
+): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    throw new GitProviderError(`${new URL(url).host} answered ${res.status}`, res.status);
+  }
+  return (await res.json().catch(() => ({}))) as T;
 }
 
 async function getText(url: string, headers: Record<string, string>): Promise<string | null> {
@@ -62,6 +79,8 @@ abstract class BaseProvider implements GitProvider {
   abstract cloneCredential(): CloneCredential;
   abstract verifyWebhook(rawBody: string, headers: WebhookHeaders): boolean;
   abstract parsePush(headers: WebhookHeaders, body: unknown): PushEvent | null;
+  abstract ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration>;
+  abstract hasWebhook(repo: string, url: string): Promise<boolean | null>;
 }
 
 /** github.com with a token, or GitHub Enterprise Server. */
@@ -151,6 +170,29 @@ export class GithubTokenProvider extends BaseProvider {
     if (headers['x-github-event'] && headers['x-github-event'] !== 'push') return null;
     return parseGithubStylePush(body);
   }
+
+  async hasWebhook(repo: string, url: string): Promise<boolean | null> {
+    try {
+      const hooks = await getJson<any[]>(
+        `${this.api}/repos/${encodePath(repo)}/hooks?per_page=100`,
+        this.headers
+      );
+      return hooks.some((h) => h.config?.url === url);
+    } catch {
+      return null;
+    }
+  }
+
+  async ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration> {
+    if (await this.hasWebhook(repo, url)) return 'exists';
+    await postJson(`${this.api}/repos/${encodePath(repo)}/hooks`, this.headers, {
+      name: 'web',
+      active: true,
+      events: ['push'],
+      config: { url, content_type: 'json', secret, insecure_ssl: '0' }
+    });
+    return 'registered';
+  }
 }
 
 export class GitlabProvider extends BaseProvider {
@@ -234,6 +276,29 @@ export class GitlabProvider extends BaseProvider {
     const event = headers['x-gitlab-event'];
     if (event && event !== 'Push Hook') return null;
     return parseGitlabPush(body);
+  }
+
+  async hasWebhook(repo: string, url: string): Promise<boolean | null> {
+    try {
+      const hooks = await getJson<any[]>(
+        `${this.api}/projects/${encodeURIComponent(repo)}/hooks?per_page=100`,
+        this.headers
+      );
+      return hooks.some((h) => h.url === url);
+    } catch {
+      return null;
+    }
+  }
+
+  async ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration> {
+    if (await this.hasWebhook(repo, url)) return 'exists';
+    await postJson(`${this.api}/projects/${encodeURIComponent(repo)}/hooks`, this.headers, {
+      url,
+      token: secret,
+      push_events: true,
+      enable_ssl_verification: true
+    });
+    return 'registered';
   }
 }
 
@@ -328,6 +393,29 @@ export class GiteaProvider extends BaseProvider {
     const event = headers['x-gitea-event'] ?? headers['x-forgejo-event'] ?? headers['x-gogs-event'];
     if (event && event !== 'push') return null;
     return parseGithubStylePush(body);
+  }
+
+  async hasWebhook(repo: string, url: string): Promise<boolean | null> {
+    try {
+      const hooks = await getJson<any[]>(
+        `${this.api}/repos/${encodePath(repo)}/hooks?limit=100`,
+        this.headers
+      );
+      return hooks.some((h) => h.config?.url === url);
+    } catch {
+      return null;
+    }
+  }
+
+  async ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration> {
+    if (await this.hasWebhook(repo, url)) return 'exists';
+    await postJson(`${this.api}/repos/${encodePath(repo)}/hooks`, this.headers, {
+      type: 'gitea',
+      active: true,
+      events: ['push'],
+      config: { url, content_type: 'json', secret }
+    });
+    return 'registered';
   }
 }
 
@@ -425,6 +513,30 @@ export class BitbucketProvider extends BaseProvider {
     if (event && event !== 'repo:push') return null;
     return parseBitbucketPush(body);
   }
+
+  async hasWebhook(repo: string, url: string): Promise<boolean | null> {
+    try {
+      const data = await getJson<any>(
+        `${this.api}/repositories/${encodePath(repo)}/hooks?pagelen=100`,
+        this.headers
+      );
+      return (data.values ?? []).some((h: any) => h.url === url);
+    } catch {
+      return null;
+    }
+  }
+
+  async ensureWebhook(repo: string, url: string, secret: string): Promise<WebhookRegistration> {
+    if (await this.hasWebhook(repo, url)) return 'exists';
+    await postJson(`${this.api}/repositories/${encodePath(repo)}/hooks`, this.headers, {
+      description: 'Orchard auto-deploy',
+      url,
+      active: true,
+      secret,
+      events: ['repo:push']
+    });
+    return 'registered';
+  }
 }
 
 /** Any https git host with a username and token. No listing; pastes only. */
@@ -476,6 +588,14 @@ export class GenericProvider extends BaseProvider {
 
   parsePush(_headers: WebhookHeaders, body: unknown): PushEvent | null {
     return parseGithubStylePush(body) ?? parseGitlabPush(body) ?? parseBitbucketPush(body);
+  }
+
+  async hasWebhook(): Promise<boolean | null> {
+    return null;
+  }
+
+  async ensureWebhook(): Promise<WebhookRegistration> {
+    return 'unsupported';
   }
 }
 

@@ -481,6 +481,59 @@ export class GitConnectionsService {
     return encodeCloneCredential((await this.providerForRow(dep.gitConnection)).cloneCredential());
   }
 
+  webhookUrlFor(connectionId: string): string {
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    return `${base}/apiv1/git/webhooks/${connectionId}`;
+  }
+
+  /**
+   * Put the connection's push hook on the repository, with the forge's own
+   * API and the connection's secret, so turning auto-deploy on is one click
+   * rather than a copy-paste. Reports rather than throws: a forge that will
+   * not take the hook still leaves the manual route open.
+   */
+  async registerWebhook(
+    connectionId: string,
+    repoUrl: string
+  ): Promise<{ status: 'registered' | 'exists' | 'unsupported' | 'failed'; error?: string }> {
+    const row = await this.prisma.gitConnection.findUnique({ where: { id: connectionId } });
+    if (!row) return { status: 'failed', error: 'connection is gone' };
+    const repoPath = this.repoPathFor(row.baseUrl, repoUrl);
+    if (!repoPath) return { status: 'failed', error: 'repository is not on this provider' };
+    try {
+      const provider = await this.providerForRow(row);
+      const status = await provider.ensureWebhook(
+        repoPath,
+        this.webhookUrlFor(row.id),
+        row.webhookSecret
+      );
+      return { status };
+    } catch (e) {
+      return { status: 'failed', error: (e as Error).message };
+    }
+  }
+
+  async webhookPresent(connectionId: string, repoUrl: string): Promise<boolean | null> {
+    const row = await this.prisma.gitConnection.findUnique({ where: { id: connectionId } });
+    if (!row) return null;
+    const repoPath = this.repoPathFor(row.baseUrl, repoUrl);
+    if (!repoPath) return null;
+    try {
+      const provider = await this.providerForRow(row);
+      return provider.hasWebhook(repoPath, this.webhookUrlFor(row.id));
+    } catch {
+      return null;
+    }
+  }
+
+  /** The apps built from a connection, for the owner to see before removing it. */
+  async dependents(connectionId: string) {
+    return this.prisma.deployment.findMany({
+      where: { gitConnectionId: connectionId },
+      select: { id: true, name: true, project: { select: { name: true, organizationId: true } } }
+    });
+  }
+
   /** Resolve a connection an org member is allowed to deploy from. */
   async forDeploy(userId: string, connectionId: string) {
     return this.rowOrThrow(userId, connectionId);
