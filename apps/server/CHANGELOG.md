@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.47.1](https://github.com/hackclub/orchard/compare/server/v2.47.0...server/v2.47.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* loading panel for metrics + HTTP tracing ([#95](https://github.com/hackclub/orchard/issues/95)) ([b2c7203](https://github.com/hackclub/orchard/commit/b2c72030c3b9bb62b17ff57d12134d860ddbbd57))
+
 ## [2.47.0](https://github.com/hackclub/orchard/compare/server/v2.46.1...server/v2.47.0) (2026-09-22)
 
 

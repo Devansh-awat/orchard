@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.41.0](https://github.com/hackclub/orchard/compare/frontend/v1.40.0...frontend/v1.41.0) (2026-09-25)
+
+
+### Features
+
+* add role select for new project members ([#96](https://github.com/hackclub/orchard/issues/96)) ([560c579](https://github.com/hackclub/orchard/commit/560c579b28aced0da67140544fcdab1287f0683a))
+* generate default avatars with blobatar ([c907888](https://github.com/hackclub/orchard/commit/c9078880ea9fcb864cb421d85b28517bfffe64ce))
+* make blobatars react to state, and follow the cursor on the settings hero ([5bd8055](https://github.com/hackclub/orchard/commit/5bd805572883071b4f38469b0d19cfc80d7d373c))
+
+
+### Bug Fixes
+
+* loading panel for metrics + HTTP tracing ([#95](https://github.com/hackclub/orchard/issues/95)) ([b2c7203](https://github.com/hackclub/orchard/commit/b2c72030c3b9bb62b17ff57d12134d860ddbbd57))
+
 ## [1.40.0](https://github.com/hackclub/orchard/compare/frontend/v1.39.1...frontend/v1.40.0) (2026-09-22)
 
 
