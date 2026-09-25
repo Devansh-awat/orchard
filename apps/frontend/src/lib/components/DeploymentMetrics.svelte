@@ -221,20 +221,15 @@
 
 	let series = $state<Record<MetricId, Series>>({ cpu: [], mem: [], rx: [], tx: [] } as any);
 	let initialLoading = $state(false);
+	let loaded = $state(false);
 	let fetchError = $state<string | null>(null);
 	let fetchSeq = 0;
-	let inFlight = false;
-
-	function hasData(): boolean {
-		return (
-			series.cpu.length > 0 || series.mem.length > 0 || series.rx.length > 0 || series.tx.length > 0
-		);
-	}
+	const hasData = $derived(CARDS.some((card) => (series[card.id] ?? []).length > 0));
 
 	const demo = $derived($page.url.searchParams.has('demo'));
 
 	async function loadSeries(start: number, end: number, stepMs: number, id: string) {
-		if (!id || inFlight) return;
+		if (!id) return;
 		if (demo) {
 			if (source === 'http') {
 				const h = demoHttpMetrics(start, end, stepMs);
@@ -246,6 +241,7 @@
 					latmax: h.latencyMax
 				} as Record<MetricId, Series>;
 				fetchError = null;
+				loaded = true;
 				initialLoading = false;
 				return;
 			}
@@ -263,13 +259,12 @@
 				series = demoResourceSeries(start, end, stepMs);
 			}
 			fetchError = null;
+			loaded = true;
 			initialLoading = false;
 			return;
 		}
-		inFlight = true;
 		const seq = ++fetchSeq;
-		// Show the skeleton only on the first load — silently refresh after.
-		if (!hasData()) initialLoading = true;
+		if (!loaded) initialLoading = true;
 		try {
 			const groupParam = groupBy === 'pod' ? '&groupBy=pod' : '';
 			const url =
@@ -289,6 +284,7 @@
 					latmax: body?.latencyMax ?? []
 				} as Record<MetricId, Series>;
 				fetchError = null;
+				loaded = true;
 				return;
 			}
 			if (body?.groupBy === 'pod' && body?.grouped) {
@@ -304,19 +300,15 @@
 				series = body?.data ?? { cpu: [], mem: [], rx: [], tx: [] };
 			}
 			fetchError = null;
+			loaded = true;
 		} catch (err) {
 			if (seq !== fetchSeq) return;
 			fetchError = (err as Error).message;
 		} finally {
-			inFlight = false;
 			if (seq === fetchSeq) initialLoading = false;
 		}
 	}
 
-	// Fire whenever window/step/deployment changes. `untrack` prevents the
-	// series write inside loadSeries from re-triggering this effect. The
-	// `inFlight` guard above coalesces overlapping ticks (live mode) so we
-	// don't pile up requests when the network is slow.
 	$effect(() => {
 		const start = windowStart;
 		const end = windowEnd;
@@ -1183,11 +1175,31 @@
 		{@render customPanel()}
 	{/if}
 
-	<div class="mtx-board">
-		{#each CARDS as c (c.id)}
-			{@render boardCell(c)}
-		{/each}
-	</div>
+	{#if initialLoading && !loaded}
+		<div class="mtx-board" role="status" aria-label="Loading metrics">
+			{#each CARDS as c (c.id)}
+				<div class="mtx-cell mtx-loading-cell">
+					<span class="mtx-cell-label">{c.label}</span>
+					<div class="mtx-loading-chart"><div class="metrics-card-skeleton"></div></div>
+				</div>
+			{/each}
+		</div>
+	{:else if !hasData && !fetchError}
+		<div class="mtx-empty" role="status">
+			<p>No {source === 'http' ? 'HTTP' : 'resource'} metrics in this time range</p>
+			{#if source === 'http'}
+				<span>Traffic through the configured ingress will appear here soon.</span>
+			{/if}
+		</div>
+	{:else if !hasData && fetchError}
+		<div class="mtx-empty" role="alert">Failed to load metrics: {fetchError}</div>
+	{:else}
+		<div class="mtx-board">
+			{#each CARDS as c (c.id)}
+				{@render boardCell(c)}
+			{/each}
+		</div>
+	{/if}
 
 	<p class="metrics-foot">
 		{#if fetchError}
@@ -1195,7 +1207,9 @@
 		{:else if initialLoading}
 			Loading…
 		{:else}
-			Live from <code>victoriametrics.orchard-metrics</code> · cAdvisor
+			Live from <code>victoriametrics.orchard-metrics</code> · {source === 'http'
+				? 'HAProxy'
+				: 'cAdvisor'}
 		{/if}
 	</p>
 </div>
@@ -1547,6 +1561,23 @@
 		position: relative;
 		min-width: 0;
 		touch-action: none;
+	}
+	.mtx-loading-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.mtx-loading-chart {
+		height: 12rem;
+	}
+	.mtx-empty {
+		padding: 4rem 1rem;
+		text-align: center;
+		color: var(--text-muted);
+	}
+	.mtx-empty p {
+		color: var(--text-default);
+		margin-bottom: 0.5rem;
 	}
 	.metrics-card-skeleton {
 		width: 100%;

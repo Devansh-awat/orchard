@@ -214,7 +214,7 @@ export function explainExitCode(
 	code: number | null | undefined,
 	reason?: string | null
 ): ExplainedExit | null {
-	if (/oomkilled/i.test(reason ?? '') || code === 137)
+	if (/oomkilled/i.test(reason ?? ''))
 		return { short: 'Killed for going over its memory limit', severity: 'critical' };
 
 	if (code == null) {

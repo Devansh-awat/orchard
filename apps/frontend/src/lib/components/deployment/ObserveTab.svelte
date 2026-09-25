@@ -414,8 +414,11 @@
 		)
 	);
 
+	let eventPods = $state<{ name?: string; events?: PodEvent[] }[]>([]);
+	let eventsLoading = $state(false);
+	let eventsError = $state<string | null>(null);
 	const podEvents = $derived(
-		((deployment?.pods ?? []) as { name?: string; events?: PodEvent[] }[])
+		(demo ? ((deployment?.pods ?? []) as { name?: string; events?: PodEvent[] }[]) : eventPods)
 			.flatMap((pod) =>
 				(pod.events ?? []).map((event) => ({ ...event, pod: pod.name ?? 'unknown' }))
 			)
@@ -425,6 +428,29 @@
 				return bt - at;
 			})
 	);
+
+	$effect(() => {
+		if (activeTab !== 'events' || demo || !deployment?.id) return;
+		const controller = new AbortController();
+		eventsLoading = true;
+		eventsError = null;
+		apiFetch(`/apiv1/deployments/${deployment.id}/pods-live`, { signal: controller.signal })
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then((data) => {
+				if (!controller.signal.aborted) eventPods = data.pods ?? [];
+			})
+			.catch((error) => {
+				if (!controller.signal.aborted)
+					eventsError = error instanceof Error ? error.message : 'Failed to load';
+			})
+			.finally(() => {
+				if (!controller.signal.aborted) eventsLoading = false;
+			});
+		return () => controller.abort();
+	});
 
 	$effect(() => {
 		if (!visibleTabs.includes(activeTab)) activeTab = 'metrics';
@@ -1449,7 +1475,13 @@
 				</div>
 			{/if}
 		{:else if activeTab === 'events'}
-			{#if podEvents.length === 0}
+			{#if eventsLoading}
+				<div class="observe-empty-state"><p class="observe-empty-desc">Loading events...</p></div>
+			{:else if eventsError}
+				<div class="observe-empty-state">
+					<p class="observe-empty-desc">Could not load events: {eventsError}</p>
+				</div>
+			{:else if podEvents.length === 0}
 				<div class="observe-empty-state">
 					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
 						<PartyPopper class="h-10 w-10" />

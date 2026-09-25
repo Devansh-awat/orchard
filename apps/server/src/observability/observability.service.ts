@@ -378,7 +378,7 @@ export class ObservabilityService {
     // gauges (no native histogram), so latency is avg + max, not p50/p95.
     const queries = {
       requestRate: `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
-      errorRate: `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`,
+      errorRate: `100 * (sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1e-9)`,
       latencyAvg: `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
       latencyMax: `max(haproxy_backend_max_response_time_seconds{${selector}}) * 1000`
     };
@@ -521,7 +521,7 @@ export class ObservabilityService {
           `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`
         ),
         this.queryInstant(
-          `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`
+          `100 * (sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1e-9)`
         ),
         this.queryInstant(`max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`)
       ]);

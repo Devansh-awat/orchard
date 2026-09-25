@@ -4903,6 +4903,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       createdAt: pod.createdAt,
       cpuUsage: pod.cpuUsage ?? null,
       memoryUsage: pod.memoryUsage ?? null,
+      events: pod.events ?? [],
       containers:
         pod.containers?.map((container) => ({
           name: container.name,
