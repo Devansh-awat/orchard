@@ -128,6 +128,12 @@
 		WebhookToken,
 		TerminalTabInfo
 	} from '$lib/types/deployment';
+	import type { Binding, BindingOption } from '$lib/components/deployment/bindings';
+	import {
+		createBinding,
+		fetchBindingOptions,
+		fetchBindings
+	} from '$lib/components/deployment/bindings-api';
 	import {
 		EnvironmentTab,
 		OverviewTab,
@@ -341,6 +347,42 @@
 	const headerCollapsed = $derived(tabs.value !== 'overview');
 
 	let deployment = $state<Deployment | null>(null);
+	let bindings = $state<Binding[]>([]);
+	let bindingOptions = $state<BindingOption[]>([]);
+	async function fetchBindingsForTab() {
+		try {
+			[bindings, bindingOptions] = await Promise.all([
+				fetchBindings(deploymentId),
+				fetchBindingOptions(deploymentId)
+			]);
+		} catch {
+			bindings = [];
+			bindingOptions = [];
+		}
+	}
+	async function connectResource(option: BindingOption): Promise<Binding | null> {
+		try {
+			const created = await createBinding(deploymentId, {
+				resourceType: option.resourceType,
+				resourceId: option.resourceId,
+				name: option.suggestedName,
+				envKey: null
+			});
+			await fetchBindingsForTab();
+			return created;
+		} catch (e) {
+			toasts.add({
+				title: 'Could not connect',
+				description: e instanceof Error ? e.message : '',
+				color: 'error'
+			});
+			return null;
+		}
+	}
+	$effect(() => {
+		void deploymentId;
+		fetchBindingsForTab();
+	});
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -1220,6 +1262,7 @@
 	 *  that previously called this function directly now just invalidate the cache
 	 *  and the $effect below applies the new data. */
 	function fetchDeployment() {
+		fetchBindingsForTab();
 		queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
 	}
 
@@ -3128,6 +3171,9 @@
 							bind:isEditing={isEditingEnv}
 							{savingEnv}
 							onSave={saveEnv}
+							{bindings}
+							resourceOptions={bindingOptions}
+							onConnect={connectResource}
 						/>
 					{:else if tab.id === 'network'}
 						<NetworkTab

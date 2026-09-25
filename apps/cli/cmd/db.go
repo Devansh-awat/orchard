@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/hackclub/orchard/cli/internal/termsession"
-	"github.com/coder/websocket"
 	"github.com/spf13/cobra"
 )
 
@@ -42,6 +42,7 @@ func dbCmd() *cobra.Command {
 		dbExtensionCmd(),
 		dbSettingsCmd(),
 		dbPublicCmd(),
+		dbRotatePasswordCmd(),
 		dbResourcesCmd(),
 		dbStorageCmd(),
 	)

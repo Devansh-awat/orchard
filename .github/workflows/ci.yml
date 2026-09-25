@@ -350,6 +350,12 @@ jobs:
       # alert states, and the incident reconstruction from pod transitions.
       - name: Status page tests
         run: pnpm --filter server test:status-page
+      # A bound resource is a live reference, never a snapshot: a value that
+      # reads a database's credentials must resolve at inject time, refuse to
+      # ship when the binding is gone, and follow the database when its host
+      # or password changes. Pins the resolver and the re-apply fan-out.
+      - name: Resource binding tests
+        run: pnpm --filter server test:resource-bindings
 
   e2e:
     needs: changes

@@ -5,6 +5,7 @@ import { OrgEventsService } from '../events/org-events.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { referencedSharedKeys, resolveEnvVars, EnvVar } from '../env/env-resolver';
+import { ResourceBindingsService } from './resource-bindings.service';
 
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Generous ceilings — unreachable in normal use, but bound what a single env can
@@ -30,7 +31,8 @@ export class EnvironmentSharedVarsService {
     private readonly audit: AuditService,
     private readonly orgEvents: OrgEventsService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly crypto: SecretCryptoService
+    private readonly crypto: SecretCryptoService,
+    private readonly resourceBindings: ResourceBindingsService
   ) {}
 
   /**
@@ -57,8 +59,9 @@ export class EnvironmentSharedVarsService {
         // Decrypt secret values before resolution so plaintext flows to k8s.
         // `before`/`after` are already plaintext (see updateSharedVars).
         const own = dep.envVars.map((v) => this.crypto.maybeDecrypt(v));
-        const resolvedBefore = resolveEnvVars(own, before).resolved;
-        const resolvedAfter = resolveEnvVars(own, after).resolved;
+        const resources = await this.resourceBindings.valuesFor(dep.id);
+        const resolvedBefore = resolveEnvVars(own, before, resources).resolved;
+        const resolvedAfter = resolveEnvVars(own, after, resources).resolved;
         if (JSON.stringify(resolvedBefore) === JSON.stringify(resolvedAfter)) return;
         const exists = await this.k8sWorkload
           .getKubernetesDeployment(dep.name, dep.namespace)

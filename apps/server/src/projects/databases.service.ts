@@ -7,6 +7,9 @@ import {
   Logger
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { ModuleRef } from '@nestjs/core';
+import { DeploymentsService } from './deployments.service';
+import { ResourceBindingsService } from './resource-bindings.service';
 import { Prisma } from '@prisma/client';
 import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Client } from 'pg';
@@ -82,7 +85,9 @@ export class DatabasesService {
     private readonly nodesService: NodesService,
     private readonly backupSync: BackupSyncService,
     private readonly notifications: NotificationsService,
-    private readonly instanceConfig: InstanceConfigService
+    private readonly instanceConfig: InstanceConfigService,
+    private readonly moduleRef: ModuleRef,
+    private readonly bindings: ResourceBindingsService
   ) {}
 
   // Resolve a database cluster's placement: org hostname allow/deny + assigned
@@ -1284,6 +1289,68 @@ export class DatabasesService {
     );
   }
 
+  /**
+   * Every app bound to this database reads its credentials at inject time,
+   * so after a host or password change the cluster env must be pushed
+   * again. Failures are logged, not thrown: the database change itself has
+   * already happened and is the thing the caller asked for.
+   */
+  private async followCredentialChange(databaseId: string, reason: string): Promise<string[]> {
+    try {
+      const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
+      const names = await deployments.reapplyEnvForResource('database', databaseId);
+      if (names.length > 0) {
+        console.log(`[DB] ${reason}: re-applied env to ${names.join(', ')}`);
+      }
+      return names;
+    } catch (e: any) {
+      console.error(`[DB] ${reason}: re-applying env to bound apps failed: ${e?.message}`);
+      return [];
+    }
+  }
+
+  async rotateDatabasePassword(databaseId: string, clerkId: string, userData?: any) {
+    const { user, database } = await this.access.assertDatabaseEditor(
+      databaseId,
+      clerkId,
+      userData
+    );
+    if (database.status !== 'ready' && database.status !== 'running') {
+      throw new BadRequestException('The database has to be running to rotate its password');
+    }
+    const password = this.generatePassword();
+    if (database.mode === 'cnpg') {
+      if (!database.namespace || !database.clusterName) {
+        throw new BadRequestException('Database is missing cluster metadata');
+      }
+      await this.k8sCnpg.setCnpgAppPassword(
+        database.namespace,
+        database.clusterName,
+        database.dbName,
+        database.dbUser,
+        password
+      );
+    } else {
+      await this.k8sCnpg.setSharedRolePassword(database.dbUser, password);
+    }
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { dbPassword: password }
+    });
+    const reapplied = await this.followCredentialChange(database.id, 'password rotation');
+    void this.audit.log({
+      action: 'database.password.rotated',
+      actorUserId: user.id,
+      organizationId: database.project.organizationId,
+      projectId: database.project.id,
+      targetType: 'database',
+      targetId: database.id,
+      targetLabel: database.name,
+      metadata: { reapplied: reapplied.join(',') || null }
+    });
+    return { success: true, reapplied };
+  }
+
   async deleteDatabase(
     databaseId: string,
     clerkId: string,
@@ -1305,6 +1372,13 @@ export class DatabasesService {
     if (!database) throw new NotFoundException('Database not found');
 
     await this.authz.requireProjectEdit(database.project.id, user.id, 'delete databases');
+
+    const bound = await this.bindings.boundDeployments('database', database.id);
+    if (bound.length > 0) {
+      throw new BadRequestException(
+        `${database.name} is still bound to ${bound.map((d) => d.name).join(', ')}. Unbind it there first.`
+      );
+    }
 
     if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
       try {
@@ -1966,6 +2040,7 @@ export class DatabasesService {
             r2ProxySecret: restoreR2.r2ProxySecret ?? null
           }
         });
+        await this.followCredentialChange(database.id, 'restore');
 
         try {
           await this.k8sCnpg.deleteCnpgCluster(database.namespace!, oldClusterName);

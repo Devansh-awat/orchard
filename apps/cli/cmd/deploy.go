@@ -43,6 +43,7 @@ func deployCmd() *cobra.Command {
 		deployPodsCmd(),
 		deployMetricsCmd(),
 		deployEnvCmd(),
+		deployBindingsCmd(),
 		deployResourcesCmd(),
 		deployVolumesCmd(),
 		deployStrategyCmd(),

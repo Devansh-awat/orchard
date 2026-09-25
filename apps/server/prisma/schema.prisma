@@ -745,6 +745,7 @@ model Deployment {
   jobSteps          JobStep[]
   crashState        DeploymentCrashState?
   releases          Release[]
+  resourceBindings  ResourceBinding[]
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -931,6 +932,26 @@ model DeploymentWebhookToken {
   @@index([deploymentId], map: "idx_webhook_tokens_deployment")
   @@index([originatingApiTokenId], map: "idx_webhook_tokens_originating_api_token")
   @@map("deployment_webhook_tokens")
+}
+
+// A live link from a deployment to a resource it reads credentials off.
+// Env values reference it as ${{resource.<name>.<field>}}; the value is
+// composed at inject time, so nothing here is a snapshot of a password.
+model ResourceBinding {
+  id           String   @id @default(uuid()) @db.Uuid
+  deploymentId String   @map("deployment_id") @db.Uuid
+  resourceType String   @map("resource_type") @db.VarChar(20)
+  resourceId   String   @map("resource_id") @db.Uuid
+  name         String   @db.VarChar(32)
+  createdById  String?  @map("created_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, name])
+  @@unique([deploymentId, resourceType, resourceId])
+  @@index([resourceType, resourceId], map: "idx_resource_bindings_resource")
+  @@map("resource_bindings")
 }
 
 model DeploymentEnvVar {

@@ -36,7 +36,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { BuildQueueService, QueueSnapshot } from './build-queue.service';
-import { resolveEnvVars, EnvVar } from '../env/env-resolver';
+import {
+  resolveEnvVars,
+  EnvVar,
+  UnresolvedResourceRefError,
+  type ResourceValues
+} from '../env/env-resolver';
+import { ResourceBindingsService } from './resource-bindings.service';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
 import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
@@ -143,6 +149,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly buildQueue: BuildQueueService,
     private readonly storage: StorageService,
     private readonly applyQueue: ApplyQueueService,
+    private readonly resourceBindings: ResourceBindingsService,
     private readonly applyExecutor: ApplyExecutorService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly releases: ReleasesService,
@@ -312,12 +319,63 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deployment.id,
       deployment.environmentId
     );
-    const { resolved } = resolveEnvVars(envVars, sharedVars);
+    const resources = await this.resourceBindings.valuesFor(deployment.id);
+    const { resolved } = resolveEnvVars(envVars, sharedVars, resources);
     await this.k8sWorkload.updateDeploymentEnv({
       namespace: deployment.namespace,
       deploymentName: deployment.name,
       env: resolved
     });
+  }
+
+  /**
+   * Push a deployment's env to the cluster again without any row changing.
+   * Used when something an env value points at moved: a restored database
+   * on a new host, a rotated password.
+   */
+  async reapplyEnv(deploymentId: string): Promise<void> {
+    if (this.applyPipelineEnabled()) {
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.updateEnv:${deploymentId}`,
+        opType: 'deployment.updateEnv',
+        deploymentId
+      });
+      return;
+    }
+    await this.applyEnvToCluster(deploymentId);
+  }
+
+  async reapplyEnvForResource(
+    resourceType: 'database' | 'deployment',
+    resourceId: string
+  ): Promise<string[]> {
+    const bound = await this.resourceBindings.boundDeployments(resourceType, resourceId);
+    const results = await Promise.allSettled(bound.map((d) => this.reapplyEnv(d.id)));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        this.logger.warn(
+          `[Bindings] re-apply env to ${bound[i].name} failed: ${(r.reason as Error)?.message ?? r.reason}`
+        );
+      }
+    });
+    return bound.map((d) => d.name);
+  }
+
+  async getDeploymentEnvKeys(deploymentId: string): Promise<{ key: string; secret: boolean }[]> {
+    return this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId },
+      select: { key: true, secret: true },
+      orderBy: { key: 'asc' }
+    });
+  }
+
+  private resolveOrReject(env: EnvVar[], shared: EnvVar[], resources: ResourceValues) {
+    try {
+      return resolveEnvVars(env, shared, resources);
+    } catch (e) {
+      if (e instanceof UnresolvedResourceRefError) throw new BadRequestException(e.message);
+      throw e;
+    }
   }
 
   onModuleDestroy() {
@@ -2112,6 +2170,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       secret: e.secret
     }));
 
+    const resources = await this.resourceBindings.valuesFor(deployment.id);
+    this.resolveOrReject(envList, [], resources);
+
     if (!this.applyPipelineEnabled()) {
       // Only push to K8s if the deployment actually exists in the cluster.
       // If the build hasn't succeeded yet, just persist to DB — the env vars
@@ -2128,7 +2189,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deployment.id,
           deployment.environmentId
         );
-        const { resolved } = resolveEnvVars(envList, sharedVars);
+        const { resolved } = this.resolveOrReject(envList, sharedVars, resources);
         await this.k8sWorkload.updateDeploymentEnv({
           namespace: deployment.namespace,
           deploymentName: deployment.name,
@@ -2191,6 +2252,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       });
     });
+
+    void this.resourceBindings.pruneUnreferenced(deployment.id).catch(() => undefined);
 
     if (this.applyPipelineEnabled()) {
       await this.applyQueue.enqueue({
@@ -3657,6 +3720,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
     });
+    void this.reapplyEnvForResource('deployment', deploymentId).catch(() => undefined);
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -4401,7 +4465,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const { resolved: env } = resolveEnvVars(
       deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
-      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId)
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+      await this.resourceBindings.valuesFor(deployment.id)
     );
 
     const volumes = (deployment.volumes || []).map((vol) => ({
@@ -4810,7 +4875,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<{ resolved: EnvVar[]; errors: { key: string; missingRef: string }[] }> {
     const own = await this.readOwnEnvVars(deploymentId);
     const shared = await this.loadSharedVarsForDeployment(deploymentId, environmentId);
-    return resolveEnvVars(own, shared);
+    const resources = await this.resourceBindings.valuesFor(deploymentId);
+    return resolveEnvVars(own, shared, resources);
   }
 
   /**
@@ -5767,7 +5833,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Injected form resolves shared references against the environment's shared
     // vars (secrets — own or inherited — route to a k8s Secret downstream).
     const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
-    const { resolved: resolvedEnv } = resolveEnvVars(env, sharedVars);
+    const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
     const exposePublic = Boolean(data.exposePublic);
 
@@ -6271,7 +6337,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // Injected form resolves shared references against the environment's shared
     // vars (secrets — own or inherited — route to a k8s Secret downstream).
     const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
-    const { resolved: resolvedEnv } = resolveEnvVars(env, sharedVars);
+    const { resolved: resolvedEnv } = this.resolveOrReject(env, sharedVars, {});
 
     const exposePublic = Boolean(data.exposePublic);
 
@@ -6844,7 +6910,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const storedEnv = await this.readOwnEnvVars(deployment.id);
     const sharedVars = await this.loadSharedVarsForDeployment('', deployment.environmentId);
-    const { resolved: resolvedEnv } = resolveEnvVars(storedEnv, sharedVars);
+    const { resolved: resolvedEnv } = resolveEnvVars(
+      storedEnv,
+      sharedVars,
+      await this.resourceBindings.valuesFor(deployment.id)
+    );
 
     const volumes = (deployment.volumes ?? []).map((vol) => ({
       name: vol.name,
@@ -8199,7 +8269,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const { resolved: env } = resolveEnvVars(
       deployment.envVars.map((ev) => this.crypto.maybeDecrypt(ev)),
-      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId)
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+      await this.resourceBindings.valuesFor(deployment.id)
     );
 
     const volumes = (deployment.volumes || []).map((vol) => ({

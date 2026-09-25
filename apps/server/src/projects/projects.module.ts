@@ -20,6 +20,8 @@ import { BackupSyncService } from './backup-sync.service';
 import { ImportSettleService } from './import-settle.service';
 import { DeploymentsService } from './deployments.service';
 import { ReleasesService } from './releases.service';
+import { ResourceBindingsService } from './resource-bindings.service';
+import { ResourceBindingsController } from './resource-bindings.controller';
 import { BlueGreenSettleService } from './blue-green-settle.service';
 import { ProjectOrgTransferService } from './project-org-transfer.service';
 import { BuildQueueService } from './build-queue.service';
@@ -59,6 +61,7 @@ import { ProjectTransfersController } from './project-transfers.controller';
     BackupSyncService,
     ImportSettleService,
     DeploymentsService,
+    ResourceBindingsService,
     ReleasesService,
     BlueGreenSettleService,
     ProjectOrgTransferService,
@@ -69,6 +72,7 @@ import { ProjectTransfersController } from './project-transfers.controller';
   controllers: [
     ProjectsController,
     DeploymentsController,
+    ResourceBindingsController,
     IngressesController,
     DatabasesController,
     EnvironmentsController,

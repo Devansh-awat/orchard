@@ -1,21 +1,96 @@
 <script lang="ts">
-	import { Plus, Loader2, Lock, LockOpen } from 'lucide-svelte';
+	import {
+		Plus,
+		Loader2,
+		Lock,
+		LockOpen,
+		Link2,
+		ChevronDown,
+		Database,
+		Boxes
+	} from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from '$lib/utils/transitions';
-	import { SectionCard } from '$lib/components/ui';
+	import { Menu, MenuItem, SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVarsKeepingSecrets } from './deployment-helpers';
+	import {
+		PRIMARY_FIELD,
+		fieldLabel,
+		isResourceRef,
+		refFor,
+		refLabel,
+		refParts,
+		suggestedKey,
+		type Binding,
+		type BindingOption
+	} from './bindings';
 
 	let {
 		envVars = $bindable<Array<{ key: string; value: string; secret?: boolean }>>(),
 		isEditing = $bindable(false),
 		savingEnv,
-		onSave
+		onSave,
+		bindings = [],
+		resourceOptions = [],
+		onConnect
 	}: {
 		envVars: Array<{ key: string; value: string; secret?: boolean }>;
 		isEditing?: boolean;
 		savingEnv: boolean;
 		onSave: () => void;
+		bindings?: Binding[];
+		resourceOptions?: BindingOption[];
+		onConnect?: (option: BindingOption) => Promise<Binding | null>;
 	} = $props();
+
+	type Pick = { kind: 'bound'; binding: Binding } | { kind: 'option'; option: BindingOption };
+
+	const picks = $derived<Pick[]>([
+		...bindings.map((binding) => ({ kind: 'bound' as const, binding })),
+		...resourceOptions.map((option) => ({ kind: 'option' as const, option }))
+	]);
+	const databasePicks = $derived(picks.filter((p) => pickType(p) === 'database'));
+	const appPicks = $derived(picks.filter((p) => pickType(p) === 'deployment'));
+	let connecting = $state(false);
+
+	function pickType(p: Pick) {
+		return p.kind === 'bound' ? p.binding.resourceType : p.option.resourceType;
+	}
+	function pickName(p: Pick) {
+		return p.kind === 'bound' ? (p.binding.resource?.name ?? p.binding.name) : p.option.name;
+	}
+	function pickEndpoint(p: Pick) {
+		return p.kind === 'bound' ? p.binding.endpoint : p.option.endpoint;
+	}
+
+	async function resolvePick(p: Pick): Promise<Binding | null> {
+		if (p.kind === 'bound') return p.binding;
+		if (!onConnect) return null;
+		connecting = true;
+		try {
+			return await onConnect(p.option);
+		} finally {
+			connecting = false;
+		}
+	}
+
+	async function useResource(index: number, p: Pick) {
+		const binding = await resolvePick(p);
+		if (!binding) return;
+		const value = refFor(binding.name, PRIMARY_FIELD[binding.resourceType]);
+		const taken = envVars.map((e) => e.key.trim()).filter(Boolean);
+		isEditing = true;
+		envVars = envVars.map((e, i) =>
+			i === index
+				? {
+						...e,
+						key: e.key.trim() || suggestedKey(binding, PRIMARY_FIELD[binding.resourceType], taken),
+						value,
+						secret: false
+					}
+				: e
+		);
+	}
 
 	function toggleSecret(index: number) {
 		isEditing = true;
@@ -57,6 +132,11 @@
 		envViewMode = mode;
 	}
 
+	function setValue(index: number, value: string) {
+		isEditing = true;
+		envVars = envVars.map((e, i) => (i === index ? { ...e, value, secret: false } : e));
+	}
+
 	function handleSave() {
 		if (envViewMode === 'raw') {
 			const parsed = rawToEnvVarsKeepingSecrets(envRawText, envVars);
@@ -66,6 +146,33 @@
 		onSave();
 	}
 </script>
+
+{#snippet resourceMenu(onPick: (p: Pick) => void)}
+	{#if databasePicks.length > 0}
+		<div class="env-menu-label">Databases</div>
+		{#each databasePicks as p (p.kind === 'bound' ? p.binding.id : p.option.resourceId)}
+			<MenuItem onclick={() => onPick(p)}>
+				<Database size={14} />
+				<span class="env-pick">
+					<span>{pickName(p)}</span>
+					{#if pickEndpoint(p)}<span class="env-pick-sub">{pickEndpoint(p)}</span>{/if}
+				</span>
+			</MenuItem>
+		{/each}
+	{/if}
+	{#if appPicks.length > 0}
+		<div class="env-menu-label">Apps on this project</div>
+		{#each appPicks as p (p.kind === 'bound' ? p.binding.id : p.option.resourceId)}
+			<MenuItem onclick={() => onPick(p)}>
+				<Boxes size={14} />
+				<span class="env-pick">
+					<span>{pickName(p)}</span>
+					<span class="env-pick-sub">{pickEndpoint(p) ?? 'No port exposed yet'}</span>
+				</span>
+			</MenuItem>
+		{/each}
+	{/if}
+{/snippet}
 
 <SectionCard title="Environment variables">
 	{#snippet actions()}
@@ -99,6 +206,11 @@
 				{@const isRevealed = revealedIndices.has(index)}
 				{@const hasKey = env.key.trim().length > 0}
 				{@const withheld = Boolean(env.secret) && env.value === ''}
+				{@const isRef = isResourceRef(env.value)}
+				{@const refText = isRef ? refLabel(env.value, bindings) : null}
+				{@const bound = isRef
+					? bindings.find((b) => b.name === refParts(env.value)?.binding)
+					: null}
 				<div class="env-row" transition:slide={{ duration: 150 }}>
 					<div class="env-row-inner">
 						<div class="env-key-col">
@@ -111,16 +223,50 @@
 							/>
 						</div>
 						<div class="env-val-col">
-							<input
-								type={isRevealed && !withheld ? 'text' : 'password'}
-								bind:value={env.value}
-								placeholder={withheld ? 'Unchanged' : hasKey ? 'value' : ''}
-								class="env-val-input"
-								onfocus={() => (isEditing = true)}
-							/>
+							{#if isRef}
+								<Menu placement="bottom-start">
+									{#snippet trigger(props)}
+										<button {...props} type="button" class="env-token" title={env.value}>
+											<Link2 size={13} />
+											<span class="env-token-text">{refText}</span>
+											<ChevronDown size={12} class="env-token-chevron" />
+										</button>
+									{/snippet}
+									{#if bound}
+										<div class="env-menu-label">Read from {bound.resource?.name ?? bound.name}</div>
+										{#each bound.fields as field (field)}
+											<MenuItem onclick={() => setValue(index, refFor(bound.name, field))}>
+												<span>{fieldLabel(field)}</span>
+											</MenuItem>
+										{/each}
+									{/if}
+									<MenuItem onclick={() => setValue(index, '')}>
+										<span>Type a value instead</span>
+									</MenuItem>
+								</Menu>
+							{:else}
+								<input
+									type={isRevealed && !withheld ? 'text' : 'password'}
+									bind:value={env.value}
+									placeholder={withheld ? 'Unchanged' : hasKey ? 'value' : ''}
+									class="env-val-input"
+									onfocus={() => (isEditing = true)}
+								/>
+								{#if env.value === '' && !withheld && picks.length > 0}
+									<Menu placement="bottom-end">
+										{#snippet trigger(props)}
+											<button {...props} type="button" class="env-use" disabled={connecting}>
+												<Link2 size={12} />
+												<span>Use a resource</span>
+											</button>
+										{/snippet}
+										{@render resourceMenu((p) => useResource(index, p))}
+									</Menu>
+								{/if}
+							{/if}
 						</div>
 						<div class="env-actions">
-							{#if !withheld}
+							{#if !withheld && !isRef}
 								<button
 									type="button"
 									onclick={() => toggleReveal(index)}
@@ -183,6 +329,70 @@
 </SectionCard>
 
 <style>
+	.env-val-col {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+	.env-token {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		max-width: 100%;
+		padding: 0.25rem 0.5rem 0.25rem 0.5rem;
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		color: var(--accent);
+		font-size: var(--text-caption);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.env-token:hover {
+		background: color-mix(in srgb, var(--accent) 16%, transparent);
+	}
+	.env-token-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.env-use {
+		position: absolute;
+		right: 0.5rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.125rem 0.5rem;
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: none;
+		color: var(--text-faint);
+		font-size: var(--text-caption);
+		cursor: pointer;
+	}
+	.env-use:hover {
+		background: var(--fill-quiet);
+		color: var(--text-muted);
+	}
+	.env-pick {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.env-pick-sub {
+		font-family: var(--font-mono);
+		font-size: var(--text-micro);
+		color: var(--text-faint);
+	}
+	.env-menu-label {
+		padding: 0.375rem 0.75rem 0.125rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
 	.env-action-secret {
 		color: var(--status-warning);
 		background: color-mix(in srgb, var(--status-warning) 12%, transparent);

@@ -1910,6 +1910,17 @@ export class DatabasesController {
     private readonly logCapture: PodLogCaptureService
   ) {}
 
+  @Post(':id/rotate-password')
+  async rotatePassword(@Param('id') id: string, @Request() req) {
+    return this.databases.rotateDatabasePassword(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl
+    });
+  }
+
   // The post-mortem safety net app deployments already had. A crashing Postgres
   // is replaced fast enough that by the time anyone opens the page the pod that
   // died is gone and its logs with it.

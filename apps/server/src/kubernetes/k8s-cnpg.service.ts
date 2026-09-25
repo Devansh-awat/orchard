@@ -411,6 +411,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     });
   }
 
+  async setSharedRolePassword(dbUser: string, password: string): Promise<void> {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(dbUser)) {
+      throw new BadRequestException('Invalid database user');
+    }
+    await this.execPsql(`ALTER ROLE "${dbUser}" WITH PASSWORD '${password.replace(/'/g, "''")}';`);
+  }
+
   async createPostgresDatabase(dbName: string, dbUser: string, dbPassword: string): Promise<void> {
     // Defense-in-depth: identifiers are produced via formatSlug, but reject anything
     // that isn't a safe lowercase pg identifier before it ever lands in interpolated SQL.
@@ -2248,6 +2255,52 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       undefined,
       undefined,
       { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
+  }
+
+  /**
+   * Rotate the application role's password. The role is altered directly so
+   * the change is immediate, and the bootstrap secret is rewritten so the
+   * operator agrees with the database from then on.
+   */
+  async setCnpgAppPassword(
+    namespace: string,
+    clusterName: string,
+    dbName: string,
+    dbUser: string,
+    password: string
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const ns = namespace.trim();
+    const name = clusterName.trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(dbUser)) {
+      throw new BadRequestException('Invalid database user');
+    }
+    const escaped = password.replace(/'/g, "''");
+    const result = await this.runPsqlInCnpg(
+      ns,
+      name,
+      dbName,
+      `ALTER ROLE "${dbUser}" WITH PASSWORD '${escaped}'`
+    );
+    if (!result.success) {
+      throw new Error(`ALTER ROLE failed: ${result.stderr || result.stdout}`);
+    }
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    await this.upsertSecret(
+      coreApi,
+      ns,
+      this.buildAppSecretName(name),
+      'kubernetes.io/basic-auth',
+      {
+        username: Buffer.from(dbUser).toString('base64'),
+        password: Buffer.from(password).toString('base64')
+      },
+      {
+        'app.kubernetes.io/name': name,
+        'app.kubernetes.io/component': 'postgres',
+        'app.kubernetes.io/managed-by': 'orchard'
+      }
     );
   }
 

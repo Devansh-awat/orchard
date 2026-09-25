@@ -74,7 +74,8 @@
     "test:timeline": "tsx --test test/timeline.test.ts",
     "test:rollout-gate": "tsx --test test/rollout-gate.test.ts",
     "test:metric-alerts": "tsx --test test/metric-alerts.test.ts",
-    "test:status-page": "tsx --test test/status-page.test.ts"
+    "test:status-page": "tsx --test test/status-page.test.ts",
+    "test:resource-bindings": "tsx --test test/resource-binding-resolve.test.ts test/binding-reapply.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

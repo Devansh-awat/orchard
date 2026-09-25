@@ -115,12 +115,17 @@ var routeCoverage = map[string]string{
 	"GET /deployments/:id/github-deployments":                 "deploy github-deployments",
 
 	// deployments: config
-	"PUT /deployments/:id/env":           "deploy env set",
-	"PATCH /deployments/:id/resources":   "deploy resources set",
-	"PUT /deployments/:id/volumes":       "deploy volumes set",
-	"PATCH /deployments/:id/strategy":    "deploy strategy set",
-	"GET /deployments/:id/releases":      "deploy releases",
-	"PATCH /deployments/:id/pull-policy": "deploy pull-policy set",
+	"PUT /deployments/:id/env":                    "deploy env set",
+	"PATCH /deployments/:id/resources":            "deploy resources set",
+	"PUT /deployments/:id/volumes":                "deploy volumes set",
+	"PATCH /deployments/:id/strategy":             "deploy strategy set",
+	"GET /deployments/:id/releases":               "deploy releases",
+	"GET /deployments/:id/bindings":               "deploy bindings list",
+	"GET /deployments/:id/bindings/options":       "deploy bindings options",
+	"POST /deployments/:id/bindings":              "deploy bindings add",
+	"DELETE /deployments/:id/bindings/:bindingId": "deploy bindings remove",
+	"POST /databases/:id/rotate-password":         "db rotate-password",
+	"PATCH /deployments/:id/pull-policy":          "deploy pull-policy set",
 
 	// databases: post-mortem capture
 	"GET /databases/:id/killed-containers":               "db killed list",
