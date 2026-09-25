@@ -108,6 +108,9 @@ importers:
 
   apps/frontend:
     dependencies:
+      '@blobatar/svelte':
+        specifier: ^2.7.0
+        version: 2.7.0(blobatar@2.7.0)(svelte@5.57.0)
       '@codemirror/commands':
         specifier: ^6.10.4
         version: 6.10.4
@@ -775,6 +778,12 @@ packages:
   '@babel/types@7.29.7':
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
     engines: {node: '>=6.9.0'}
+
+  '@blobatar/svelte@2.7.0':
+    resolution: {integrity: sha512-Pf/RE5ICEUatbWloaBa4vGLRx+HRsKNN/eNCCHp1Nksgs3+3VuutpZBB61Y169fa0uMgAqPl72fAr+GcmnmtHA==}
+    peerDependencies:
+      blobatar: 2.x
+      svelte: '>=5'
 
   '@borewit/text-codec@0.1.1':
     resolution: {integrity: sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA==}
@@ -8768,6 +8777,11 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@blobatar/svelte@2.7.0(blobatar@2.7.0)(svelte@5.57.0)':
+    dependencies:
+      blobatar: 2.7.0
+      svelte: 5.57.0
 
   '@borewit/text-codec@0.1.1': {}
 

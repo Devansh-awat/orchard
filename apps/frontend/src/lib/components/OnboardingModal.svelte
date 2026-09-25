@@ -2,8 +2,7 @@
 	import { fly } from '$lib/utils/transitions';
 	import { user, showOnboarding, lastAcceptedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { Loader2, User, Github, PartyPopper, ArrowRight, Check, Link2 } from 'lucide-svelte';
-	import { Modal, Button, Field, Input } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { Avatar, Modal, Button, Field, Input } from '$lib/components/ui';
 
 	type Step = 'profile' | 'github' | 'welcome';
 
@@ -200,8 +199,10 @@
 								class="flex items-center gap-4 rounded-xl p-4"
 								style="background-color: var(--control-bg);"
 							>
-								<img
-									src={avatarUrl(currentUser)}
+								<Avatar
+									user={currentUser}
+									alive="always"
+									mood={saving ? 'thinking' : 'idle'}
 									alt="Profile"
 									class="h-14 w-14 rounded-2xl object-cover ring-2 ring-[var(--surface-border)]"
 								/>

@@ -273,6 +273,20 @@ html.motion-reduce [role='img'][aria-label] {
 	pointer-events: none;
 }
 
+/* Blobatar's idle loop is decoration, and the rule above only reaches half of
+   it: the breathe, bob, blink and glance are keyframes and are already clamped,
+   but the hover lift is a transform and the expression morph is a transition,
+   and neither is an animation. Below `full` a blobatar holds still and adopts
+   its pose instantly - which is what the library itself does under
+   `prefers-reduced-motion`. The pose is not dropped, only the travel to it: an
+   expression carries state, and state arrives rather than animates. */
+html.motion-reduce .mo-root,
+html.motion-reduce .mo-root:hover {
+	--mo-amp: 0;
+	transform: none;
+	transition: none;
+}
+
 /* Progress indicators keep running at every tier: a frozen spinner reads as a
    hung app, which is worse than the motion it saves. */
 html.motion-reduce .animate-spin,

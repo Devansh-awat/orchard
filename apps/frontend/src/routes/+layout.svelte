@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import 'blobatar/motion.css';
 	import { onMount } from 'svelte';
 	import { browser, dev } from '$app/environment';
 	import { goto, beforeNavigate } from '$app/navigation';

@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { Loader2, Camera, X, Pencil } from 'lucide-svelte';
 	import { Eye, EyeOff } from '@jis3r/icons';
-	import { motionStagger, iconAnimation } from '$lib/utils/motion.svelte';
-	import { Button, Field, Input, Modal } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { gaze } from '@blobatar/svelte/gaze';
+	import 'blobatar/gaze.css';
+	import { motionStagger, iconAnimation, decorativeMotion } from '$lib/utils/motion.svelte';
+	import { effectiveAnimation } from '$lib/stores';
+	import { Avatar, Button, Field, Input, Modal } from '$lib/components/ui';
 
 	interface UserData {
+		id?: string;
 		firstName?: string;
 		lastName?: string;
 		name?: string;
@@ -99,6 +102,26 @@
 			label: string;
 		}[]
 	);
+
+	// The one big blobatar the page is about, so it gets the layer that only
+	// earns its place at this size: on a 32px row the excursion is a fraction of
+	// a pixel, here it is 3% of a 72px face.
+	//
+	// Held in a const rather than called inline, because the expression would
+	// re-run whenever the state it reads changes and a rebuilt driver starts
+	// with the eyes back at centre - the face would snap home every time
+	// something near it moved.
+	const eyes = gaze({ travel: 3 });
+
+	// `rest` rather than `null`: both stop the tracking, but `null` hands the
+	// blobatar back to its idle glance, and idle motion is exactly what this
+	// tier asked us to stop. `rest` is a face deliberately not looking.
+	$effect(() => {
+		void $effectiveAnimation;
+		eyes.lookAt(decorativeMotion() ? 'pointer' : 'rest');
+	});
+
+	const busy = $derived(saving || uploadingAvatar || deletingAvatar);
 </script>
 
 <input
@@ -114,7 +137,14 @@
 	<div class="uh-top">
 		<div class="uh-avatar-wrap">
 			<div class="uh-avatar">
-				<img src={avatarUrl(user)} alt={displayName} class="uh-avatar-img" />
+				<Avatar
+					{user}
+					alive="always"
+					{eyes}
+					mood={busy ? 'thinking' : 'idle'}
+					alt={displayName}
+					class="uh-avatar-img"
+				/>
 			</div>
 			<div class="uh-avatar-actions">
 				<button
@@ -259,7 +289,9 @@
 		outline: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 		outline-offset: 3px;
 	}
-	.uh-avatar-img {
+	/* Handed to `<Avatar>` as a prop, so it reaches an element this component
+	   does not render and never picks up the scope hash. */
+	.uh-avatar :global(.uh-avatar-img) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

@@ -1,66 +1,79 @@
+<script lang="ts" module>
+	// Hoisted so the fallback is the same function every render. Inline, the
+	// `??` would mint a new one whenever any prop changed, and an attachment
+	// whose identity changes is torn down and re-run - which for the one caller
+	// that does pass a gaze would mean rebuilding the driver, with the eyes
+	// snapping back to centre each time.
+	const noAttachment = () => {};
+</script>
+
 <script lang="ts">
-	// A user's picture, at a size. There is always something to show: an
-	// uploaded image if there is one, otherwise the blobatar `avatarUrl` derives
-	// from the user's id. The initial sits underneath as a base layer purely so
-	// a failed image request degrades to a letter instead of a hole.
+	// A user's picture. There is always something to show: their upload if they
+	// have one, otherwise the blobatar drawn from their id.
+	//
+	// It renders exactly one element and forwards `class` and `style` onto it,
+	// so a caller styles it the way they already styled the `<img>` this
+	// replaced. That is the whole reason there is no wrapper here.
+	//
+	// `alive` is what costs something. A still blobatar is one `<img>` and an
+	// animated one is inline SVG - roughly a dozen nodes - because host CSS
+	// cannot reach inside an `<img>` and `:hover` is what drives the idle loop.
+	// So it is opt-in per call site rather than a default, and the long lists
+	// (admin users, the grove feed, quick search) deliberately leave it off.
+	//
+	// `mood` is free either way. A pose is baked into the static markup too, so
+	// an invited-but-not-arrived member still reads as asleep in a list that
+	// never animates.
+	import { Blobatar } from '@blobatar/svelte';
+	import type { GazeAttachment } from '@blobatar/svelte/gaze';
 	import RemoteImg from './RemoteImg.svelte';
-	import { avatarUrl, avatarInitial, type AvatarUser } from '$lib/avatar';
+	import { AVATAR_OPTIONS, avatarSeed, moodPose, type AvatarUser, type Mood } from '$lib/avatar';
 
 	let {
 		user,
-		size = 32,
-		shape = 'circle',
+		seed = undefined,
+		mood = 'idle',
+		alive = false,
+		eyes = undefined,
+		size = undefined,
+		alt = '',
 		class: klass = '',
-		alt = undefined
+		style = undefined,
+		loading = undefined
 	}: {
-		user: AvatarUser | null | undefined;
+		user?: AvatarUser | null;
+		seed?: string;
+		mood?: Mood;
+		alive?: boolean | 'always';
+		eyes?: GazeAttachment;
 		size?: number;
-		shape?: 'circle' | 'rounded';
-		class?: string;
 		alt?: string;
+		class?: string;
+		style?: string;
+		loading?: 'eager' | 'lazy';
 	} = $props();
 
-	const src = $derived(avatarUrl(user));
-	const initial = $derived(avatarInitial(user));
-	const label = $derived(alt ?? `${user?.name || user?.username || user?.email || 'User'} avatar`);
+	const name = $derived(seed || avatarSeed(user));
+	const expression = $derived(moodPose(mood));
+	// Handed to the library in its own vocabulary rather than as a boolean, so a
+	// profile header choosing continuous motion is choosing it by name.
+	const animate = $derived(alive === 'always' ? 'always' : alive ? 'hover' : false);
 </script>
 
-<span
-	class="ui-avatar {klass}"
-	class:ui-avatar--rounded={shape === 'rounded'}
-	style="width: {size}px; height: {size}px; font-size: {Math.round(size * 0.42)}px;"
->
-	<span class="ui-avatar-fb" aria-hidden="true">{initial}</span>
-	<RemoteImg {src} alt={label} class="ui-avatar-img" />
-</span>
-
-<style>
-	.ui-avatar {
-		position: relative;
-		display: inline-grid;
-		place-items: center;
-		flex-shrink: 0;
-		overflow: hidden;
-		border-radius: 50%;
-		background-color: var(--bg-sunken);
-	}
-	.ui-avatar--rounded {
-		border-radius: var(--radius-md);
-	}
-	.ui-avatar-fb {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		font-weight: 600;
-		color: var(--text-muted);
-		line-height: 1;
-	}
-	.ui-avatar :global(.ui-avatar-img) {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-</style>
+{#if user?.imageUrl}
+	<RemoteImg src={user.imageUrl} {alt} class={klass} {style} eager={loading !== 'lazy'} />
+{:else if animate}
+	<Blobatar
+		{name}
+		{...AVATAR_OPTIONS}
+		{animate}
+		{expression}
+		{size}
+		title={alt || undefined}
+		class={klass}
+		{style}
+		{@attach eyes ?? noAttachment}
+	/>
+{:else}
+	<Blobatar {name} {...AVATAR_OPTIONS} {expression} {size} {alt} class={klass} {style} {loading} />
+{/if}

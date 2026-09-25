@@ -1,4 +1,5 @@
 import { blobatarUri } from 'blobatar/uri';
+import { happy, sleepy, thinking, wink } from 'blobatar/expression';
 
 /**
  * Default profile pictures.
@@ -21,15 +22,40 @@ import { blobatarUri } from 'blobatar/uri';
  * not fill its own viewBox, so without a backdrop the avatar frame shows
  * through around it and reads as a hole rather than a picture.
  */
-const OPTIONS = { background: 'circle' } as const;
+export const AVATAR_OPTIONS = { background: 'circle' } as const;
 
-function seedOf(user: AvatarUser | null | undefined): string {
+/**
+ * The stable handle a blobatar is drawn from. Id first so it survives a rename,
+ * falling back to whatever is available when a caller only has a partial user.
+ */
+export function avatarSeed(user: AvatarUser | null | undefined): string {
 	return user?.id || user?.username || user?.email || 'orchard';
 }
 
 /** The blobatar assigned to `seed`, as a `data:` URI. */
 export function defaultAvatar(seed: string | null | undefined): string {
-	return blobatarUri(seed || 'orchard', OPTIONS);
+	return blobatarUri(seed || 'orchard', AVATAR_OPTIONS);
+}
+
+/**
+ * Poses a blobatar can hold.
+ *
+ * A pose is a state, not an event: nothing returns to idle on its own, so every
+ * mood below is bound to something already true in the UI rather than fired and
+ * forgotten. `idle` is deliberately absent as a value - omitting the expression
+ * renders byte-identical markup and skips the pose machinery entirely, so the
+ * default costs nothing.
+ *
+ * Four of the library's fourteen poses tint the palette, and none of them are
+ * here. That is also what keeps the OKLab colour path out of the bundle: the
+ * first tinted pose pulls in about 720 bytes the four below never touch.
+ */
+export const MOODS = { happy, thinking, sleepy, wink };
+
+export type Mood = keyof typeof MOODS | 'idle';
+
+export function moodPose(mood: Mood | null | undefined) {
+	return mood && mood !== 'idle' ? MOODS[mood] : undefined;
 }
 
 export interface AvatarUser {
@@ -49,7 +75,7 @@ export interface AvatarUser {
  */
 export function avatarUrl(user: AvatarUser | null | undefined): string {
 	if (user?.imageUrl) return user.imageUrl;
-	return defaultAvatar(seedOf(user));
+	return defaultAvatar(avatarSeed(user));
 }
 
 /** Single-letter fallback for the rare case an avatar image itself fails to load. */

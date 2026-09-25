@@ -20,6 +20,7 @@ export { sidebarCollapsed, mobileNavOpen, MOBILE_NAV_QUERY } from './sidebarStat
 export {
 	projectGradientEnabled,
 	animationLevel,
+	effectiveAnimation,
 	effectiveAnimationLevel,
 	dashboardDensity,
 	contrastLevel,

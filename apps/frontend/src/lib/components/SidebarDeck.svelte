@@ -29,8 +29,7 @@
 	} from 'lucide-svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg, Avatar } from '$lib/components/ui';
 	import CliModal from './CliModal.svelte';
 	import {
 		springRotate,
@@ -326,7 +325,7 @@
 
 {#snippet userAvatarEl()}
 	<span class="deck-user-avatar">
-		<RemoteImg src={avatarUrl($user)} />
+		<Avatar user={$user} alive />
 	</span>
 {/snippet}
 
@@ -1105,7 +1104,8 @@
 		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, currentColor 10%, transparent);
 	}
-	.deck-user-avatar :global(img) {
+	.deck-user-avatar :global(img),
+	.deck-user-avatar :global(svg) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

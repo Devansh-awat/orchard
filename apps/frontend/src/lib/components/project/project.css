@@ -1222,7 +1222,7 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	font-weight: 600;
 	color: var(--pj-text-secondary);
 }
-.pj-member--pending .pj-member-avatar--letter {
+.pj-member--pending .pj-member-avatar {
 	opacity: 0.65;
 }
 .pj-member--pending .pj-member-name {

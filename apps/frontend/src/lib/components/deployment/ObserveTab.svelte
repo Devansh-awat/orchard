@@ -17,11 +17,12 @@
 		podLabel,
 		humanizeWarning
 	} from '$lib/utils/format';
-	import { Button, Select, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
+	import { Avatar, Button, Select, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { slide } from '$lib/utils/transitions';
+	import type { Mood } from '$lib/avatar';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
-	import { avatarUrl } from '$lib/avatar';
+
 	import {
 		Clock,
 		Boxes,
@@ -249,6 +250,16 @@
 		} finally {
 			updatingError = null;
 		}
+	}
+
+	// The assignee's face carries where the error stands with them: still on it,
+	// done with it, or explicitly not looking. It is a pose rather than a status
+	// badge - the chip beside it already says the word - so nothing here is the
+	// only thing telling you the state.
+	function assigneeMood(status: 'unresolved' | 'resolved' | 'ignored'): Mood {
+		if (status === 'resolved') return 'happy';
+		if (status === 'ignored') return 'sleepy';
+		return 'thinking';
 	}
 
 	async function assignError(g: ErrorGroup, assigneeId: string | null) {
@@ -1352,7 +1363,7 @@
 										<button class="eg-assign" type="button" {...attrs}>
 											{#if group.assignee}
 												<span class="eg-avatar">
-													<img src={avatarUrl(group.assignee)} alt="" />
+													<Avatar user={group.assignee} alive mood={assigneeMood(status)} />
 												</span>
 												<span>@{group.assignee.username}</span>
 											{:else}
@@ -1368,7 +1379,7 @@
 									{#each orgMembers as m (m.id)}
 										<MenuItem onclick={() => assignError(group, m.id)}>
 											<span class="eg-avatar">
-												<img src={avatarUrl(m)} alt="" />
+												<Avatar user={m} alive />
 											</span>
 											<span class="eg-menu-row">@{m.username}</span>
 										</MenuItem>
@@ -2808,7 +2819,8 @@
 		line-height: 1;
 		font-weight: 600;
 	}
-	.eg-avatar img {
+	.eg-avatar :global(img),
+	.eg-avatar :global(svg) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

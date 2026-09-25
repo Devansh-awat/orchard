@@ -2,9 +2,9 @@
 	import { Loader2, UserPlus, Trash2, ChevronDown, Check, Mail, X, Search } from 'lucide-svelte';
 	import { UsersRound, MailCheck } from '@jis3r/icons';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
-	import { Button, Badge, Menu, MenuItem, PopoverPanel } from '$lib/components/ui';
+	import { Avatar, Button, Badge, Menu, MenuItem, PopoverPanel } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
-	import { avatarUrl } from '$lib/avatar';
+	import { user } from '$lib/stores';
 
 	interface MemberProject {
 		projectMemberId: string;
@@ -266,7 +266,12 @@
 			{#each visibleMembers as member (member.user.id)}
 				<div class="om-tr">
 					<div class="om-td om-td--member">
-						<img src={avatarUrl(member.user)} alt="" class="om-avatar" />
+						<Avatar
+							user={member.user}
+							alive
+							mood={member.user.id === $user?.id ? 'wink' : 'idle'}
+							class="om-avatar"
+						/>
 						<div class="om-member-info">
 							<p class="om-member-name">{memberName(member) || member.user.email}</p>
 							<p class="om-member-email">{member.user.email}</p>
@@ -385,9 +390,7 @@
 			{#each invitations as invitation, i (invitation.id)}
 				<div class="om-member" {@attach motionStagger({ index: i })}>
 					<div class="om-member-left">
-						<div class="om-avatar-fallback om-avatar-pending">
-							<Mail class="h-3.5 w-3.5" />
-						</div>
+						<Avatar seed={invitation.email} mood="sleepy" class="om-avatar om-avatar-pending" />
 						<div class="om-member-info">
 							<p class="om-member-name">{invitation.email}</p>
 							<p class="om-member-email">
@@ -529,7 +532,9 @@
 		min-width: 0;
 	}
 
-	.om-avatar {
+	/* Passed into `<Avatar>`, so it lands on an element this component does not
+	   render and has no scope hash to match. */
+	:global(.om-avatar) {
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
@@ -537,24 +542,8 @@
 		flex-shrink: 0;
 	}
 
-	.om-avatar-fallback {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-	}
-
-	.om-avatar-pending {
-		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
-		color: var(--away-indicator);
+	:global(.om-avatar-pending) {
+		opacity: 0.65;
 	}
 
 	.om-member-info {

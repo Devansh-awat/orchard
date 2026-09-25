@@ -20,8 +20,7 @@
 		Link2,
 		PartyPopper
 	} from 'lucide-svelte';
-	import { Button, Field, Input } from '$lib/components/ui';
-	import { avatarUrl } from '$lib/avatar';
+	import { Avatar, Button, Field, Input } from '$lib/components/ui';
 
 	type Step = 'loading' | 'profile' | 'github' | 'done';
 
@@ -311,7 +310,13 @@
 
 							{#if currentUser}
 								<div class="setup-profile-preview">
-									<img src={avatarUrl(currentUser)} alt="Profile" class="setup-profile-avatar" />
+									<Avatar
+										user={currentUser}
+										alive="always"
+										mood={saving ? 'thinking' : 'idle'}
+										alt="Profile"
+										class="setup-profile-avatar"
+									/>
 									<div>
 										<p class="setup-profile-name">
 											{firstName || 'First'}
@@ -705,7 +710,8 @@
 		margin-bottom: 2rem;
 	}
 
-	.setup-profile-avatar {
+	/* Passed into `<Avatar>`: no scope hash reaches it. */
+	:global(.setup-profile-avatar) {
 		width: 3.5rem;
 		height: 3.5rem;
 		border-radius: var(--radius-lg);
