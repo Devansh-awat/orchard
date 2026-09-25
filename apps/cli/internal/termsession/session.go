@@ -1,6 +1,7 @@
 package termsession
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -57,17 +58,36 @@ func Run(ctx context.Context, conn *websocket.Conn, stdin io.Reader, stdout io.W
 	}()
 
 	for {
-		_, data, err := conn.Read(ctx)
+		typ, data, err := conn.Read(ctx)
 		if err != nil {
 			if ctx.Err() != nil || websocket.CloseStatus(err) != -1 || errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
 		}
+		if typ == websocket.MessageText && controlFrame(data) {
+			continue
+		}
 		if _, err := stdout.Write(data); err != nil {
 			return err
 		}
 	}
+}
+
+// The gateway announces a session with a JSON text frame the web terminal
+// reads to offer resume; a raw terminal has no use for it and would print it.
+func controlFrame(data []byte) bool {
+	t := bytes.TrimSpace(data)
+	if len(t) < 2 || t[0] != '{' || t[len(t)-1] != '}' {
+		return false
+	}
+	var frame struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(t, &frame) != nil {
+		return false
+	}
+	return frame.Type == "attached"
 }
 
 func sendResize(ctx context.Context, conn *websocket.Conn, fd int) {
