@@ -164,11 +164,13 @@ test('every event belongs to exactly one category', () => {
 
 test('resource scopes only accept events that can happen there', () => {
   assert.deepEqual(eventsForScopeType('deployment').sort(), [
-    'deploy.failed',
-    'deploy.succeeded',
-    'pod.crashing',
-    'pod.recovered'
-  ]);
+      'alert.firing',
+      'alert.resolved',
+      'deploy.failed',
+      'deploy.succeeded',
+      'pod.crashing',
+      'pod.recovered'
+    ]);
   assert.ok(eventsForScopeType('database').includes('backup.failed'));
   assert.ok(!eventsForScopeType('database').includes('deploy.failed'));
   assert.deepEqual(eventsForScopeType('org').length, TEAM_ROUTABLE_EVENTS.length);

@@ -6,6 +6,7 @@
 	import { animate } from 'motion';
 	import { motionStagger, motionEnabled, motion, transition } from '$lib/utils/motion.svelte';
 	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
+	import type { AlertState } from '$lib/components/notifications/alerts';
 
 	interface Warning {
 		podName: string;
@@ -39,7 +40,9 @@
 		onGoToResources,
 		onReconnectGithub,
 		canReconnectGithub = false,
-		githubRepoUrl = ''
+		githubRepoUrl = '',
+		metricAlerts = [],
+		onGoToAlerts
 	}: {
 		buildFailed?: boolean;
 		buildError?: string;
@@ -53,6 +56,8 @@
 		onReconnectGithub?: () => void;
 		canReconnectGithub?: boolean;
 		githubRepoUrl?: string;
+		metricAlerts?: AlertState[];
+		onGoToAlerts?: () => void;
 	} = $props();
 
 	interface AlertAction {
@@ -131,6 +136,19 @@
 
 	const candidates = $derived.by(() => {
 		const items: AlertItem[] = [];
+
+		for (const a of metricAlerts) {
+			if (a.status !== 'firing' && a.status !== 'recovering') continue;
+			items.push({
+				id: `alert:${a.ruleId}`,
+				severity: a.status === 'firing' ? 'error' : 'warning',
+				title: a.label,
+				hint: a.valueLabel ? `Now ${a.valueLabel}` : 'Over the threshold',
+				action: 'Alerts',
+				onAction: onGoToAlerts,
+				animateIcon: a.status === 'firing'
+			});
+		}
 
 		if (buildFailed) {
 			const isGithubAuth =

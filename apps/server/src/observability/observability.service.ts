@@ -21,6 +21,12 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { deploymentPodRegex } from '../metrics/pod-selector';
+import {
+  VictoriaMetricsService,
+  escapeLabel,
+  escapeRegex,
+  type SeriesPoint
+} from '../metrics/victoria-metrics.service';
 
 interface BuildLogMessage {
   id?: string;
@@ -47,10 +53,7 @@ interface RuntimeLogMessage {
 
 const MAX_RUNTIME_STREAMS_PER_KEY = 5;
 
-export interface SeriesPoint {
-  x: number;
-  y: number;
-}
+export type { SeriesPoint };
 
 export interface HttpMetricsSeries {
   requestRate: SeriesPoint[];
@@ -119,14 +122,11 @@ export interface DeploymentOverview {
 export class ObservabilityService {
   private readonly logger = new Logger(ObservabilityService.name);
 
-  private readonly vmBase =
-    process.env.VICTORIAMETRICS_URL ??
-    'http://victoriametrics.orchard-metrics.svc.cluster.local:8428';
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
-    private readonly orgEvents: OrgEventsService
+    private readonly orgEvents: OrgEventsService,
+    private readonly vm: VictoriaMetricsService
   ) {}
 
   /**
@@ -384,10 +384,10 @@ export class ObservabilityService {
     };
 
     const [requestRate, errorRate, latencyAvg, latencyMax] = await Promise.all([
-      this.queryRange(queries.requestRate, startSec, endSec, stepSec),
-      this.queryRange(queries.errorRate, startSec, endSec, stepSec),
-      this.queryRange(queries.latencyAvg, startSec, endSec, stepSec),
-      this.queryRange(queries.latencyMax, startSec, endSec, stepSec)
+      this.vm.queryRange(queries.requestRate, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.errorRate, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.latencyAvg, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.latencyMax, startSec, endSec, stepSec)
     ]);
 
     return { requestRate, errorRate, latencyAvg, latencyMax };
@@ -490,10 +490,10 @@ export class ObservabilityService {
     const podRe = deploymentPodRegex(deployment.name);
 
     const [cpuMilli, memBytes] = await Promise.all([
-      this.queryInstant(
+      this.vm.queryInstant(
         `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[60s])) * 1000`
       ),
-      this.queryInstant(
+      this.vm.queryInstant(
         `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`
       )
     ]);
@@ -517,13 +517,15 @@ export class ObservabilityService {
       const rateWin = 60;
 
       [httpRequestRate, httpErrorRate, httpAvgLatency] = await Promise.all([
-        this.queryInstant(
+        this.vm.queryInstant(
           `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`
         ),
-        this.queryInstant(
+        this.vm.queryInstant(
           `100 * (sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1e-9)`
         ),
-        this.queryInstant(`max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`)
+        this.vm.queryInstant(
+          `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`
+        )
       ]);
     }
 
@@ -686,7 +688,7 @@ export class ObservabilityService {
   // Build a `proxy=~` selector covering every service the deployment exposes
   // through an ingress (namespace and service names are DNS-safe, so `_` is an
   // unambiguous delimiter and `.+` captures any port suffix).
-  private async buildHaproxySelector(deploymentId: string): Promise<string | null> {
+  async buildHaproxySelector(deploymentId: string): Promise<string | null> {
     const [deployment, services, ingresses] = await Promise.all([
       this.prisma.deployment.findUnique({
         where: { id: deploymentId },
@@ -711,62 +713,6 @@ export class ObservabilityService {
 
     const alt = [...names].map(escapeRegex).join('|');
     return `proxy=~"${escapeRegex(deployment.namespace)}_svc_(${alt})_.+"`;
-  }
-
-  private async queryInstant(promql: string): Promise<number | null> {
-    const params = new URLSearchParams({ query: promql });
-    const url = `${this.vmBase}/api/v1/query?${params}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) {
-        this.logger.warn(`VM query ${res.status}: ${await res.text()}`);
-        return null;
-      }
-      const body = (await res.json()) as {
-        status: string;
-        data?: { resultType: string; result: { value: [number, string] }[] };
-      };
-      if (body.status !== 'success' || !body.data?.result?.length) return null;
-      const v = Number(body.data.result[0].value[1]);
-      return Number.isFinite(v) ? v : null;
-    } catch (err) {
-      this.logger.warn(`VM query failed: ${(err as Error).message}`);
-      return null;
-    }
-  }
-
-  private async queryRange(
-    promql: string,
-    startSec: number,
-    endSec: number,
-    stepSec: number
-  ): Promise<SeriesPoint[]> {
-    const params = new URLSearchParams({
-      query: promql,
-      start: String(startSec),
-      end: String(endSec),
-      step: String(stepSec)
-    });
-    const url = `${this.vmBase}/api/v1/query_range?${params}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) {
-        this.logger.warn(`VM query_range ${res.status}: ${await res.text()}`);
-        return [];
-      }
-      const body = (await res.json()) as {
-        status: string;
-        data?: {
-          resultType: string;
-          result: { metric: Record<string, string>; values: [number, string][] }[];
-        };
-      };
-      if (body.status !== 'success' || !body.data?.result?.length) return [];
-      return body.data.result[0].values.map(([t, v]) => ({ x: t * 1000, y: Number(v) }));
-    } catch (err) {
-      this.logger.warn(`VM query_range failed: ${(err as Error).message}`);
-      return [];
-    }
   }
 }
 
@@ -909,14 +855,6 @@ function normalizeLevel(s: string): string {
   const upper = s.toUpperCase();
   if (upper === 'WARNING') return 'WARN';
   return upper;
-}
-
-function escapeLabel(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const LANGUAGE_PATTERNS: { re: RegExp; language: string; framework?: string }[] = [

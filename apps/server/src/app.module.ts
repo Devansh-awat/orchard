@@ -33,6 +33,7 @@ import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { AlertsModule } from './alerts/alerts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
@@ -82,6 +83,7 @@ import { ApplyModule } from './apply/apply.module';
     AnalyticsModule,
     AiChatModule,
     ObservabilityModule,
+    AlertsModule,
     NotificationsModule,
     JobsModule,
     ForumModule,

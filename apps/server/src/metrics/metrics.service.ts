@@ -1,36 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { deploymentPodRegex } from './pod-selector';
+import {
+  VictoriaMetricsService,
+  escapeLabel,
+  escapeRegex,
+  type GroupedSeries,
+  type SeriesPoint
+} from './victoria-metrics.service';
 
-export interface SeriesPoint {
-  x: number;
-  y: number;
-}
+export type { SeriesPoint, GroupedSeries };
 export type SeriesId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type SeriesBundle = Record<SeriesId, SeriesPoint[]>;
-export interface GroupedSeries {
-  key: string;
-  points: SeriesPoint[];
-}
 export type GroupedBundle = Record<SeriesId, GroupedSeries[]>;
-
-interface PromMatrix {
-  status: string;
-  data?: {
-    resultType: string;
-    result: { metric: Record<string, string>; values: [number, string][] }[];
-  };
-}
 
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
 
-  private readonly base =
-    process.env.VICTORIAMETRICS_URL ??
-    'http://victoriametrics.orchard-metrics.svc.cluster.local:8428';
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly vm: VictoriaMetricsService
+  ) {}
 
   // Provisioning view: for every deployment & database in the org, compare its requested
   // resources against the p95 actual usage over the window. Used to surface over/underprovisioning.
@@ -108,10 +99,10 @@ export class MetricsService {
         tasks.push(
           (async () => {
             const [cpu, mem] = await Promise.all([
-              this.queryInstant(
+              this.vm.queryInstant(
                 `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
               ),
-              this.queryInstant(
+              this.vm.queryInstant(
                 `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""})[${rangeSeconds}s:60s])`
               )
             ]);
@@ -142,10 +133,10 @@ export class MetricsService {
         tasks.push(
           (async () => {
             const [cpu, mem] = await Promise.all([
-              this.queryInstant(
+              this.vm.queryInstant(
                 `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
               ),
-              this.queryInstant(
+              this.vm.queryInstant(
                 `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""})[${rangeSeconds}s:60s])`
               )
             ]);
@@ -174,28 +165,6 @@ export class MetricsService {
     await Promise.all(tasks);
     rows.sort((a, b) => a.projectName.localeCompare(b.projectName) || a.name.localeCompare(b.name));
     return { rows };
-  }
-
-  private async queryInstant(promql: string): Promise<number | null> {
-    const params = new URLSearchParams({ query: promql });
-    const url = `${this.base}/api/v1/query?${params}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) {
-        this.logger.warn(`VM query ${res.status}: ${await res.text()}`);
-        return null;
-      }
-      const body = (await res.json()) as {
-        status: string;
-        data?: { resultType: string; result: { value: [number, string] }[] };
-      };
-      if (body.status !== 'success' || !body.data?.result?.length) return null;
-      const v = Number(body.data.result[0].value[1]);
-      return Number.isFinite(v) ? v : null;
-    } catch (err) {
-      this.logger.warn(`VM query failed: ${(err as Error).message}`);
-      return null;
-    }
   }
 
   async fetchDeploymentMetrics(args: {
@@ -229,10 +198,10 @@ export class MetricsService {
     const endSec = Math.floor(args.endMs / 1000);
 
     const [cpu, mem, rx, tx] = await Promise.all([
-      this.queryRange(queries.cpu, startSec, endSec, stepSec),
-      this.queryRange(queries.mem, startSec, endSec, stepSec),
-      this.queryRange(queries.rx, startSec, endSec, stepSec),
-      this.queryRange(queries.tx, startSec, endSec, stepSec)
+      this.vm.queryRange(queries.cpu, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.mem, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.rx, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.tx, startSec, endSec, stepSec)
     ]);
 
     return {
@@ -266,10 +235,10 @@ export class MetricsService {
     const endSec = Math.floor(args.endMs / 1000);
 
     const [cpu, mem, rx, tx] = await Promise.all([
-      this.queryRange(queries.cpu, startSec, endSec, stepSec),
-      this.queryRange(queries.mem, startSec, endSec, stepSec),
-      this.queryRange(queries.rx, startSec, endSec, stepSec),
-      this.queryRange(queries.tx, startSec, endSec, stepSec)
+      this.vm.queryRange(queries.cpu, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.mem, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.rx, startSec, endSec, stepSec),
+      this.vm.queryRange(queries.tx, startSec, endSec, stepSec)
     ]);
 
     return {
@@ -278,40 +247,6 @@ export class MetricsService {
       rx: rx.map((p) => ({ x: p.x, y: p.y / 1024 })),
       tx: tx.map((p) => ({ x: p.x, y: p.y / 1024 }))
     };
-  }
-
-  private async queryRangeGrouped(
-    promql: string,
-    startSec: number,
-    endSec: number,
-    stepSec: number,
-    label: string
-  ): Promise<GroupedSeries[]> {
-    const params = new URLSearchParams({
-      query: promql,
-      start: String(startSec),
-      end: String(endSec),
-      step: String(stepSec)
-    });
-    const url = `${this.base}/api/v1/query_range?${params}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) {
-        this.logger.warn(`VM query_range ${res.status}: ${await res.text()}`);
-        return [];
-      }
-      const body = (await res.json()) as PromMatrix;
-      if (body.status !== 'success' || !body.data?.result?.length) return [];
-      return body.data.result
-        .map((r) => ({
-          key: r.metric?.[label] ?? 'unknown',
-          points: r.values.map(([t, v]) => ({ x: t * 1000, y: Number(v) }))
-        }))
-        .sort((a, b) => a.key.localeCompare(b.key));
-    } catch (err) {
-      this.logger.warn(`VM query_range failed: ${(err as Error).message}`);
-      return [];
-    }
   }
 
   async fetchDeploymentMetricsByPod(args: {
@@ -337,10 +272,10 @@ export class MetricsService {
     const endSec = Math.floor(args.endMs / 1000);
 
     const [cpu, mem, rx, tx] = await Promise.all([
-      this.queryRangeGrouped(queries.cpu, startSec, endSec, stepSec, 'pod'),
-      this.queryRangeGrouped(queries.mem, startSec, endSec, stepSec, 'pod'),
-      this.queryRangeGrouped(queries.rx, startSec, endSec, stepSec, 'pod'),
-      this.queryRangeGrouped(queries.tx, startSec, endSec, stepSec, 'pod')
+      this.vm.queryRangeGrouped(queries.cpu, startSec, endSec, stepSec, 'pod'),
+      this.vm.queryRangeGrouped(queries.mem, startSec, endSec, stepSec, 'pod'),
+      this.vm.queryRangeGrouped(queries.rx, startSec, endSec, stepSec, 'pod'),
+      this.vm.queryRangeGrouped(queries.tx, startSec, endSec, stepSec, 'pod')
     ]);
 
     const scale = (g: GroupedSeries[], f: number) =>
@@ -353,44 +288,6 @@ export class MetricsService {
       tx: scale(tx, 1024)
     };
   }
-
-  private async queryRange(
-    promql: string,
-    startSec: number,
-    endSec: number,
-    stepSec: number
-  ): Promise<SeriesPoint[]> {
-    const params = new URLSearchParams({
-      query: promql,
-      start: String(startSec),
-      end: String(endSec),
-      step: String(stepSec)
-    });
-    const url = `${this.base}/api/v1/query_range?${params}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) {
-        this.logger.warn(`VM query_range ${res.status}: ${await res.text()}`);
-        return [];
-      }
-      const body = (await res.json()) as PromMatrix;
-      if (body.status !== 'success' || !body.data?.result?.length) return [];
-      const series = body.data.result[0].values;
-      return series.map(([t, v]) => ({ x: t * 1000, y: Number(v) }));
-    } catch (err) {
-      this.logger.warn(`VM query_range failed: ${(err as Error).message}`);
-      return [];
-    }
-  }
-}
-
-function escapeLabel(s: string): string {
-  // Inside double-quoted PromQL labels, escape backslash and double-quote.
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function classify(

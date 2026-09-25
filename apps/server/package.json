@@ -72,7 +72,8 @@
     "test:client-ip": "tsx --test test/client-ip.test.ts",
     "test:redis-throttle": "tsx --test test/redis-throttle.test.ts",
     "test:timeline": "tsx --test test/timeline.test.ts",
-    "test:rollout-gate": "tsx --test test/rollout-gate.test.ts"
+    "test:rollout-gate": "tsx --test test/rollout-gate.test.ts",
+    "test:metric-alerts": "tsx --test test/metric-alerts.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

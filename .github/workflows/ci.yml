@@ -338,6 +338,12 @@ jobs:
       # ready, nor touch blue when green fails.
       - name: Rollout gate and blue/green tests
         run: pnpm --filter server test:rollout-gate
+      # A threshold alert is a state machine over timestamps in Postgres, not
+      # a timer: it must survive restarts, fire once per episode, resolve only
+      # after the condition has cleared for the whole window, and treat "the
+      # metrics store did not answer" as unknown rather than as a recovery.
+      - name: Metric alert tests
+        run: pnpm --filter server test:metric-alerts
 
   e2e:
     needs: changes

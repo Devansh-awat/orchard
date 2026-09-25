@@ -32,6 +32,7 @@
 	import { invalidate } from '$app/navigation';
 	import { featureFlag } from '$lib/posthog';
 	import { focusDeployment, watchBuild } from '$lib/utils/sound';
+	import { fetchAlertStates } from '$lib/components/notifications/alerts';
 	import { registerShortcut } from '$lib/utils/shortcuts';
 	import type { PageData } from './$types';
 	import {
@@ -2580,6 +2581,15 @@
 		return () => focusDeployment(null);
 	});
 
+	const alertStatesQuery = createQuery(() => ({
+		queryKey: ['alert-states', deploymentId],
+		queryFn: () => fetchAlertStates($selectedOrganization?.id ?? '', deploymentId),
+		enabled: !!deploymentId && !!$selectedOrganization?.id,
+		refetchInterval: 60_000,
+		refetchIntervalInBackground: false
+	}));
+	const metricAlerts = $derived(alertStatesQuery.data ?? []);
+
 	// SSE subscription — invalidates the TanStack query instead of fetching directly.
 	let sseOrgId: string | null = null;
 	$effect(() => {
@@ -3028,6 +3038,8 @@
 					gotoSettings('resources');
 				}}
 				githubRepoUrl={deployment?.githubRepo ?? ''}
+				{metricAlerts}
+				onGoToAlerts={() => gotoSettings('notifications')}
 				canReconnectGithub={!!deployment?.createdBy && deployment.createdBy === $user?.id}
 				onReconnectGithub={() => {
 					const back = $page.url.pathname + $page.url.search;

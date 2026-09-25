@@ -4,3 +4,4 @@ export { default as ResourceNotifications } from './ResourceNotifications.svelte
 export * from './types';
 export * from './api';
 export * from './channel-types';
+export { default as AlertRules } from './AlertRules.svelte';

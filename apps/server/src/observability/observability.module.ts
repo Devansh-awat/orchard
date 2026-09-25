@@ -7,9 +7,10 @@ import { ObservabilityController } from './observability.controller';
 import { ErrorIngestService } from './error-ingest.service';
 import { TimelineService } from './timeline.service';
 import { EventsModule } from '../events/events.module';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
-  imports: [PrismaModule, KubernetesModule, ProjectsModule, EventsModule],
+  imports: [PrismaModule, KubernetesModule, ProjectsModule, EventsModule, MetricsModule],
   providers: [ObservabilityService, ErrorIngestService, TimelineService],
   controllers: [ObservabilityController],
   exports: [ObservabilityService, ErrorIngestService, TimelineService]

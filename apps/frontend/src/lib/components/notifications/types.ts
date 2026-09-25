@@ -127,7 +127,9 @@ export const EVENT_GROUPS: {
 		category: 'health',
 		options: [
 			{ value: 'pod.crashing', label: 'Crashing', tone: 'fail' },
-			{ value: 'pod.recovered', label: 'Recovered', tone: 'ok' }
+			{ value: 'pod.recovered', label: 'Recovered', tone: 'ok' },
+			{ value: 'alert.firing', label: 'Alert firing', tone: 'fail' },
+			{ value: 'alert.resolved', label: 'Alert resolved', tone: 'ok' }
 		]
 	},
 	{
@@ -197,7 +199,14 @@ export function settingLabel(
 const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 	org: null,
 	project: null,
-	deployment: ['deploy.succeeded', 'deploy.failed', 'pod.crashing', 'pod.recovered'],
+	deployment: [
+		'deploy.succeeded',
+		'deploy.failed',
+		'pod.crashing',
+		'pod.recovered',
+		'alert.firing',
+		'alert.resolved'
+	],
 	database: [
 		'backup.completed',
 		'backup.failed',

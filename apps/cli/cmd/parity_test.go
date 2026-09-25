@@ -302,6 +302,14 @@ var routeCoverage = map[string]string{
 	"POST /organizations/:id/notification-channels/:channelId/test":      "notify channel test",
 	"GET /organizations/:id/notification-channels/:channelId/deliveries": "notify deliveries",
 
+	// metric alerts
+	"GET /organizations/:id/metric-alerts":            "alert list",
+	"GET /organizations/:id/metric-alerts/catalogue":  "alert metrics",
+	"GET /organizations/:id/metric-alerts/states":     "alert status",
+	"POST /organizations/:id/metric-alerts":           "alert create",
+	"PATCH /organizations/:id/metric-alerts/:ruleId":  "alert update",
+	"DELETE /organizations/:id/metric-alerts/:ruleId": "alert delete",
+
 	// audit
 	"GET /audit-logs/organization/:id": "audit list",
 	"GET /audit-logs/deployment/:id":   "audit list --deployment",

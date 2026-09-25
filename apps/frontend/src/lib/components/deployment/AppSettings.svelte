@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SettingsRail, SectionCard, Button } from '$lib/components/ui';
-	import { ResourceNotifications } from '$lib/components/notifications';
+	import { ResourceNotifications, AlertRules } from '$lib/components/notifications';
 	import { featureFlag } from '$lib/posthog';
 	import AdvancedTab from './AdvancedTab.svelte';
 	import BuildTab from './BuildTab.svelte';
@@ -385,6 +385,9 @@
 			/>
 		{:else if activeSection === 'notifications'}
 			{#if deployment?.id && organizationId}
+				<SectionCard>
+					<AlertRules {organizationId} scopeType="deployment" scopeId={deployment.id} />
+				</SectionCard>
 				<SectionCard title="Notifications">
 					<ResourceNotifications {organizationId} scopeType="deployment" scopeId={deployment.id} />
 				</SectionCard>

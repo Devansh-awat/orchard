@@ -692,7 +692,7 @@ Filter with \`level\` to see only errors, or \`search\` to grep. Both are applie
   server.registerTool(
     'get_deployment_http_metrics',
     {
-      description: `Request rate, latency percentiles and status-code breakdown for a deployment, as served through its ingress.
+      description: `Request rate, average and max latency, and 5xx rate for a deployment, as served through its ingress. Latency is the load balancer's average and max, not a percentile.
 
 Answers "is it actually serving traffic", "did latency regress after that deploy", "how many 5xx". Defaults to the last hour at 30s resolution. Returns empty series when nothing fronts the deployment — check \`get_deployment.ingresses\` first if that surprises you.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
