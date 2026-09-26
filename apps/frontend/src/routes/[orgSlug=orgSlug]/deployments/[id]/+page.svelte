@@ -84,6 +84,7 @@
 	import { MemoryStick } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
+	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
@@ -1819,6 +1820,7 @@
 	}
 
 	let redirectUpdatingId = $state<string | null>(null);
+	let anomaliesShown = $state(false);
 	async function updateRedirect(
 		ingressId: string,
 		data: { host: string; redirectTarget: string; redirectStatus: number }
@@ -3099,6 +3101,11 @@
 			</nav>
 
 			<!-- Unified alerts -->
+			<Anomalies
+				scope={{ kind: 'deployment', id: deploymentId }}
+				hideResource
+				onLoaded={(items) => (anomaliesShown = items.length > 0)}
+			/>
 			<DeploymentAlerts
 				applyError={deployment?.applyError ?? ''}
 				onRetryApply={async () => {
@@ -3121,7 +3128,7 @@
 					gotoSettings('resources');
 				}}
 				githubRepoUrl={deployment?.githubRepo ?? ''}
-				{metricAlerts}
+				metricAlerts={anomaliesShown ? [] : metricAlerts}
 				onGoToAlerts={() => gotoSettings('notifications')}
 				canReconnectGithub={!!deployment?.createdBy && deployment.createdBy === $user?.id}
 				onReconnectGithub={() => {

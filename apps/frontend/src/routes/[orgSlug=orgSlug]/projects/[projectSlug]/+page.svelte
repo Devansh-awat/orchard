@@ -12,6 +12,7 @@
 	import { Server, TriangleAlert, ChevronLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
+	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import MeshGradient from '$lib/components/MeshGradient.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 
@@ -839,6 +840,7 @@
 			/>
 
 			{#if activeTab === 'resources'}
+				<Anomalies scope={{ kind: 'project', id: project.id }} />
 				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<ResourcesTab
 						filteredDeployments={envFilteredDeployments}

@@ -15,6 +15,16 @@ are right-sizing: `kubectl top` reports an instantaneous sample and will happily
 mislead you about a spiky workload. Look at the range, and size against the peak
 you actually care about rather than the number that happened to be on screen.
 
+## Anomalies
+
+A project's Apps tab, and the top of every app and database page, carries one
+card listing what is wrong right now, worst first: an app killed for memory,
+a crash loop, a release that rolled back, a change the cluster refused, a failed
+build, a firing alert, an error spike in the logs, or fewer replicas ready than
+asked for. Each row names the resource, says how long it has been the case, and
+carries the one action that helps. The card is empty most of the time, and it
+disappears when it is.
+
 ## Alerts
 
 Deployment alerts appear above an app's tabs and reflect **current cluster

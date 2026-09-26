@@ -42,6 +42,7 @@
 		StorageCard
 	} from '$lib/components/database';
 	import RenameModal from '$lib/components/RenameModal.svelte';
+	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
 	import type {
 		DatabaseDetail,
 		Backup,
@@ -1401,6 +1402,7 @@
 		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || dbErrorConfirmed)}
 			<DatabaseProvisioning {dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />
 		{:else}
+			<Anomalies scope={{ kind: 'database', id: dbId }} hideResource />
 			{#if database.liveStatus}
 				{@const state = podStateLabel()}
 				<div class="db-stats">
