@@ -1220,6 +1220,12 @@
 					<p class="observe-empty-desc">Add a domain to see HTTP metrics</p>
 				</div>
 			{:else}
+				{#if capabilities?.httpMetricsShared}
+					<p class="observe-note">
+						Protected domains share one backend per project, so these numbers include every
+						protected app in it.
+					</p>
+				{/if}
 				<DeploymentMetrics
 					kind="deployment"
 					source="http"
@@ -2109,6 +2115,13 @@
 		color: var(--surface-muted);
 		margin: 0;
 		max-width: 360px;
+	}
+
+	.observe-note {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--surface-muted);
+		margin: 0 0 0.75rem;
 	}
 
 	.observe-chart-grid {

@@ -264,7 +264,7 @@
 			return;
 		}
 		const seq = ++fetchSeq;
-		if (!loaded) initialLoading = true;
+		if (!loaded && !fetchError) initialLoading = true;
 		try {
 			const groupParam = groupBy === 'pod' ? '&groupBy=pod' : '';
 			const url =
@@ -272,7 +272,12 @@
 					? `/apiv1/observe/deployments/${encodeURIComponent(id)}/http-metrics?start=${start}&end=${end}&step=${stepMs}`
 					: `/apiv1/${kind === 'database' ? 'databases' : 'deployments'}/${encodeURIComponent(id)}/metrics?start=${start}&end=${end}&step=${stepMs}${groupParam}`;
 			const res = await apiFetch(url);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(
+					res.status === 503 ? 'metrics store unreachable' : detail?.message || `HTTP ${res.status}`
+				);
+			}
 			const body = await res.json();
 			if (seq !== fetchSeq) return;
 			if (source === 'http') {
@@ -1192,7 +1197,14 @@
 			{/if}
 		</div>
 	{:else if !hasData && fetchError && !loaded}
-		<div class="mtx-empty" role="alert">Failed to load metrics: {fetchError}</div>
+		<div class="mtx-empty" role="alert">
+			<p>
+				{fetchError === 'metrics store unreachable'
+					? 'Metrics store unreachable'
+					: 'Failed to load metrics'}
+			</p>
+			{#if fetchError !== 'metrics store unreachable'}<span>{fetchError}</span>{/if}
+		</div>
 	{:else}
 		<div class="mtx-board">
 			{#each CARDS as c (c.id)}

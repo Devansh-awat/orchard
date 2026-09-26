@@ -55,6 +55,7 @@ export class MetricsService {
           select: {
             id: true,
             name: true,
+            namespace: true,
             cpuRequestMilli: true,
             memoryRequestBytes: true,
             replicas: true
@@ -93,6 +94,7 @@ export class MetricsService {
 
     for (const p of projects) {
       for (const d of p.deployments) {
+        const ns = d.namespace || p.namespace;
         const requestedCpu = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
         const requestedMem =
           (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
@@ -100,10 +102,10 @@ export class MetricsService {
           (async () => {
             const [cpu, mem] = await Promise.all([
               this.vm.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`
               ),
               this.vm.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""})[${rangeSeconds}s:60s])`
+                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(ns)}",pod=~"${deploymentPodRegex(d.name)}",container="",image=""})[${rangeSeconds}s:60s])`
               )
             ]);
             const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;

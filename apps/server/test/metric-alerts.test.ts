@@ -30,7 +30,10 @@ test("cpu and memory are a percent of the limit across every replica, and only t
   const cpu = buildMetricQuery('cpu_percent', target);
   assert.equal(cpu.kind, 'query');
   assert.match((cpu as any).promql, /\/ 1000$/);
-  assert.match((cpu as any).promql, /pod=~"crescent-\[a-z0-9\]\+-\[a-z0-9\]\+"/);
+  assert.match(
+    (cpu as any).promql,
+    /pod=~"\(\?:crescent\|crescent--green\)-\[a-z0-9\]\+-\[a-z0-9\]\+"/
+  );
   assert.doesNotMatch((cpu as any).promql, /crescent-\.\*/);
   const mem = buildMetricQuery('memory_percent', target);
   assert.match((mem as any).promql, new RegExp(`/ ${2 * 256 * 1024 * 1024}$`));

@@ -43,3 +43,9 @@ test('regex metacharacters in a name are escaped, not interpreted', () => {
   assert.ok(!matches('a.c', 'abc-7868f9d8bb-zcktr'));
   assert.ok(matches('a.c', 'a.c-7868f9d8bb-zcktr'));
 });
+
+test('a blue/green rollout keeps the green pods in the same series', () => {
+  assert.ok(matches('crescent', 'crescent--green-6c9d7f5b4-q2xkz'));
+  assert.ok(!matches('crescent-ssr', 'crescent--green-6c9d7f5b4-q2xkz'));
+  assert.ok(!matches('crescent', 'crescent-ssr--green-6c9d7f5b4-q2xkz'));
+});

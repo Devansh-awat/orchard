@@ -15,7 +15,8 @@ import {
   UploadedFile,
   BadRequestException,
   ForbiddenException,
-  NotFoundException
+  NotFoundException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -30,6 +31,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
 import { Auth } from '../auth/decorators';
 import { MetricsService } from '../metrics/metrics.service';
+import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 import { GitHubService } from '../github/github.service';
 import { UsersService } from '../users/users.service';
@@ -1007,25 +1009,30 @@ export class DeploymentsController {
       throw new BadRequestException('Deployment has no namespace/name');
     }
 
-    if (groupBy === 'pod') {
-      const grouped = await this.metricsService.fetchDeploymentMetricsByPod({
+    try {
+      if (groupBy === 'pod') {
+        const grouped = await this.metricsService.fetchDeploymentMetricsByPod({
+          namespace: dep.namespace,
+          deploymentName: dep.name,
+          startMs: start,
+          endMs: end,
+          stepMs: step
+        });
+        return { start, end, step, groupBy: 'pod', grouped };
+      }
+
+      const data = await this.metricsService.fetchDeploymentMetrics({
         namespace: dep.namespace,
         deploymentName: dep.name,
         startMs: start,
         endMs: end,
         stepMs: step
       });
-      return { start, end, step, groupBy: 'pod', grouped };
+      return { start, end, step, data };
+    } catch (err) {
+      if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
     }
-
-    const data = await this.metricsService.fetchDeploymentMetrics({
-      namespace: dep.namespace,
-      deploymentName: dep.name,
-      startMs: start,
-      endMs: end,
-      stepMs: step
-    });
-    return { start, end, step, data };
   }
 
   @Patch(':id/strategy')
@@ -2019,14 +2026,19 @@ export class DatabasesController {
       throw new BadRequestException('Database has no namespace/pod info');
     }
 
-    const data = await this.metricsService.fetchDatabaseMetrics({
-      namespace: db.namespace,
-      podPrefix,
-      startMs: start,
-      endMs: end,
-      stepMs: step
-    });
-    return { start, end, step, data };
+    try {
+      const data = await this.metricsService.fetchDatabaseMetrics({
+        namespace: db.namespace,
+        podPrefix,
+        startMs: start,
+        endMs: end,
+        stepMs: step
+      });
+      return { start, end, step, data };
+    } catch (err) {
+      if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
+    }
   }
 
   @Patch(':id/resources')

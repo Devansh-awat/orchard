@@ -11,7 +11,8 @@
  * carry no ReplicaSet hash at all.
  */
 export function deploymentPodRegex(name: string): string {
-  return `${escapePromRegex(name)}-[a-z0-9]+-[a-z0-9]+`;
+  const base = escapePromRegex(name);
+  return `(?:${base}|${base}--green)-[a-z0-9]+-[a-z0-9]+`;
 }
 
 export function escapePromRegex(s: string): string {

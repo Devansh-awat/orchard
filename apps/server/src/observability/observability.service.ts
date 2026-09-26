@@ -98,10 +98,13 @@ export interface ErrorGroup {
   trend: 'rising' | 'stable' | 'falling';
 }
 
+const PROTECTION_PROXY_SERVICE = 'orchard-protection-proxy';
+
 export interface Capabilities {
   logs: boolean;
   containerMetrics: boolean;
   httpMetrics: boolean;
+  httpMetricsShared: boolean;
   customMetrics: boolean;
   traces: boolean;
   runtime: DetectedRuntime | null;
@@ -343,19 +346,40 @@ export class ObservabilityService {
   }
 
   async getCapabilities(deploymentId: string): Promise<Capabilities> {
-    const [ingressCount, runtime] = await Promise.all([
+    const [ingressCount, runtime, httpMetricsShared] = await Promise.all([
       this.prisma.ingress.count({ where: { deploymentId } }),
-      this.detectRuntime(deploymentId).catch(() => null)
+      this.detectRuntime(deploymentId).catch(() => null),
+      this.protectedNeighbours(deploymentId)
     ]);
 
     return {
       logs: true,
       containerMetrics: true,
       httpMetrics: ingressCount > 0,
+      httpMetricsShared,
       customMetrics: false,
       traces: false,
       runtime
     };
+  }
+
+  private async protectedNeighbours(deploymentId: string): Promise<boolean> {
+    const own = await this.prisma.ingress.findFirst({
+      where: {
+        deploymentId,
+        OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+      },
+      select: { namespace: true }
+    });
+    if (!own) return false;
+    const others = await this.prisma.ingress.count({
+      where: {
+        namespace: own.namespace,
+        deploymentId: { not: deploymentId },
+        OR: [{ protectionMode: { not: 'none' } }, { redirectTarget: { not: null } }]
+      }
+    });
+    return others > 0;
   }
 
   async getHttpMetrics(
@@ -700,7 +724,7 @@ export class ObservabilityService {
       }),
       this.prisma.ingress.findMany({
         where: { deploymentId },
-        select: { service: { select: { name: true } } }
+        select: { protectionMode: true, redirectTarget: true, service: { select: { name: true } } }
       })
     ]);
 
@@ -709,6 +733,9 @@ export class ObservabilityService {
     const names = new Set<string>();
     for (const s of services) names.add(s.name);
     for (const i of ingresses) if (i.service?.name) names.add(i.service.name);
+    if (ingresses.some((i) => i.protectionMode !== 'none' || i.redirectTarget)) {
+      names.add(PROTECTION_PROXY_SERVICE);
+    }
     if (names.size === 0) return null;
 
     const alt = [...names].map(escapeRegex).join('|');

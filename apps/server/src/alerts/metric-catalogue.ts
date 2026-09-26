@@ -164,7 +164,7 @@ export function buildMetricQuery(id: MetricId, target: MetricTarget): MetricQuer
       if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };
       return {
         kind: 'query',
-        promql: `100 * sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector},code="5xx"}[${RATE_WINDOW}])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector}}[${RATE_WINDOW}])), 1)`
+        promql: `100 * (sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector},code="5xx"}[${RATE_WINDOW}])) or vector(0)) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${target.haproxySelector}}[${RATE_WINDOW}])), 1e-9)`
       };
     case 'latency_avg_ms':
       if (!target.haproxySelector) return { kind: 'inapplicable', reason: 'no ingress' };

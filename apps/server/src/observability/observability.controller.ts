@@ -8,12 +8,14 @@ import {
   Request,
   BadRequestException,
   Sse,
-  MessageEvent
+  MessageEvent,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ObservabilityService } from './observability.service';
+import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { ErrorIngestService } from './error-ingest.service';
 import { TimelineService } from './timeline.service';
 import { parseKinds } from './timeline-entries';
@@ -63,7 +65,12 @@ export class ObservabilityController {
     const start = Number(startStr) || end - 60 * 60 * 1000;
     const step = Math.max(1000, Number(stepStr) || 30_000);
     if (end <= start) throw new BadRequestException('end must be > start');
-    return this.observability.getHttpMetrics(id, start, end, step);
+    try {
+      return await this.observability.getHttpMetrics(id, start, end, step);
+    } catch (err) {
+      if (err instanceof MetricsStoreError) throw new ServiceUnavailableException(err.message);
+      throw err;
+    }
   }
 
   @Sse('deployments/:id/build-logs/stream')

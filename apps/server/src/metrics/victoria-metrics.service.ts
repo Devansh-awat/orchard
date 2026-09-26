@@ -27,6 +27,13 @@ interface PromMatrix {
 
 const QUERY_TIMEOUT_MS = 30_000;
 
+export class MetricsStoreError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'MetricsStoreError';
+  }
+}
+
 export function escapeLabel(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -107,22 +114,28 @@ export class VictoriaMetricsService {
       step: String(stepSec)
     });
     const url = `${this.base}/api/v1/query_range?${params}`;
+    let res: Response;
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
-      if (!res.ok) {
-        this.logger.warn(`VM query_range ${res.status}: ${await res.text()}`);
-        return [];
-      }
-      const body = (await res.json()) as PromMatrix;
-      if (body.status !== 'success' || !body.data?.result?.length) return [];
-      const series = body.data.result.map((r) => ({
-        key: label ? (r.metric?.[label] ?? 'unknown') : '',
-        points: r.values.map(([t, v]) => ({ x: t * 1000, y: Number(v) }))
-      }));
-      return label ? series.sort((a, b) => a.key.localeCompare(b.key)) : series;
+      res = await fetch(url, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
     } catch (err) {
-      this.logger.warn(`VM query_range failed: ${(err as Error).message}`);
-      return [];
+      const reason = (err as Error).message;
+      this.logger.warn(`VM query_range failed: ${reason}`);
+      throw new MetricsStoreError(`metrics store unreachable: ${reason}`);
     }
+    if (!res.ok) {
+      const text = await res.text();
+      this.logger.warn(`VM query_range ${res.status}: ${text}`);
+      throw new MetricsStoreError(`metrics store answered ${res.status}`);
+    }
+    const body = (await res.json()) as PromMatrix;
+    if (body.status !== 'success') {
+      throw new MetricsStoreError(`metrics store returned ${body.status}`);
+    }
+    if (!body.data?.result?.length) return [];
+    const series = body.data.result.map((r) => ({
+      key: label ? (r.metric?.[label] ?? 'unknown') : '',
+      points: r.values.map(([t, v]) => ({ x: t * 1000, y: Number(v) }))
+    }));
+    return label ? series.sort((a, b) => a.key.localeCompare(b.key)) : series;
   }
 }
