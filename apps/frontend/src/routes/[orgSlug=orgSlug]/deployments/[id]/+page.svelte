@@ -1813,6 +1813,41 @@
 		}
 	}
 
+	let redirectUpdatingId = $state<string | null>(null);
+	async function updateRedirect(
+		ingressId: string,
+		data: { host: string; redirectTarget: string; redirectStatus: number }
+	) {
+		if (!deployment?.project?.id) return;
+		redirectUpdatingId = ingressId;
+		try {
+			const response = await apiFetch(
+				`/apiv1/projects/${deployment.project.id}/ingresses/${ingressId}`,
+				{
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(data)
+				}
+			);
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				throw new Error(body.message || 'Failed to update redirect');
+			}
+			toasts.add({ title: 'Redirect updated', description: data.host, color: 'success' });
+			await fetchDeployment();
+			await fetchProjectIngresses();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update redirect',
+				color: 'error'
+			});
+			throw e;
+		} finally {
+			redirectUpdatingId = null;
+		}
+	}
+
 	function resetDomainForm() {
 		newDomainHost = '';
 		newDomainPath = '/';
@@ -3237,6 +3272,8 @@
 							onCheckDns={checkDomainDns}
 							onUpdateProtection={updateProtection}
 							{protectionUpdatingId}
+							onUpdateRedirect={updateRedirect}
+							{redirectUpdatingId}
 							{toasts}
 						/>
 					{:else if tab.id === 'observe'}

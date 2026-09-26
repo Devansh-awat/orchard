@@ -1527,6 +1527,8 @@ orchard update <ingress-id>
 | --- | --- | --- | --- |
 | `--host` | string |  | new domain name |
 | `--path` | string | `/` | URL path prefix |
+| `--redirect-status` | int | `0` | for a redirect domain: 301, 302, 307 or 308 |
+| `--redirect-to` | string |  | for a redirect domain: where it sends visitors |
 | `--service-port` | int | `0` | service port to route to |
 | `--tls` | bool | `true` | provision TLS for the host |
 

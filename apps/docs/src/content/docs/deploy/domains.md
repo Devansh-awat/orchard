@@ -26,6 +26,21 @@ Organizations can have **DNS-verified domains**, which proves ownership of a
 parent domain once so hostnames underneath it can be attached without
 re-verifying each time.
 
+## Redirects
+
+A domain can send visitors somewhere else instead of serving the app: pick
+**Redirect to domain** when adding it, give it a destination and a status
+(301, 302, 307 or 308). The path and query string are carried over.
+
+A redirect can be edited later from the pencil on its row: the destination, the
+status, and the domain itself. Changing the domain provisions the new one before
+the old one is removed, so the id and history stay put. From the CLI:
+
+```sh
+orchard domain update <ingress-id> --redirect-to www.example.com --redirect-status 308
+orchard domain update <ingress-id> --host new.example.com
+```
+
 ## Certificates
 
 On the one-command installer, apps get per-hostname certificates over HTTP-01.

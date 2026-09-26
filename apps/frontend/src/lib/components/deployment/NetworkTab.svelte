@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Lock, Shield, Check, Network } from 'lucide-svelte';
+	import { Loader2, Lock, Shield, Check, Network, PenLine } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
 	import { Button, SectionCard, Select, SegmentedControl } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
@@ -68,6 +68,8 @@
 		onGenerateRandomDomain,
 		onCheckDns,
 		onUpdateProtection,
+		onUpdateRedirect,
+		redirectUpdatingId = null,
 		protectionUpdatingId,
 		toasts
 	}: {
@@ -126,6 +128,11 @@
 		onResetDomainForm: () => void;
 		onGenerateRandomDomain: () => void;
 		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
+		onUpdateRedirect?: (
+			ingressId: string,
+			data: { host: string; redirectTarget: string; redirectStatus: number }
+		) => Promise<void>;
+		redirectUpdatingId?: string | null;
 		onUpdateProtection?: (
 			ingressId: string,
 			mode: string,
@@ -137,6 +144,50 @@
 	} = $props();
 
 	let protectionExpandedId = $state<string | null>(null);
+	let redirectExpandedId = $state<string | null>(null);
+	let redirectHostEdit = $state('');
+	let redirectTargetEdit = $state('');
+	let redirectStatusEdit = $state('307');
+	let redirectEditing = $state<{ host: string; target: string; status: string } | null>(null);
+	const redirectEditDirty = $derived(
+		!!redirectEditing &&
+			(redirectHostEdit.trim().toLowerCase() !== redirectEditing.host ||
+				redirectTargetEdit.trim() !== redirectEditing.target ||
+				redirectStatusEdit !== redirectEditing.status)
+	);
+	const redirectEditValid = $derived(
+		!!redirectHostEdit.trim() && !!redirectTargetEdit.trim() && redirectEditDirty
+	);
+
+	function toggleRedirect(ingress: any) {
+		if (redirectExpandedId === ingress.id) {
+			redirectExpandedId = null;
+			redirectEditing = null;
+			return;
+		}
+		protectionExpandedId = null;
+		redirectExpandedId = ingress.id;
+		redirectHostEdit = ingress.host;
+		redirectTargetEdit = String(ingress.redirectTarget ?? '').replace(/^https?:\/\//, '');
+		redirectStatusEdit = String(ingress.redirectStatus ?? 307);
+		redirectEditing = {
+			host: ingress.host,
+			target: redirectTargetEdit,
+			status: redirectStatusEdit
+		};
+	}
+
+	async function saveRedirect(ingress: any) {
+		if (!onUpdateRedirect || !redirectEditValid) return;
+		await onUpdateRedirect(ingress.id, {
+			host: redirectHostEdit.trim().toLowerCase(),
+			redirectTarget: redirectTargetEdit.trim(),
+			redirectStatus: Number(redirectStatusEdit)
+		});
+		redirectExpandedId = null;
+		redirectEditing = null;
+	}
+
 	let protectionMode = $state<string>('none');
 	let protectionPassword = $state('');
 	let protectionBypassPaths = $state('');
@@ -556,6 +607,23 @@
 								{/if}
 							</a>
 							<div class="flex items-center gap-1.5">
+								{#if onUpdateRedirect && ingress.redirectTarget}
+									<Button
+										variant="ghost"
+										size="sm"
+										aria-label="Edit redirect"
+										title="Edit redirect"
+										style={redirectExpandedId === ingress.id
+											? 'color: var(--sidebar-text-active-border);'
+											: undefined}
+										onclick={(e: MouseEvent) => {
+											e.stopPropagation();
+											toggleRedirect(ingress);
+										}}
+									>
+										<PenLine size={16} class="h-4 w-4" />
+									</Button>
+								{/if}
 								{#if onUpdateProtection && !ingress.redirectTarget}
 									<Button
 										variant="ghost"
@@ -592,6 +660,69 @@
 								</Button>
 							</div>
 						</div>
+
+						{#if redirectExpandedId === ingress.id}
+							<div
+								class="border-t px-3 pb-3 pt-2"
+								style="border-color: var(--surface-border);"
+								transition:slide={{ duration: 150 }}
+							>
+								<div class="dom-row">
+									<span class="dom-row-label">Domain</span>
+									<input
+										type="text"
+										class="dom-input"
+										aria-label="Domain"
+										bind:value={redirectHostEdit}
+									/>
+									{#if redirectHostEdit.trim().toLowerCase() !== ingress.host}
+										<p class="dom-hint">Point the new domain's DNS at the cluster before saving.</p>
+									{/if}
+								</div>
+								<div class="dom-row">
+									<span class="dom-row-label">Redirect to</span>
+									<input
+										type="text"
+										class="dom-input"
+										placeholder="example.com"
+										aria-label="Redirect destination"
+										bind:value={redirectTargetEdit}
+									/>
+								</div>
+								<div class="dom-row">
+									<span class="dom-row-label">Redirect type</span>
+									<Select bind:value={redirectStatusEdit} aria-label="Redirect type">
+										<optgroup label="Temporary">
+											<option value="307">307 Temporary Redirect</option>
+											<option value="302">302 Found</option>
+										</optgroup>
+										<optgroup label="Permanent">
+											<option value="308">308 Permanent Redirect</option>
+											<option value="301">301 Moved Permanently</option>
+										</optgroup>
+									</Select>
+								</div>
+								<div class="flex justify-end gap-2 mt-3">
+									<Button
+										variant="secondary"
+										size="sm"
+										onclick={() => toggleRedirect(ingress)}
+										disabled={redirectUpdatingId === ingress.id}
+									>
+										Cancel
+									</Button>
+									<Button
+										variant="primary"
+										size="sm"
+										disabled={!redirectEditValid || redirectUpdatingId === ingress.id}
+										loading={redirectUpdatingId === ingress.id}
+										onclick={() => saveRedirect(ingress)}
+									>
+										Save
+									</Button>
+								</div>
+							</div>
+						{/if}
 
 						{#if protectionExpandedId === ingress.id}
 							<div

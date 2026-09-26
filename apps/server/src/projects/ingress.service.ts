@@ -1091,6 +1091,80 @@ export class IngressService implements OnModuleInit {
     return this.deployments.addInternalUrlsToDeployment(result);
   }
 
+  private async redirectIngressSpec(
+    project: { slug: string; namespace: string },
+    rawHost: string,
+    tlsEnabled: boolean
+  ) {
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
+    const tlsSecretName = tlsEnabled
+      ? (wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`)
+      : null;
+    const tlsHosts = tlsSecretName ? [rawHost] : [];
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
+    const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
+    const annotations: Record<string, string> = {};
+    if (tlsEnabled) annotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+    if (clusterIssuer) annotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
+
+    const hostSlug = rawHost
+      .split('.')
+      .map((segment) => formatSlug(segment))
+      .filter(Boolean)
+      .join('-');
+    const baseName =
+      truncateK8sName(formatSlug(`${project.slug}-${hostSlug}-redirect`), 48) ||
+      `redirect-${Math.floor(Date.now() / 1000)}`;
+    let ingressName = baseName;
+    let suffixCounter = 1;
+    while (
+      await this.prisma.ingress.findFirst({
+        where: { namespace: project.namespace, name: ingressName }
+      })
+    ) {
+      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
+      if (suffixCounter > 50) {
+        throw new BadRequestException('Failed to generate unique ingress name');
+      }
+    }
+    return { ingressName, tlsSecretName, tlsHosts, clusterIssuer, entrypoints, annotations };
+  }
+
+  private async applyRedirectIngress(
+    namespace: string,
+    rawHost: string,
+    spec: Awaited<ReturnType<IngressService['redirectIngressSpec']>>
+  ): Promise<string | null> {
+    const proxyServicePort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
+    const ingressResult = await this.k8sNetwork.createIngress({
+      namespace,
+      name: spec.ingressName,
+      host: rawHost,
+      path: '/',
+      pathType: 'Prefix',
+      serviceName: 'orchard-protection-proxy',
+      servicePort: proxyServicePort,
+      tlsSecretName: spec.tlsSecretName || undefined,
+      tlsHosts: spec.tlsHosts,
+      ingressClassName: TENANT_INGRESS_CLASS,
+      entrypoints: spec.entrypoints,
+      annotations: spec.annotations
+    });
+    const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
+      ? ingressResult.status?.loadBalancer?.ingress?.[0] || null
+      : null;
+    const proxyResult = await this.k8sNetwork.enableProtectionProxy(namespace, spec.ingressName);
+    if (proxyResult !== 'applied') {
+      try {
+        await this.k8sNetwork.deleteIngress(namespace, spec.ingressName);
+      } catch {}
+      throw new BadRequestException(
+        'Could not configure the domain redirect; try again in a moment'
+      );
+    }
+    return statusRecord?.ip || statusRecord?.hostname || null;
+  }
+
   private async createProjectRedirectIngress(
     project: any,
     rawHost: string,
@@ -1130,61 +1204,9 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('Select an app for this redirect');
     }
 
-    const proxyServicePort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
-
-    const tlsEnabled = data.tlsEnabled !== false;
-    const wildcardSecret = wildcardTlsSecretFor(rawHost);
-    const tlsSecretName = tlsEnabled
-      ? (wildcardSecret ?? `${OWN_CERT_PREFIX}${randomUUID()}`)
-      : null;
-    const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
-    const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
-    const annotations: Record<string, string> = {};
-    if (tlsEnabled) annotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-    if (clusterIssuer) annotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
-
-    const hostSlug = rawHost
-      .split('.')
-      .map((segment) => formatSlug(segment))
-      .filter(Boolean)
-      .join('-');
-    const baseName =
-      truncateK8sName(formatSlug(`${project.slug}-${hostSlug}-redirect`), 48) ||
-      `redirect-${Math.floor(Date.now() / 1000)}`;
-    let ingressName = baseName;
-    let suffixCounter = 1;
-    while (
-      await this.prisma.ingress.findFirst({
-        where: { namespace: project.namespace, name: ingressName }
-      })
-    ) {
-      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
-      if (suffixCounter > 50) {
-        throw new BadRequestException('Failed to generate unique ingress name');
-      }
-    }
-
     await this.access.assertHostnameAvailable(rawHost, project.id);
-
-    const ingressResult = await this.k8sNetwork.createIngress({
-      namespace: project.namespace,
-      name: ingressName,
-      host: rawHost,
-      path: '/',
-      pathType: 'Prefix',
-      serviceName: 'orchard-protection-proxy',
-      servicePort: proxyServicePort,
-      tlsSecretName: tlsSecretName || undefined,
-      tlsHosts,
-      ingressClassName: TENANT_INGRESS_CLASS,
-      entrypoints,
-      annotations
-    });
-    const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
-      ? ingressResult.status?.loadBalancer?.ingress?.[0] || null
-      : null;
-    const statusAddress = statusRecord?.ip || statusRecord?.hostname || null;
+    const spec = await this.redirectIngressSpec(project, rawHost, data.tlsEnabled !== false);
+    const statusAddress = await this.applyRedirectIngress(project.namespace, rawHost, spec);
 
     let created;
     try {
@@ -1192,18 +1214,18 @@ export class IngressService implements OnModuleInit {
         data: {
           projectId: project.id,
           deploymentId: deployment.id,
-          name: ingressName,
+          name: spec.ingressName,
           namespace: project.namespace,
           host: rawHost,
           path: '/',
           pathType: 'Prefix',
-          tlsSecretName,
-          tlsHosts,
+          tlsSecretName: spec.tlsSecretName,
+          tlsHosts: spec.tlsHosts,
           ingressClass: TENANT_INGRESS_CLASS,
-          entrypoints,
-          clusterIssuer,
-          annotations: Object.keys(annotations).length
-            ? (annotations as Prisma.JsonObject)
+          entrypoints: spec.entrypoints,
+          clusterIssuer: spec.clusterIssuer,
+          annotations: Object.keys(spec.annotations).length
+            ? (spec.annotations as Prisma.JsonObject)
             : undefined,
           statusAddress,
           redirectTarget,
@@ -1212,20 +1234,9 @@ export class IngressService implements OnModuleInit {
       });
     } catch (error) {
       try {
-        await this.k8sNetwork.deleteIngress(project.namespace, ingressName);
+        await this.k8sNetwork.deleteIngress(project.namespace, spec.ingressName);
       } catch {}
       throw error;
-    }
-
-    const proxyResult = await this.k8sNetwork.enableProtectionProxy(project.namespace, ingressName);
-    if (proxyResult !== 'applied') {
-      await this.prisma.ingress.delete({ where: { id: created.id } });
-      try {
-        await this.k8sNetwork.deleteIngress(project.namespace, ingressName);
-      } catch {}
-      throw new BadRequestException(
-        'Could not configure the domain redirect; try again in a moment'
-      );
     }
 
     void this.audit.log({
@@ -1242,6 +1253,95 @@ export class IngressService implements OnModuleInit {
     });
 
     return this.projects.getProject(project.id, clerkId, userData);
+  }
+
+  async updateProjectRedirectIngress(
+    ingress: {
+      id: string;
+      host: string;
+      name: string;
+      namespace: string;
+      redirectTarget: string | null;
+      redirectStatus: number | null;
+      tlsSecretName: string | null;
+    },
+    project: any,
+    data: { host?: string; redirectTarget?: string; redirectStatus?: number; tlsEnabled?: boolean },
+    user: { id: string; email?: string | null }
+  ) {
+    const nextHost = String(data.host ?? ingress.host)
+      .trim()
+      .toLowerCase();
+    if (!nextHost) throw new BadRequestException('Host is required');
+    const target = normalizeRedirectTarget(
+      data.redirectTarget ?? ingress.redirectTarget ?? '',
+      nextHost
+    );
+    const status = Number(data.redirectStatus ?? ingress.redirectStatus ?? 307);
+    if (!REDIRECT_STATUSES.has(status)) {
+      throw new BadRequestException('Redirect status must be 301, 302, 307, or 308');
+    }
+
+    const hostChanged = nextHost !== ingress.host;
+    let renamed: { name: string; tlsSecretName: string | null } | null = null;
+    if (hostChanged) {
+      const taken = project.deployments
+        .flatMap((deployment) => deployment.ingresses ?? [])
+        .find((entry) => entry.host === nextHost && entry.id !== ingress.id);
+      if (taken) throw new BadRequestException('This domain is already in use by the project');
+      await this.access.assertHostnameAvailable(nextHost, project.id);
+
+      const tlsEnabled = data.tlsEnabled ?? Boolean(ingress.tlsSecretName);
+      const spec = await this.redirectIngressSpec(project, nextHost, tlsEnabled);
+      const statusAddress = await this.applyRedirectIngress(project.namespace, nextHost, spec);
+      await this.prisma.ingress.update({
+        where: { id: ingress.id },
+        data: {
+          host: nextHost,
+          name: spec.ingressName,
+          tlsSecretName: spec.tlsSecretName,
+          tlsHosts: spec.tlsHosts,
+          entrypoints: spec.entrypoints,
+          clusterIssuer: spec.clusterIssuer,
+          annotations: Object.keys(spec.annotations).length
+            ? (spec.annotations as Prisma.JsonObject)
+            : undefined,
+          statusAddress,
+          redirectTarget: target,
+          redirectStatus: status
+        }
+      });
+      renamed = { name: spec.ingressName, tlsSecretName: spec.tlsSecretName };
+      try {
+        await this.k8sNetwork.deleteIngress(project.namespace, ingress.name);
+      } catch (error) {
+        this.logger.warn(
+          `old redirect ingress ${project.namespace}/${ingress.name} was not removed after renaming to ${nextHost}: ${error?.message}`
+        );
+      }
+    } else {
+      await this.prisma.ingress.update({
+        where: { id: ingress.id },
+        data: { redirectTarget: target, redirectStatus: status }
+      });
+    }
+
+    void this.audit.log({
+      action: 'ingress.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId: project.id,
+      targetType: 'ingress',
+      targetId: ingress.id,
+      targetLabel: nextHost,
+      metadata: {
+        host: [ingress.host, nextHost],
+        redirectTarget: [ingress.redirectTarget, target],
+        redirectStatus: [ingress.redirectStatus, status],
+        ingressName: renamed ? [ingress.name, renamed.name] : undefined
+      }
+    });
   }
 
   async createProjectIngress(
@@ -1813,7 +1913,9 @@ export class IngressService implements OnModuleInit {
     data: {
       host: string;
       tlsEnabled?: boolean;
-      routes: { path: string; serviceName: string; servicePort: number }[];
+      routes?: { path: string; serviceName: string; servicePort: number }[];
+      redirectTarget?: string;
+      redirectStatus?: number;
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -1872,6 +1974,11 @@ export class IngressService implements OnModuleInit {
       /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
     if (!hostPattern.test(rawHost)) {
       throw new BadRequestException('Host is invalid');
+    }
+
+    if (ingress.redirectTarget) {
+      await this.updateProjectRedirectIngress(ingress, project, { ...data, host: rawHost }, user);
+      return this.projects.getProject(project.id, clerkId, userData);
     }
 
     const routes = Array.isArray(data.routes) && data.routes.length > 0 ? data.routes : null;

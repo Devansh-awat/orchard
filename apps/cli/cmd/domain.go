@@ -215,8 +215,8 @@ func domainCreateCmd() *cobra.Command {
 }
 
 func domainUpdateCmd() *cobra.Command {
-	var host, path string
-	var servicePort int
+	var host, path, redirectTo string
+	var servicePort, redirectStatus int
 	var tls bool
 	c := &cobra.Command{
 		Use:   "update <ingress-id>",
@@ -240,7 +240,19 @@ func domainUpdateCmd() *cobra.Command {
 				newHost = host
 			}
 			var raw any
-			if depID := str(ing["deploymentId"]); depID != "" {
+			if target := str(ing["redirectTarget"]); target != "" || changed("redirect-to") {
+				body := map[string]any{"host": newHost}
+				if changed("redirect-to") {
+					body["redirectTarget"] = redirectTo
+				}
+				if changed("redirect-status") {
+					body["redirectStatus"] = redirectStatus
+				}
+				if changed("tls") {
+					body["tlsEnabled"] = tls
+				}
+				err = cl.Send(cmd.Context(), http.MethodPut, "/projects/"+url.PathEscape(str(ing["projectId"]))+"/ingresses/"+url.PathEscape(args[0]), body, &raw)
+			} else if depID := str(ing["deploymentId"]); depID != "" {
 				body := map[string]any{"host": newHost}
 				if changed("path") {
 					body["path"] = path
@@ -285,6 +297,8 @@ func domainUpdateCmd() *cobra.Command {
 	c.Flags().StringVar(&path, "path", "/", "URL path prefix")
 	c.Flags().IntVar(&servicePort, "service-port", 0, "service port to route to")
 	c.Flags().BoolVar(&tls, "tls", true, "provision TLS for the host")
+	c.Flags().StringVar(&redirectTo, "redirect-to", "", "for a redirect domain: where it sends visitors")
+	c.Flags().IntVar(&redirectStatus, "redirect-status", 0, "for a redirect domain: 301, 302, 307 or 308")
 	return c
 }
 

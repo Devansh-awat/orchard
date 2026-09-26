@@ -604,7 +604,9 @@ export class ProjectsController {
     body: {
       host: string;
       tlsEnabled?: boolean;
-      routes: { path: string; serviceName: string; servicePort: number }[];
+      routes?: { path: string; serviceName: string; servicePort: number }[];
+      redirectTarget?: string;
+      redirectStatus?: number;
       basicAuth?: {
         enabled: boolean;
         username: string;

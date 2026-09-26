@@ -434,10 +434,36 @@ The user must point their domain's DNS to the cluster before creating the ingres
         ingressId: z.string().describe('The ingress UUID to update'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix'),
-        servicePort: z.number().optional().describe('The service port to route to')
+        servicePort: z.number().optional().describe('The service port to route to'),
+        redirectTarget: z
+          .string()
+          .optional()
+          .describe('For a redirect domain: the domain it sends visitors to'),
+        redirectStatus: z
+          .number()
+          .optional()
+          .describe('For a redirect domain: 301, 302, 307 or 308')
       }
     },
-    async ({ deploymentId, ingressId, host, path, servicePort }) => {
+    async ({
+      deploymentId,
+      ingressId,
+      host,
+      path,
+      servicePort,
+      redirectTarget,
+      redirectStatus
+    }) => {
+      if (redirectTarget !== undefined || redirectStatus !== undefined) {
+        const current = (await client.get(`/ingresses/${ingressId}`)) as { projectId?: string };
+        if (!current?.projectId) throw new Error('Ingress has no project');
+        const body: Record<string, any> = { host };
+        if (redirectTarget !== undefined) body.redirectTarget = redirectTarget;
+        if (redirectStatus !== undefined) body.redirectStatus = redirectStatus;
+        return json(
+          await client.put(`/projects/${current.projectId}/ingresses/${ingressId}`, body)
+        );
+      }
       const body: Record<string, any> = { host };
       if (path !== undefined) body.path = path;
       if (servicePort !== undefined) body.servicePort = servicePort;
