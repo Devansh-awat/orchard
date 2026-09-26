@@ -882,7 +882,7 @@ ${registryConfigs}
     // - use_path_style should be true for R2
     // Note: buildctl uses --import-cache and --export-cache (not --cache-from/--cache-to)
     const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},use_path_style=true`;
-    const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=max,use_path_style=true`;
+    const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=min,use_path_style=true`;
 
     return ['--import-cache', importCache, '--export-cache', exportCache];
   }
@@ -1745,6 +1745,7 @@ fi
             return {
               name: 'buildkit',
               image: this.buildkitImage,
+              imagePullPolicy: 'IfNotPresent',
               // Not privileged — just a gRPC client. The daemon pod has registry
               // creds and pushes directly, so the client doesn't need docker-config.
               command: ['/bin/sh', '-c'],
@@ -1776,6 +1777,7 @@ fi
           return {
             name: 'buildkit',
             image: this.buildkitImage,
+            imagePullPolicy: 'IfNotPresent',
             securityContext: { privileged: true },
             command: ['/bin/sh', '-c'],
             args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
@@ -1893,6 +1895,7 @@ fi
         ? {
             name: 'pusher',
             image: this.pusherImage,
+            imagePullPolicy: 'IfNotPresent',
             command: ['/bin/sh', '-c'],
             args: [
               `set -e
@@ -2343,9 +2346,15 @@ exit $rc`
     //     sidecar container.
     //   - Default: push directly from BuildKit.
     if (this.sidecarPushEnabled && !options.skipCache) {
-      args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
+      args.push(
+        '--output',
+        `type=oci,"name=${fullImageName}",dest=/output/image.tar,compression=zstd,oci-mediatypes=true`
+      );
     } else {
-      args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+      args.push(
+        '--output',
+        `type=image,"name=${fullImageName}",push=true,compression=zstd,oci-mediatypes=true`
+      );
     }
 
     return args;
@@ -2396,9 +2405,15 @@ exit $rc`
     }
 
     if (this.sidecarPushEnabled && !options.skipCache) {
-      args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
+      args.push(
+        '--output',
+        `type=oci,"name=${fullImageName}",dest=/output/image.tar,compression=zstd,oci-mediatypes=true`
+      );
     } else {
-      args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+      args.push(
+        '--output',
+        `type=image,"name=${fullImageName}",push=true,compression=zstd,oci-mediatypes=true`
+      );
     }
 
     return args;

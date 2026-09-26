@@ -354,7 +354,7 @@ export class BuildKitPoolService {
    * Delete daemon pods that haven't been used within maxIdleMs.
    * Call this periodically (e.g. every 5 minutes via setInterval).
    */
-  async reapIdleDaemons(maxIdleMs = 30 * 60_000): Promise<void> {
+  async reapIdleDaemons(maxIdleMs = 120 * 60_000): Promise<void> {
     if (!this.kc) return;
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
