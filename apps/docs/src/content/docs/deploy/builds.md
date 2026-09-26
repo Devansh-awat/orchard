@@ -23,6 +23,13 @@ Build status is tracked from the cluster's own job state rather than inferred
 from a request, so a builder that dies is reported as failed instead of hanging
 in "building" forever.
 
+## Where the time went
+
+Under the steps, a finished build shows a bar split into queue, builder,
+start, clone, build, push and rollout, each with its seconds. Builder is the
+wait between the job being submitted and its pod running, which is where disk
+attach and image pulls hide; start is the pod coming up before the clone begins.
+
 ## Caching
 
 Builders share a BuildKit cache so a second build of the same repo reuses layers.
