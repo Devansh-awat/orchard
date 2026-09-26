@@ -205,6 +205,131 @@ export class K8sNetworkService implements OnModuleInit {
     } catch (error) {
       this.logger.warn(`Failed to restore orphaned protection backends: ${error.message}`);
     }
+
+    try {
+      await this.syncUnprotectedBackends();
+    } catch (error) {
+      this.logger.warn(`Failed to reconcile ingress backends: ${error.message}`);
+    }
+  }
+
+  async readIngressBackends(
+    namespace: string,
+    name: string
+  ): Promise<Map<string, { name: string; port: number }> | null> {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      const { body } = await networkingApi.readNamespacedIngress(name, namespace);
+      const out = new Map<string, { name: string; port: number }>();
+      for (const rule of body.spec?.rules || []) {
+        for (const p of rule.http?.paths || []) {
+          const svc = p.backend?.service;
+          if (!svc?.name) continue;
+          out.set(p.path || '/', { name: svc.name, port: Number(svc.port?.number ?? 0) });
+        }
+      }
+      return out;
+    } catch (error) {
+      if (error.response?.statusCode === 404) return null;
+      throw error;
+    }
+  }
+
+  async setIngressBackends(
+    namespace: string,
+    name: string,
+    backends: { path: string; serviceName: string; servicePort: number }[]
+  ): Promise<'applied' | 'unchanged' | 'ingress-missing'> {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    let ingress: k8s.V1Ingress;
+    try {
+      ingress = (await networkingApi.readNamespacedIngress(name, namespace)).body;
+    } catch (error) {
+      if (error.response?.statusCode === 404) return 'ingress-missing';
+      throw error;
+    }
+    const wanted = new Map(backends.map((b) => [b.path || '/', b]));
+    let changed = false;
+    for (const rule of ingress.spec?.rules || []) {
+      for (const p of rule.http?.paths || []) {
+        const b = wanted.get(p.path || '/');
+        if (!b) continue;
+        const current = p.backend?.service;
+        if (current?.name === b.serviceName && current?.port?.number === b.servicePort) continue;
+        p.backend = { service: { name: b.serviceName, port: { number: b.servicePort } } };
+        changed = true;
+      }
+    }
+    if (!changed) return 'unchanged';
+    await networkingApi.replaceNamespacedIngress(name, namespace, ingress);
+    return 'applied';
+  }
+
+  async syncIngressBackends(
+    namespace: string,
+    name: string
+  ): Promise<'proxy' | 'applied' | 'unchanged' | 'ingress-missing' | 'no-rows' | 'failed'> {
+    const rows = await this.prisma.ingress.findMany({
+      where: { namespace, name },
+      include: { service: { include: { ports: true } } }
+    });
+    if (rows.length === 0) return 'no-rows';
+    if (rows.some((r) => r.protectionMode !== 'none' || r.redirectTarget !== null)) {
+      const result = await this.enableProtectionProxy(namespace, name);
+      if (result === 'applied') return 'proxy';
+      return result === 'ingress-missing' ? 'ingress-missing' : 'failed';
+    }
+    const live = await this.readIngressBackends(namespace, name);
+    if (live === null) return 'ingress-missing';
+    const backends: { path: string; serviceName: string; servicePort: number }[] = [];
+    for (const row of rows) {
+      if (!row.service) continue;
+      const path = row.path || '/';
+      const onCluster = live.get(path);
+      const persisted = row.servicePort;
+      const seen = onCluster && onCluster.name === row.service.name ? onCluster.port : null;
+      const known = new Set<number>([
+        ...row.service.ports.map((p) => p.port),
+        ...(row.service.port ? [row.service.port] : [])
+      ]);
+      let port: number | null = persisted && known.has(persisted) ? persisted : null;
+      if (port === null && seen && known.has(seen)) port = seen;
+      if (port === null) port = row.service.ports[0]?.port ?? row.service.port ?? null;
+      if (!port) continue;
+      if (row.servicePort !== port) {
+        await this.prisma.ingress.update({ where: { id: row.id }, data: { servicePort: port } });
+      }
+      backends.push({ path, serviceName: row.service.name, servicePort: port });
+    }
+    if (backends.length === 0) return 'unchanged';
+    return this.setIngressBackends(namespace, name, backends);
+  }
+
+  private async syncUnprotectedBackends(): Promise<void> {
+    const groups = await this.prisma.ingress.findMany({
+      where: { protectionMode: 'none', redirectTarget: null },
+      select: { namespace: true, name: true },
+      distinct: ['namespace', 'name']
+    });
+    let applied = 0;
+    let failed = 0;
+    for (const g of groups) {
+      try {
+        const r = await this.syncIngressBackends(g.namespace, g.name);
+        if (r === 'applied') applied += 1;
+        else if (r === 'failed') failed += 1;
+      } catch (error) {
+        failed += 1;
+        this.logger.warn(
+          `Failed to sync backends for ${g.namespace}/${g.name}: ${k8sErrorMessage(error)}`
+        );
+      }
+    }
+    if (applied > 0 || failed > 0) {
+      this.logger.log(`Ingress backends reconciled: ${applied} repointed, ${failed} failed`);
+    }
   }
 
   private async restoreOrphanedProtectionBackends(protectedKeys: Set<string>): Promise<void> {
@@ -1381,41 +1506,6 @@ export class K8sNetworkService implements OnModuleInit {
         message: error.message
       });
     }
-  }
-
-  async patchIngressPathPort(
-    namespace: string,
-    ingressName: string,
-    path: string,
-    newPort: number
-  ) {
-    this.ensureKubeConfig();
-    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
-
-    const ingress = await networkingApi.readNamespacedIngress(ingressName, namespace);
-    const paths = ingress.body.spec?.rules?.[0]?.http?.paths;
-    if (!paths) return;
-
-    const pathIndex = paths.findIndex((p) => p.path === path);
-    if (pathIndex === -1) return;
-
-    await networkingApi.patchNamespacedIngress(
-      ingressName,
-      namespace,
-      [
-        {
-          op: 'replace',
-          path: `/spec/rules/0/http/paths/${pathIndex}/backend/service/port/number`,
-          value: newPort
-        }
-      ],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/json-patch+json' } }
-    );
   }
 
   /**

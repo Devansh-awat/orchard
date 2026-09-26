@@ -208,6 +208,39 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     this.applyExecutor.registerHandler('deployment.disruptionBudget', async (item) => {
       await this.applyDisruptionBudgetToCluster(item.deploymentId!);
     });
+    this.applyExecutor.registerHandler('ingress.sync', async (item) => {
+      const target = item.manifest as { namespace?: string; name?: string } | null;
+      if (!target?.namespace || !target?.name) return;
+      const result = await this.k8sNetwork.syncIngressBackends(target.namespace, target.name);
+      if (result === 'failed')
+        throw new Error(`ingress ${target.namespace}/${target.name} not synced`);
+    });
+  }
+
+  async syncIngressesForService(serviceId: string, deploymentId: string): Promise<void> {
+    const rows = await this.prisma.ingress.findMany({
+      where: { serviceId },
+      select: { namespace: true, name: true },
+      distinct: ['namespace', 'name']
+    });
+    for (const { namespace, name } of rows) {
+      let result: Awaited<ReturnType<K8sNetworkService['syncIngressBackends']>> | 'threw' = 'threw';
+      try {
+        result = await this.k8sNetwork.syncIngressBackends(namespace, name);
+      } catch (error) {
+        this.logger.warn(
+          `ingress ${namespace}/${name} did not follow the service port change: ${(error as Error)?.message}`
+        );
+      }
+      if (result === 'failed' || result === 'threw') {
+        await this.applyQueue.enqueue({
+          dedupeKey: `op:ingress.sync:${namespace}/${name}`,
+          opType: 'ingress.sync',
+          manifest: { namespace, name },
+          deploymentId
+        });
+      }
+    }
   }
 
   private applyPipelineEnabled(): boolean {
@@ -3671,12 +3704,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (portsPayload) {
       for (const p of service.ports) {
         if (p.publicEnabled && p.publicPort) {
-          priorPublic.set(`${p.port}:${p.protocol.toUpperCase()}`, {
+          const entry = {
             publicEnabled: true,
             publicPort: p.publicPort,
             targetPort: p.targetPort,
             protocol: p.protocol
-          });
+          };
+          priorPublic.set(publicKey({ port: p.port, protocol: p.protocol }), entry);
+          if (p.name) priorPublic.set(publicKey(p), entry);
         }
       }
     }
@@ -3712,8 +3747,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (resolvedPorts.length > 0) {
           await tx.servicePort.createMany({
             data: resolvedPorts.map((port) => {
-              const key = `${port.servicePort}:${port.protocol.toUpperCase()}`;
-              const prior = priorPublic.get(key);
+              const prior =
+                priorPublic.get(
+                  publicKey({ name: port.name, port: port.servicePort, protocol: port.protocol })
+                ) ??
+                priorPublic.get(publicKey({ port: port.servicePort, protocol: port.protocol }));
               return {
                 serviceId: service.id,
                 name: port.name,
@@ -3785,23 +3823,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (portsPayload) {
-      const affectedIngresses = await this.prisma.ingress.findMany({
-        where: { serviceId: service.id }
-      });
-      for (const ing of affectedIngresses) {
-        try {
-          await this.k8sNetwork.patchIngressPathPort(
-            ing.namespace,
-            ing.name,
-            ing.path,
-            primaryPort.servicePort
-          );
-        } catch (e: any) {
-          console.error(
-            `[Deployment] Failed to sync ingress ${ing.name} path ${ing.path} port: ${e?.message}`
-          );
-        }
-      }
+      await this.syncIngressesForService(service.id, deploymentId);
     }
 
     const result = await this.prisma.deployment.findUnique({
@@ -8735,4 +8757,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     return this.addInternalUrlsToDeployment(result);
   }
+}
+
+function publicKey(p: { name?: string | null; port: number; protocol: string }): string {
+  return p.name ? `name:${p.name}` : `${p.port}:${p.protocol.toUpperCase()}`;
 }
