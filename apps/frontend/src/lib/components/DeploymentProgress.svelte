@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { buildPhases, formatPhase } from '$lib/components/deployment/build-phases';
 	import { Loader2, Check, X, ChevronDown, ChevronUp, Github, Container } from 'lucide-svelte';
 	import { flip } from 'svelte/animate';
 	import { backOut } from 'svelte/easing';
@@ -193,6 +194,11 @@
 	}
 
 	const totalDurationSeconds = $derived(getTotalBuildSeconds());
+
+	const phases = $derived(
+		isGitHubDeploy ? buildPhases(buildStepTimestamps, currentTime, buildStatus === 'building') : []
+	);
+	const phaseTotal = $derived(phases.reduce((sum, p) => sum + p.ms, 0));
 </script>
 
 <div class="deployment-progress">
@@ -280,6 +286,28 @@
 			</div>
 		{/each}
 	</div>
+
+	{#if phases.length > 1 && phaseTotal > 0}
+		<div class="phase-bar" role="img" aria-label="Where the time went">
+			{#each phases as p (p.id)}
+				<span
+					class="phase-seg phase-seg--{p.id}"
+					class:phase-seg--live={p.live}
+					style="flex-grow: {Math.max(p.ms, phaseTotal * 0.015)}"
+					title="{p.label}: {formatPhase(p.ms)}"
+				></span>
+			{/each}
+		</div>
+		<ul class="phase-legend">
+			{#each phases as p (p.id)}
+				<li class="phase-item" class:phase-item--live={p.live}>
+					<span class="phase-dot phase-seg--{p.id}"></span>
+					<span class="phase-label">{p.label}</span>
+					<span class="phase-ms">{formatPhase(p.ms)}</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 
 	{#if warnings?.length && buildStatus !== 'building'}
 		<div class="mt-4">
@@ -419,5 +447,79 @@
 	.step-duration {
 		white-space: nowrap;
 		opacity: 0.8;
+	}
+
+	.phase-bar {
+		display: flex;
+		gap: 2px;
+		height: 0.375rem;
+		margin-top: 0.875rem;
+		border-radius: var(--radius-pill);
+		overflow: hidden;
+	}
+	.phase-seg {
+		flex-basis: 0;
+		min-width: 3px;
+		border-radius: 2px;
+		background: var(--phase-tone, var(--surface-border));
+		transition: flex-grow var(--dur-base) ease;
+	}
+	.phase-seg--live {
+		animation: phase-pulse 1.6s ease-in-out infinite;
+	}
+	@keyframes phase-pulse {
+		50% {
+			opacity: 0.55;
+		}
+	}
+	.phase-seg--queue {
+		--phase-tone: color-mix(in srgb, var(--surface-muted) 55%, transparent);
+	}
+	.phase-seg--schedule {
+		--phase-tone: var(--hue-amber, var(--status-warning));
+	}
+	.phase-seg--start {
+		--phase-tone: color-mix(in srgb, var(--status-warning) 65%, var(--surface-bg));
+	}
+	.phase-seg--clone {
+		--phase-tone: var(--hue-violet, var(--accent));
+	}
+	.phase-seg--build {
+		--phase-tone: var(--accent);
+	}
+	.phase-seg--push {
+		--phase-tone: var(--hue-green, var(--status-success));
+	}
+	.phase-seg--rollout {
+		--phase-tone: color-mix(in srgb, var(--status-success) 70%, var(--surface-bg));
+	}
+	.phase-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem 0.875rem;
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+	}
+	.phase-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+	.phase-item--live {
+		color: var(--text-default);
+	}
+	.phase-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--phase-tone, var(--surface-border));
+	}
+	.phase-ms {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
 	}
 </style>

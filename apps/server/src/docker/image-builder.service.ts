@@ -580,6 +580,27 @@ export class ImageBuilderService {
     this.buildkitTranscoders.delete(jobName);
   }
 
+  private async stampBuildTime(deploymentId: string | undefined, key: string) {
+    if (!deploymentId) return;
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildStepTimestamps: true }
+      });
+      if (!deployment) return;
+      const timestamps = (deployment.buildStepTimestamps as Record<string, number> | null) || {};
+      if (typeof timestamps[key] === 'number') return;
+      timestamps[key] = Date.now();
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { buildStepTimestamps: timestamps }
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2025') return;
+      console.error('[ImageBuilder] Failed to stamp build time:', error);
+    }
+  }
+
   private async setBuildStep(deploymentId: string | undefined, step: string) {
     if (!deploymentId) return;
 
@@ -2164,6 +2185,7 @@ exit $rc`
       console.log(
         `[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`
       );
+      await this.stampBuildTime(options.deploymentId, 'submitted');
 
       if (jobDockerConfigSecret && jobCreationResult.body.metadata?.uid) {
         const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
@@ -2988,6 +3010,7 @@ exit $rc`
 
         if (status.status !== 'pending' && status.status !== 'unknown') {
           scheduleSpan.finish({ 'build.schedule_outcome': status.status });
+          await this.stampBuildTime(deploymentId, 'scheduled');
         }
 
         if (status.status === 'unknown') {
