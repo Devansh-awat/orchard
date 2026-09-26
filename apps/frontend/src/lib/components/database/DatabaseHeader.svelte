@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Database, Pencil, Trash2, Play, RefreshCw, Square } from 'lucide-svelte';
-	import { Button } from '$lib/components/ui';
+	import { Button, IconTile } from '$lib/components/ui';
+	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import type { DatabaseDetail } from './types';
 
 	let {
@@ -36,9 +37,11 @@
 </script>
 
 <div class="dbh-hero">
-	<div class="dbh-hero-icon">
-		<Database size={22} />
-	</div>
+	<IconTile class="dbh-hero-icon" src={IMG_ICONS.postgres}>
+		{#snippet fallback()}
+			<Database size={22} />
+		{/snippet}
+	</IconTile>
 	<div class="dbh-hero-id">
 		<div class="dbh-hero-titlerow">
 			<h1 class="dbh-hero-name">{database.name}</h1>
@@ -117,12 +120,13 @@
 			0 1px 2px rgb(0 0 0 / 0.02);
 		margin-bottom: 1.25rem;
 	}
-	.dbh-hero-icon {
+	:global(.dbh-hero-icon) {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
+		padding: 0.5rem;
 		border-radius: var(--radius-lg);
 		flex-shrink: 0;
 		background: linear-gradient(

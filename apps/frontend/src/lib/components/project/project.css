@@ -509,6 +509,14 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	flex-shrink: 0;
 	background-color: color-mix(in srgb, currentColor 12%, transparent);
 }
+.pj-deployment-indicator--logo {
+	border-radius: var(--radius-md);
+	background-color: color-mix(in srgb, var(--ink) 6%, transparent);
+	padding: 0.5rem;
+}
+.pj-deployment-indicator--logo :global(.icon-tile-img) {
+	object-fit: contain;
+}
 .pj-deployment-card-body {
 	display: flex;
 	flex-direction: column;

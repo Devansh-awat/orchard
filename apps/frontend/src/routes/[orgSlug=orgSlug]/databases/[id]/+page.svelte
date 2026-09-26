@@ -511,6 +511,62 @@
 
 	let liveInFlight = false;
 
+	function mergeLiveStatus(
+		prev: DatabaseDetail['liveStatus'] | undefined,
+		next: DatabaseDetail['liveStatus'] | undefined
+	): DatabaseDetail['liveStatus'] | undefined {
+		if (!next) return prev;
+		if (!prev) return next;
+		return {
+			...next,
+			size: next.size ?? prev.size,
+			connections: next.connections ?? prev.connections,
+			statsAt: next.statsAt ?? prev.statsAt
+		};
+	}
+
+	const STATS_STALE_MS = 90_000;
+	const statsStale = $derived.by(() => {
+		const at = database?.liveStatus?.statsAt;
+		if (!at) return !!database?.liveStatus && database.liveStatus.size == null;
+		return Date.now() - Date.parse(at) > STATS_STALE_MS;
+	});
+	const statsAgo = $derived.by(() => {
+		const at = database?.liveStatus?.statsAt;
+		if (!at) return '';
+		const s = Math.max(0, Math.round((Date.now() - Date.parse(at)) / 1000));
+		if (s < 60) return `${s}s ago`;
+		const m = Math.round(s / 60);
+		return m < 60 ? `${m}m ago` : `${Math.round(m / 60)}h ago`;
+	});
+
+	const DB_DOWN_CONFIRM_MS = 60_000;
+	const dbErrorNow = $derived(
+		database?.mode === 'cnpg' && database?.status === 'error' && !database?.liveStatus?.ready
+	);
+	let dbErrorConfirmed = $state(false);
+	let dbErrorTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		if (dbErrorNow) {
+			dbErrorTimer ??= setTimeout(() => {
+				dbErrorTimer = null;
+				dbErrorConfirmed = true;
+			}, DB_DOWN_CONFIRM_MS);
+		} else {
+			if (dbErrorTimer) {
+				clearTimeout(dbErrorTimer);
+				dbErrorTimer = null;
+			}
+			dbErrorConfirmed = false;
+		}
+		return () => {
+			if (dbErrorTimer) {
+				clearTimeout(dbErrorTimer);
+				dbErrorTimer = null;
+			}
+		};
+	});
+
 	async function fetchLive() {
 		if (liveInFlight || !database) return;
 		liveInFlight = true;
@@ -519,7 +575,7 @@
 			if (!response.ok) return;
 			const live = await response.json();
 			if (!database) return;
-			database.liveStatus = live.liveStatus;
+			database.liveStatus = mergeLiveStatus(database.liveStatus, live.liveStatus);
 			database.pods = live.pods;
 			if (live.status) database.status = live.status;
 		} catch {
@@ -1342,7 +1398,7 @@
 			}}
 		/>
 
-		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || (database.status === 'error' && !database.liveStatus?.ready))}
+		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || dbErrorConfirmed)}
 			<DatabaseProvisioning {dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />
 		{:else}
 			{#if database.liveStatus}
@@ -1368,13 +1424,21 @@
 							{/if}
 						</div>
 					{/if}
-					<div class="db-stat">
+					<div
+						class="db-stat"
+						class:db-stat--stale={statsStale}
+						title={statsAgo ? `As of ${statsAgo}` : ''}
+					>
 						<span class="db-stat-label">Size</span>
-						<span class="db-stat-value">{database.liveStatus.size ?? 'N/A'}</span>
+						<span class="db-stat-value">{database.liveStatus.size ?? '—'}</span>
 					</div>
-					<div class="db-stat">
+					<div
+						class="db-stat"
+						class:db-stat--stale={statsStale}
+						title={statsAgo ? `As of ${statsAgo}` : ''}
+					>
 						<span class="db-stat-label">Connections</span>
-						<span class="db-stat-value">{database.liveStatus.connections ?? 0}</span>
+						<span class="db-stat-value">{database.liveStatus.connections ?? '—'}</span>
 					</div>
 					<div class="db-stat">
 						<span class="db-stat-label">Port</span>
@@ -1666,7 +1730,12 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		padding: 0.25rem 1.25rem;
-		min-width: 6rem;
+		min-width: 7.5rem;
+	}
+
+	.db-stat--stale .db-stat-value {
+		color: var(--text-muted);
+		transition: color var(--dur-base) ease;
 	}
 
 	.db-stat:not(:first-child) {

@@ -17,7 +17,13 @@
 	import { onMount } from 'svelte';
 	import { IconTile } from '$lib/components/ui';
 	import { avatarUrl } from '$lib/avatar';
-	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
+	import {
+		knownIcon,
+		favUrl,
+		iconTint,
+		projectSwatch,
+		IMG_ICONS
+	} from './org-dashboard/helpers.svelte';
 	import {
 		actionsFor,
 		rankedResults,
@@ -430,7 +436,11 @@
 						{/snippet}
 					</IconTile>
 				{:else if item.type === 'database'}
-					<span class="qs-ic qs-ic--glyph"><Database size={15} /></span>
+					<IconTile class="qs-ic qs-ic--logo" src={IMG_ICONS.postgres}>
+						{#snippet fallback()}
+							<Database size={15} />
+						{/snippet}
+					</IconTile>
 				{:else}
 					<span class="qs-ic qs-ic--glyph"><LayoutTemplate size={15} /></span>
 				{/if}
@@ -814,6 +824,14 @@
 		display: grid;
 		place-items: center;
 		color: var(--text-muted);
+	}
+
+	.quick-search-list :global(.qs-ic--logo) {
+		padding: 0.2rem;
+		background: color-mix(in srgb, var(--ink) 6%, transparent);
+	}
+	.quick-search-list :global(.qs-ic--logo .icon-tile-img) {
+		object-fit: contain;
 	}
 
 	.quick-search-list :global(.qs-ic-letter) {

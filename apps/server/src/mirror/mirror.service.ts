@@ -21,6 +21,7 @@ const BALANCE_INTERVAL_MS = 15_000;
 const FLUSH_INTERVAL_MS = 10_000;
 const RESYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DB_STATS_INTERVAL_MS = 30_000;
 const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const STALE_MS = 60_000;
@@ -160,7 +161,10 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       }, RETENTION_INTERVAL_MS),
       setInterval(() => {
         void this.sweepCrashStates();
-      }, CRASH_SWEEP_INTERVAL_MS)
+      }, CRASH_SWEEP_INTERVAL_MS),
+      setInterval(() => {
+        void this.sampleDatabaseStats();
+      }, DB_STATS_INTERVAL_MS)
     ];
     for (const t of this.timers) t.unref?.();
     this.logger.log(
@@ -418,6 +422,13 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     if (!this.enabled) return;
     if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
     await this.podConsumer.sweepCrashStates();
+    await this.cnpgConsumer.sweepCrashStates();
+  }
+
+  private async sampleDatabaseStats(): Promise<void> {
+    if (!this.enabled) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
+    await this.cnpgConsumer.sampleAllStats();
   }
 
   private async retention(): Promise<void> {

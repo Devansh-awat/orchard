@@ -111,7 +111,8 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           labelSelector: CNPG_POD_SELECTOR,
           list: (kc, opts) => listPods(kc, opts, CNPG_POD_SELECTOR),
           mapRefs: (obj) => deps.cnpg.mapPodRefs(obj),
-          onEvent: (type, obj) => deps.cnpg.onPodEvent(type, obj)
+          onEvent: (type, obj) => deps.cnpg.onPodEvent(type, obj),
+          onListComplete: (seen) => deps.cnpg.pruneStalePods(seen)
         },
         {
           kind: 'Cluster',

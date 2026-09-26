@@ -7,6 +7,14 @@ import {
   OnApplicationBootstrap
 } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { computePodStatus } from '../mirror/pod-status';
+import {
+  buildCnpgLiveStatus,
+  clusterSnapshot,
+  type ClusterSnapshot,
+  type DbStats,
+  type MirroredDbPod
+} from './cnpg-status';
 import { PassThrough } from 'stream';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1603,22 +1611,14 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async getCnpgClusterStatus(
     namespace: string,
     clusterName: string,
-    dbName?: string,
-    // Pod facts from the mirrored `database_pods` rows. When supplied we skip
-    // listing pods against the apiserver: the CNPG informer already wrote these
-    // and they are pushed over SSE, so the request path does not need to ask.
-    mirroredPods?:
-      | {
-          status: string;
-          restartCount: number;
-          ready: boolean | null;
-          lastTerminationReason: string | null;
-          lastExitCode: number | null;
-          lastTerminatedAt: Date | null;
-          updatedAt: Date;
-        }[]
-      | null
+    _dbName?: string,
+    mirroredPods?: MirroredDbPod[] | null,
+    mirrored?: { cluster: ClusterSnapshot | null; stats: DbStats } | null
   ): Promise<any> {
+    const stats: DbStats = mirrored?.stats ?? { sizeBytes: null, connections: null, statsAt: null };
+    if (mirrored?.cluster && mirroredPods && mirroredPods.length > 0) {
+      return buildCnpgLiveStatus(mirrored.cluster, mirroredPods, stats);
+    }
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -1630,48 +1630,9 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         this.CNPG_PLURAL,
         clusterName
       );
-      const cluster: any = body;
-      const phase: string = cluster.status?.phase || 'Unknown';
-      const readyInstances: number = cluster.status?.readyInstances || 0;
-      const instances: number = cluster.status?.instances || cluster.spec?.instances || 1;
-      // Prefer quantitative readiness over phase strings, which can include noisy transient messages
-      // like "Instance Status Extraction Error: HTTP communication issue" during pod startup.
-      const ready = readyInstances >= instances && readyInstances > 0;
-
-      // Surface restart count and last-termination reason from the postgres container
-      // across all instance pods. The cluster phase / readyInstances alone hide
-      // OOMKill cycles when the pod is currently in `running` state between crashes.
-      let restartCount = 0;
-      let lastTerminationReason: string | undefined;
-      let lastTerminationExitCode: number | undefined;
-      let lastTerminationAt: string | undefined;
-      let currentWaitingReason: string | undefined;
-      let currentRunningSinceMs: number | undefined;
-      let currentReady = false;
-      if (mirroredPods && mirroredPods.length > 0) {
-        for (const p of mirroredPods) {
-          restartCount += p.restartCount ?? 0;
-          if (p.lastTerminationReason) {
-            const at = p.lastTerminatedAt ? p.lastTerminatedAt.toISOString() : undefined;
-            if (!lastTerminationAt || (at && at > lastTerminationAt)) {
-              lastTerminationReason = p.lastTerminationReason;
-              lastTerminationExitCode = p.lastExitCode ?? undefined;
-              lastTerminationAt = at;
-            }
-          }
-          if (p.status === 'crashing') currentWaitingReason = 'CrashLoopBackOff';
-          if (p.ready) {
-            currentReady = true;
-            // The mirror stores no container start time, so approximate "how
-            // long has it been clean" with the row's last write. The informer
-            // writes on every pod transition, so this moves when the pod does.
-            const t = p.updatedAt.getTime();
-            if (currentRunningSinceMs === undefined || t > currentRunningSinceMs) {
-              currentRunningSinceMs = t;
-            }
-          }
-        }
-      } else {
+      const cluster = clusterSnapshot(body);
+      let pods: MirroredDbPod[] = mirroredPods ?? [];
+      if (pods.length === 0) {
         try {
           const { body: podList } = await coreApi.listNamespacedPod(
             namespace,
@@ -1681,147 +1642,42 @@ export class K8sCnpgService implements OnApplicationBootstrap {
             undefined,
             `cnpg.io/cluster=${clusterName}`
           );
-          for (const pod of podList.items || []) {
-            const container = pod.status?.containerStatuses?.find((c) => c.name === 'postgres');
-            if (!container) continue;
-            restartCount += container.restartCount || 0;
-            const lastTerm = (container as any).lastState?.terminated;
-            if (lastTerm?.reason) {
-              // Keep the most recent termination across pods
-              const at: string | undefined = lastTerm.finishedAt;
-              if (!lastTerminationAt || (at && at > lastTerminationAt)) {
-                lastTerminationReason = lastTerm.reason;
-                lastTerminationExitCode = lastTerm.exitCode;
-                lastTerminationAt = at;
-              }
-            }
-            if (container.state?.waiting?.reason) {
-              currentWaitingReason = container.state.waiting.reason;
-            }
-            const runningSince = (container as any).state?.running?.startedAt;
-            if (runningSince) {
-              const t = Date.parse(runningSince);
-              if (
-                !Number.isNaN(t) &&
-                (currentRunningSinceMs === undefined || t > currentRunningSinceMs)
-              ) {
-                currentRunningSinceMs = t;
-              }
-            }
-            if (container.ready) currentReady = true;
-          }
+          pods = (podList.items || [])
+            .map((pod) => livePodToMirrored(pod))
+            .filter((p): p is MirroredDbPod => p !== null);
         } catch {
-          /* ignore — pod listing is best-effort */
+          /* pod listing is best-effort */
         }
       }
-
-      // Synthesize a `message` so the existing frontend liveStatus.message path
-      // surfaces OOMKilled / CrashLoopBackOff even when the container is currently running.
-      // Historical terminations are only surfaced if they're still "fresh" — once the
-      // container has been running cleanly for a while (e.g. after a memory bump),
-      // we stop nagging about the old OOM.
-      const STALE_TERMINATION_MS = 10 * 60 * 1000; // 10 minutes of clean runtime = recovered
-      const runningCleanlyForMs =
-        currentReady && currentRunningSinceMs ? Date.now() - currentRunningSinceMs : 0;
-      const terminationIsStale = runningCleanlyForMs > STALE_TERMINATION_MS;
-
-      let message: string | undefined;
-      if (currentWaitingReason) {
-        message = currentWaitingReason; // e.g. "CrashLoopBackOff"
-      } else if (
-        lastTerminationReason &&
-        lastTerminationReason !== 'Completed' &&
-        !terminationIsStale
-      ) {
-        // e.g. "OOMKilled" — only flag if we haven't yet proven the issue is gone
-        message = lastTerminationReason;
-      }
-
-      if (cluster.metadata?.annotations?.['cnpg.io/hibernation'] === 'on') {
-        return {
-          exists: true,
-          ready: false,
-          phase: 'hibernated',
-          replicas: 0,
-          readyReplicas: 0,
-          message: 'Database is stopped'
-        };
-      }
-
-      // psql does not expand `-v` variables inside `-c` commands, so the
-      // name is inlined behind a strict character allowlist (see
-      // getPostgresContainerStatus). Best-effort — a failed exec just
-      // leaves size/connections undefined.
-      let size: string | undefined;
-      let connections: number | undefined;
-      const currentPrimary: string | undefined = cluster.status?.currentPrimary;
-      if (ready && dbName && currentPrimary) {
-        try {
-          const cacheKey = `${namespace}/${currentPrimary}/${dbName}`;
-          const cached = this.dbStatsCache.get(cacheKey);
-          if (cached && Date.now() - cached.at < this.DB_STATS_TTL_MS) {
-            size = cached.size;
-            connections = cached.connections;
-          } else {
-            const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
-            if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
-            const r = await this.execInPod(namespace, currentPrimary, 'postgres', [
-              'psql',
-              '-U',
-              'postgres',
-              '-t',
-              '-A',
-              '-c',
-              `SELECT pg_size_pretty(pg_database_size('${safeDb}')) || '|' || (SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}');`
-            ]);
-            const [sizeRaw, connRaw] = r.stdout.trim().split('|');
-            size = sizeRaw || undefined;
-            connections = parseInt(connRaw, 10) || 0;
-            this.dbStatsCache.set(cacheKey, { size, connections, at: Date.now() });
-          }
-        } catch {
-          /* best-effort */
-        }
-      }
-
-      const archivingCond = (cluster.status?.conditions || []).find(
-        (c: any) => c.type === 'ContinuousArchiving'
-      );
-
-      return {
-        exists: true,
-        phase,
-        ready,
-        readyReplicas: readyInstances,
-        replicas: instances,
-        currentPrimary: cluster.status?.currentPrimary,
-        size,
-        connections,
-        conditions: cluster.status?.conditions || [],
-        archiving: archivingCond
-          ? {
-              ok: archivingCond.status === 'True',
-              message: archivingCond.message || null,
-              since: archivingCond.lastTransitionTime || null
-            }
-          : null,
-        firstRecoverabilityPoint: cluster.status?.firstRecoverabilityPoint || null,
-        lastSuccessfulBackup: cluster.status?.lastSuccessfulBackup || null,
-        // CNPG can report "Cluster in healthy state" while holding a dangling
-        // PVC and running no pod at all, which is how a database sat dead for a
-        // month looking fine. These name the actual reason.
-        danglingPVC: cluster.status?.danglingPVC || [],
-        unusablePVC: cluster.status?.unusablePVC || [],
-        restartCount,
-        message,
-        lastTerminationReason,
-        lastTerminationExitCode,
-        lastTerminationAt
-      };
+      return buildCnpgLiveStatus(cluster, pods, stats);
     } catch (e: any) {
       if (e.response?.statusCode === 404) return { exists: false };
       throw e;
     }
+  }
+
+  async sampleDatabaseStats(
+    namespace: string,
+    pod: string,
+    dbName: string
+  ): Promise<{ sizeBytes: number; connections: number } | null> {
+    const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
+    if (safeDb !== dbName) return null;
+    const r = await this.execInPod(namespace, pod, 'postgres', [
+      'psql',
+      '-U',
+      'postgres',
+      '-t',
+      '-A',
+      '-c',
+      `SELECT pg_database_size('${safeDb}') || '|' || (SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}');`
+    ]);
+    if (!r.success) return null;
+    const [sizeRaw, connRaw] = r.stdout.trim().split('|');
+    const sizeBytes = Number(sizeRaw);
+    if (!Number.isFinite(sizeBytes)) return null;
+    const connections = parseInt(connRaw, 10);
+    return { sizeBytes, connections: Number.isFinite(connections) ? connections : 0 };
   }
 
   // Detailed provisioning view for the CNPG cluster: PVC, instance pod, optional
@@ -2945,4 +2801,22 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     );
     return { success: r.success, output: r.stdout + r.stderr };
   }
+}
+
+function livePodToMirrored(pod: k8s.V1Pod): MirroredDbPod | null {
+  const container = pod.status?.containerStatuses?.find((c) => c.name === 'postgres');
+  if (!container) return null;
+  const term = (container as any).lastState?.terminated ?? container.state?.terminated;
+  const runningSince = container.state?.running?.startedAt;
+  return {
+    status: computePodStatus(pod),
+    restartCount: container.restartCount || 0,
+    ready: !!container.ready,
+    lastTerminationReason: term?.reason ?? null,
+    lastExitCode: term?.exitCode ?? null,
+    lastTerminatedAt: term?.finishedAt ? new Date(term.finishedAt) : null,
+    updatedAt: new Date(),
+    runningSince: runningSince ? new Date(runningSince) : null,
+    waitingReason: container.state?.waiting?.reason ?? null
+  };
 }

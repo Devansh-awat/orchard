@@ -46,6 +46,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { platformBackupTarget } from '../instance-config/object-storage';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import type { ClusterSnapshot, DbStats, MirroredDbPod } from '../kubernetes/cnpg-status';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -655,6 +656,36 @@ export class DatabasesService {
     return stripR2ProxyCreds(database as any);
   }
 
+  private async mirroredPodsFor(ids: string[]): Promise<Map<string, MirroredDbPod[]>> {
+    const out = new Map<string, MirroredDbPod[]>();
+    if (ids.length === 0) return out;
+    const rows = await this.prisma.databasePod
+      .findMany({
+        where: { databaseId: { in: ids } },
+        select: {
+          databaseId: true,
+          status: true,
+          restartCount: true,
+          ready: true,
+          lastTerminationReason: true,
+          lastExitCode: true,
+          lastTerminatedAt: true,
+          updatedAt: true
+        }
+      })
+      .catch(() => []);
+    for (const { databaseId, ...pod } of rows) {
+      const list = out.get(databaseId);
+      if (list) list.push(pod);
+      else out.set(databaseId, [pod]);
+    }
+    return out;
+  }
+
+  private async mirroredPods(databaseId: string): Promise<MirroredDbPod[]> {
+    return (await this.mirroredPodsFor([databaseId])).get(databaseId) ?? [];
+  }
+
   async getDatabase(databaseId: string, canEdit = true, userId?: string, skipLive = false) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
@@ -683,25 +714,13 @@ export class DatabasesService {
       // apiserver on every request. Null means the informer has not seen this
       // cluster yet (brand new, or a cold start), and getCnpgClusterStatus
       // falls back to a live pod listing.
-      const mirrored = await this.prisma.databasePod
-        .findMany({
-          where: { databaseId: database.id },
-          select: {
-            status: true,
-            restartCount: true,
-            ready: true,
-            lastTerminationReason: true,
-            lastExitCode: true,
-            lastTerminatedAt: true,
-            updatedAt: true
-          }
-        })
-        .catch(() => []);
+      const mirrored = await this.mirroredPods(database.id);
       liveStatus = await this.k8sCnpg.getCnpgClusterStatus(
         database.namespace,
         database.clusterName,
         database.dbName,
-        mirrored.length > 0 ? mirrored : null
+        mirrored,
+        clusterMirror(database)
       );
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
@@ -839,7 +858,12 @@ export class DatabasesService {
         dbName: true,
         dbUser: true,
         status: true,
-        projectId: true
+        projectId: true,
+        clusterStatus: true,
+        clusterSyncedAt: true,
+        sizeBytes: true,
+        connections: true,
+        statsAt: true
       }
     });
     if (!database) throw new NotFoundException('Database not found');
@@ -854,7 +878,9 @@ export class DatabasesService {
       liveStatus = await this.k8sCnpg.getCnpgClusterStatus(
         database.namespace,
         database.clusterName,
-        database.dbName
+        database.dbName,
+        await this.mirroredPods(database.id),
+        clusterMirror(database)
       );
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
@@ -1102,11 +1128,18 @@ export class DatabasesService {
     // Lightweight liveStatus enrichment so the list view can surface OOM/crash
     // states (the persisted `status` says "ready" even while pods OOM-cycle).
     // Best-effort + parallel; failures fall through silently.
+    const podsByDb = await this.mirroredPodsFor(databases.map((d) => d.id));
     const enriched = await Promise.all(
       databases.map(async (d: any) => {
         if (d.mode === 'cnpg' && d.namespace && d.clusterName) {
           try {
-            const ls = await this.k8sCnpg.getCnpgClusterStatus(d.namespace, d.clusterName);
+            const ls = await this.k8sCnpg.getCnpgClusterStatus(
+              d.namespace,
+              d.clusterName,
+              d.dbName,
+              podsByDb.get(d.id) ?? [],
+              clusterMirror(d)
+            );
             return { ...d, liveStatus: ls };
           } catch {
             return d;
@@ -2635,6 +2668,27 @@ export class DatabasesService {
     synchronous_commit: {
       kind: 'string',
       enum: ['on', 'off', 'local', 'remote_write', 'remote_apply']
+    }
+  };
+}
+
+function clusterMirror(db: {
+  clusterStatus?: unknown;
+  clusterSyncedAt?: Date | null;
+  sizeBytes?: bigint | number | null;
+  connections?: number | null;
+  statsAt?: Date | null;
+}): { cluster: ClusterSnapshot | null; stats: DbStats } {
+  const cluster =
+    db.clusterSyncedAt && db.clusterStatus && typeof db.clusterStatus === 'object'
+      ? (db.clusterStatus as ClusterSnapshot)
+      : null;
+  return {
+    cluster,
+    stats: {
+      sizeBytes: db.sizeBytes ?? null,
+      connections: db.connections ?? null,
+      statsAt: db.statsAt ?? null
     }
   };
 }

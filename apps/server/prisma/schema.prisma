@@ -1071,6 +1071,7 @@ model DatabasePod {
   lastTerminationReason String?   @map("last_termination_reason") @db.VarChar(100)
   lastExitCode          Int?      @map("last_exit_code")
   lastTerminatedAt      DateTime? @map("last_terminated_at") @db.Timestamp(6)
+  currentPrimary        Boolean   @default(false) @map("current_primary")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
@@ -1371,6 +1372,11 @@ model Database {
   containerName       String? @map("container_name") @db.VarChar(100)
   storageSize         String? @map("storage_size") @db.VarChar(20)
   clusterName         String? @map("cluster_name") @db.VarChar(100)
+  clusterStatus       Json?     @map("cluster_status")
+  clusterSyncedAt     DateTime? @map("cluster_synced_at") @db.Timestamp(6)
+  sizeBytes           BigInt?   @map("size_bytes")
+  connections         Int?
+  statsAt             DateTime? @map("stats_at") @db.Timestamp(6)
   // Total CNPG instances: 1 primary + (replicas - 1) hot standbys. Every
   // instance gets its own pod and its own PVC, so this multiplies the
   // cluster's CPU/memory footprint against the org cap and member allowance.

@@ -242,7 +242,8 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
           pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null,
         lastTerminationReason: term?.reason ?? null,
         lastExitCode: term?.exitCode ?? null,
-        lastTerminatedAt: term?.finishedAt ?? null
+        lastTerminatedAt: term?.finishedAt ?? null,
+        currentPrimary: pod.metadata?.labels?.['cnpg.io/instanceRole'] === 'primary'
       };
 
       await this.prisma.databasePod.upsert({

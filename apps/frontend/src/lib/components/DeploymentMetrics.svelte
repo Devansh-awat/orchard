@@ -1184,14 +1184,14 @@
 				</div>
 			{/each}
 		</div>
-	{:else if !hasData && !fetchError}
+	{:else if !hasData && !fetchError && !loaded}
 		<div class="mtx-empty" role="status">
 			<p>No {source === 'http' ? 'HTTP' : 'resource'} metrics in this time range</p>
 			{#if source === 'http'}
 				<span>Traffic through the configured ingress will appear here soon.</span>
 			{/if}
 		</div>
-	{:else if !hasData && fetchError}
+	{:else if !hasData && fetchError && !loaded}
 		<div class="mtx-empty" role="alert">Failed to load metrics: {fetchError}</div>
 	{:else}
 		<div class="mtx-board">

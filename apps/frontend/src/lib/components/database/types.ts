@@ -38,6 +38,7 @@ export interface DatabaseDetail {
 		exists: boolean;
 		size?: string;
 		connections?: number;
+		statsAt?: string;
 		ready?: boolean;
 		phase?: string;
 		replicas?: number;

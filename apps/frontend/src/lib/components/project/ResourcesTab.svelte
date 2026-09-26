@@ -2,7 +2,8 @@
 	import { Server, GitBranch, Plus, Database as DatabaseIcon, LayoutTemplate } from 'lucide-svelte';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import { mergeAttrs } from 'melt';
-	import { StatusBadge, resourceStatus, statusMeta } from '$lib/components/ui';
+	import { StatusBadge, resourceStatus, statusMeta, IconTile } from '$lib/components/ui';
+	import { IMG_ICONS } from '$lib/components/org-dashboard/helpers.svelte';
 	import type { Deployment, DatabaseSummary, TemplateInstanceSummary } from './types';
 
 	let {
@@ -28,6 +29,8 @@
 		onNewResource?: () => void;
 		onOpenDeployment: (id: string) => void;
 	} = $props();
+
+	const POSTGRES_LOGO = IMG_ICONS.postgres;
 
 	function formatBuildDuration(deployment: Deployment): string | null {
 		const history = deployment.imageHistory?.[0];
@@ -178,9 +181,14 @@
 				{@attach springHover({ lift: -4 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div class="pj-deployment-indicator status--{dbMeta.kind}">
-						<DatabaseIcon class="h-5 w-5" />
-					</div>
+					<IconTile
+						class="pj-deployment-indicator pj-deployment-indicator--logo"
+						src={POSTGRES_LOGO}
+					>
+						{#snippet fallback()}
+							<DatabaseIcon class="h-5 w-5" />
+						{/snippet}
+					</IconTile>
 					<StatusBadge meta={dbMeta} />
 				</div>
 				<div class="pj-deployment-card-body">
