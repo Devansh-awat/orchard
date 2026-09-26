@@ -16,7 +16,14 @@ export {
 	type Organization
 } from './organizations';
 export { pinnedItems, type PinnedItem } from './pinnedItems';
-export { sidebarCollapsed, mobileNavOpen, MOBILE_NAV_QUERY } from './sidebarState';
+export {
+	sidebarCollapsed,
+	mobileNavOpen,
+	MOBILE_NAV_QUERY,
+	sidebarWidthPx,
+	SIDEBAR_EXPANDED_W,
+	SIDEBAR_COLLAPSED_W
+} from './sidebarState';
 export {
 	projectGradientEnabled,
 	animationLevel,

@@ -51,6 +51,9 @@
 		pinnedItems,
 		pendingInvitations,
 		mobileNavOpen,
+		sidebarWidthPx,
+		SIDEBAR_EXPANDED_W,
+		SIDEBAR_COLLAPSED_W,
 		MOBILE_NAV_QUERY,
 		type Organization
 	} from '$lib/stores';
@@ -159,14 +162,13 @@
 
 	let attentionOpen = $state(false);
 
-	const EXPANDED_W = 280;
-	const COLLAPSED_W = 88;
+	const EXPANDED_W = SIDEBAR_EXPANDED_W;
+	const COLLAPSED_W = SIDEBAR_COLLAPSED_W;
 	const RAIL_SWAP_T = 0.45;
 	const COLLAPSE_KEY = 'sidebar-collapsed';
 
 	let collapsed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
 	let asideEl: HTMLElement | undefined = $state();
-	let visible = $state(true);
 	let isMobile = $state(false);
 	let railed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
 	let cliOpen = $state(false);
@@ -202,6 +204,10 @@
 		if (browser) localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
 	}
 
+	function publishWidth(px: number) {
+		document.documentElement.style.setProperty('--app-sidebar-w', `${px}px`);
+	}
+
 	let widthInitialized = false;
 	$effect(() => {
 		const el = asideEl;
@@ -212,31 +218,39 @@
 			el.style.width = '';
 			widthInitialized = false;
 			railed = false;
+			publishWidth(0);
 			return;
 		}
-		const toW = target ? COLLAPSED_W : EXPANDED_W;
+		const toW = sidebarWidthPx(target, false);
 		if (!widthInitialized || !motionEnabled()) {
 			widthInitialized = true;
 			el.style.width = `${toW}px`;
 			el.style.setProperty('--rail-t', target ? '0' : '1');
 			railed = target;
+			publishWidth(toW);
 			return;
 		}
 		const fromW = el.getBoundingClientRect().width || toW;
 		document.documentElement.dataset.sidebarAnimating = 'true';
 		const done = () => {
 			delete document.documentElement.dataset.sidebarAnimating;
+			publishWidth(toW);
 		};
 		animate(fromW, toW, {
 			...transition('smooth'),
 			onUpdate: (v) => {
 				el.style.width = `${v}px`;
+				publishWidth(v);
 				const t = Math.max(0, Math.min(1, (v - COLLAPSED_W) / (EXPANDED_W - COLLAPSED_W)));
 				el.style.setProperty('--rail-t', String(t));
 				const wantRail = t <= RAIL_SWAP_T;
 				if (wantRail !== railed) railed = wantRail;
 			}
 		}).finished.then(done, done);
+	});
+
+	$effect(() => () => {
+		if (browser) document.documentElement.style.removeProperty('--app-sidebar-w');
 	});
 
 	$effect(() =>
@@ -252,25 +266,6 @@
 	function onStripClick() {
 		attentionOpen = !attentionOpen;
 	}
-
-	$effect(() => {
-		if (!asideEl) return;
-		const ro = new ResizeObserver(() => {
-			visible = (asideEl?.getBoundingClientRect().width ?? 0) > 0;
-		});
-		ro.observe(asideEl);
-		return () => ro.disconnect();
-	});
-
-	$effect(() => {
-		if (!visible) return;
-		if (typeof document !== 'undefined') {
-			document.documentElement.style.setProperty(
-				'--app-sidebar-w',
-				`${collapsed ? COLLAPSED_W : EXPANDED_W}px`
-			);
-		}
-	});
 
 	let themeMode = $state<ThemeMode>('auto');
 	$effect(() => {

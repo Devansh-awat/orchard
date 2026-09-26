@@ -616,20 +616,23 @@ html {
 	background-color: var(--surface-bg);
 	color: var(--center-channel-color);
 	box-shadow: 0 24px 64px rgb(0 0 0 / 0.24);
-	width: min(92vw, 28rem);
+	--modal-room: calc(100vw - var(--app-sidebar-w, 0px) - 2rem);
+	width: min(var(--modal-room), 28rem);
 	max-height: min(85vh, 48rem);
 	display: none;
 	flex-direction: column;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 899px) {
 	.ui-modal {
 		inset-inline-start: 0;
+		--modal-room: calc(100vw - 2rem);
 	}
 }
 
 .ui-modal--viewport {
 	inset-inline-start: 0;
+	--modal-room: calc(100vw - 2rem);
 }
 
 .ui-modal[open] {
@@ -637,15 +640,15 @@ html {
 }
 
 .ui-modal--sm {
-	width: min(92vw, 22rem);
+	width: min(var(--modal-room), 22rem);
 }
 
 .ui-modal--lg {
-	width: min(92vw, 40rem);
+	width: min(var(--modal-room), 40rem);
 }
 
 .ui-modal--xl {
-	width: min(94vw, 56rem);
+	width: min(var(--modal-room), 56rem);
 }
 
 .ui-modal::backdrop {

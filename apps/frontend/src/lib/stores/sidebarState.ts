@@ -24,6 +24,7 @@ function saveToStorage(value: boolean) {
 const store = writable<boolean>(loadFromStorage());
 
 export const MOBILE_NAV_QUERY = '(max-width: 899px)';
+export { sidebarWidthPx, SIDEBAR_EXPANDED_W, SIDEBAR_COLLAPSED_W } from './sidebar-width';
 
 const mobileNav = writable<boolean>(false);
 
