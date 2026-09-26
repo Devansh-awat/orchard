@@ -7,6 +7,11 @@ import { ProjectsService } from './projects.service';
 export class OverviewController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  @Get()
+  async getUserOverview(@Request() req) {
+    return this.projectsService.getUserOverview(req.user.sub);
+  }
+
   @Get('orgs/:orgSlug')
   async getOrgOverview(@Param('orgSlug') orgSlug: string, @Request() req) {
     return this.projectsService.getOrgOverviewBySlug(req.user.sub, orgSlug);

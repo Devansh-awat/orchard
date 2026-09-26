@@ -8,9 +8,10 @@ export interface Person {
 export interface TreeItem {
 	id: string;
 	name: string;
-	type: 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
+	type: 'organization' | 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
 	href: string;
 	slug?: string;
+	orgName?: string;
 	image?: string;
 	faviconUrl?: string | null;
 	ingressHost?: string;
@@ -38,6 +39,7 @@ export interface Hit {
 
 export interface Group {
 	key: string;
+	foreign?: boolean;
 	project?: TreeItem;
 	projectSpans?: Span[];
 	projectMatched: boolean;
@@ -111,6 +113,11 @@ export function flatten(items: TreeItem[], project?: TreeItem): Flat[] {
 	const out: Flat[] = [];
 	for (const item of items) {
 		if (item.type === 'ingress') continue;
+		if (item.type === 'organization') {
+			out.push({ item });
+			if (item.children) out.push(...flatten(item.children));
+			continue;
+		}
 		if (item.type === 'project') {
 			out.push({ item, project: item });
 			if (item.children) out.push(...flatten(item.children, item));
@@ -216,6 +223,19 @@ export function searchResults(tree: TreeItem[], query: string): { groups: Group[
 		for (const h of g.items) flatHits.push(h);
 	}
 	return { groups, flat: flatHits };
+}
+
+export function foreignResults(tree: TreeItem[], query: string): { groups: Group[]; flat: Hit[] } {
+	const { groups, flat } = searchResults(tree, query);
+	for (const g of groups) g.foreign = true;
+	return { groups, flat };
+}
+
+export function mergeResults(
+	home: { groups: Group[]; flat: Hit[] },
+	away: { groups: Group[]; flat: Hit[] }
+): { groups: Group[]; flat: Hit[] } {
+	return { groups: [...home.groups, ...away.groups], flat: [...home.flat, ...away.flat] };
 }
 
 // Highlight matched character ranges. `offset` shifts spans that were computed
@@ -352,6 +372,8 @@ export function actionsFor(item: TreeItem): Action[] {
 					key: 'R'
 				}
 			];
+		case 'organization':
+			return [{ id: 'switch', label: 'Switch to', kind: 'navigate', href: item.href, key: '↵' }];
 		case 'project': {
 			const org = item.href.split('/')[1] ?? '';
 			return [

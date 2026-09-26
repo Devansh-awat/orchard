@@ -199,6 +199,7 @@
   "GET /organizations/:orgId/quota/projects": "authenticated",
   "GET /organizations/slug/:slug": "authenticated",
   "GET /organizations/user": "authenticated",
+  "GET /overview": "authenticated",
   "GET /overview/orgs/:orgSlug": "authenticated",
   "GET /overview/orgs/:orgSlug/builds": "authenticated",
   "GET /pods": "authenticated",

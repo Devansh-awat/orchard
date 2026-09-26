@@ -14,6 +14,7 @@ import (
 // SLUG, not id, so the scope value is resolved to the full org first.
 func overviewCmd() *cobra.Command {
 	var builds bool
+	var all bool
 	c := &cobra.Command{
 		Use:     "overview",
 		GroupID: groupCore,
@@ -23,6 +24,17 @@ func overviewCmd() *cobra.Command {
 			cl, cfg, err := client()
 			if err != nil {
 				return err
+			}
+			if all {
+				var everything map[string]any
+				if err := cl.GetJSON(cmd.Context(), "/overview", &everything); err != nil {
+					return err
+				}
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(everything)
+				}
+				overviewRenderAll(everything)
+				return nil
 			}
 			scope := scopedOrg(cfg)
 			if scope == "" {
@@ -60,7 +72,39 @@ func overviewCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&builds, "builds", false, "include the recent build feed")
+	c.Flags().BoolVar(&all, "all", false, "every organization you belong to, with what each holds")
 	return c
+}
+
+func overviewRenderAll(ov map[string]any) {
+	orgs := asList(ov["organizations"])
+	projects := asList(ov["projects"])
+	deployments := asList(ov["deployments"])
+	databases := asList(ov["databases"])
+	if len(orgs) == 0 {
+		fmt.Println(output.Dim("no organizations"))
+		return
+	}
+	for _, org := range orgs {
+		id := str(org["id"])
+		var np, nd, ndb int
+		for _, p := range projects {
+			if str(p["organizationId"]) == id {
+				np++
+			}
+		}
+		for _, d := range deployments {
+			if pr, ok := d["project"].(map[string]any); ok && str(pr["organizationId"]) == id {
+				nd++
+			}
+		}
+		for _, d := range databases {
+			if pr, ok := d["project"].(map[string]any); ok && str(pr["organizationId"]) == id {
+				ndb++
+			}
+		}
+		fmt.Printf("%s %s  %d projects, %d apps, %d databases\n", pick(org, "name"), output.Dim(str(org["slug"])), np, nd, ndb)
+	}
 }
 
 func overviewRender(ov map[string]any, slug string) {

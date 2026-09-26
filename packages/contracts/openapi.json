@@ -6635,7 +6635,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -7802,7 +7803,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -8939,7 +8941,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -10034,7 +10037,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -11167,7 +11171,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -12279,7 +12284,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -13572,7 +13578,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -14918,7 +14925,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -16029,7 +16037,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -17188,7 +17197,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -18749,7 +18759,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -20059,7 +20070,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -21347,7 +21359,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -22022,7 +22035,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -24037,7 +24051,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -24433,7 +24448,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -25543,7 +25559,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -26066,7 +26083,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -27279,7 +27297,8 @@
                   "strategy": {
                     "enum": [
                       "rollingUpdate",
-                      "recreate"
+                      "recreate",
+                      "blueGreen"
                     ],
                     "type": "string"
                   }
@@ -27390,7 +27409,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -27829,7 +27849,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -29685,12 +29706,75 @@
                               ],
                               "type": "object"
                             },
+                            {
+                              "description": "Payload for audit.created events; id on the envelope is the audit log row id",
+                              "properties": {
+                                "action": {
+                                  "type": "string"
+                                },
+                                "actorUserId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "deploymentId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "projectId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "targetId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "targetLabel": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "targetType": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "action",
+                                "deploymentId",
+                                "projectId",
+                                "targetType",
+                                "targetId",
+                                "targetLabel",
+                                "actorUserId"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "description": "Payload for build.changed events when the write carried a build status; absent for other build writes",
+                              "properties": {
+                                "buildStatus": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
                             {},
                             {
                               "type": "null"
                             }
                           ],
-                          "description": "Event-specific payload: structured for jobrun.changed and deployment.metrics, informer-derived data for pod.changed and database.changed, absent otherwise"
+                          "description": "Event-specific payload: structured for jobrun.changed, deployment.metrics, audit.created and build.changed, informer-derived data for pod.changed and database.changed, absent otherwise"
                         },
                         "projectId": {
                           "type": "string"
@@ -29711,7 +29795,9 @@
                             "job.changed",
                             "jobrun.changed",
                             "environment.changed",
-                            "sharedvars.changed"
+                            "sharedvars.changed",
+                            "engine.changed",
+                            "audit.created"
                           ],
                           "type": "string"
                         }
@@ -31075,7 +31161,8 @@
                         "deployStrategy": {
                           "enum": [
                             "rollingUpdate",
-                            "recreate"
+                            "recreate",
+                            "blueGreen"
                           ],
                           "type": "string"
                         },
@@ -38852,7 +38939,8 @@
                       "deployStrategy": {
                         "enum": [
                           "rollingUpdate",
-                          "recreate"
+                          "recreate",
+                          "blueGreen"
                         ],
                         "type": "string"
                       },
@@ -40084,7 +40172,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },
@@ -41362,7 +41451,8 @@
                     "deployStrategy": {
                       "enum": [
                         "rollingUpdate",
-                        "recreate"
+                        "recreate",
+                        "blueGreen"
                       ],
                       "type": "string"
                     },

@@ -2125,6 +2125,22 @@ export class ProjectsService {
    * Single-roundtrip overview aggregator. Looks up org by slug, runs RBAC once
    * (via cached memberships), and fans out the four list queries in parallel.
    */
+  async getUserOverview(userId: string) {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      select: { organization: { select: { id: true, slug: true, name: true } } }
+    });
+    const organizations = memberships
+      .map((m) => m.organization)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const [projects, deployments, databases] = await Promise.all([
+      this.listProjects(userId),
+      this.deployments.listDeploymentsSummary(userId),
+      this.listDatabasesSummary(userId)
+    ]);
+    return { organizations, projects, deployments, databases };
+  }
+
   async getOrgOverviewBySlug(userId: string, orgSlug: string) {
     const org = await this.prisma.organization.findUnique({
       where: { slug: orgSlug },

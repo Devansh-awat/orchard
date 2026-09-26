@@ -20,6 +20,19 @@ export function overviewQueryOptions(orgSlug: string) {
 	};
 }
 
+export function userOverviewQueryOptions() {
+	return {
+		queryKey: ['overview', '__all'],
+		queryFn: async () => {
+			const res = await apiFetch('/apiv1/overview');
+			if (!res.ok) {
+				throw Object.assign(new Error(`overview ${res.status}`), { status: res.status });
+			}
+			return res.json();
+		}
+	};
+}
+
 export function buildsQueryOptions(orgSlug: string) {
 	return {
 		queryKey: ['builds', orgSlug],

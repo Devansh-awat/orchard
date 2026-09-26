@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	actionsFor,
+	foreignResults,
 	frecencyScore,
 	fuzzy,
+	mergeResults,
 	rankedResults,
 	recentItems,
 	recordUse,
@@ -93,4 +95,55 @@ test('the empty palette lists what you used most, dropping anything that no long
 
 test('fuzzy still prefers prefixes over scattered letters', () => {
 	assert.ok((fuzzy('backend', 'back')?.score ?? 0) > (fuzzy('backend', 'bkd')?.score ?? 0));
+});
+
+const elsewhere: TreeItem[] = [
+	{
+		id: 'org:hq',
+		name: 'HQ',
+		type: 'organization',
+		href: '/hq',
+		slug: 'hq',
+		children: [
+			{
+				id: 'p9',
+				name: 'Horizons Ops',
+				type: 'project',
+				href: '/hq/projects/horizons-ops',
+				slug: 'horizons-ops',
+				orgName: 'HQ',
+				children: [
+					{
+						id: 'd9',
+						name: 'backend',
+						type: 'deployment',
+						href: '/hq/deployments/d9',
+						orgName: 'HQ'
+					}
+				]
+			}
+		]
+	}
+];
+
+test('another organization is searchable, switches on select, and its apps carry their own org slug', () => {
+	const away = foreignResults(elsewhere, 'hq');
+	const org = away.flat.find((h) => h.item.type === 'organization');
+	assert.ok(org);
+	assert.deepEqual(
+		actionsFor(org!.item).map((a) => [a.id, a.href]),
+		[['switch', '/hq']]
+	);
+	const backend = foreignResults(elsewhere, 'backend').flat[0];
+	assert.equal(backend.item.href, '/hq/deployments/d9');
+	assert.ok(away.groups.every((g) => g.foreign));
+});
+
+test('home results come first and foreign groups follow, so the divider has a fixed place', () => {
+	const merged = mergeResults(searchResults(tree, 'backend'), foreignResults(elsewhere, 'backend'));
+	assert.equal(merged.flat[0].item.id, 'd1');
+	assert.equal(merged.flat.at(-1)?.item.id, 'd9');
+	const firstForeign = merged.groups.findIndex((g) => g.foreign);
+	assert.ok(firstForeign > 0);
+	assert.ok(merged.groups.slice(firstForeign).every((g) => g.foreign));
 });

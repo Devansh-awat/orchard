@@ -348,6 +348,7 @@ var routeCoverage = map[string]string{
 	"GET /organizations/:orgId/quota/projects": "quota projects",
 
 	// overview
+	"GET /overview":                      "overview --all",
 	"GET /overview/orgs/:orgSlug":        "overview",
 	"GET /overview/orgs/:orgSlug/builds": "overview --builds",
 }

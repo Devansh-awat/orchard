@@ -4,7 +4,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { selectedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { registerShortcut } from '$lib/utils/shortcuts';
-	import { overviewQueryOptions } from '$lib/queries/overview';
+	import { overviewQueryOptions, userOverviewQueryOptions } from '$lib/queries/overview';
 	import {
 		Search,
 		CornerDownLeft,
@@ -26,6 +26,8 @@
 	} from './org-dashboard/helpers.svelte';
 	import {
 		actionsFor,
+		foreignResults,
+		mergeResults,
 		rankedResults,
 		recentItems,
 		recordUse,
@@ -77,6 +79,13 @@
 		enabled: open && !!orgSlug
 	}));
 
+	const crossOrg = $derived(open && query.trim().length >= 2);
+	const everything = createQuery(() => ({
+		...userOverviewQueryOptions(),
+		enabled: crossOrg,
+		staleTime: 60_000
+	}));
+
 	type ProjectRef = { id: string; name: string; slug: string };
 	type CreatorRef = {
 		id: string;
@@ -112,6 +121,86 @@
 		if (!name) return undefined;
 		return { id: c.id, name, username: c.username ?? undefined, imageUrl: c.imageUrl };
 	}
+
+	function buildTree(data: OverviewLite, slug: string, orgName?: string): TreeItem[] {
+		const projects = new Map<string, TreeItem>();
+		const ensureProject = (p: ProjectRef) => {
+			let node = projects.get(p.id);
+			if (!node) {
+				node = {
+					id: p.id,
+					name: p.name,
+					type: 'project',
+					href: `/${slug}/projects/${p.slug}`,
+					slug: p.slug,
+					orgName,
+					children: []
+				};
+				projects.set(p.id, node);
+			}
+			return node;
+		};
+		for (const d of data.deployments ?? []) {
+			if (!d.project) continue;
+			ensureProject(d.project).children!.push({
+				id: d.id,
+				name: d.displayName || d.name,
+				type: 'deployment',
+				href: `/${slug}/deployments/${d.id}`,
+				image: d.image,
+				faviconUrl: d.faviconUrl,
+				ingressHost: d.ingresses?.[0]?.host.split('/')[0],
+				owner: toPerson(d.creator),
+				orgName
+			});
+		}
+		for (const db of data.databases ?? []) {
+			if (!db.project) continue;
+			ensureProject(db.project).children!.push({
+				id: db.id,
+				name: db.name,
+				type: 'database',
+				href: `/${slug}/databases/${db.id}`,
+				owner: toPerson(db.creator),
+				orgName
+			});
+		}
+		for (const p of data.projects ?? []) ensureProject(p);
+		return [...projects.values()];
+	}
+
+	type UserOverview = OverviewLite & {
+		organizations?: Array<{ id: string; slug: string; name: string }>;
+		projects?: Array<ProjectRef & { organizationId?: string }>;
+	};
+
+	const foreignTree = $derived.by<TreeItem[]>(() => {
+		const data = everything.data as UserOverview | undefined;
+		if (!data || !crossOrg) return [];
+		const current = $selectedOrganization?.id;
+		const out: TreeItem[] = [];
+		for (const org of data.organizations ?? []) {
+			if (org.id === current || org.slug === orgSlug) continue;
+			const slice: OverviewLite = {
+				projects: (data.projects ?? []).filter((p) => p.organizationId === org.id),
+				deployments: (data.deployments ?? []).filter(
+					(d) => (d.project as ProjectRef & { organizationId?: string })?.organizationId === org.id
+				),
+				databases: (data.databases ?? []).filter(
+					(d) => (d.project as ProjectRef & { organizationId?: string })?.organizationId === org.id
+				)
+			};
+			out.push({
+				id: `org:${org.id}`,
+				name: org.name,
+				type: 'organization',
+				href: `/${org.slug}`,
+				slug: org.slug,
+				children: buildTree(slice, org.slug, org.name)
+			});
+		}
+		return out;
+	});
 
 	const searchTree = $derived.by<TreeItem[]>(() => {
 		const data = overview.data as OverviewLite | undefined;
@@ -169,6 +258,8 @@
 
 	function typeLabel(type: TreeItem['type']) {
 		switch (type) {
+			case 'organization':
+				return 'org';
 			case 'templateInstance':
 				return 'template';
 			case 'deployment':
@@ -179,7 +270,11 @@
 	}
 
 	const result = $derived.by<{ groups: Group[]; flat: Hit[] }>(() => {
-		if (query.trim()) return rankedResults(searchTree, query, frecency, Date.now());
+		if (query.trim()) {
+			const home = rankedResults(searchTree, query, frecency, Date.now());
+			if (!crossOrg || foreignTree.length === 0) return home;
+			return mergeResults(home, foreignResults(foreignTree, query));
+		}
 		const recent = recentItems(searchTree, frecency, Date.now());
 		if (recent.length === 0) return { groups: [], flat: [] };
 		const items: Hit[] = recent.map((item) => ({ item, score: 0, spans: [], via: 'self' }));
@@ -424,7 +519,11 @@
 			)}
 		>
 			{#snippet itemVisual(item: TreeItem)}
-				{#if item.type === 'project'}
+				{#if item.type === 'organization'}
+					<span class="qs-ic qs-ic--letter" style={projectSwatch(item.slug ?? item.id)}>
+						<span class="qs-ic-letter">{item.name.charAt(0).toUpperCase()}</span>
+					</span>
+				{:else if item.type === 'project'}
 					<span class="qs-ic qs-ic--swatch" style={projectSwatch(item.slug ?? item.id)}></span>
 				{:else if item.type === 'deployment'}
 					{@const known = knownIcon(item.image)}
@@ -486,7 +585,12 @@
 						</div>
 					{:else}
 						{@const flat = result.flat}
-						{#each result.groups as group (group.key)}
+						{#each result.groups as group, gi (group.key)}
+							{#if group.foreign && !result.groups[gi - 1]?.foreign}
+								<div class="quick-search-divider">
+									<span>In other organizations</span>
+								</div>
+							{/if}
 							{#if group.person}
 								<div class="quick-search-group-header">
 									<img class="qs-person-avatar" src={avatarUrl(group.person)} alt="" />
@@ -512,6 +616,9 @@
 							{:else if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
 								<div class="quick-search-group-header">
 									<span class="quick-search-group-label">
+										{#if group.foreign && group.project.orgName}
+											<span class="quick-search-group-org">{group.project.orgName} /</span>
+										{/if}
 										{#each segments(group.project.name, group.projectSpans) as seg, si (si)}
 											<span class:hl={seg.hit}>{seg.text}</span>
 										{/each}
@@ -546,6 +653,8 @@
 										</div>
 										{#if hit.via !== 'self' && hit.project}
 											<div class="quick-search-item-sub">in {hit.project.name}</div>
+										{:else if group.foreign && hit.item.type !== 'organization' && hit.item.orgName && hit.item.id === group.project?.id}
+											<div class="quick-search-item-sub">in {hit.item.orgName}</div>
 										{/if}
 									</div>
 									<span class="quick-search-item-tag">{typeLabel(hit.item.type)}</span>
@@ -1039,5 +1148,34 @@
 
 	.quick-search-modal {
 		position: relative;
+	}
+
+	.quick-search-divider {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.625rem 0.75rem 0.25rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+	.quick-search-divider::before,
+	.quick-search-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: color-mix(in srgb, var(--surface-border) 70%, transparent);
+	}
+	.quick-search-group-org {
+		color: var(--text-muted);
+		font-weight: 500;
+		margin-right: 0.25rem;
+	}
+	.quick-search-list :global(.qs-ic--letter) {
+		display: grid;
+		place-items: center;
 	}
 </style>
