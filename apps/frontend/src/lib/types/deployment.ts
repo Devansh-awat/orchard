@@ -164,6 +164,14 @@ export interface Deployment {
 	buildStepTimestamps?: Record<string, number> | null;
 	autoDeployEnabled?: boolean;
 	autoDeployBranch?: string;
+	pendingPush?: {
+		sha: string;
+		branch: string;
+		author?: string | null;
+		message?: string | null;
+		at: string;
+		count: number;
+	} | null;
 	gitConnection?: {
 		id: string;
 		name: string;

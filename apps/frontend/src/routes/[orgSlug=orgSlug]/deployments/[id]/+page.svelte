@@ -1559,20 +1559,25 @@
 	async function lifecycleAction(kind: 'stop' | 'start') {
 		if (kind === 'stop') stopping = true;
 		else starting = true;
+		const build = kind === 'start' && !!deployment?.pendingPush;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/${kind}`, {
-				method: 'POST'
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(build ? { build: true } : {})
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || `Failed to ${kind} app`);
 			}
 			toasts.add({
-				title: kind === 'stop' ? 'App stopping' : 'App starting',
+				title: kind === 'stop' ? 'App stopping' : build ? 'Building latest push' : 'App starting',
 				description:
 					kind === 'stop'
 						? 'All replicas are being spun down'
-						: `Restoring ${deployment?.replicas ?? 1} replica(s)`,
+						: build
+							? 'The app starts when the build lands'
+							: `Restoring ${deployment?.replicas ?? 1} replica(s)`,
 				color: 'success'
 			});
 			await fetchDeployment();

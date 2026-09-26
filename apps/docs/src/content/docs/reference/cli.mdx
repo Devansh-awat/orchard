@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **343 commands** are available.
+override the saved context. **345 commands** are available.
 
 ## alert
 
@@ -1335,6 +1335,28 @@ orchard scale <id> <replicas>
 | --- | --- | --- | --- |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
+
+### `orchard deploy start`
+
+Start a stopped deployment; builds the latest held push first when there is one
+
+```bash
+orchard start <id>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--build` | bool | `false` | rebuild from source before starting |
+| `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
+| `--wait` | bool | `false` | block until the operation reaches a terminal state |
+
+### `orchard deploy stop`
+
+Stop a deployment: scale it to zero and hold pushes until it is started
+
+```bash
+orchard stop <id>
+```
 
 ### `orchard deploy strategy`
 

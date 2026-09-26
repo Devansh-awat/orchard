@@ -595,6 +595,7 @@ model Deployment {
   image                String?            @db.VarChar(500)
   replicas             Int                @default(1)
   stopped              Boolean            @default(false)
+  pendingPush          Json?              @map("pending_push")
   // Per-container resource request (== limit; Guaranteed QoS).
   // Null means fall back to org defaultPodCpuMilli/defaultPodMemoryBytes, then 100m/128Mi.
   cpuRequestMilli      Int?               @map("cpu_request_milli")

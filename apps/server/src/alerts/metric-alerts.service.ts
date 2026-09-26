@@ -526,8 +526,16 @@ export class MetricAlertsService {
         : rule.scopeType === 'project'
           ? { projectId: rule.scopeId ?? '' }
           : { project: { organizationId: rule.organizationId } };
+    const live = await this.prisma.k8sWorkload.findMany({
+      where: { readyReplicas: { gt: 0 } },
+      select: { deploymentId: true }
+    });
     return this.prisma.deployment.findMany({
-      where: { ...where, status: { in: ['running', 'degraded'] }, stopped: false },
+      where: {
+        ...where,
+        stopped: false,
+        OR: [{ id: { in: live.map((w) => w.deploymentId) } }, { status: 'running' }]
+      },
       take: MAX_TARGETS_PER_RULE,
       orderBy: { createdAt: 'asc' },
       select: {

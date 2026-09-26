@@ -161,6 +161,7 @@ const AUDIT_TITLES: Record<string, string> = {
   'deployment.rolled_back': 'Rolled back',
   'deployment.started': 'Started',
   'deployment.stopped': 'Stopped',
+  'deployment.push_held': 'Push held while stopped',
   'deployment.build_cancelled': 'Build cancelled',
   'deployment.build_options.updated': 'Build settings updated',
   'deployment.health_check.updated': 'Health check updated',

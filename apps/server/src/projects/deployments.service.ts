@@ -1064,14 +1064,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private async markBuildSucceeded(deploymentId: string, logMessage: string) {
     const data = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { buildStepTimestamps: true }
+      select: { buildStepTimestamps: true, stopped: true }
     });
     const timestamps = (data?.buildStepTimestamps as Record<string, any> | null) || {};
     timestamps['complete'] = Date.now();
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        status: 'running',
+        status: data?.stopped ? 'stopped' : 'running',
         buildStatus: 'succeeded',
         buildStep: 'complete',
         buildStepTimestamps: timestamps
@@ -1958,6 +1958,44 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async holdPush(
+    deploymentId: string,
+    push: { sha: string; branch: string; author: string | null; message: string | null }
+  ): Promise<PendingPush> {
+    const row = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        pendingPush: true,
+        name: true,
+        projectId: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    const previous = (row?.pendingPush as unknown as PendingPush | null) ?? null;
+    const next: PendingPush = {
+      ...push,
+      at: new Date().toISOString(),
+      count: (previous?.count ?? 0) + 1
+    };
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { pendingPush: next as object }
+    });
+    if (row) {
+      void this.audit.log({
+        action: 'deployment.push_held',
+        organizationId: row.project.organizationId,
+        projectId: row.projectId,
+        deploymentId,
+        targetType: 'deployment',
+        targetId: deploymentId,
+        targetLabel: row.name,
+        metadata: { sha: push.sha, branch: push.branch, count: next.count }
+      });
+    }
+    return next;
+  }
+
   async stopDeployment(
     deploymentId: string,
     clerkId: string,
@@ -2030,7 +2068,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    opts?: { build?: boolean }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -2044,6 +2083,37 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'start deployments');
 
     const replicas = Math.max(1, deployment.replicas);
+    const pending = (deployment.pendingPush as unknown as PendingPush | null) ?? null;
+    if (deployment.stopped && (pending || opts?.build) && deployment.githubRepo) {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas, stopped: false, pendingPush: null }
+      });
+      void this.audit.log({
+        action: 'deployment.started',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId,
+        targetType: 'deployment',
+        targetId: deploymentId,
+        targetLabel: deployment.name,
+        metadata: { build: true, sha: pending?.sha ?? null }
+      });
+      if (pending) {
+        const result = await this.triggerAutoDeploy(
+          deploymentId,
+          pending.sha,
+          pending.message ?? 'Held push',
+          pending.author ?? undefined,
+          pending.author ?? undefined
+        );
+        return { success: true, started: 'building', replicas, stopped: false, build: result };
+      }
+      const result = await this.rebuildDeployment(deploymentId, clerkId, userData);
+      return { success: true, started: 'building', replicas, stopped: false, build: result };
+    }
     if (deployment.stopped || deployment.replicas < 1) {
       const perPod = await this.quotasService.resolvePodResources(
         deployment.projectId,
@@ -4434,6 +4504,16 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (!deployment.githubRepo || !deployment.githubBranch) {
       throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    if (!fromQueueRunId && deployment.stopped) {
+      const held = await this.holdPush(deployment.id, {
+        sha: commitSha,
+        branch: deployment.autoDeployBranch || deployment.githubBranch,
+        author: commitAuthorUsername || commitAuthorName || null,
+        message: commitMessage || null
+      });
+      return { held: true, commitSha, count: held.count };
     }
 
     if (!fromQueueRunId) {
@@ -7890,7 +7970,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      if (!rolloutGated) {
+      const stillStopped = await this.prisma.deployment
+        .findUnique({ where: { id: deploymentId }, select: { stopped: true } })
+        .then((row) => row?.stopped ?? false);
+      if (stillStopped) {
+        await this.appendBuildLog(deploymentId, 'App is stopped; the new image waits for Start');
+      }
+      if (!rolloutGated && !stillStopped) {
         await this.gateRollout(deploymentId, data.name, data.namespace, {
           sinceMs: rolloutStartedAt,
           image,
@@ -8433,6 +8519,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
 
+    if (!fromQueueRunId && deployment.stopped) {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas: Math.max(1, deployment.replicas), stopped: false, pendingPush: null }
+      });
+    }
+
     if (!fromQueueRunId) {
       const { startNow, runId, queue } = await this.buildQueue.enqueue({
         deploymentId,
@@ -8761,4 +8854,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
 function publicKey(p: { name?: string | null; port: number; protocol: string }): string {
   return p.name ? `name:${p.name}` : `${p.port}:${p.protocol.toUpperCase()}`;
+}
+
+export interface PendingPush {
+  sha: string;
+  branch: string;
+  author: string | null;
+  message: string | null;
+  at: string;
+  count: number;
 }

@@ -65,6 +65,16 @@
 		branch: string | undefined;
 	} = $props();
 
+	const pendingPush = $derived(deployment?.pendingPush ?? null);
+	const heldPushes = $derived(
+		pendingPush ? `${pendingPush.count} push${pendingPush.count === 1 ? '' : 'es'} since` : null
+	);
+	const heldPushTitle = $derived(
+		pendingPush
+			? `${pendingPush.sha.slice(0, 7)} on ${pendingPush.branch}${pendingPush.message ? `: ${pendingPush.message.split('\n')[0]}` : ''}`
+			: undefined
+	);
+
 	const repoLabel = $derived(
 		deployment?.githubRepo
 			? deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')
@@ -81,6 +91,9 @@
 	<div class="dh-identity">
 		<h1 class="dh-name">{deployment.displayName || deployment.name}</h1>
 		<StatusBadge meta={deploymentStatusChip} />
+		{#if stopped && heldPushes}
+			<span class="dh-held-chip" title={heldPushTitle}>{heldPushes}</span>
+		{/if}
 		{#if buildStatusChip}
 			<StatusBadge meta={buildStatusChip} />
 		{/if}
@@ -99,7 +112,7 @@
 	<div class="dh-actions">
 		{#if repoUrl}
 			<Button
-				variant="primary"
+				variant={stopped ? 'secondary' : 'primary'}
 				size="sm"
 				onclick={onRebuild}
 				disabled={rebuilding || _isBuilding}
@@ -109,13 +122,13 @@
 						size={14}
 						animate={actionAnim.redeploy ?? false}
 					/>{/if}
-				<span>Redeploy</span>
+				<span>{stopped ? 'Deploy and start' : 'Redeploy'}</span>
 			</Button>
 		{/if}
 		{#if stopped}
-			<Button variant="primary" size="sm" onclick={onStart} disabled={starting}>
+			<Button variant="primary" size="sm" onclick={onStart} disabled={starting || _isBuilding}>
 				{#if starting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play size={14} />{/if}
-				<span>Start</span>
+				<span>{pendingPush ? 'Build and start' : 'Start'}</span>
 			</Button>
 		{:else}
 			<Button
@@ -408,5 +421,18 @@
 			width: 100%;
 			justify-content: flex-start;
 		}
+	}
+	.dh-held-chip {
+		display: inline-flex;
+		align-items: center;
+		height: 1.375rem;
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
+		background: color-mix(in srgb, var(--ink) 6%, transparent);
+		cursor: default;
 	}
 </style>

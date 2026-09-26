@@ -11,6 +11,20 @@ The replica slider on an app's overview changes how many copies run. Rolling
 updates mean a deploy does not drop traffic as long as more than one replica is
 up and health checks pass.
 
+## Stopping an app
+
+Stop scales an app to zero and keeps its replica count for later. While it is
+stopped, pushes to its repository are held rather than built: the header reads
+"Stopped · 3 pushes since" and Start becomes **Build and start**, which builds
+the newest held commit and brings the app back on it. **Deploy and start** does
+the same from the current branch head. Restart stays off until the app runs.
+
+```sh
+orchard deploy stop <id>
+orchard deploy start <id>          # builds the held push first, if there is one
+orchard deploy start <id> --build  # rebuild from source before starting
+```
+
 ## CPU and memory
 
 Sizes are chosen per app, in millicores and MiB (or cores and GiB).

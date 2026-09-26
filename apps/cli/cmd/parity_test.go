@@ -98,6 +98,8 @@ var routeCoverage = map[string]string{
 	"DELETE /deployments/:id":                        "deploy delete",
 	"POST /deployments/:id/scale":                    "deploy scale",
 	"POST /deployments/:id/restart":                  "deploy restart",
+	"POST /deployments/:id/stop":                     "deploy stop",
+	"POST /deployments/:id/start":                    "deploy start",
 	"POST /deployments/:id/rebuild":                  "deploy rebuild",
 	"POST /deployments/:id/cancel":                   "deploy cancel",
 	"POST /deployments/:id/rollback/:imageHistoryId": "deploy rollback",

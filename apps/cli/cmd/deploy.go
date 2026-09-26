@@ -32,6 +32,8 @@ func deployCmd() *cobra.Command {
 		deployCreateCmd(),
 		deployDeleteCmd(),
 		deployScaleCmd(),
+		deployStopCmd(),
+		deployStartCmd(),
 		deployRestartCmd(),
 		deployRebuildCmd(),
 		deployCancelCmd(),
@@ -479,6 +481,65 @@ func deployScaleCmd() *cobra.Command {
 			return nil
 		},
 	}
+	wait, timeout = addWaitFlags(c)
+	return c
+}
+
+func deployStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop <id>",
+		Short: "Stop a deployment: scale it to zero and hold pushes until it is started",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "stop"), nil, nil); err != nil {
+				return err
+			}
+			output.Successf("stopped %s", args[0])
+			return nil
+		},
+	}
+}
+
+func deployStartCmd() *cobra.Command {
+	var build bool
+	var wait *bool
+	var timeout *time.Duration
+	c := &cobra.Command{
+		Use:   "start <id>",
+		Short: "Start a stopped deployment; builds the latest held push first when there is one",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			body := map[string]any{}
+			if build {
+				body["build"] = true
+			}
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "start"), body, &raw); err != nil {
+				return err
+			}
+			if str(raw["started"]) == "building" {
+				output.Successf("building %s; it starts when the build lands", args[0])
+				if *wait {
+					return runWait(cmd.Context(), cl, deployWaitBuild(args[0]), *timeout)
+				}
+				return nil
+			}
+			output.Successf("started %s", args[0])
+			if *wait {
+				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+			}
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&build, "build", false, "rebuild from source before starting")
 	wait, timeout = addWaitFlags(c)
 	return c
 }

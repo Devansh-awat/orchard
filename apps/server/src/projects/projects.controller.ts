@@ -1352,14 +1352,23 @@ export class DeploymentsController {
   }
 
   @Post(':id/start')
-  async startDeployment(@Param('id') id: string, @Request() req) {
-    return this.deployments.startDeployment(id, req.user.sub, {
-      email: req.user.email,
-      username: req.user.username,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl
-    });
+  async startDeployment(
+    @Param('id') id: string,
+    @Body() body: { build?: boolean } | undefined,
+    @Request() req
+  ) {
+    return this.deployments.startDeployment(
+      id,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl
+      },
+      { build: body?.build === true }
+    );
   }
 
   @Post(':id/restart')
