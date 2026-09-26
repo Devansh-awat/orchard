@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { clusterPods, clusterServiceCounts } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
+import { LeaseService } from '../coordination/lease.service';
 
 /**
  * Namespaces a tenant pod may be reached from, and reach.
@@ -50,7 +51,8 @@ export class K8sNamespaceService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kubernetes: KubernetesService
+    private readonly kubernetes: KubernetesService,
+    private readonly lease: LeaseService
   ) {}
 
   /**
@@ -63,6 +65,7 @@ export class K8sNamespaceService implements OnModuleInit {
    * Backgrounded and swallowed: this must never hold up or fail startup.
    */
   onModuleInit(): void {
+    if (!this.lease.canCoordinate) return;
     setTimeout(() => {
       this.reconcileTenantNetworkPolicies()
         .then(({ updated, failed }) => {
