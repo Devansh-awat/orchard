@@ -10,6 +10,7 @@ export { default as TransferOwnershipModal } from './TransferOwnershipModal.svel
 export { default as MoveToOrgModal } from './MoveToOrgModal.svelte';
 export { default as TransferBanner } from './TransferBanner.svelte';
 export type {
+	ProjectTab,
 	Project,
 	Deployment,
 	DeploymentUser,

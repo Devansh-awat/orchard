@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
@@ -25,7 +26,8 @@
 		CustomizeModal,
 		TransferOwnershipModal,
 		MoveToOrgModal,
-		TransferBanner
+		TransferBanner,
+		type ProjectTab
 	} from '$lib/components/project';
 	import { SharedVarsEditor } from '$lib/components/environment';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
@@ -97,9 +99,19 @@
 		!!pendingTransfer && !!$user?.id && pendingTransfer.to.id === $user.id
 	);
 	let openRoleMenuId = $state<string | null>(null);
-	let activeTab = $state<'resources' | 'variables' | 'compose' | 'members' | 'settings'>(
-		'resources'
-	);
+	const PROJECT_TABS: ProjectTab[] = ['resources', 'variables', 'compose', 'members', 'settings'];
+	function tabFromUrl(url: URL): ProjectTab {
+		const t = url.searchParams.get('tab');
+		return t && (PROJECT_TABS as string[]).includes(t) ? (t as ProjectTab) : 'resources';
+	}
+	const activeTab = $derived(tabFromUrl($page.url));
+	function gotoTab(tab: ProjectTab) {
+		const url = new URL(window.location.href);
+		if (tab === 'resources') url.searchParams.delete('tab');
+		else url.searchParams.set('tab', tab);
+		if (url.href === window.location.href) return;
+		void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+	}
 	let memberSearch = $state('');
 
 	// Compose stacks — keyed by project id so SSE-driven project refetches
@@ -781,7 +793,6 @@
 			{#if project.backgroundImage}
 				<ProjectHero
 					{project}
-					{activeTab}
 					{canEdit}
 					bind:heroImgReady
 					onCustomize={() => (showCustomize = true)}
@@ -806,7 +817,8 @@
 
 			<!-- Tab bar -->
 			<ProjectTabs
-				bind:activeTab
+				{activeTab}
+				onSelect={gotoTab}
 				resourceCount={envFilteredDeployments.length +
 					envFilteredDatabases.length +
 					envFilteredTemplateInstances.length}
@@ -815,7 +827,10 @@
 				repositoryUrl={project.repositoryUrl}
 				hasDeployments={!!project.deployments?.length}
 				bind:deploymentSearch
-				onNewResource={() => (showNewResourceModal = true)}
+				onNewResource={() => {
+					gotoTab('resources');
+					showNewResourceModal = true;
+				}}
 				bind:tabsRowEl
 				{deploymentMenu}
 				projectId={project.id}

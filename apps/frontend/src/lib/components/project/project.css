@@ -67,11 +67,6 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 		0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent),
 		0 18px 48px rgb(0 0 0 / 0.16);
 }
-/* Compact keeps the artwork, cropped toward the top of the frame so the
-   subject survives the shorter band. */
-.pj-hero--compact .pj-hero-img {
-	object-position: center 28%;
-}
 .pj-description--onhero {
 	overflow: hidden;
 	margin: 0;
@@ -164,11 +159,6 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	justify-content: space-between;
 	gap: var(--space-4);
 	color: #fff;
-}
-.pj-hero--compact .pj-hero-content {
-	top: 0;
-	align-items: center;
-	padding: 0 var(--space-4);
 }
 .pj-title--onhero {
 	color: #fff !important;
@@ -675,10 +665,28 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	margin-bottom: var(--space-5);
 	padding: 0.3125rem;
 	border-radius: var(--radius-lg);
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	scrollbar-width: none;
 	border: none;
 	position: relative;
 	z-index: 1;
+}
+.pj-tabs-row::-webkit-scrollbar {
+	display: none;
+}
+.pj-tabs,
+.pj-tabs-actions,
+.pj-env-context {
+	flex-shrink: 0;
+}
+@media (max-width: 56rem) {
+	.pj-tab-label {
+		display: none;
+	}
+	.pj-tab {
+		padding: 0.5rem 0.625rem;
+	}
 }
 .pj-env-context {
 	display: inline-flex;
@@ -1800,7 +1808,7 @@ html.reduce-transparency .pj-back {
 		padding: var(--space-2) var(--space-4) var(--space-10);
 	}
 	.pj-hero {
-		height: 12rem !important;
+		height: 12rem;
 		border-radius: var(--radius-xl);
 	}
 	.pj-hero-content {
@@ -1808,7 +1816,7 @@ html.reduce-transparency .pj-back {
 		gap: var(--space-2);
 	}
 	.pj-title--onhero {
-		font-size: var(--text-title-3) !important;
+		font-size: var(--text-title-3);
 	}
 	.pj-title-owner {
 		display: none;
@@ -1816,21 +1824,8 @@ html.reduce-transparency .pj-back {
 	.pj-header-actions {
 		flex-shrink: 0;
 	}
-	/* Tabs scroll rather than wrap — a wrapped tab bar orphans the last item
-	   and pushes the primary action onto its own line. */
 	.pj-tabs-row {
-		flex-wrap: nowrap;
-		overflow-x: auto;
-		scrollbar-width: none;
 		border-radius: var(--radius-md);
-	}
-	.pj-tabs-row::-webkit-scrollbar {
-		display: none;
-	}
-	.pj-tabs,
-	.pj-tabs-actions,
-	.pj-env-context {
-		flex-shrink: 0;
 	}
 }
 

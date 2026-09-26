@@ -1,3 +1,5 @@
+export type ProjectTab = 'resources' | 'variables' | 'compose' | 'members' | 'settings';
+
 export interface DeploymentUser {
 	id: string;
 	username?: string;

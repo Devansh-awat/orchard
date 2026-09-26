@@ -1,62 +1,19 @@
 <script lang="ts">
-	import { animate } from 'motion';
-	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
-	import { tick } from 'svelte';
 	import { Palette, Ellipsis } from 'lucide-svelte';
 	import { Menu, MenuItem } from '$lib/components/ui';
 	import type { Project } from './types';
 
 	let {
 		project,
-		activeTab,
 		canEdit = false,
 		heroImgReady = $bindable(false),
 		onCustomize
 	}: {
 		project: Project;
-		activeTab: string;
 		canEdit?: boolean;
 		heroImgReady?: boolean;
 		onCustomize?: () => void;
 	} = $props();
-
-	let heroEl = $state<HTMLElement | null>(null);
-	let heroTitleEl = $state<HTMLElement | null>(null);
-	let heroDescEl = $state<HTMLElement | null>(null);
-	let firstRun = true;
-
-	// Tabs that don't need the big banner collapse the hero to a compact strip.
-	const heroCompact = $derived(
-		activeTab === 'members' || activeTab === 'variables' || activeTab === 'compose'
-	);
-
-	$effect(() => {
-		const compact = heroCompact;
-		const heroPx = compact ? 7.5 * 16 : 18 * 16;
-		const titlePx = compact ? 1.375 * 16 : 1.75 * 16;
-		const descOp = compact ? 0 : 1;
-
-		if (!motionEnabled()) {
-			if (heroEl) heroEl.style.height = `${heroPx}px`;
-			if (heroTitleEl) heroTitleEl.style.fontSize = `${titlePx}px`;
-			if (heroDescEl) heroDescEl.style.opacity = `${descOp}`;
-			firstRun = false;
-			return;
-		}
-
-		if (heroEl) {
-			animate(heroEl, { height: `${heroPx}px` }, transition('smooth'));
-		}
-		if (heroTitleEl) {
-			animate(heroTitleEl, { fontSize: `${titlePx}px` }, transition('smooth'));
-		}
-		if (heroDescEl) {
-			animate(heroDescEl, { opacity: descOp }, transition('smooth'));
-		}
-		if (firstRun) {
-			firstRun = false;
-		}
-	});
 </script>
 
 {#if heroImgReady}
@@ -66,7 +23,7 @@
 		aria-hidden="true"
 	></div>
 {/if}
-<div class="pj-hero" class:pj-hero--compact={heroCompact} bind:this={heroEl}>
+<div class="pj-hero">
 	<img
 		class="pj-hero-img"
 		src={project.backgroundImage}
@@ -78,7 +35,7 @@
 	<div class="pj-hero-fade"></div>
 	<div class="pj-hero-content">
 		<div class="pj-header-info">
-			<h1 class="pj-title pj-title--onhero" bind:this={heroTitleEl}>
+			<h1 class="pj-title pj-title--onhero">
 				{#if project.icon}
 					<span class="pj-title-icon">
 						{#if /^https?:\/\//.test(project.icon)}
@@ -92,7 +49,7 @@
 					>{/if}{project.name}
 			</h1>
 			{#if project.description}
-				<p class="pj-description pj-description--onhero" bind:this={heroDescEl}>
+				<p class="pj-description pj-description--onhero">
 					{project.description}
 				</p>
 			{/if}
