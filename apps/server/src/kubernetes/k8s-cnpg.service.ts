@@ -15,6 +15,10 @@ import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory 
 import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
 import { optionalDomain } from '../env/platform-domains';
 import { syncTlsSecret } from './tls-secret-sync';
+import { repairedCaBundle, walCapPatchFor } from './cnpg-defaults';
+import { ModuleRef } from '@nestjs/core';
+import { LeaseService } from '../coordination/lease.service';
+import { LeaderElectionService } from '../events/leader-election.service';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -37,13 +41,121 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   // disturbance becomes a restart it cannot manage (2026-07-20 incident).
   private readonly CNPG_OPERATOR_NAMESPACE = process.env.CNPG_OPERATOR_NAMESPACE || 'postgresql';
 
+  private defaultsTimer?: ReturnType<typeof setInterval>;
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kubernetes: KubernetesService
+    private readonly kubernetes: KubernetesService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   async onApplicationBootstrap() {
     void this.backfillOperatorIngressPolicies();
+    setTimeout(() => void this.reconcileClusterDefaults(), 90_000).unref?.();
+    this.defaultsTimer = setInterval(() => void this.reconcileClusterDefaults(), 6 * 60 * 60_000);
+    this.defaultsTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.defaultsTimer) clearInterval(this.defaultsTimer);
+  }
+
+  private canRunClusterWide(): boolean {
+    try {
+      const lease = this.moduleRef.get(LeaseService, { strict: false });
+      const leader = this.moduleRef.get(LeaderElectionService, { strict: false });
+      return !!lease?.canCoordinate && !!leader?.isLeader();
+    } catch {
+      return false;
+    }
+  }
+
+  async reconcileClusterDefaults(): Promise<{
+    walCapped: number;
+    caRepaired: number;
+    failed: number;
+  } | null> {
+    if (!this.kc || !this.canRunClusterWide()) return null;
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const rows = await this.prisma.database.findMany({
+      where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
+      select: { namespace: true, clusterName: true }
+    });
+    let walCapped = 0;
+    let caRepaired = 0;
+    let failed = 0;
+    const namespaces = new Set<string>();
+    for (const row of rows) {
+      const ns = row.namespace!;
+      const name = row.clusterName!;
+      try {
+        const { body } = await customApi.getNamespacedCustomObject(
+          this.CNPG_GROUP,
+          this.CNPG_VERSION,
+          ns,
+          this.CNPG_PLURAL,
+          name
+        );
+        const cluster = body as any;
+        if (cluster.spec?.certificates?.serverCASecret === this.PUBLIC_TLS_LOCAL_SECRET) {
+          namespaces.add(ns);
+        }
+        const patch = walCapPatchFor(cluster);
+        if (!patch) continue;
+        await customApi.patchNamespacedCustomObject(
+          this.CNPG_GROUP,
+          this.CNPG_VERSION,
+          ns,
+          this.CNPG_PLURAL,
+          name,
+          { spec: { postgresql: { parameters: patch } } },
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+        walCapped += 1;
+      } catch (e: any) {
+        if (e?.response?.statusCode === 404) continue;
+        failed += 1;
+        this.logger.warn(`cluster defaults for ${ns}/${name} not applied: ${e?.message || e}`);
+      }
+    }
+    for (const ns of namespaces) {
+      try {
+        const { body: secret } = await coreApi.readNamespacedSecret(
+          this.PUBLIC_TLS_LOCAL_SECRET,
+          ns
+        );
+        const repaired = repairedCaBundle(
+          (secret.data ?? {}) as { 'ca.crt'?: string; 'tls.crt'?: string }
+        );
+        if (!repaired) continue;
+        await coreApi.patchNamespacedSecret(
+          this.PUBLIC_TLS_LOCAL_SECRET,
+          ns,
+          { data: { 'ca.crt': repaired } },
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+        caRepaired += 1;
+      } catch (e: any) {
+        if (e?.response?.statusCode === 404) continue;
+        failed += 1;
+        this.logger.warn(`server ca bundle in ${ns} not repaired: ${e?.message || e}`);
+      }
+    }
+    if (walCapped || caRepaired || failed) {
+      this.logger.log(
+        `cnpg defaults reconciled: ${walCapped} clusters capped, ${caRepaired} ca bundles completed, ${failed} failed`
+      );
+    }
+    return { walCapped, caRepaired, failed };
   }
 
   async ensureCnpgOperatorIngress(namespace: string): Promise<void> {
