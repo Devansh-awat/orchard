@@ -2997,7 +2997,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.appendBuildLog(deploymentId, 'Waiting for the new pods to become ready');
     const verdict = await this.k8sWorkload.waitForRollout(name, namespace, {
       sinceMs: opts.sinceMs,
-      onProgress: (detail) => void this.appendBuildLog(deploymentId, `rollout: ${detail}`)
+      onProgress: (detail) => {
+        this.appendBuildLog(deploymentId, `rollout: ${detail}`).catch(() => {});
+      }
     });
     if (verdict.state === 'ready') {
       await this.appendBuildLog(deploymentId, 'All pods are ready');
@@ -3042,7 +3044,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       image,
       healthCheck,
       args,
-      log: (line) => void this.appendBuildLog(deploymentId, line)
+      log: (line) => {
+        this.appendBuildLog(deploymentId, line).catch(() => {});
+      }
     });
     if (result.ok === false) {
       const { reason } = result;

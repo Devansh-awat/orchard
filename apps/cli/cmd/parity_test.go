@@ -364,11 +364,15 @@ var routeExclusions = map[string]string{
 	"GET /git/oauth/:provider/callback": "browser OAuth ceremony (callback)",
 
 	// browser login ceremonies: driven by redirects and cookies, not tokens
-	"GET /auth/login":        "browser login ceremony",
-	"GET /auth/callback":     "browser login ceremony (OAuth callback)",
-	"GET /auth/logout":       "browser logout (CLI logout deletes the local token)",
-	"POST /auth/otp/request": "browser OTP login ceremony",
-	"POST /auth/otp/verify":  "browser OTP login ceremony",
+	"GET /auth/config":        "browser login ceremony (which methods the login page offers)",
+	"GET /auth/methods":       "browser login ceremony (which methods the login page offers)",
+	"POST /auth/password":     "browser login ceremony (password sign-in; the CLI signs in with a token or OAuth)",
+	"POST /auth/password/set": "browser account settings (setting a password happens in the app)",
+	"GET /auth/login":         "browser login ceremony",
+	"GET /auth/callback":      "browser login ceremony (OAuth callback)",
+	"GET /auth/logout":        "browser logout (CLI logout deletes the local token)",
+	"POST /auth/otp/request":  "browser OTP login ceremony",
+	"POST /auth/otp/verify":   "browser OTP login ceremony",
 
 	// WebAuthn: the ceremony requires a browser authenticator
 	"GET /auth/passkey/check":                 "WebAuthn ceremony, browser only",
