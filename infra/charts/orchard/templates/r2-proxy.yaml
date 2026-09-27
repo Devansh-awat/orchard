@@ -29,6 +29,7 @@ stringData:
   R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
   R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
+  DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
 ---
 # Database URL for binding lookups. By default cloned from the existing CNPG
 # `<cluster>-app` Secret at helm-template time. Override via values if you

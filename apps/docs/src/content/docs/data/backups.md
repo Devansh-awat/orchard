@@ -11,9 +11,14 @@ The **Backups** tab lists every backup with its size and age, and takes one on
 demand. A **schedule** runs them automatically; set it once and the operator
 handles the rest.
 
-Backups go to object storage configured per organization (an S3-compatible
-endpoint, bucket and credentials). Without that configured, there is nowhere to
-put them.
+Backups go to object storage. An organization can bring its own (an
+S3-compatible endpoint, bucket and credentials under its settings), and that is
+always used when present. Otherwise they go to the instance's backup bucket, set
+by the admin under Instance, Storage as **Backup bucket** (`R2_BACKUP_BUCKET`).
+With either in place every managed database archives WAL continuously and takes
+a nightly base backup on its own; databases created before the bucket existed
+are brought in by the platform within a few hours, without touching anything an
+organization configured itself.
 
 ## Restoring
 

@@ -13,12 +13,13 @@
 // in-memory for 60s on hit, 5s on miss.
 //
 // Configuration:
-//   PROXY_LISTEN      address to listen on (default :9000)
-//   R2_ENDPOINT       upstream R2 endpoint (https://<acc>.r2.cloudflarestorage.com)
-//   R2_REGION         signing region for upstream (default "auto")
-//   R2_ACCESS_KEY     real R2 access key id
-//   R2_SECRET_KEY     real R2 secret access key
-//   DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
+//
+//	PROXY_LISTEN      address to listen on (default :9000)
+//	R2_ENDPOINT       upstream R2 endpoint (https://<acc>.r2.cloudflarestorage.com)
+//	R2_REGION         signing region for upstream (default "auto")
+//	R2_ACCESS_KEY     real R2 access key id
+//	R2_SECRET_KEY     real R2 secret access key
+//	DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
 // HEAD bucket, HEAD/PUT/GET/DELETE object, LIST objects v1/v2,
@@ -67,24 +68,26 @@ type cacheEntry struct {
 }
 
 const (
-	hitTTL    = 60 * time.Second
-	missTTL   = 5 * time.Second
+	hitTTL  = 60 * time.Second
+	missTTL = 5 * time.Second
 )
 
 // bindingStore resolves access keys to bindings, backed by orchard's Postgres.
 // A small TTL cache absorbs the steady-state load (barman makes many requests
 // per backup) while still picking up new databases within ~missTTL of creation.
 type bindingStore struct {
-	db *sql.DB
+	db            *sql.DB
+	defaultBucket string
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 }
 
-func newBindingStore(db *sql.DB) *bindingStore {
+func newBindingStore(db *sql.DB, defaultBucket string) *bindingStore {
 	return &bindingStore{
-		db:    db,
-		cache: map[string]cacheEntry{},
+		db:            db,
+		defaultBucket: defaultBucket,
+		cache:         map[string]cacheEntry{},
 	}
 }
 
@@ -129,7 +132,7 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 		       d.r2_proxy_secret,
 		       d.namespace,
 		       d.cluster_name,
-		       o.backup_r2_bucket
+		       COALESCE(o.backup_r2_bucket, NULLIF($2, ''))
 		FROM databases d
 		JOIN projects p      ON p.id = d.project_id
 		JOIN organizations o ON o.id = p.organization_id
@@ -138,7 +141,7 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 		  AND d.r2_proxy_secret     IS NOT NULL
 		  AND d.namespace           IS NOT NULL
 		  AND d.cluster_name        IS NOT NULL
-		  AND o.backup_r2_bucket    IS NOT NULL
+		  AND COALESCE(o.backup_r2_bucket, NULLIF($2, '')) IS NOT NULL
 		LIMIT 1`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -146,7 +149,7 @@ func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
 
 	var b Binding
 	var ns, cluster string
-	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
+	err := s.db.QueryRowContext(ctx, q, ak, s.defaultBucket).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Binding{}, false, nil
 	}
@@ -203,7 +206,7 @@ func main() {
 		cancel()
 	}
 
-	store := newBindingStore(db)
+	store := newBindingStore(db, envDefault("DEFAULT_BACKUP_BUCKET", ""))
 
 	p := &Proxy{
 		upstreamURL:     upURL,
@@ -671,19 +674,19 @@ func readBodyForSigning(r *http.Request) (body []byte, contentSha string, err er
 
 func copyForwardHeaders(in, out http.Header) {
 	skip := map[string]bool{
-		"Authorization":          true,
-		"X-Amz-Date":             true,
-		"X-Amz-Content-Sha256":   true,
-		"X-Amz-Security-Token":   true,
-		"Host":                   true,
-		"Content-Length":         true, // Go sets this automatically from the body
-		"Connection":             true,
-		"Proxy-Connection":       true,
-		"Transfer-Encoding":      true,
-		"Upgrade":                true,
-		"Te":                     true,
-		"Trailer":                true,
-		"Keep-Alive":             true,
+		"Authorization":        true,
+		"X-Amz-Date":           true,
+		"X-Amz-Content-Sha256": true,
+		"X-Amz-Security-Token": true,
+		"Host":                 true,
+		"Content-Length":       true, // Go sets this automatically from the body
+		"Connection":           true,
+		"Proxy-Connection":     true,
+		"Transfer-Encoding":    true,
+		"Upgrade":              true,
+		"Te":                   true,
+		"Trailer":              true,
+		"Keep-Alive":           true,
 	}
 	for k, v := range in {
 		if skip[http.CanonicalHeaderKey(k)] {

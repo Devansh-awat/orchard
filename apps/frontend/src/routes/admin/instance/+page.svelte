@@ -40,7 +40,8 @@
 				bucketName: 'Bucket',
 				endpoint: 'Endpoint',
 				publicUrl: 'Public base URL',
-				buildContextBucket: 'Build context bucket'
+				buildContextBucket: 'Build context bucket',
+				backupBucket: 'Backup bucket'
 			}
 		},
 		email: {

@@ -43,6 +43,9 @@ import {
   GIB
 } from './projects.utils';
 import { NotificationsService } from '../notifications/notifications.service';
+import { platformBackupTarget } from '../instance-config/object-storage';
+import { LeaseService } from '../coordination/lease.service';
+import { LeaderElectionService } from '../events/leader-election.service';
 
 /** The org fields that locate a managed database's backups in R2. */
 export type OrgR2 = {
@@ -180,12 +183,22 @@ export class DatabasesService {
     r2ProxyAccessKey: string | undefined;
     r2ProxySecret: string | undefined;
   }> {
-    if (
-      !org?.backupR2Endpoint ||
-      !org?.backupR2Bucket ||
-      !org?.backupR2AccessKey ||
-      !org?.backupR2SecretKey
-    ) {
+    const own =
+      org?.backupR2Endpoint &&
+      org?.backupR2Bucket &&
+      org?.backupR2AccessKey &&
+      org?.backupR2SecretKey
+        ? {
+            endpoint: org.backupR2Endpoint,
+            bucket: org.backupR2Bucket,
+            region: org.backupR2Region || 'auto',
+            accessKey: org.backupR2AccessKey,
+            secretKey: org.backupR2SecretKey
+          }
+        : null;
+    const platform = own ? null : platformBackupTarget();
+    const target = own ?? (platform ? { ...platform, region: 'auto' } : null);
+    if (!target) {
       return { r2: undefined, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
     }
 
@@ -194,14 +207,14 @@ export class DatabasesService {
       await this.r2Proxy.addBinding({
         accessKey: minted.accessKey,
         secret: minted.secret,
-        bucket: org.backupR2Bucket,
+        bucket: target.bucket,
         prefix: `${namespace}/${clusterName}/`
       });
       return {
         r2: {
           endpoint: this.r2Proxy.getEndpoint(),
-          bucket: org.backupR2Bucket,
-          region: org.backupR2Region || 'auto',
+          bucket: target.bucket,
+          region: target.region,
           accessKey: minted.accessKey,
           secretKey: minted.secret
         },
@@ -210,17 +223,7 @@ export class DatabasesService {
       };
     }
 
-    return {
-      r2: {
-        endpoint: org.backupR2Endpoint,
-        bucket: org.backupR2Bucket,
-        region: org.backupR2Region || 'auto',
-        accessKey: org.backupR2AccessKey,
-        secretKey: org.backupR2SecretKey
-      },
-      r2ProxyAccessKey: undefined,
-      r2ProxySecret: undefined
-    };
+    return { r2: target, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
   }
 
   private async validateImportSource(src: {
@@ -758,10 +761,11 @@ export class DatabasesService {
     });
     const backupsEnabled = Boolean(
       (database.mode === 'cnpg' || database.mode === 'container') &&
-      org?.backupR2Endpoint &&
-      org?.backupR2Bucket &&
-      org?.backupR2AccessKey &&
-      org?.backupR2SecretKey
+      ((org?.backupR2Endpoint &&
+        org?.backupR2Bucket &&
+        org?.backupR2AccessKey &&
+        org?.backupR2SecretKey) ||
+        platformBackupTarget())
     );
 
     let publicHostname: string | null = null;
@@ -1695,7 +1699,9 @@ export class DatabasesService {
     if (!database.namespace || !database.clusterName) {
       throw new BadRequestException('Database is missing cluster metadata');
     }
-    const org = await this.getOrgR2Config(database.project.organizationId);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: database.project.organizationId }
+    });
 
     if (await this.k8sCnpg.isCnpgBackupConfigured(database.namespace, database.clusterName)) {
       return false;
@@ -1707,7 +1713,9 @@ export class DatabasesService {
       database.clusterName
     );
     if (!r2) {
-      throw new BadRequestException('R2 backup storage is not configured for this organization');
+      throw new BadRequestException(
+        'No backup storage: configure it for this organization, or set a backup bucket on the instance'
+      );
     }
 
     try {
@@ -1734,6 +1742,79 @@ export class DatabasesService {
       `[DB/backup] enabled WAL archiving for ${database.namespace}/${database.clusterName}`
     );
     return true;
+  }
+
+  private defaultBackupsTimer?: ReturnType<typeof setInterval>;
+
+  onApplicationBootstrap() {
+    setTimeout(() => this.reconcileDefaultBackups().catch(() => {}), 120_000).unref?.();
+    this.defaultBackupsTimer = setInterval(
+      () => this.reconcileDefaultBackups().catch(() => {}),
+      6 * 60 * 60_000
+    );
+    this.defaultBackupsTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.defaultBackupsTimer) clearInterval(this.defaultBackupsTimer);
+  }
+
+  private canRunClusterWide(): boolean {
+    try {
+      const lease = this.moduleRef.get(LeaseService, { strict: false });
+      const leader = this.moduleRef.get(LeaderElectionService, { strict: false });
+      return !!lease?.canCoordinate && !!leader?.isLeader();
+    } catch {
+      return false;
+    }
+  }
+
+  async reconcileDefaultBackups(): Promise<{
+    archived: number;
+    scheduled: number;
+    failed: number;
+  } | null> {
+    if (!this.canRunClusterWide()) return null;
+    if (!platformBackupTarget()) return { archived: 0, scheduled: 0, failed: 0 };
+    const rows = await this.prisma.database.findMany({
+      where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
+      select: {
+        id: true,
+        namespace: true,
+        clusterName: true,
+        r2ProxyAccessKey: true,
+        backupScheduleCron: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    let archived = 0;
+    let scheduled = 0;
+    let failed = 0;
+    for (const db of rows) {
+      try {
+        if (await this.ensureBackupsConfigured(db)) archived += 1;
+        if (!(await this.k8sCnpg.hasScheduledBackup(db.namespace!, db.clusterName!))) {
+          await this.k8sCnpg.upsertScheduledBackup(
+            db.namespace!,
+            db.clusterName!,
+            toQuartzCron(db.backupScheduleCron || DEFAULT_BACKUP_CRON)
+          );
+          scheduled += 1;
+        }
+      } catch (e: any) {
+        if (e?.response?.statusCode === 404) continue;
+        failed += 1;
+        this.logger.warn(
+          `[DB/backup] default backups for ${db.namespace}/${db.clusterName} not applied: ${e?.message || e}`
+        );
+      }
+    }
+    if (archived || scheduled || failed) {
+      this.logger.log(
+        `[DB/backup] defaults reconciled: ${archived} clusters now archiving, ${scheduled} schedules created, ${failed} failed`
+      );
+    }
+    return { archived, scheduled, failed };
   }
 
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {

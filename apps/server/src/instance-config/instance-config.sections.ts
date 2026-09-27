@@ -37,7 +37,8 @@ export const STORAGE = section(
     { name: 'bucketName', env: 'R2_BUCKET_NAME' },
     { name: 'endpoint', env: 'R2_ENDPOINT' },
     { name: 'publicUrl', env: 'R2_PUBLIC_URL' },
-    { name: 'buildContextBucket', env: 'R2_BUILD_CONTEXT_BUCKET' }
+    { name: 'buildContextBucket', env: 'R2_BUILD_CONTEXT_BUCKET' },
+    { name: 'backupBucket', env: 'R2_BACKUP_BUCKET' }
   ],
   ['accessKeyId', 'secretAccessKey', 'bucketName']
 );

@@ -51,8 +51,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     void this.backfillOperatorIngressPolicies();
-    setTimeout(() => void this.reconcileClusterDefaults(), 90_000).unref?.();
-    this.defaultsTimer = setInterval(() => void this.reconcileClusterDefaults(), 6 * 60 * 60_000);
+    setTimeout(() => this.reconcileClusterDefaults().catch(() => {}), 90_000).unref?.();
+    this.defaultsTimer = setInterval(
+      () => this.reconcileClusterDefaults().catch(() => {}),
+      6 * 60 * 60_000
+    );
     this.defaultsTimer.unref?.();
   }
 

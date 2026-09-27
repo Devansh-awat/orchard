@@ -464,6 +464,9 @@ certificates:
 r2Proxy:
   enabled: true
   namespace: orchard-r2-proxy
+  # Bucket used for organizations that never configured their own backup
+  # storage. Pair it with R2_BACKUP_BUCKET on the server.
+  defaultBucket: ""
   replicas: 2
   image:
     name: r2-proxy
