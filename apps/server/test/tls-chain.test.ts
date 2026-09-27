@@ -31,7 +31,9 @@ test('a chain whose root is unknown is left as it was', () => {
 
 test('the WAL slot cap scales with the disk and stays inside a sane band', () => {
   assert.equal(walSlotKeepSize('10Gi'), '2GB');
-  assert.equal(walSlotKeepSize('1Gi'), '1GB');
+  assert.equal(walSlotKeepSize('5Gi'), '1GB');
+  assert.equal(walSlotKeepSize('1Gi'), '256MB');
+  assert.equal(walSlotKeepSize('3Gi'), '614MB');
   assert.equal(walSlotKeepSize('100Gi'), '8GB');
-  assert.equal(walSlotKeepSize(undefined), '1GB');
+  assert.equal(walSlotKeepSize(undefined), '256MB');
 });
