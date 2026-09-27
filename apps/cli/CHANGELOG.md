@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.17.0](https://github.com/hackclub/orchard/compare/cli/v0.16.0...cli/v0.17.0) (2026-09-27)
+
+
+### Features
+
+* activity timeline per app with live audit events ([8abc9e4](https://github.com/hackclub/orchard/commit/8abc9e4603f01c52cec168ff669cc6d697224785))
+* git providers per user with instance-registered oauth apps and per-connection webhook secrets ([b5584ac](https://github.com/hackclub/orchard/commit/b5584ac18baaedf5a42dc654be590eb3360341ef))
+* palette actions with frecency, orchard top and orchard console ([5dd7480](https://github.com/hackclub/orchard/commit/5dd7480321191214ab73e3184954704be219db1a))
+* public status pages with hosts, derived from crash state, replicas and alerts ([efa60a9](https://github.com/hackclub/orchard/commit/efa60a97818e96fcaad53ef5eae94207a015b7e9))
+* resource bindings so apps follow a database across restores and password rotation ([ad9c7f4](https://github.com/hackclub/orchard/commit/ad9c7f4e5c8b73a24160d29da955b9e1c9934fd9))
+* rollout gate with auto rollback, blue/green deploys and releases ([7cc9bc1](https://github.com/hackclub/orchard/commit/7cc9bc1068cff1dbb837d0f99d2e8ebe4018e7ad))
+* score.yaml workloads and a terraform and opentofu provider on the cli api client ([33db897](https://github.com/hackclub/orchard/commit/33db89754e915b13ec0d40bcee4445a474108b6e))
+* threshold alerts on app metrics with a shared metrics client ([e36774c](https://github.com/hackclub/orchard/commit/e36774c484955b5b68593b97b74284233ce14395))
+
+
+### Bug Fixes
+
+* cli terminal sessions printed the exec attach handshake frame ([854685c](https://github.com/hackclub/orchard/commit/854685ccaedebd98dd1cb8ca859daf1f44094750))
+
 ## [0.16.0](https://github.com/hackclub/orchard/compare/cli/v0.15.1...cli/v0.16.0) (2026-09-18)
 
 

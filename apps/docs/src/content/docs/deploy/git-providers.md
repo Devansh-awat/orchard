@@ -25,13 +25,13 @@ plain git host. The token is stored encrypted and checked once before it is save
 A provider is yours. Orchard lists only the repositories your token can see, and only
 you can start apps from it.
 
-| Provider | Token | Scopes |
-| --- | --- | --- |
-| GitLab | personal or project access token | `read_api`, `read_repository` |
-| Gitea, Forgejo, Codeberg | access token | repository read |
-| Bitbucket Cloud | app password, with your username | repository read |
-| GitHub with a token | fine-grained token | contents read |
-| Any git host | the password used to clone over https | none |
+| Provider                 | Token                                 | Scopes                        |
+| ------------------------ | ------------------------------------- | ----------------------------- |
+| GitLab                   | personal or project access token      | `read_api`, `read_repository` |
+| Gitea, Forgejo, Codeberg | access token                          | repository read               |
+| Bitbucket Cloud          | app password, with your username      | repository read               |
+| GitHub with a token      | fine-grained token                    | contents read                 |
+| Any git host             | the password used to clone over https | none                          |
 
 ## Creating an app
 

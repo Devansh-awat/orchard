@@ -347,10 +347,9 @@
 	}
 	.ar-form-row {
 		display: grid;
-		grid-template-columns: minmax(9rem, 1.4fr) minmax(6rem, 0.8fr) minmax(5rem, 0.7fr) minmax(
-				6rem,
-				0.8fr
-			) minmax(6rem, 0.8fr);
+		grid-template-columns:
+			minmax(9rem, 1.4fr) minmax(6rem, 0.8fr) minmax(5rem, 0.7fr) minmax(6rem, 0.8fr)
+			minmax(6rem, 0.8fr);
 		gap: var(--space-2);
 		align-items: end;
 	}

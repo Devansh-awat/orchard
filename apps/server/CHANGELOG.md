@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.48.0](https://github.com/hackclub/orchard/compare/server/v2.47.1...server/v2.48.0) (2026-09-27)
+
+
+### Features
+
+* activity timeline per app with live audit events ([8abc9e4](https://github.com/hackclub/orchard/commit/8abc9e4603f01c52cec168ff669cc6d697224785))
+* an instance backup bucket backs every database whose organization has none, and a leader-only pass brings existing clusters in ([250791e](https://github.com/hackclub/orchard/commit/250791e7c47470025268eef54b84e1fde6cf857e))
+* auto-deploy for git providers registers the forge webhook, with docs for providers, score and terraform ([32d6a37](https://github.com/hackclub/orchard/commit/32d6a37df2c7d357e1e98576416780684e9e44ec))
+* git providers per user with instance-registered oauth apps and per-connection webhook secrets ([b5584ac](https://github.com/hackclub/orchard/commit/b5584ac18baaedf5a42dc654be590eb3360341ef))
+* public status pages with hosts, derived from crash state, replicas and alerts ([efa60a9](https://github.com/hackclub/orchard/commit/efa60a97818e96fcaad53ef5eae94207a015b7e9))
+* resource bindings so apps follow a database across restores and password rotation ([ad9c7f4](https://github.com/hackclub/orchard/commit/ad9c7f4e5c8b73a24160d29da955b9e1c9934fd9))
+* rollout gate with auto rollback, blue/green deploys and releases ([7cc9bc1](https://github.com/hackclub/orchard/commit/7cc9bc1068cff1dbb837d0f99d2e8ebe4018e7ad))
+* score.yaml workloads and a terraform and opentofu provider on the cli api client ([33db897](https://github.com/hackclub/orchard/commit/33db89754e915b13ec0d40bcee4445a474108b6e))
+* threshold alerts on app metrics with a shared metrics client ([e36774c](https://github.com/hackclub/orchard/commit/e36774c484955b5b68593b97b74284233ce14395))
+
+
+### Bug Fixes
+
+* cnpg server ca bundle is completed to a self-signed root, and new clusters cap slot wal so a dead replica cannot fill the primary ([5971bc7](https://github.com/hackclub/orchard/commit/5971bc7a20eaf6f771eb53cf74874d438984b4ab))
+* existing cnpg clusters get the slot wal cap and a complete server ca bundle from a leader-only reconcile ([b7456dc](https://github.com/hackclub/orchard/commit/b7456dcc79b16d1ae5b783a974a5941415df8ca8))
+* the slot wal cap keeps a fifth of the disk from 256MB up, so tiny databases are not capped at half their volume ([9502ed5](https://github.com/hackclub/orchard/commit/9502ed5e19c48a2b8c6a49f18145f938e4aeef3f))
+
 ## [2.47.1](https://github.com/hackclub/orchard/compare/server/v2.47.0...server/v2.47.1) (2026-09-25)
 
 

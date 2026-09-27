@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.42.0](https://github.com/hackclub/orchard/compare/frontend/v1.41.0...frontend/v1.42.0) (2026-09-27)
+
+
+### Features
+
+* activity timeline per app with live audit events ([8abc9e4](https://github.com/hackclub/orchard/commit/8abc9e4603f01c52cec168ff669cc6d697224785))
+* an instance backup bucket backs every database whose organization has none, and a leader-only pass brings existing clusters in ([250791e](https://github.com/hackclub/orchard/commit/250791e7c47470025268eef54b84e1fde6cf857e))
+* auto-deploy for git providers registers the forge webhook, with docs for providers, score and terraform ([32d6a37](https://github.com/hackclub/orchard/commit/32d6a37df2c7d357e1e98576416780684e9e44ec))
+* git providers per user with instance-registered oauth apps and per-connection webhook secrets ([b5584ac](https://github.com/hackclub/orchard/commit/b5584ac18baaedf5a42dc654be590eb3360341ef))
+* next steps as a compact tips stack in the overview side column ([7204f05](https://github.com/hackclub/orchard/commit/7204f05ce8593e9009d2eeee1a5082bb2c5b04c1))
+* palette actions with frecency, orchard top and orchard console ([5dd7480](https://github.com/hackclub/orchard/commit/5dd7480321191214ab73e3184954704be219db1a))
+* public status pages with hosts, derived from crash state, replicas and alerts ([efa60a9](https://github.com/hackclub/orchard/commit/efa60a97818e96fcaad53ef5eae94207a015b7e9))
+* resource bindings so apps follow a database across restores and password rotation ([ad9c7f4](https://github.com/hackclub/orchard/commit/ad9c7f4e5c8b73a24160d29da955b9e1c9934fd9))
+* rollout gate with auto rollback, blue/green deploys and releases ([7cc9bc1](https://github.com/hackclub/orchard/commit/7cc9bc1068cff1dbb837d0f99d2e8ebe4018e7ad))
+* score.yaml workloads and a terraform and opentofu provider on the cli api client ([33db897](https://github.com/hackclub/orchard/commit/33db89754e915b13ec0d40bcee4445a474108b6e))
+* sound cues for finished builds behind an accessibility setting ([ff31e0a](https://github.com/hackclub/orchard/commit/ff31e0af3cf25a51de4a3d19c1371521c810e872))
+* threshold alerts on app metrics with a shared metrics client ([e36774c](https://github.com/hackclub/orchard/commit/e36774c484955b5b68593b97b74284233ce14395))
+
 ## [1.41.0](https://github.com/hackclub/orchard/compare/frontend/v1.40.0...frontend/v1.41.0) (2026-09-25)
 
 

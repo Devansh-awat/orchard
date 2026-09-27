@@ -103,14 +103,14 @@ itself yet.
 
 ## Resources
 
-| Resource | What it manages | Replaced on change |
-| --- | --- | --- |
-| `orchard_project` | A project in an organization | `organization_id`, `slug` |
-| `orchard_deployment` | An app running a container image. Image and replica changes roll the app in place | `name`, `port`, `start_command`, `environment_id` |
-| `orchard_database` | A managed Postgres database. Exposes `host`, `port`, `database_name` and `status`, never the password | everything except `name` |
-| `orchard_ingress` | A custom domain routed to an app | `deployment_id` |
-| `orchard_env_var` | One variable on an app, leaving the rest alone. A `secret` value is write-only | `deployment_id`, `key` |
-| `orchard_job` | A scheduled or on-demand job made of image steps | `project_id` |
+| Resource             | What it manages                                                                                       | Replaced on change                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `orchard_project`    | A project in an organization                                                                          | `organization_id`, `slug`                         |
+| `orchard_deployment` | An app running a container image. Image and replica changes roll the app in place                     | `name`, `port`, `start_command`, `environment_id` |
+| `orchard_database`   | A managed Postgres database. Exposes `host`, `port`, `database_name` and `status`, never the password | everything except `name`                          |
+| `orchard_ingress`    | A custom domain routed to an app                                                                      | `deployment_id`                                   |
+| `orchard_env_var`    | One variable on an app, leaving the rest alone. A `secret` value is write-only                        | `deployment_id`, `key`                            |
+| `orchard_job`        | A scheduled or on-demand job made of image steps                                                      | `project_id`                                      |
 
 Apps built from a repository are created from the dashboard or with
 `orchard deploy create --github`; the provider can read them and set their variables,

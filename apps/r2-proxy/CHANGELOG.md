@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.2.1...r2-proxy/v0.3.0) (2026-09-27)
+
+
+### Features
+
+* an instance backup bucket backs every database whose organization has none, and a leader-only pass brings existing clusters in ([250791e](https://github.com/hackclub/orchard/commit/250791e7c47470025268eef54b84e1fde6cf857e))
+
 ## [0.2.1](https://github.com/hackclub/orchard/compare/r2-proxy/v0.2.0...r2-proxy/v0.2.1) (2026-09-02)
 
 

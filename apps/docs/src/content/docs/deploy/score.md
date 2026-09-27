@@ -16,7 +16,7 @@ metadata:
   name: web
   annotations:
     orchard.my/domain: midnight.example.com
-    orchard.my/replicas: "2"
+    orchard.my/replicas: '2'
 containers:
   web:
     image: .
@@ -35,14 +35,14 @@ resources:
 
 ## What each part becomes
 
-| Score | Orchard |
-| --- | --- |
-| `containers.<first>.variables` | The app's variables. Keys not in the file are left alone |
-| `service.ports` | The app's service ports |
+| Score                                    | Orchard                                                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `containers.<first>.variables`           | The app's variables. Keys not in the file are left alone                                      |
+| `service.ports`                          | The app's service ports                                                                       |
 | `resources.<name>` with `type: postgres` | A managed database on the project named `<name>`, created if missing and connected to the app |
-| `${resources.<name>.<field>}` | A live reference to that database, resolved when the pod starts |
-| `orchard.my/domain` | A custom domain routed to the app |
-| `orchard.my/replicas` | The replica count |
+| `${resources.<name>.<field>}`            | A live reference to that database, resolved when the pod starts                               |
+| `orchard.my/domain`                      | A custom domain routed to the app                                                             |
+| `orchard.my/replicas`                    | The replica count                                                                             |
 
 Only the first container is deployed. `image: .` means the image Orchard builds;
 another image is accepted but the build still comes from the repository.
