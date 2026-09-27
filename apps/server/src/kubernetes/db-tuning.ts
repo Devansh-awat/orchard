@@ -137,3 +137,15 @@ export function deriveDbTuning(input: DbTuningInput): DbTuning {
 
   return { sharedBuffers, dataCompression, advisories };
 }
+
+export function walSlotKeepSize(storageSize: string | undefined): string {
+  const m = /^(\d+(?:\.\d+)?)\s*(Gi|Mi|G|M|Ti|T)?$/i.exec(String(storageSize ?? '').trim());
+  let gib = 1;
+  if (m) {
+    const n = Number(m[1]);
+    const unit = (m[2] ?? 'Gi').toLowerCase();
+    gib = unit.startsWith('t') ? n * 1024 : unit.startsWith('m') ? n / 1024 : n;
+  }
+  const keep = Math.min(8, Math.max(1, Math.round(gib * 0.2)));
+  return `${keep}GB`;
+}

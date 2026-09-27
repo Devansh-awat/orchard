@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
-import { deriveDbTuning } from './db-tuning';
+import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
 import { optionalDomain } from '../env/platform-domains';
 import { syncTlsSecret } from './tls-secret-sync';
 
@@ -1302,6 +1302,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         parameters: {
           max_connections: '100',
           shared_buffers: tuning.sharedBuffers,
+          max_slot_wal_keep_size: walSlotKeepSize(options.storageSize),
           ...options.parameters
         },
         ...(options.sharedPreloadLibraries && options.sharedPreloadLibraries.length > 0
@@ -2118,6 +2119,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         parameters: {
           max_connections: '100',
           shared_buffers: tuning.sharedBuffers,
+          max_slot_wal_keep_size: walSlotKeepSize(options.storageSize),
           ...options.parameters
         },
         ...(options.sharedPreloadLibraries && options.sharedPreloadLibraries.length > 0

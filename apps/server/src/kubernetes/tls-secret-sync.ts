@@ -1,4 +1,6 @@
 import * as k8s from '@kubernetes/client-node';
+import { X509Certificate } from 'node:crypto';
+import { rootCertificates } from 'node:tls';
 
 export const TLS_SOURCE_RV_LABEL = 'orchard.my/tls-source-rv';
 const LEGACY_TLS_SOURCE_RV_LABEL = 'orchard.dev/tls-source-rv';
@@ -34,10 +36,10 @@ export async function syncTlsSecret(
   let caCrtB64 = src.data['ca.crt'];
   if (!caCrtB64) {
     const fullChainPem = Buffer.from(src.data['tls.crt'], 'base64').toString('utf-8');
-    const certs =
-      fullChainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
+    const certs = pemCertificates(fullChainPem);
     if (certs.length >= 2) {
-      caCrtB64 = Buffer.from(`${certs.slice(1).join('\n')}\n`, 'utf-8').toString('base64');
+      const bundle = completeChain(certs.slice(1));
+      caCrtB64 = Buffer.from(`${bundle.join('\n')}\n`, 'utf-8').toString('base64');
     }
   }
 
@@ -74,4 +76,39 @@ export async function syncTlsSecret(
     }
     throw e;
   }
+}
+
+export function pemCertificates(pem: string): string[] {
+  return pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
+}
+
+export function completeChain(
+  chain: string[],
+  roots: readonly string[] = rootCertificates
+): string[] {
+  const out = [...chain];
+  const seen = new Set(out.map((c) => c.trim()));
+  for (let i = 0; i < 8; i += 1) {
+    const last = out[out.length - 1];
+    if (!last) return out;
+    let cert: X509Certificate;
+    try {
+      cert = new X509Certificate(last);
+    } catch {
+      return out;
+    }
+    if (cert.issuer === cert.subject) return out;
+    const issuer = roots.find((r) => {
+      try {
+        const root = new X509Certificate(r);
+        return root.subject === cert.issuer && cert.checkIssued(root);
+      } catch {
+        return false;
+      }
+    });
+    if (!issuer || seen.has(issuer.trim())) return out;
+    out.push(issuer.trim());
+    seen.add(issuer.trim());
+  }
+  return out;
 }
