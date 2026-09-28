@@ -114,6 +114,16 @@ const RECOVERY_OUTCOME_REASON: Partial<
   internal: 'internal'
 };
 
+const DOCKERFILE_TARGET_RE = /^[A-Za-z0-9._-]{1,128}$/;
+
+function safeDockerfileTarget(raw: string | null | undefined): string | null {
+  const target = raw?.trim() || null;
+  if (target && !DOCKERFILE_TARGET_RE.test(target)) {
+    throw new BadRequestException('Invalid Dockerfile target');
+  }
+  return target;
+}
+
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeploymentsService.name);
@@ -2518,6 +2528,29 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const override = (key: keyof typeof body) =>
       key in body ? { [key]: (body[key] as string | null)?.trim() || null } : {};
 
+    const nextDockerfilePath = override('dockerfilePath').dockerfilePath as
+      | string
+      | null
+      | undefined;
+    if (
+      nextDockerfilePath &&
+      (nextDockerfilePath.length > 500 ||
+        nextDockerfilePath.startsWith('/') ||
+        nextDockerfilePath.startsWith('\\') ||
+        nextDockerfilePath.includes('..') ||
+        nextDockerfilePath.includes('\0') ||
+        !/^[A-Za-z0-9._/\- ]+$/.test(nextDockerfilePath))
+    ) {
+      throw new BadRequestException('Invalid Dockerfile path');
+    }
+    const nextDockerfileTarget = override('dockerfileTarget').dockerfileTarget as
+      | string
+      | null
+      | undefined;
+    if (nextDockerfileTarget && !DOCKERFILE_TARGET_RE.test(nextDockerfileTarget)) {
+      throw new BadRequestException('Invalid Dockerfile target');
+    }
+
     // The start command means two different things either side of a build-type
     // switch — a Railpack build bakes it into the image, everything else runs
     // it as the container's args — so a value carried across the switch would
@@ -4313,6 +4346,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           this.githubService.autoDeployUnavailableMessage(repoInfo.owner, repoInfo.repo)
         );
       }
+    }
+
+    if (!branch || branch.length > 255 || !/^[A-Za-z0-9._/-]+$/.test(branch)) {
+      throw new BadRequestException('Invalid branch name');
     }
 
     const previousBranch = deployment.autoDeployBranch;
@@ -6484,6 +6521,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (tag.length > 200 || tag.startsWith('-') || tag.includes('..') || !GIT_REF_RE.test(tag)) {
       throw new BadRequestException('Invalid tag');
     }
+    if (
+      data.autoDeployBranch &&
+      (data.autoDeployBranch.length > 255 || !GIT_REF_RE.test(data.autoDeployBranch))
+    ) {
+      throw new BadRequestException('Invalid auto-deploy branch');
+    }
     if (dockerfilePath) {
       if (
         dockerfilePath.length > 500 ||
@@ -6694,7 +6737,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         // Railpack has no notion of stages, so a target can only mean anything
         // alongside a Dockerfile.
-        dockerfileTarget: buildType === 'dockerfile' ? data.target?.trim() || null : null,
+        dockerfileTarget: buildType === 'dockerfile' ? safeDockerfileTarget(data.target) : null,
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,
         persistentBuildCache: data.persistentBuildCache ?? false,
@@ -7021,7 +7064,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'none',
         buildType,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
-        dockerfileTarget: buildType === 'dockerfile' ? data.target?.trim() || null : null,
+        dockerfileTarget: buildType === 'dockerfile' ? safeDockerfileTarget(data.target) : null,
         rootDirectory: buildType === 'railpack' ? normalizeRootDirectory(data.rootDirectory) : null,
         framework: data.framework?.trim() || null,
         installCommand: data.installCommand?.trim() || null,

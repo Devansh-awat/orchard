@@ -2441,6 +2441,10 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('Host is invalid');
     }
 
+    if (rawHost !== ingress.host) {
+      await this.access.assertHostnameAvailable(rawHost, deployment.project.id);
+    }
+
     let path = String(data.path || '/').trim();
     if (!path) {
       path = '/';
