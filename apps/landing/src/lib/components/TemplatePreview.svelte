@@ -30,7 +30,7 @@
 	const bakes = new Map<string, string | null>();
 
 	let iconBroken = $state(false);
-	let baked = $state<string | null>((icon && bakes.get(icon)) || null);
+	let baked = $state<string | null>(null);
 
 	function bake(img: HTMLImageElement) {
 		if (!icon) return;
