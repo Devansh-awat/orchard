@@ -37,6 +37,7 @@ export interface MirrorResourceConfig {
   apiVersion: string;
   watchPath: string;
   labelSelector?: string;
+  fieldSelector?: string;
   list(kc: k8s.KubeConfig, opts: MirrorListOptions): Promise<MirrorListPage>;
   // Resolve the Orchard rows an object belongs to. Returning `{}` means "it
   // belongs to nothing", which is a real answer and gets stored. Throwing means
@@ -567,6 +568,7 @@ export class MirrorInformer {
       resourceVersion
     };
     if (this.config.labelSelector) queryParams.labelSelector = this.config.labelSelector;
+    if (this.config.fieldSelector) queryParams.fieldSelector = this.config.fieldSelector;
 
     this.req = await watch.watch(
       this.config.watchPath,

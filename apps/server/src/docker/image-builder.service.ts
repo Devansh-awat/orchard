@@ -18,6 +18,7 @@ import { cacheEvictInitContainer } from './cache-evict';
 import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import { redactUrlUserinfo } from '../git/clone-credential';
 import { injectBuildArgsScript } from './build-args';
+import { BUILDER_NAMESPACE } from './builder-namespace';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
 import {
@@ -102,6 +103,32 @@ const BUILDKIT_STEP_RE = /(?:^|\n)#(?:[0-9a-f]{8}|\d+)\s/;
 /** Main container of a super build Job; BuildKit jobs use `buildkit`. */
 const DEPOT_CONTAINER = 'depot-build';
 
+const BUILD_ENV_SECRET_KEYS = {
+  cloneUrl: 'orchard.clone-url',
+  contextUrl: 'orchard.context-url',
+  depotToken: 'orchard.depot-token',
+  dockerAuthJson: 'orchard.docker-auth-json'
+} as const;
+const BUILD_ARG_ENV_PREFIX = 'ORCHARD_BUILD_ARG_';
+const BUILD_META_VOLUME = 'build-meta';
+const BUILD_META_PATH = '/orchard-build';
+const BUILD_DIR_FILE = `${BUILD_META_PATH}/dir`;
+
+type BuildctlArg = string | { shell: string };
+
+const shellQuote = (arg: string) =>
+  /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+
+const renderBuildctlArg = (arg: BuildctlArg) =>
+  typeof arg === 'string' ? shellQuote(arg) : arg.shell;
+
+const secretEnv = (name: string, secretName: string, key: string): k8s.V1EnvVar => ({
+  name,
+  valueFrom: { secretKeyRef: { name: secretName, key } }
+});
+
+const buildArgEnvName = (index: number) => `${BUILD_ARG_ENV_PREFIX}${index}`;
+
 @Injectable()
 export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
@@ -116,7 +143,7 @@ export class ImageBuilderService {
 
   private railpackInfoFetched = new Set<string>();
 
-  private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
+  private readonly builderNamespace = BUILDER_NAMESPACE;
 
   // Internal Harbor registry for pushing (HTTP on port 80)
   private readonly harborRegistryPush =
@@ -712,6 +739,45 @@ export class ImageBuilderService {
     }
   }
 
+  private async upsertOpaqueSecret(
+    name: string,
+    stringData: Record<string, string>,
+    extraMetadata: k8s.V1ObjectMeta = {}
+  ): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    const body: k8s.V1Secret = {
+      metadata: { name, namespace: this.builderNamespace, ...extraMetadata },
+      type: 'Opaque',
+      stringData
+    };
+    try {
+      await coreApi.createNamespacedSecret(this.builderNamespace, body);
+    } catch (error) {
+      if (error.statusCode === 409) {
+        await coreApi.replaceNamespacedSecret(name, this.builderNamespace, body);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private async deleteBuildJobSecrets(jobName: string): Promise<void> {
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    const secrets = await coreApi.listNamespacedSecret(
+      this.builderNamespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `orchard.my/build-job=${jobName}`
+    );
+    for (const secret of secrets.body.items) {
+      const name = secret.metadata?.name;
+      if (!name) continue;
+      await coreApi.deleteNamespacedSecret(name, this.builderNamespace).catch(() => {});
+    }
+  }
+
   async ensureBuilderSecrets(): Promise<void> {
     this.ensureKubeConfig();
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
@@ -894,7 +960,7 @@ ${registryConfigs}
     buildFromRoot: boolean;
     buildType: string;
     envVars: Record<string, string>;
-    pullAuths?: RegistryAuths;
+    envSecretName: string;
   }): k8s.V1Container {
     const {
       dockerfilePath,
@@ -903,7 +969,7 @@ ${registryConfigs}
       buildFromRoot,
       buildType,
       envVars,
-      pullAuths = {}
+      envSecretName
     } = opts;
 
     // Keys are interpolated into the depot build shell string below. Reject
@@ -949,10 +1015,9 @@ ${registryConfigs}
     // variable called PATH or DOCKER_CONFIG reconfigure the container running
     // the build. Indexes rather than a prefix, so a deployment that already has
     // an ORCHARD_BUILD_ARG_-shaped key cannot collide with a real one.
-    const depotBuildArgs = Object.entries(envVars).map(([key, value], index) => ({
+    const depotBuildArgs = Object.keys(envVars).map((key, index) => ({
       key,
-      envName: `ORCHARD_BUILD_ARG_${index}`,
-      value
+      envName: buildArgEnvName(index)
     }));
     const buildArgLines = depotBuildArgs
       .map(({ key, envName }) => `--build-arg "${key}=\${${envName}}"`)
@@ -1014,16 +1079,10 @@ echo "=== Super Build completed ==="
       args: [depotScript],
       workingDir: '/workspace',
       env: [
-        { name: 'DEPOT_TOKEN', value: this.depotToken || '' },
+        secretEnv('DEPOT_TOKEN', envSecretName, BUILD_ENV_SECRET_KEYS.depotToken),
         ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
-        {
-          name: 'DOCKER_AUTH_JSON',
-          value: JSON.stringify(dockerConfigJson(mergeRegistryAuths(this.harborAuths(), pullAuths)))
-        },
-        ...depotBuildArgs.map(({ envName, value }) => ({
-          name: envName,
-          value
-        }))
+        secretEnv('DOCKER_AUTH_JSON', envSecretName, BUILD_ENV_SECRET_KEYS.dockerAuthJson),
+        ...depotBuildArgs.map(({ key, envName }) => secretEnv(envName, envSecretName, key))
       ],
       volumeMounts: [
         {
@@ -1131,28 +1190,29 @@ fi
    * stay at /workspace.
    */
   private static readonly BUILD_DIR_PREAMBLE = `
-if [ -f /workspace/.orchard-build-dir ]; then
-  cd "$(cat /workspace/.orchard-build-dir)" || exit 1
+if [ -f ${BUILD_DIR_FILE} ]; then
+  ORCHARD_BUILD_DIR="$(cat ${BUILD_DIR_FILE})"
+  cd "$ORCHARD_BUILD_DIR" || exit 1
+  case "$(pwd -P)" in
+    /workspace|/workspace/*) ;;
+    *) echo "ERROR: refusing to build outside /workspace: $ORCHARD_BUILD_DIR"; exit 1 ;;
+  esac
   echo "=== Building in $(pwd) ==="
 fi
 `;
 
   private generateBuildScriptWithCacheFallback(
-    buildctlArgs: string[],
-    injectGitSha = false
+    buildctlArgs: BuildctlArg[],
+    injectGitSha = false,
+    buildDirPreamble = ''
   ): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
 
-    const shellQuote = (arg: string) =>
-      /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
-
     const gitShaPreamble = injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '';
     const gitShaOpt = injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : '';
 
-    const argsWithCache = buildctlArgs.map(shellQuote).join(' ') + gitShaOpt;
-
-    const buildDirPreamble = ImageBuilderService.BUILD_DIR_PREAMBLE;
+    const argsWithCache = buildctlArgs.map(renderBuildctlArg).join(' ') + gitShaOpt;
 
     if (!hasCacheEnabled) {
       return (
@@ -1165,7 +1225,7 @@ fi
     // Split the cache flags off the base args so the build can drop them at
     // runtime. Values are restricted to shellQuote's safe charset (no spaces),
     // so $CACHE_ARGS word-splits back into the original arguments.
-    const isCacheFlag = (arg: string, idx: number, arr: string[]) =>
+    const isCacheFlag = (arg: BuildctlArg, idx: number, arr: BuildctlArg[]) =>
       arg === '--import-cache' ||
       arg === '--export-cache' ||
       (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache'));
@@ -1173,12 +1233,14 @@ fi
     const baseArgs =
       buildctlArgs
         .filter((a, i, arr) => !isCacheFlag(a, i, arr))
-        .map(shellQuote)
+        .map(renderBuildctlArg)
         .join(' ') + gitShaOpt;
-    const cacheOnlyArgs = buildctlArgs.filter(isCacheFlag).map(shellQuote).join(' ');
+    const cacheOnlyArgs = buildctlArgs.filter(isCacheFlag).map(renderBuildctlArg).join(' ');
 
-    const argAfter = (flag: string) =>
-      buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag) || '';
+    const argAfter = (flag: string) => {
+      const found = buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag);
+      return typeof found === 'string' ? found : '';
+    };
     const cacheDirMatch =
       argAfter('--export-cache').match(/dest=([^,]+)/) ||
       argAfter('--import-cache').match(/src=([^,]+)/);
@@ -1309,6 +1371,7 @@ exit $EXIT_CODE
     }
 
     const jobName = this.generateJobName(imageName);
+    const buildEnvSecret = `benv-${jobName.slice(-8)}`;
     const jobDockerConfigSecret = hasAppPullAuth ? `bdc-${jobName.slice(-8)}` : null;
     if (jobDockerConfigSecret) {
       await this.upsertDockerConfigSecret(
@@ -1383,7 +1446,7 @@ echo "=== Build context extracted ==="
 ls -la /workspace
 `
           ],
-          env: [{ name: 'CONTEXT_URL', value: localContextUrl }],
+          env: [secretEnv('CONTEXT_URL', buildEnvSecret, BUILD_ENV_SECRET_KEYS.contextUrl)],
           volumeMounts: [
             {
               name: 'workspace',
@@ -1456,7 +1519,7 @@ echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo
 ls -la /workspace
 `
           ],
-          env: [{ name: 'CLONE_URL', value: cloneUrl }],
+          env: [secretEnv('CLONE_URL', buildEnvSecret, BUILD_ENV_SECRET_KEYS.cloneUrl)],
           volumeMounts: [
             {
               name: 'workspace',
@@ -1516,12 +1579,17 @@ ls -la /workspace
       });
     }
 
+    const buildArgEnv: k8s.V1EnvVar[] = Object.keys(envVars).map((key, index) =>
+      secretEnv(buildArgEnvName(index), buildEnvSecret, key)
+    );
+
     // For Railpack builds, add a second init container to run `railpack prepare`
     if (buildType === 'railpack') {
       // Build the env args for railpack prepare
-      const envArgs = Object.entries(envVars)
-        .filter(([, value]) => value && typeof value === 'string')
-        .map(([key, value]) => `--env '${key}=${value.replace(/'/g, "'\\''")}'`)
+      const envArgs = Object.keys(envVars)
+        .map((key, index) => ({ key, index, value: envVars[key] }))
+        .filter(({ value }) => value && typeof value === 'string')
+        .map(({ key, index }) => `--env "${key}=$${buildArgEnvName(index)}"`)
         .join(' ');
 
       // A railpack.json in the repo outranks env overrides, so the build
@@ -1612,7 +1680,7 @@ fi
 # The BuildKit container reads this back: its working directory has to match
 # the one the plan was generated for, and it is fixed in the pod spec before
 # any of the above is known.
-echo "$ORCHARD_BUILD_DIR" > /workspace/.orchard-build-dir
+echo "$ORCHARD_BUILD_DIR" > ${BUILD_DIR_FILE}
 
 cd "$ORCHARD_BUILD_DIR"
 ${configOverrideBlock}
@@ -1649,11 +1717,13 @@ fi
 `
         ],
         workingDir: '/workspace',
+        env: buildArgEnv,
         volumeMounts: [
           {
             name: 'workspace',
             mountPath: '/workspace'
-          }
+          },
+          { name: BUILD_META_VOLUME, mountPath: BUILD_META_PATH }
         ],
         resources: {
           requests: {
@@ -1667,6 +1737,13 @@ fi
         }
       });
     }
+
+    const dockerfileBuildArgEnv = buildType === 'dockerfile' ? buildArgEnv : [];
+    const buildDirPreamble = buildType === 'railpack' ? ImageBuilderService.BUILD_DIR_PREAMBLE : '';
+    const buildMetaMount: k8s.V1VolumeMount[] =
+      buildType === 'railpack'
+        ? [{ name: BUILD_META_VOLUME, mountPath: BUILD_META_PATH, readOnly: true }]
+        : [];
 
     // Persistent daemon mode: get/create a warm BuildKit daemon and build
     // a lightweight client container that connects to it via gRPC. The
@@ -1729,9 +1806,7 @@ fi
             // --- Daemon client mode ---
             // buildctl sends the local context directory to the remote daemon
             // over gRPC, so the client needs /workspace but NOT privilege.
-            const shellQuote = (arg: string) =>
-              /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
-            const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}${
+            const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(renderBuildctlArg).join(' ')}${
               injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''
             }`;
             const clientScript =
@@ -1739,7 +1814,7 @@ fi
               // Same directory handoff as the daemonless path: buildctl streams the
               // local context from the client's cwd, so it must match the directory
               // railpack-prepare generated the plan for.
-              ImageBuilderService.BUILD_DIR_PREAMBLE +
+              buildDirPreamble +
               this.generateBuildScript(clientCmd);
 
             return {
@@ -1751,8 +1826,8 @@ fi
               command: ['/bin/sh', '-c'],
               args: [clientScript],
               workingDir: '/workspace',
-              env: builderContainerEnv(envVars),
-              volumeMounts: [{ name: 'workspace', mountPath: '/workspace' }],
+              env: [...builderContainerEnv(envVars, buildEnvSecret), ...dockerfileBuildArgEnv],
+              volumeMounts: [{ name: 'workspace', mountPath: '/workspace' }, ...buildMetaMount],
               resources: {
                 requests: { cpu: '200m', memory: '512Mi' },
                 limits: { cpu: '2', memory: '4Gi' }
@@ -1780,7 +1855,9 @@ fi
             imagePullPolicy: 'IfNotPresent',
             securityContext: { privileged: true },
             command: ['/bin/sh', '-c'],
-            args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
+            args: [
+              this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha, buildDirPreamble)
+            ],
             workingDir: '/workspace',
             env: [
               ...(buildkitAuthSecret ? [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }] : []),
@@ -1788,7 +1865,8 @@ fi
                 name: 'BUILDKITD_FLAGS',
                 value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}`
               },
-              ...builderContainerEnv(envVars),
+              ...builderContainerEnv(envVars, buildEnvSecret),
+              ...dockerfileBuildArgEnv,
               // After the user's variables, not before. A build that pulls assets
               // from S3 sets AWS_ACCESS_KEY_ID for perfectly good reasons, and it
               // reaches the build by value as a --build-arg, so losing the race
@@ -1821,6 +1899,7 @@ fi
             ],
             volumeMounts: [
               { name: 'workspace', mountPath: '/workspace' },
+              ...buildMetaMount,
               ...(buildkitAuthSecret
                 ? [
                     {
@@ -1948,21 +2027,19 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
           buildFromRoot,
           buildType,
           envVars,
-          pullAuths: appPullAuths
+          envSecretName: buildEnvSecret
         })
       ];
     } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
 
-      const shellQuote2 = (arg: string) =>
-        /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
       const cacheExportArgs = buildctlArgs
         .map((a) =>
-          a.includes('dest=/output/image.tar')
+          typeof a === 'string' && a.includes('dest=/output/image.tar')
             ? a.replace('dest=/output/image.tar', 'dest=/tmp/cache-export.tar')
             : a
         )
-        .map(shellQuote2)
+        .map(renderBuildctlArg)
         .join(' ');
       const hasCacheExport = buildctlArgs.some((a) => a === '--export-cache');
 
@@ -2078,6 +2155,9 @@ exit $rc`
                 name: 'workspace',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {}
               },
+              ...(buildType === 'railpack'
+                ? [{ name: BUILD_META_VOLUME, emptyDir: { medium: 'Memory' } }]
+                : []),
               {
                 name: 'docker-config',
                 secret: {
@@ -2183,44 +2263,66 @@ exit $rc`
       envVarsCount: Object.keys(envVars).length
     });
 
+    const buildEnvSecretData: Record<string, string> = {
+      ...envVars,
+      ...(localContextUrl
+        ? { [BUILD_ENV_SECRET_KEYS.contextUrl]: localContextUrl }
+        : { [BUILD_ENV_SECRET_KEYS.cloneUrl]: cloneUrl }),
+      ...(buildWithDepot
+        ? {
+            [BUILD_ENV_SECRET_KEYS.depotToken]: this.depotToken || '',
+            [BUILD_ENV_SECRET_KEYS.dockerAuthJson]: JSON.stringify(
+              dockerConfigJson(mergeRegistryAuths(this.harborAuths(), appPullAuths))
+            )
+          }
+        : {})
+    };
+    const jobSecrets = [buildEnvSecret, ...(jobDockerConfigSecret ? [jobDockerConfigSecret] : [])];
+
     try {
+      await this.upsertOpaqueSecret(buildEnvSecret, buildEnvSecretData, {
+        labels: { 'orchard.my/build-job': jobName }
+      });
       const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
       console.log(
         `[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`
       );
       await this.stampBuildTime(options.deploymentId, 'submitted');
 
-      if (jobDockerConfigSecret && jobCreationResult.body.metadata?.uid) {
+      const jobUid = jobCreationResult.body.metadata?.uid;
+      if (jobUid) {
         const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
-        try {
-          await coreApi.patchNamespacedSecret(
-            jobDockerConfigSecret,
-            this.builderNamespace,
-            {
-              metadata: {
-                ownerReferences: [
-                  {
-                    apiVersion: 'batch/v1',
-                    kind: 'Job',
-                    name: jobName,
-                    uid: jobCreationResult.body.metadata.uid,
-                    controller: true
-                  }
-                ]
-              }
-            },
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            { headers: { 'Content-Type': 'application/merge-patch+json' } }
-          );
-        } catch (error) {
-          console.warn(
-            `[ImageBuilder] Could not attach ownerRef to ${jobDockerConfigSecret}:`,
-            error.message
-          );
+        for (const secretName of jobSecrets) {
+          try {
+            await coreApi.patchNamespacedSecret(
+              secretName,
+              this.builderNamespace,
+              {
+                metadata: {
+                  ownerReferences: [
+                    {
+                      apiVersion: 'batch/v1',
+                      kind: 'Job',
+                      name: jobName,
+                      uid: jobUid,
+                      controller: true
+                    }
+                  ]
+                }
+              },
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              { headers: { 'Content-Type': 'application/merge-patch+json' } }
+            );
+          } catch (error) {
+            console.warn(
+              `[ImageBuilder] Could not attach ownerRef to ${secretName}:`,
+              error.message
+            );
+          }
         }
       }
 
@@ -2247,6 +2349,7 @@ exit $rc`
 
       return jobName;
     } catch (error) {
+      await this.deleteBuildJobSecrets(jobName).catch(() => {});
       const errorDetails = error.body ? JSON.stringify(error.body, null, 2) : error.message;
       const errorMsg = `Failed to create build job: ${error.message}${error.body ? `\nDetails: ${errorDetails}` : ''}`;
 
@@ -2273,7 +2376,7 @@ exit $rc`
     buildFromRoot: boolean;
     envVars: Record<string, string>;
     skipCache?: boolean;
-  }): string[] {
+  }): BuildctlArg[] {
     const { dockerfilePath, fullImageName, target, buildFromRoot, envVars } = options;
 
     // Determine dockerfile location and context
@@ -2294,7 +2397,7 @@ exit $rc`
       }
     }
 
-    const args: string[] = [
+    const args: BuildctlArg[] = [
       'build',
       '--progress',
       this.buildkitProgress,
@@ -2319,9 +2422,9 @@ exit $rc`
     // Note: These will be available in the Dockerfile if declared with ARG
     // For security, sensitive values should not be used in ways that bake them into layers
     // The values are passed directly (not via shell expansion) to avoid exposure in process lists
-    for (const [key, value] of Object.entries(envVars)) {
-      args.push('--opt', `build-arg:${key}=${value}`);
-    }
+    Object.keys(envVars).forEach((key, index) => {
+      args.push('--opt', { shell: `build-arg:${key}="$${buildArgEnvName(index)}"` });
+    });
     if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
       args.push('--opt', 'build-arg:BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
     }
@@ -2429,7 +2532,7 @@ exit $rc`
     secretsHash?: string;
     cacheKey?: string;
     skipCache?: boolean;
-  }): string[] {
+  }): BuildctlArg[] {
     const {
       buildType,
       fullImageName,
@@ -3323,6 +3426,7 @@ exit $rc`
         undefined,
         'Background'
       );
+      await this.deleteBuildJobSecrets(jobName).catch(() => {});
       console.log(`[ImageBuilder] Deleted job ${jobName}`);
     } catch (error) {
       if (error.statusCode !== 404) {
@@ -3435,6 +3539,7 @@ exit $rc`
             }
           );
 
+          await this.deleteBuildJobSecrets(jobName).catch(() => {});
           console.log(`[ImageBuilder] Successfully deleted build job ${jobName} and its pods`);
         } catch (deleteError) {
           if (deleteError.statusCode !== 404) {

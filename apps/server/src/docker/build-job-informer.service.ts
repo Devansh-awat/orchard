@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { BUILDER_NAMESPACE } from './builder-namespace';
 
 export type BuildJobPhase = 'pending' | 'running' | 'succeeded' | 'failed' | 'gone';
 
@@ -65,7 +66,7 @@ export function observationFromJob(job: k8s.V1Job): BuildJobObservation {
 export class BuildJobInformerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BuildJobInformerService.name);
 
-  private readonly namespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
+  private readonly namespace = BUILDER_NAMESPACE;
 
   private informer?: k8s.Informer<k8s.V1Job> & k8s.ObjectCache<k8s.V1Job>;
 

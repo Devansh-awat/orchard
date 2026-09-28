@@ -6,12 +6,14 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { GitHubService } from '../github/github.service';
 import { detectApps, primaryApp, type DetectedApp } from '../github/framework-detect';
 import { parseRepoUrl } from '../docker/repo-url';
+import { assertPublicUrl } from '../notifications/webhook-guard';
 import { encodeCloneCredential } from './clone-credential';
 import {
   GIT_PROVIDER_KINDS,
   PROVIDER_DEFAULT_BASE_URL,
   hostOf,
   normalizeBaseUrl,
+  providerFailureMessage,
   type BranchRef,
   type ConnectionConfig,
   type GitProvider,
@@ -241,6 +243,7 @@ export class GitConnectionsService {
       String(input.baseUrl || PROVIDER_DEFAULT_BASE_URL[provider] || '')
     );
     if (!baseUrl) throw new BadRequestException('Base URL must be a plain https:// address');
+    await assertPublicUrl(baseUrl, 'Base URL');
     const token = String(input.token || '').trim();
     if (!token) throw new BadRequestException('A token is required');
     if (token.length > 4096) throw new BadRequestException('Token is too long');
@@ -295,9 +298,7 @@ export class GitConnectionsService {
     try {
       await providerFor(config).listRepos();
     } catch (e) {
-      throw new BadRequestException(
-        `${hostOf(config.baseUrl)} rejected the token: ${(e as Error).message}`
-      );
+      throw new BadRequestException(providerFailureMessage(e));
     }
   }
 

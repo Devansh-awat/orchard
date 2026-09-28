@@ -89,10 +89,9 @@ test('pull-auth keys never become build args or builder container env', () => {
   };
   const forBuild = buildSafeEnv(stored);
   assert.deepEqual(forBuild, { DATABASE_URL: 'postgres://app' });
-  assert.deepEqual(
-    builderContainerEnv(stored).map((e) => e.name),
-    ['DATABASE_URL']
-  );
+  assert.deepEqual(builderContainerEnv(stored, 'benv-abc'), [
+    { name: 'DATABASE_URL', valueFrom: { secretKeyRef: { name: 'benv-abc', key: 'DATABASE_URL' } } }
+  ]);
   for (const key of ['DHI_USERNAME', 'DHI_TOKEN', 'DOCKER_AUTH_CONFIG']) {
     assert.equal(isPullAuthEnvKey(key), true);
   }

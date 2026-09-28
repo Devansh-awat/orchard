@@ -1,5 +1,7 @@
+import { guardedFetch } from '../notifications/webhook-guard';
 import {
   GitProviderError,
+  PROVIDER_UNREACHABLE,
   hostOf,
   type BranchRef,
   type CloneCredential,
@@ -21,12 +23,23 @@ import {
 
 const MAX_PAGES = 5;
 const MAX_TREE_PAGES = 20;
+const REQUEST_TIMEOUT_MS = 20_000;
+
+async function request(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await guardedFetch(url, {
+      ...init,
+      label: 'Provider URL',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+  } catch {
+    throw new GitProviderError(PROVIDER_UNREACHABLE);
+  }
+}
 
 async function getJson<T>(url: string, headers: Record<string, string>): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json', ...headers } });
-  if (!res.ok) {
-    throw new GitProviderError(`${new URL(url).host} answered ${res.status}`, res.status);
-  }
+  const res = await request(url, { headers: { Accept: 'application/json', ...headers } });
+  if (!res.ok) throw new GitProviderError(PROVIDER_UNREACHABLE, res.status);
   return (await res.json()) as T;
 }
 
@@ -35,22 +48,19 @@ async function postJson<T>(
   headers: Record<string, string>,
   body: unknown
 ): Promise<T> {
-  const res = await fetch(url, {
+  const res = await request(url, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body)
   });
-  if (!res.ok) {
-    throw new GitProviderError(`${new URL(url).host} answered ${res.status}`, res.status);
-  }
+  if (!res.ok) throw new GitProviderError(PROVIDER_UNREACHABLE, res.status);
   return (await res.json().catch(() => ({}))) as T;
 }
 
 async function getText(url: string, headers: Record<string, string>): Promise<string | null> {
-  const res = await fetch(url, { headers });
+  const res = await request(url, { headers });
   if (res.status === 404) return null;
-  if (!res.ok)
-    throw new GitProviderError(`${new URL(url).host} answered ${res.status}`, res.status);
+  if (!res.ok) throw new GitProviderError(PROVIDER_UNREACHABLE, res.status);
   return res.text();
 }
 

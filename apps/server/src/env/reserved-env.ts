@@ -52,12 +52,18 @@ export const BUILDER_RESERVED_ENV_KEYS = new Set([
   'DOCKER_CONFIG'
 ]);
 
+export interface SecretEnvRef {
+  name: string;
+  valueFrom: { secretKeyRef: { name: string; key: string } };
+}
+
 export function builderContainerEnv(
-  envVars: Record<string, string>
-): { name: string; value: string }[] {
-  return Object.entries(envVars)
-    .filter(([key]) => !BUILDER_RESERVED_ENV_KEYS.has(key))
-    .map(([name, value]) => ({ name, value }));
+  envVars: Record<string, string>,
+  secretName: string
+): SecretEnvRef[] {
+  return Object.keys(envVars)
+    .filter((key) => !BUILDER_RESERVED_ENV_KEYS.has(key))
+    .map((name) => ({ name, valueFrom: { secretKeyRef: { name: secretName, key: name } } }));
 }
 
 /**

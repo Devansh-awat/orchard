@@ -54,21 +54,35 @@ test('ordinary values still come through with quotes stripped', () => {
 });
 
 test('a deployment that already stores PATH cannot reach the builder container', () => {
-  const env = builderContainerEnv({
-    PATH: '/usr/local/bun/bin:$PATH',
-    DOCKER_CONFIG: '/tmp/evil',
-    BUILDKITD_FLAGS: '--debug',
-    DATABASE_URL: 'postgres://app'
-  });
-  assert.deepEqual(env, [{ name: 'DATABASE_URL', value: 'postgres://app' }]);
+  const env = builderContainerEnv(
+    {
+      PATH: '/usr/local/bun/bin:$PATH',
+      DOCKER_CONFIG: '/tmp/evil',
+      BUILDKITD_FLAGS: '--debug',
+      DATABASE_URL: 'postgres://app'
+    },
+    'benv-test'
+  );
+  assert.deepEqual(env, [
+    {
+      name: 'DATABASE_URL',
+      valueFrom: { secretKeyRef: { name: 'benv-test', key: 'DATABASE_URL' } }
+    }
+  ]);
 });
 
 test('AWS credentials are a normal build input and are never withheld', () => {
   const stored = { AWS_ACCESS_KEY_ID: 'AKIA', AWS_SECRET_ACCESS_KEY: 'shh' };
   assert.deepEqual(buildSafeEnv(stored), stored);
-  assert.deepEqual(builderContainerEnv(stored), [
-    { name: 'AWS_ACCESS_KEY_ID', value: 'AKIA' },
-    { name: 'AWS_SECRET_ACCESS_KEY', value: 'shh' }
+  assert.deepEqual(builderContainerEnv(stored, 'benv-test'), [
+    {
+      name: 'AWS_ACCESS_KEY_ID',
+      valueFrom: { secretKeyRef: { name: 'benv-test', key: 'AWS_ACCESS_KEY_ID' } }
+    },
+    {
+      name: 'AWS_SECRET_ACCESS_KEY',
+      valueFrom: { secretKeyRef: { name: 'benv-test', key: 'AWS_SECRET_ACCESS_KEY' } }
+    }
   ]);
 });
 
@@ -82,6 +96,6 @@ test('the same set is withheld from the build, so ARG PATH never shadows the bas
 test('the container env and the build-arg set agree, so no Railpack secret dangles', () => {
   const stored = { PATH: '/bad', DOCKER_CONFIG: '/tmp/evil', PORT: '3000', AWS_ACCESS_KEY_ID: 'k' };
   const forBuild = buildSafeEnv(stored);
-  const inContainer = builderContainerEnv(forBuild).map((e) => e.name);
+  const inContainer = builderContainerEnv(forBuild, 'benv-test').map((e) => e.name);
   assert.deepEqual(Object.keys(forBuild), inContainer);
 });

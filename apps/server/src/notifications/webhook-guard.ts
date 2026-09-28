@@ -3,47 +3,135 @@ import { lookup as dnsLookup } from 'dns';
 import { lookup as dnsLookupAsync } from 'dns/promises';
 import { isIP } from 'net';
 
-const BLOCKED_HOST_SUFFIXES = ['.svc', '.cluster.local', '.internal', '.local', '.localhost'];
+const BLOCKED_HOST_SUFFIXES = [
+  '.svc',
+  '.cluster.local',
+  '.internal',
+  '.local',
+  '.localhost',
+  '.consul'
+];
+
+const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+const DEFAULT_MAX_REDIRECTS = 5;
+
+export class BlockedDestinationError extends BadRequestException {}
 
 export function defaultPort(protocol: string): number {
   return protocol === 'https:' ? 443 : 80;
 }
 
-export async function assertSafeWebhookUrl(raw: string): Promise<void> {
+export function parseHttpUrl(raw: string | URL, label = 'URL'): URL {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = raw instanceof URL ? new URL(raw.href) : new URL(raw);
   } catch {
-    throw new BadRequestException('Invalid webhook URL');
+    throw new BadRequestException(`${label} is not a valid URL`);
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new BadRequestException('Webhook URL must use http or https');
+    throw new BadRequestException(`${label} must use http or https`);
   }
   const port = url.port ? Number(url.port) : defaultPort(url.protocol);
   if (port !== 80 && port !== 443 && port < 1024) {
-    throw new BadRequestException('Webhook URL port must be 80, 443, or 1024+');
+    throw new BadRequestException(`${label} port must be 80, 443, or 1024+`);
   }
+  return url;
+}
+
+export async function assertPublicUrl(raw: string | URL, label = 'URL'): Promise<URL> {
+  const url = parseHttpUrl(raw, label);
   const host = url.hostname
     .toLowerCase()
     .replace(/\.$/, '')
     .replace(/^\[|\]$/g, '');
   if (isIP(host)) {
     if (!isPublicAddress(host)) {
-      throw new BadRequestException('Webhook URL must resolve to a public address');
+      throw new BlockedDestinationError(`${label} must resolve to a public address`);
     }
-    return;
+    return url;
   }
   if (!host.includes('.') || BLOCKED_HOST_SUFFIXES.some((s) => host.endsWith(s))) {
-    throw new BadRequestException('Webhook URL must be a public hostname');
+    throw new BlockedDestinationError(`${label} must be a public hostname`);
   }
   let addresses: { address: string }[];
   try {
     addresses = await dnsLookupAsync(host, { all: true, verbatim: true });
   } catch {
-    throw new BadRequestException(`Could not resolve webhook host "${host}"`);
+    throw new BadRequestException(`Could not resolve the ${label.toLowerCase()} host "${host}"`);
   }
   if (addresses.length === 0 || addresses.some((a) => !isPublicAddress(a.address))) {
-    throw new BadRequestException('Webhook URL must resolve to a public address');
+    throw new BlockedDestinationError(`${label} must resolve to a public address`);
+  }
+  return url;
+}
+
+export function assertSafeWebhookUrl(raw: string): Promise<URL> {
+  return assertPublicUrl(raw, 'Webhook URL');
+}
+
+export interface GuardedFetchInit extends RequestInit {
+  maxRedirects?: number;
+  allowPrivate?: boolean;
+  label?: string;
+}
+
+function isRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+export async function guardedFetch(
+  input: string | URL,
+  init: GuardedFetchInit = {}
+): Promise<Response> {
+  const {
+    maxRedirects = DEFAULT_MAX_REDIRECTS,
+    allowPrivate = false,
+    label = 'URL',
+    redirect,
+    signal,
+    ...rest
+  } = init;
+  const check = (target: string | URL) =>
+    allowPrivate ? Promise.resolve(parseHttpUrl(target, label)) : assertPublicUrl(target, label);
+  let url = await check(input);
+  let method = (rest.method ?? 'GET').toUpperCase();
+  let body = rest.body;
+  const headers = new Headers(rest.headers);
+  const timeout = signal ?? AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(url, {
+      ...rest,
+      method,
+      body,
+      headers,
+      redirect: 'manual',
+      signal: timeout
+    });
+    if (redirect === 'manual' || !isRedirect(res.status)) return res;
+    await res.body?.cancel();
+    const location = res.headers.get('location');
+    if (!location) throw new BadRequestException(`${label} redirected without a location`);
+    if (hop >= maxRedirects) throw new BadRequestException(`${label} redirected too many times`);
+    let next: URL;
+    try {
+      next = new URL(location, url);
+    } catch {
+      throw new BadRequestException(`${label} redirected to an invalid URL`);
+    }
+    if (url.protocol === 'https:' && next.protocol !== 'https:') {
+      throw new BlockedDestinationError(`${label} redirected off https`);
+    }
+    if (next.origin !== url.origin) {
+      headers.delete('authorization');
+      headers.delete('cookie');
+    }
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && method === 'POST')) {
+      method = 'GET';
+      body = undefined;
+      headers.delete('content-type');
+      headers.delete('content-length');
+    }
+    url = await check(next);
   }
 }
 

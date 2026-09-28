@@ -40,7 +40,7 @@ export interface ResolvedStep {
   script?: string | null;
   scriptRuntime?: ScriptRuntime | null;
   scriptFile?: string | null;
-  envVars: { key: string; value: string }[];
+  envVars: { key: string; value: string; secret?: boolean }[];
   cpuMilli: number;
   memoryBytes: number;
   timeoutSeconds: number;
@@ -63,6 +63,9 @@ export const cronJobNameFor = (jobId: string) => `ojob-${short(jobId)}`;
 export const stepJobNameFor = (runId: string, order: number) => `ojr-${short(runId)}-s${order}`;
 export const jobScriptsConfigMapName = (jobId: string) => `ojob-${short(jobId)}-scripts`;
 export const runScriptsConfigMapName = (runId: string) => `ojr-${short(runId)}-scripts`;
+export const jobEnvSecretName = (jobId: string) => `ojob-${short(jobId)}-env`;
+export const runEnvSecretName = (runId: string) => `ojr-${short(runId)}-env`;
+const stepSecretKey = (stepOrder: number, key: string) => `s${stepOrder}.${key}`;
 
 @Injectable()
 export class JobsOrchestratorService {
@@ -187,16 +190,18 @@ export class JobsOrchestratorService {
 
     // The app's secret values are ciphertext at rest and the job runs them for
     // real, so they come back to plaintext here the same as for a pod.
-    const merged = new Map<string, string>();
-    for (const e of deployment.envVars) merged.set(e.key, this.crypto.maybeDecrypt(e).value);
-    for (const e of base.envVars) merged.set(e.key, e.value);
+    const merged = new Map<string, { value: string; secret?: boolean }>();
+    for (const e of deployment.envVars) {
+      merged.set(e.key, { value: this.crypto.maybeDecrypt(e).value, secret: !!e.secret });
+    }
+    for (const e of base.envVars) merged.set(e.key, { value: e.value });
 
     return {
       ...base,
       type: 'app',
       image: deployment.image,
       shell: (step.command as any)?.shell ?? null,
-      envVars: Array.from(merged, ([key, value]) => ({ key, value }))
+      envVars: Array.from(merged, ([key, { value, secret }]) => ({ key, value, secret }))
     };
   }
 
@@ -210,7 +215,8 @@ export class JobsOrchestratorService {
       runId?: string;
       runNumber?: number;
       scriptsConfigMap?: string;
-    } = {}
+      envSecret: string;
+    }
   ): k8s.V1Job {
     const labels: Record<string, string> = {
       'app.kubernetes.io/managed-by': JOB_MANAGED_BY,
@@ -227,7 +233,16 @@ export class JobsOrchestratorService {
       ...(opts.runNumber != null
         ? [{ name: 'ORCHARD_RUN_NUMBER', value: String(opts.runNumber) }]
         : []),
-      ...step.envVars.map((e) => ({ name: e.key, value: e.value }))
+      ...step.envVars.map((e) =>
+        e.secret
+          ? {
+              name: e.key,
+              valueFrom: {
+                secretKeyRef: { name: opts.envSecret, key: stepSecretKey(step.stepOrder, e.key) }
+              }
+            }
+          : { name: e.key, value: e.value }
+      )
     ];
 
     let command: string[] | undefined;
@@ -314,6 +329,22 @@ export class JobsOrchestratorService {
     };
   }
 
+  private buildEnvSecret(
+    name: string,
+    namespace: string,
+    steps: ResolvedStep[],
+    labels: Record<string, string>
+  ): k8s.V1Secret | null {
+    const stringData: Record<string, string> = {};
+    for (const step of steps) {
+      for (const e of step.envVars) {
+        if (e.secret) stringData[stepSecretKey(step.stepOrder, e.key)] = e.value;
+      }
+    }
+    if (Object.keys(stringData).length === 0) return null;
+    return { metadata: { name, namespace, labels }, type: 'Opaque', stringData };
+  }
+
   // ------------------------------------------------------------ cronjob sync
 
   async syncCronJob(jobId: string): Promise<void> {
@@ -349,6 +380,7 @@ export class JobsOrchestratorService {
     }
 
     await this.syncJobScriptsConfigMap(ctx, resolved, labels);
+    await this.syncJobEnvSecret(ctx, resolved, labels);
 
     if (!job.scheduleCron || job.steps.length === 0) {
       await this.deleteCronJobIfExists(namespace, name);
@@ -360,7 +392,8 @@ export class JobsOrchestratorService {
 
     const firstStep = resolved[0];
     const template = this.buildStepJobManifest(ctx, firstStep, {
-      scriptsConfigMap: jobScriptsConfigMapName(job.id)
+      scriptsConfigMap: jobScriptsConfigMapName(job.id),
+      envSecret: jobEnvSecretName(job.id)
     });
 
     const desired: k8s.V1CronJob = {
@@ -434,6 +467,31 @@ export class JobsOrchestratorService {
     }
   }
 
+  private async syncJobEnvSecret(
+    ctx: RunContext,
+    resolved: ResolvedStep[],
+    labels: Record<string, string>
+  ) {
+    const core = this.coreApi();
+    const name = jobEnvSecretName(ctx.jobId);
+    const desired = this.buildEnvSecret(name, ctx.namespace, resolved, labels);
+    if (!desired) {
+      await core.deleteNamespacedSecret(name, ctx.namespace).catch(() => {});
+      return;
+    }
+    try {
+      const existing = await core.readNamespacedSecret(name, ctx.namespace);
+      desired.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
+      await core.replaceNamespacedSecret(name, ctx.namespace, desired);
+    } catch (err: any) {
+      if (err?.statusCode === 404 || err?.response?.statusCode === 404) {
+        await core.createNamespacedSecret(ctx.namespace, desired);
+      } else {
+        throw err;
+      }
+    }
+  }
+
   private async deleteCronJobIfExists(namespace: string, name: string) {
     try {
       await this.batchApi().deleteNamespacedCronJob(name, namespace);
@@ -492,6 +550,7 @@ export class JobsOrchestratorService {
     }
 
     await this.ensureRunScriptsConfigMap(ctx, run.id, resolved);
+    await this.ensureRunEnvSecret(ctx, run.id, resolved);
     await this.launchStep(ctx, run.id, 1);
 
     const fresh = await this.prisma.jobRun.findUniqueOrThrow({
@@ -522,6 +581,23 @@ export class JobsOrchestratorService {
     }
   }
 
+  private async ensureRunEnvSecret(ctx: RunContext, runId: string, steps: ResolvedStep[]) {
+    const name = runEnvSecretName(runId);
+    const labels = {
+      'app.kubernetes.io/managed-by': JOB_MANAGED_BY,
+      [LABEL_JOB_ID]: ctx.jobId,
+      [LABEL_PROJECT_ID]: ctx.projectId,
+      [LABEL_RUN_ID]: runId
+    };
+    const desired = this.buildEnvSecret(name, ctx.namespace, steps, labels);
+    if (!desired) return;
+    try {
+      await this.coreApi().createNamespacedSecret(ctx.namespace, desired);
+    } catch (err: any) {
+      if (err?.statusCode !== 409 && err?.response?.statusCode !== 409) throw err;
+    }
+  }
+
   async launchStep(ctx: RunContext, runId: string, stepOrder: number): Promise<void> {
     const run = await this.prisma.jobRun.findUniqueOrThrow({
       where: { id: runId },
@@ -539,7 +615,8 @@ export class JobsOrchestratorService {
       name,
       runId,
       runNumber: run.number,
-      scriptsConfigMap: runScriptsConfigMapName(runId)
+      scriptsConfigMap: runScriptsConfigMapName(runId),
+      envSecret: runEnvSecretName(runId)
     });
 
     const now = new Date();
@@ -715,6 +792,9 @@ export class JobsOrchestratorService {
 
     await this.ensureRunScriptsConfigMap(ctx, run.id, resolved).catch((err) =>
       this.logger.warn(`run scripts configmap failed for ${run.id}: ${err?.message}`)
+    );
+    await this.ensureRunEnvSecret(ctx, run.id, resolved).catch((err) =>
+      this.logger.warn(`run env secret failed for ${run.id}: ${err?.message}`)
     );
 
     try {
@@ -1121,6 +1201,21 @@ export class JobsOrchestratorService {
       }
     } catch {
       // best-effort
+    }
+
+    const secrets = await core
+      .listNamespacedSecret(
+        namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        `${LABEL_JOB_ID}=${job.id}`
+      )
+      .catch(() => null);
+    for (const secret of secrets?.body.items ?? []) {
+      if (!secret.metadata?.name) continue;
+      await core.deleteNamespacedSecret(secret.metadata.name, namespace).catch(() => {});
     }
   }
 }

@@ -8,6 +8,7 @@ import {
   JobsOrchestratorService,
   RunContext,
   LABEL_JOB_ID,
+  runEnvSecretName,
   runScriptsConfigMapName
 } from './jobs-orchestrator.service';
 import { JobMirrorConsumer, jobTerminalOutcome } from '../mirror/consumers/job-mirror.consumer';
@@ -313,6 +314,7 @@ export class JobsSyncService {
       await core
         .deleteNamespacedConfigMap(runScriptsConfigMapName(step.run.id), namespace)
         .catch(() => {});
+      await core.deleteNamespacedSecret(runEnvSecretName(step.run.id), namespace).catch(() => {});
     }
   }
 }

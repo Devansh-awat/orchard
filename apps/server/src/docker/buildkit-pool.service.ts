@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { truncateK8sName } from '../projects/projects.utils';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
+import { BUILDER_NAMESPACE } from './builder-namespace';
 
 interface DaemonInfo {
   podName: string;
@@ -32,7 +33,7 @@ export class BuildKitPoolService {
   private readonly builderRuntimeClass: string | undefined;
 
   constructor() {
-    this.namespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
+    this.namespace = BUILDER_NAMESPACE;
     this.localCachePvc = process.env.BUILDKIT_LOCAL_CACHE_PVC;
     this.dedicatedNodeEnabled = process.env.BUILDER_DEDICATED_NODE === 'true';
     const rc = (process.env.BUILDER_RUNTIME_CLASS || '').trim();

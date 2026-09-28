@@ -1,5 +1,6 @@
 import * as k8s from '@kubernetes/client-node';
 import { LABEL_JOB_ID } from '../jobs/jobs-orchestrator.service';
+import { BUILDER_NAMESPACE } from '../docker/builder-namespace';
 import {
   CRD_API_VERSION,
   CRD_GROUP,
@@ -24,6 +25,7 @@ import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
 const CNPG_POD_SELECTOR = 'cnpg.io/cluster';
+const OUTSIDE_BUILDERS = `metadata.namespace!=${BUILDER_NAMESPACE}`;
 
 export interface MirrorShardDef {
   name: string;
@@ -71,13 +73,14 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
   const listPods = async (
     kc: k8s.KubeConfig,
     opts: MirrorListOptions,
-    labelSelector: string
+    labelSelector: string,
+    fieldSelector?: string
   ): Promise<MirrorListPage> =>
     toListResult(
       await core(kc).listPodForAllNamespaces(
         undefined,
         opts.continueToken,
-        undefined,
+        fieldSelector,
         labelSelector,
         opts.limit
       )
@@ -93,7 +96,8 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: '/api/v1/pods',
           labelSelector: ORCHARD_SELECTOR,
-          list: (kc, opts) => listPods(kc, opts, ORCHARD_SELECTOR),
+          fieldSelector: OUTSIDE_BUILDERS,
+          list: (kc, opts) => listPods(kc, opts, ORCHARD_SELECTOR, OUTSIDE_BUILDERS),
           mapRefs: (obj) => deps.pods.mapRefs(obj),
           onEvent: (type, obj) => deps.pods.onEvent(type, obj),
           onListComplete: (seen) => deps.pods.pruneStalePods(seen)

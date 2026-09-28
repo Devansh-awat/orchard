@@ -85,6 +85,8 @@ export interface GitProvider {
 
 export type WebhookRegistration = 'registered' | 'exists' | 'unsupported';
 
+export const PROVIDER_UNREACHABLE = 'could not reach the provider';
+
 export class GitProviderError extends Error {
   constructor(
     message: string,
@@ -106,6 +108,13 @@ export function normalizeBaseUrl(raw: string): string | null {
   if (url.username || url.password || url.search || url.hash) return null;
   const path = url.pathname.replace(/\/+$/, '');
   return `https://${url.host}${path}`;
+}
+
+export function providerFailureMessage(e: unknown): string {
+  if (e instanceof GitProviderError && (e.status === 401 || e.status === 403)) {
+    return 'The provider rejected the token';
+  }
+  return 'Could not reach the provider';
 }
 
 export function hostOf(baseUrl: string): string {
