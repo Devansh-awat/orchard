@@ -37,6 +37,8 @@
 	let message = $state<string | null>(null);
 	let error = $state<string | null>(null);
 	let passkeySupported = $state(false);
+	let hasPassword = $state(false);
+	let hasPasskey = $state(false);
 
 	let siteKey = $state<string | null>(null);
 	let widget = $state<{ execute: () => Promise<string> } | null>(null);
@@ -147,7 +149,10 @@
 				methods = { passkey: false, password: false };
 			}
 
-			if (methods.passkey && passkeySupported) {
+			hasPassword = methods.password;
+			hasPasskey = methods.passkey && passkeySupported;
+
+			if (hasPasskey) {
 				setMode('passkey');
 				await signInWithPasskey();
 			} else if (methods.password) {
@@ -276,6 +281,14 @@
 		password = '';
 		message = null;
 		error = null;
+		hasPassword = false;
+		hasPasskey = false;
+	}
+
+	function switchTo(next: Mode) {
+		error = null;
+		password = '';
+		setMode(next);
 	}
 </script>
 
@@ -338,6 +351,11 @@
 			<p class="lg-error">{error}</p>
 		{/if}
 		{@render botCheck()}
+		{#if hasPassword}
+			<Button variant="ghost" class="lg-wide" onclick={() => switchTo('password')}>
+				Use your password instead
+			</Button>
+		{/if}
 		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
@@ -371,6 +389,11 @@
 		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
 			Sign in
 		</Button>
+		{#if hasPasskey}
+			<Button variant="ghost" class="lg-wide" onclick={() => switchTo('passkey')}>
+				Use your passkey instead
+			</Button>
+		{/if}
 		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
