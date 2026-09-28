@@ -125,7 +125,8 @@ export class GitHubController {
     }
 
     try {
-      await this.githubService.verifySessionToken(token);
+      const payload = await this.githubService.verifySessionToken(token);
+      if (payload.orgScope) throw new Error('org-scoped session');
     } catch {
       return res.redirect(
         `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
@@ -205,6 +206,11 @@ export class GitHubController {
       }
 
       const payload = await this.githubService.verifySessionToken(token);
+      if (payload.orgScope) {
+        return res.redirect(
+          `${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`
+        );
+      }
       const user = payload.externalAuthId
         ? await this.usersService.findByExternalAuthId(payload.externalAuthId)
         : await this.usersService.findById(payload.sub);

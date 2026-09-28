@@ -347,6 +347,12 @@ export class McpOAuthService {
     if (!payload.sessionId) {
       return { error: 'Session token missing session binding' };
     }
+    if (payload.type) {
+      return { error: 'Consent needs a browser session, not a derived token' };
+    }
+    if (payload.orgScope) {
+      return { error: 'A sign-in scoped to one organization cannot authorize an MCP client' };
+    }
     if (!(await this.sessions.validateSession(payload.sessionId))) {
       return { error: 'Session expired, sign in again' };
     }

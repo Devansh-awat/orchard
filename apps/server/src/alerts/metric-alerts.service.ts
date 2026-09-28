@@ -129,16 +129,25 @@ export class MetricAlertsService {
     }));
   }
 
-  async listRules(organizationId: string, scopeType?: string, scopeId?: string | null) {
+  async listRules(
+    organizationId: string,
+    scopeType?: string,
+    scopeId?: string | null,
+    visibleProjectIds: string[] | null = null
+  ) {
     if (!scopeType) {
       const all = await this.prisma.metricAlertRule.findMany({
         where: { organizationId },
         orderBy: [{ scopeType: 'asc' }, { createdAt: 'asc' }],
         include: { _count: { select: { states: true } } }
       });
-      return all.map((r) => this.presentRule(r, false));
+      const rows = await this.onlyVisible(all, visibleProjectIds);
+      return rows.map((r) => this.presentRule(r, false));
     }
     const scope = await this.resolveAlertScope(organizationId, scopeType, scopeId ?? null);
+    if (visibleProjectIds && scope.projectId && !visibleProjectIds.includes(scope.projectId)) {
+      throw new NotFoundException('Scope not found');
+    }
     const chain = scopeChain(scope);
     const rows = await this.prisma.metricAlertRule.findMany({
       where: {
@@ -558,6 +567,35 @@ export class MetricAlertsService {
           }
         }
       }
+    });
+  }
+
+  private async onlyVisible<T extends { scopeType: string; scopeId: string | null }>(
+    rows: T[],
+    visibleProjectIds: string[] | null
+  ): Promise<T[]> {
+    if (visibleProjectIds === null) return rows;
+    const visible = new Set(visibleProjectIds);
+    const ids = (type: string) =>
+      rows.filter((r) => r.scopeType === type && r.scopeId).map((r) => r.scopeId as string);
+    const [deployments, databases] = await Promise.all([
+      this.prisma.deployment.findMany({
+        where: { id: { in: ids('deployment') } },
+        select: { id: true, projectId: true }
+      }),
+      this.prisma.database.findMany({
+        where: { id: { in: ids('database') } },
+        select: { id: true, projectId: true }
+      })
+    ]);
+    const projectOf = new Map<string, string>();
+    for (const d of deployments) projectOf.set(d.id, d.projectId);
+    for (const d of databases) projectOf.set(d.id, d.projectId);
+    return rows.filter((r) => {
+      if (r.scopeType === 'org') return true;
+      if (r.scopeType === 'project') return visible.has(r.scopeId ?? '');
+      const projectId = projectOf.get(r.scopeId ?? '');
+      return projectId !== undefined && visible.has(projectId);
     });
   }
 

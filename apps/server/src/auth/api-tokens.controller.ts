@@ -28,14 +28,22 @@ export class ApiTokensController {
       restrictedProjectIds?: string[];
     }
   ) {
-    const userId = req['auth'].userId;
+    const auth = req['auth'] as {
+      userId: string;
+      apiTokenId?: string;
+      tokenScopes?: string[];
+      tokenProjectIds?: string[];
+    };
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
     return this.apiTokensService.create(
-      userId,
+      auth.userId,
       body.name,
       expiresAt,
       body.scopes,
-      body.restrictedProjectIds
+      body.restrictedProjectIds,
+      auth.apiTokenId
+        ? { scopes: auth.tokenScopes ?? [], projectIds: auth.tokenProjectIds ?? [] }
+        : undefined
     );
   }
 

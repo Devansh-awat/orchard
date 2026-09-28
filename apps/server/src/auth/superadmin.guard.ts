@@ -33,9 +33,29 @@ import { requestAuthStorage, RequestAuthContext } from './request-context';
  *
  * Read-only self-identity stays reachable so the app can render.
  */
-const ORG_SCOPED_DENY = ['auth/', 'ssh-identities', 'invitations', 'users/', 'setup', 'admin/'];
+const ORG_SCOPED_DENY = [
+  'auth/',
+  'ssh-identities',
+  'invitations',
+  'users/',
+  'setup',
+  'admin/',
+  'github/link',
+  'github/unlink',
+  'git/oauth/',
+  'tailscale/link',
+  'tailscale/unlink',
+  'sandboxes/credentials'
+];
 // Method-qualified: reading your own identity is fine, editing it is not.
 const ORG_SCOPED_ALLOW = ['GET auth/me', 'GET auth/logout'];
+
+const API_TOKEN_DENY = ['auth/passkey/register', 'auth/password/set', 'auth/mcp-token', 'setup'];
+
+function deniedToApiToken(path: string): boolean {
+  const p = path.replace(/^\/?(apiv1\/)?/, '').replace(/\/+$/, '');
+  return API_TOKEN_DENY.some((d) => p === d || p.startsWith(`${d}/`));
+}
 
 function deniedToOrgScopedSession(method: string, path: string): boolean {
   const p = path.replace(/^\/?(apiv1\/)?/, '').replace(/\/+$/, '');
@@ -300,6 +320,10 @@ export class SuperAdminGuard implements CanActivate {
         throw new UnauthorizedException('API token has expired');
       }
 
+      if (deniedToApiToken(request.path)) {
+        throw new ForbiddenException('An API token cannot enrol credentials; sign in instead');
+      }
+
       const user = apiToken.user;
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
 
@@ -374,7 +398,7 @@ export class SuperAdminGuard implements CanActivate {
     }
 
     // Store the real DB user ID for downstream use
-    request['auth'] = { userId: user.id };
+    request['auth'] = { ...request['auth'], userId: user.id };
 
     return true;
   }

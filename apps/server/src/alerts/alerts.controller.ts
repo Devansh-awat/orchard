@@ -78,8 +78,9 @@ export class AlertsController {
     @Query('scopeId') scopeId: string | undefined,
     @Request() req
   ) {
-    await this.requireMember(organizationId, req);
-    return this.alerts.listRules(organizationId, scopeType, scopeId ?? null);
+    const user = await this.requireMember(organizationId, req);
+    const visible = await this.authz.listVisibleProjectIds(organizationId, user.id);
+    return this.alerts.listRules(organizationId, scopeType, scopeId ?? null, visible);
   }
 
   @Post(':id/metric-alerts')

@@ -235,6 +235,9 @@ export class OAuthService {
     if (!id || !email) {
       throw new Error('OIDC userinfo response is missing the id or email claim');
     }
+    if (claimPath(data, 'email_verified') === false) {
+      throw new Error('OIDC provider reports this email as unverified');
+    }
 
     return {
       id: String(id),

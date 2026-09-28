@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -79,7 +79,8 @@ export class ApiTokensService {
     name: string,
     expiresAt?: Date,
     scopes?: unknown,
-    restrictedProjectIds?: unknown
+    restrictedProjectIds?: unknown,
+    ceiling?: { scopes: string[]; projectIds: string[] }
   ) {
     const now = Date.now();
     const cap = new Date(now + MAX_TOKEN_LIFETIME_MS);
@@ -101,6 +102,24 @@ export class ApiTokensService {
       userId,
       restrictedProjectIds
     );
+    if (ceiling) {
+      const rank = (s: string) => ['read', 'deploy', 'exec'].indexOf(s);
+      const ceilingRank = Math.max(-1, ...ceiling.scopes.map(rank));
+      if (resolvedScopes.some((s) => rank(s) > ceilingRank)) {
+        throw new ForbiddenException('A token cannot mint a token with broader scopes than its own');
+      }
+      if (ceiling.projectIds.length > 0) {
+        const allowed = new Set(ceiling.projectIds);
+        if (
+          resolvedRestrictedProjects.length === 0 ||
+          resolvedRestrictedProjects.some((id) => !allowed.has(id))
+        ) {
+          throw new ForbiddenException(
+            'A project-restricted token cannot mint a token for other projects'
+          );
+        }
+      }
+    }
     const token = `orch_${randomBytes(32).toString('hex')}`;
     const tokenHash = hashApiToken(token);
 

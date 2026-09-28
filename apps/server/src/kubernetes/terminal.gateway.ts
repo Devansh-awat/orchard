@@ -246,6 +246,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       tokenProjectIds: string[];
     } | null = null;
     let sessionIdForRecheck: string | undefined;
+    let sessionOrgScope: string | undefined;
 
     const proxyHeader = req.headers['x-orchard-exec-proxy'];
     if (typeof proxyHeader === 'string' && proxyHeader) {
@@ -283,6 +284,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         const sessionValid = await sessionsService.validateSession(sessionId);
         if (!sessionValid) return reject(401, 'Unauthorized');
         sessionIdForRecheck = sessionId;
+        sessionOrgScope = payload.orgScope as string | undefined;
 
         // Resolve sub → internal user UUID (sub may be externalAuthId for OAuth).
         let dbUserId = payload.sub as string;
@@ -366,7 +368,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     // context, matching what SuperAdminGuard publishes for JWT-auth requests.
     const runWithAuthCtx = <T>(fn: () => Promise<T>): Promise<T> =>
       new Promise<T>((resolve, rejectPromise) => {
-        requestAuthStorage.run(tokenAuthCtx ?? {}, () => {
+        requestAuthStorage.run(tokenAuthCtx ?? { sessionOrgId: sessionOrgScope }, () => {
           fn().then(resolve, rejectPromise);
         });
       });

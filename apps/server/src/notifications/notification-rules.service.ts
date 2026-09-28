@@ -286,9 +286,9 @@ export class NotificationRulesService {
     }
     const project = await this.prisma.project.findFirst({
       where: { id: scope.projectId, organizationId },
-      select: { ownerId: true, createdBy: true }
+      select: { ownerId: true }
     });
-    if (project?.ownerId === actor.id || project?.createdBy === actor.id) return;
+    if (project?.ownerId === actor.id) return;
     const membership = await this.prisma.projectMember.findFirst({
       where: { projectId: scope.projectId, userId: actor.id },
       select: { role: { select: { name: true } } }

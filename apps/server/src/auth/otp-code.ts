@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 
 export const OTP_LENGTH = 6;
 export const OTP_EXPIRY_MINUTES = 10;
@@ -22,7 +22,12 @@ export function generateOtpCode(): string {
   return (drawn % OTP_MODULUS).toString().padStart(OTP_LENGTH, '0');
 }
 
-/** Hash the OTP code using SHA-256 for secure storage. */
+/**
+ * Keyed on the instance secret: a six-digit space is a million entries, so a
+ * bare hash would hand every live code to anyone who can read the table.
+ */
 export function hashOtpCode(code: string): string {
-  return createHash('sha256').update(code).digest('hex');
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET is required to hash sign-in codes');
+  return createHmac('sha256', secret).update(code).digest('hex');
 }

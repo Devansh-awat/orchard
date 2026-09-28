@@ -9,7 +9,8 @@ import {
   BadRequestException,
   Sse,
   MessageEvent,
-  ServiceUnavailableException
+  ServiceUnavailableException,
+  ForbiddenException
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { Auth } from '../auth/decorators';
@@ -145,7 +146,10 @@ export class ObservabilityController {
     @Body() body: { status?: string; assigneeId?: string | null },
     @Request() req
   ) {
-    const { user } = await this.assertAccess(id, req);
+    const { user, access } = await this.assertAccess(id, req);
+    if (!access.canEdit) {
+      throw new ForbiddenException('Editing error groups needs edit access to the project');
+    }
     return this.errorIngest.updateGroup(id, fingerprint, body, user.id);
   }
 
