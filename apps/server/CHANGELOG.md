@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.51.1](https://github.com/hackclub/orchard/compare/server/v2.51.0...server/v2.51.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* api tokens keep their scopes on superadmin routes and cannot enrol credentials, org-scoped sessions stay confined through mcp consent, exec and github linking, and sign-in codes are keyed on the instance secret ([fcc0100](https://github.com/hackclub/orchard/commit/fcc010083ba518cbc0422a93d78a76d2516b0840))
+* build args and job env reach pods through secrets, build pods stay out of the mirror, and every user-supplied outbound url is checked against private networks ([03c6333](https://github.com/hackclub/orchard/commit/03c63336d5d95df268c290367abcbffaf6384506))
+* build config, dockerfile target, auto-deploy branch and ingress host updates are validated like their create paths ([3c27464](https://github.com/hackclub/orchard/commit/3c274642c1f066ae72a8b76a653949f4499dee1b))
+* sso providers are owner-managed and saml rejects unsolicited assertions, sign-in attempts are counted atomically, jwt secret has a floor, platform images are project-scoped and logs are editor-only ([d540422](https://github.com/hackclub/orchard/commit/d54042289c4d9311e4727968934e029e75b402b7))
+* the org-scope and api-token deny lists ignore path case, and notification rules and channels list only what the caller can view ([23bf216](https://github.com/hackclub/orchard/commit/23bf2169b639e19fc38d2061600f9171617781d2))
+* the self-host registry answers on loopback with a password, the installer opens ufw or firewalld for k3s, and orchardctl update retrofits both ([711a52a](https://github.com/hackclub/orchard/commit/711a52a84efe98815a4a9d368343928a27e671d2))
+
 ## [2.51.0](https://github.com/hackclub/orchard/compare/server/v2.50.0...server/v2.51.0) (2026-09-28)
 
 
