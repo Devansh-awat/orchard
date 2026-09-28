@@ -11,7 +11,7 @@
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 
-	const title = 'Orchard · Your own cloud in one click';
+	const title = 'Hack Club Orchard · Your own cloud in one click';
 	const description =
 		'Orchard turns a GitHub repo into a running app on your own Kubernetes cluster, with databases, HTTPS, logs, and an MCP server for your agents.';
 </script>

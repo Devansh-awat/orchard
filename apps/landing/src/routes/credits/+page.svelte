@@ -181,12 +181,12 @@
 </script>
 
 <svelte:head>
-	<title>Credits · Orchard</title>
+	<title>Credits · Hack Club Orchard</title>
 	<meta
 		name="description"
 		content="The people, typefaces, artwork and open-source packages behind Orchard."
 	/>
-	<meta property="og:title" content="Credits · Orchard" />
+	<meta property="og:title" content="Credits · Hack Club Orchard" />
 	<meta property="og:type" content="website" />
 </svelte:head>
 

@@ -77,12 +77,12 @@
 </script>
 
 <svelte:head>
-	<title>Templates · Orchard</title>
+	<title>Templates · Hack Club Orchard</title>
 	<meta
 		name="description"
 		content="One-click stacks for Orchard, built in and contributed by the community. Deploy a blog, a database, a whole app with its pieces wired together."
 	/>
-	<meta property="og:title" content="Templates · Orchard" />
+	<meta property="og:title" content="Templates · Hack Club Orchard" />
 	<meta property="og:type" content="website" />
 </svelte:head>
 

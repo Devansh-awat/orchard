@@ -40,9 +40,9 @@
 </script>
 
 <svelte:head>
-	<title>{t.displayName} · Templates · Orchard</title>
+	<title>{t.displayName} · Templates · Hack Club Orchard</title>
 	<meta name="description" content={t.description ?? `Deploy ${t.displayName} on Orchard.`} />
-	<meta property="og:title" content="{t.displayName} · Orchard templates" />
+	<meta property="og:title" content="{t.displayName} · Hack Club Orchard templates" />
 	<meta property="og:type" content="website" />
 	{#if preview}
 		<meta property="og:image" content="{data.registry}/{preview}" />

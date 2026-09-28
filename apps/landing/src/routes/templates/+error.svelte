@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>{page.status} · Templates · Orchard</title>
+	<title>{page.status} · Templates · Hack Club Orchard</title>
 </svelte:head>
 
 <div class="flex min-h-screen flex-col bg-crimson text-white">
