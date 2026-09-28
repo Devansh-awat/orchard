@@ -1,0 +1,95 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: libretranslate
+  displayName: 'LibreTranslate'
+  description: 'A translation API and web UI that runs entirely on your server.'
+  icon: https://github.com/LibreTranslate.png?size=256
+  version: '1.0.0'
+  category: ai
+  tags: ['translation', 'api', 'nlp']
+  keywords: ['google translate', 'deepl', 'argos', 'language']
+  homepage: https://libretranslate.com
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'translate'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'translate.example.com'
+  - name: languages
+    displayName: 'Languages to load'
+    description: 'Comma-separated codes; fewer means less memory'
+    type: string
+    default: 'en,es,fr,de'
+  - name: webUi
+    displayName: 'Web UI'
+    type: boolean
+    default: true
+  - name: charLimit
+    displayName: 'Character limit per request'
+    type: number
+    default: 5000
+    validation:
+      min: 100
+  - name: requireApiKeys
+    displayName: 'Require API keys'
+    type: boolean
+    default: false
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for downloaded language models'
+    type: string
+    default: '10Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: libretranslate/libretranslate:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5000
+          servicePort: 5000
+          protocol: TCP
+      volumes:
+        - name: models
+          type: pvc
+          mountPath: /home/libretranslate/.local
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: LT_LOAD_ONLY
+          value: '{{ params.languages }}'
+        - key: LT_DISABLE_WEB_UI
+          value: '{{ params.webUi }}'
+        - key: LT_CHAR_LIMIT
+          value: '{{ params.charLimit }}'
+        - key: LT_API_KEYS
+          value: '{{ params.requireApiKeys }}'
+        - key: LT_UPDATE_MODELS
+          value: 'true'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5000

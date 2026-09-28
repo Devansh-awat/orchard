@@ -1,0 +1,124 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: activepieces
+  displayName: 'Activepieces'
+  description: 'No-code automation with a huge piece library and an AI agent builder. Postgres and Valkey included.'
+  icon: https://github.com/activepieces.png?size=256
+  version: '1.0.0'
+  category: automation
+  tags: ['automation', 'workflows', 'integrations']
+  keywords: ['zapier', 'n8n', 'make', 'flows', 'ai agents']
+  homepage: https://www.activepieces.com
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'activepieces'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'flows.example.com'
+  - name: encryptionKey
+    displayName: 'Encryption key'
+    description: 'Exactly 32 hex characters. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: jwtSecret
+    displayName: 'JWT secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: signups
+    displayName: 'Allow sign-ups'
+    type: boolean
+    default: true
+  - name: telemetry
+    displayName: 'Telemetry'
+    type: boolean
+    default: false
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/activepieces/activepieces:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      env:
+        - key: AP_FRONTEND_URL
+          value: 'https://{{ params.domain }}'
+        - key: AP_ENCRYPTION_KEY
+          value: '{{ params.encryptionKey }}'
+          secret: true
+        - key: AP_JWT_SECRET
+          value: '{{ params.jwtSecret }}'
+          secret: true
+        - key: AP_POSTGRES_HOST
+          value: '{{ resources.db.host }}'
+        - key: AP_POSTGRES_PORT
+          value: '{{ resources.db.port }}'
+        - key: AP_POSTGRES_DATABASE
+          value: '{{ resources.db.dbName }}'
+        - key: AP_POSTGRES_USERNAME
+          value: '{{ resources.db.dbUser }}'
+        - key: AP_POSTGRES_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: AP_REDIS_HOST
+          value: '{{ resources.cache.serviceName }}'
+        - key: AP_REDIS_PORT
+          value: '6379'
+        - key: AP_EXECUTION_MODE
+          value: UNSANDBOXED
+        - key: AP_SIGN_UP_ENABLED
+          value: '{{ params.signups }}'
+        - key: AP_TELEMETRY_ENABLED
+          value: '{{ params.telemetry }}'
+        - key: AP_ENVIRONMENT
+          value: prod
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

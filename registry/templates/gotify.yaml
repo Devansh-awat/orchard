@@ -1,0 +1,83 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: gotify
+  displayName: 'Gotify'
+  description: 'A simple server for sending and receiving push messages, with an Android app.'
+  icon: https://github.com/gotify.png?size=256
+  version: '1.0.0'
+  category: monitoring
+  tags: ['notifications', 'push']
+  keywords: ['ntfy', 'pushover', 'alerts']
+  homepage: https://gotify.net
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'gotify'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'gotify.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: registration
+    displayName: 'Open registration'
+    type: boolean
+    default: false
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: gotify/server:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /app/data
+          storageSize: '1Gi'
+      env:
+        - key: GOTIFY_DEFAULTUSER_NAME
+          value: '{{ params.adminUser }}'
+        - key: GOTIFY_DEFAULTUSER_PASS
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: GOTIFY_REGISTRATION
+          value: '{{ params.registration }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

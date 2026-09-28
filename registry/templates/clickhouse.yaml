@@ -1,0 +1,76 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: clickhouse
+  displayName: 'ClickHouse'
+  description: 'A column store for analytics at scale. Internal-only; what Plausible and Langfuse want underneath.'
+  icon: https://github.com/ClickHouse.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['analytics', 'olap', 'sql']
+  keywords: ['columnar', 'events', 'time series', 'data warehouse']
+  homepage: https://clickhouse.com
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'clickhouse'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: user
+    displayName: 'Username'
+    type: string
+    default: 'app'
+    required: true
+  - name: password
+    displayName: 'Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: database
+    displayName: 'Database name'
+    type: string
+    default: 'app'
+    required: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for tables'
+    type: string
+    default: '20Gi'
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: clickhouse/clickhouse-server:24
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8123
+          servicePort: 8123
+          protocol: TCP
+        - name: native
+          containerPort: 9000
+          servicePort: 9000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/lib/clickhouse
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: CLICKHOUSE_USER
+          value: '{{ params.user }}'
+        - key: CLICKHOUSE_PASSWORD
+          value: '{{ params.password }}'
+          secret: true
+        - key: CLICKHOUSE_DB
+          value: '{{ params.database }}'
+        - key: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+          value: '1'

@@ -1,0 +1,198 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: librechat
+  displayName: 'LibreChat'
+  description: 'A ChatGPT-style interface for many providers with agents, files and search. Brings its own MongoDB and Meilisearch.'
+  icon: message-square
+  version: '1.0.0'
+  category: ai
+  tags: ['llm', 'chat', 'openai']
+  keywords: ['chatgpt', 'open webui', 'ai assistant', 'hack club ai']
+  homepage: https://www.librechat.ai
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'librechat'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'chat.example.com'
+  - name: openaiBaseUrl
+    displayName: 'OpenAI-compatible base URL'
+    type: string
+    default: 'https://ai.hackclub.com/proxy/v1'
+    required: true
+  - name: openaiApiKey
+    displayName: 'API key'
+    type: string
+    required: true
+    placeholder: 'sk-…'
+  - name: jwtSecret
+    displayName: 'JWT secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 32
+      encoding: 'hex'
+  - name: jwtRefreshSecret
+    displayName: 'JWT refresh secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 32
+      encoding: 'hex'
+  - name: credsKey
+    displayName: 'Credentials key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 32
+      encoding: 'hex'
+  - name: credsIv
+    displayName: 'Credentials IV'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 16
+      encoding: 'hex'
+  - name: meiliMasterKey
+    displayName: 'Meilisearch master key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: registration
+    displayName: 'Allow registration'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for uploads and images'
+    type: string
+    default: '10Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: mongo
+    type: deployment
+    config:
+      name: '{{ params.appName }}-mongo'
+      image: mongo:8
+      replicas: 1
+      ports:
+        - name: mongo
+          containerPort: 27017
+          servicePort: 27017
+          protocol: TCP
+      volumes:
+        - name: mongo
+          type: pvc
+          mountPath: /data/db
+          storageSize: '10Gi'
+
+  - name: search
+    type: deployment
+    config:
+      name: '{{ params.appName }}-search'
+      image: getmeili/meilisearch:v1.13
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 7700
+          servicePort: 7700
+          protocol: TCP
+      volumes:
+        - name: meili
+          type: pvc
+          mountPath: /meili_data
+          storageSize: '5Gi'
+      env:
+        - key: MEILI_MASTER_KEY
+          value: '{{ params.meiliMasterKey }}'
+          secret: true
+        - key: MEILI_NO_ANALYTICS
+          value: 'true'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/danny-avila/librechat:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3080
+          servicePort: 3080
+          protocol: TCP
+      volumes:
+        - name: uploads
+          type: pvc
+          mountPath: /app/uploads
+          storageSize: '{{ params.storage }}'
+        - name: images
+          type: pvc
+          mountPath: /app/client/public/images
+          storageSize: '5Gi'
+      env:
+        - key: HOST
+          value: '0.0.0.0'
+        - key: PORT
+          value: '3080'
+        - key: MONGO_URI
+          value: 'mongodb://{{ resources.mongo.serviceName }}:27017/LibreChat'
+        - key: MEILI_HOST
+          value: 'http://{{ resources.search.serviceName }}:7700'
+        - key: MEILI_MASTER_KEY
+          value: '{{ params.meiliMasterKey }}'
+          secret: true
+        - key: SEARCH
+          value: 'true'
+        - key: OPENAI_API_KEY
+          value: '{{ params.openaiApiKey }}'
+          secret: true
+        - key: OPENAI_REVERSE_PROXY
+          value: '{{ params.openaiBaseUrl }}'
+        - key: JWT_SECRET
+          value: '{{ params.jwtSecret }}'
+          secret: true
+        - key: JWT_REFRESH_SECRET
+          value: '{{ params.jwtRefreshSecret }}'
+          secret: true
+        - key: CREDS_KEY
+          value: '{{ params.credsKey }}'
+          secret: true
+        - key: CREDS_IV
+          value: '{{ params.credsIv }}'
+          secret: true
+        - key: DOMAIN_CLIENT
+          value: 'https://{{ params.domain }}'
+        - key: DOMAIN_SERVER
+          value: 'https://{{ params.domain }}'
+        - key: ALLOW_REGISTRATION
+          value: '{{ params.registration }}'
+        - key: ALLOW_EMAIL_LOGIN
+          value: 'true'
+        - key: NO_INDEX
+          value: 'true'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3080

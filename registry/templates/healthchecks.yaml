@@ -1,0 +1,155 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: healthchecks
+  displayName: 'Healthchecks'
+  description: 'Cron job monitoring. Your jobs ping it; it alerts you when they stop.'
+  icon: https://github.com/healthchecks.png?size=256
+  version: '1.0.0'
+  category: monitoring
+  tags: ['monitoring', 'cron', 'alerts']
+  keywords: ['dead man switch', 'cronitor', 'healthchecks.io', 'ping monitoring']
+  homepage: https://healthchecks.io
+  license: BSD-3-Clause
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'healthchecks'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'hc.example.com'
+  - name: siteName
+    displayName: 'Site name'
+    type: string
+    default: 'Healthchecks'
+  - name: superuserEmail
+    displayName: 'Admin email'
+    type: string
+    required: true
+    placeholder: 'you@example.com'
+  - name: superuserPassword
+    displayName: 'Admin password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: secretKey
+    displayName: 'Django secret key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 50
+  - name: registrationOpen
+    displayName: 'Open registration'
+    type: boolean
+    default: false
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for alerts and logins. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: healthchecks/healthchecks:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8000
+          servicePort: 8000
+          protocol: TCP
+      env:
+        - key: DB
+          value: postgres
+        - key: DB_HOST
+          value: '{{ resources.db.host }}'
+        - key: DB_PORT
+          value: '{{ resources.db.port }}'
+        - key: DB_NAME
+          value: '{{ resources.db.dbName }}'
+        - key: DB_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: DB_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: SECRET_KEY
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: SITE_ROOT
+          value: 'https://{{ params.domain }}'
+        - key: SITE_NAME
+          value: '{{ params.siteName }}'
+        - key: ALLOWED_HOSTS
+          value: '{{ params.domain }}'
+        - key: REGISTRATION_OPEN
+          value: '{{ params.registrationOpen }}'
+        - key: DEBUG
+          value: 'False'
+        - key: SUPERUSER_EMAIL
+          value: '{{ params.superuserEmail }}'
+        - key: SUPERUSER_PASSWORD
+          value: '{{ params.superuserPassword }}'
+          secret: true
+        - key: EMAIL_USE_TLS
+          value: 'True'
+        - key: EMAIL_HOST
+          value: '{{ params.smtpHost }}'
+        - key: EMAIL_PORT
+          value: '{{ params.smtpPort }}'
+        - key: EMAIL_HOST_USER
+          value: '{{ params.smtpUser }}'
+        - key: EMAIL_HOST_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: DEFAULT_FROM_EMAIL
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8000

@@ -1,0 +1,72 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: memos
+  displayName: 'Memos'
+  description: 'A lightweight note-taking service. Markdown, tags, a timeline, and nothing else.'
+  icon: https://github.com/usememos.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['notes', 'markdown', 'journal']
+  keywords: ['flomo', 'microblog', 'daily notes', 'second brain']
+  homepage: https://usememos.com
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'memos'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'memos.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the SQLite database and attachments'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: neosmemo/memos:stable
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5230
+          servicePort: 5230
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/opt/memos
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: MEMOS_MODE
+          value: prod
+        - key: MEMOS_PORT
+          value: '5230'
+        - key: MEMOS_INSTANCE_URL
+          value: 'https://{{ params.domain }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5230

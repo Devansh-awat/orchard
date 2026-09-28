@@ -4,10 +4,12 @@ metadata:
   name: nephthys
   displayName: Nephthys
   description: Hack Club's Slack support bot. Manages help channels with AI ticket tagging, routing, and resolution tracking. Builds from the GitHub repository and runs migrations automatically.
-  icon: slack
+  icon: https://github.com/hackclub.png?size=256
   version: '1.0.0'
   category: bot
   tags: ['slack', 'bot', 'python', 'support', 'postgres']
+  keywords: ['slack', 'bot', 'helpdesk', 'support', 'tickets', 'chat']
+  homepage: https://github.com/hackclub/nephthys
 
 parameters:
   - name: appName

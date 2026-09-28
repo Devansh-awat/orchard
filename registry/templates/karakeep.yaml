@@ -1,0 +1,156 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: karakeep
+  displayName: 'Karakeep'
+  description: 'A bookmark-everything app with AI tagging and full-page archives. Brings its own Meilisearch and headless Chrome.'
+  icon: https://github.com/karakeep-app.png?size=256
+  version: '1.0.0'
+  category: reader
+  tags: ['bookmarks', 'archive', 'ai']
+  keywords: ['hoarder', 'pocket', 'raindrop', 'read later', 'ai tagging']
+  homepage: https://karakeep.app
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'karakeep'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'keep.example.com'
+  - name: nextauthSecret
+    displayName: 'Auth secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: meiliMasterKey
+    displayName: 'Meilisearch master key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: openaiBaseUrl
+    displayName: 'OpenAI-compatible base URL'
+    description: 'Optional, for automatic tagging'
+    type: string
+    default: ''
+    placeholder: 'https://ai.hackclub.com/proxy/v1'
+  - name: openaiApiKey
+    displayName: 'API key'
+    type: string
+    default: ''
+    placeholder: 'sk-…'
+  - name: inferenceModel
+    displayName: 'Tagging model'
+    type: string
+    default: 'gpt-4o-mini'
+  - name: disableSignups
+    displayName: 'Disable sign-ups'
+    type: boolean
+    default: false
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for archives and the database'
+    type: string
+    default: '10Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: search
+    type: deployment
+    config:
+      name: '{{ params.appName }}-search'
+      image: getmeili/meilisearch:v1.13
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 7700
+          servicePort: 7700
+          protocol: TCP
+      volumes:
+        - name: meili
+          type: pvc
+          mountPath: /meili_data
+          storageSize: '5Gi'
+      env:
+        - key: MEILI_MASTER_KEY
+          value: '{{ params.meiliMasterKey }}'
+          secret: true
+        - key: MEILI_NO_ANALYTICS
+          value: 'true'
+
+  - name: chrome
+    type: deployment
+    config:
+      name: '{{ params.appName }}-chrome'
+      image: zenika/alpine-chrome:124
+      startCommand: 'chromium-browser --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --hide-scrollbars'
+      replicas: 1
+      ports:
+        - name: cdp
+          containerPort: 9222
+          servicePort: 9222
+          protocol: TCP
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/karakeep-app/karakeep:release
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: NEXTAUTH_SECRET
+          value: '{{ params.nextauthSecret }}'
+          secret: true
+        - key: NEXTAUTH_URL
+          value: 'https://{{ params.domain }}'
+        - key: DATA_DIR
+          value: /data
+        - key: MEILI_ADDR
+          value: 'http://{{ resources.search.serviceName }}:7700'
+        - key: MEILI_MASTER_KEY
+          value: '{{ params.meiliMasterKey }}'
+          secret: true
+        - key: BROWSER_WEB_URL
+          value: 'http://{{ resources.chrome.serviceName }}:9222'
+        - key: OPENAI_BASE_URL
+          value: '{{ params.openaiBaseUrl }}'
+        - key: OPENAI_API_KEY
+          value: '{{ params.openaiApiKey }}'
+          secret: true
+        - key: INFERENCE_TEXT_MODEL
+          value: '{{ params.inferenceModel }}'
+        - key: DISABLE_SIGNUPS
+          value: '{{ params.disableSignups }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3000

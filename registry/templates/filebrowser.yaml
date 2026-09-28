@@ -1,0 +1,78 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: filebrowser
+  displayName: 'File Browser'
+  description: 'A web file manager over a volume. Upload, download, share links, multiple users.'
+  icon: https://github.com/filebrowser.png?size=256
+  version: '1.0.0'
+  category: files
+  tags: ['files', 'file manager']
+  keywords: ['nextcloud lite', 'ftp alternative', 'file sharing', 'directory listing']
+  homepage: https://filebrowser.org
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'files'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'files.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the files'
+    type: string
+    default: '20Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: filebrowser/filebrowser:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: files
+          type: pvc
+          mountPath: /srv
+          storageSize: '{{ params.storage }}'
+        - name: database
+          type: pvc
+          mountPath: /database
+          storageSize: '1Gi'
+      env:
+        - key: FB_DATABASE
+          value: /database/filebrowser.db
+        - key: FB_ROOT
+          value: /srv
+        - key: FB_PORT
+          value: '80'
+        - key: FB_BASEURL
+          value: /
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

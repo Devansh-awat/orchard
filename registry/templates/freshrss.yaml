@@ -1,0 +1,123 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: freshrss
+  displayName: 'FreshRSS'
+  description: 'A full-featured feed aggregator with extensions, filters and a mobile-friendly UI.'
+  icon: https://github.com/FreshRSS.png?size=256
+  version: '1.0.0'
+  category: reader
+  tags: ['rss', 'feeds', 'reader']
+  keywords: ['miniflux', 'feedly', 'atom', 'news reader']
+  homepage: https://freshrss.org
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'freshrss'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'rss.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: cronMinutes
+    displayName: 'Refresh feeds at minutes'
+    description: 'cron minute field'
+    type: string
+    default: '*/20'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: language
+    displayName: 'Language'
+    type: select
+    default: 'en'
+    options:
+      - label: 'en'
+        value: 'en'
+      - label: 'de'
+        value: 'de'
+      - label: 'es'
+        value: 'es'
+      - label: 'fr'
+        value: 'fr'
+      - label: 'it'
+        value: 'it'
+      - label: 'nl'
+        value: 'nl'
+      - label: 'pt-br'
+        value: 'pt-br'
+      - label: 'ru'
+        value: 'ru'
+      - label: 'zh-cn'
+        value: 'zh-cn'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: freshrss/freshrss:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/www/FreshRSS/data
+          storageSize: '2Gi'
+        - name: extensions
+          type: pvc
+          mountPath: /var/www/FreshRSS/extensions
+          storageSize: '1Gi'
+      env:
+        - key: CRON_MIN
+          value: '{{ params.cronMinutes }}'
+        - key: TZ
+          value: '{{ params.timezone }}'
+        - key: FRESHRSS_INSTALL
+          value: '--api_enabled --base_url https://{{ params.domain }} --db-type pgsql --db-host {{ resources.db.host }}:{{ resources.db.port }} --db-user {{ resources.db.dbUser }} --db-password {{ resources.db.dbPassword }} --db-base {{ resources.db.dbName }} --default-user {{ params.adminUser }} --language {{ params.language }}'
+          secret: true
+        - key: FRESHRSS_USER
+          value: '--api_password {{ params.adminPassword }} --language {{ params.language }} --password {{ params.adminPassword }} --user {{ params.adminUser }}'
+          secret: true
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

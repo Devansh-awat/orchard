@@ -1,0 +1,84 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: actual-budget
+  displayName: 'Actual Budget'
+  description: 'Envelope budgeting that syncs between devices. Local-first, your data on a volume.'
+  icon: https://github.com/actualbudget.png?size=256
+  version: '1.0.0'
+  category: finance
+  tags: ['budget', 'finance', 'money']
+  keywords: ['ynab', 'personal finance', 'expenses', 'envelope budgeting']
+  homepage: https://actualbudget.org
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'budget'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'budget.example.com'
+  - name: syncSizeLimitMb
+    displayName: 'Sync file size limit (MB)'
+    type: number
+    default: 20
+    validation:
+      min: 1
+  - name: uploadSizeLimitMb
+    displayName: 'Upload size limit (MB)'
+    type: number
+    default: 20
+    validation:
+      min: 1
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: actualbudget/actual-server:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5006
+          servicePort: 5006
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: ACTUAL_UPLOAD_FILE_SYNC_SIZE_LIMIT_MB
+          value: '{{ params.syncSizeLimitMb }}'
+        - key: ACTUAL_UPLOAD_FILE_SIZE_LIMIT_MB
+          value: '{{ params.uploadSizeLimitMb }}'
+        - key: ACTUAL_LOGIN_METHOD
+          value: password
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5006

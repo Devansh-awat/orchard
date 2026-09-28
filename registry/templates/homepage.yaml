@@ -1,0 +1,63 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: homepage
+  displayName: 'Homepage'
+  description: 'A start page for all your services, with widgets for docker, media servers and status.'
+  icon: https://github.com/gethomepage.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['dashboard', 'start page']
+  keywords: ['homarr', 'heimdall', 'dashy', 'launcher']
+  homepage: https://gethomepage.dev
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'homepage'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'home.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/gethomepage/homepage:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /app/config
+          storageSize: '1Gi'
+      env:
+        - key: HOMEPAGE_ALLOWED_HOSTS
+          value: '{{ params.domain }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3000

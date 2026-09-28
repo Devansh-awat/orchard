@@ -4,10 +4,13 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
-  OnModuleInit
+  OnModuleInit,
+  OnModuleDestroy
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash } from 'crypto';
+import { LeaseService } from '../coordination/lease.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { DatabasesService } from '../projects/databases.service';
@@ -18,9 +21,27 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { TemplateEngineService, ResolutionContext } from './template-engine.service';
 
+const REGISTRY_SYNC_MS = 6 * 60 * 60 * 1000;
+const REGISTRY_FETCH_TIMEOUT_MS = 15_000;
+
+interface RegistryEntry {
+  name: string;
+  version: string;
+  yaml: string;
+  sha256: string;
+}
+
+export function registryUrl(): string | null {
+  const raw = process.env.TEMPLATE_REGISTRY_URL?.trim();
+  if (!raw) return null;
+  return raw.replace(/\/+$/, '');
+}
+
 @Injectable()
-export class TemplatesService implements OnModuleInit {
+export class TemplatesService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TemplatesService.name);
+
+  private registryTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,7 +51,8 @@ export class TemplatesService implements OnModuleInit {
     private readonly ingress: IngressService,
     private readonly templateEngine: TemplateEngineService,
     private readonly authz: AuthorizationService,
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    private readonly lease: LeaseService
   ) {}
 
   private async resolveUserId(clerkId: string, userData?: any): Promise<string> {
@@ -55,6 +77,112 @@ export class TemplatesService implements OnModuleInit {
     this.logger.log('onModuleInit: starting seedBuiltInTemplates...');
     await this.seedBuiltInTemplates();
     this.logger.log('onModuleInit: seedBuiltInTemplates complete');
+    this.startRegistrySync();
+  }
+
+  onModuleDestroy() {
+    if (this.registryTimer) clearInterval(this.registryTimer);
+  }
+
+  private startRegistrySync() {
+    const base = registryUrl();
+    if (!base) return;
+    if (!this.lease.canCoordinate) {
+      this.logger.warn(
+        'TEMPLATE_REGISTRY_URL is set but this process is not a member of the cluster; skipping registry sync'
+      );
+      return;
+    }
+    void this.syncRegistry();
+    this.registryTimer = setInterval(() => {
+      void this.syncRegistry();
+    }, REGISTRY_SYNC_MS);
+    this.registryTimer.unref?.();
+  }
+
+  private async fetchRegistry(url: string): Promise<Response> {
+    const response = await fetch(url, {
+      headers: {
+        accept: 'application/json, application/yaml, text/plain',
+        'user-agent': 'orchard-server'
+      },
+      signal: AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS)
+    });
+    if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+    return response;
+  }
+
+  async syncRegistry(): Promise<{ synced: number; skipped: number }> {
+    const base = registryUrl();
+    if (!base) return { synced: 0, skipped: 0 };
+    let entries: RegistryEntry[];
+    try {
+      const index = (await (await this.fetchRegistry(`${base}/templates/index.json`)).json()) as {
+        templates?: RegistryEntry[];
+      };
+      entries = Array.isArray(index.templates) ? index.templates : [];
+    } catch (e) {
+      this.logger.warn(`Registry sync skipped: ${e.message}`);
+      return { synced: 0, skipped: 0 };
+    }
+
+    let synced = 0;
+    let skipped = 0;
+    for (const entry of entries) {
+      try {
+        const yamlContent = await (await this.fetchRegistry(`${base}/${entry.yaml}`)).text();
+        const digest = createHash('sha256').update(yamlContent).digest('hex');
+        if (digest !== entry.sha256) {
+          this.logger.warn(`Registry template ${entry.name}: checksum mismatch, not importing`);
+          skipped += 1;
+          continue;
+        }
+        const parsed = this.templateEngine.parseTemplate(yamlContent);
+        if (parsed.metadata.name !== entry.name) {
+          this.logger.warn(
+            `Registry template ${entry.name}: yaml names itself ${parsed.metadata.name}, not importing`
+          );
+          skipped += 1;
+          continue;
+        }
+        const existing = await this.prisma.template.findUnique({
+          where: { name: entry.name },
+          select: { source: true, yaml: true }
+        });
+        if (existing?.source === 'custom') {
+          this.logger.warn(
+            `Registry template ${entry.name}: a custom template already uses this name, leaving it alone`
+          );
+          skipped += 1;
+          continue;
+        }
+        if (existing?.source === 'registry' && existing.yaml === yamlContent) continue;
+        const fields = {
+          displayName: parsed.metadata.displayName,
+          description: parsed.metadata.description,
+          icon: parsed.metadata.icon,
+          version: parsed.metadata.version,
+          category: parsed.metadata.category,
+          tags: parsed.metadata.tags || [],
+          yaml: yamlContent,
+          isBuiltIn: true,
+          source: 'registry'
+        };
+        await this.prisma.template.upsert({
+          where: { name: entry.name },
+          update: fields,
+          create: { name: entry.name, ...fields }
+        });
+        synced += 1;
+      } catch (e) {
+        this.logger.warn(`Registry template ${entry.name}: ${e.message}`);
+        skipped += 1;
+      }
+    }
+    this.logger.log(
+      `Registry sync: ${synced} updated, ${skipped} skipped, ${entries.length} listed`
+    );
+    return { synced, skipped };
   }
 
   private async seedBuiltInTemplates() {
@@ -77,6 +205,17 @@ export class TemplatesService implements OnModuleInit {
         const parsed = this.templateEngine.parseTemplate(yamlContent);
         this.logger.log(`Parsed template: ${parsed.metadata.name}, upserting to DB...`);
 
+        const claimed = await this.prisma.template.findUnique({
+          where: { name: parsed.metadata.name },
+          select: { source: true }
+        });
+        if (claimed?.source === 'registry') {
+          this.logger.log(
+            `Template ${parsed.metadata.name} is managed by the registry, not reseeding`
+          );
+          continue;
+        }
+
         await this.prisma.template.upsert({
           where: { name: parsed.metadata.name },
           update: {
@@ -87,7 +226,8 @@ export class TemplatesService implements OnModuleInit {
             category: parsed.metadata.category,
             tags: parsed.metadata.tags || [],
             yaml: yamlContent,
-            isBuiltIn: true
+            isBuiltIn: true,
+            source: 'built-in'
           },
           create: {
             name: parsed.metadata.name,
@@ -98,7 +238,8 @@ export class TemplatesService implements OnModuleInit {
             category: parsed.metadata.category,
             tags: parsed.metadata.tags || [],
             yaml: yamlContent,
-            isBuiltIn: true
+            isBuiltIn: true,
+            source: 'built-in'
           }
         });
 
@@ -121,7 +262,8 @@ export class TemplatesService implements OnModuleInit {
         version: true,
         category: true,
         tags: true,
-        isBuiltIn: true
+        isBuiltIn: true,
+        source: true
       }
     });
   }
@@ -378,12 +520,47 @@ export class TemplatesService implements OnModuleInit {
             }
 
             const services = await this.prisma.service.findMany({
-              where: { deploymentId: deployment.id }
+              where: { deploymentId: deployment.id },
+              include: { ports: true }
             });
+
+            const published: Record<string, unknown> = {};
+            const wanted = (Array.isArray(config.ports) ? config.ports : []).filter(
+              (p: any) => p && (p.public === true || p.public === 'true')
+            );
+            for (const want of wanted) {
+              const containerPort = Number(want.containerPort);
+              const hit = services
+                .flatMap((s) => s.ports.map((p) => ({ service: s, port: p })))
+                .find(
+                  ({ port }) =>
+                    port.targetPort === containerPort ||
+                    port.port === Number(want.servicePort ?? containerPort)
+                );
+              if (!hit) {
+                throw new BadRequestException(
+                  `Resource "${resource.name}" asks to publish port ${want.containerPort}, but the deployment has no such port`
+                );
+              }
+              const result = await this.deployments.enableServicePortPublic(
+                deployment.id,
+                hit.service.id,
+                hit.port.id,
+                clerkId,
+                userData
+              );
+              if (!('publicPort' in published)) {
+                published.publicIp = result.ip;
+                published.publicPort = result.port;
+                published.publicHost = result.host;
+              }
+              published[`publicPort_${want.name ?? containerPort}`] = result.port;
+            }
 
             context.resources[resource.name] = {
               id: deployment.id,
-              serviceName: services[0]?.name || `${config.name}-svc`
+              serviceName: services[0]?.name || `${config.name}-svc`,
+              ...published
             };
             break;
           }

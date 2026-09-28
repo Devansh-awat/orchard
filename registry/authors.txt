@@ -1,0 +1,3 @@
+# git email -> GitHub login, for commits made without a GitHub noreply address.
+# Commits from <id>+<login>@users.noreply.github.com resolve on their own.
+hi@leafd.dev LeafdTK

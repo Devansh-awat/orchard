@@ -1,0 +1,114 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: ntfy
+  displayName: 'ntfy'
+  description: 'Push notifications over HTTP. curl a topic, get it on your phone.'
+  icon: https://raw.githubusercontent.com/binwiederhier/ntfy/main/web/public/static/images/ntfy.png
+  version: '1.0.0'
+  category: monitoring
+  tags: ['notifications', 'push', 'api']
+  keywords: ['pushover', 'gotify', 'alerts', 'webhook to phone']
+  homepage: https://ntfy.sh
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'ntfy'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'ntfy.example.com'
+  - name: defaultAccess
+    displayName: 'Default access'
+    description: 'deny-all means only signed-in users can publish or subscribe'
+    type: select
+    default: 'deny-all'
+    options:
+      - label: 'read-write'
+        value: 'read-write'
+      - label: 'read-only'
+        value: 'read-only'
+      - label: 'write-only'
+        value: 'write-only'
+      - label: 'deny-all'
+        value: 'deny-all'
+  - name: signup
+    displayName: 'Allow sign-up'
+    type: boolean
+    default: false
+  - name: login
+    displayName: 'Allow login'
+    type: boolean
+    default: true
+  - name: attachmentLimitMb
+    displayName: 'Attachment size limit (MB)'
+    type: number
+    default: 15
+    validation:
+      min: 1
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: binwiederhier/ntfy:latest
+      startCommand: 'serve'
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: cache
+          type: pvc
+          mountPath: /var/cache/ntfy
+          storageSize: '2Gi'
+        - name: data
+          type: pvc
+          mountPath: /var/lib/ntfy
+          storageSize: '1Gi'
+      env:
+        - key: NTFY_BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: NTFY_LISTEN_HTTP
+          value: ':80'
+        - key: NTFY_CACHE_FILE
+          value: /var/cache/ntfy/cache.db
+        - key: NTFY_AUTH_FILE
+          value: /var/lib/ntfy/user.db
+        - key: NTFY_AUTH_DEFAULT_ACCESS
+          value: '{{ params.defaultAccess }}'
+        - key: NTFY_ENABLE_SIGNUP
+          value: '{{ params.signup }}'
+        - key: NTFY_ENABLE_LOGIN
+          value: '{{ params.login }}'
+        - key: NTFY_BEHIND_PROXY
+          value: 'true'
+        - key: NTFY_ATTACHMENT_CACHE_DIR
+          value: /var/cache/ntfy/attachments
+        - key: NTFY_ATTACHMENT_FILE_SIZE_LIMIT
+          value: '{{ params.attachmentLimitMb }}M'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

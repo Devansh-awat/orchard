@@ -1,0 +1,55 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: cyberchef
+  displayName: 'CyberChef'
+  description: 'The cyber Swiss army knife. Encode, decode, compress, hash and analyse data in the browser.'
+  icon: https://github.com/gchq.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['tools', 'security', 'static']
+  keywords: ['decoder', 'base64', 'crypto', 'forensics', 'gchq']
+  homepage: https://github.com/gchq/CyberChef
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'cyberchef'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'chef.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/gchq/cyberchef:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

@@ -1,0 +1,136 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: open-webui
+  displayName: 'Open WebUI'
+  description: 'A chat interface for any OpenAI-compatible API, with accounts, history and document uploads.'
+  icon: https://github.com/open-webui.png?size=256
+  version: '1.0.0'
+  category: ai
+  tags: ['llm', 'chat', 'openai', 'ollama']
+  keywords: ['chatgpt', 'gpt', 'claude', 'ai assistant', 'rag', 'hack club ai']
+  homepage: https://openwebui.com
+  license: BSD-3-Clause
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'chat'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'chat.example.com'
+  - name: apiBaseUrl
+    displayName: 'API base URL'
+    description: 'Any OpenAI-compatible endpoint'
+    type: string
+    default: 'https://ai.hackclub.com/proxy/v1'
+    required: true
+  - name: apiKey
+    displayName: 'API key'
+    description: 'Stored as a secret'
+    type: string
+    required: true
+    placeholder: 'sk-…'
+  - name: secretKey
+    displayName: 'Session secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: siteName
+    displayName: 'Site name'
+    type: string
+    default: 'Open WebUI'
+  - name: signups
+    displayName: 'Allow sign-ups'
+    type: boolean
+    default: true
+  - name: defaultRole
+    displayName: 'Role for new users'
+    description: 'Pending users wait for an admin to approve them'
+    type: select
+    default: 'pending'
+    options:
+      - label: 'pending'
+        value: 'pending'
+      - label: 'user'
+        value: 'user'
+      - label: 'admin'
+        value: 'admin'
+  - name: defaultModels
+    displayName: 'Default models'
+    description: 'Comma-separated model ids preselected for new chats'
+    type: string
+    default: ''
+    placeholder: 'gpt-4o-mini'
+  - name: communitySharing
+    displayName: 'Community sharing'
+    type: boolean
+    default: false
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for accounts, chats and uploaded documents'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/open-webui/open-webui:main
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /app/backend/data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: OPENAI_API_BASE_URL
+          value: '{{ params.apiBaseUrl }}'
+        - key: OPENAI_API_KEY
+          value: '{{ params.apiKey }}'
+          secret: true
+        - key: WEBUI_SECRET_KEY
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: WEBUI_URL
+          value: 'https://{{ params.domain }}'
+        - key: WEBUI_NAME
+          value: '{{ params.siteName }}'
+        - key: ENABLE_SIGNUP
+          value: '{{ params.signups }}'
+        - key: DEFAULT_USER_ROLE
+          value: '{{ params.defaultRole }}'
+        - key: DEFAULT_MODELS
+          value: '{{ params.defaultModels }}'
+        - key: ENABLE_COMMUNITY_SHARING
+          value: '{{ params.communitySharing }}'
+        - key: ENABLE_OLLAMA_API
+          value: 'false'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

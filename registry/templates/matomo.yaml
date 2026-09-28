@@ -1,0 +1,117 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: matomo
+  displayName: 'Matomo'
+  description: 'Full-featured web analytics with heatmaps, funnels and a hundred plugins. Ships with its own MariaDB.'
+  icon: https://github.com/matomo-org.png?size=256
+  version: '1.0.0'
+  category: analytics
+  tags: ['analytics', 'tracking']
+  keywords: ['google analytics alternative', 'piwik', 'visitors', 'stats']
+  homepage: https://matomo.org
+  license: GPL-3.0-or-later
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'matomo'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'analytics.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '5Gi'
+  - name: dbPassword
+    displayName: 'Database password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: dbRootPassword
+    displayName: 'Database root password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: mysql
+    type: deployment
+    config:
+      name: '{{ params.appName }}-mysql'
+      image: mariadb:11
+      replicas: 1
+      ports:
+        - name: mysql
+          containerPort: 3306
+          servicePort: 3306
+          protocol: TCP
+      volumes:
+        - name: mysql
+          type: pvc
+          mountPath: /var/lib/mysql
+          storageSize: '5Gi'
+      env:
+        - key: MARIADB_DATABASE
+          value: 'app'
+        - key: MARIADB_USER
+          value: 'app'
+        - key: MARIADB_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: MARIADB_ROOT_PASSWORD
+          value: '{{ params.dbRootPassword }}'
+          secret: true
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: matomo:5-apache
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: html
+          type: pvc
+          mountPath: /var/www/html
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: MATOMO_DATABASE_HOST
+          value: '{{ resources.mysql.serviceName }}'
+        - key: MATOMO_DATABASE_ADAPTER
+          value: mysql
+        - key: MATOMO_DATABASE_USERNAME
+          value: app
+        - key: MATOMO_DATABASE_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: MATOMO_DATABASE_DBNAME
+          value: app
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

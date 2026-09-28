@@ -2,12 +2,15 @@ apiVersion: leaf/v1
 kind: Template
 metadata:
   name: redis
-  displayName: Redis Cache
-  description: In-memory Redis cache for your applications. Internal-only, no public exposure.
-  icon: database
-  version: '1.0.0'
+  displayName: Valkey Cache
+  description: In-memory key-value cache, Redis-compatible. Internal-only, no public exposure.
+  icon: https://github.com/valkey-io.png?size=256
+  version: '1.1.0'
   category: database
   tags: ['redis', 'cache', 'memory', 'key-value']
+  keywords: ['redis', 'cache', 'key-value', 'in-memory', 'queue', 'session store']
+  homepage: https://valkey.io
+  license: BSD-3-Clause
 
 parameters:
   - name: appName
@@ -20,10 +23,10 @@ parameters:
       pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
       message: Must be lowercase alphanumeric with hyphens, 3-60 chars
 
-  - name: redisImage
-    displayName: Redis Image
+  - name: image
+    displayName: Image
     type: string
-    default: 'redis:7-alpine'
+    default: 'valkey/valkey:8-alpine'
 
   - name: maxMemory
     displayName: Max Memory
@@ -45,15 +48,11 @@ resources:
     type: deployment
     config:
       name: '{{ params.appName }}'
-      image: '{{ params.redisImage }}'
+      image: '{{ params.image }}'
+      startCommand: 'valkey-server --maxmemory {{ params.maxMemory }} --maxmemory-policy allkeys-lru'
       replicas: 1
       ports:
         - name: redis
           containerPort: 6379
           servicePort: 6379
           protocol: TCP
-      env:
-        - key: REDIS_MAXMEMORY
-          value: '{{ params.maxMemory }}'
-        - key: REDIS_MAXMEMORY_POLICY
-          value: allkeys-lru

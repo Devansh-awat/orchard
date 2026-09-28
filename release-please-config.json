@@ -25,6 +25,14 @@
     "apps/r2-proxy": {
       "release-type": "go",
       "component": "r2-proxy"
+    },
+    "apps/registry": {
+      "release-type": "go",
+      "component": "registry"
+    },
+    "registry": {
+      "release-type": "simple",
+      "component": "templates"
     }
   }
 }

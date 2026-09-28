@@ -19,12 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp1.outputs.releases_created || steps.rp2.outputs.releases_created || steps.rp3.outputs.releases_created }}
+      platform: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] || steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] || steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] || steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] || steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] || steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] }}
       frontend: ${{ steps.rp1.outputs['apps/frontend--release_created'] || steps.rp2.outputs['apps/frontend--release_created'] || steps.rp3.outputs['apps/frontend--release_created'] }}
       frontend_v: ${{ steps.rp1.outputs['apps/frontend--version'] || steps.rp2.outputs['apps/frontend--version'] || steps.rp3.outputs['apps/frontend--version'] }}
       server: ${{ steps.rp1.outputs['apps/server--release_created'] || steps.rp2.outputs['apps/server--release_created'] || steps.rp3.outputs['apps/server--release_created'] }}
       server_v: ${{ steps.rp1.outputs['apps/server--version'] || steps.rp2.outputs['apps/server--version'] || steps.rp3.outputs['apps/server--version'] }}
       r2_proxy: ${{ steps.rp1.outputs['apps/r2-proxy--release_created'] || steps.rp2.outputs['apps/r2-proxy--release_created'] || steps.rp3.outputs['apps/r2-proxy--release_created'] }}
       r2_proxy_v: ${{ steps.rp1.outputs['apps/r2-proxy--version'] || steps.rp2.outputs['apps/r2-proxy--version'] || steps.rp3.outputs['apps/r2-proxy--version'] }}
+      registry: ${{ steps.rp1.outputs['apps/registry--release_created'] || steps.rp2.outputs['apps/registry--release_created'] || steps.rp3.outputs['apps/registry--release_created'] }}
+      registry_v: ${{ steps.rp1.outputs['apps/registry--version'] || steps.rp2.outputs['apps/registry--version'] || steps.rp3.outputs['apps/registry--version'] }}
       gateway: ${{ steps.rp1.outputs['apps/gateway--release_created'] || steps.rp2.outputs['apps/gateway--release_created'] || steps.rp3.outputs['apps/gateway--release_created'] }}
       gateway_v: ${{ steps.rp1.outputs['apps/gateway--version'] || steps.rp2.outputs['apps/gateway--version'] || steps.rp3.outputs['apps/gateway--version'] }}
       cli: ${{ steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] }}
@@ -105,6 +108,17 @@ jobs:
       context: apps/r2-proxy
       version: ${{ needs.release-please.outputs.r2_proxy_v }}
 
+  image-registry:
+    needs: release-please
+    if: needs.release-please.outputs.registry == 'true'
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: registry
+      dockerfile: apps/registry/Dockerfile
+      context: apps/registry
+      version: ${{ needs.release-please.outputs.registry_v }}
+
   # Builds cli binaries with goreleaser and attaches them to the release that
   # release-please just cut for tag cli/vX.Y.Z. OSS goreleaser cannot parse
   # monorepo component tags (monorepo.tag_prefix is a Pro feature), so we lay
@@ -164,7 +178,7 @@ jobs:
   publish-chart:
     needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy]
     if: >-
-      ${{ !cancelled() && needs.release-please.outputs.any == 'true'
+      ${{ !cancelled() && needs.release-please.outputs.platform == 'true'
         && needs.image-frontend.result != 'failure'
         && needs.image-server.result != 'failure'
         && needs.image-mcp.result != 'failure'
@@ -203,7 +217,7 @@ jobs:
 
   deploy-marker:
     needs: [release-please, publish-chart]
-    if: ${{ !cancelled() && needs.release-please.outputs.any == 'true' && needs.publish-chart.result == 'success' }}
+    if: ${{ !cancelled() && needs.release-please.outputs.platform == 'true' && needs.publish-chart.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Datadog deploy markers
@@ -228,6 +242,7 @@ jobs:
           [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark server   "${{ needs.release-please.outputs.server_v }}"
           [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark mcp      "${{ needs.release-please.outputs.server_v }}"
           [ "${{ needs.release-please.outputs.r2_proxy }}" = "true" ] && mark r2-proxy "${{ needs.release-please.outputs.r2_proxy_v }}"
+          [ "${{ needs.release-please.outputs.registry }}" = "true" ] && mark registry "${{ needs.release-please.outputs.registry_v }}"
           [ "${{ needs.release-please.outputs.gateway }}" = "true" ]  && mark gateway  "${{ needs.release-please.outputs.gateway_v }}"
           [ "${{ needs.release-please.outputs.cli }}" = "true" ]      && mark cli      "${{ needs.release-please.outputs.cli_v }}"
           true
@@ -236,7 +251,7 @@ jobs:
   # instead of waiting for the OCIRepository poll interval.
   flux-notify:
     needs: [release-please, publish-chart]
-    if: ${{ !cancelled() && needs.release-please.outputs.any == 'true' && needs.publish-chart.result == 'success' }}
+    if: ${{ !cancelled() && needs.release-please.outputs.platform == 'true' && needs.publish-chart.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Flux reconcile

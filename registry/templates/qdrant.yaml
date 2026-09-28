@@ -1,0 +1,62 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: qdrant
+  displayName: 'Qdrant'
+  description: 'A vector database for embeddings and similarity search. Internal-only.'
+  icon: https://github.com/qdrant.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['vectors', 'ai', 'search']
+  keywords: ['pinecone', 'weaviate', 'pgvector', 'embeddings', 'rag']
+  homepage: https://qdrant.tech
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'qdrant'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: apiKey
+    displayName: 'API key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for collections'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: qdrant/qdrant:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 6333
+          servicePort: 6333
+          protocol: TCP
+        - name: grpc
+          containerPort: 6334
+          servicePort: 6334
+          protocol: TCP
+      volumes:
+        - name: storage
+          type: pvc
+          mountPath: /qdrant/storage
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: QDRANT__SERVICE__API_KEY
+          value: '{{ params.apiKey }}'
+          secret: true
+        - key: QDRANT__TELEMETRY_DISABLED
+          value: 'true'

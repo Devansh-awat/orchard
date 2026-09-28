@@ -1,0 +1,99 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: navidrome
+  displayName: 'Navidrome'
+  description: 'A music server and streamer that speaks Subsonic, so every music app works with it.'
+  icon: https://github.com/navidrome.png?size=256
+  version: '1.0.0'
+  category: media
+  tags: ['music', 'streaming', 'subsonic']
+  keywords: ['spotify', 'plexamp', 'mp3', 'flac', 'music library']
+  homepage: https://www.navidrome.org
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'music'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'music.example.com'
+  - name: scanSchedule
+    displayName: 'Rescan library every'
+    type: string
+    default: '1h'
+  - name: logLevel
+    displayName: 'Log level'
+    type: select
+    default: 'info'
+    options:
+      - label: 'error'
+        value: 'error'
+      - label: 'warn'
+        value: 'warn'
+      - label: 'info'
+        value: 'info'
+      - label: 'debug'
+        value: 'debug'
+  - name: enableSharing
+    displayName: 'Public share links'
+    type: boolean
+    default: false
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the music library'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: deluan/navidrome:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 4533
+          servicePort: 4533
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '2Gi'
+        - name: music
+          type: pvc
+          mountPath: /music
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: ND_SCANSCHEDULE
+          value: '{{ params.scanSchedule }}'
+        - key: ND_LOGLEVEL
+          value: '{{ params.logLevel }}'
+        - key: ND_ENABLESHARING
+          value: '{{ params.enableSharing }}'
+        - key: ND_BASEURL
+          value: 'https://{{ params.domain }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 4533

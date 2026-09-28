@@ -1,0 +1,177 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: nextcloud
+  displayName: 'Nextcloud'
+  description: 'Files, calendar, contacts and office documents on your own server. Postgres, Valkey and the admin account are wired up for you.'
+  icon: https://github.com/nextcloud.png?size=256
+  version: '1.0.0'
+  category: files
+  tags: ['files', 'sync', 'calendar', 'office']
+  keywords: ['google drive', 'dropbox', 'owncloud', 'storage', 'photos', 'webdav']
+  homepage: https://nextcloud.com
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'nextcloud'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'cloud.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 20
+  - name: phpMemoryLimit
+    displayName: 'PHP memory limit'
+    type: string
+    default: '512M'
+  - name: phpUploadLimit
+    displayName: 'Upload limit'
+    type: string
+    default: '2G'
+  - name: mailDomain
+    displayName: 'Mail domain'
+    type: string
+    default: ''
+    placeholder: 'example.com'
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for shares and password resets. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for user files and the app itself'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: nextcloud:30-apache
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: html
+          type: pvc
+          mountPath: /var/www/html
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: POSTGRES_HOST
+          value: '{{ resources.db.host }}:{{ resources.db.port }}'
+        - key: POSTGRES_DB
+          value: '{{ resources.db.dbName }}'
+        - key: POSTGRES_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: POSTGRES_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: REDIS_HOST
+          value: '{{ resources.cache.serviceName }}'
+        - key: NEXTCLOUD_ADMIN_USER
+          value: '{{ params.adminUser }}'
+        - key: NEXTCLOUD_ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: NEXTCLOUD_TRUSTED_DOMAINS
+          value: '{{ params.domain }}'
+        - key: OVERWRITEPROTOCOL
+          value: https
+        - key: OVERWRITEHOST
+          value: '{{ params.domain }}'
+        - key: TRUSTED_PROXIES
+          value: '10.0.0.0/8 172.16.0.0/12 192.168.0.0/16'
+        - key: PHP_MEMORY_LIMIT
+          value: '{{ params.phpMemoryLimit }}'
+        - key: PHP_UPLOAD_LIMIT
+          value: '{{ params.phpUploadLimit }}'
+        - key: SMTP_SECURE
+          value: tls
+        - key: SMTP_AUTHTYPE
+          value: LOGIN
+        - key: MAIL_DOMAIN
+          value: '{{ params.mailDomain }}'
+        - key: SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: SMTP_NAME
+          value: '{{ params.smtpUser }}'
+        - key: SMTP_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: MAIL_FROM_ADDRESS
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

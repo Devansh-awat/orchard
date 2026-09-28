@@ -1,0 +1,102 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: vikunja
+  displayName: 'Vikunja'
+  description: 'Tasks and projects with lists, kanban, gantt and CalDAV.'
+  icon: https://github.com/go-vikunja.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['tasks', 'todo', 'kanban']
+  keywords: ['todoist', 'trello', 'project management', 'caldav']
+  homepage: https://vikunja.io
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'tasks'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'tasks.example.com'
+  - name: jwtSecret
+    displayName: 'JWT secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: registration
+    displayName: 'Allow registration'
+    type: boolean
+    default: true
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: vikunja/vikunja:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3456
+          servicePort: 3456
+          protocol: TCP
+      volumes:
+        - name: files
+          type: pvc
+          mountPath: /app/vikunja/files
+          storageSize: '5Gi'
+      env:
+        - key: VIKUNJA_SERVICE_PUBLICURL
+          value: 'https://{{ params.domain }}/'
+        - key: VIKUNJA_SERVICE_JWTSECRET
+          value: '{{ params.jwtSecret }}'
+          secret: true
+        - key: VIKUNJA_SERVICE_ENABLEREGISTRATION
+          value: '{{ params.registration }}'
+        - key: VIKUNJA_SERVICE_TIMEZONE
+          value: '{{ params.timezone }}'
+        - key: VIKUNJA_DATABASE_TYPE
+          value: postgres
+        - key: VIKUNJA_DATABASE_HOST
+          value: '{{ resources.db.host }}:{{ resources.db.port }}'
+        - key: VIKUNJA_DATABASE_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: VIKUNJA_DATABASE_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: VIKUNJA_DATABASE_DATABASE
+          value: '{{ resources.db.dbName }}'
+        - key: VIKUNJA_DATABASE_SSLMODE
+          value: disable
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3456

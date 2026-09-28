@@ -1,0 +1,118 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: valheim
+  displayName: 'Valheim Server'
+  description: 'A dedicated Valheim server with automatic updates and backups, on public UDP ports.'
+  icon: none
+  version: '1.0.0'
+  category: games
+  tags: ['valheim', 'game server', 'multiplayer']
+  keywords: ['viking', 'survival', 'coop', 'dedicated server']
+  homepage: https://github.com/lloesche/valheim-server-docker
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'valheim'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: serverName
+    displayName: 'Server name'
+    type: string
+    default: 'Orchard Valheim'
+    required: true
+  - name: worldName
+    displayName: 'World name'
+    type: string
+    default: 'Dedicated'
+    required: true
+  - name: serverPassword
+    displayName: 'Server password'
+    description: 'Valheim refuses to start without one'
+    type: string
+    required: true
+    placeholder: 'at least 5 characters'
+  - name: publicListing
+    displayName: 'List in the public server browser'
+    type: boolean
+    default: false
+  - name: crossplay
+    displayName: 'Crossplay'
+    type: boolean
+    default: false
+  - name: backups
+    displayName: 'Automatic backups'
+    type: boolean
+    default: true
+  - name: backupsMaxAgeDays
+    displayName: 'Keep backups for (days)'
+    type: number
+    default: 3
+    validation:
+      min: 1
+  - name: updateOnStart
+    displayName: 'Update on start'
+    type: boolean
+    default: true
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for worlds, config and backups'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: server
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/lloesche/valheim-server:latest
+      replicas: 1
+      ports:
+        - name: game
+          containerPort: 2456
+          servicePort: 2456
+          protocol: UDP
+          public: true
+        - name: query
+          containerPort: 2457
+          servicePort: 2457
+          protocol: UDP
+          public: true
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '{{ params.storage }}'
+        - name: server
+          type: pvc
+          mountPath: /opt/valheim
+          storageSize: '15Gi'
+      env:
+        - key: SERVER_NAME
+          value: '{{ params.serverName }}'
+        - key: WORLD_NAME
+          value: '{{ params.worldName }}'
+        - key: SERVER_PASS
+          value: '{{ params.serverPassword }}'
+          secret: true
+        - key: SERVER_PUBLIC
+          value: '{{ params.publicListing }}'
+        - key: CROSSPLAY
+          value: '{{ params.crossplay }}'
+        - key: BACKUPS
+          value: '{{ params.backups }}'
+        - key: BACKUPS_MAX_AGE
+          value: '{{ params.backupsMaxAgeDays }}'
+        - key: UPDATE_IF_IDLE
+          value: '{{ params.updateOnStart }}'
+        - key: TZ
+          value: '{{ params.timezone }}'

@@ -1,0 +1,48 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mosquitto
+  displayName: 'Mosquitto MQTT'
+  description: 'An MQTT broker for IoT and home automation, on a public TCP port. Starts open; add users afterwards.'
+  icon: https://github.com/eclipse-mosquitto.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['mqtt', 'iot', 'messaging']
+  keywords: ['home assistant', 'esp32', 'sensors', 'pubsub', 'broker']
+  homepage: https://mosquitto.org
+  license: EPL-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mqtt'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for retained messages'
+    type: string
+    default: '1Gi'
+
+resources:
+  - name: broker
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: eclipse-mosquitto:2
+      startCommand: 'mosquitto -c /mosquitto-no-auth.conf'
+      replicas: 1
+      ports:
+        - name: mqtt
+          containerPort: 1883
+          servicePort: 1883
+          protocol: TCP
+          public: true
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /mosquitto/data
+          storageSize: '{{ params.storage }}'

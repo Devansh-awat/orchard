@@ -1,0 +1,103 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: code-server
+  displayName: 'code-server'
+  description: 'VS Code in the browser, with your home directory on a volume.'
+  icon: https://github.com/coder.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['vscode', 'ide', 'editor', 'remote']
+  keywords: ['visual studio code', 'coder', 'cloud ide', 'dev environment']
+  homepage: https://coder.com/docs/code-server
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'code'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'code.example.com'
+  - name: password
+    displayName: 'Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 20
+  - name: sudoPassword
+    displayName: 'sudo password'
+    description: 'For installing packages inside the container'
+    type: secret
+    validation:
+      min: 20
+  - name: extensionsGallery
+    displayName: 'Extensions gallery'
+    description: 'JSON for a different marketplace'
+    type: string
+    default: ''
+    placeholder: 'leave empty for Open VSX'
+  - name: idleTimeoutSeconds
+    displayName: 'Shut down after idle (seconds)'
+    description: '0 keeps it running'
+    type: number
+    default: 0
+    validation:
+      min: 0
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the home directory'
+    type: string
+    default: '10Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: codercom/code-server:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: home
+          type: pvc
+          mountPath: /home/coder
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: PASSWORD
+          value: '{{ params.password }}'
+          secret: true
+        - key: SUDO_PASSWORD
+          value: '{{ params.sudoPassword }}'
+          secret: true
+        - key: EXTENSIONS_GALLERY
+          value: '{{ params.extensionsGallery }}'
+        - key: CODE_SERVER_IDLE_TIMEOUT_SECONDS
+          value: '{{ params.idleTimeoutSeconds }}'
+        - key: CS_DISABLE_GETTING_STARTED_OVERRIDE
+          value: '1'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

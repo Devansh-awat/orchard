@@ -1,0 +1,174 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: plausible
+  displayName: 'Plausible'
+  description: 'Lightweight, privacy-first web analytics. Ships with its own ClickHouse and Postgres.'
+  icon: https://github.com/plausible.png?size=256
+  version: '1.0.0'
+  category: analytics
+  tags: ['analytics', 'privacy', 'tracking']
+  keywords: ['google analytics alternative', 'umami', 'page views', 'visitors', 'stats']
+  homepage: https://plausible.io
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'plausible'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'plausible.example.com'
+  - name: secretKeyBase
+    displayName: 'Secret key base'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 48
+      encoding: 'base64'
+  - name: totpVaultKey
+    displayName: 'TOTP vault key'
+    description: 'Encrypts 2FA secrets. Generated if left empty.'
+    type: secret
+    validation:
+      bytes: 32
+      encoding: 'base64'
+  - name: registration
+    displayName: 'Registration'
+    description: 'Open it long enough to create your own account'
+    type: select
+    default: 'invite_only'
+    options:
+      - label: 'Open'
+        value: 'true'
+      - label: 'Invite only'
+        value: 'invite_only'
+      - label: 'Disabled'
+        value: 'false'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for reports and invites. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for ClickHouse event data'
+    type: string
+    default: '20Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: events
+    type: deployment
+    config:
+      name: '{{ params.appName }}-events'
+      image: clickhouse/clickhouse-server:24.12-alpine
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8123
+          servicePort: 8123
+          protocol: TCP
+      volumes:
+        - name: clickhouse
+          type: pvc
+          mountPath: /var/lib/clickhouse
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: CLICKHOUSE_SKIP_USER_SETUP
+          value: '1'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/plausible/community-edition:v3.0
+      startCommand: '/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run'
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8000
+          servicePort: 8000
+          protocol: TCP
+      env:
+        - key: BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: SECRET_KEY_BASE
+          value: '{{ params.secretKeyBase }}'
+          secret: true
+        - key: TOTP_VAULT_KEY
+          value: '{{ params.totpVaultKey }}'
+          secret: true
+        - key: DATABASE_URL
+          value: '{{ resources.db.connectionString }}'
+          secret: true
+        - key: CLICKHOUSE_DATABASE_URL
+          value: 'http://{{ resources.events.serviceName }}:8123/plausible_events_db'
+        - key: DISABLE_REGISTRATION
+          value: '{{ params.registration }}'
+        - key: DEFAULT_TIMEZONE
+          value: '{{ params.timezone }}'
+        - key: MAILER_ADAPTER
+          value: Bamboo.Mua
+        - key: HTTP_PORT
+          value: '8000'
+        - key: SMTP_HOST_ADDR
+          value: '{{ params.smtpHost }}'
+        - key: SMTP_HOST_PORT
+          value: '{{ params.smtpPort }}'
+        - key: SMTP_USER_NAME
+          value: '{{ params.smtpUser }}'
+        - key: SMTP_USER_PWD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: MAILER_EMAIL
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8000

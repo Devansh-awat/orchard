@@ -1,0 +1,60 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: cloudbeaver
+  displayName: 'CloudBeaver'
+  description: 'DBeaver in the browser. Connects to Postgres, MySQL, SQLite and more.'
+  icon: https://github.com/dbeaver.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['database', 'admin', 'sql']
+  keywords: ['dbeaver', 'pgadmin', 'sql client', 'query editor']
+  homepage: https://dbeaver.com/docs/cloudbeaver/
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'cloudbeaver'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'db.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: dbeaver/cloudbeaver:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8978
+          servicePort: 8978
+          protocol: TCP
+      volumes:
+        - name: workspace
+          type: pvc
+          mountPath: /opt/cloudbeaver/workspace
+          storageSize: '2Gi'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8978

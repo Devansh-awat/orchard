@@ -1,0 +1,85 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mariadb
+  displayName: 'MariaDB'
+  description: 'A MySQL-compatible database for the apps that will not talk to Postgres. Internal-only, no public exposure.'
+  icon: https://github.com/MariaDB.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['mysql', 'mariadb', 'database', 'sql']
+  keywords: ['mysql', 'wordpress', 'php', 'relational']
+  homepage: https://mariadb.org
+  license: GPL-2.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mariadb'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: database
+    displayName: 'Database name'
+    type: string
+    default: 'app'
+    required: true
+  - name: user
+    displayName: 'Username'
+    type: string
+    default: 'app'
+    required: true
+  - name: password
+    displayName: 'Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: rootPassword
+    displayName: 'Root password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: autoUpgrade
+    displayName: 'Auto-upgrade system tables on version bumps'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the data directory'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: db
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: mariadb:11
+      replicas: 1
+      ports:
+        - name: mysql
+          containerPort: 3306
+          servicePort: 3306
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/lib/mysql
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: MARIADB_DATABASE
+          value: '{{ params.database }}'
+        - key: MARIADB_USER
+          value: '{{ params.user }}'
+        - key: MARIADB_PASSWORD
+          value: '{{ params.password }}'
+          secret: true
+        - key: MARIADB_ROOT_PASSWORD
+          value: '{{ params.rootPassword }}'
+          secret: true
+        - key: MARIADB_AUTO_UPGRADE
+          value: '{{ params.autoUpgrade }}'

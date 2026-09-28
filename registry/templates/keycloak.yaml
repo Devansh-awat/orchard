@@ -1,0 +1,128 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: keycloak
+  displayName: 'Keycloak'
+  description: 'Single sign-on for your apps. OpenID Connect, SAML, social logins and user federation, without hand-tuning the container.'
+  icon: https://github.com/keycloak.png?size=256
+  version: '1.0.0'
+  category: auth
+  tags: ['sso', 'oidc', 'saml', 'identity']
+  keywords: ['auth0', 'okta', 'login', 'identity provider', 'oauth', 'users']
+  homepage: https://www.keycloak.org
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'keycloak'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'auth.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty. Keycloak asks you to replace this bootstrap account on first login.'
+    type: secret
+    validation:
+      min: 24
+  - name: logLevel
+    displayName: 'Log level'
+    type: select
+    default: 'info'
+    options:
+      - label: 'error'
+        value: 'error'
+      - label: 'warn'
+        value: 'warn'
+      - label: 'info'
+        value: 'info'
+      - label: 'debug'
+        value: 'debug'
+  - name: metrics
+    displayName: 'Metrics endpoint'
+    type: boolean
+    default: false
+  - name: health
+    displayName: 'Health endpoints'
+    type: boolean
+    default: true
+  - name: features
+    displayName: 'Extra features'
+    description: 'Comma-separated preview features to enable'
+    type: string
+    default: ''
+    placeholder: 'token-exchange,admin-fine-grained-authz'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: quay.io/keycloak/keycloak:26.0
+      startCommand: 'start'
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      env:
+        - key: KC_DB
+          value: postgres
+        - key: KC_DB_URL
+          value: 'jdbc:postgresql://{{ resources.db.host }}:{{ resources.db.port }}/{{ resources.db.dbName }}'
+        - key: KC_DB_USERNAME
+          value: '{{ resources.db.dbUser }}'
+        - key: KC_DB_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: KC_HOSTNAME
+          value: 'https://{{ params.domain }}'
+        - key: KC_HTTP_ENABLED
+          value: 'true'
+        - key: KC_PROXY_HEADERS
+          value: xforwarded
+        - key: KC_HEALTH_ENABLED
+          value: '{{ params.health }}'
+        - key: KC_METRICS_ENABLED
+          value: '{{ params.metrics }}'
+        - key: KC_LOG_LEVEL
+          value: '{{ params.logLevel }}'
+        - key: KC_FEATURES
+          value: '{{ params.features }}'
+        - key: KC_BOOTSTRAP_ADMIN_USERNAME
+          value: '{{ params.adminUser }}'
+        - key: KC_BOOTSTRAP_ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

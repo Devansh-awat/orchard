@@ -3,5 +3,7 @@
   "apps/frontend": "1.43.0",
   "apps/gateway": "0.2.1",
   "apps/cli": "0.17.0",
-  "apps/r2-proxy": "0.3.0"
+  "apps/r2-proxy": "0.3.0",
+  "apps/registry": "0.1.0",
+  "registry": "0.1.0"
 }

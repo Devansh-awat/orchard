@@ -8,6 +8,8 @@ export interface ParameterValidation {
   message?: string;
   min?: number;
   max?: number;
+  bytes?: number;
+  encoding?: 'hex' | 'base64';
 }
 
 export interface ParameterOption {
@@ -130,11 +132,15 @@ export class TemplateEngineService {
 
       // Auto-generate secret if not provided
       if (def.type === 'secret' && (value === undefined || value === null || value === '')) {
-        const length =
-          def.validation?.min && def.validation.min > 0 ? Math.max(def.validation.min, 16) : 32;
-        value = randomBytes(Math.ceil(length / 2))
-          .toString('hex')
-          .slice(0, length);
+        if (def.validation?.bytes && def.validation.bytes > 0) {
+          value = randomBytes(def.validation.bytes).toString(def.validation.encoding ?? 'hex');
+        } else {
+          const length =
+            def.validation?.min && def.validation.min > 0 ? Math.max(def.validation.min, 16) : 32;
+          value = randomBytes(Math.ceil(length / 2))
+            .toString('hex')
+            .slice(0, length);
+        }
       }
 
       // Apply default
@@ -222,7 +228,7 @@ export class TemplateEngineService {
   resolveValue(value: any, context: ResolutionContext): any {
     if (typeof value === 'string') {
       // Check if the entire value is a single interpolation (for type preservation)
-      const singleMatch = value.match(/^\{\{\s*(.+?)\s*\}\}$/);
+      const singleMatch = value.match(/^\{\{\s*([^{}]+?)\s*\}\}$/);
       if (singleMatch) {
         return this.evaluateExpression(singleMatch[1], context);
       }

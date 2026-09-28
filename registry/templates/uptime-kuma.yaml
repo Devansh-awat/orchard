@@ -1,0 +1,79 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: uptime-kuma
+  displayName: 'Uptime Kuma'
+  description: 'Uptime monitoring with status pages and notifications to just about anything.'
+  icon: activity
+  version: '1.0.0'
+  category: monitoring
+  tags: ['monitoring', 'uptime', 'status page', 'alerts']
+  keywords: ['pingdom', 'healthcheck', 'downtime', 'incidents', 'statuspage']
+  homepage: https://uptime.kuma.pet
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'uptime'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'status.example.com'
+  - name: allowFraming
+    displayName: 'Allow embedding status pages in iframes'
+    type: boolean
+    default: false
+  - name: notificationProxy
+    displayName: 'Proxy for notifications'
+    type: string
+    default: ''
+    placeholder: 'http://proxy:3128'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the SQLite database and uploads'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: louislam/uptime-kuma:1
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3001
+          servicePort: 3001
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /app/data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: UPTIME_KUMA_DISABLE_FRAME_SAMEORIGIN
+          value: '{{ params.allowFraming }}'
+        - key: NOTIFICATION_PROXY
+          value: '{{ params.notificationProxy }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3001

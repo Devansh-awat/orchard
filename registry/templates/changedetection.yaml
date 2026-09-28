@@ -1,0 +1,83 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: changedetection
+  displayName: 'changedetection.io'
+  description: 'Watch any page for changes and get notified. Prices, stock, docs, anything.'
+  icon: https://raw.githubusercontent.com/dgtlmoon/changedetection.io/master/changedetectionio/static/favicons/apple-touch-icon.png
+  version: '1.0.0'
+  category: monitoring
+  tags: ['monitoring', 'scraping', 'notifications']
+  keywords: ['website change', 'price tracker', 'watch page', 'visualping']
+  homepage: https://github.com/dgtlmoon/changedetection.io
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'watch'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'watch.example.com'
+  - name: fetchWorkers
+    displayName: 'Fetch workers'
+    type: number
+    default: 10
+    validation:
+      min: 1
+      max: 50
+  - name: hideReferer
+    displayName: 'Hide referer'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/dgtlmoon/changedetection.io:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5000
+          servicePort: 5000
+          protocol: TCP
+      volumes:
+        - name: datastore
+          type: pvc
+          mountPath: /datastore
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: FETCH_WORKERS
+          value: '{{ params.fetchWorkers }}'
+        - key: HIDE_REFERER
+          value: '{{ params.hideReferer }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5000

@@ -1,0 +1,72 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: kavita
+  displayName: 'Kavita'
+  description: 'A reader and library for manga, comics and books, with progress sync and OPDS.'
+  icon: https://github.com/Kareadita.png?size=256
+  version: '1.0.0'
+  category: media
+  tags: ['comics', 'manga', 'ebooks']
+  keywords: ['komga', 'calibre', 'reader', 'library']
+  homepage: https://www.kavitareader.com
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'kavita'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'read.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the library'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: jvmilazz0/kavita:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5000
+          servicePort: 5000
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /kavita/config
+          storageSize: '2Gi'
+        - name: library
+          type: pvc
+          mountPath: /library
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: TZ
+          value: UTC
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5000

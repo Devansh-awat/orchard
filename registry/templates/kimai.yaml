@@ -1,0 +1,124 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: kimai
+  displayName: 'Kimai'
+  description: 'Time tracking for teams and freelancers, with invoices and reports. Ships with its own MariaDB.'
+  icon: https://github.com/kimai.png?size=256
+  version: '1.0.0'
+  category: finance
+  tags: ['time tracking', 'invoices', 'teams']
+  keywords: ['toggl', 'harvest', 'timesheets', 'billing']
+  homepage: https://www.kimai.org
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'kimai'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'time.example.com'
+  - name: adminEmail
+    displayName: 'Admin email'
+    type: string
+    required: true
+    placeholder: 'you@example.com'
+  - name: adminPassword
+    displayName: 'Admin password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: dbPassword
+    displayName: 'Database password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: dbRootPassword
+    displayName: 'Database root password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: mysql
+    type: deployment
+    config:
+      name: '{{ params.appName }}-mysql'
+      image: mariadb:11
+      replicas: 1
+      ports:
+        - name: mysql
+          containerPort: 3306
+          servicePort: 3306
+          protocol: TCP
+      volumes:
+        - name: mysql
+          type: pvc
+          mountPath: /var/lib/mysql
+          storageSize: '5Gi'
+      env:
+        - key: MARIADB_DATABASE
+          value: 'app'
+        - key: MARIADB_USER
+          value: 'app'
+        - key: MARIADB_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: MARIADB_ROOT_PASSWORD
+          value: '{{ params.dbRootPassword }}'
+          secret: true
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: kimai/kimai2:apache
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8001
+          servicePort: 8001
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /opt/kimai/var/data
+          storageSize: '2Gi'
+      env:
+        - key: DATABASE_URL
+          value: 'mysql://app:{{ params.dbPassword }}@{{ resources.mysql.serviceName }}:3306/app?charset=utf8mb4&serverVersion=11.4.0-MariaDB'
+          secret: true
+        - key: ADMINMAIL
+          value: '{{ params.adminEmail }}'
+        - key: ADMINPASS
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: TRUSTED_HOSTS
+          value: 'localhost,{{ params.domain }}'
+        - key: APP_ENV
+          value: prod
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8001

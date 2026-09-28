@@ -4,10 +4,13 @@ metadata:
   name: static-site
   displayName: Static Site
   description: Serve a static website or SPA with Nginx and a public domain. No database needed.
-  icon: globe
+  icon: https://github.com/nginx.png?size=256
   version: '1.0.0'
   category: frontend
   tags: ['static', 'nginx', 'spa', 'frontend', 'html']
+  keywords: ['website', 'html', 'landing page', 'spa', 'nginx', 'frontend']
+  homepage: https://nginx.org
+  license: BSD-2-Clause
 
 parameters:
   - name: appName

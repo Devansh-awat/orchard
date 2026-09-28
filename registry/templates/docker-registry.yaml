@@ -1,0 +1,83 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: docker-registry
+  displayName: 'Docker Registry'
+  description: 'A private container registry. Put it behind Orchard protection or an auth proxy; the registry itself is open.'
+  icon: https://github.com/distribution.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['docker', 'registry', 'images', 'oci']
+  keywords: ['container registry', 'harbor', 'ghcr', 'push images']
+  homepage: https://github.com/distribution/distribution
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'docker-registry'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'registry.example.com'
+  - name: httpSecret
+    displayName: 'HTTP secret'
+    description: 'Signs upload sessions. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: deleteEnabled
+    displayName: 'Allow deleting images'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for image layers'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: registry:2
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5000
+          servicePort: 5000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/lib/registry
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: REGISTRY_HTTP_SECRET
+          value: '{{ params.httpSecret }}'
+          secret: true
+        - key: REGISTRY_STORAGE_DELETE_ENABLED
+          value: '{{ params.deleteEnabled }}'
+        - key: REGISTRY_HTTP_ADDR
+          value: '0.0.0.0:5000'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5000

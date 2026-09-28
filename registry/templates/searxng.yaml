@@ -1,0 +1,83 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: searxng
+  displayName: 'SearXNG'
+  description: 'A private metasearch engine. Aggregates results from other engines without tracking you.'
+  icon: https://github.com/searxng.png?size=256
+  version: '1.0.0'
+  category: ai
+  tags: ['search', 'privacy']
+  keywords: ['google alternative', 'duckduckgo', 'meta search', 'web search api']
+  homepage: https://github.com/searxng/searxng
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'search'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'search.example.com'
+  - name: secretKey
+    displayName: 'Secret key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: workers
+    displayName: 'Workers'
+    type: number
+    default: 4
+    validation:
+      min: 1
+      max: 16
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: searxng/searxng:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /etc/searxng
+          storageSize: '1Gi'
+      env:
+        - key: SEARXNG_BASE_URL
+          value: 'https://{{ params.domain }}/'
+        - key: SEARXNG_SECRET
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: UWSGI_WORKERS
+          value: '{{ params.workers }}'
+        - key: UWSGI_THREADS
+          value: '4'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

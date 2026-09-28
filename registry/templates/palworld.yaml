@@ -1,0 +1,169 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: palworld
+  displayName: 'Palworld Server'
+  description: 'A dedicated Palworld server on a public UDP port. Needs a lot of memory: 8 GB is the floor.'
+  icon: none
+  version: '1.0.0'
+  category: games
+  tags: ['palworld', 'game server', 'multiplayer']
+  keywords: ['pals', 'survival', 'dedicated server', 'steam']
+  homepage: https://github.com/thijsvanloef/palworld-server-docker
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'palworld'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: serverName
+    displayName: 'Server name'
+    type: string
+    default: 'Orchard Palworld'
+    required: true
+  - name: serverDescription
+    displayName: 'Server description'
+    type: string
+    default: ''
+  - name: serverPassword
+    displayName: 'Server password'
+    type: string
+    default: ''
+    placeholder: 'leave empty for open'
+  - name: adminPassword
+    displayName: 'Admin password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: players
+    displayName: 'Max players'
+    type: number
+    default: 16
+    validation:
+      min: 1
+      max: 32
+  - name: communityServer
+    displayName: 'List as a community server'
+    type: boolean
+    default: false
+  - name: multithreading
+    displayName: 'Multithreading'
+    type: boolean
+    default: true
+  - name: updateOnBoot
+    displayName: 'Update on boot'
+    type: boolean
+    default: true
+  - name: rcon
+    displayName: 'RCON'
+    type: boolean
+    default: false
+  - name: difficulty
+    displayName: 'Difficulty'
+    type: select
+    default: 'None'
+    options:
+      - label: 'None'
+        value: 'None'
+      - label: 'Normal'
+        value: 'Normal'
+      - label: 'Difficult'
+        value: 'Difficult'
+  - name: expRate
+    displayName: 'Experience rate'
+    type: number
+    default: 1
+    validation:
+      min: 0.1
+      max: 20
+  - name: dayTimeSpeed
+    displayName: 'Day speed'
+    type: number
+    default: 1
+    validation:
+      min: 0.1
+      max: 5
+  - name: nightTimeSpeed
+    displayName: 'Night speed'
+    type: number
+    default: 1
+    validation:
+      min: 0.1
+      max: 5
+  - name: enablePvp
+    displayName: 'PvP'
+    type: boolean
+    default: false
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the game files and saves'
+    type: string
+    default: '20Gi'
+
+resources:
+  - name: server
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: thijsvanloef/palworld-server-docker:latest
+      replicas: 1
+      ports:
+        - name: game
+          containerPort: 8211
+          servicePort: 8211
+          protocol: UDP
+          public: true
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /palworld
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: SERVER_NAME
+          value: '{{ params.serverName }}'
+        - key: SERVER_DESCRIPTION
+          value: '{{ params.serverDescription }}'
+        - key: SERVER_PASSWORD
+          value: '{{ params.serverPassword }}'
+          secret: true
+        - key: ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: PLAYERS
+          value: '{{ params.players }}'
+        - key: COMMUNITY
+          value: '{{ params.communityServer }}'
+        - key: MULTITHREADING
+          value: '{{ params.multithreading }}'
+        - key: UPDATE_ON_BOOT
+          value: '{{ params.updateOnBoot }}'
+        - key: RCON_ENABLED
+          value: '{{ params.rcon }}'
+        - key: DIFFICULTY
+          value: '{{ params.difficulty }}'
+        - key: EXP_RATE
+          value: '{{ params.expRate }}'
+        - key: DAYTIME_SPEEDRATE
+          value: '{{ params.dayTimeSpeed }}'
+        - key: NIGHTTIME_SPEEDRATE
+          value: '{{ params.nightTimeSpeed }}'
+        - key: ENABLE_PVP
+          value: '{{ params.enablePvp }}'
+        - key: PORT
+          value: '8211'
+        - key: PUID
+          value: '1000'
+        - key: PGID
+          value: '1000'
+        - key: TZ
+          value: '{{ params.timezone }}'

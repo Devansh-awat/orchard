@@ -1,0 +1,87 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: rabbitmq
+  displayName: 'RabbitMQ'
+  description: 'A message broker with a management UI. AMQP inside the cluster, the console on a domain.'
+  icon: https://github.com/rabbitmq.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['queue', 'messaging', 'amqp']
+  keywords: ['message queue', 'celery', 'bullmq', 'pubsub', 'broker']
+  homepage: https://www.rabbitmq.com
+  license: MPL-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'rabbitmq'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    description: 'The management console'
+    type: string
+    required: true
+    placeholder: 'rabbit.example.com'
+  - name: user
+    displayName: 'Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: password
+    displayName: 'Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for queues'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: rabbitmq:4-management
+      replicas: 1
+      ports:
+        - name: amqp
+          containerPort: 5672
+          servicePort: 5672
+          protocol: TCP
+        - name: management
+          containerPort: 15672
+          servicePort: 15672
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /var/lib/rabbitmq
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: RABBITMQ_DEFAULT_USER
+          value: '{{ params.user }}'
+        - key: RABBITMQ_DEFAULT_PASS
+          value: '{{ params.password }}'
+          secret: true
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 15672

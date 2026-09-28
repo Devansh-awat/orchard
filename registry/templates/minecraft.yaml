@@ -1,0 +1,474 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: minecraft
+  displayName: 'Minecraft Server'
+  description: 'A Paper, Vanilla, Fabric, Forge or modpack server on a public port, with the world on a volume. Every server.properties knob is a parameter.'
+  icon: none
+  version: '1.0.0'
+  category: games
+  tags: ['minecraft', 'game server', 'multiplayer']
+  keywords:
+    [
+      'paper',
+      'spigot',
+      'fabric',
+      'forge',
+      'neoforge',
+      'modpack',
+      'curseforge',
+      'modrinth',
+      'smp',
+      'survival'
+    ]
+  homepage: https://github.com/itzg/docker-minecraft-server
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'minecraft'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: type
+    displayName: 'Server type'
+    type: select
+    default: 'PAPER'
+    options:
+      - label: 'Paper (plugins)'
+        value: 'PAPER'
+      - label: 'Purpur (plugins, more knobs)'
+        value: 'PURPUR'
+      - label: 'Vanilla'
+        value: 'VANILLA'
+      - label: 'Fabric (mods)'
+        value: 'FABRIC'
+      - label: 'NeoForge (mods)'
+        value: 'NEOFORGE'
+      - label: 'Forge (mods)'
+        value: 'FORGE'
+      - label: 'Quilt (mods)'
+        value: 'QUILT'
+      - label: 'CurseForge modpack'
+        value: 'AUTO_CURSEFORGE'
+      - label: 'Modrinth modpack'
+        value: 'MODRINTH'
+  - name: version
+    displayName: 'Minecraft version'
+    description: 'LATEST, SNAPSHOT or a specific version such as 1.21.4'
+    type: string
+    default: 'LATEST'
+  - name: memory
+    displayName: 'Memory'
+    description: 'Java heap. Leave room above it for the pod itself.'
+    type: select
+    default: '2G'
+    options:
+      - label: '1 GB'
+        value: '1G'
+      - label: '2 GB'
+        value: '2G'
+      - label: '4 GB'
+        value: '4G'
+      - label: '6 GB'
+        value: '6G'
+      - label: '8 GB'
+        value: '8G'
+  - name: motd
+    displayName: 'Server message'
+    type: string
+    default: 'An Orchard server'
+  - name: serverIcon
+    displayName: 'Server icon URL'
+    description: '64x64 PNG shown in the server list'
+    type: string
+    default: ''
+    placeholder: 'https://example.com/icon.png'
+  - name: mode
+    displayName: 'Game mode'
+    type: select
+    default: 'survival'
+    options:
+      - label: 'survival'
+        value: 'survival'
+      - label: 'creative'
+        value: 'creative'
+      - label: 'adventure'
+        value: 'adventure'
+      - label: 'spectator'
+        value: 'spectator'
+  - name: difficulty
+    displayName: 'Difficulty'
+    type: select
+    default: 'normal'
+    options:
+      - label: 'peaceful'
+        value: 'peaceful'
+      - label: 'easy'
+        value: 'easy'
+      - label: 'normal'
+        value: 'normal'
+      - label: 'hard'
+        value: 'hard'
+  - name: hardcore
+    displayName: 'Hardcore'
+    type: boolean
+    default: false
+  - name: pvp
+    displayName: 'PvP'
+    type: boolean
+    default: true
+  - name: forceGamemode
+    displayName: 'Force game mode on join'
+    type: boolean
+    default: false
+  - name: maxPlayers
+    displayName: 'Max players'
+    type: number
+    default: 20
+    validation:
+      min: 1
+      max: 1000
+  - name: onlineMode
+    displayName: 'Online mode'
+    description: 'Verify players against Mojang. Turn off only for offline or cracked clients.'
+    type: boolean
+    default: true
+  - name: enableWhitelist
+    displayName: 'Whitelist'
+    type: boolean
+    default: false
+  - name: whitelist
+    displayName: 'Whitelisted players'
+    description: 'Comma-separated usernames, used when the whitelist is on'
+    type: string
+    default: ''
+    placeholder: 'alice,bob'
+  - name: ops
+    displayName: 'Operators'
+    description: 'Comma-separated usernames with op'
+    type: string
+    default: ''
+    placeholder: 'alice'
+  - name: opPermissionLevel
+    displayName: 'Op permission level'
+    type: number
+    default: 4
+    validation:
+      min: 1
+      max: 4
+  - name: seed
+    displayName: 'World seed'
+    type: string
+    default: ''
+    placeholder: 'leave empty for random'
+  - name: levelType
+    displayName: 'World type'
+    type: select
+    default: 'minecraft:normal'
+    options:
+      - label: 'Normal'
+        value: 'minecraft:normal'
+      - label: 'Flat'
+        value: 'minecraft:flat'
+      - label: 'Large biomes'
+        value: 'minecraft:large_biomes'
+      - label: 'Amplified'
+        value: 'minecraft:amplified'
+  - name: level
+    displayName: 'World name'
+    type: string
+    default: 'world'
+  - name: generateStructures
+    displayName: 'Generate structures'
+    type: boolean
+    default: true
+  - name: allowNether
+    displayName: 'Allow the Nether'
+    type: boolean
+    default: true
+  - name: spawnAnimals
+    displayName: 'Spawn animals'
+    type: boolean
+    default: true
+  - name: spawnMonsters
+    displayName: 'Spawn monsters'
+    type: boolean
+    default: true
+  - name: spawnNpcs
+    displayName: 'Spawn villagers'
+    type: boolean
+    default: true
+  - name: spawnProtection
+    displayName: 'Spawn protection radius'
+    type: number
+    default: 16
+    validation:
+      min: 0
+  - name: maxWorldSize
+    displayName: 'World border radius'
+    type: number
+    default: 29999984
+    validation:
+      min: 1
+  - name: viewDistance
+    displayName: 'View distance'
+    type: number
+    default: 10
+    validation:
+      min: 3
+      max: 32
+  - name: simulationDistance
+    displayName: 'Simulation distance'
+    type: number
+    default: 10
+    validation:
+      min: 3
+      max: 32
+  - name: allowFlight
+    displayName: 'Allow flight'
+    type: boolean
+    default: false
+  - name: enableCommandBlock
+    displayName: 'Command blocks'
+    type: boolean
+    default: false
+  - name: announceAchievements
+    displayName: 'Announce advancements'
+    type: boolean
+    default: true
+  - name: playerIdleTimeout
+    displayName: 'Kick idle players after (minutes)'
+    type: number
+    default: 0
+    validation:
+      min: 0
+  - name: hideOnlinePlayers
+    displayName: 'Hide online players in the list'
+    type: boolean
+    default: false
+  - name: enforceSecureProfile
+    displayName: 'Enforce secure profiles'
+    type: boolean
+    default: true
+  - name: resourcePack
+    displayName: 'Resource pack URL'
+    type: string
+    default: ''
+    placeholder: 'https://example.com/pack.zip'
+  - name: resourcePackSha1
+    displayName: 'Resource pack SHA1'
+    type: string
+    default: ''
+  - name: resourcePackEnforce
+    displayName: 'Require the resource pack'
+    type: boolean
+    default: false
+  - name: modrinthProjects
+    displayName: 'Modrinth projects'
+    description: 'Comma-separated slugs, installed on start for Fabric/NeoForge/Forge/Paper'
+    type: string
+    default: ''
+    placeholder: 'fabric-api,lithium'
+  - name: spigetResources
+    displayName: 'Spiget plugin ids'
+    description: 'Comma-separated SpigotMC resource ids, for Paper and Purpur'
+    type: string
+    default: ''
+    placeholder: '9089,34315'
+  - name: mods
+    displayName: 'Mod or plugin URLs'
+    description: 'Comma-separated direct download links'
+    type: string
+    default: ''
+    placeholder: 'https://…/a.jar,https://…/b.jar'
+  - name: cfSlug
+    displayName: 'CurseForge modpack slug'
+    description: 'For the CurseForge modpack type'
+    type: string
+    default: ''
+    placeholder: 'all-the-mods-9'
+  - name: cfApiKey
+    displayName: 'CurseForge API key'
+    description: 'Required for the CurseForge modpack type'
+    type: string
+    default: ''
+  - name: modrinthModpack
+    displayName: 'Modrinth modpack'
+    description: 'Slug or URL, for the Modrinth modpack type'
+    type: string
+    default: ''
+    placeholder: 'cobblemon-modpack'
+  - name: useAikarFlags
+    displayName: "Aikar's JVM flags"
+    description: 'Recommended garbage collector tuning'
+    type: boolean
+    default: true
+  - name: jvmOpts
+    displayName: 'Extra JVM options'
+    type: string
+    default: ''
+    placeholder: '-XX:+UseZGC'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: enableAutopause
+    displayName: 'Auto-pause when empty'
+    description: 'Freezes the server process after a while with nobody online'
+    type: boolean
+    default: false
+  - name: autopauseTimeout
+    displayName: 'Auto-pause after (seconds)'
+    type: number
+    default: 3600
+    validation:
+      min: 60
+  - name: enableRcon
+    displayName: 'RCON'
+    type: boolean
+    default: false
+  - name: rconPassword
+    displayName: 'RCON password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the world and server files'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: server
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: itzg/minecraft-server:latest
+      replicas: 1
+      ports:
+        - name: game
+          containerPort: 25565
+          servicePort: 25565
+          protocol: TCP
+          public: true
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: EULA
+          value: 'TRUE'
+        - key: TYPE
+          value: '{{ params.type }}'
+        - key: VERSION
+          value: '{{ params.version }}'
+        - key: MEMORY
+          value: '{{ params.memory }}'
+        - key: MOTD
+          value: '{{ params.motd }}'
+        - key: ICON
+          value: '{{ params.serverIcon }}'
+        - key: OVERRIDE_ICON
+          value: 'TRUE'
+        - key: MODE
+          value: '{{ params.mode }}'
+        - key: DIFFICULTY
+          value: '{{ params.difficulty }}'
+        - key: HARDCORE
+          value: '{{ params.hardcore }}'
+        - key: PVP
+          value: '{{ params.pvp }}'
+        - key: FORCE_GAMEMODE
+          value: '{{ params.forceGamemode }}'
+        - key: MAX_PLAYERS
+          value: '{{ params.maxPlayers }}'
+        - key: ONLINE_MODE
+          value: '{{ params.onlineMode }}'
+        - key: ENABLE_WHITELIST
+          value: '{{ params.enableWhitelist }}'
+        - key: WHITELIST
+          value: '{{ params.whitelist }}'
+        - key: OPS
+          value: '{{ params.ops }}'
+        - key: OP_PERMISSION_LEVEL
+          value: '{{ params.opPermissionLevel }}'
+        - key: SEED
+          value: '{{ params.seed }}'
+        - key: LEVEL_TYPE
+          value: '{{ params.levelType }}'
+        - key: LEVEL
+          value: '{{ params.level }}'
+        - key: GENERATE_STRUCTURES
+          value: '{{ params.generateStructures }}'
+        - key: ALLOW_NETHER
+          value: '{{ params.allowNether }}'
+        - key: SPAWN_ANIMALS
+          value: '{{ params.spawnAnimals }}'
+        - key: SPAWN_MONSTERS
+          value: '{{ params.spawnMonsters }}'
+        - key: SPAWN_NPCS
+          value: '{{ params.spawnNpcs }}'
+        - key: SPAWN_PROTECTION
+          value: '{{ params.spawnProtection }}'
+        - key: MAX_WORLD_SIZE
+          value: '{{ params.maxWorldSize }}'
+        - key: VIEW_DISTANCE
+          value: '{{ params.viewDistance }}'
+        - key: SIMULATION_DISTANCE
+          value: '{{ params.simulationDistance }}'
+        - key: ALLOW_FLIGHT
+          value: '{{ params.allowFlight }}'
+        - key: ENABLE_COMMAND_BLOCK
+          value: '{{ params.enableCommandBlock }}'
+        - key: ANNOUNCE_PLAYER_ACHIEVEMENTS
+          value: '{{ params.announceAchievements }}'
+        - key: PLAYER_IDLE_TIMEOUT
+          value: '{{ params.playerIdleTimeout }}'
+        - key: HIDE_ONLINE_PLAYERS
+          value: '{{ params.hideOnlinePlayers }}'
+        - key: ENFORCE_SECURE_PROFILE
+          value: '{{ params.enforceSecureProfile }}'
+        - key: RESOURCE_PACK
+          value: '{{ params.resourcePack }}'
+        - key: RESOURCE_PACK_SHA1
+          value: '{{ params.resourcePackSha1 }}'
+        - key: RESOURCE_PACK_ENFORCE
+          value: '{{ params.resourcePackEnforce }}'
+        - key: MODRINTH_PROJECTS
+          value: '{{ params.modrinthProjects }}'
+        - key: SPIGET_RESOURCES
+          value: '{{ params.spigetResources }}'
+        - key: MODS
+          value: '{{ params.mods }}'
+        - key: CF_SLUG
+          value: '{{ params.cfSlug }}'
+        - key: CF_API_KEY
+          value: '{{ params.cfApiKey }}'
+          secret: true
+        - key: MODRINTH_MODPACK
+          value: '{{ params.modrinthModpack }}'
+        - key: USE_AIKAR_FLAGS
+          value: '{{ params.useAikarFlags }}'
+        - key: JVM_OPTS
+          value: '{{ params.jvmOpts }}'
+        - key: TZ
+          value: '{{ params.timezone }}'
+        - key: ENABLE_AUTOPAUSE
+          value: '{{ params.enableAutopause }}'
+        - key: AUTOPAUSE_TIMEOUT_EST
+          value: '{{ params.autopauseTimeout }}'
+        - key: AUTOPAUSE_TIMEOUT_INIT
+          value: '{{ params.autopauseTimeout }}'
+        - key: ENABLE_RCON
+          value: '{{ params.enableRcon }}'
+        - key: RCON_PASSWORD
+          value: '{{ params.rconPassword }}'
+          secret: true
+        - key: OVERRIDE_SERVER_PROPERTIES
+          value: 'true'

@@ -4,10 +4,13 @@ metadata:
   name: ghost
   displayName: Ghost Blog
   description: Modern publishing platform powered by Ghost with PostgreSQL storage and public domain.
-  icon: ghost
+  icon: https://github.com/TryGhost.png?size=256
   version: '1.0.0'
   category: cms
   tags: ['blog', 'cms', 'ghost', 'publishing']
+  keywords: ['blog', 'writing', 'posts', 'newsletter', 'publishing', 'markdown']
+  homepage: https://ghost.org
+  license: MIT
 
 parameters:
   - name: appName

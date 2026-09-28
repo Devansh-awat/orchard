@@ -1,0 +1,138 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: bookstack
+  displayName: 'BookStack'
+  description: 'A wiki organised as shelves, books, chapters and pages. Ships with its own MariaDB.'
+  icon: https://github.com/BookStackApp.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['wiki', 'docs', 'knowledge base']
+  keywords: ['confluence', 'documentation', 'manual', 'handbook']
+  homepage: https://www.bookstackapp.com
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'bookstack'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'wiki.example.com'
+  - name: appKey
+    displayName: 'App key'
+    description: 'Exactly 32 characters. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for uploads and config'
+    type: string
+    default: '5Gi'
+  - name: dbPassword
+    displayName: 'Database password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: dbRootPassword
+    displayName: 'Database root password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: mysql
+    type: deployment
+    config:
+      name: '{{ params.appName }}-mysql'
+      image: mariadb:11
+      replicas: 1
+      ports:
+        - name: mysql
+          containerPort: 3306
+          servicePort: 3306
+          protocol: TCP
+      volumes:
+        - name: mysql
+          type: pvc
+          mountPath: /var/lib/mysql
+          storageSize: '5Gi'
+      env:
+        - key: MARIADB_DATABASE
+          value: 'app'
+        - key: MARIADB_USER
+          value: 'app'
+        - key: MARIADB_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: MARIADB_ROOT_PASSWORD
+          value: '{{ params.dbRootPassword }}'
+          secret: true
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: lscr.io/linuxserver/bookstack:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: APP_URL
+          value: 'https://{{ params.domain }}'
+        - key: APP_KEY
+          value: '{{ params.appKey }}'
+          secret: true
+        - key: DB_HOST
+          value: '{{ resources.mysql.serviceName }}'
+        - key: DB_PORT
+          value: '3306'
+        - key: DB_USERNAME
+          value: app
+        - key: DB_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: DB_DATABASE
+          value: app
+        - key: PUID
+          value: '1000'
+        - key: PGID
+          value: '1000'
+        - key: TZ
+          value: '{{ params.timezone }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

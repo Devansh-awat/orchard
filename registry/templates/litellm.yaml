@@ -1,0 +1,101 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: litellm
+  displayName: 'LiteLLM Proxy'
+  description: 'One OpenAI-compatible endpoint in front of a hundred model providers, with keys, budgets and logging.'
+  icon: https://github.com/BerriAI.png?size=256
+  version: '1.0.0'
+  category: ai
+  tags: ['llm', 'proxy', 'api gateway']
+  keywords: ['openai proxy', 'model router', 'api keys', 'spend tracking']
+  homepage: https://docs.litellm.ai
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'litellm'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'llm.example.com'
+  - name: masterKey
+    displayName: 'Master key'
+    description: 'Must start with sk-. Admin key for the proxy.'
+    type: string
+    required: true
+    placeholder: 'sk-…'
+  - name: uiUser
+    displayName: 'UI username'
+    type: string
+    default: 'admin'
+  - name: uiPassword
+    displayName: 'UI password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: saltKey
+    displayName: 'Salt key'
+    description: 'Encrypts stored provider keys. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/berriai/litellm:main-latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 4000
+          servicePort: 4000
+          protocol: TCP
+      env:
+        - key: DATABASE_URL
+          value: '{{ resources.db.connectionString }}'
+          secret: true
+        - key: LITELLM_MASTER_KEY
+          value: '{{ params.masterKey }}'
+          secret: true
+        - key: LITELLM_SALT_KEY
+          value: '{{ params.saltKey }}'
+          secret: true
+        - key: UI_USERNAME
+          value: '{{ params.uiUser }}'
+        - key: UI_PASSWORD
+          value: '{{ params.uiPassword }}'
+          secret: true
+        - key: STORE_MODEL_IN_DB
+          value: 'True'
+        - key: PORT
+          value: '4000'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 4000

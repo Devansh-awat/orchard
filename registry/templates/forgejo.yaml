@@ -1,0 +1,165 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: forgejo
+  displayName: 'Forgejo'
+  description: 'A community-run Git service with issues, pull requests and Actions. The Codeberg fork of Gitea.'
+  icon: https://github.com/forgejo.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['git', 'code hosting', 'ci', 'codeberg']
+  keywords: ['github alternative', 'gitea', 'repositories', 'actions', 'self-hosted git']
+  homepage: https://forgejo.org
+  license: GPL-3.0-or-later
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'forgejo'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'git.example.com'
+  - name: disableSignups
+    displayName: 'Disable sign-ups'
+    description: 'On means only the first account (yours) can register'
+    type: boolean
+    default: true
+  - name: requireSignin
+    displayName: 'Require sign-in to view'
+    type: boolean
+    default: false
+  - name: enableActions
+    displayName: 'Forgejo Actions'
+    type: boolean
+    default: true
+  - name: lfs
+    displayName: 'Git LFS'
+    type: boolean
+    default: true
+  - name: siteTitle
+    displayName: 'Site title'
+    type: string
+    default: 'Forgejo'
+  - name: defaultPrivate
+    displayName: 'New repositories private by default'
+    type: boolean
+    default: true
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for notifications and password resets. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for repositories, LFS objects and attachments'
+    type: string
+    default: '20Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: codeberg.org/forgejo/forgejo:9
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: FORGEJO__database__DB_TYPE
+          value: postgres
+        - key: FORGEJO__database__HOST
+          value: '{{ resources.db.host }}:{{ resources.db.port }}'
+        - key: FORGEJO__database__NAME
+          value: '{{ resources.db.dbName }}'
+        - key: FORGEJO__database__USER
+          value: '{{ resources.db.dbUser }}'
+        - key: FORGEJO__database__PASSWD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: FORGEJO__server__DOMAIN
+          value: '{{ params.domain }}'
+        - key: FORGEJO__server__ROOT_URL
+          value: 'https://{{ params.domain }}/'
+        - key: FORGEJO__server__HTTP_PORT
+          value: '3000'
+        - key: FORGEJO__server__LFS_START_SERVER
+          value: '{{ params.lfs }}'
+        - key: FORGEJO__service__DISABLE_REGISTRATION
+          value: '{{ params.disableSignups }}'
+        - key: FORGEJO__service__REQUIRE_SIGNIN_VIEW
+          value: '{{ params.requireSignin }}'
+        - key: FORGEJO__actions__ENABLED
+          value: '{{ params.enableActions }}'
+        - key: APP_NAME
+          value: '{{ params.siteTitle }}'
+        - key: FORGEJO__repository__DEFAULT_PRIVATE
+          value: '{{ params.defaultPrivate }}'
+        - key: FORGEJO__mailer__ENABLED
+          value: 'true'
+        - key: FORGEJO__mailer__PROTOCOL
+          value: smtp+starttls
+        - key: FORGEJO__mailer__SMTP_ADDR
+          value: '{{ params.smtpHost }}'
+        - key: FORGEJO__mailer__SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: FORGEJO__mailer__USER
+          value: '{{ params.smtpUser }}'
+        - key: FORGEJO__mailer__PASSWD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: FORGEJO__mailer__FROM
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3000

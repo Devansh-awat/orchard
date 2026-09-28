@@ -1,0 +1,219 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: penpot
+  displayName: 'Penpot'
+  description: 'Design and prototyping in the browser. Frontend, backend, exporter, Postgres and Valkey wired together; assets go to an S3 bucket such as RustFS.'
+  icon: https://github.com/penpot.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['design', 'prototyping', 'figma']
+  keywords: ['figma alternative', 'ui design', 'wireframes', 'svg']
+  homepage: https://penpot.app
+  license: MPL-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'penpot'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'design.example.com'
+  - name: secretKey
+    displayName: 'Secret key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      bytes: 48
+      encoding: 'base64'
+  - name: registration
+    displayName: 'Open registration'
+    type: boolean
+    default: true
+  - name: emailVerification
+    displayName: 'Email verification'
+    description: 'Needs SMTP'
+    type: boolean
+    default: false
+  - name: s3Endpoint
+    displayName: 'S3 endpoint'
+    description: 'Where design assets are stored, for example a RustFS template'
+    type: string
+    required: true
+    placeholder: 'https://s3.example.com'
+  - name: s3Bucket
+    displayName: 'S3 bucket'
+    type: string
+    default: 'penpot'
+    required: true
+  - name: s3Region
+    displayName: 'S3 region'
+    type: string
+    default: 'us-east-1'
+  - name: s3AccessKey
+    displayName: 'S3 access key'
+    type: string
+    required: true
+  - name: s3SecretKey
+    displayName: 'S3 secret key'
+    type: string
+    required: true
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for invites and verification. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: backend
+    type: deployment
+    config:
+      name: '{{ params.appName }}-backend'
+      image: penpotapp/backend:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 6060
+          servicePort: 6060
+          protocol: TCP
+      env:
+        - key: PENPOT_FLAGS
+          value: 'enable-login-with-password {{ params.registration }}'
+        - key: PENPOT_SECRET_KEY
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: PENPOT_PUBLIC_URI
+          value: 'https://{{ params.domain }}'
+        - key: PENPOT_DATABASE_URI
+          value: 'postgresql://{{ resources.db.host }}:{{ resources.db.port }}/{{ resources.db.dbName }}'
+        - key: PENPOT_DATABASE_USERNAME
+          value: '{{ resources.db.dbUser }}'
+        - key: PENPOT_DATABASE_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: PENPOT_REDIS_URI
+          value: 'redis://{{ resources.cache.serviceName }}/0'
+        - key: PENPOT_ASSETS_STORAGE_BACKEND
+          value: assets-s3
+        - key: PENPOT_STORAGE_ASSETS_S3_ENDPOINT
+          value: '{{ params.s3Endpoint }}'
+        - key: PENPOT_STORAGE_ASSETS_S3_BUCKET
+          value: '{{ params.s3Bucket }}'
+        - key: PENPOT_STORAGE_ASSETS_S3_REGION
+          value: '{{ params.s3Region }}'
+        - key: AWS_ACCESS_KEY_ID
+          value: '{{ params.s3AccessKey }}'
+        - key: AWS_SECRET_ACCESS_KEY
+          value: '{{ params.s3SecretKey }}'
+          secret: true
+        - key: PENPOT_TELEMETRY_ENABLED
+          value: 'false'
+        - key: PENPOT_SMTP_ENABLED
+          value: 'true'
+        - key: PENPOT_SMTP_TLS
+          value: 'true'
+        - key: PENPOT_SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: PENPOT_SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: PENPOT_SMTP_USERNAME
+          value: '{{ params.smtpUser }}'
+        - key: PENPOT_SMTP_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: PENPOT_SMTP_DEFAULT_FROM
+          value: '{{ params.mailFrom }}'
+
+  - name: exporter
+    type: deployment
+    config:
+      name: '{{ params.appName }}-exporter'
+      image: penpotapp/exporter:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 6061
+          servicePort: 6061
+          protocol: TCP
+      env:
+        - key: PENPOT_PUBLIC_URI
+          value: 'http://{{ params.appName }}-frontend-svc:8080'
+        - key: PENPOT_REDIS_URI
+          value: 'redis://{{ resources.cache.serviceName }}/0'
+
+  - name: frontend
+    type: deployment
+    config:
+      name: '{{ params.appName }}-frontend'
+      image: penpotapp/frontend:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      env:
+        - key: PENPOT_FLAGS
+          value: 'enable-login-with-password {{ params.registration }}'
+        - key: PENPOT_BACKEND_URI
+          value: 'http://{{ resources.backend.serviceName }}:6060'
+        - key: PENPOT_EXPORTER_URI
+          value: 'http://{{ resources.exporter.serviceName }}:6061'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.frontend.serviceName }}'
+          servicePort: 8080

@@ -1,0 +1,235 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: n8n
+  displayName: 'n8n'
+  description: 'Workflow automation with a visual editor and hundreds of integrations.'
+  icon: https://github.com/n8n-io.png?size=256
+  version: '1.0.0'
+  category: automation
+  tags: ['automation', 'workflows', 'integrations', 'webhooks']
+  keywords: ['zapier', 'make', 'ifttt', 'cron', 'pipelines', 'low code']
+  homepage: https://n8n.io
+  license: Sustainable Use License
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'n8n'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'n8n.example.com'
+  - name: encryptionKey
+    displayName: 'Encryption key'
+    description: 'Encrypts stored credentials. Generated if left empty. Keep it, or every credential becomes unreadable.'
+    type: secret
+    validation:
+      min: 32
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: locale
+    displayName: 'Editor language'
+    type: select
+    default: 'en'
+    options:
+      - label: 'en'
+        value: 'en'
+      - label: 'de'
+        value: 'de'
+      - label: 'es'
+        value: 'es'
+      - label: 'fr'
+        value: 'fr'
+      - label: 'it'
+        value: 'it'
+      - label: 'ja'
+        value: 'ja'
+      - label: 'ko'
+        value: 'ko'
+      - label: 'pt'
+        value: 'pt'
+      - label: 'ru'
+        value: 'ru'
+      - label: 'zh-CN'
+        value: 'zh-CN'
+  - name: pruneExecutions
+    displayName: 'Prune old executions'
+    type: boolean
+    default: true
+  - name: executionMaxAgeHours
+    displayName: 'Keep executions for (hours)'
+    type: number
+    default: 336
+    validation:
+      min: 1
+  - name: executionsSaveOnSuccess
+    displayName: 'Save successful executions'
+    type: select
+    default: 'all'
+    options:
+      - label: 'all'
+        value: 'all'
+      - label: 'none'
+        value: 'none'
+  - name: diagnostics
+    displayName: 'Send diagnostics to n8n'
+    type: boolean
+    default: false
+  - name: logLevel
+    displayName: 'Log level'
+    type: select
+    default: 'info'
+    options:
+      - label: 'error'
+        value: 'error'
+      - label: 'warn'
+        value: 'warn'
+      - label: 'info'
+        value: 'info'
+      - label: 'debug'
+        value: 'debug'
+  - name: runners
+    displayName: 'Task runners'
+    description: 'Runs Code nodes in a separate process'
+    type: boolean
+    default: true
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for user invites and password resets. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for binary data and local files'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: n8nio/n8n:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 5678
+          servicePort: 5678
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /home/node/.n8n
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: DB_TYPE
+          value: postgresdb
+        - key: DB_POSTGRESDB_HOST
+          value: '{{ resources.db.host }}'
+        - key: DB_POSTGRESDB_PORT
+          value: '{{ resources.db.port }}'
+        - key: DB_POSTGRESDB_DATABASE
+          value: '{{ resources.db.dbName }}'
+        - key: DB_POSTGRESDB_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: DB_POSTGRESDB_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: N8N_ENCRYPTION_KEY
+          value: '{{ params.encryptionKey }}'
+          secret: true
+        - key: N8N_HOST
+          value: '{{ params.domain }}'
+        - key: N8N_PORT
+          value: '5678'
+        - key: N8N_PROTOCOL
+          value: https
+        - key: WEBHOOK_URL
+          value: 'https://{{ params.domain }}/'
+        - key: N8N_EDITOR_BASE_URL
+          value: 'https://{{ params.domain }}/'
+        - key: GENERIC_TIMEZONE
+          value: '{{ params.timezone }}'
+        - key: TZ
+          value: '{{ params.timezone }}'
+        - key: N8N_DEFAULT_LOCALE
+          value: '{{ params.locale }}'
+        - key: EXECUTIONS_DATA_PRUNE
+          value: '{{ params.pruneExecutions }}'
+        - key: EXECUTIONS_DATA_MAX_AGE
+          value: '{{ params.executionMaxAgeHours }}'
+        - key: EXECUTIONS_DATA_SAVE_ON_SUCCESS
+          value: '{{ params.executionsSaveOnSuccess }}'
+        - key: N8N_DIAGNOSTICS_ENABLED
+          value: '{{ params.diagnostics }}'
+        - key: N8N_PERSONALIZATION_ENABLED
+          value: '{{ params.diagnostics }}'
+        - key: N8N_LOG_LEVEL
+          value: '{{ params.logLevel }}'
+        - key: N8N_RUNNERS_ENABLED
+          value: '{{ params.runners }}'
+        - key: N8N_SECURE_COOKIE
+          value: 'true'
+        - key: N8N_PROXY_HOPS
+          value: '1'
+        - key: N8N_EMAIL_MODE
+          value: smtp
+        - key: N8N_SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: N8N_SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: N8N_SMTP_USER
+          value: '{{ params.smtpUser }}'
+        - key: N8N_SMTP_PASS
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: N8N_SMTP_SENDER
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 5678

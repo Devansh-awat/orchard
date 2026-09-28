@@ -1,0 +1,104 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: listmonk
+  displayName: 'listmonk'
+  description: 'Newsletters and mailing lists with campaigns, templates and subscriber management.'
+  icon: mail
+  version: '1.0.0'
+  category: marketing
+  tags: ['newsletter', 'email', 'mailing list', 'campaigns']
+  keywords: ['mailchimp', 'sendy', 'subscribers', 'transactional', 'smtp']
+  homepage: https://listmonk.app
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'listmonk'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'mail.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for media uploads'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: listmonk/listmonk:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 9000
+          servicePort: 9000
+          protocol: TCP
+      volumes:
+        - name: uploads
+          type: pvc
+          mountPath: /listmonk/uploads
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: LISTMONK_app__address
+          value: '0.0.0.0:9000'
+        - key: LISTMONK_app__root_url
+          value: 'https://{{ params.domain }}'
+        - key: LISTMONK_db__host
+          value: '{{ resources.db.host }}'
+        - key: LISTMONK_db__port
+          value: '{{ resources.db.port }}'
+        - key: LISTMONK_db__database
+          value: '{{ resources.db.dbName }}'
+        - key: LISTMONK_db__user
+          value: '{{ resources.db.dbUser }}'
+        - key: LISTMONK_db__password
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: LISTMONK_db__ssl_mode
+          value: disable
+        - key: LISTMONK_ADMIN_USER
+          value: '{{ params.adminUser }}'
+        - key: LISTMONK_ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 9000

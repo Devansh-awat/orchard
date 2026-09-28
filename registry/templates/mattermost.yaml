@@ -1,0 +1,159 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mattermost
+  displayName: 'Mattermost'
+  description: 'Team chat with channels, threads and calls. The team edition, on your own Postgres.'
+  icon: https://github.com/mattermost.png?size=256
+  version: '1.0.0'
+  category: community
+  tags: ['chat', 'team', 'messaging', 'slack']
+  keywords: ['slack alternative', 'discord', 'channels', 'rocket.chat', 'workspace']
+  homepage: https://github.com/mattermost/mattermost
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mattermost'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'chat.example.com'
+  - name: siteName
+    displayName: 'Site name'
+    type: string
+    default: 'Mattermost'
+  - name: openServer
+    displayName: 'Open server'
+    description: 'Anyone with the link can create an account'
+    type: boolean
+    default: false
+  - name: pluginUploads
+    displayName: 'Allow plugin uploads'
+    type: boolean
+    default: true
+  - name: maxFileSizeMb
+    displayName: 'Max upload (MB)'
+    type: number
+    default: 100
+    validation:
+      min: 1
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for invites and notifications. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for uploads'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: mattermost/mattermost-team-edition:10.12
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8065
+          servicePort: 8065
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /mattermost/data
+          storageSize: '{{ params.storage }}'
+        - name: config
+          type: pvc
+          mountPath: /mattermost/config
+          storageSize: '1Gi'
+        - name: plugins
+          type: pvc
+          mountPath: /mattermost/plugins
+          storageSize: '2Gi'
+        - name: client-plugins
+          type: pvc
+          mountPath: /mattermost/client/plugins
+          storageSize: '1Gi'
+      env:
+        - key: MM_SQLSETTINGS_DRIVERNAME
+          value: postgres
+        - key: MM_SQLSETTINGS_DATASOURCE
+          value: '{{ resources.db.connectionString }}?sslmode=disable&connect_timeout=10'
+          secret: true
+        - key: MM_SERVICESETTINGS_SITEURL
+          value: 'https://{{ params.domain }}'
+        - key: MM_SERVICESETTINGS_LISTENADDRESS
+          value: ':8065'
+        - key: MM_TEAMSETTINGS_SITENAME
+          value: '{{ params.siteName }}'
+        - key: MM_TEAMSETTINGS_ENABLEOPENSERVER
+          value: '{{ params.openServer }}'
+        - key: MM_PLUGINSETTINGS_ENABLEUPLOADS
+          value: '{{ params.pluginUploads }}'
+        - key: MM_FILESETTINGS_MAXFILESIZE
+          value: '{{ params.maxFileSizeMb }}000000'
+        - key: MM_EMAILSETTINGS_CONNECTIONSECURITY
+          value: STARTTLS
+        - key: MM_EMAILSETTINGS_ENABLESMTPAUTH
+          value: 'true'
+        - key: MM_EMAILSETTINGS_SMTPSERVER
+          value: '{{ params.smtpHost }}'
+        - key: MM_EMAILSETTINGS_SMTPPORT
+          value: '{{ params.smtpPort }}'
+        - key: MM_EMAILSETTINGS_SMTPUSERNAME
+          value: '{{ params.smtpUser }}'
+        - key: MM_EMAILSETTINGS_SMTPPASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: MM_EMAILSETTINGS_FEEDBACKEMAIL
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8065

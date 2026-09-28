@@ -1,0 +1,71 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: grocy
+  displayName: 'Grocy'
+  description: 'Groceries, chores, batteries and everything else in your household, tracked.'
+  icon: https://github.com/grocy.png?size=256
+  version: '1.0.0'
+  category: finance
+  tags: ['household', 'inventory', 'groceries']
+  keywords: ['pantry', 'shopping list', 'chores', 'recipes']
+  homepage: https://grocy.info
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'grocy'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'grocy.example.com'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: lscr.io/linuxserver/grocy:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '2Gi'
+      env:
+        - key: PUID
+          value: '1000'
+        - key: PGID
+          value: '1000'
+        - key: TZ
+          value: '{{ params.timezone }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

@@ -67,6 +67,9 @@ jobs:
             r2_proxy:
               - 'apps/r2-proxy/**'
               - '.github/workflows/**'
+            registry:
+              - 'apps/registry/**'
+              - '.github/workflows/**'
             docs:
               - 'apps/docs/**'
               - 'apps/cli/**'
@@ -472,6 +475,17 @@ jobs:
         with:
           go-version-file: apps/r2-proxy/go.mod
       - run: cd apps/r2-proxy && go vet ./... && go build ./...
+
+  go-registry:
+    needs: changes
+    if: needs.changes.outputs.registry == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/registry/go.mod
+      - run: cd apps/registry && go vet ./... && go test ./...
 
   landing:
     needs: changes

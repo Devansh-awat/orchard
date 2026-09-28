@@ -1,0 +1,135 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mealie
+  displayName: 'Mealie'
+  description: 'A recipe manager and meal planner that imports from any recipe site.'
+  icon: https://github.com/mealie-recipes.png?size=256
+  version: '1.0.0'
+  category: finance
+  tags: ['recipes', 'meal planning', 'household']
+  keywords: ['cookbook', 'shopping list', 'paprika', 'tandoor']
+  homepage: https://mealie.io
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mealie'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'recipes.example.com'
+  - name: allowSignup
+    displayName: 'Allow sign-up'
+    type: boolean
+    default: false
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for invites. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/mealie-recipes/mealie:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 9000
+          servicePort: 9000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /app/data
+          storageSize: '5Gi'
+      env:
+        - key: BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: ALLOW_SIGNUP
+          value: '{{ params.allowSignup }}'
+        - key: TZ
+          value: '{{ params.timezone }}'
+        - key: PUID
+          value: '1000'
+        - key: PGID
+          value: '1000'
+        - key: DB_ENGINE
+          value: postgres
+        - key: POSTGRES_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: POSTGRES_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: POSTGRES_SERVER
+          value: '{{ resources.db.host }}'
+        - key: POSTGRES_PORT
+          value: '{{ resources.db.port }}'
+        - key: POSTGRES_DB
+          value: '{{ resources.db.dbName }}'
+        - key: SMTP_AUTH_STRATEGY
+          value: TLS
+        - key: SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: SMTP_USER
+          value: '{{ params.smtpUser }}'
+        - key: SMTP_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: SMTP_FROM_EMAIL
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 9000

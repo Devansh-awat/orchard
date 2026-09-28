@@ -1,0 +1,153 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: miniflux
+  displayName: 'Miniflux'
+  description: 'A minimalist feed reader. Fast, keyboard-driven, no JavaScript frameworks.'
+  icon: https://github.com/miniflux.png?size=256
+  version: '1.0.0'
+  category: reader
+  tags: ['rss', 'feeds', 'reader', 'news']
+  keywords: ['feedly', 'atom', 'subscriptions', 'articles', 'read later']
+  homepage: https://miniflux.app
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'miniflux'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'reader.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty. Change it after the first login.'
+    type: secret
+    validation:
+      min: 16
+  - name: pollingFrequency
+    displayName: 'Refresh feeds every (minutes)'
+    type: number
+    default: 60
+    validation:
+      min: 1
+  - name: workerPoolSize
+    displayName: 'Fetch workers'
+    type: number
+    default: 16
+    validation:
+      min: 1
+      max: 64
+  - name: cleanupReadDays
+    displayName: 'Delete read entries after (days)'
+    type: number
+    default: 60
+    validation:
+      min: 1
+  - name: cleanupUnreadDays
+    displayName: 'Delete unread entries after (days)'
+    type: number
+    default: 180
+    validation:
+      min: 1
+  - name: mediaProxyMode
+    displayName: 'Proxy images'
+    type: select
+    default: 'http-only'
+    options:
+      - label: 'http-only'
+        value: 'http-only'
+      - label: 'all'
+        value: 'all'
+      - label: 'none'
+        value: 'none'
+  - name: fetchYoutubeWatchTime
+    displayName: 'Fetch YouTube durations'
+    type: boolean
+    default: false
+  - name: disableApi
+    displayName: 'Disable the API'
+    type: boolean
+    default: false
+  - name: httpClientUserAgent
+    displayName: 'Fetcher user agent'
+    type: string
+    default: ''
+    placeholder: 'leave empty for the default'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: miniflux/miniflux:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      env:
+        - key: DATABASE_URL
+          value: '{{ resources.db.connectionString }}?sslmode=disable'
+          secret: true
+        - key: RUN_MIGRATIONS
+          value: '1'
+        - key: CREATE_ADMIN
+          value: '1'
+        - key: ADMIN_USERNAME
+          value: '{{ params.adminUser }}'
+        - key: ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: HTTPS
+          value: '1'
+        - key: POLLING_FREQUENCY
+          value: '{{ params.pollingFrequency }}'
+        - key: WORKER_POOL_SIZE
+          value: '{{ params.workerPoolSize }}'
+        - key: CLEANUP_ARCHIVE_READ_DAYS
+          value: '{{ params.cleanupReadDays }}'
+        - key: CLEANUP_ARCHIVE_UNREAD_DAYS
+          value: '{{ params.cleanupUnreadDays }}'
+        - key: MEDIA_PROXY_MODE
+          value: '{{ params.mediaProxyMode }}'
+        - key: FETCH_YOUTUBE_WATCH_TIME
+          value: '{{ params.fetchYoutubeWatchTime }}'
+        - key: DISABLE_API
+          value: '{{ params.disableApi }}'
+        - key: HTTP_CLIENT_USER_AGENT
+          value: '{{ params.httpClientUserAgent }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

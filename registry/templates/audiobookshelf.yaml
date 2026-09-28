@@ -1,0 +1,80 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: audiobookshelf
+  displayName: 'Audiobookshelf'
+  description: 'A server for audiobooks and podcasts with progress sync and mobile apps.'
+  icon: https://github.com/advplyr.png?size=256
+  version: '1.0.0'
+  category: media
+  tags: ['audiobooks', 'podcasts', 'streaming']
+  keywords: ['audible', 'podcast player', 'listening']
+  homepage: https://www.audiobookshelf.org
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'audiobooks'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'audiobooks.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the audiobook library'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/advplyr/audiobookshelf:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '2Gi'
+        - name: metadata
+          type: pvc
+          mountPath: /metadata
+          storageSize: '5Gi'
+        - name: audiobooks
+          type: pvc
+          mountPath: /audiobooks
+          storageSize: '{{ params.storage }}'
+        - name: podcasts
+          type: pvc
+          mountPath: /podcasts
+          storageSize: '20Gi'
+      env:
+        - key: TZ
+          value: UTC
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

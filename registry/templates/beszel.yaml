@@ -1,0 +1,63 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: beszel
+  displayName: 'Beszel'
+  description: 'A lightweight server monitoring hub with historical charts and alerts. Install the agent on each machine.'
+  icon: activity
+  version: '1.0.0'
+  category: monitoring
+  tags: ['monitoring', 'metrics', 'servers']
+  keywords: ['netdata', 'grafana lite', 'cpu', 'memory', 'disk usage']
+  homepage: https://beszel.dev
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'beszel'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'beszel.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: henrygd/beszel:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8090
+          servicePort: 8090
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /beszel_data
+          storageSize: '1Gi'
+      env:
+        - key: APP_URL
+          value: 'https://{{ params.domain }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8090

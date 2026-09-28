@@ -1,0 +1,170 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: vaultwarden
+  displayName: 'Vaultwarden'
+  description: 'A Bitwarden-compatible password server that runs in a few megabytes of RAM.'
+  icon: https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg
+  version: '1.0.0'
+  category: security
+  tags: ['passwords', 'bitwarden', 'secrets', 'vault']
+  keywords: ['password manager', '1password', 'lastpass', 'credentials', 'totp']
+  homepage: https://github.com/dani-garcia/vaultwarden
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'vault'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'vault.example.com'
+  - name: adminToken
+    displayName: 'Admin token'
+    description: 'Unlocks /admin. Generated if left empty.'
+    type: secret
+    validation:
+      min: 48
+  - name: allowSignups
+    displayName: 'Allow sign-ups'
+    description: 'Turn off after creating your account'
+    type: boolean
+    default: true
+  - name: signupDomains
+    displayName: 'Sign-up domain allowlist'
+    description: 'Comma-separated; empty allows any domain'
+    type: string
+    default: ''
+    placeholder: 'example.com,school.edu'
+  - name: allowInvitations
+    displayName: 'Allow invitations'
+    type: boolean
+    default: true
+  - name: showPasswordHint
+    displayName: 'Show password hints'
+    type: boolean
+    default: false
+  - name: orgCreationUsers
+    displayName: 'Who can create organizations'
+    description: 'all, none, or a comma-separated list of emails'
+    type: string
+    default: 'all'
+  - name: websockets
+    displayName: 'WebSocket notifications'
+    type: boolean
+    default: true
+  - name: logLevel
+    displayName: 'Log level'
+    type: select
+    default: 'info'
+    options:
+      - label: 'error'
+        value: 'error'
+      - label: 'warn'
+        value: 'warn'
+      - label: 'info'
+        value: 'info'
+      - label: 'debug'
+        value: 'debug'
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for invites and verification. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: vaultwarden/server:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: DOMAIN
+          value: 'https://{{ params.domain }}'
+        - key: ADMIN_TOKEN
+          value: '{{ params.adminToken }}'
+          secret: true
+        - key: SIGNUPS_ALLOWED
+          value: '{{ params.allowSignups }}'
+        - key: SIGNUPS_DOMAINS_WHITELIST
+          value: '{{ params.signupDomains }}'
+        - key: INVITATIONS_ALLOWED
+          value: '{{ params.allowInvitations }}'
+        - key: SHOW_PASSWORD_HINT
+          value: '{{ params.showPasswordHint }}'
+        - key: ORG_CREATION_USERS
+          value: '{{ params.orgCreationUsers }}'
+        - key: WEBSOCKET_ENABLED
+          value: '{{ params.websockets }}'
+        - key: LOG_LEVEL
+          value: '{{ params.logLevel }}'
+        - key: SMTP_SECURITY
+          value: starttls
+        - key: SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: SMTP_USERNAME
+          value: '{{ params.smtpUser }}'
+        - key: SMTP_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: SMTP_FROM
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

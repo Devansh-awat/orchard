@@ -23,6 +23,8 @@ module.exports = {
         'cli',
         'r2-proxy',
         'r2proxy',
+        'registry',
+        'templates',
         'chart',
         'release',
         'ci',

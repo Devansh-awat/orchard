@@ -1,0 +1,130 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: rustfs
+  displayName: 'RustFS'
+  description: 'S3-compatible object storage with a web console. The bucket everything else can point at. MinIO stopped publishing its community image; this is the drop-in.'
+  icon: https://github.com/rustfs.png?size=256
+  version: '1.0.0'
+  category: storage
+  tags: ['s3', 'object storage', 'buckets']
+  keywords: ['minio', 'aws s3', 'r2', 'garage', 'uploads', 'blob storage', 'file storage']
+  homepage: https://rustfs.com
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'rustfs'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: apiDomain
+    displayName: 'API domain'
+    description: 'What apps and SDKs connect to'
+    type: string
+    required: true
+    placeholder: 's3.example.com'
+  - name: consoleDomain
+    displayName: 'Console domain'
+    description: 'The web UI'
+    type: string
+    required: true
+    placeholder: 's3-console.example.com'
+  - name: accessKey
+    displayName: 'Access key'
+    type: string
+    default: 'admin'
+    required: true
+  - name: secretKey
+    displayName: 'Secret key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: console
+    displayName: 'Web console'
+    type: boolean
+    default: true
+  - name: logLevel
+    displayName: 'Log level'
+    type: select
+    default: 'error'
+    options:
+      - label: 'error'
+        value: 'error'
+      - label: 'warn'
+        value: 'warn'
+      - label: 'info'
+        value: 'info'
+      - label: 'debug'
+        value: 'debug'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for objects'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: rustfs/rustfs:latest
+      replicas: 1
+      ports:
+        - name: api
+          containerPort: 9000
+          servicePort: 9000
+          protocol: TCP
+        - name: console
+          containerPort: 9001
+          servicePort: 9001
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: RUSTFS_ACCESS_KEY
+          value: '{{ params.accessKey }}'
+        - key: RUSTFS_SECRET_KEY
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: RUSTFS_ADDRESS
+          value: ':9000'
+        - key: RUSTFS_CONSOLE_ADDRESS
+          value: ':9001'
+        - key: RUSTFS_CONSOLE_ENABLE
+          value: '{{ params.console }}'
+        - key: RUSTFS_OBS_LOGGER_LEVEL
+          value: '{{ params.logLevel }}'
+        - key: RUSTFS_VOLUMES
+          value: /data
+
+  - name: api
+    type: ingress
+    config:
+      host: '{{ params.apiDomain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 9000
+
+  - name: console
+    type: ingress
+    config:
+      host: '{{ params.consoleDomain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 9001

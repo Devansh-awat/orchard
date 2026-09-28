@@ -1,0 +1,63 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mongo
+  displayName: 'MongoDB'
+  description: 'A document database for the apps that need one. Internal-only, no public exposure.'
+  icon: https://github.com/mongodb.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['mongodb', 'database', 'nosql']
+  keywords: ['mongo', 'document store', 'mongoose']
+  homepage: https://www.mongodb.com
+  license: SSPL-1.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mongo'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: rootUser
+    displayName: 'Root username'
+    type: string
+    default: 'root'
+    required: true
+  - name: rootPassword
+    displayName: 'Root password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: db
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: mongo:8
+      replicas: 1
+      ports:
+        - name: mongo
+          containerPort: 27017
+          servicePort: 27017
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data/db
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: MONGO_INITDB_ROOT_USERNAME
+          value: '{{ params.rootUser }}'
+        - key: MONGO_INITDB_ROOT_PASSWORD
+          value: '{{ params.rootPassword }}'
+          secret: true

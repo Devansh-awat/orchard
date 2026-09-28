@@ -1,0 +1,154 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: immich
+  displayName: 'Immich'
+  description: 'Photo and video backup with a phone app, face recognition and search. Brings its own Postgres with the vector extension it needs, plus Valkey and the ML worker.'
+  icon: https://github.com/immich-app.png?size=256
+  version: '1.0.0'
+  category: media
+  tags: ['photos', 'backup', 'ai']
+  keywords: ['google photos alternative', 'icloud photos', 'gallery', 'face recognition']
+  homepage: https://immich.app
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'immich'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'photos.example.com'
+  - name: dbPassword
+    displayName: 'Database password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 24
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: machineLearning
+    displayName: 'Machine learning'
+    description: 'Face recognition, smart search and duplicates. Uses a lot of CPU and memory.'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the photo library'
+    type: string
+    default: '200Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: deployment
+    config:
+      name: '{{ params.appName }}-db'
+      image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+      replicas: 1
+      ports:
+        - name: pg
+          containerPort: 5432
+          servicePort: 5432
+          protocol: TCP
+      volumes:
+        - name: pgdata
+          type: pvc
+          mountPath: /var/lib/postgresql/data
+          storageSize: '20Gi'
+      env:
+        - key: POSTGRES_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: POSTGRES_USER
+          value: immich
+        - key: POSTGRES_DB
+          value: immich
+        - key: POSTGRES_INITDB_ARGS
+          value: '--data-checksums'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: ml
+    type: deployment
+    config:
+      name: '{{ params.appName }}-ml'
+      image: ghcr.io/immich-app/immich-machine-learning:release
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3003
+          servicePort: 3003
+          protocol: TCP
+      volumes:
+        - name: cache
+          type: pvc
+          mountPath: /cache
+          storageSize: '10Gi'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/immich-app/immich-server:release
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 2283
+          servicePort: 2283
+          protocol: TCP
+      volumes:
+        - name: upload
+          type: pvc
+          mountPath: /usr/src/app/upload
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: DB_HOSTNAME
+          value: '{{ resources.db.serviceName }}'
+        - key: DB_USERNAME
+          value: immich
+        - key: DB_PASSWORD
+          value: '{{ params.dbPassword }}'
+          secret: true
+        - key: DB_DATABASE_NAME
+          value: immich
+        - key: REDIS_HOSTNAME
+          value: '{{ resources.cache.serviceName }}'
+        - key: IMMICH_MACHINE_LEARNING_ENABLED
+          value: '{{ params.machineLearning }}'
+        - key: IMMICH_MACHINE_LEARNING_URL
+          value: 'http://{{ resources.ml.serviceName }}:3003'
+        - key: TZ
+          value: '{{ params.timezone }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 2283

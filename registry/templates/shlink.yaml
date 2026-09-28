@@ -1,0 +1,110 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: shlink
+  displayName: 'Shlink'
+  description: 'A URL shortener with an API, QR codes and visit stats. Bring your own short domain.'
+  icon: https://github.com/shlinkio.png?size=256
+  version: '1.0.0'
+  category: marketing
+  tags: ['url shortener', 'links', 'api']
+  keywords: ['bitly', 'short links', 'qr code', 'redirects']
+  homepage: https://shlink.io
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'shlink'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 's.example.com'
+  - name: initialApiKey
+    displayName: 'Initial API key'
+    description: 'For the web client or the CLI. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: geoliteLicenseKey
+    displayName: 'MaxMind license key'
+    type: string
+    default: ''
+    placeholder: 'for visitor geolocation, optional'
+  - name: redirectStatus
+    displayName: 'Redirect status code'
+    type: select
+    default: '302'
+    options:
+      - label: '301'
+        value: '301'
+      - label: '302'
+        value: '302'
+      - label: '307'
+        value: '307'
+      - label: '308'
+        value: '308'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: shlinkio/shlink:stable
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      env:
+        - key: DEFAULT_DOMAIN
+          value: '{{ params.domain }}'
+        - key: IS_HTTPS_ENABLED
+          value: '{{ params.enableTls }}'
+        - key: DB_DRIVER
+          value: postgres
+        - key: DB_NAME
+          value: '{{ resources.db.dbName }}'
+        - key: DB_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: DB_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: DB_HOST
+          value: '{{ resources.db.host }}'
+        - key: DB_PORT
+          value: '{{ resources.db.port }}'
+        - key: INITIAL_API_KEY
+          value: '{{ params.initialApiKey }}'
+          secret: true
+        - key: GEOLITE_LICENSE_KEY
+          value: '{{ params.geoliteLicenseKey }}'
+          secret: true
+        - key: REDIRECT_STATUS_CODE
+          value: '{{ params.redirectStatus }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

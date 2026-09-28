@@ -1,0 +1,81 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: enshrouded
+  displayName: 'Enshrouded Server'
+  description: 'A dedicated Enshrouded server on public UDP ports.'
+  icon: none
+  version: '1.0.0'
+  category: games
+  tags: ['enshrouded', 'game server', 'multiplayer']
+  keywords: ['survival', 'coop', 'dedicated server', 'steam']
+  homepage: https://github.com/jsknnr/enshrouded-server
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'enshrouded'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: serverName
+    displayName: 'Server name'
+    type: string
+    default: 'Orchard Enshrouded'
+    required: true
+  - name: serverPassword
+    displayName: 'Server password'
+    type: string
+    default: ''
+    placeholder: 'leave empty for open'
+  - name: slots
+    displayName: 'Player slots'
+    type: number
+    default: 16
+    validation:
+      min: 1
+      max: 16
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for saves'
+    type: string
+    default: '10Gi'
+
+resources:
+  - name: server
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: sknnr/enshrouded-dedicated-server:latest
+      replicas: 1
+      ports:
+        - name: game
+          containerPort: 15636
+          servicePort: 15636
+          protocol: UDP
+          public: true
+        - name: query
+          containerPort: 15637
+          servicePort: 15637
+          protocol: UDP
+          public: true
+      volumes:
+        - name: saves
+          type: pvc
+          mountPath: /home/steam/enshrouded/savegame
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: SERVER_NAME
+          value: '{{ params.serverName }}'
+        - key: SERVER_PASSWORD
+          value: '{{ params.serverPassword }}'
+          secret: true
+        - key: SERVER_SLOTS
+          value: '{{ params.slots }}'
+        - key: GAME_PORT
+          value: '15636'
+        - key: QUERY_PORT
+          value: '15637'

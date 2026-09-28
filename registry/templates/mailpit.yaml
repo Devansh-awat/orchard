@@ -1,0 +1,95 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: mailpit
+  displayName: 'Mailpit'
+  description: 'A fake SMTP server with a web inbox. Point your app at it and read every email it sends.'
+  icon: https://raw.githubusercontent.com/axllent/mailpit/develop/server/ui/mailpit.svg
+  version: '1.0.0'
+  category: developer
+  tags: ['email', 'smtp', 'testing', 'dev tools']
+  keywords: ['mailhog', 'mailcatcher', 'fake smtp', 'email testing', 'staging']
+  homepage: https://mailpit.axllent.org
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'mailpit'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'mail.example.com'
+  - name: maxMessages
+    displayName: 'Keep at most (messages)'
+    type: number
+    default: 500
+    validation:
+      min: 1
+  - name: maxAge
+    displayName: 'Delete after'
+    description: 'Such as 12h or 7d; empty keeps everything up to the limit'
+    type: string
+    default: ''
+    placeholder: '7d'
+  - name: webhookUrl
+    displayName: 'Webhook URL'
+    description: 'Called for every new message'
+    type: string
+    default: ''
+    placeholder: 'https://example.com/hook'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: axllent/mailpit:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8025
+          servicePort: 8025
+          protocol: TCP
+        - name: smtp
+          containerPort: 1025
+          servicePort: 1025
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '1Gi'
+      env:
+        - key: MP_DATABASE
+          value: /data/mailpit.db
+        - key: MP_SMTP_AUTH_ACCEPT_ANY
+          value: '1'
+        - key: MP_SMTP_AUTH_ALLOW_INSECURE
+          value: '1'
+        - key: MP_MAX_MESSAGES
+          value: '{{ params.maxMessages }}'
+        - key: MP_MAX_AGE
+          value: '{{ params.maxAge }}'
+        - key: MP_WEBHOOK_URL
+          value: '{{ params.webhookUrl }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8025

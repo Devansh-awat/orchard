@@ -1,0 +1,70 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: trilium
+  displayName: 'Trilium Notes'
+  description: 'A hierarchical note-taking app with a rich editor, scripting and sync for the desktop client.'
+  icon: https://github.com/TriliumNext.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['notes', 'knowledge base']
+  keywords: ['obsidian', 'evernote', 'personal wiki', 'note taking']
+  homepage: https://github.com/TriliumNext/Notes
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'trilium'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'notes.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for data'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: triliumnext/notes:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /home/node/trilium-data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: TRILIUM_DATA_DIR
+          value: /home/node/trilium-data
+        - key: TRILIUM_PORT
+          value: '8080'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

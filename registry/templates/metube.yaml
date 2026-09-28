@@ -1,0 +1,96 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: metube
+  displayName: 'MeTube'
+  description: 'A web UI for yt-dlp. Paste a link, get the video or audio into a volume.'
+  icon: none
+  version: '1.0.0'
+  category: media
+  tags: ['downloads', 'youtube', 'yt-dlp']
+  keywords: ['youtube downloader', 'video download', 'mp3']
+  homepage: https://github.com/alexta69/metube
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'metube'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'metube.example.com'
+  - name: defaultQuality
+    displayName: 'Default quality'
+    type: select
+    default: 'best'
+    options:
+      - label: 'best'
+        value: 'best'
+      - label: '1080'
+        value: '1080'
+      - label: '720'
+        value: '720'
+      - label: '480'
+        value: '480'
+      - label: 'audio'
+        value: 'audio'
+  - name: theme
+    displayName: 'Theme'
+    type: select
+    default: 'auto'
+    options:
+      - label: 'auto'
+        value: 'auto'
+      - label: 'light'
+        value: 'light'
+      - label: 'dark'
+        value: 'dark'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for downloads'
+    type: string
+    default: '20Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/alexta69/metube:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8081
+          servicePort: 8081
+          protocol: TCP
+      volumes:
+        - name: downloads
+          type: pvc
+          mountPath: /downloads
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: DEFAULT_OPTION_PLAYLIST_STRICT_MODE
+          value: 'true'
+        - key: DEFAULT_THEME
+          value: '{{ params.theme }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8081

@@ -1,0 +1,55 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: it-tools
+  displayName: 'IT Tools'
+  description: 'A hundred small developer utilities on one page: encoders, hashes, converters, generators. No configuration.'
+  icon: wrench
+  version: '1.0.0'
+  category: developer
+  tags: ['tools', 'utilities', 'static']
+  keywords: ['base64', 'jwt', 'uuid', 'hash', 'regex', 'converter', 'cyberchef']
+  homepage: https://it-tools.tech
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'tools'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'tools.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: corentinth/it-tools:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 80

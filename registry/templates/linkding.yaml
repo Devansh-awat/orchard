@@ -1,0 +1,104 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: linkding
+  displayName: 'linkding'
+  description: 'A bookmark manager that stays out of the way. Tags, search, archive, browser extension.'
+  icon: https://raw.githubusercontent.com/sissbruecker/linkding/master/assets/logo.png
+  version: '1.0.0'
+  category: reader
+  tags: ['bookmarks', 'links', 'archive']
+  keywords: ['pocket', 'raindrop', 'pinboard', 'read later', 'save links']
+  homepage: https://github.com/sissbruecker/linkding
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'linkding'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'links.example.com'
+  - name: adminUser
+    displayName: 'Admin Username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin Password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: backgroundTasks
+    displayName: 'HTML snapshots and metadata in the background'
+    type: boolean
+    default: true
+  - name: urlValidation
+    displayName: 'Validate URLs'
+    type: boolean
+    default: true
+  - name: sessionDays
+    displayName: 'Stay signed in for (days)'
+    type: number
+    default: 14
+    validation:
+      min: 1
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the SQLite database and snapshots'
+    type: string
+    default: '2Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: sissbruecker/linkding:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 9090
+          servicePort: 9090
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /etc/linkding/data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: LD_SUPERUSER_NAME
+          value: '{{ params.adminUser }}'
+        - key: LD_SUPERUSER_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: LD_CSRF_TRUSTED_ORIGINS
+          value: 'https://{{ params.domain }}'
+        - key: LD_DISABLE_BACKGROUND_TASKS
+          value: '{{ params.backgroundTasks }}'
+        - key: LD_DISABLE_URL_VALIDATION
+          value: '{{ params.urlValidation }}'
+        - key: LD_SESSION_COOKIE_AGE
+          value: '{{ params.sessionDays }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 9090

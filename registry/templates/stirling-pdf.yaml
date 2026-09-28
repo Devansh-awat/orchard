@@ -1,0 +1,80 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: stirling-pdf
+  displayName: 'Stirling PDF'
+  description: 'Merge, split, compress, sign, OCR and convert PDFs from a web UI.'
+  icon: https://github.com/Stirling-Tools.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['pdf', 'tools']
+  keywords: ['pdf editor', 'merge pdf', 'ocr', 'compress pdf', 'ilovepdf']
+  homepage: https://www.stirlingpdf.com
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'pdf'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'pdf.example.com'
+  - name: login
+    displayName: 'Require login'
+    type: boolean
+    default: false
+  - name: languages
+    displayName: 'OCR languages'
+    description: 'Comma-separated tesseract codes, such as eng,spa'
+    type: string
+    default: 'eng'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: stirlingtools/stirling-pdf:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: configs
+          type: pvc
+          mountPath: /configs
+          storageSize: '1Gi'
+        - name: logs
+          type: pvc
+          mountPath: /logs
+          storageSize: '1Gi'
+      env:
+        - key: DOCKER_ENABLE_SECURITY
+          value: '{{ params.login }}'
+        - key: LANGS
+          value: '{{ params.languages }}'
+        - key: SYSTEM_DEFAULTLOCALE
+          value: en-US
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

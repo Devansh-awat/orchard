@@ -1,0 +1,126 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: firefly
+  displayName: 'Firefly III'
+  description: 'Personal finance with accounts, budgets, rules and reports.'
+  icon: https://github.com/firefly-iii.png?size=256
+  version: '1.0.0'
+  category: finance
+  tags: ['finance', 'budget', 'accounting']
+  keywords: ['ynab', 'money manager', 'transactions', 'bank import']
+  homepage: https://www.firefly-iii.org
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'firefly'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'money.example.com'
+  - name: appKey
+    displayName: 'App key'
+    description: 'Exactly 32 characters. Generated if left empty.'
+    type: secret
+    validation:
+      min: 32
+  - name: siteOwner
+    displayName: 'Owner email'
+    type: string
+    required: true
+    placeholder: 'you@example.com'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: language
+    displayName: 'Language'
+    type: select
+    default: 'en_US'
+    options:
+      - label: 'en_US'
+        value: 'en_US'
+      - label: 'de_DE'
+        value: 'de_DE'
+      - label: 'es_ES'
+        value: 'es_ES'
+      - label: 'fr_FR'
+        value: 'fr_FR'
+      - label: 'it_IT'
+        value: 'it_IT'
+      - label: 'nl_NL'
+        value: 'nl_NL'
+      - label: 'pt_BR'
+        value: 'pt_BR'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: fireflyiii/core:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+      volumes:
+        - name: upload
+          type: pvc
+          mountPath: /var/www/html/storage/upload
+          storageSize: '2Gi'
+      env:
+        - key: APP_KEY
+          value: '{{ params.appKey }}'
+          secret: true
+        - key: APP_URL
+          value: 'https://{{ params.domain }}'
+        - key: SITE_OWNER
+          value: '{{ params.siteOwner }}'
+        - key: TZ
+          value: '{{ params.timezone }}'
+        - key: DEFAULT_LANGUAGE
+          value: '{{ params.language }}'
+        - key: DB_CONNECTION
+          value: pgsql
+        - key: DB_HOST
+          value: '{{ resources.db.host }}'
+        - key: DB_PORT
+          value: '{{ resources.db.port }}'
+        - key: DB_DATABASE
+          value: '{{ resources.db.dbName }}'
+        - key: DB_USERNAME
+          value: '{{ resources.db.dbUser }}'
+        - key: DB_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: TRUSTED_PROXIES
+          value: '**'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080

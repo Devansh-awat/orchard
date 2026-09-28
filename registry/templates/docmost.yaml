@@ -1,0 +1,198 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: docmost
+  displayName: 'Docmost'
+  description: 'A wiki with real-time editing, spaces and comments. Ships with its own Postgres and Valkey.'
+  icon: https://github.com/docmost.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['wiki', 'docs', 'knowledge base', 'collaboration']
+  keywords: ['notion', 'confluence', 'outline', 'documentation', 'pages']
+  homepage: https://docmost.com
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'docmost'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'wiki.example.com'
+  - name: appSecret
+    displayName: 'App secret'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: uploadLimit
+    displayName: 'Upload size limit'
+    type: string
+    default: '100mb'
+  - name: disableTelemetry
+    displayName: 'Disable telemetry'
+    type: boolean
+    default: true
+  - name: storageDriver
+    displayName: 'File storage'
+    type: select
+    default: 'local'
+    options:
+      - label: 'local'
+        value: 'local'
+      - label: 's3'
+        value: 's3'
+  - name: s3Endpoint
+    displayName: 'S3 endpoint'
+    description: 'Leave the S3 fields empty to keep files on the volume'
+    type: string
+    default: ''
+    placeholder: 'https://s3.example.com'
+  - name: s3Bucket
+    displayName: 'S3 bucket'
+    type: string
+    default: ''
+    placeholder: 'uploads'
+  - name: s3Region
+    displayName: 'S3 region'
+    type: string
+    default: 'us-east-1'
+  - name: s3AccessKey
+    displayName: 'S3 access key'
+    type: string
+    default: ''
+  - name: s3SecretKey
+    displayName: 'S3 secret key'
+    type: string
+    default: ''
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for invites. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for attachments'
+    type: string
+    default: '5Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: docmost/docmost:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+      volumes:
+        - name: storage
+          type: pvc
+          mountPath: /app/data/storage
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: APP_URL
+          value: 'https://{{ params.domain }}'
+        - key: APP_SECRET
+          value: '{{ params.appSecret }}'
+          secret: true
+        - key: DATABASE_URL
+          value: '{{ resources.db.connectionString }}'
+          secret: true
+        - key: REDIS_URL
+          value: 'redis://{{ resources.cache.serviceName }}:6379'
+        - key: FILE_UPLOAD_SIZE_LIMIT
+          value: '{{ params.uploadLimit }}'
+        - key: DISABLE_TELEMETRY
+          value: '{{ params.disableTelemetry }}'
+        - key: STORAGE_DRIVER
+          value: '{{ params.storageDriver }}'
+        - key: AWS_S3_ENDPOINT
+          value: '{{ params.s3Endpoint }}'
+        - key: AWS_S3_BUCKET
+          value: '{{ params.s3Bucket }}'
+        - key: AWS_S3_REGION
+          value: '{{ params.s3Region }}'
+        - key: AWS_S3_ACCESS_KEY_ID
+          value: '{{ params.s3AccessKey }}'
+        - key: AWS_S3_SECRET_ACCESS_KEY
+          value: '{{ params.s3SecretKey }}'
+          secret: true
+        - key: AWS_S3_FORCE_PATH_STYLE
+          value: 'true'
+        - key: MAIL_DRIVER
+          value: smtp
+        - key: SMTP_SECURE
+          value: 'false'
+        - key: SMTP_HOST
+          value: '{{ params.smtpHost }}'
+        - key: SMTP_PORT
+          value: '{{ params.smtpPort }}'
+        - key: SMTP_USERNAME
+          value: '{{ params.smtpUser }}'
+        - key: SMTP_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: MAIL_FROM_ADDRESS
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 3000

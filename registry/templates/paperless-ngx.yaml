@@ -1,0 +1,199 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: paperless-ngx
+  displayName: 'Paperless-ngx'
+  description: 'Scan, OCR, tag and search every document you own. Comes with Postgres, Valkey, Tika and Gotenberg so office files work too.'
+  icon: https://github.com/paperless-ngx.png?size=256
+  version: '1.0.0'
+  category: docs
+  tags: ['documents', 'ocr', 'archive']
+  keywords: ['paperless', 'scanner', 'receipts', 'pdf archive', 'document management']
+  homepage: https://docs.paperless-ngx.com
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'paperless'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'docs.example.com'
+  - name: secretKey
+    displayName: 'Secret key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 50
+  - name: adminUser
+    displayName: 'Admin username'
+    type: string
+    default: 'admin'
+    required: true
+  - name: adminPassword
+    displayName: 'Admin password'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 16
+  - name: adminEmail
+    displayName: 'Admin email'
+    type: string
+    default: ''
+    placeholder: 'you@example.com'
+  - name: ocrLanguage
+    displayName: 'OCR language'
+    description: 'Tesseract code, such as eng or deu; use + for several: eng+deu'
+    type: string
+    default: 'eng'
+  - name: timezone
+    displayName: 'Timezone'
+    type: string
+    default: 'UTC'
+  - name: officeDocuments
+    displayName: 'Convert office documents'
+    description: 'Runs Tika and Gotenberg alongside'
+    type: boolean
+    default: true
+  - name: consumerPollingSeconds
+    displayName: 'Poll the consume folder every (seconds)'
+    type: number
+    default: 30
+    validation:
+      min: 0
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for originals, thumbnails and the index'
+    type: string
+    default: '50Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: cache
+    type: deployment
+    config:
+      name: '{{ params.appName }}-cache'
+      image: valkey/valkey:8-alpine
+      replicas: 1
+      ports:
+        - name: valkey
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+
+  - name: tika
+    type: deployment
+    config:
+      name: '{{ params.appName }}-tika'
+      image: apache/tika:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 9998
+          servicePort: 9998
+          protocol: TCP
+
+  - name: gotenberg
+    type: deployment
+    config:
+      name: '{{ params.appName }}-gotenberg'
+      image: gotenberg/gotenberg:8
+      startCommand: 'gotenberg --chromium-disable-javascript=true --chromium-allow-list=file:///tmp/.*'
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 3000
+          servicePort: 3000
+          protocol: TCP
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: ghcr.io/paperless-ngx/paperless-ngx:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8000
+          servicePort: 8000
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /usr/src/paperless/data
+          storageSize: '5Gi'
+        - name: media
+          type: pvc
+          mountPath: /usr/src/paperless/media
+          storageSize: '{{ params.storage }}'
+        - name: consume
+          type: pvc
+          mountPath: /usr/src/paperless/consume
+          storageSize: '5Gi'
+        - name: export
+          type: pvc
+          mountPath: /usr/src/paperless/export
+          storageSize: '5Gi'
+      env:
+        - key: PAPERLESS_URL
+          value: 'https://{{ params.domain }}'
+        - key: PAPERLESS_SECRET_KEY
+          value: '{{ params.secretKey }}'
+          secret: true
+        - key: PAPERLESS_REDIS
+          value: 'redis://{{ resources.cache.serviceName }}:6379'
+        - key: PAPERLESS_DBHOST
+          value: '{{ resources.db.host }}'
+        - key: PAPERLESS_DBPORT
+          value: '{{ resources.db.port }}'
+        - key: PAPERLESS_DBNAME
+          value: '{{ resources.db.dbName }}'
+        - key: PAPERLESS_DBUSER
+          value: '{{ resources.db.dbUser }}'
+        - key: PAPERLESS_DBPASS
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: PAPERLESS_ADMIN_USER
+          value: '{{ params.adminUser }}'
+        - key: PAPERLESS_ADMIN_PASSWORD
+          value: '{{ params.adminPassword }}'
+          secret: true
+        - key: PAPERLESS_ADMIN_MAIL
+          value: '{{ params.adminEmail }}'
+        - key: PAPERLESS_OCR_LANGUAGE
+          value: '{{ params.ocrLanguage }}'
+        - key: PAPERLESS_TIME_ZONE
+          value: '{{ params.timezone }}'
+        - key: PAPERLESS_CONSUMER_POLLING
+          value: '{{ params.consumerPollingSeconds }}'
+        - key: PAPERLESS_TIKA_ENABLED
+          value: '{{ params.officeDocuments }}'
+        - key: PAPERLESS_TIKA_ENDPOINT
+          value: 'http://{{ resources.tika.serviceName }}:9998'
+        - key: PAPERLESS_TIKA_GOTENBERG_ENDPOINT
+          value: 'http://{{ resources.gotenberg.serviceName }}:3000'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8000

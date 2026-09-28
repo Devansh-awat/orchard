@@ -1,0 +1,76 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: jellyfin
+  displayName: 'Jellyfin'
+  description: 'A media server for your movies, shows and music, with apps for every screen.'
+  icon: https://github.com/jellyfin.png?size=256
+  version: '1.0.0'
+  category: media
+  tags: ['media', 'video', 'streaming']
+  keywords: ['plex', 'emby', 'movies', 'tv shows', 'home media']
+  homepage: https://jellyfin.org
+  license: GPL-2.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'jellyfin'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'watch.example.com'
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for the media library'
+    type: string
+    default: '100Gi'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: jellyfin/jellyfin:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8096
+          servicePort: 8096
+          protocol: TCP
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '5Gi'
+        - name: cache
+          type: pvc
+          mountPath: /cache
+          storageSize: '10Gi'
+        - name: media
+          type: pvc
+          mountPath: /media
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: JELLYFIN_PublishedServerUrl
+          value: 'https://{{ params.domain }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8096

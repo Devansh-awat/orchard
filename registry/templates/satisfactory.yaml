@@ -1,0 +1,94 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: satisfactory
+  displayName: 'Satisfactory Server'
+  description: 'A dedicated Satisfactory server on public ports, with autosave and auto-pause when empty.'
+  icon: none
+  version: '1.0.0'
+  category: games
+  tags: ['satisfactory', 'game server', 'multiplayer']
+  keywords: ['factory', 'coop', 'dedicated server', 'steam']
+  homepage: https://github.com/wolveix/satisfactory-server
+  license: MIT
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'satisfactory'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: maxPlayers
+    displayName: 'Max players'
+    type: number
+    default: 4
+    validation:
+      min: 1
+      max: 64
+  - name: autopause
+    displayName: 'Auto-pause when empty'
+    type: boolean
+    default: true
+  - name: autosaveInterval
+    displayName: 'Autosave every (seconds)'
+    type: number
+    default: 300
+    validation:
+      min: 60
+  - name: autosaveNum
+    displayName: 'Autosaves to keep'
+    type: number
+    default: 5
+    validation:
+      min: 1
+  - name: skipUpdate
+    displayName: 'Skip update on start'
+    type: boolean
+    default: false
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for saves and the game'
+    type: string
+    default: '20Gi'
+
+resources:
+  - name: server
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: wolveix/satisfactory-server:latest
+      replicas: 1
+      ports:
+        - name: game
+          containerPort: 7777
+          servicePort: 7777
+          protocol: UDP
+          public: true
+        - name: game-tcp
+          containerPort: 7777
+          servicePort: 7777
+          protocol: TCP
+          public: true
+      volumes:
+        - name: config
+          type: pvc
+          mountPath: /config
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: MAXPLAYERS
+          value: '{{ params.maxPlayers }}'
+        - key: AUTOPAUSE
+          value: '{{ params.autopause }}'
+        - key: AUTOSAVEINTERVAL
+          value: '{{ params.autosaveInterval }}'
+        - key: AUTOSAVENUM
+          value: '{{ params.autosaveNum }}'
+        - key: SKIPUPDATE
+          value: '{{ params.skipUpdate }}'
+        - key: PGID
+          value: '1000'
+        - key: PUID
+          value: '1000'

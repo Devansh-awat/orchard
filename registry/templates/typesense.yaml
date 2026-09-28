@@ -1,0 +1,64 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: typesense
+  displayName: 'Typesense'
+  description: 'An open-source search engine built for instant results. Internal-only; front it from your app.'
+  icon: https://github.com/typesense.png?size=256
+  version: '1.0.0'
+  category: database
+  tags: ['search', 'api']
+  keywords: ['algolia', 'meilisearch', 'full text search', 'autocomplete']
+  homepage: https://typesense.org
+  license: GPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'typesense'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: apiKey
+    displayName: 'API key'
+    description: 'Generated if left empty'
+    type: secret
+    validation:
+      min: 32
+  - name: cors
+    displayName: 'CORS'
+    type: boolean
+    default: true
+  - name: storage
+    displayName: 'Storage'
+    description: 'Volume for indexes'
+    type: string
+    default: '5Gi'
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: typesense/typesense:28.0
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8108
+          servicePort: 8108
+          protocol: TCP
+      volumes:
+        - name: data
+          type: pvc
+          mountPath: /data
+          storageSize: '{{ params.storage }}'
+      env:
+        - key: TYPESENSE_API_KEY
+          value: '{{ params.apiKey }}'
+          secret: true
+        - key: TYPESENSE_DATA_DIR
+          value: /data
+        - key: TYPESENSE_ENABLE_CORS
+          value: '{{ params.cors }}'

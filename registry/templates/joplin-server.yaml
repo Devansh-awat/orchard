@@ -1,0 +1,118 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: joplin-server
+  displayName: 'Joplin Server'
+  description: 'Sync server for the Joplin note apps, with sharing and publishing.'
+  icon: https://raw.githubusercontent.com/laurent22/joplin/dev/Assets/LinuxIcons/256x256.png
+  version: '1.0.0'
+  category: docs
+  tags: ['notes', 'sync']
+  keywords: ['joplin', 'note sync', 'evernote alternative']
+  homepage: https://joplinapp.org
+  license: AGPL-3.0-only
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'joplin'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'joplin.example.com'
+  - name: smtpHost
+    displayName: 'SMTP host'
+    description: 'Outgoing mail for account confirmation. Optional.'
+    type: string
+    default: ''
+    placeholder: 'smtp.example.com'
+  - name: smtpPort
+    displayName: 'SMTP port'
+    type: number
+    default: 587
+  - name: smtpUser
+    displayName: 'SMTP username'
+    type: string
+    default: ''
+    placeholder: 'postmaster@example.com'
+  - name: smtpPassword
+    displayName: 'SMTP password'
+    type: string
+    default: ''
+    placeholder: 'app password'
+  - name: mailFrom
+    displayName: 'From address'
+    type: string
+    default: ''
+    placeholder: 'noreply@example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: '{{ params.appName }}-db'
+
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: joplin/server:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 22300
+          servicePort: 22300
+          protocol: TCP
+      env:
+        - key: APP_BASE_URL
+          value: 'https://{{ params.domain }}'
+        - key: APP_PORT
+          value: '22300'
+        - key: DB_CLIENT
+          value: pg
+        - key: POSTGRES_HOST
+          value: '{{ resources.db.host }}'
+        - key: POSTGRES_PORT
+          value: '{{ resources.db.port }}'
+        - key: POSTGRES_DATABASE
+          value: '{{ resources.db.dbName }}'
+        - key: POSTGRES_USER
+          value: '{{ resources.db.dbUser }}'
+        - key: POSTGRES_PASSWORD
+          value: '{{ resources.db.dbPassword }}'
+          secret: true
+        - key: MAILER_ENABLED
+          value: '1'
+        - key: MAILER_SECURITY
+          value: starttls
+        - key: MAILER_HOST
+          value: '{{ params.smtpHost }}'
+        - key: MAILER_PORT
+          value: '{{ params.smtpPort }}'
+        - key: MAILER_AUTH_USER
+          value: '{{ params.smtpUser }}'
+        - key: MAILER_AUTH_PASSWORD
+          value: '{{ params.smtpPassword }}'
+          secret: true
+        - key: MAILER_NOREPLY_EMAIL
+          value: '{{ params.mailFrom }}'
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 22300

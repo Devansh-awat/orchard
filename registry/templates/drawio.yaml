@@ -1,0 +1,55 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: drawio
+  displayName: 'draw.io'
+  description: 'Diagrams in the browser: flowcharts, architecture, UML. Export to PNG, SVG or PDF.'
+  icon: https://github.com/jgraph.png?size=256
+  version: '1.0.0'
+  category: developer
+  tags: ['diagrams', 'static']
+  keywords: ['diagrams.net', 'flowchart', 'uml', 'architecture diagram', 'visio']
+  homepage: https://www.drawio.com
+  license: Apache-2.0
+
+parameters:
+  - name: appName
+    displayName: 'App Name'
+    type: string
+    default: 'drawio'
+    required: true
+    validation:
+      pattern: '^[a-z][a-z0-9-]{1,58}[a-z0-9]$'
+      message: 'Must be lowercase alphanumeric with hyphens, 3-60 chars'
+  - name: domain
+    displayName: 'Domain'
+    type: string
+    required: true
+    placeholder: 'diagrams.example.com'
+  - name: enableTls
+    displayName: 'Enable HTTPS'
+    type: boolean
+    default: true
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: '{{ params.appName }}'
+      image: jgraph/drawio:latest
+      replicas: 1
+      ports:
+        - name: http
+          containerPort: 8080
+          servicePort: 8080
+          protocol: TCP
+
+  - name: ingress
+    type: ingress
+    config:
+      host: '{{ params.domain }}'
+      tlsEnabled: '{{ params.enableTls }}'
+      routes:
+        - path: /
+          serviceName: '{{ resources.app.serviceName }}'
+          servicePort: 8080
