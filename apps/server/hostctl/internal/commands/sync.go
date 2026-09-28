@@ -56,6 +56,7 @@ func All() []*cli.Command {
 		Logs(),
 		Status(),
 		Sync(),
+		Licenses(),
 	}
 }
 

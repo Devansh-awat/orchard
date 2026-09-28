@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **345 commands** are available.
+override the saved context. **346 commands** are available.
 
 ## alert
 
@@ -2158,6 +2158,16 @@ orchard logs <runId>
 | --- | --- | --- | --- |
 | `-f`, `--follow` | bool | `false` | poll for new log lines while the run is active; stops once it finishes |
 | `--step` | int | `0` | 1-based step number (default: all steps in order) |
+
+## licenses
+
+### `orchard licenses`
+
+Show the licenses of the open-source software built into this CLI
+
+```bash
+orchard licenses
+```
 
 ## link
 

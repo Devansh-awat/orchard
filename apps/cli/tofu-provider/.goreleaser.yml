@@ -37,6 +37,11 @@ builds:
 archives:
   - formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: ../../LICENSE
+        strip_parent: true
+      - src: tofu-provider/THIRD_PARTY_NOTICES.txt
+        strip_parent: true
 
 checksum:
   extra_files:

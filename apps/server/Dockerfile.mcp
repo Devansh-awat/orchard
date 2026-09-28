@@ -24,6 +24,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 FROM base AS runner
+LABEL org.opencontainers.image.source="https://github.com/hackclub/orchard"
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -34,6 +35,7 @@ COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY apps/server/package.json apps/server/tsconfig.json apps/server/.swcrc ./apps/server/
 COPY apps/server/src ./apps/server/src
 COPY apps/server/prisma ./apps/server/prisma
+COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 WORKDIR /app/apps/server
 RUN pnpm prisma:generate

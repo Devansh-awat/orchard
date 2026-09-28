@@ -31,6 +31,7 @@ RUN --mount=type=cache,id=vite,target=/app/apps/frontend/node_modules/.vite \
     pnpm build
 
 FROM base AS runner
+LABEL org.opencontainers.image.source="https://github.com/hackclub/orchard"
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -41,6 +42,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=builder /app/apps/frontend/node_modules ./apps/frontend/node_modules
 COPY --from=builder /app/apps/frontend/build ./apps/frontend/build
+COPY LICENSE ./LICENSE
 
 EXPOSE 3000
 

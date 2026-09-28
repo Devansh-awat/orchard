@@ -25,6 +25,7 @@
 		Shield,
 		LogOut,
 		KeyRound,
+		Scale,
 		SquareTerminal,
 		Sun
 	} from 'lucide-svelte';
@@ -631,6 +632,16 @@
 						<a class="deck-menu-item" href="/user/settings?tab=appearance" onclick={close}>
 							<Palette size={14} />
 							Theme
+						</a>
+						<a
+							class="deck-menu-item"
+							href="/third-party-notices.txt"
+							target="_blank"
+							rel="noopener"
+							onclick={close}
+						>
+							<Scale size={14} />
+							Open source licenses
 						</a>
 						<button
 							type="button"

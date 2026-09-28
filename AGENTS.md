@@ -11,6 +11,7 @@
 
 - `apps/frontend`: SvelteKit + Svelte 5 web app. Design rules in `apps/frontend/DESIGN.md` and `apps/frontend/CLAUDE.md`.
 - `apps/server`: NestJS API, Prisma (Postgres), ~24 feature modules under `src/`. Auth in `src/auth`, k8s orchestration in `src/kubernetes`, builds in `src/docker`, tenant resources in `src/projects`.
+- `apps/landing`: the public marketing site (orchard.my), its own SvelteKit app on `:5173`, Tailwind only, no shared UI with `apps/frontend`.
 - `apps/gateway`: Go dev/edge reverse proxy (`:4000` → API `:3001` + Vite `:3000`).
 - `apps/r2-proxy`: Go proxy that issues per-cluster scoped credentials for database backups to R2.
 - `apps/cli`: Go CLI (`orchard`), Cobra + Bubbletea. Agent notes in `apps/cli/AGENTS.md`.
@@ -26,6 +27,10 @@
 ## Conventions
 
 - Conventional Commits, enforced by commitlint; release-please cuts per-service releases from them.
+- After adding or upgrading a dependency, run `pnpm credits`. It rebuilds each app with sourcemaps,
+  then refreshes the credits page data (`apps/landing/src/lib/credits.generated.json`) and the
+  third-party notices every artifact ships (`THIRD_PARTY_NOTICES.txt` or `third-party-notices.txt`
+  in each app; the CLI and orchardctl embed theirs). Fix anything it reports before committing.
 - New API endpoints must be recorded in the auth-coverage snapshot (`UPDATE_SNAPSHOT=1 pnpm --filter server test:auth-coverage`).
 - Prisma migrations: `pnpm --filter server prisma:migrate` for dev; never edit applied migrations.
 - Typecheck errors claiming a schema column "does not exist" mean a stale generated client, not a

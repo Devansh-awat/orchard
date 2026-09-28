@@ -17,7 +17,8 @@
     "dev:docs": "pnpm --filter docs dev",
     "dev:landing": "pnpm --filter landing dev",
     "docs:generate": "pnpm --filter docs generate",
-    "build:docs": "pnpm --filter docs build"
+    "build:docs": "pnpm --filter docs build",
+    "credits": "node scripts/credits/index.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

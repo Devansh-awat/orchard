@@ -58,6 +58,7 @@ RUN pnpm prisma:generate
 RUN pnpm build
 
 FROM base AS runner
+LABEL org.opencontainers.image.source="https://github.com/hackclub/orchard"
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -97,6 +98,7 @@ RUN pnpm dlx prisma@6.18.0 generate
 # anywhere else they would never reach a published image.
 COPY apps/server/hostbin /app/hostbin
 COPY --from=hostctl /out/orchardctl-linux-amd64 /out/orchardctl-linux-arm64 /app/hostbin/
+COPY LICENSE apps/server/THIRD_PARTY_NOTICES.txt /app/
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
