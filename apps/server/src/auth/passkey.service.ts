@@ -224,8 +224,6 @@ export class PasskeyService {
     });
 
     if (!passkey) {
-      // Increment rate limit for IP on failure
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'passkey_auth');
       throw new BadRequestException('Passkey not found');
     }
 
@@ -239,8 +237,6 @@ export class PasskeyService {
     );
 
     if (!challengeRecord) {
-      await this.rateLimitService.incrementRateLimit(passkey.user.email, 'email', 'passkey_auth');
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'passkey_auth');
       throw new BadRequestException('Invalid or expired authentication challenge');
     }
 
@@ -261,14 +257,10 @@ export class PasskeyService {
       });
     } catch (error) {
       console.error('Passkey authentication verification failed:', error);
-      await this.rateLimitService.incrementRateLimit(passkey.user.email, 'email', 'passkey_auth');
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'passkey_auth');
       throw new BadRequestException('Passkey authentication verification failed');
     }
 
     if (!verification.verified) {
-      await this.rateLimitService.incrementRateLimit(passkey.user.email, 'email', 'passkey_auth');
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'passkey_auth');
       throw new BadRequestException('Passkey authentication failed');
     }
 

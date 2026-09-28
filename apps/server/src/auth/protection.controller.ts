@@ -112,8 +112,6 @@ export class ProtectionController {
 
     const valid = await this.protection.verifyPassword(body.ingressId, body.password);
     if (!valid) {
-      await this.rateLimit.incrementRateLimit(ipKey, 'ip', 'protection_password');
-      await this.rateLimit.incrementRateLimit(body.ingressId, 'ingress', 'protection_password');
       throw new ForbiddenException('Invalid password');
     }
 

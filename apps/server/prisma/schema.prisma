@@ -1713,6 +1713,8 @@ model IdentityProvider {
   allowedDomains       String[]         @default([]) @map("allowed_domains")
   requireVerifiedEmail Boolean          @default(true) @map("require_verified_email")
 
+  createdBy String? @map("created_by") @db.Uuid
+
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(6)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)

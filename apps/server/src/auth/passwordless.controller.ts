@@ -313,8 +313,6 @@ export class PasswordlessController {
 
     const match = await verifySuperadminPassword(this.prisma, normalizedEmail, password);
     if (!match) {
-      await this.rateLimit.incrementRateLimit(normalizedEmail, 'email', 'password_signin');
-      await this.rateLimit.incrementRateLimit(ipAddress, 'ip', 'password_signin');
       throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
     }
 

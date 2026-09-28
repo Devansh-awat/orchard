@@ -18,7 +18,9 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 
 /**
- * Org-owned SSO configuration. Owners and org admins manage it; the platform
+ * Org-owned SSO configuration. Admins may read it; only the owner may change
+ * anything that decides who the IdP is allowed to sign in as, because a
+ * hostile provider is a path to any member's account. The platform
  * superadmin's kill switch lives in sso-instance.controller and is not
  * reachable from here.
  */
@@ -40,6 +42,16 @@ export class SsoAdminController {
     });
     if (!user) throw new NotFoundException('User not found');
     await this.authz.requireOrgAdmin(organizationId, user.id);
+    return { userId: user.id, email: user.email as string };
+  }
+
+  private async requireOwner(organizationId: string, req: any) {
+    const user = await this.users.findOrCreateByClerkId(req.user.sub, {
+      email: req.user.email,
+      username: req.user.username
+    });
+    if (!user) throw new NotFoundException('User not found');
+    await this.authz.requireOrgOwner(organizationId, user.id);
     return { userId: user.id, email: user.email as string };
   }
 
@@ -77,7 +89,7 @@ export class SsoAdminController {
     @Body('domain') domain: string,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.domains.add(organizationId, domain, actor);
   }
 
@@ -87,7 +99,7 @@ export class SsoAdminController {
     @Param('domainId') domainId: string,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.domains.verify(organizationId, domainId, actor);
   }
 
@@ -97,7 +109,7 @@ export class SsoAdminController {
     @Param('domainId') domainId: string,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.domains.remove(organizationId, domainId, actor);
   }
 
@@ -107,7 +119,7 @@ export class SsoAdminController {
     @Body() body: SettingsInput,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.sso.updateSettings(organizationId, body, actor);
   }
 
@@ -123,7 +135,7 @@ export class SsoAdminController {
     @Body() body: ProviderInput,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.sso.createProvider(organizationId, body, actor);
   }
 
@@ -144,7 +156,7 @@ export class SsoAdminController {
     @Body() body: ProviderInput,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.sso.updateProvider(providerId, organizationId, body, actor);
   }
 
@@ -154,7 +166,7 @@ export class SsoAdminController {
     @Param('providerId') providerId: string,
     @Request() req
   ) {
-    const actor = await this.requireAdmin(organizationId, req);
+    const actor = await this.requireOwner(organizationId, req);
     return this.sso.deleteProvider(providerId, organizationId, actor);
   }
 
@@ -164,7 +176,7 @@ export class SsoAdminController {
     @Param('providerId') providerId: string,
     @Request() req
   ) {
-    await this.requireAdmin(organizationId, req);
+    await this.requireOwner(organizationId, req);
     // Scope check first: testing a provider id from another org must 404.
     await this.sso.getProviderForAdmin(providerId, organizationId);
     return this.login.testProvider(providerId);

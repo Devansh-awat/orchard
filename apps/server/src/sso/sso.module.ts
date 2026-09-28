@@ -9,6 +9,7 @@ import { SsoInstanceController } from './sso-instance.controller';
 import { VanityDomainService } from './vanity-domain.service';
 import { VanityDomainController } from './vanity-domain.controller';
 import { OidcStateStore } from './oidc-state.store';
+import { SamlRequestStore } from './saml-request.store';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
@@ -24,7 +25,8 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
     SsoCryptoService,
     OrgDomainsService,
     VanityDomainService,
-    OidcStateStore
+    OidcStateStore,
+    SamlRequestStore
   ],
   exports: [SsoService, OrgDomainsService]
 })

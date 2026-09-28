@@ -22,6 +22,32 @@ if (now - ws) > windowMs then return 0 end
 if count >= max then return math.ceil(blockMs / 1000) end
 return 0`;
 
+const CONSUME_SCRIPT = `
+local key = KEYS[1]
+local max = tonumber(ARGV[1])
+local windowMs = tonumber(ARGV[2])
+local blockMs = tonumber(ARGV[3])
+local now = tonumber(ARGV[4])
+local st = redis.call('HMGET', key, 'count', 'ws', 'bu')
+local count = tonumber(st[1])
+local ws = tonumber(st[2]) or 0
+local bu = tonumber(st[3]) or 0
+if bu > now then return math.ceil((bu - now) / 1000) end
+if count == nil or (now - ws) > windowMs then
+  redis.call('HMSET', key, 'count', 1, 'ws', now, 'bu', 0)
+  redis.call('PEXPIRE', key, windowMs + 60000)
+  return 0
+end
+count = count + 1
+redis.call('HSET', key, 'count', count)
+if count > max then
+  redis.call('HSET', key, 'bu', now + blockMs)
+  redis.call('PEXPIRE', key, blockMs + 60000)
+  return math.ceil(blockMs / 1000)
+end
+redis.call('PEXPIRE', key, windowMs + 60000)
+return 0`;
+
 const HIT_SCRIPT = `
 local key = KEYS[1]
 local max = tonumber(ARGV[1])
@@ -95,6 +121,22 @@ export class RedisThrottleService implements OnModuleInit, OnModuleDestroy {
       return Number(seconds) || 0;
     } catch (e: any) {
       this.logger.warn(`throttle read fell back: ${e?.message ?? e}`);
+      return null;
+    }
+  }
+
+  async consume(key: string, config: ThrottleWindow): Promise<number | null> {
+    if (!this.redis) return null;
+    try {
+      const seconds = await this.redis.eval(
+        CONSUME_SCRIPT,
+        1,
+        KEY_PREFIX + key,
+        ...this.args(config)
+      );
+      return Number(seconds) || 0;
+    } catch (e: any) {
+      this.logger.warn(`throttle consume fell back: ${e?.message ?? e}`);
       return null;
     }
   }

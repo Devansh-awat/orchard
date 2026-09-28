@@ -65,6 +65,11 @@ export class OAuthService {
     if (!jwtSecretString) {
       throw new Error('JWT_SECRET environment variable is required');
     }
+    if (jwtSecretString.length < 32 || jwtSecretString === 'change-me-to-a-long-random-string') {
+      throw new Error(
+        'JWT_SECRET must be at least 32 characters and not the example value; every session, cookie and code is signed with it'
+      );
+    }
     this.jwtSecret = new TextEncoder().encode(jwtSecretString);
 
     const configured = process.env.AUTH_PROVIDER;

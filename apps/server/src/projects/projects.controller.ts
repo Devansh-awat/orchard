@@ -975,13 +975,14 @@ export class DeploymentsController {
 
   @Get(':id/build-runs/:runId/logs')
   async getBuildRunLogs(@Param('id') id: string, @Param('runId') runId: string, @Request() req) {
-    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
+    if (!access.canEdit) return '';
     return this.deployments.getBuildRunLogs(id, runId);
   }
 

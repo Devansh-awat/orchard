@@ -1,4 +1,9 @@
-import { ForbiddenException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  BadRequestException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -106,7 +111,9 @@ export class ApiTokensService {
       const rank = (s: string) => ['read', 'deploy', 'exec'].indexOf(s);
       const ceilingRank = Math.max(-1, ...ceiling.scopes.map(rank));
       if (resolvedScopes.some((s) => rank(s) > ceilingRank)) {
-        throw new ForbiddenException('A token cannot mint a token with broader scopes than its own');
+        throw new ForbiddenException(
+          'A token cannot mint a token with broader scopes than its own'
+        );
       }
       if (ceiling.projectIds.length > 0) {
         const allowed = new Set(ceiling.projectIds);

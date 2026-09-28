@@ -10,7 +10,7 @@ import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client'
 // openid-client is ESM only. Loading it lazily keeps this file a CommonJS
 // module rather than forcing a require() of an ES module at import time.
 import type * as OpenIdClient from 'openid-client' with { 'resolution-mode': 'import' };
-import { SAML } from '@node-saml/node-saml';
+import { SAML, ValidateInResponseTo } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
@@ -19,6 +19,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { signupMode } from '../auth/signup-mode';
 import { OidcStateStore } from './oidc-state.store';
+import { SamlRequestStore } from './saml-request.store';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SsoService } from './sso.service';
 import { OrgDomainsService } from './org-domains.service';
@@ -49,6 +50,7 @@ export class SsoLoginService {
     private readonly sso: SsoService,
     private readonly crypto: SsoCryptoService,
     private readonly stateStore: OidcStateStore,
+    private readonly samlRequests: SamlRequestStore,
     private readonly oauthService: OAuthService,
     private readonly sessionsService: SessionsService,
     private readonly authz: AuthorizationService,
@@ -168,7 +170,9 @@ export class SsoLoginService {
     return openid.discovery(
       new URL(provider.issuerUrl),
       provider.clientId,
-      clientSecret ? { client_secret: clientSecret } : undefined
+      clientSecret ? { client_secret: clientSecret } : undefined,
+      undefined,
+      { [openid.customFetch]: (url, init) => this.sso.fetchIdp(url, init as RequestInit) }
     );
   }
 
@@ -184,7 +188,9 @@ export class SsoLoginService {
       ...(provider.samlIdpEntityId ? { idpIssuer: provider.samlIdpEntityId } : {}),
       idpCert: cert,
       wantAuthnResponseSigned: true,
-      wantAssertionsSigned: true
+      wantAssertionsSigned: true,
+      validateInResponseTo: ValidateInResponseTo.always,
+      cacheProvider: this.samlRequests
     });
   }
 
@@ -241,7 +247,7 @@ export class SsoLoginService {
     const provider = await this.loadLoginProvider(providerId);
     const clientSecret = this.crypto.decryptOrNull(provider.clientSecret);
 
-    const tokenRes = await fetch(provider.tokenUrl, {
+    const tokenRes = await this.sso.fetchIdp(provider.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: new URLSearchParams({
@@ -310,7 +316,10 @@ export class SsoLoginService {
       'User-Agent': 'Orchard'
     };
 
-    const res = await fetch(provider.userinfoUrl, { headers, signal: AbortSignal.timeout(15_000) });
+    const res = await this.sso.fetchIdp(provider.userinfoUrl, {
+      headers,
+      signal: AbortSignal.timeout(15_000)
+    });
     if (!res.ok) throw new UnauthorizedException('Could not read profile from SSO provider');
     const body = (await res.json()) as Record<string, unknown>;
 
@@ -496,6 +505,15 @@ export class SsoLoginService {
         );
         throw new UnauthorizedException('SSO authentication failed');
       }
+      if (
+        membership.role === OrganizationRole.owner &&
+        (!provider.createdBy || provider.createdBy !== user.id)
+      ) {
+        this.logger.warn(
+          `Refused org SSO for owner ${user.id} via provider ${provider.id} (org ${organizationId}): provider was not configured by this owner`
+        );
+        throw new UnauthorizedException('SSO authentication failed');
+      }
       return user;
     }
 
@@ -677,7 +695,7 @@ export class SsoLoginService {
         const openid = await this.loadOpenIdClient();
         await this.discoverOidc(provider, openid);
       } else {
-        const res = await fetch(provider.authorizationUrl, {
+        const res = await this.sso.fetchIdp(provider.authorizationUrl, {
           method: 'HEAD',
           signal: AbortSignal.timeout(10_000)
         });

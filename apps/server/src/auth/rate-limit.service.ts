@@ -112,135 +112,56 @@ export class RateLimitService {
       return;
     }
 
-    const seconds = await this.throttle.retryAfter(
+    const shared = await this.throttle.consume(
       RateLimitService.throttleKey(identifier, type, action),
       config
     );
-    if (seconds !== null) {
-      if (seconds > 0) throw RateLimitService.tooMany(seconds);
-      return;
-    }
-
-    const record = await this.prisma.rateLimitRecord.findUnique({
-      where: {
-        identifier_type_action: {
-          identifier,
-          type,
-          action
-        }
-      }
-    });
-
-    if (!record) {
-      return; // No record means not rate limited
-    }
-
-    // Check if currently blocked
-    if (record.blockedUntil && record.blockedUntil > new Date()) {
-      const remainingSeconds = Math.ceil((record.blockedUntil.getTime() - Date.now()) / 1000);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `Too many attempts. Please try again in ${Math.ceil(remainingSeconds / 60)} minutes.`,
-          retryAfter: remainingSeconds
-        },
-        HttpStatus.TOO_MANY_REQUESTS
-      );
-    }
-
-    // Check if window has expired
-    const windowEnd = new Date(record.windowStart.getTime() + config.windowMs);
-    if (new Date() > windowEnd) {
-      // Window expired, reset will happen on increment
-      return;
-    }
-
-    // Check if max attempts reached
-    if (record.count >= config.maxAttempts) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `Too many attempts. Please try again later.`,
-          retryAfter: Math.ceil(config.blockDurationMs / 1000)
-        },
-        HttpStatus.TOO_MANY_REQUESTS
-      );
-    }
-  }
-
-  /**
-   * Increment the rate limit counter for an identifier.
-   * Should be called after a failed attempt.
-   */
-  async incrementRateLimit(
-    identifier: string,
-    type: RateLimitIdentifierType,
-    action: string
-  ): Promise<void> {
-    const configKey = `${action}_${type}`;
-    const config = RATE_LIMIT_CONFIGS[configKey];
-
-    if (!config) {
-      return;
-    }
-
-    if (await this.throttle.hit(RateLimitService.throttleKey(identifier, type, action), config)) {
+    if (shared !== null) {
+      if (shared > 0) throw RateLimitService.tooMany(shared);
       return;
     }
 
     const now = new Date();
-
-    const existing = await this.prisma.rateLimitRecord.findUnique({
-      where: {
-        identifier_type_action: {
-          identifier,
-          type,
-          action
-        }
+    const key = { identifier_type_action: { identifier, type, action } };
+    let record = await this.prisma.rateLimitRecord.findUnique({ where: key });
+    if (!record) {
+      try {
+        await this.prisma.rateLimitRecord.create({
+          data: { identifier, type, action, count: 1, windowStart: now }
+        });
+        return;
+      } catch {
+        record = await this.prisma.rateLimitRecord.findUnique({ where: key });
+        if (!record) return;
       }
-    });
-
-    if (!existing) {
-      // Create new record
-      await this.prisma.rateLimitRecord.create({
-        data: {
-          identifier,
-          type,
-          action,
-          count: 1,
-          windowStart: now
-        }
-      });
-      return;
     }
 
-    // Check if window has expired
-    const windowEnd = new Date(existing.windowStart.getTime() + config.windowMs);
+    if (record.blockedUntil && record.blockedUntil > now) {
+      throw RateLimitService.tooMany(
+        Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000)
+      );
+    }
 
-    if (now > windowEnd) {
-      // Reset the window
+    if (now.getTime() - record.windowStart.getTime() > config.windowMs) {
       await this.prisma.rateLimitRecord.update({
-        where: { id: existing.id },
-        data: {
-          count: 1,
-          windowStart: now,
-          blockedUntil: null
-        }
+        where: { id: record.id },
+        data: { count: 1, windowStart: now, blockedUntil: null }
       });
       return;
     }
 
-    // Increment counter
-    const newCount = existing.count + 1;
-    const shouldBlock = newCount >= config.maxAttempts;
-
-    await this.prisma.rateLimitRecord.update({
-      where: { id: existing.id },
-      data: {
-        count: newCount,
-        blockedUntil: shouldBlock ? new Date(now.getTime() + config.blockDurationMs) : null
-      }
+    const bumped = await this.prisma.rateLimitRecord.update({
+      where: { id: record.id },
+      data: { count: { increment: 1 } }
     });
+    if (bumped.count > config.maxAttempts) {
+      const blockedUntil = new Date(now.getTime() + config.blockDurationMs);
+      await this.prisma.rateLimitRecord.update({
+        where: { id: record.id },
+        data: { blockedUntil }
+      });
+      throw RateLimitService.tooMany(Math.ceil(config.blockDurationMs / 1000));
+    }
   }
 
   /**

@@ -80,7 +80,7 @@ export class ObservabilityController {
     @Request() req,
     @Query('offset') offsetStr?: string
   ): Promise<Observable<MessageEvent>> {
-    await this.assertAccess(id, req);
+    await this.assertLogAccess(id, req);
     const lastEventId =
       typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
     const offset = Math.max(0, Number(lastEventId ?? offsetStr) || 0);
@@ -94,7 +94,7 @@ export class ObservabilityController {
     @Query('tailLines') tailLinesStr?: string,
     @Query('sinceTime') sinceTimeQuery?: string
   ): Promise<Observable<MessageEvent>> {
-    await this.assertAccess(id, req);
+    await this.assertLogAccess(id, req);
     const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 100), 5000);
     const lastEventId =
       typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
@@ -115,7 +115,7 @@ export class ObservabilityController {
     @Query('level') level?: string,
     @Query('search') search?: string
   ) {
-    await this.assertAccess(id, req);
+    await this.assertLogAccess(id, req);
     const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 200), 20000);
     return this.observability.getStructuredLogs(id, tailLines, level, search);
   }
@@ -151,6 +151,14 @@ export class ObservabilityController {
       throw new ForbiddenException('Editing error groups needs edit access to the project');
     }
     return this.errorIngest.updateGroup(id, fingerprint, body, user.id);
+  }
+
+  private async assertLogAccess(deploymentId: string, req) {
+    const scope = await this.assertAccess(deploymentId, req);
+    if (!scope.access.canEdit) {
+      throw new ForbiddenException('Logs need edit access to the project');
+    }
+    return scope;
   }
 
   private assertAccess(deploymentId: string, req) {

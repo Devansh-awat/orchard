@@ -114,6 +114,22 @@ const RECOVERY_OUTCOME_REASON: Partial<
   internal: 'internal'
 };
 
+const PLATFORM_REGISTRY_HOSTS = [process.env.DOCKER_REGISTRY_PULL, process.env.DOCKER_REGISTRY_PUSH]
+  .filter((h): h is string => Boolean(h))
+  .map((h) => h.toLowerCase());
+const PLATFORM_REGISTRY_PROJECT = process.env.REGISTRY_PROJECT || 'orchard';
+
+function assertImageOwnedByProject(image: string, projectNamespace: string): void {
+  const [host, ...rest] = image.toLowerCase().split('/');
+  if (!PLATFORM_REGISTRY_HOSTS.includes(host)) return;
+  const [registryProject, repo] = rest;
+  if (registryProject !== PLATFORM_REGISTRY_PROJECT) return;
+  const name = (repo ?? '').split(/[:@]/)[0];
+  if (!name.startsWith(`${projectNamespace}-`)) {
+    throw new ForbiddenException('That image belongs to another project');
+  }
+}
+
 const DOCKERFILE_TARGET_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 function safeDockerfileTarget(raw: string | null | undefined): string | null {
@@ -5871,6 +5887,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (userId) {
       await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deployment image');
     }
+    assertImageOwnedByProject(
+      trimmed,
+      (
+        await this.prisma.project.findUniqueOrThrow({
+          where: { id: deployment.projectId },
+          select: { namespace: true }
+        })
+      ).namespace
+    );
 
     // Image-source deployments only — anything tied to a repo is rebuilt from
     // source by the GitHub flow, so a manual image change would just be
@@ -6096,6 +6121,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!image) {
       throw new BadRequestException('Image is required');
     }
+    assertImageOwnedByProject(image, project.namespace);
 
     const name = formatSlug(nameInput);
 

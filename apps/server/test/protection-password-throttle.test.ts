@@ -29,7 +29,12 @@ function fakePrisma() {
       },
       update: async ({ where, data }: any) => {
         const row = rows.find((r) => r.id === where.id);
-        Object.assign(row, data);
+        for (const [k, v] of Object.entries(data)) {
+          row[k] =
+            v && typeof v === 'object' && 'increment' in (v as any)
+              ? row[k] + (v as any).increment
+              : v;
+        }
         return row;
       },
       deleteMany: async ({ where }: any) => {
@@ -54,6 +59,7 @@ function fakePrisma() {
 const offlineThrottle = {
   available: false,
   retryAfter: async () => null,
+  consume: async () => null,
   hit: async () => false,
   clear: async () => false
 };

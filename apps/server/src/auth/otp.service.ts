@@ -67,8 +67,6 @@ export class OtpService {
     });
 
     // Increment rate limit counter
-    await this.rateLimitService.incrementRateLimit(normalizedEmail, 'email', 'otp_request');
-    await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'otp_request');
 
     if (!emailSent) {
       if (process.env.NODE_ENV !== 'production' && !this.emailService.isConfigured()) {
@@ -119,16 +117,15 @@ export class OtpService {
     });
 
     if (!otpRecord) {
-      // Increment rate limit on failure
-      await this.rateLimitService.incrementRateLimit(normalizedEmail, 'email', 'otp_verify');
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'otp_verify');
       return { valid: false };
     }
 
-    // Check if max attempts exceeded for this specific OTP
-    if (otpRecord.attempts >= MAX_VERIFICATION_ATTEMPTS) {
-      // Mark as used to prevent further attempts
-      await this.prisma.otpCode.update({
+    const claimed = await this.prisma.otpCode.updateMany({
+      where: { id: otpRecord.id, used: false, attempts: { lt: MAX_VERIFICATION_ATTEMPTS } },
+      data: { attempts: { increment: 1 } }
+    });
+    if (claimed.count === 0) {
+      await this.prisma.otpCode.updateMany({
         where: { id: otpRecord.id },
         data: { used: true }
       });
@@ -137,19 +134,11 @@ export class OtpService {
       );
     }
 
-    // Increment attempt counter
-    await this.prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { attempts: { increment: 1 } }
-    });
-
     // Use timing-safe comparison to prevent timing attacks
     const isValid = this.timingSafeCompare(hashedCode, otpRecord.code);
 
     if (!isValid) {
       // Increment rate limit on failure
-      await this.rateLimitService.incrementRateLimit(normalizedEmail, 'email', 'otp_verify');
-      await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'otp_verify');
       return { valid: false };
     }
 

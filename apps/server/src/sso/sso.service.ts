@@ -12,6 +12,13 @@ import { AuditService } from '../audit/audit.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { findPreset, resolveIssuerUrl } from './presets';
 import { OrgDomainsService } from './org-domains.service';
+import {
+  BlockedDestinationError,
+  assertPublicUrl,
+  guardedFetch,
+  parseHttpUrl,
+  type GuardedFetchInit
+} from '../notifications/webhook-guard';
 
 export interface ProviderInput {
   name?: string;
@@ -364,63 +371,42 @@ export class SsoService {
   /**
    * Admin-supplied IdP URLs drive server-side fetches, which makes them an
    * SSRF primitive: an org admin is not trusted with cluster-internal HTTP.
-   * Blocks loopback, RFC1918, link-local, and cluster DNS names. Self-hosters
-   * whose IdP genuinely lives on internal DNS (in-cluster Keycloak/Dex) can
-   * opt out with SSO_ALLOW_INTERNAL_IDP=true. DNS rebinding is out of scope —
-   * this is a bar-raiser at the config surface, not a network policy.
+   * Resolves DNS and blocks loopback, RFC1918, CGNAT, link-local, and cluster
+   * DNS names. Self-hosters whose IdP genuinely lives on internal DNS
+   * (in-cluster Keycloak/Dex) can opt out with SSO_ALLOW_INTERNAL_IDP=true.
    */
-  private assertIdpUrl(raw: string | null | undefined, label: string) {
+  private async assertIdpUrl(raw: string | null | undefined, label: string): Promise<void> {
     if (!raw) return;
-    if ((process.env.SSO_ALLOW_INTERNAL_IDP || '').toLowerCase() === 'true') return;
-
-    let url: URL;
+    if (this.allowInternalIdp()) {
+      parseHttpUrl(raw, label);
+      return;
+    }
     try {
-      url = new URL(raw);
-    } catch {
-      throw new BadRequestException(`${label} is not a valid URL`);
-    }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-      throw new BadRequestException(`${label} must be an http(s) URL`);
-    }
-
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    const blockedHosts = new Set(['localhost', '0.0.0.0', 'metadata.google.internal']);
-    const blockedSuffixes = ['.localhost', '.local', '.internal', '.svc', '.cluster.local'];
-
-    const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(host);
-    const privateV4 =
-      v4 &&
-      (() => {
-        const a = Number(v4[1]);
-        const b = Number(v4[2]);
-        return (
-          a === 0 ||
-          a === 10 ||
-          a === 127 ||
-          (a === 169 && b === 254) ||
-          (a === 172 && b >= 16 && b <= 31) ||
-          (a === 192 && b === 168)
+      await assertPublicUrl(raw, label);
+    } catch (err) {
+      if (err instanceof BlockedDestinationError) {
+        throw new BadRequestException(
+          `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`
         );
-      })();
-    const privateV6 =
-      host.includes(':') &&
-      (host === '::1' ||
-        host === '::' ||
-        host.startsWith('fc') ||
-        host.startsWith('fd') ||
-        host.startsWith('fe80') ||
-        host.startsWith('::ffff:'));
-
-    if (
-      blockedHosts.has(host) ||
-      blockedSuffixes.some((s) => host.endsWith(s)) ||
-      privateV4 ||
-      privateV6
-    ) {
-      throw new BadRequestException(
-        `${label} points at an internal address. If your identity provider really lives there, set SSO_ALLOW_INTERNAL_IDP=true.`
-      );
+      }
+      throw err;
     }
+  }
+
+  private allowInternalIdp(): boolean {
+    return (process.env.SSO_ALLOW_INTERNAL_IDP || '').toLowerCase() === 'true';
+  }
+
+  /**
+   * Every request to an identity provider goes through here so the same
+   * address policy applies at fetch time as at save time, redirects included.
+   */
+  fetchIdp(url: string | URL, init: GuardedFetchInit = {}): Promise<Response> {
+    return guardedFetch(url, {
+      ...init,
+      label: 'Identity provider URL',
+      allowPrivate: this.allowInternalIdp()
+    });
   }
 
   private slugify(input: string): string {
@@ -551,10 +537,10 @@ export class SsoService {
       // Every one of these is fetched server-side (discovery, token exchange,
       // userinfo, connection test), so each is an SSRF primitive if it can
       // point inside the cluster. Checked at write time, where only admins are.
-      this.assertIdpUrl(issuerUrl, 'Issuer URL');
-      this.assertIdpUrl(data.authorizationUrl as string | null, 'Authorization URL');
-      this.assertIdpUrl(data.tokenUrl as string | null, 'Token URL');
-      this.assertIdpUrl(data.userinfoUrl as string | null, 'Userinfo URL');
+      await this.assertIdpUrl(issuerUrl, 'Issuer URL');
+      await this.assertIdpUrl(data.authorizationUrl as string | null, 'Authorization URL');
+      await this.assertIdpUrl(data.tokenUrl as string | null, 'Token URL');
+      await this.assertIdpUrl(data.userinfoUrl as string | null, 'Userinfo URL');
 
       if (input.clientSecret && !isMask(input.clientSecret)) {
         data.clientSecret = this.crypto.encrypt(input.clientSecret);
@@ -579,7 +565,7 @@ export class SsoService {
     const slug = await this.uniqueSlug(organizationId, input.slug || (data.name as string));
 
     const created = await this.prisma.identityProvider.create({
-      data: { ...(data as any), organizationId, slug }
+      data: { ...(data as any), organizationId, slug, createdBy: actor.userId }
     });
 
     void this.audit.log({
@@ -813,16 +799,17 @@ export class SsoService {
    * against them. Signature validation of live assertions is node-saml's job.
    */
   private async fetchIdpMetadata(url: string) {
-    this.assertIdpUrl(url, 'Metadata URL');
+    await this.assertIdpUrl(url, 'Metadata URL');
     let xml: string;
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const res = await this.fetchIdp(url, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       xml = await res.text();
     } catch (err) {
-      throw new BadRequestException(
-        `Could not read IdP metadata: ${err instanceof Error ? err.message : 'request failed'}`
+      this.logger.warn(
+        `IdP metadata fetch failed: ${err instanceof Error ? err.message : 'request failed'}`
       );
+      throw new BadRequestException('Could not read IdP metadata from that URL');
     }
     return this.parseIdpMetadata(xml);
   }
