@@ -270,15 +270,18 @@ export class PasswordlessController {
    * GET /auth/methods?email=user@example.com
    */
   @Get('methods')
-  async authMethods(@Req() req: Request): Promise<{ passkey: boolean; password: boolean }> {
-    const email = (req.query.email as string) || '';
-    if (!email) return { passkey: false, password: false };
+  async authMethods(
+    @Req() req: Request
+  ): Promise<{ passkey: boolean; password: boolean; superadmin: boolean }> {
+    const email = ((req.query.email as string) || '').toLowerCase().trim();
+    if (!email) return { passkey: false, password: false, superadmin: false };
 
-    const [passkey, password] = await Promise.all([
+    const [passkey, password, user] = await Promise.all([
       this.passkeyService.userHasPasskeys(email),
-      superadminHasPassword(this.prisma, email)
+      superadminHasPassword(this.prisma, email),
+      this.prisma.user.findUnique({ where: { email }, select: { isSuperAdmin: true } })
     ]);
-    return { passkey, password };
+    return { passkey, password, superadmin: Boolean(user?.isSuperAdmin) };
   }
 
   /**

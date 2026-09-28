@@ -25,7 +25,7 @@
 		onSsoRedirect?: (email: string) => Promise<boolean>;
 	} = $props();
 
-	type Mode = 'start' | 'passkey' | 'code' | 'password';
+	type Mode = 'start' | 'choose' | 'passkey' | 'code' | 'password';
 
 	let mode = $state<Mode>('start');
 	let code = $state('');
@@ -39,6 +39,7 @@
 	let passkeySupported = $state(false);
 	let hasPassword = $state(false);
 	let hasPasskey = $state(false);
+	let chooser = $state(false);
 
 	let siteKey = $state<string | null>(null);
 	let widget = $state<{ execute: () => Promise<string> } | null>(null);
@@ -140,19 +141,26 @@
 		try {
 			if (onSsoRedirect && (await onSsoRedirect(address))) return;
 
-			let methods = { passkey: false, password: false };
+			let methods = { passkey: false, password: false, superadmin: false };
 			try {
 				const response = await apiFetch(`/apiv1/auth/methods?email=${encodeURIComponent(address)}`);
 				const data = await response.json().catch(() => ({}));
-				methods = { passkey: Boolean(data?.passkey), password: Boolean(data?.password) };
+				methods = {
+					passkey: Boolean(data?.passkey),
+					password: Boolean(data?.password),
+					superadmin: Boolean(data?.superadmin)
+				};
 			} catch {
-				methods = { passkey: false, password: false };
+				methods = { passkey: false, password: false, superadmin: false };
 			}
 
 			hasPassword = methods.password;
 			hasPasskey = methods.passkey && passkeySupported;
+			chooser = methods.superadmin && (hasPasskey || hasPassword);
 
-			if (hasPasskey) {
+			if (chooser) {
+				setMode('choose');
+			} else if (hasPasskey) {
 				setMode('passkey');
 				await signInWithPasskey();
 			} else if (methods.password) {
@@ -283,12 +291,18 @@
 		error = null;
 		hasPassword = false;
 		hasPasskey = false;
+		chooser = false;
 	}
 
 	function switchTo(next: Mode) {
 		error = null;
 		password = '';
 		setMode(next);
+	}
+
+	function back() {
+		if (chooser) switchTo('choose');
+		else reset();
 	}
 </script>
 
@@ -331,6 +345,43 @@
 			Continue
 		</Button>
 	</form>
+{:else if mode === 'choose'}
+	<div class="lg-step">
+		<div class="lg-step-head">
+			<p class="lg-step-title">{email}</p>
+			<p class="lg-step-hint">How do you want to sign in?</p>
+		</div>
+		{#if hasPasskey}
+			<Button
+				variant="secondary"
+				class="lg-wide"
+				onclick={() => {
+					switchTo('passkey');
+					signInWithPasskey();
+				}}
+			>
+				<KeyRound class="h-4 w-4" />
+				Sign in with your passkey
+			</Button>
+		{/if}
+		{#if hasPassword}
+			<Button
+				variant={hasPasskey ? 'ghost' : 'secondary'}
+				class="lg-wide"
+				onclick={() => switchTo('password')}
+			>
+				Use your password
+			</Button>
+		{/if}
+		{#if error}
+			<p class="lg-error">{error}</p>
+		{/if}
+		{@render botCheck()}
+		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
+			Email me a code
+		</Button>
+		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
+	</div>
 {:else if mode === 'passkey'}
 	<div class="lg-step">
 		<div class="lg-step-head">
@@ -359,7 +410,7 @@
 		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
-		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
+		<Button variant="ghost" size="sm" class="lg-center" onclick={back}>Back</Button>
 	</div>
 {:else if mode === 'password'}
 	<form
@@ -397,7 +448,7 @@
 		<Button variant="ghost" class="lg-wide" loading={requesting} onclick={requestOtp}>
 			Email me a code instead
 		</Button>
-		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
+		<Button variant="ghost" size="sm" class="lg-center" onclick={back}>Back</Button>
 	</form>
 {:else}
 	<form
@@ -433,6 +484,6 @@
 		<Button variant="secondary" type="submit" loading={verifying} class="lg-wide lg-action">
 			Verify
 		</Button>
-		<Button variant="ghost" size="sm" class="lg-center" onclick={reset}>Back</Button>
+		<Button variant="ghost" size="sm" class="lg-center" onclick={back}>Back</Button>
 	</form>
 {/if}
