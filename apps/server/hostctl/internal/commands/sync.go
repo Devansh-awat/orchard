@@ -41,6 +41,7 @@ var Aliases = []string{
 func All() []*cli.Command {
 	return []*cli.Command{
 		Update(),
+		Harden(),
 		Config(),
 		Registry(),
 		Policies(),

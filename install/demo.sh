@@ -61,7 +61,7 @@ demo() {
   info "memory: 16031Mi"
   info "free disk: 218G"
   info "ports 80/443 are free"
-  info "node ports: 30000-30100, registry on 30100"
+  info "node ports: 30000-30100, registry on 127.0.0.1:5000"
 
   step
   info "public IP: 203.0.113.44"
@@ -76,6 +76,7 @@ demo() {
   info "concurrent builds: 3, build cache: 43G, registry: 43G"
 
   step
+  info "no host firewall active; install/README.md lists what this box will listen on"
   maybe "downloading and starting k3s" 1m 6
   maybe "waiting for the node to be ready" 30s 3
 
@@ -90,9 +91,10 @@ demo() {
   maybe "cert-manager" 1m30s 5
 
   step
+  maybe "generating registry credentials" 30s 2
   maybe "reloading k3s with the registry mirror" 45s 3
   maybe "starting the registry" 2m 5
-  info "registry ready at registry.orchard.local, mirrored to 127.0.0.1:30100"
+  info "registry ready at registry.orchard.local, mirrored to 127.0.0.1:5000, loopback only"
 
   step
   info "not needed in public mode"

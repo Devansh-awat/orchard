@@ -16,7 +16,9 @@ HTTPS_PORT=${ORCHARD_HTTPS_PORT:-443}
 HTTP_SUFFIX=''
 HTTPS_SUFFIX=''
 INGRESS_EXTRA_HOSTS='[]'
-ZOT_NODE_PORT=${ORCHARD_ZOT_NODE_PORT:-30100}
+REGISTRY_PORT=${ORCHARD_REGISTRY_PORT:-5000}
+REGISTRY_USER=orchard
+REGISTRY_PASSWORD=''
 REGISTRY_HOST=${ORCHARD_REGISTRY_HOST:-registry.orchard.local}
 
 ORCHARD_DOMAIN=${ORCHARD_DOMAIN:-}
@@ -267,7 +269,7 @@ usage() {
     --k3s-version <version>      K3S_VERSION
     --gateway-api-version <ver>  GATEWAY_API_VERSION
     --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
-    --registry-port <port>       ORCHARD_ZOT_NODE_PORT    must sit inside the range
+    --registry-port <port>       ORCHARD_REGISTRY_PORT    loopback port the kubelet pulls through
     --registry-host <host>       ORCHARD_REGISTRY_HOST    name the kubelet pulls by
     --state-dir <path>           ORCHARD_STATE_DIR        where values.yaml is written
 
@@ -313,7 +315,7 @@ parse_args() {
       --node-port-range) need_value "$1" "${2:-}"; NODE_PORT_RANGE=$2; shift 2 ;;
     --http-port) need_value "$1" "${2:-}"; HTTP_PORT=$2; shift 2 ;;
     --https-port) need_value "$1" "${2:-}"; HTTPS_PORT=$2; shift 2 ;;
-      --registry-port) need_value "$1" "${2:-}"; ZOT_NODE_PORT=$2; shift 2 ;;
+      --registry-port) need_value "$1" "${2:-}"; REGISTRY_PORT=$2; shift 2 ;;
       --registry-host) need_value "$1" "${2:-}"; REGISTRY_HOST=$2; shift 2 ;;
       --state-dir) need_value "$1" "${2:-}"; STATE_DIR=$2; VALUES_FILE="$STATE_DIR/values.yaml"; shift 2 ;;
       -y|--yes) ASSUME_YES=true; shift ;;
@@ -502,15 +504,17 @@ preflight() {
   fi
 
   local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-}
-  if [ "$ZOT_NODE_PORT" -lt "$lo" ] || [ "$ZOT_NODE_PORT" -gt "$hi" ]; then
-    die "ORCHARD_ZOT_NODE_PORT ($ZOT_NODE_PORT) must fall inside ORCHARD_NODE_PORT_RANGE ($NODE_PORT_RANGE)"
-  fi
-  for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+  for port in "$HTTP_PORT" "$HTTPS_PORT" "$REGISTRY_PORT"; do
     if [ "$port" -ge "$lo" ] && [ "$port" -le "$hi" ]; then
       die "port $port falls inside ORCHARD_NODE_PORT_RANGE ($NODE_PORT_RANGE), where Kubernetes hands out its own"
     fi
   done
-  info "node ports: $NODE_PORT_RANGE, registry on $ZOT_NODE_PORT"
+  if command -v ss >/dev/null 2>&1 && ss -lnt "sport = :$REGISTRY_PORT" 2>/dev/null | grep -q LISTEN; then
+    if ! kubectl -n orchard get deploy zot >/dev/null 2>&1; then
+      die "port $REGISTRY_PORT is already in use on this box; pick another with --registry-port"
+    fi
+  fi
+  info "node ports: $NODE_PORT_RANGE, registry on 127.0.0.1:$REGISTRY_PORT"
 }
 
 detect_network() {
@@ -862,8 +866,58 @@ wait_for_node() {
   kubectl wait --for=condition=Ready node --all --timeout=180s >/dev/null
 }
 
+lan_cidrs() {
+  ip -4 route show scope link 2>/dev/null \
+    | awk '$1 ~ /\// && $2 == "dev" && $3 !~ /^(cni|flannel|veth|docker|br-|lo|tailscale)/ {print $1}' \
+    | sort -u
+}
+
+ufw_rules() {
+  local lo=$1 hi=$2 cidr
+  ufw allow from 10.42.0.0/16 to any comment 'k3s pods'
+  ufw allow from 10.43.0.0/16 to any comment 'k3s services'
+  for cidr in $(lan_cidrs) 100.64.0.0/10; do
+    ufw allow from "$cidr" to any port 6443 proto tcp comment 'kubernetes api'
+  done
+  if [ "$INGRESS_MODE" != tunnel ]; then
+    ufw allow "$HTTP_PORT/tcp" comment 'orchard http'
+    ufw allow "$HTTPS_PORT/tcp" comment 'orchard https'
+    ufw allow "$lo:$hi/tcp" comment 'orchard app ports'
+    ufw allow "$lo:$hi/udp" comment 'orchard app ports'
+  fi
+}
+
+firewalld_rules() {
+  local lo=$1 hi=$2 cidr
+  firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16
+  firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16
+  for cidr in $(lan_cidrs) 100.64.0.0/10; do
+    firewall-cmd --permanent \
+      --add-rich-rule="rule family=ipv4 source address=$cidr port port=6443 protocol=tcp accept"
+  done
+  if [ "$INGRESS_MODE" != tunnel ]; then
+    firewall-cmd --permanent --add-port="$HTTP_PORT/tcp"
+    firewall-cmd --permanent --add-port="$HTTPS_PORT/tcp"
+    firewall-cmd --permanent --add-port="$lo-$hi/tcp"
+    firewall-cmd --permanent --add-port="$lo-$hi/udp"
+  fi
+  firewall-cmd --reload
+}
+
+configure_firewall() {
+  local lo=${NODE_PORT_RANGE%-*} hi=${NODE_PORT_RANGE#*-}
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    run_step "opening ufw for k3s and Orchard" 10s ufw_rules "$lo" "$hi"
+  elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+    run_step "opening firewalld for k3s and Orchard" 20s firewalld_rules "$lo" "$hi"
+  else
+    info "no host firewall active; install/README.md lists what this box will listen on"
+  fi
+}
+
 install_k3s() {
   step
+  configure_firewall
 
   if command -v k3s >/dev/null 2>&1; then
     info "k3s already installed, leaving it alone"
@@ -982,10 +1036,38 @@ spec:
 EOF
 }
 
+registry_htpasswd() {
+  if command -v htpasswd >/dev/null 2>&1; then
+    htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
+  else
+    kubectl run zot-htpasswd --rm -i --quiet --restart=Never --image=httpd:2.4-alpine \
+      --command -- htpasswd -nbB "$REGISTRY_USER" "$REGISTRY_PASSWORD"
+  fi
+}
+
+write_registry_auth() {
+  local line
+  line=$(registry_htpasswd | grep "^$REGISTRY_USER:" | head -1 | tr -d '[:space:]')
+  [ -n "$line" ] || return 1
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: zot-auth
+  namespace: orchard
+stringData:
+  htpasswd: "$line"
+EOF
+}
+
 install_registry() {
   step
 
   kubectl create namespace orchard >/dev/null 2>&1 || true
+
+  REGISTRY_PASSWORD=$(reuse_value '.builders.harbor.password')
+  [ -n "$REGISTRY_PASSWORD" ] || REGISTRY_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  run_step "generating registry credentials" 30s write_registry_auth
 
   kubectl apply -f - >/dev/null <<EOF
 apiVersion: v1
@@ -1014,7 +1096,11 @@ data:
         "gcDelay": "1h",
         "gcInterval": "24h"
       },
-      "http": { "address": "0.0.0.0", "port": "5000" },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "auth": { "htpasswd": { "path": "/etc/zot-auth/htpasswd" } }
+      },
       "log": { "level": "info" },
       "extensions": {
         "scrub": { "interval": "24h" }
@@ -1028,6 +1114,7 @@ metadata:
   namespace: orchard
 spec:
   replicas: 1
+  strategy: { type: Recreate }
   selector:
     matchLabels: { app: zot }
   template:
@@ -1040,9 +1127,12 @@ spec:
           args: ["serve", "/etc/zot/config.json"]
           ports:
             - containerPort: 5000
+              hostPort: $REGISTRY_PORT
+              hostIP: 127.0.0.1
           volumeMounts:
             - { name: data, mountPath: /var/lib/registry }
             - { name: config, mountPath: /etc/zot }
+            - { name: auth, mountPath: /etc/zot-auth, readOnly: true }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: "1", memory: 512Mi }
@@ -1051,6 +1141,8 @@ spec:
           persistentVolumeClaim: { claimName: zot-data }
         - name: config
           configMap: { name: zot-config }
+        - name: auth
+          secret: { secretName: zot-auth }
 ---
 apiVersion: v1
 kind: Service
@@ -1058,12 +1150,11 @@ metadata:
   name: zot
   namespace: orchard
 spec:
-  type: NodePort
+  type: ClusterIP
   selector: { app: zot }
   ports:
     - port: 5000
       targetPort: 5000
-      nodePort: $ZOT_NODE_PORT
 EOF
 
   mkdir -p /etc/rancher/k3s
@@ -1071,16 +1162,17 @@ EOF
 mirrors:
   $REGISTRY_HOST:
     endpoint:
-      - "http://127.0.0.1:$ZOT_NODE_PORT"
+      - "http://127.0.0.1:$REGISTRY_PORT"
 configs:
-  "127.0.0.1:$ZOT_NODE_PORT":
-    tls:
-      insecure_skip_verify: true
+  "127.0.0.1:$REGISTRY_PORT":
+    auth:
+      username: $REGISTRY_USER
+      password: "$REGISTRY_PASSWORD"
 EOF
   run_step "reloading k3s with the registry mirror" 45s restart_k3s
   run_step "starting the registry" 2m \
     kubectl -n orchard rollout status deploy/zot --timeout=5m
-  info "registry ready at $REGISTRY_HOST, mirrored to 127.0.0.1:$ZOT_NODE_PORT"
+  info "registry ready at $REGISTRY_HOST, mirrored to 127.0.0.1:$REGISTRY_PORT, loopback only"
 }
 
 restart_k3s() {
@@ -1162,10 +1254,14 @@ size_workloads() {
 # Pull a server env value out of the values file a previous run wrote, so a
 # re-run preserves it instead of rotating it.
 reuse_secret() {
-  local name=$1 value
+  reuse_value ".server.env[]? | select(.name == \"$1\") | .value"
+}
+
+reuse_value() {
+  local value
   [ -f "$VALUES_FILE" ] || return 0
   command -v yq >/dev/null 2>&1 || return 0
-  value=$(yq -r ".server.env[]? | select(.name == \"$name\") | .value" "$VALUES_FILE" 2>/dev/null | head -1)
+  value=$(yq -r "$1" "$VALUES_FILE" 2>/dev/null | head -1)
   [ "$value" = null ] && value=
   printf '%s' "$value"
 }
@@ -1257,6 +1353,8 @@ server:
     - { name: DOCKER_REGISTRY_PULL, value: $REGISTRY_HOST }
     - { name: REGISTRY_HTTP_HOSTS, value: zot.orchard.svc.cluster.local:5000 }
     - { name: REGISTRY_PROJECT, value: orchard }
+    - { name: HARBOR_USERNAME, value: $REGISTRY_USER }
+    - { name: HARBOR_PASSWORD, value: "$REGISTRY_PASSWORD" }
     - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: local-path }
 
 tenant:
@@ -1303,10 +1401,10 @@ redis:
 builders:
   enabled: true
   harbor:
-    username: ""
-    password: ""
+    username: $REGISTRY_USER
+    password: "$REGISTRY_PASSWORD"
     hosts:
-      - zot.orchard.svc.cluster.local
+      - zot.orchard.svc.cluster.local:5000
   # Builds are firewalled off from the rest of the cluster, so the registry they
   # push to has to be named or the push is refused. This installer runs zot in
   # the orchard namespace; the chart's defaults describe a different cluster.

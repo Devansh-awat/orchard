@@ -168,11 +168,16 @@ func Update() *cli.Command {
 		Root:    true,
 		Usage: `orchardctl update - upgrade this instance
 
-Runs helm upgrade --install with your values file, waits for each deployment
-to roll out, then refreshes the host commands. Extra arguments are passed
-through to helm.
+Runs orchardctl harden first, so an install from before the registry was
+locked down and the firewall was opened comes out of the upgrade fixed. Then
+helm upgrade --install with your values file, waits for each deployment to roll
+out, and refreshes the host commands. Extra arguments are passed through to
+helm.
 `,
 		Run: func(c *cli.Context, args []string) error {
+			if err := harden(c); err != nil {
+				return err
+			}
 			helmArgs := append([]string{
 				"upgrade", "--install", "orchard", c.Env.Chart,
 				"--namespace", c.Env.Namespace,

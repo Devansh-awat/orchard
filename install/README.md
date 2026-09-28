@@ -101,6 +101,30 @@ sudo orchardctl login           # a one-time sign-in link, valid ten minutes
 sudo orchardctl password set    # a password on the superadmin account
 ```
 
+## What the box listens on
+
+The installer opens these itself when ufw or firewalld is active, and prints a
+note when neither is. If something else fronts the box, a cloud firewall or a
+router, this is the list to allow.
+
+| Port          | Bound to        | What                              | Who needs it                                 |
+| ------------- | --------------- | --------------------------------- | -------------------------------------------- |
+| `80`, `443`   | every interface | Traefik: the dashboard and apps   | everyone, in `public` and `lan` mode         |
+| `30000-30100` | every interface | raw TCP/UDP ports apps claim      | whoever those apps serve; unused in `tunnel` |
+| `6443`        | every interface | the Kubernetes API                | `kubectl` from your LAN or Tailscale only    |
+| `5000`        | `127.0.0.1`     | the image registry, password only | nobody outside the box                       |
+| `10250`       | every interface | the kubelet                       | nothing off the box; needs a client cert     |
+
+Nothing else is meant to be reachable. In `tunnel` mode only `6443` and `10250`
+are bound at all. The pod and service networks, `10.42.0.0/16` and
+`10.43.0.0/16`, must be allowed to reach the host: that is how every pod talks
+to the API, and a firewall that drops it makes the whole cluster time out after
+the next reboot.
+
+Installs from before this list existed had the registry on a node port with no
+password. `sudo orchardctl update` fixes that on its way through, and
+`sudo orchardctl harden` does the same without upgrading anything.
+
 ## Sizing
 
 Build concurrency, cache size and registry size are derived from the machine:
@@ -224,13 +248,13 @@ because the server and the frontend are versioned independently and one
 | `--k3s-version <version>`     | `K3S_VERSION`             | `v1.31.5+k3s1`           |
 | `--gateway-api-version <ver>` | `GATEWAY_API_VERSION`     | `v1.2.1`                 |
 | `--node-port-range <lo-hi>`   | `ORCHARD_NODE_PORT_RANGE` | `30000-30100`            |
-| `--registry-port <port>`      | `ORCHARD_ZOT_NODE_PORT`   | `30100`                  |
+| `--registry-port <port>`      | `ORCHARD_REGISTRY_PORT`   | `5000`                   |
 | `--registry-host <host>`      | `ORCHARD_REGISTRY_HOST`   | `registry.orchard.local` |
 | `--state-dir <path>`          | `ORCHARD_STATE_DIR`       | `/etc/orchard`           |
 
 The node port range is what your apps can claim, so it is also the range you
-forward on a router. The registry port must sit inside it; the installer refuses
-to start if it does not.
+forward on a router. The registry port is bound to loopback only and must sit
+outside the range; the installer refuses to start if it does not.
 
 ## Seeing what an install looks like
 
