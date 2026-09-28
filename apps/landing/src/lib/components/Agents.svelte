@@ -264,7 +264,7 @@
 			</p>
 			<p
 				{@attach reveal({ index: 2 })}
-				class="mt-5 text-[1.1875rem] leading-[1.5] font-bold text-white"
+				class="mt-5 text-[1.1875rem] leading-[1.5] font-bold text-pretty text-white"
 			>
 				<span class="block">New to servers? You don’t need to be.</span>
 				<span class="block">Already know how? Skip the infra and just ship.</span>
