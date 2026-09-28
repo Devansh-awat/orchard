@@ -848,7 +848,7 @@ choose_update_policy() {
 k3s_download() {
   curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server \
     --disable=traefik \
-    --write-kubeconfig-mode=644 \
+    --write-kubeconfig-mode=600 \
     --service-node-port-range="$NODE_PORT_RANGE"
 }
 

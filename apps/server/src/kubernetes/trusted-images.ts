@@ -24,21 +24,23 @@ export const TRUSTED_IMAGES: TrustedImagePattern[] = [
   'bitnami/redis:*'
 ];
 
-const parseRef = (image: string): { repo: string; tag: string } => {
-  // Strip digest
+const DOCKER_HUB_HOSTS = new Set(['docker.io', 'index.docker.io', 'registry-1.docker.io']);
+
+const parseRef = (image: string): { repo: string; tag: string; host: string | null } => {
   const noDigest = image.split('@')[0];
-  // Strip registry host (anything before first `/` that contains `.` or `:`)
   const slashIdx = noDigest.indexOf('/');
   let remainder = noDigest;
+  let host: string | null = null;
   if (slashIdx > 0) {
     const maybeHost = noDigest.slice(0, slashIdx);
     if (maybeHost.includes('.') || maybeHost.includes(':') || maybeHost === 'localhost') {
+      host = maybeHost.toLowerCase();
       remainder = noDigest.slice(slashIdx + 1);
     }
   }
   const colonIdx = remainder.lastIndexOf(':');
-  if (colonIdx === -1) return { repo: remainder, tag: 'latest' };
-  return { repo: remainder.slice(0, colonIdx), tag: remainder.slice(colonIdx + 1) };
+  if (colonIdx === -1) return { repo: remainder, tag: 'latest', host };
+  return { repo: remainder.slice(0, colonIdx), tag: remainder.slice(colonIdx + 1), host };
 };
 
 const globToRegex = (glob: string): RegExp => {
@@ -47,7 +49,8 @@ const globToRegex = (glob: string): RegExp => {
 };
 
 const matchPattern = (pattern: TrustedImagePattern, image: string): boolean => {
-  const { repo, tag } = parseRef(image);
+  const { repo, tag, host } = parseRef(image);
+  if (host !== null && !DOCKER_HUB_HOSTS.has(host)) return false;
   const colonIdx = pattern.indexOf(':');
   const patRepo = colonIdx === -1 ? pattern : pattern.slice(0, colonIdx);
   const patTag = colonIdx === -1 ? null : pattern.slice(colonIdx + 1);

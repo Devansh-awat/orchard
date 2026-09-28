@@ -210,7 +210,7 @@ export class OAuthController {
     }
   }
 
-  @Get('logout')
+  @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {
     // Try to revoke the session if there's a valid token
     try {
@@ -241,7 +241,7 @@ export class OAuthController {
     // browsers free to refuse the clear when the original cookie had
     // SameSite=Strict from a cross-site context (rare, but observed).
     clearSessionCookie(res);
-    return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+    return res.status(204).send();
   }
 
   @Auth()

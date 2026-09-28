@@ -66,26 +66,44 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 
 	srv := &http.Server{}
 	mux := http.NewServeMux()
+	deliver := func(res result) {
+		select {
+		case resCh <- res:
+		default:
+		}
+	}
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
+		if r.Method == http.MethodOptions {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", "*")
+			h.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			h.Set("Access-Control-Allow-Headers", "Content-Type")
+			h.Set("Access-Control-Allow-Private-Network", "true")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		q := r.Form
 		if got := q.Get("state"); got != state {
-			finish(w, r, "state_mismatch")
-			resCh <- result{err: errors.New("state mismatch on callback")}
+			http.Error(w, "state mismatch", http.StatusBadRequest)
 			return
 		}
 		if e := q.Get("error"); e != "" {
 			finish(w, r, e)
-			resCh <- result{err: fmt.Errorf("authorization failed: %s", e)}
+			deliver(result{err: fmt.Errorf("authorization failed: %s", e)})
 			return
 		}
 		token := q.Get("token")
 		if token == "" {
 			finish(w, r, "no_token")
-			resCh <- result{err: errors.New("no token in callback")}
+			deliver(result{err: errors.New("no token in callback")})
 			return
 		}
 		finish(w, r, "")
-		resCh <- result{token: token}
+		deliver(result{token: token})
 	})
 	srv.Handler = mux
 

@@ -373,7 +373,7 @@ var routeExclusions = map[string]string{
 	"POST /auth/password/set": "browser account settings (setting a password happens in the app)",
 	"GET /auth/login":         "browser login ceremony",
 	"GET /auth/callback":      "browser login ceremony (OAuth callback)",
-	"GET /auth/logout":        "browser logout (CLI logout deletes the local token)",
+	"POST /auth/logout":       "browser logout (CLI logout deletes the local token)",
 	"POST /auth/otp/request":  "browser OTP login ceremony",
 	"POST /auth/otp/verify":   "browser OTP login ceremony",
 

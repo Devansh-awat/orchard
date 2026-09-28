@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { env } from '$env/dynamic/public';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { user, isSignedIn, apiFetch, authConfig } from '$lib/stores';
@@ -20,6 +21,30 @@
 			return '';
 		}
 	});
+
+	function originOf(raw: string | undefined): string | null {
+		if (!raw) return null;
+		try {
+			return new URL(raw).origin;
+		} catch {
+			return null;
+		}
+	}
+
+	function allowedMcpOrigins(): Set<string> {
+		const origins = new Set<string>();
+		for (const raw of [env.PUBLIC_MCP_URL, env.PUBLIC_API_BASE]) {
+			const origin = originOf(raw);
+			if (origin) origins.add(origin);
+		}
+		if (browser) origins.add(window.location.origin);
+		return origins;
+	}
+
+	function mcpServerAllowed(server: string): boolean {
+		const origin = originOf(server);
+		return origin !== null && allowedMcpOrigins().has(origin);
+	}
 
 	let error = $state<string | null>(null);
 	let authorizing = $state(false);
@@ -63,6 +88,11 @@
 			return;
 		}
 
+		if (!mcpServerAllowed(mcpServer)) {
+			error = 'Invalid authorization request. Unrecognized MCP server.';
+			return;
+		}
+
 		if (browser && typeof window !== 'undefined') {
 			passkeySupported =
 				window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
@@ -71,6 +101,10 @@
 
 	async function completeAuthorization() {
 		if (authorizing) return;
+		if (!mcpServerAllowed(mcpServer)) {
+			error = 'Invalid authorization request. Unrecognized MCP server.';
+			return;
+		}
 		authorizing = true;
 		error = null;
 
@@ -251,7 +285,7 @@
 			sessionStorage.removeItem('mcp_authorize_state');
 			sessionStorage.removeItem('mcp_authorize_server');
 
-			if (mcpState && mcpServer) {
+			if (mcpState && mcpServer && savedServer === mcpServer && mcpServerAllowed(savedServer)) {
 				await completeAuthorization();
 			}
 		}

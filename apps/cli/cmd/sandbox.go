@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+var sandboxIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func sandboxCmd() *cobra.Command {
 	c := &cobra.Command{
@@ -735,6 +738,9 @@ func sandboxSSHCmd() *cobra.Command {
 				return err
 			}
 			id := str(sb["id"])
+			if !sandboxIDPattern.MatchString(id) {
+				return fmt.Errorf("refusing to use sandbox id %q in an ssh ProxyCommand", id)
+			}
 			sshBin, err := exec.LookPath("ssh")
 			if err != nil {
 				return fmt.Errorf("no ssh binary on PATH; run `orchard sandbox ssh-config %s` and point your client at ProxyCommand %q", args[0], exe+" sandbox proxy "+id)
@@ -902,6 +908,9 @@ func sandboxSSHConfigCmd() *cobra.Command {
 					fmt.Println()
 				}
 				id := str(sb["id"])
+				if !sandboxIDPattern.MatchString(id) {
+					return fmt.Errorf("refusing to write sandbox id %q into an ssh config", id)
+				}
 				fmt.Println("Host orchard-" + str(sb["name"]))
 				fmt.Println("  HostName orchard-sandbox-" + id)
 				fmt.Println("  User dev")

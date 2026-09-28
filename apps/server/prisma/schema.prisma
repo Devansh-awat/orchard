@@ -1430,6 +1430,7 @@ model Database {
   @@index([templateInstanceId], map: "idx_databases_template_instance")
   @@index([publicIp, publicPort], map: "idx_databases_public_endpoint")
   @@index([nodePoolId], map: "idx_databases_node_pool")
+  @@index([r2ProxyAccessKey], map: "idx_databases_r2_proxy_access_key")
   @@map("databases")
 }
 

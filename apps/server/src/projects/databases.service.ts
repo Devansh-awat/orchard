@@ -203,7 +203,7 @@ export class DatabasesService {
       return { r2: undefined, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
     }
 
-    if (this.r2Proxy.isEnabled()) {
+    if (this.r2Proxy.isEnabled() && !own) {
       const minted = this.r2Proxy.mintCredentials();
       await this.r2Proxy.addBinding({
         accessKey: minted.accessKey,

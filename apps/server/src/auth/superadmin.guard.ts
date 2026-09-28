@@ -48,9 +48,35 @@ const ORG_SCOPED_DENY = [
   'sandboxes/credentials'
 ];
 // Method-qualified: reading your own identity is fine, editing it is not.
-const ORG_SCOPED_ALLOW = ['GET auth/me', 'GET auth/logout'];
+const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
 
 const API_TOKEN_DENY = ['auth/passkey/register', 'auth/password/set', 'auth/mcp-token', 'setup'];
+
+const PLATFORM_ORIGINS = new Set<string>(
+  [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    ...(process.env.PLATFORM_ORIGINS || '').split(',')
+  ]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      try {
+        return new URL(s).origin;
+      } catch {
+        return s;
+      }
+    })
+);
+
+function crossSiteMutation(request: Request): boolean {
+  const method = request.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  const origin = request.headers.origin;
+  if (typeof origin === 'string' && origin !== 'null') return !PLATFORM_ORIGINS.has(origin);
+  const site = request.headers['sec-fetch-site'];
+  if (typeof site === 'string') return site !== 'same-origin' && site !== 'none';
+  return false;
+}
 
 function deniedToApiToken(path: string): boolean {
   const p = path
@@ -217,6 +243,9 @@ export class SuperAdminGuard implements CanActivate {
       // passwordless / SSO have no `type` claim and pass through.
       if ((payload as any).type === 'mcp') {
         throw new UnauthorizedException('Invalid token');
+      }
+      if (!request.headers.authorization && crossSiteMutation(request)) {
+        throw new ForbiddenException('Cross-site requests cannot use the session cookie');
       }
 
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).

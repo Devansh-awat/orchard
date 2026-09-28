@@ -442,9 +442,9 @@ func dbPsqlCmd() *cobra.Command {
 				return err
 			}
 			// The exec gateway always spawns a shell; exec into psql so quitting
-			// psql ends the session. Credentials are platform-generated alnum.
+			// psql ends the session.
 			if cs := str(db["connectionString"]); cs != "" {
-				if err := conn.Write(cmd.Context(), websocket.MessageText, []byte("exec psql \""+cs+"\"\n")); err != nil {
+				if err := conn.Write(cmd.Context(), websocket.MessageText, []byte("exec psql "+shellQuote(cs)+"\n")); err != nil {
 					return err
 				}
 			}
@@ -939,4 +939,8 @@ func dbKilledLogsCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

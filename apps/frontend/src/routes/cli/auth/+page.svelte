@@ -29,6 +29,19 @@
 		return Number.isInteger(n) && n > 0 && n < 65536;
 	}
 
+	async function deliver(params: Record<string, string>) {
+		try {
+			await fetch(`http://127.0.0.1:${encodeURIComponent(port)}/callback`, {
+				method: 'POST',
+				mode: 'no-cors',
+				body: new URLSearchParams(params)
+			});
+			window.location.href = '/cli/done';
+		} catch {
+			window.location.href = callbackUrl(params);
+		}
+	}
+
 	async function authorize() {
 		if (authorizing) return;
 		authorizing = true;
@@ -45,7 +58,7 @@
 			}
 			const { token } = await res.json();
 			done = true;
-			window.location.href = callbackUrl({ token, state });
+			await deliver({ token, state });
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Authorization failed.';
 			authorizing = false;

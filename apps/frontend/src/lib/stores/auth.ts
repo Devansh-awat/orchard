@@ -56,11 +56,17 @@ function createAuthStore() {
 		}
 	}
 
-	function signOut() {
-		if (browser) {
-			import('$lib/posthog').then(({ resetPostHog }) => resetPostHog()).catch(() => {});
-			window.location.href = `${get(apiBase)}/apiv1/auth/logout`;
-		}
+	async function signOut() {
+		if (!browser) return;
+		import('$lib/posthog').then(({ resetPostHog }) => resetPostHog()).catch(() => {});
+		try {
+			await fetch(`${get(apiBase)}/apiv1/auth/logout`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+		} catch {}
+		set(null);
+		window.location.href = '/';
 	}
 
 	async function getToken(): Promise<string | null> {

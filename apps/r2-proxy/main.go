@@ -20,6 +20,7 @@
 //	R2_ACCESS_KEY     real R2 access key id
 //	R2_SECRET_KEY     real R2 secret access key
 //	DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
+//	ALLOWED_BUCKETS   comma-separated buckets a binding may name (default: DEFAULT_BACKUP_BUCKET)
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
 // HEAD bucket, HEAD/PUT/GET/DELETE object, LIST objects v1/v2,
@@ -28,6 +29,7 @@
 package main
 
 import (
+	"encoding/xml"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -68,8 +70,11 @@ type cacheEntry struct {
 }
 
 const (
-	hitTTL  = 60 * time.Second
-	missTTL = 5 * time.Second
+	hitTTL       = 60 * time.Second
+	missTTL      = 5 * time.Second
+	maxCacheSize = 4096
+	maxKeyLength = 128
+	maxBodyBytes = 1 << 30
 )
 
 // bindingStore resolves access keys to bindings, backed by orchard's Postgres.
@@ -121,6 +126,16 @@ func (s *bindingStore) get(ak string) (Binding, bool) {
 		ttl = missTTL
 	}
 	s.mu.Lock()
+	if len(s.cache) >= maxCacheSize {
+		for k, e := range s.cache {
+			if !e.expiresAt.After(now) {
+				delete(s.cache, k)
+			}
+		}
+		if len(s.cache) >= maxCacheSize {
+			s.cache = map[string]cacheEntry{}
+		}
+	}
 	s.cache[ak] = cacheEntry{binding: b, found: found, expiresAt: now.Add(ttl)}
 	s.mu.Unlock()
 	return b, found
@@ -170,6 +185,7 @@ type Proxy struct {
 	upstreamSK      string
 	upstreamService string
 	policy          *bindingStore
+	allowedBuckets  map[string]bool
 	client          *http.Client
 }
 
@@ -206,7 +222,14 @@ func main() {
 		cancel()
 	}
 
-	store := newBindingStore(db, envDefault("DEFAULT_BACKUP_BUCKET", ""))
+	defaultBucket := envDefault("DEFAULT_BACKUP_BUCKET", "")
+	store := newBindingStore(db, defaultBucket)
+	allowed := map[string]bool{}
+	for _, b := range strings.Split(envDefault("ALLOWED_BUCKETS", defaultBucket), ",") {
+		if b = strings.TrimSpace(b); b != "" {
+			allowed[b] = true
+		}
+	}
 
 	p := &Proxy{
 		upstreamURL:     upURL,
@@ -215,6 +238,7 @@ func main() {
 		upstreamSK:      sk,
 		upstreamService: "s3",
 		policy:          store,
+		allowedBuckets:  allowed,
 		// No client-level timeout: backup uploads can be large/long. The
 		// caller controls liveness via context (we don't add one — barman
 		// has its own retry/timeout). If you front this with an ingress
@@ -230,7 +254,13 @@ func main() {
 	mux.Handle("/", p)
 
 	log.Printf("[r2-proxy] listening %s, upstream=%s region=%s", listen, upURL, region)
-	if err := http.ListenAndServe(listen, mux); err != nil {
+	server := &http.Server{
+		Addr:              listen,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -241,6 +271,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	authz, err := parseAuthHeader(r.Header.Get("Authorization"))
 	if err != nil {
 		denyAndLog(w, r, "", "AccessDenied", err.Error())
+		return
+	}
+	if len(authz.AccessKey) > maxKeyLength {
+		denyAndLog(w, r, "", "InvalidAccessKeyId", "access key too long")
 		return
 	}
 
@@ -266,47 +300,26 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not allowed for this key")
 		return
 	}
-	// Object-level operations must target a key inside the binding's prefix.
-	// Bucket-level operations (key=="") get separate handling below.
-	if key != "" && binding.Prefix != "" && !strings.HasPrefix(key, binding.Prefix) {
-		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "key outside policy prefix")
+	if len(p.allowedBuckets) > 0 && !p.allowedBuckets[bucket] {
+		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not served by this proxy")
 		return
 	}
-	if key == "" {
-		// Bucket-level: HEAD/GET location/policy/lifecycle/etc. are metadata
-		// ops on the bucket itself — bucket check already passed, allow.
-		// Listing operations (GET with no sub-resource) must have ?prefix=
-		// inside the binding's prefix so the response can't include other
-		// tenants' keys.
-		if r.Method == http.MethodGet {
-			q := r.URL.Query()
-			// Treat ?location, ?versioning, ?lifecycle, ?policy, ?acl etc. as
-			// metadata sub-resources and allow them through (bucket-level only,
-			// no tenant data exposure).
-			isMetadataSubresource := q.Has("location") || q.Has("versioning") ||
-				q.Has("lifecycle") || q.Has("policy") || q.Has("acl") ||
-				q.Has("cors") || q.Has("logging") || q.Has("encryption")
-			if !isMetadataSubresource {
-				listPrefix := q.Get("prefix")
-				if binding.Prefix != "" && !strings.HasPrefix(listPrefix, binding.Prefix) {
-					denyAndLog(w, r, authz.AccessKey, "AccessDenied", "list prefix outside policy scope")
-					return
-				}
-			}
-		}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	body, contentSha, err := readBodyForSigning(r)
+	if err != nil {
+		s3Error(w, http.StatusRequestEntityTooLarge, "EntityTooLarge", "body too large or unreadable")
+		return
 	}
 
-	// Build upstream request: same method, same path (preserves bucket+key shape
-	// so path-style works), same query, same body. Re-sign with real creds.
+	if code, msg, ok := authorizeOperation(r, key, binding.Prefix, body); !ok {
+		denyAndLog(w, r, authz.AccessKey, code, msg)
+		return
+	}
+
 	upURL := *p.upstreamURL
 	upURL.Path = r.URL.Path
 	upURL.RawQuery = r.URL.RawQuery
-
-	body, contentSha, err := readBodyForSigning(r)
-	if err != nil {
-		s3Error(w, http.StatusInternalServerError, "InternalError", "body read failed")
-		return
-	}
 
 	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), bytes.NewReader(body))
 	if err != nil {
@@ -637,6 +650,72 @@ func dedupe(in []string) []string {
 }
 
 // ─────────────────────────── helpers ───────────────────────────
+
+type deleteObjectsBody struct {
+	Objects []struct {
+		Key string `xml:"Key"`
+	} `xml:"Object"`
+}
+
+func authorizeOperation(r *http.Request, key, prefix string, body []byte) (code, msg string, ok bool) {
+	for h := range r.Header {
+		if strings.HasPrefix(strings.ToLower(h), "x-amz-copy-source") {
+			return "AccessDenied", "copy operations are not permitted", false
+		}
+	}
+	q := r.URL.Query()
+	inPrefix := func(k string) bool { return prefix == "" || strings.HasPrefix(k, prefix) }
+
+	if key != "" {
+		if !inPrefix(key) {
+			return "AccessDenied", "key outside policy prefix", false
+		}
+		switch r.Method {
+		case http.MethodHead, http.MethodGet, http.MethodPut, http.MethodDelete:
+			return "", "", true
+		case http.MethodPost:
+			if q.Has("uploads") || q.Has("uploadId") {
+				return "", "", true
+			}
+		}
+		return "MethodNotAllowed", "operation not permitted on objects", false
+	}
+
+	switch r.Method {
+	case http.MethodHead:
+		return "", "", true
+	case http.MethodGet:
+		if q.Has("location") || q.Has("versioning") || q.Has("lifecycle") || q.Has("policy") ||
+			q.Has("acl") || q.Has("cors") || q.Has("logging") || q.Has("encryption") {
+			return "", "", true
+		}
+		if q.Has("uploads") {
+			return "AccessDenied", "listing multipart uploads is not permitted", false
+		}
+		if !inPrefix(q.Get("prefix")) {
+			return "AccessDenied", "list prefix outside policy scope", false
+		}
+		return "", "", true
+	case http.MethodPost:
+		if !q.Has("delete") {
+			return "MethodNotAllowed", "operation not permitted on the bucket", false
+		}
+		var del deleteObjectsBody
+		if err := xml.Unmarshal(body, &del); err != nil {
+			return "MalformedXML", "could not parse the delete request", false
+		}
+		if len(del.Objects) == 0 {
+			return "MalformedXML", "delete request names no objects", false
+		}
+		for _, o := range del.Objects {
+			if o.Key == "" || !inPrefix(o.Key) {
+				return "AccessDenied", "delete request names a key outside policy prefix", false
+			}
+		}
+		return "", "", true
+	}
+	return "MethodNotAllowed", "operation not permitted on the bucket", false
+}
 
 func splitPathStyle(p string) (bucket, key string) {
 	p = strings.TrimPrefix(p, "/")
