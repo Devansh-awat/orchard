@@ -1,5 +1,11 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+
+const clientOptions = {
+  omit: { organization: { backupR2AccessKey: true, backupR2SecretKey: true } }
+} satisfies Prisma.PrismaClientOptions;
+
+type ClientOptions = typeof clientOptions & { datasourceUrl?: string };
 
 function buildDatasourceUrl(): string | undefined {
   const base = process.env.DATABASE_URL;
@@ -19,11 +25,14 @@ function buildDatasourceUrl(): string | undefined {
 }
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient<ClientOptions>
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super({ datasourceUrl: buildDatasourceUrl() });
+    super({ ...clientOptions, datasourceUrl: buildDatasourceUrl() });
   }
 
   async onModuleInit() {

@@ -1279,7 +1279,7 @@ export class DeploymentsController {
     @Param('entryId') entryId: string,
     @Request() req
   ) {
-    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1288,7 +1288,7 @@ export class DeploymentsController {
     });
     const entry = await this.logCapture.getLogs(id, entryId);
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
-    return entry;
+    return access.canEdit ? entry : { ...entry, logs: '' };
   }
 
   @Post(':id/build-context')
@@ -1963,7 +1963,7 @@ export class DatabasesController {
     @Param('entryId') entryId: string,
     @Request() req
   ) {
-    await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1972,7 +1972,7 @@ export class DatabasesController {
     });
     const entry = await this.logCapture.getLogs(id, entryId, 'database');
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
-    return entry;
+    return access.canEdit ? entry : { ...entry, logs: '' };
   }
 
   @Get()

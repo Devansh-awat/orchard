@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { lookup as dnsLookup } from 'dns';
+import { Agent, fetch as pinnedFetch } from 'undici';
 import { lookup as dnsLookupAsync } from 'dns/promises';
 import { isIP } from 'net';
 
@@ -79,6 +80,13 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
+let pinnedAgent: Agent | null = null;
+
+function pinned(): Agent {
+  pinnedAgent ??= new Agent({ connect: { lookup: guardedLookup } });
+  return pinnedAgent;
+}
+
 export async function guardedFetch(
   input: string | URL,
   init: GuardedFetchInit = {}
@@ -99,14 +107,17 @@ export async function guardedFetch(
   const headers = new Headers(rest.headers);
   const timeout = signal ?? AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
   for (let hop = 0; ; hop++) {
-    const res = await fetch(url, {
-      ...rest,
-      method,
-      body,
-      headers,
-      redirect: 'manual',
-      signal: timeout
-    });
+    const res = allowPrivate
+      ? await fetch(url, { ...rest, method, body, headers, redirect: 'manual', signal: timeout })
+      : ((await pinnedFetch(url, {
+          ...(rest as any),
+          method,
+          body: body as any,
+          headers,
+          redirect: 'manual',
+          signal: timeout,
+          dispatcher: pinned()
+        })) as unknown as Response);
     if (redirect === 'manual' || !isRedirect(res.status)) return res;
     await res.body?.cancel();
     const location = res.headers.get('location');

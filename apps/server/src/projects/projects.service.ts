@@ -1667,7 +1667,7 @@ export class ProjectsService {
     if (!proj) {
       throw new NotFoundException(`Project with slug ${slug} not found`);
     }
-    await this.authz.requireProjectView(proj.id, user.id);
+    const access = await this.authz.requireProjectView(proj.id, user.id);
     const project = await this.prisma.project.findUnique({
       where: {
         organizationId_slug: {
@@ -1725,11 +1725,12 @@ export class ProjectsService {
       project.deployments.map(async (deployment) => {
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment);
 
-        return {
+        const merged = {
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           status: computedStatus
         };
+        return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged);
       })
     );
 

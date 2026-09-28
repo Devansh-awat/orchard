@@ -92,7 +92,7 @@ export class ProjectOrgTransferService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        organization: true,
+        organization: { omit: { backupR2AccessKey: false, backupR2SecretKey: false } },
         members: { include: { user: { select: { id: true, username: true } } } }
       }
     });
@@ -113,7 +113,8 @@ export class ProjectOrgTransferService {
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);
 
     const destOrg = (await this.prisma.organization.findUnique({
-      where: { id: destinationOrgId }
+      where: { id: destinationOrgId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     })) as OrgWithR2 | null;
     if (!destOrg) throw new NotFoundException('Destination organization not found');
 

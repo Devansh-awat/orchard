@@ -168,6 +168,7 @@ export class OrganizationsService {
     const visibleProjectIds = await this.authz.listVisibleProjectIds(organizationId, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       include: {
         projects: {
           where: visibleProjectIds === null ? undefined : { id: { in: visibleProjectIds } },
@@ -226,7 +227,8 @@ export class OrganizationsService {
     const userId = await this.resolveUserId(clerkId, userData);
     const access = await this.authz.requireOrgMember(organizationId, userId);
     const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId }
+      where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     });
 
     if (!organization) {
@@ -323,6 +325,7 @@ export class OrganizationsService {
     const visibleProjectIds = await this.authz.listVisibleProjectIds(orgRow.id, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { slug },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       include: {
         projects: {
           where: visibleProjectIds === null ? undefined : { id: { in: visibleProjectIds } },
@@ -479,6 +482,7 @@ export class OrganizationsService {
 
     const updated = await this.prisma.organization.update({
       where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       data: updateData,
       include: {
         projects: {
@@ -572,6 +576,7 @@ export class OrganizationsService {
 
     const updated = await this.prisma.organization.update({
       where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       data: { avatarUrl },
       include: {
         projects: {
@@ -635,6 +640,7 @@ export class OrganizationsService {
 
     const updated = await this.prisma.organization.update({
       where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       data: { avatarUrl: null },
       include: {
         projects: {

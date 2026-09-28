@@ -402,7 +402,8 @@ export class DatabasesService {
     const namespace = project.namespace;
 
     const org = await this.prisma.organization.findUnique({
-      where: { id: project.organizationId }
+      where: { id: project.organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     });
     const { r2, r2ProxyAccessKey, r2ProxySecret } = await this.buildBackupR2Config(
       org,
@@ -776,7 +777,8 @@ export class DatabasesService {
     }
 
     const org = await this.prisma.organization.findUnique({
-      where: { id: database.project.organizationId }
+      where: { id: database.project.organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     });
     const backupsEnabled = Boolean(
       (database.mode === 'cnpg' || database.mode === 'container') &&
@@ -1248,7 +1250,8 @@ export class DatabasesService {
    */
   async repointProjectBackupsToOrg(projectId: string, destOrgId: string): Promise<void> {
     const destOrg = (await this.prisma.organization.findUnique({
-      where: { id: destOrgId }
+      where: { id: destOrgId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     })) as OrgR2 | null;
     const databases = await this.prisma.database.findMany({
       where: { projectId },
@@ -1404,7 +1407,13 @@ export class DatabasesService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } }
+      include: {
+        project: {
+          include: {
+            organization: { omit: { backupR2AccessKey: false, backupR2SecretKey: false } }
+          }
+        }
+      }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -1654,7 +1663,13 @@ export class DatabasesService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { organization: true } } }
+      include: {
+        project: {
+          include: {
+            organization: { omit: { backupR2AccessKey: false, backupR2SecretKey: false } }
+          }
+        }
+      }
     });
     if (!database) throw new NotFoundException('Database not found');
 
@@ -1703,7 +1718,10 @@ export class DatabasesService {
   // ── Database backup management ──
 
   private async getOrgR2Config(organizationId: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+    });
     if (
       !org?.backupR2Endpoint ||
       !org?.backupR2Bucket ||
@@ -1733,7 +1751,8 @@ export class DatabasesService {
       throw new BadRequestException('Database is missing cluster metadata');
     }
     const org = await this.prisma.organization.findUnique({
-      where: { id: database.project.organizationId }
+      where: { id: database.project.organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     });
 
     if (await this.k8sCnpg.isCnpgBackupConfigured(database.namespace, database.clusterName)) {
@@ -2562,7 +2581,8 @@ export class DatabasesService {
     }
 
     const org = await this.prisma.organization.findUnique({
-      where: { id: database.project.organizationId }
+      where: { id: database.project.organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
     });
     const ip = (org?.databasePublicIp || '').trim() || this.instanceConfig.defaultPublicIp();
     if (!ip) {

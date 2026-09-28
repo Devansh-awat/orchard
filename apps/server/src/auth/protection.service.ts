@@ -463,21 +463,18 @@ export class ProtectionService {
   async getIngressInfo(ingressId: string): Promise<{
     host: string;
     protectionMode: string;
-    projectName: string;
   } | null> {
     const ingress = await this.prisma.ingress.findUnique({
       where: { id: ingressId },
       select: {
         host: true,
-        protectionMode: true,
-        project: { select: { name: true } }
+        protectionMode: true
       }
     });
     if (!ingress || ingress.protectionMode === 'none') return null;
     return {
       host: ingress.host,
-      protectionMode: ingress.protectionMode,
-      projectName: ingress.project.name
+      protectionMode: ingress.protectionMode
     };
   }
 

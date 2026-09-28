@@ -12,7 +12,6 @@
 	interface IngressInfo {
 		host: string;
 		protectionMode: string;
-		projectName: string;
 		turnstileSiteKey: string | null;
 	}
 

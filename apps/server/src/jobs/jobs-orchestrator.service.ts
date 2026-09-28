@@ -19,6 +19,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NodesService } from '../nodes/nodes.service';
 import { JobsService, RUN_ACTIVE_STATUSES } from './jobs.service';
 import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runtimes';
+import { decodeStepsSnapshot, encodeStepsSnapshot } from './steps-snapshot';
 
 export const JOB_MANAGED_BY = 'orchard-job';
 export const LABEL_JOB_ID = 'orchard/job-id';
@@ -603,7 +604,7 @@ export class JobsOrchestratorService {
       where: { id: runId },
       select: { id: true, number: true, status: true, stepsSnapshot: true }
     });
-    const snapshot = run.stepsSnapshot as unknown as ResolvedStep[];
+    const snapshot = decodeStepsSnapshot<ResolvedStep>(run.stepsSnapshot, this.crypto);
     const step = snapshot.find((s) => s.stepOrder === stepOrder);
     if (!step) {
       await this.finishRun(ctx, runId, 'failed', `Step ${stepOrder} missing from snapshot`);
@@ -835,7 +836,10 @@ export class JobsOrchestratorService {
         data: { runCounter: { increment: 1 } },
         select: { runCounter: true }
       });
-      const snapshot = resolved.map((s) => ({ ...s, memoryBytes: Number(s.memoryBytes) }));
+      const snapshot = encodeStepsSnapshot(resolved, this.crypto).map((s) => ({
+        ...s,
+        memoryBytes: Number(s.memoryBytes)
+      }));
       return await this.prisma.jobRun.create({
         data: {
           jobId: job.id,

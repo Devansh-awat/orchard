@@ -333,13 +333,17 @@ export class AdminService {
   }
 
   async updateOrganization(orgId: string, data: { name?: string; description?: string }) {
-    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+    });
     if (!org) {
       throw new NotFoundException('Organization not found');
     }
 
     const updated = await this.prisma.organization.update({
       where: { id: orgId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description })
@@ -371,7 +375,10 @@ export class AdminService {
   }
 
   async deleteOrganization(orgId: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+    });
     if (!org) {
       throw new NotFoundException('Organization not found');
     }

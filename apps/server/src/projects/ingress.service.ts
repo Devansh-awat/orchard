@@ -16,7 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { UsersService } from '../users/users.service';
-import { AuthorizationService } from '../auth/authorization.service';
+import { AuthorizationService, ProjectAccess } from '../auth/authorization.service';
 import { normalizeBypassPath } from '../auth/protection.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
@@ -1846,12 +1846,13 @@ export class IngressService implements OnModuleInit {
       throw new NotFoundException('Ingress not found');
     }
 
+    let access: ProjectAccess;
     try {
-      await this.access.assertProjectAccess(
+      ({ access } = await this.access.assertProjectAccess(
         ingress.project.id,
         user.id,
         ingress.project.organizationId
-      );
+      ));
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw new NotFoundException('Ingress not found');
@@ -1901,7 +1902,7 @@ export class IngressService implements OnModuleInit {
       basicAuthEnabled: hasBasicAuth,
       protectionMode: ingress.protectionMode,
       protectionBypassSecret:
-        ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
+        access.canEdit && ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
       protectionBypassPaths: ingress.protectionBypassPaths ?? [],
       project: ingress.project
     };
