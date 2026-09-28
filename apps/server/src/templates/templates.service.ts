@@ -198,11 +198,14 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
     this.logger.log(`Found ${files.length} template files: ${files.join(', ')}`);
 
+    const shipped = new Set<string>();
+    let unreadable = 0;
     for (const file of files) {
       try {
         this.logger.log(`Processing template file: ${file}`);
         const yamlContent = fs.readFileSync(path.join(builtInDir, file), 'utf-8');
         const parsed = this.templateEngine.parseTemplate(yamlContent);
+        shipped.add(parsed.metadata.name);
         this.logger.log(`Parsed template: ${parsed.metadata.name}, upserting to DB...`);
 
         const claimed = await this.prisma.template.findUnique({
@@ -245,9 +248,28 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
 
         this.logger.log(`Seeded built-in template: ${parsed.metadata.name}`);
       } catch (e) {
+        unreadable += 1;
         this.logger.error(`Failed to seed template ${file}: ${e.message}`);
       }
     }
+
+    if (unreadable === 0 && this.lease.canCoordinate) {
+      await this.pruneRetiredBuiltIns(shipped);
+    }
+  }
+
+  private async pruneRetiredBuiltIns(shipped: Set<string>) {
+    const retired = await this.prisma.template.findMany({
+      where: { source: 'built-in', name: { notIn: [...shipped] }, instances: { none: {} } },
+      select: { id: true, name: true }
+    });
+    if (retired.length === 0) return;
+    await this.prisma.template.deleteMany({
+      where: { id: { in: retired.map((t) => t.id) }, instances: { none: {} } }
+    });
+    this.logger.log(
+      `Removed built-in templates that no longer ship: ${retired.map((t) => t.name).join(', ')}`
+    );
   }
 
   async listTemplates() {
