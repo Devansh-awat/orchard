@@ -128,7 +128,7 @@
 		<nav class="relative flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Orchard home"
+				aria-label="Hack Club Orchard home"
 				data-intro-hide
 				data-cascade="nav"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-cream focus-visible:outline-offset-4"

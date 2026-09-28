@@ -11,7 +11,7 @@
 <div class="flex min-h-screen flex-col bg-crimson text-white">
 	<div class="shell pt-8">
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
-			<a href="/" aria-label="Orchard home"><Logo /></a>
+			<a href="/" aria-label="Hack Club Orchard home"><Logo /></a>
 			<a href={links.install} class="pill pill-sm">Install Orchard</a>
 		</nav>
 	</div>

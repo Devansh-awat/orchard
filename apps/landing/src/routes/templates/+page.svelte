@@ -91,7 +91,7 @@
 		<nav class="flex items-center justify-between gap-4" aria-label="Main">
 			<a
 				href="/"
-				aria-label="Orchard home"
+				aria-label="Hack Club Orchard home"
 				class="rounded-sm focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-cream"
 			>
 				<Logo />
