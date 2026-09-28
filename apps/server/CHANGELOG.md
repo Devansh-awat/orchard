@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.49.0](https://github.com/hackclub/orchard/compare/server/v2.48.0...server/v2.49.0) (2026-09-28)
+
+
+### Features
+
+* a superadmin picks their sign-in method instead of the login card picking for them ([54018a6](https://github.com/hackclub/orchard/commit/54018a69b6659dd3d38c38078bdc4ab0beef521a))
+
 ## [2.48.0](https://github.com/hackclub/orchard/compare/server/v2.47.1...server/v2.48.0) (2026-09-27)
 
 

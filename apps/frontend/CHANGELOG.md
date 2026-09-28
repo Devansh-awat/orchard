@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.43.0](https://github.com/hackclub/orchard/compare/frontend/v1.42.0...frontend/v1.43.0) (2026-09-28)
+
+
+### Features
+
+* a superadmin picks their sign-in method instead of the login card picking for them ([54018a6](https://github.com/hackclub/orchard/commit/54018a69b6659dd3d38c38078bdc4ab0beef521a))
+
+
+### Bug Fixes
+
+* the login card offers the password when a passkey exists and the passkey when a password does ([19b72b0](https://github.com/hackclub/orchard/commit/19b72b0a8ec1e9a3d3a086e558a532b86c8eb64b))
+
 ## [1.42.0](https://github.com/hackclub/orchard/compare/frontend/v1.41.0...frontend/v1.42.0) (2026-09-27)
 
 
