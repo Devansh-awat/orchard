@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.3.0...r2-proxy/v0.4.0) (2026-09-28)
+
+
+### Features
+
+* a credits page with live contributors, and third-party notices in every app, image and binary ([168c584](https://github.com/hackclub/orchard/commit/168c584bc5de82dd085d6148c54f44f8f61ebc37))
+
 ## [0.3.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.2.1...r2-proxy/v0.3.0) (2026-09-27)
 
 

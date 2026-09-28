@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.0](https://github.com/hackclub/orchard/compare/cli/v0.17.0...cli/v0.18.0) (2026-09-28)
+
+
+### Features
+
+* a credits page with live contributors, and third-party notices in every app, image and binary ([168c584](https://github.com/hackclub/orchard/commit/168c584bc5de82dd085d6148c54f44f8f61ebc37))
+* a stopped app holds its pushes, start builds the newest one, and redeploy starts it ([2fd976f](https://github.com/hackclub/orchard/commit/2fd976f30f1edd865b5947ded6b7e2603e5b8451))
+* an anomalies card on projects, apps and databases that names what is wrong and the one action that helps ([4dc261f](https://github.com/hackclub/orchard/commit/4dc261fb7f5d980f962802d70a9adbed03984dff))
+* redirects can be edited in place, including the domain, from the app, the cli and mcp ([0b0ded2](https://github.com/hackclub/orchard/commit/0b0ded26f40a8dbb54ded854d9511a0ae6355251))
+* the command palette searches every organization you belong to and switches on select ([6c6b41d](https://github.com/hackclub/orchard/commit/6c6b41d92d4159ac8f0e2b3e9206082d5f376c5e))
+
 ## [0.17.0](https://github.com/hackclub/orchard/compare/cli/v0.16.0...cli/v0.17.0) (2026-09-27)
 
 

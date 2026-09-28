@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.44.0](https://github.com/hackclub/orchard/compare/frontend/v1.43.0...frontend/v1.44.0) (2026-09-28)
+
+
+### Features
+
+* a credits page with live contributors, and third-party notices in every app, image and binary ([168c584](https://github.com/hackclub/orchard/commit/168c584bc5de82dd085d6148c54f44f8f61ebc37))
+* a stopped app holds its pushes, start builds the newest one, and redeploy starts it ([2fd976f](https://github.com/hackclub/orchard/commit/2fd976f30f1edd865b5947ded6b7e2603e5b8451))
+* an anomalies card on projects, apps and databases that names what is wrong and the one action that helps ([4dc261f](https://github.com/hackclub/orchard/commit/4dc261fb7f5d980f962802d70a9adbed03984dff))
+* builds record when the job was submitted and scheduled, and the progress view shows where the time went ([0dfe05d](https://github.com/hackclub/orchard/commit/0dfe05d4fc697535d42a94769da922c7c03cefcc))
+* database stats and cluster state mirrored by the informer so the page never flickers, with the postgres logo ([4b68095](https://github.com/hackclub/orchard/commit/4b680953da7fb183c0fe3d86e2db8e612aa59a0f))
+* redirects can be edited in place, including the domain, from the app, the cli and mcp ([0b0ded2](https://github.com/hackclub/orchard/commit/0b0ded26f40a8dbb54ded854d9511a0ae6355251))
+* the command palette searches every organization you belong to and switches on select ([6c6b41d](https://github.com/hackclub/orchard/commit/6c6b41d92d4159ac8f0e2b3e9206082d5f376c5e))
+
+
+### Bug Fixes
+
+* metrics see blue green pods and environment namespaces, report the store being down, and count protected traffic ([4e90114](https://github.com/hackclub/orchard/commit/4e90114a44b824c60bf7a6a3a9ce7cbbd6f6ec35))
+* modals center in the content area at every width, sidebar var owned by the width effect ([48715b2](https://github.com/hackclub/orchard/commit/48715b2279e6ea49bfb3a6c370e76a3cb8fb9a97))
+* project hero keeps one height across tabs and the tab bar never wraps ([64f598a](https://github.com/hackclub/orchard/commit/64f598aaf576fd89c76a819d699feea032736d28))
+* rename modal gets an icon, a labelled field and a live before and after ([8b10d82](https://github.com/hackclub/orchard/commit/8b10d82bfc79af9dcff7c4552de910a4038b530c))
+
 ## [1.43.0](https://github.com/hackclub/orchard/compare/frontend/v1.42.0...frontend/v1.43.0) (2026-09-28)
 
 

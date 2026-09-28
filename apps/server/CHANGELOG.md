@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.50.0](https://github.com/hackclub/orchard/compare/server/v2.49.0...server/v2.50.0) (2026-09-28)
+
+
+### Features
+
+* a community template registry on r2 that the server syncs and the landing browses ([4ad1bd7](https://github.com/hackclub/orchard/commit/4ad1bd7663170a6fb0e8294cd65ec5dbd1d061b2))
+* a credits page with live contributors, and third-party notices in every app, image and binary ([168c584](https://github.com/hackclub/orchard/commit/168c584bc5de82dd085d6148c54f44f8f61ebc37))
+* a stopped app holds its pushes, start builds the newest one, and redeploy starts it ([2fd976f](https://github.com/hackclub/orchard/commit/2fd976f30f1edd865b5947ded6b7e2603e5b8451))
+* an anomalies card on projects, apps and databases that names what is wrong and the one action that helps ([4dc261f](https://github.com/hackclub/orchard/commit/4dc261fb7f5d980f962802d70a9adbed03984dff))
+* builds record when the job was submitted and scheduled, and the progress view shows where the time went ([0dfe05d](https://github.com/hackclub/orchard/commit/0dfe05d4fc697535d42a94769da922c7c03cefcc))
+* database stats and cluster state mirrored by the informer so the page never flickers, with the postgres logo ([4b68095](https://github.com/hackclub/orchard/commit/4b680953da7fb183c0fe3d86e2db8e612aa59a0f))
+* redirects can be edited in place, including the domain, from the app, the cli and mcp ([0b0ded2](https://github.com/hackclub/orchard/commit/0b0ded26f40a8dbb54ded854d9511a0ae6355251))
+* the command palette searches every organization you belong to and switches on select ([6c6b41d](https://github.com/hackclub/orchard/commit/6c6b41d92d4159ac8f0e2b3e9206082d5f376c5e))
+
+
+### Bug Fixes
+
+* a service port change repoints every domain on it, keeps protected ones on the proxy, and retries through the apply queue ([dd51c44](https://github.com/hackclub/orchard/commit/dd51c440ac51bbdd0ad69f8b3722925ca33d27c7))
+* metrics see blue green pods and environment namespaces, report the store being down, and count protected traffic ([4e90114](https://github.com/hackclub/orchard/commit/4e90114a44b824c60bf7a6a3a9ce7cbbd6f6ec35))
+* tenant network policy reconcile only runs from a cluster member ([be90da6](https://github.com/hackclub/orchard/commit/be90da6370addf61baf32e3f3251d2f6a52a0a9f))
+
+
+### Performance Improvements
+
+* zstd images, a leaner cache export, explicit pull policy on builder containers, and warm daemons that live two hours ([2d1c09f](https://github.com/hackclub/orchard/commit/2d1c09f9783df84848eb220ebb137fe18ca7953b))
+
 ## [2.49.0](https://github.com/hackclub/orchard/compare/server/v2.48.0...server/v2.49.0) (2026-09-28)
 
 
