@@ -27,7 +27,8 @@ jobs:
           go-version-file: apps/registry/go.mod
       - name: Validate every template
         run: |
-          go run ./apps/registry validate \
+          go build -C apps/registry -o "$RUNNER_TEMP/registry" .
+          "$RUNNER_TEMP/registry" validate \
             -templates apps/server/src/templates/built-in \
             -templates registry/templates
 
@@ -50,7 +51,8 @@ jobs:
           go-version-file: apps/registry/go.mod
       - name: Publish to R2
         run: |
-          go run ./apps/registry publish \
+          go build -C apps/registry -o "$RUNNER_TEMP/registry" .
+          "$RUNNER_TEMP/registry" publish \
             -templates apps/server/src/templates/built-in \
             -templates registry/templates \
             -files registry/files \
