@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.51.0](https://github.com/hackclub/orchard/compare/server/v2.50.0...server/v2.51.0) (2026-09-28)
+
+
+### Features
+
+* the template registry defaults to assets.orchard.my, with a latest copy of every template ([7ed8e49](https://github.com/hackclub/orchard/commit/7ed8e49e17125de6d969f4893e1f241bde588422))
+
+
+### Bug Fixes
+
+* built-in templates that no longer ship leave the gallery unless something was deployed from them ([b78c480](https://github.com/hackclub/orchard/commit/b78c480b281c156dc376104a76dd0a381ddac1e3))
+
 ## [2.50.0](https://github.com/hackclub/orchard/compare/server/v2.49.0...server/v2.50.0) (2026-09-28)
 
 
