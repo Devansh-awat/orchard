@@ -85,8 +85,9 @@ export class NotificationChannelsController {
     @Request() req
   ) {
     if (scopeType) {
-      await this.requireMember(organizationId, req);
+      const user = await this.requireMember(organizationId, req);
       const scope = await this.rules.resolveScope(organizationId, scopeType, scopeId ?? null);
+      if (scope.projectId) await this.authz.requireProjectView(scope.projectId, user.id);
       return this.channels.listChannelsForScope(organizationId, scope);
     }
     await this.requireAdmin(organizationId, req);
@@ -174,8 +175,9 @@ export class NotificationChannelsController {
     @Query('scopeId') scopeId: string,
     @Request() req
   ) {
-    await this.requireMember(organizationId, req);
-    return this.rules.listRules(organizationId, scopeType, scopeId);
+    const user = await this.requireMember(organizationId, req);
+    const visible = await this.authz.listVisibleProjectIds(organizationId, user.id);
+    return this.rules.listRules(organizationId, scopeType, scopeId, visible);
   }
 
   @Post(':id/notification-rules')

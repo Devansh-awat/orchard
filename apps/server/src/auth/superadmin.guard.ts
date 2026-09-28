@@ -53,12 +53,18 @@ const ORG_SCOPED_ALLOW = ['GET auth/me', 'GET auth/logout'];
 const API_TOKEN_DENY = ['auth/passkey/register', 'auth/password/set', 'auth/mcp-token', 'setup'];
 
 function deniedToApiToken(path: string): boolean {
-  const p = path.replace(/^\/?(apiv1\/)?/, '').replace(/\/+$/, '');
+  const p = path
+    .toLowerCase()
+    .replace(/^\/?(apiv1\/)?/, '')
+    .replace(/\/+$/, '');
   return API_TOKEN_DENY.some((d) => p === d || p.startsWith(`${d}/`));
 }
 
 function deniedToOrgScopedSession(method: string, path: string): boolean {
-  const p = path.replace(/^\/?(apiv1\/)?/, '').replace(/\/+$/, '');
+  const p = path
+    .toLowerCase()
+    .replace(/^\/?(apiv1\/)?/, '')
+    .replace(/\/+$/, '');
   if (ORG_SCOPED_ALLOW.includes(`${method.toUpperCase()} ${p}`)) return false;
   return ORG_SCOPED_DENY.some((d) => p === d.replace(/\/$/, '') || p.startsWith(d));
 }
