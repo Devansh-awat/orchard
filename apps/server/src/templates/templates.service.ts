@@ -31,6 +31,11 @@ interface RegistryEntry {
   sha256: string;
 }
 
+function blankParameterValues(parameters: unknown): unknown {
+  if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return parameters;
+  return Object.fromEntries(Object.keys(parameters).map((key) => [key, null]));
+}
+
 export const DEFAULT_REGISTRY_URL = 'https://assets.orchard.my/registry';
 
 export function registryUrl(): string | null {
@@ -687,7 +692,7 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       select: { projectId: true }
     });
     if (!owner) throw new NotFoundException('Template instance not found');
-    await this.authz.requireProjectView(owner.projectId, userId);
+    const access = await this.authz.requireProjectView(owner.projectId, userId);
     const instance = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
       include: {
@@ -730,13 +735,17 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
-    return { ...instance, ingresses: instance.ingresses.map((ing) => scrubIngress(ing)) };
+    return {
+      ...instance,
+      parameters: access.canEdit ? instance.parameters : blankParameterValues(instance.parameters),
+      ingresses: instance.ingresses.map((ing) => scrubIngress(ing))
+    };
   }
 
   async getProjectTemplateInstances(projectId: string, clerkId: string, userData?: any) {
     const userId = await this.resolveUserId(clerkId, userData);
-    await this.authz.requireProjectView(projectId, userId);
-    return this.prisma.templateInstance.findMany({
+    const access = await this.authz.requireProjectView(projectId, userId);
+    const instances = await this.prisma.templateInstance.findMany({
       where: { projectId },
       include: {
         template: {
@@ -754,6 +763,11 @@ export class TemplatesService implements OnModuleInit, OnModuleDestroy {
       },
       orderBy: { createdAt: 'desc' }
     });
+    if (access.canEdit) return instances;
+    return instances.map((instance) => ({
+      ...instance,
+      parameters: blankParameterValues(instance.parameters)
+    }));
   }
 
   async deleteTemplateInstance(

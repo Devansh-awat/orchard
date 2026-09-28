@@ -23,19 +23,19 @@ export class AnomaliesController {
 
   @Get('projects/:id/anomalies')
   async forProject(@Param('id') id: string, @Request() req) {
-    await this.access.assertProjectView(id, req.user.sub, who(req));
-    return { anomalies: await this.anomalies.forProject(id) };
+    const { access } = await this.access.assertProjectView(id, req.user.sub, who(req));
+    return { anomalies: await this.anomalies.forProject(id, access.canEdit) };
   }
 
   @Get('deployments/:id/anomalies')
   async forDeployment(@Param('id') id: string, @Request() req) {
-    await this.access.assertDeploymentView(id, req.user.sub, who(req));
-    return { anomalies: await this.anomalies.forDeployment(id) };
+    const { access } = await this.access.assertDeploymentView(id, req.user.sub, who(req));
+    return { anomalies: await this.anomalies.forDeployment(id, access.canEdit) };
   }
 
   @Get('databases/:id/anomalies')
   async forDatabase(@Param('id') id: string, @Request() req) {
-    await this.access.assertDatabaseView(id, req.user.sub, who(req));
-    return { anomalies: await this.anomalies.forDatabase(id) };
+    const { access } = await this.access.assertDatabaseView(id, req.user.sub, who(req));
+    return { anomalies: await this.anomalies.forDatabase(id, access.canEdit) };
   }
 }

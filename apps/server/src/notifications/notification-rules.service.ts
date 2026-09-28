@@ -322,17 +322,12 @@ export class NotificationRulesService {
         'Only organization admins can manage org-wide notification rules'
       );
     }
-    const project = await this.prisma.project.findFirst({
-      where: { id: scope.projectId, organizationId },
-      select: { ownerId: true }
-    });
-    if (project?.ownerId === actor.id) return;
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId: scope.projectId, userId: actor.id },
-      select: { role: { select: { name: true } } }
-    });
-    const role = membership?.role?.name?.toLowerCase();
-    if (role === 'admin' || role === 'owner' || role === 'maintainer') return;
+    const projectAccess = await this.authz.resolveProjectAccess(
+      scope.projectId,
+      organizationId,
+      actor.id
+    );
+    if (projectAccess?.canEdit && projectAccess.canManageMembers) return;
     throw new ForbiddenException(
       'You need admin access to this project to change its notification rules'
     );

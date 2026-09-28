@@ -39,11 +39,12 @@ export class ObservabilityController {
     @Query('limit') limitStr?: string,
     @Query('kinds') kinds?: string
   ) {
-    await this.assertAccess(id, req);
+    const { access } = await this.assertAccess(id, req);
     return this.timeline.list(id, {
       cursor: cursor || null,
       limit: Number(limitStr) || undefined,
-      kinds: parseKinds(kinds)
+      kinds: parseKinds(kinds),
+      canEdit: access.canEdit
     });
   }
 
@@ -134,7 +135,7 @@ export class ObservabilityController {
 
   @Get('deployments/:id/errors')
   async getErrors(@Param('id') id: string, @Request() req, @Query('window') windowStr?: string) {
-    await this.assertAccess(id, req);
+    await this.assertLogAccess(id, req);
     const window = Math.min(Math.max(1, Number(windowStr) || 60), 1440);
     return this.errorIngest.listGroups(id, window);
   }

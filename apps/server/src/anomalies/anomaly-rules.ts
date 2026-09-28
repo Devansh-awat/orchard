@@ -46,6 +46,7 @@ export interface DeploymentFacts {
   buildStatus: string | null;
   buildError: string | null;
   errorGroups: { message: string; count: number; lastSeenAt: Date }[];
+  errorTextVisible: boolean;
   href: string;
 }
 
@@ -127,7 +128,9 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
       severity: 'error',
       resource,
       title: 'failed to build',
-      detail: d.buildError?.split('\n')[0].slice(0, 160) || 'The last build did not finish',
+      detail:
+        (d.errorTextVisible && d.buildError?.split('\n')[0].slice(0, 160)) ||
+        'The last build did not finish',
       since: null,
       href: d.href,
       action: { label: 'Build logs', href: `${d.href}?tab=deploys` }
@@ -153,7 +156,9 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
       severity: 'error',
       resource,
       title: 'has a change the cluster refused',
-      detail: d.applyError.split('\n')[0].slice(0, 160),
+      detail:
+        (d.errorTextVisible && d.applyError.split('\n')[0].slice(0, 160)) ||
+        'The cluster rejected the last change',
       since: null,
       href: d.href,
       action: { label: 'Retry', href: `${d.href}?tab=settings` }
@@ -186,7 +191,9 @@ export function deploymentAnomalies(d: DeploymentFacts, now = Date.now()): Anoma
       severity: 'warning',
       resource,
       title: 'is logging errors',
-      detail: `${plural(total, 'error')} in the last hour, most often: ${spike[0].message.slice(0, 100)}`,
+      detail: d.errorTextVisible
+        ? `${plural(total, 'error')} in the last hour, most often: ${spike[0].message.slice(0, 100)}`
+        : `${plural(total, 'error')} in the last hour`,
       since: spike[0].lastSeenAt.toISOString(),
       href: d.href,
       action: { label: 'Errors', href: `${d.href}?tab=observe&view=errors` }

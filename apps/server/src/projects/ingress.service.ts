@@ -1758,13 +1758,17 @@ export class IngressService implements OnModuleInit {
           include: {
             organization: true,
             deployments: {
-              include: {
+              select: {
+                id: true,
+                name: true,
+                displayName: true,
+                status: true,
                 services: { include: { ports: true } }
               }
             }
           }
         },
-        deployment: true,
+        deployment: { select: { id: true, name: true, displayName: true, status: true } },
         service: true
       }
     });
@@ -1832,7 +1836,11 @@ export class IngressService implements OnModuleInit {
           include: {
             organization: true,
             deployments: {
-              include: {
+              select: {
+                id: true,
+                name: true,
+                displayName: true,
+                status: true,
                 services: { include: { ports: true } }
               }
             }

@@ -181,7 +181,7 @@ export class JobsService {
     return jobs.map((job) => this.serializeJob(job));
   }
 
-  async getJobDetail(jobId: string) {
+  async getJobDetail(jobId: string, opts: { redact?: boolean } = {}) {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
       include: {
@@ -205,7 +205,20 @@ export class JobsService {
     if (!job) throw new NotFoundException(`Job ${jobId} not found`);
     return {
       ...this.serializeJob(job),
-      steps: job.steps.map((s) => this.serializeStep(s))
+      steps: job.steps.map((s) =>
+        opts.redact ? this.redactStep(this.serializeStep(s)) : this.serializeStep(s)
+      )
+    };
+  }
+
+  private redactStep(step: ReturnType<JobsService['serializeStep']>) {
+    return {
+      ...step,
+      script: null,
+      envVars: (step.envVars as { key: string; value: string }[]).map(({ key }) => ({
+        key,
+        value: null
+      }))
     };
   }
 

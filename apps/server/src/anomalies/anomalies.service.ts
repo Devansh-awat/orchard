@@ -24,26 +24,31 @@ const ALERT_UNITS: Record<string, string> = {
 export class AnomaliesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async forProject(projectId: string): Promise<Anomaly[]> {
+  async forProject(projectId: string, canEdit = true): Promise<Anomaly[]> {
     const [deployments, databases] = await Promise.all([
       this.prisma.deployment.findMany({ where: { projectId }, select: { id: true } }),
       this.prisma.database.findMany({ where: { projectId }, select: { id: true } })
     ]);
     return this.collect(
       deployments.map((d) => d.id),
-      databases.map((d) => d.id)
+      databases.map((d) => d.id),
+      canEdit
     );
   }
 
-  async forDeployment(id: string): Promise<Anomaly[]> {
-    return this.collect([id], []);
+  async forDeployment(id: string, canEdit = true): Promise<Anomaly[]> {
+    return this.collect([id], [], canEdit);
   }
 
-  async forDatabase(id: string): Promise<Anomaly[]> {
-    return this.collect([], [id]);
+  async forDatabase(id: string, canEdit = true): Promise<Anomaly[]> {
+    return this.collect([], [id], canEdit);
   }
 
-  private async collect(deploymentIds: string[], databaseIds: string[]): Promise<Anomaly[]> {
+  private async collect(
+    deploymentIds: string[],
+    databaseIds: string[],
+    canEdit: boolean
+  ): Promise<Anomaly[]> {
     const now = Date.now();
     const since = new Date(now - ERROR_WINDOW_MS);
     const [
@@ -188,6 +193,7 @@ export class AnomaliesService {
           count: g.totalCount,
           lastSeenAt: g.lastSeenAt
         })),
+        errorTextVisible: canEdit,
         href: `/${slug}/deployments/${d.id}`
       };
       out.push(...deploymentAnomalies(facts, now));

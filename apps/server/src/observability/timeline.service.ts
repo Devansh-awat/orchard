@@ -31,8 +31,9 @@ export class TimelineService {
 
   async list(
     deploymentId: string,
-    opts: { cursor?: string | null; limit?: number; kinds?: TimelineKind[] }
+    opts: { cursor?: string | null; limit?: number; kinds?: TimelineKind[]; canEdit?: boolean }
   ): Promise<TimelinePage> {
+    const canEdit = opts.canEdit ?? true;
     const limit = Math.min(Math.max(opts.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
     const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
     if (opts.cursor && !cursor) throw new BadRequestException('Invalid cursor');
@@ -142,7 +143,7 @@ export class TimelineService {
             href: null,
             meta: {
               action: row.action,
-              actorEmail: row.actorEmail,
+              actorEmail: canEdit ? row.actorEmail : null,
               targetType: row.targetType,
               targetId: row.targetId,
               targetLabel: row.targetLabel,
@@ -151,7 +152,8 @@ export class TimelineService {
           }
         };
       }),
-      runs.map((run): Pending => {
+      runs.map((raw): Pending => {
+        const run = canEdit ? raw : { ...raw, detail: null };
         const d = describeBuildRun(run);
         return {
           actorUserId: run.triggeredById,
@@ -229,7 +231,7 @@ export class TimelineService {
         };
       }),
       errors.map((g): Pending => {
-        const d = describeErrorGroup(g);
+        const d = describeErrorGroup(canEdit ? g : { ...g, message: '' });
         return {
           actorUserId: null,
           entry: {
@@ -252,7 +254,7 @@ export class TimelineService {
       })
     ];
 
-    const actors = await this.loadActors(sources);
+    const actors = await this.loadActors(sources, canEdit);
     const hydrated = sources.map((source) =>
       source.map(({ entry, actorUserId }) => ({
         ...entry,
@@ -263,7 +265,10 @@ export class TimelineService {
     return mergeTimeline(hydrated, { limit, cursor });
   }
 
-  private async loadActors(sources: Pending[][]): Promise<Map<string, TimelineActor>> {
+  private async loadActors(
+    sources: Pending[][],
+    canEdit: boolean
+  ): Promise<Map<string, TimelineActor>> {
     const ids = new Set<string>();
     for (const source of sources) {
       for (const { actorUserId } of source) if (actorUserId) ids.add(actorUserId);
@@ -280,6 +285,6 @@ export class TimelineService {
         imageUrl: true
       }
     });
-    return new Map(users.map((u) => [u.id, u]));
+    return new Map(users.map((u) => [u.id, canEdit ? u : { ...u, email: null }]));
   }
 }

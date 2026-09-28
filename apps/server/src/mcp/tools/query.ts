@@ -795,10 +795,7 @@ For the running app's output use \`get_deployment_logs\`.`,
         podName: z.string().describe('The pod name (from list_pods)'),
         namespace: z
           .string()
-          .optional()
-          .describe(
-            'Kubernetes namespace (defaults to deployment namespace). Get this from the deployment details or list_pods.'
-          ),
+          .describe('Kubernetes namespace. Get this from the deployment details or list_pods.'),
         tailLines: z.number().optional().describe('Number of log lines to return (default: 100)'),
         previous: z
           .boolean()
@@ -809,12 +806,10 @@ For the running app's output use \`get_deployment_logs\`.`,
       }
     },
     async ({ podName, namespace, tailLines, previous }) => {
-      const params = new URLSearchParams();
-      if (namespace) params.set('namespace', namespace);
+      const params = new URLSearchParams({ namespace });
       if (tailLines) params.set('tailLines', String(tailLines));
       if (previous) params.set('previous', 'true');
-      const qs = params.toString();
-      const logs = await client.get(`/pods/${podName}/logs${qs ? `?${qs}` : ''}`);
+      const logs = await client.get(`/pods/${podName}/logs?${params.toString()}`);
       return typeof logs === 'string' ? text(logs) : json(logs);
     }
   );
@@ -913,11 +908,15 @@ For the running app's output use \`get_deployment_logs\`.`,
         'Get detailed information about a specific pod including status, IP, node, and restart count',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        podName: z.string().describe('The pod name')
+        podName: z.string().describe('The pod name (from list_pods)'),
+        namespace: z
+          .string()
+          .describe('Kubernetes namespace. Get this from the deployment details or list_pods.')
       }
     },
-    async ({ podName }) => {
-      const pod = await client.get(`/pods/${podName}`);
+    async ({ podName, namespace }) => {
+      const params = new URLSearchParams({ namespace });
+      const pod = await client.get(`/pods/${podName}?${params.toString()}`);
       return json(pod);
     }
   );

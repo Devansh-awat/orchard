@@ -1286,9 +1286,12 @@ export class DeploymentsController {
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Logs need edit access to the project');
+    }
     const entry = await this.logCapture.getLogs(id, entryId);
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
-    return access.canEdit ? entry : { ...entry, logs: '' };
+    return entry;
   }
 
   @Post(':id/build-context')
@@ -1410,14 +1413,15 @@ export class DeploymentsController {
 
   @Get(':id/image-history')
   async getImageHistory(@Param('id') id: string, @Request() req) {
-    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
-    return this.deployments.getImageHistory(id, req.user.sub);
+    const history = await this.deployments.getImageHistory(id, req.user.sub);
+    return access.canEdit ? history : history.map((entry) => ({ ...entry, buildLogs: null }));
   }
 
   @Get(':id/image-history/:imageHistoryId/logs')
@@ -1970,9 +1974,12 @@ export class DatabasesController {
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Logs need edit access to the project');
+    }
     const entry = await this.logCapture.getLogs(id, entryId, 'database');
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
-    return access.canEdit ? entry : { ...entry, logs: '' };
+    return entry;
   }
 
   @Get()
@@ -2129,13 +2136,16 @@ export class DatabasesController {
 
   @Get(':id/query-stats')
   async getDatabaseQueryStats(@Param('id') id: string, @Request() req) {
-    await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl
     });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Query statistics need edit access to the project');
+    }
     return this.databases.getDatabaseQueryStats(id);
   }
 

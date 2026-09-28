@@ -72,6 +72,12 @@ const MEMORY_UNITS: Record<string, number> = {
   gib: 1024 ** 3
 };
 
+function scrubComposeStackForViewer<
+  T extends { composeYaml: string; buildLogs: string | null; lastError: string | null }
+>(stack: T): T {
+  return { ...stack, composeYaml: '', buildLogs: '', lastError: null };
+}
+
 interface PreservedEnv {
   key: string;
   value: string;
@@ -618,14 +624,14 @@ export class ComposeStacksService {
       }
     });
     if (!stack) throw new NotFoundException('Compose stack not found');
-    await this.authz.requireProjectView(stack.projectId, userId);
-    return stack;
+    const access = await this.authz.requireProjectView(stack.projectId, userId);
+    return access.canEdit ? stack : scrubComposeStackForViewer(stack);
   }
 
   async listForProject(projectId: string, clerkId: string, userData?: UserData) {
     const userId = await this.resolveUserId(clerkId, userData);
-    await this.authz.requireProjectView(projectId, userId);
-    return this.prisma.composeStack.findMany({
+    const access = await this.authz.requireProjectView(projectId, userId);
+    const stacks = await this.prisma.composeStack.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -634,6 +640,7 @@ export class ComposeStacksService {
         }
       }
     });
+    return access.canEdit ? stacks : stacks.map(scrubComposeStackForViewer);
   }
 
   async deleteComposeStack(stackId: string, clerkId: string, userData?: UserData) {

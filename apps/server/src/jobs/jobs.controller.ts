@@ -117,8 +117,8 @@ export class JobsController {
 
   @Get('jobs/:id')
   async getJob(@Param('id') id: string, @Request() req) {
-    await this.assertJobView(id, req);
-    return this.jobs.getJobDetail(id);
+    const { access } = await this.assertJobView(id, req);
+    return this.jobs.getJobDetail(id, { redact: !access.canEdit });
   }
 
   @Patch('jobs/:id')
@@ -250,6 +250,12 @@ export class JobsController {
   @Get('job-runs/:runId/steps/:order/logs')
   async getStepLogs(@Param('runId') runId: string, @Param('order') order: string, @Request() req) {
     const { run } = await this.assertRunView(runId, req);
+    await this.projectAccess.assertProjectEditAccess(
+      run.job.projectId,
+      req.user.sub,
+      userData(req),
+      'view job run logs'
+    );
     const stepOrder = parseInt(order, 10);
     if (!Number.isFinite(stepOrder)) throw new NotFoundException('Step not found');
     const step = await this.jobs.getRunStepLogs(runId, stepOrder);

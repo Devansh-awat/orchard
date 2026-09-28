@@ -107,6 +107,7 @@ export function redactDatabaseForViewer<
     publicConnectionString?: string | null;
     r2ProxyAccessKey?: string | null;
     r2ProxySecret?: string | null;
+    creator?: { email?: string | null } | null;
   }
 >(d: T): T {
   return {
@@ -115,7 +116,8 @@ export function redactDatabaseForViewer<
     connectionString: null,
     publicConnectionString: null,
     r2ProxyAccessKey: null,
-    r2ProxySecret: null
+    r2ProxySecret: null,
+    creator: d.creator ? { ...d.creator, email: null } : d.creator
   } as T;
 }
 

@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Put, Param, Body, Request } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
+import { AuthorizationService } from '../auth/authorization.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { EnvironmentSharedVarsService, SharedVarInput } from './environment-shared-vars.service';
@@ -20,7 +21,8 @@ export class EnvironmentsController {
   constructor(
     private readonly environments: EnvironmentsService,
     private readonly sharedVars: EnvironmentSharedVarsService,
-    private readonly projectAccess: ProjectAccessService
+    private readonly projectAccess: ProjectAccessService,
+    private readonly authz: AuthorizationService
   ) {}
 
   @Get('projects/:projectId/environments')
@@ -58,7 +60,9 @@ export class EnvironmentsController {
 
   @Delete('environments/:id')
   async remove(@Param('id') id: string, @Request() req) {
-    const { user } = await this.resolveEnvEdit(id, req, 'delete environments');
+    const { user } = await this.resolveEnvView(id, req);
+    const projectId = await this.environments.projectIdForEnv(id);
+    await this.authz.requireProjectDelete(projectId, user.id);
     return this.environments.deleteEnvironment(id, user.id);
   }
 

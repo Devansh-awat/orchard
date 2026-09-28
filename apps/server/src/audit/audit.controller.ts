@@ -83,14 +83,23 @@ export class AuditController {
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
 
-    await this.authz.requireProjectView(deployment.projectId, userId);
+    const access = await this.authz.requireProjectView(deployment.projectId, userId);
 
-    return this.auditService.query({
+    const page = await this.auditService.query({
       scope: { kind: 'deployment', deploymentId },
       cursor: cursor || null,
       limit: limit ? parseInt(limit, 10) : undefined,
       action
     });
+    if (access.canEdit) return page;
+    return {
+      ...page,
+      entries: page.entries.map((entry) => ({
+        ...entry,
+        actorEmail: null,
+        actor: entry.actor ? { ...entry.actor, email: null } : entry.actor
+      }))
+    };
   }
 
   private async resolveUserId(req: Request): Promise<string> {

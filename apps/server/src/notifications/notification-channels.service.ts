@@ -31,6 +31,12 @@ interface Actor {
   email?: string | null;
 }
 
+function eventScopeFilter(scope: { scopeType: string; scopeId: string | null }) {
+  if (scope.scopeType === 'org' || !scope.scopeId) return {};
+  if (scope.scopeType === 'project') return { projectId: scope.scopeId };
+  return { scopeType: scope.scopeType, scopeId: scope.scopeId };
+}
+
 interface ChannelConfig {
   url?: string;
   recipients?: string[];
@@ -340,7 +346,7 @@ export class NotificationChannelsService {
   async replay(organizationId: string, channelId: string, sinceHours: number, actor: Actor) {
     const channel = await this.prisma.notificationChannel.findFirst({
       where: { id: channelId, organizationId },
-      select: { id: true, name: true, enabled: true }
+      select: { id: true, name: true, enabled: true, scopeType: true, scopeId: true }
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
     if (!channel.enabled) {
@@ -353,17 +359,24 @@ export class NotificationChannelsService {
     // do-over, not a way to route around the rules.
     const rules = await this.prisma.notificationRule.findMany({
       where: { channelId, enabled: true, mode: 'deliver' },
-      select: { events: true }
+      select: { scopeType: true, scopeId: true, events: true }
     });
-    const wanted = new Set(
-      rules.flatMap((r) => (Array.isArray(r.events) ? (r.events as string[]) : []))
-    );
-    if (wanted.size === 0) {
+    const wanted = rules.flatMap((rule) => {
+      const events = Array.isArray(rule.events) ? (rule.events as string[]) : [];
+      if (events.length === 0) return [];
+      return [{ event: { in: events }, ...eventScopeFilter(rule) }];
+    });
+    if (wanted.length === 0) {
       return { queued: 0, message: 'This channel has no rules, so there is nothing to replay' };
     }
 
     const events = await this.prisma.notificationEvent.findMany({
-      where: { organizationId, occurredAt: { gte: since }, event: { in: [...wanted] } },
+      where: {
+        organizationId,
+        occurredAt: { gte: since },
+        ...eventScopeFilter(channel),
+        OR: wanted
+      },
       orderBy: { occurredAt: 'asc' },
       take: MAX_REPLAY_EVENTS,
       select: { id: true, event: true, payload: true }

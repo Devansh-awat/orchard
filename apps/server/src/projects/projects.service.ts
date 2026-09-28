@@ -68,6 +68,10 @@ export class ProjectsService {
     private readonly environments: EnvironmentsService
   ) {}
 
+  private scrubCreatorForViewer<C extends { email?: string | null }>(creator: C | null): C | null {
+    return creator ? { ...creator, email: null } : creator;
+  }
+
   private scrubMembersForViewer<
     M extends {
       user?: { email?: string | null } | null;
@@ -739,6 +743,7 @@ export class ProjectsService {
 
     return {
       ...project,
+      creator: access.canEdit ? project.creator : this.scrubCreatorForViewer(project.creator),
       icon,
       backgroundImage,
       members: safeMembers,
@@ -1740,6 +1745,7 @@ export class ProjectsService {
 
     return {
       ...project,
+      creator: access.canEdit ? project.creator : this.scrubCreatorForViewer(project.creator),
       icon,
       backgroundImage,
       deployments: deploymentsWithComputedStatus
@@ -1977,6 +1983,7 @@ export class ProjectsService {
 
     return {
       ...project,
+      creator: access.canEdit ? project.creator : this.scrubCreatorForViewer(project.creator),
       icon,
       backgroundImage,
       members: safeMembers,

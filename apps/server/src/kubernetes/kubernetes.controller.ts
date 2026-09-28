@@ -251,6 +251,7 @@ export class KubernetesController {
   }
 
   @Get('sync/:namespace')
+  @RequireScope('deploy')
   async syncNamespace(@Param('namespace') namespace: string, @Req() req: any) {
     // syncing pulls live cluster state into our DB for a namespace — requires edit
     // rights because it can clobber records and is server-side expensive.
