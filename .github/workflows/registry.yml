@@ -6,12 +6,14 @@ on:
       - 'registry/**'
       - 'apps/server/src/templates/built-in/**'
       - 'apps/registry/**'
+      - '.github/workflows/registry.yml'
   push:
     branches: [main]
     paths:
       - 'registry/**'
       - 'apps/server/src/templates/built-in/**'
       - 'apps/registry/**'
+      - '.github/workflows/registry.yml'
 
 concurrency:
   group: registry-${{ github.ref }}
@@ -42,6 +44,7 @@ jobs:
       R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
       R2_ACCESS_KEY: ${{ secrets.REGISTRY_R2_ACCESS_KEY }}
       R2_SECRET_KEY: ${{ secrets.REGISTRY_R2_SECRET_KEY }}
+      REGISTRY_PREFIX: registry
     steps:
       - uses: actions/checkout@v4
         with:
