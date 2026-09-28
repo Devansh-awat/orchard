@@ -31,10 +31,14 @@ interface RegistryEntry {
   sha256: string;
 }
 
+export const DEFAULT_REGISTRY_URL = 'https://assets.orchard.my/registry';
+
 export function registryUrl(): string | null {
-  const raw = process.env.TEMPLATE_REGISTRY_URL?.trim();
-  if (!raw) return null;
-  return raw.replace(/\/+$/, '');
+  const raw = process.env.TEMPLATE_REGISTRY_URL;
+  if (raw === undefined) return DEFAULT_REGISTRY_URL;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/\/+$/, '');
 }
 
 @Injectable()

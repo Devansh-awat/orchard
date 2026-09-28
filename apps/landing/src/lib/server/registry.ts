@@ -95,7 +95,7 @@ type Fetch = typeof globalThis.fetch;
 const cache = new Map<string, { until: number; value: unknown }>();
 
 export function registryBase() {
-	return (env.REGISTRY_URL || 'https://orchard.my/registry').replace(/\/+$/, '');
+	return (env.REGISTRY_URL || 'https://assets.orchard.my/registry').replace(/\/+$/, '');
 }
 
 export function registryHref(path: string) {

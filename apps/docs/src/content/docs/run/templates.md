@@ -215,14 +215,16 @@ Deleting the instance offers to delete everything it made.
 ## The community registry
 
 The templates that ship with Orchard, and the ones the community has
-contributed, are published to a public registry at `https://orchard.my/registry`
-and shown in the gallery at [orchard.my/templates](https://orchard.my/templates).
+contributed, are published to a public registry at
+`https://assets.orchard.my/registry` and shown in the gallery at
+[orchard.my/templates](https://orchard.my/templates).
 
-An instance pulls the catalogue on boot and every six hours when
-`TEMPLATE_REGISTRY_URL` is set. Imported templates are protected like built-in
-ones: they cannot be edited or deleted from the instance, and a custom template
-that already uses a name is never overwritten. Leave the variable empty on an
-air-gapped instance; the built-in templates still seed from the server image.
+Every instance pulls the catalogue on boot and every six hours, from that
+registry unless `TEMPLATE_REGISTRY_URL` points somewhere else. Imported templates
+are protected like built-in ones: they cannot be edited or deleted from the
+instance, and a custom template that already uses a name is never overwritten.
+Set the variable empty on an air-gapped instance; the built-in templates still
+seed from the server image.
 
 ### Publishing one
 
@@ -244,8 +246,8 @@ Published versions are immutable, so bump `metadata.version` to ship a change.
 Every version stays fetchable:
 
 ```
-https://orchard.my/registry/templates/index.json
-https://orchard.my/registry/templates/<name>/index.json
-https://orchard.my/registry/templates/<name>/<version>/template.yaml
-https://orchard.my/registry/templates/<name>/latest/template.yaml
+https://assets.orchard.my/registry/templates/index.json
+https://assets.orchard.my/registry/templates/<name>/index.json
+https://assets.orchard.my/registry/templates/<name>/<version>/template.yaml
+https://assets.orchard.my/registry/templates/<name>/latest/template.yaml
 ```

@@ -21,9 +21,10 @@ import (
 )
 
 type fakeObject struct {
-	body        []byte
-	contentType string
-	modified    time.Time
+	body         []byte
+	contentType  string
+	modified     time.Time
+	cacheControl string
 }
 
 type fakeS3 struct {
@@ -69,7 +70,7 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		body, _ := io.ReadAll(r.Body)
-		f.objects[key] = fakeObject{body, r.Header.Get("Content-Type"), time.Now()}
+		f.objects[key] = fakeObject{body, r.Header.Get("Content-Type"), time.Now(), r.Header.Get("Cache-Control")}
 		f.puts++
 		w.Header().Set("ETag", md5ETag(body))
 		w.WriteHeader(http.StatusOK)
@@ -210,6 +211,7 @@ func TestPublishBuildsIndexesAndRefusesMutation(t *testing.T) {
 	for _, key := range []string{
 		"templates/index.json", "templates/ghost/index.json", "templates/ghost/1.0.0/template.yaml",
 		"templates/ghost/1.0.0/README.md", "templates/ghost/1.0.0/template.json", "templates/redis/2.1.0/template.yaml", "install.sh",
+		"templates/ghost/latest/template.yaml", "templates/ghost/latest/README.md", "templates/redis/latest/template.yaml",
 	} {
 		if _, ok := fake.objects[key]; !ok {
 			t.Errorf("missing %s", key)
@@ -254,6 +256,9 @@ func TestPublishBuildsIndexesAndRefusesMutation(t *testing.T) {
 	json.Unmarshal(fake.objects["templates/ghost/index.json"].body, &idx)
 	if idx.Latest != "1.1.0" || len(idx.Versions) != 2 || idx.Versions[1].PublishedAt != "2026-09-28T12:00:00Z" {
 		t.Fatalf("name index wrong: %+v", idx)
+	}
+	if latest := fake.objects["templates/ghost/latest/template.yaml"]; !strings.Contains(string(latest.body), "ghost:6") || latest.cacheControl != cacheIndex {
+		t.Fatalf("latest alias should follow 1.1.0 with a short cache, got %q (%s)", latest.body, latest.cacheControl)
 	}
 }
 

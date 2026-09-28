@@ -479,6 +479,14 @@ func (p *publisher) publishTemplate(ctx context.Context, t localTemplate) (templ
 	sort.Slice(idx.Versions, func(i, j int) bool { return compareSemver(idx.Versions[i].Version, idx.Versions[j].Version) > 0 })
 	idx.Latest = idx.Versions[0].Version
 
+	if idx.Latest == m.Version {
+		for _, a := range t.artifacts {
+			if _, err := p.putIfChanged(ctx, "templates/"+m.Name+"/latest/"+a.Name, a.Body, a.ContentType, cacheIndex, false); err != nil {
+				return templateIndex{}, err
+			}
+		}
+	}
+
 	body, _ := json.MarshalIndent(idx, "", "  ")
 	if _, err := p.putIfChanged(ctx, "templates/"+m.Name+"/index.json", body, "application/json; charset=utf-8", cacheIndex, false); err != nil {
 		return templateIndex{}, err

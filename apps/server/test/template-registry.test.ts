@@ -75,9 +75,11 @@ function service(prisma: unknown) {
   );
 }
 
-test('registryUrl trims a trailing slash and treats blank as unset', () => {
-  process.env.TEMPLATE_REGISTRY_URL = 'https://orchard.my/registry/';
-  assert.equal(registryUrl(), 'https://orchard.my/registry');
+test('registryUrl defaults to the public registry, trims a trailing slash and turns off when blank', () => {
+  delete process.env.TEMPLATE_REGISTRY_URL;
+  assert.equal(registryUrl(), 'https://assets.orchard.my/registry');
+  process.env.TEMPLATE_REGISTRY_URL = 'https://registry.example.com/';
+  assert.equal(registryUrl(), 'https://registry.example.com');
   process.env.TEMPLATE_REGISTRY_URL = '   ';
   assert.equal(registryUrl(), null);
 });

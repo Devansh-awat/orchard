@@ -75,7 +75,7 @@ recognised. Anything without a default is optional unless the description says o
 | `R2_BACKUP_BUCKET` |  |  |
 | `R2_PUBLIC_URL` |  |  |
 | `R2_ENDPOINT` |  |  |
-| `TEMPLATE_REGISTRY_URL` | `https://orchard.my/registry` | Community template registry. When set, the server pulls the catalogue from here on boot and every six hours and lists those templates alongside the built-in ones. Leave empty on air-gapped instances. |
+| `TEMPLATE_REGISTRY_URL` | `https://assets.orchard.my/registry` | Community template registry. The server pulls the catalogue from here on boot and every six hours and lists those templates alongside the built-in ones. Unset means the public registry below; set it empty on air-gapped instances. |
 | `EMAIL_AVATAR_LOOKUP` |  | Import a profile picture from Gravatar/Libravatar when a user has one set up for their email. The server does the lookup and copies the image into R2, so users' browsers never contact the avatar service and no email hash leaks to it from a viewer's IP. Set to false to never look anything up; requires R2. |
 | `EMAIL_AVATAR_PROVIDERS` |  | Comma-separated, tried in order. Defaults to "libravatar,gravatar". |
 | `BUILD_MODE` | `local` | ── Image builds ───────────────────────────────────────────────────────────── local (docker daemon) \| kubernetes (in-cluster buildkit jobs) |

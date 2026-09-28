@@ -1,9 +1,9 @@
 # The Orchard registry
 
-Everything in this directory is published to `https://orchard.my/registry` and
-shown in the gallery at `https://orchard.my/templates`. Every Orchard instance
-that sets `TEMPLATE_REGISTRY_URL` pulls the catalogue from there, so a merged
-template shows up in the hosted instance and in self-hosted ones alike.
+Everything in this directory is published to `https://assets.orchard.my/registry`
+and shown in the gallery at `https://orchard.my/templates`. Every Orchard instance
+pulls the catalogue from there unless `TEMPLATE_REGISTRY_URL` says otherwise, so a
+merged template shows up in the hosted instance and in self-hosted ones alike.
 
 ## Adding a template
 
