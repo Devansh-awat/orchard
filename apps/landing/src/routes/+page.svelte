@@ -1,17 +1,19 @@
 <script lang="ts">
-	import Nav from '$lib/components/Nav.svelte';
 	import Hero from '$lib/components/Hero.svelte';
+	import FloatingNav from '$lib/components/FloatingNav.svelte';
+	import Kubernetes from '$lib/components/Kubernetes.svelte';
 	import HowItWorks from '$lib/components/HowItWorks.svelte';
-	import Features from '$lib/components/Features.svelte';
-	import Mcp from '$lib/components/Mcp.svelte';
+	import Agents from '$lib/components/Agents.svelte';
+	import Platform from '$lib/components/Platform.svelte';
 	import Cli from '$lib/components/Cli.svelte';
 	import SelfHost from '$lib/components/SelfHost.svelte';
+	import HackClub from '$lib/components/HackClub.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 
-	const title = 'Orchard · Kubernetes, made easy';
+	const title = 'Orchard · Your own cloud in one click';
 	const description =
-		'Orchard runs on your own Kubernetes cluster and turns a GitHub repo into a running app: builds, HTTPS, databases, jobs, logs, rollbacks, and MCP for AI agents.';
+		'Orchard turns a GitHub repo into a running app on your own Kubernetes cluster, with databases, HTTPS, logs, and an MCP server for your agents.';
 </script>
 
 <svelte:head>
@@ -27,14 +29,22 @@
 	<meta name="twitter:image" content="/screenshots/project.png" />
 </svelte:head>
 
-<Nav />
-<main class="isolate pt-16">
-	<Hero />
+<Hero />
+<FloatingNav />
+
+<main>
 	<HowItWorks />
-	<Features />
-	<Mcp />
+	<Kubernetes />
+	<Platform />
+	<Agents />
 	<Cli />
 	<SelfHost />
-	<Closing />
+	<HackClub />
 </main>
-<Footer />
+
+<div class="bg-crimson pt-12">
+	<hr class="h-1 border-0 bg-blush" />
+	<Closing />
+	<hr class="h-1 border-0 bg-blush" />
+	<Footer />
+</div>

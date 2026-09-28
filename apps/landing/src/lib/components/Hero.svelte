@@ -1,64 +1,194 @@
 <script lang="ts">
-	import { reveal, hover } from '$lib/motion.svelte';
-	import Shot from './Shot.svelte';
+	import { onMount } from 'svelte';
+	import { animate, stagger } from 'motion';
+	import Logo from './Logo.svelte';
+	import HeroMark from './HeroMark.svelte';
+	import PromptCopy from './PromptCopy.svelte';
+	import WaveEdge from './WaveEdge.svelte';
+	import ScrollChip from './ScrollChip.svelte';
+	import CreditPill from './CreditPill.svelte';
+	import { links } from '$lib/links';
+	import { transition } from '$lib/motion.svelte';
+	import { finishIntro, introMode } from '$lib/intro';
+
+	let root = $state<HTMLElement | null>(null);
+	let box = $state<{ size: number; left: number; top: number } | null>(null);
+	let stretch = $state(0);
+
+	function placeMark() {
+		const hero = root;
+		if (!hero) return;
+		const frame = hero.getBoundingClientRect();
+		const width = hero.clientWidth;
+		const height = hero.offsetHeight;
+		let right = 0;
+		let bottom = 0;
+		for (const node of hero.querySelectorAll('[data-line], [data-measure]')) {
+			const range = document.createRange();
+			range.selectNodeContents(node);
+			const rect =
+				node.getAttribute('data-measure') === 'box'
+					? (node.firstElementChild ?? node).getBoundingClientRect()
+					: range.getBoundingClientRect();
+			right = Math.max(right, rect.right - frame.left);
+			bottom = Math.max(bottom, rect.bottom - frame.top);
+		}
+		if (width < 768) {
+			const size = Math.min(width * 0.86, 420);
+			const top = bottom + 40;
+			box = { size, left: width - size * 0.8, top };
+			stretch = Math.ceil(top + size * 0.8 + 90);
+			return;
+		}
+		stretch = 0;
+		const gap = 44;
+		const room = width - (right + gap);
+		const size = Math.min(813, Math.max(540, room / 0.84));
+		const scale = size / 813;
+		box = {
+			size,
+			left: Math.max(right + gap, width + 130 * scale - size),
+			top: height + 69 * scale - size
+		};
+	}
+
+	onMount(() => {
+		const hero = root;
+		if (hero) {
+			placeMark();
+			document.fonts.ready.then(placeMark);
+			const ro = new ResizeObserver(() => placeMark());
+			ro.observe(hero);
+			const late = setTimeout(placeMark, 1600);
+			const stopWatching = () => {
+				ro.disconnect();
+				clearTimeout(late);
+			};
+			const cascade = startCascade();
+			return () => {
+				stopWatching();
+				cascade?.();
+			};
+		}
+	});
+
+	function startCascade() {
+		const el = root;
+		const mode = introMode();
+		if (!el || !mode) return;
+		const all = (selector: string) => Array.from(el.querySelectorAll<HTMLElement>(selector));
+
+		animate(all('[data-cascade="nav"]'), { opacity: [0, 1] }, { duration: 0.35 });
+		animate(
+			all('[data-line]'),
+			{ opacity: [0, 1], y: ['105%', '0%'] },
+			{ ...transition('smooth'), delay: stagger(0.09, { startDelay: 0.05 }) }
+		);
+		animate(
+			all('[data-cascade="rise"]'),
+			{ opacity: [0, 1], y: [18, 0] },
+			{ ...transition('smooth'), delay: stagger(0.1, { startDelay: 0.28 }) }
+		);
+		animate(
+			all('[data-cascade="cta"]'),
+			{ opacity: [0, 1], scale: [0.92, 1] },
+			{ ...transition('bouncy'), delay: 0.36 }
+		);
+		animate(
+			all('[data-bloom-band]'),
+			{ opacity: [0, 1], scale: [0.82, 1], rotate: [-10, 0] },
+			{ type: 'spring', visualDuration: 0.7, bounce: 0.2, delay: 0.12 }
+		);
+		animate(
+			all('[data-bloom-petal]'),
+			{ opacity: [0, 1], scale: [0, 1] },
+			{ ...transition('bouncy'), delay: stagger(0.1, { startDelay: 0.55 }) }
+		).finished.then(finishIntro);
+	}
 </script>
 
-<header class="relative overflow-hidden">
+<header
+	id="hero"
+	bind:this={root}
+	class="relative isolate flex min-h-[clamp(640px,100svh,940px)] flex-col overflow-hidden bg-crimson pb-[90px] text-white"
+	style:min-height={stretch ? `${stretch}px` : undefined}
+>
 	<div
-		class="pointer-events-none absolute -top-32 -right-40 h-[40rem] w-[40rem] bg-[radial-gradient(closest-side,var(--color-shell-100)_0%,transparent_100%)]"
-		aria-hidden="true"
-	></div>
-	<div class="section-x relative grid items-center gap-12 py-20 lg:grid-cols-12 lg:py-28">
-		<div class="lg:col-span-5">
-			<p
-				{@attach reveal({ index: 0 })}
-				class="font-mono text-sm tracking-wide text-primary-600 uppercase"
+		class="pointer-events-none absolute -z-10 {box
+			? ''
+			: '-right-[130px] -bottom-[69px] w-[813px] max-w-[130%]'}"
+		style:width={box ? `${box.size}px` : undefined}
+		style:left={box ? `${box.left}px` : undefined}
+		style:top={box ? `${box.top}px` : undefined}
+	>
+		<HeroMark class="w-full" />
+	</div>
+
+	<div class="shell flex w-full flex-1 flex-col pt-8">
+		<nav class="relative flex items-center justify-between gap-4" aria-label="Main">
+			<a
+				href="/"
+				aria-label="Orchard home"
+				data-intro-hide
+				data-cascade="nav"
+				class="rounded-sm focus-visible:outline-3 focus-visible:outline-cream focus-visible:outline-offset-4"
 			>
-				Open source soon
+				<Logo />
+			</a>
+			<CreditPill
+				explain="#hackclub"
+				data-intro-hide
+				data-cascade="nav"
+				class="absolute left-1/2 inline-flex -translate-x-1/2 items-center max-lg:hidden"
+			/>
+			<a href={links.install} data-intro-hide data-cascade="nav" class="pill pill-sm">
+				Install Orchard
+			</a>
+		</nav>
+		<CreditPill
+			explain="#hackclub"
+			data-intro-hide
+			data-cascade="nav"
+			class="mt-5 inline-flex items-center self-start lg:hidden"
+		/>
+
+		<div class="my-auto pt-10 pb-20 max-md:my-0">
+			<h1
+				aria-label="your own cloud in one click"
+				class="text-[clamp(2.5rem,5.2vw,4rem)] leading-[1.26] font-medium"
+			>
+				<span class="block overflow-hidden" aria-hidden="true">
+					<span data-line data-intro-hide class="block">
+						your <span class="font-extrabold">own</span> cloud
+					</span>
+				</span>
+				<span class="block overflow-hidden" aria-hidden="true">
+					<span data-line data-intro-hide class="block">
+						in <em class="pr-[0.04em] font-extrabold">one</em> click
+					</span>
+				</span>
+			</h1>
+
+			<p
+				data-intro-hide
+				data-cascade="rise"
+				data-measure
+				class="mt-2 max-w-[728px] text-[clamp(1.5rem,2.2vw,2rem)] text-balance text-cream"
+			>
+				Turn any Linux box into a private hosting platform.
 			</p>
-			<div>
-				<h1
-					{@attach reveal({ index: 1 })}
-					class="mt-6 max-w-[16ch] text-5xl font-semibold tracking-tight text-balance text-ink-900 md:text-6xl"
-				>
-					Kubernetes, made easy.
-				</h1>
-				<p
-					{@attach reveal({ index: 2 })}
-					class="mt-6 max-w-[48ch] text-lg text-pretty text-ink-700"
-				>
-					Push a repo. Get a running app. On the cluster you already own.
-				</p>
+
+			<div data-intro-hide data-cascade="cta" data-measure="box" class="mt-7">
+				<PromptCopy />
 			</div>
-			<div {@attach reveal({ index: 3 })} class="mt-9 flex flex-wrap items-center gap-3">
-				<a
-					href="https://github.com/hackclub/orchard"
-					{@attach hover()}
-					class="btn btn-lg btn-primary"
-				>
-					Run it on your cluster
-				</a>
-				<a href="#how" class="btn btn-lg btn-outline">See how it works</a>
-			</div>
-			<p {@attach reveal({ index: 5 })} class="mt-7 text-ink-500">
-				A <span class="font-medium text-ink-700">Hack Club</span> project created by
-				<a
-					href="https://github.com/LeafdTK"
-					class="font-medium text-ink-900 underline decoration-primary-300 underline-offset-4 hover:decoration-primary-500"
-				>
-					Leafd
-				</a>.
-			</p>
 		</div>
-		<div class="lg:col-span-7">
-			<div {@attach reveal({ index: 6, y: 24 })}>
-				<Shot
-					name="project"
-					alt="An Orchard project page: a pixel-art gradient header over running apps and their databases"
-					priority
-					class="lg:w-[132%]"
-				/>
-			</div>
+	</div>
+
+	<div class="absolute inset-x-0 bottom-0 h-[90px]">
+		<WaveEdge fill="#ffdfe3" />
+		<div class="h-[55px] bg-blush"></div>
+		<div data-intro-hide data-cascade="rise" class="absolute -top-[17px] left-1/2 -translate-x-1/2">
+			<ScrollChip />
 		</div>
 	</div>
 </header>

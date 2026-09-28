@@ -1,40 +1,30 @@
 <script lang="ts">
-	import { reveal, hover } from '$lib/motion.svelte';
+	import { links } from '$lib/links';
+	import { hover, reveal } from '$lib/motion.svelte';
 </script>
 
-<section class="section-y">
-	<div class="section-x">
-		<div class="panel-surface rounded-3xl px-6 py-20 text-center md:px-14 md:py-24">
-			<h2
-				{@attach reveal()}
-				class="mx-auto max-w-[20ch] text-4xl font-semibold tracking-tight text-balance text-primary-50 md:text-5xl"
-			>
-				Ready when you are.
-			</h2>
-			<p
-				{@attach reveal({ index: 1 })}
-				class="mx-auto mt-5 max-w-[48ch] text-lg text-pretty text-primary-100/75"
-			>
-				Install it on the cluster you already have, invite your team, and push.
-			</p>
-			<div
-				{@attach reveal({ index: 2 })}
-				class="mt-9 flex flex-wrap items-center justify-center gap-3"
-			>
-				<a
-					href="https://github.com/hackclub/orchard"
-					{@attach hover()}
-					class="btn btn-lg btn-onpanel"
-				>
-					Run it on your cluster
-				</a>
-				<a
-					href="https://github.com/hackclub/orchard"
-					class="btn btn-lg text-primary-50 outline-1 -outline-offset-1 outline-white/25 hover:bg-white/8"
-				>
-					Read the source
-				</a>
-			</div>
-		</div>
-	</div>
+<section
+	class="shell flex flex-col items-center pt-[clamp(2.5rem,3.7vw,56px)] pb-[clamp(3rem,4.6vw,64px)]"
+>
+	<h2
+		{@attach reveal()}
+		class="text-center text-[clamp(1.75rem,3.9vw,3rem)] leading-[1.26] text-pretty text-white"
+	>
+		your <span class="font-extrabold">own</span> cloud, in
+		<em class="pr-[0.04em] font-extrabold">one</em> click.
+	</h2>
+	<p
+		{@attach reveal({ index: 1 })}
+		class="mt-3 text-center text-[clamp(1.0625rem,1.5vw,1.25rem)] font-medium text-white"
+	>
+		Free and open source. Runs on any Linux box.
+	</p>
+	<a
+		href={links.install}
+		{@attach reveal({ index: 2 })}
+		{@attach hover()}
+		class="pill pill-lg mt-8"
+	>
+		Install Orchard
+	</a>
 </section>

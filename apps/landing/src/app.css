@@ -1,7 +1,5 @@
 @import 'tailwindcss';
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
 @font-face {
 	font-family: 'Plus Jakarta Sans';
 	src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
@@ -39,79 +37,23 @@
 	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-	--color-primary-50: #fef5f6;
-	--color-primary-100: #fce8ea;
-	--color-primary-200: #f9d1d6;
-	--color-primary-300: #f3a8b2;
-	--color-primary-400: #e87485;
-	--color-primary-500: #c93a4f;
-	--color-primary-600: #b33346;
-	--color-primary-700: #962b3a;
-	--color-primary-800: #7a2430;
-	--color-primary-900: #5f1c25;
-	--color-primary-950: #3d1118;
+	--color-crimson: #f9445a;
+	--color-crimson-deep: #c31026;
+	--color-blush: #ffdfe3;
+	--color-blush-strong: #ffadbd;
+	--color-rose: #ff919f;
+	--color-cream: #fffff8;
 
-	--color-ink-900: #2c1a1d;
-	--color-ink-700: #5d3a3f;
-	--color-ink-500: #8a6a6f;
-
-	--color-shell-50: #fdf7f8;
-	--color-shell-100: #f8e8ea;
-
-	--color-canvas: #fffbfb;
-	--color-panel: #1a0f11;
+	--color-night-900: #140d10;
+	--color-night-800: #1f1519;
+	--color-night-700: #2f2227;
+	--color-night-300: #ab979c;
+	--color-night-100: #f7edef;
+	--color-live: #5fe0a4;
 }
 
 :root {
 	color-scheme: light;
-	--shot-edge: --alpha(var(--color-ink-900) / 8%);
-	--shot-shadow:
-		0 1px 2px --alpha(var(--color-primary-900) / 6%),
-		0 24px 60px -30px --alpha(var(--color-primary-900) / 30%);
-	--hairline: --alpha(var(--color-ink-900) / 10%);
-}
-
-/*
- * Dark mode re-declares the semantic tokens rather than adding `dark:` to every
- * utility, so `text-ink-900`, `bg-shell-50` and friends flip on their own.
- * Contrast is rebuilt, not inverted: ink goes light, surfaces go slightly
- * lighter than the canvas, and shadows are dropped for hairlines.
- */
-:root[data-theme='dark'] {
-	color-scheme: dark;
-	--color-canvas: #131011;
-	--color-shell-50: #1a1618;
-	--color-shell-100: #221c1e;
-	--color-panel: #1a1618;
-	--color-ink-900: #f6eef0;
-	--color-ink-700: #c2adb1;
-	--color-ink-500: #8f7d81;
-	--color-primary-500: #e2596d;
-	--color-primary-600: #ea6b7d;
-	--color-primary-300: #f0919d;
-	--shot-edge: --alpha(#ffffff / 12%);
-	--shot-shadow: none;
-	--hairline: --alpha(#ffffff / 12%);
-}
-
-/* Before the inline script resolves a theme, follow the OS. */
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme]) {
-		color-scheme: dark;
-		--color-canvas: #131011;
-		--color-shell-50: #1a1618;
-		--color-shell-100: #221c1e;
-		--color-panel: #1a1618;
-		--color-ink-900: #f6eef0;
-		--color-ink-700: #c2adb1;
-		--color-ink-500: #8f7d81;
-		--color-primary-500: #e2596d;
-		--color-primary-600: #ea6b7d;
-		--color-primary-300: #f0919d;
-		--shot-edge: --alpha(#ffffff / 12%);
-		--shot-shadow: none;
-		--hairline: --alpha(#ffffff / 12%);
-	}
 }
 
 html {
@@ -120,126 +62,208 @@ html {
 
 body {
 	font-family: var(--font-sans);
-	background: var(--color-canvas);
-	color: var(--color-ink-900);
+	background: var(--color-blush);
+	color: var(--color-crimson);
 }
 
-/* Section shell: outer handles background + vertical rhythm, inner handles width. */
-@utility section-y {
-	padding-block: --spacing(20);
-	@variant md {
-		padding-block: --spacing(28);
-	}
+::selection {
+	background: var(--color-crimson);
+	color: var(--color-cream);
 }
 
-@utility section-x {
+@utility shell {
 	margin-inline: auto;
-	max-width: 76rem;
+	max-width: 1492px;
 	padding-inline: --spacing(6);
 	@variant sm {
-		padding-inline: --spacing(10);
+		padding-inline: --spacing(8);
 	}
 	@variant lg {
-		padding-inline: --spacing(14);
+		padding-inline: --spacing(12);
 	}
 }
 
-/* Screenshots: concentric radius that scales with the viewport, hairline ring, no border. */
-@utility shot {
-	overflow: hidden;
-	border-radius: min(1vw, 14px);
-	outline: 1px solid var(--shot-edge);
-	outline-offset: -1px;
-	background: var(--color-shell-50);
-}
-
-@utility shot-lift {
-	box-shadow: var(--shot-shadow);
-}
-
-/* Surfaces that sit on the canvas: a fill in light, a hairline in dark. */
-@utility tile {
-	border-radius: var(--radius-2xl);
-	background: var(--color-shell-50);
-}
-
-@utility hairline-t {
-	border-top: 1px solid var(--hairline);
-}
-
-.btn {
+@utility pill {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.5rem;
-	border-radius: 9999px;
-	font-weight: 600;
+	justify-content: center;
+	gap: 0.625rem;
+	border-radius: 8px;
+	background: #fff;
+	color: var(--color-crimson);
 	white-space: nowrap;
 	transition:
 		background-color 0.18s ease,
-		color 0.18s ease,
-		outline-color 0.18s ease;
+		color 0.18s ease;
+	&:hover {
+		background: var(--color-blush);
+	}
+	&:focus-visible {
+		outline: 3px solid var(--color-cream);
+		outline-offset: 3px;
+	}
 }
 
-.btn:focus-visible {
-	outline: 2px solid var(--color-primary-500);
-	outline-offset: 2px;
+@utility pill-solid {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	border-radius: 8px;
+	background: var(--color-crimson);
+	color: #fff;
+	white-space: nowrap;
+	transition: background-color 0.18s ease;
+	&:hover {
+		background: var(--color-crimson-deep);
+	}
+	&:focus-visible {
+		outline: 3px solid var(--color-crimson-deep);
+		outline-offset: 3px;
+	}
 }
 
-.btn-md {
-	padding: 0.625rem 1rem;
-	font-size: 0.9375rem;
+@utility pill-lg {
+	height: 54px;
+	width: 289px;
+	max-width: 100%;
+	padding-inline: 1rem;
+	font-size: 1.5rem;
+	font-weight: 500;
 }
 
-.btn-lg {
-	padding: 0.8125rem 1.25rem;
+@utility pill-sm {
+	padding: 10px 12px;
 	font-size: 1rem;
 }
 
-.btn-primary {
-	background: var(--color-primary-500);
-	color: #fff;
+@utility focus-ring {
+	&:focus-visible {
+		outline: 3px solid var(--color-crimson-deep);
+		outline-offset: 3px;
+	}
 }
 
-.btn-primary:hover {
-	background: var(--color-primary-600);
+@utility section-title {
+	text-align: center;
+	font-size: clamp(1.75rem, 2.9vw, 2.25rem);
+	line-height: 1.2;
+	font-weight: 600;
+	text-wrap: balance;
 }
 
-.btn-outline {
-	color: var(--color-ink-900);
-	outline: 1px solid --alpha(var(--color-ink-900) / 14%);
-	outline-offset: -1px;
+@utility section-lead {
+	text-align: center;
+	font-size: clamp(1rem, 1.6vw, 1.25rem);
+	line-height: 1.5;
+	font-weight: 500;
+	text-wrap: pretty;
 }
 
-.btn-outline:hover {
-	background: --alpha(var(--color-ink-900) / 4%);
+@utility grain {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+	mix-blend-mode: multiply;
 }
 
-/* Always sits on a dark panel, so it must not follow the flipping ink tokens. */
-.btn-onpanel {
-	background: #fff;
-	color: #241a1c;
+.wave-drift {
+	animation: wave-drift var(--wave-period, 9s) linear infinite;
 }
 
-.btn-onpanel:hover {
-	background: #fdeff1;
+@keyframes wave-drift {
+	to {
+		background-position-x: calc(var(--wave-length, 213px) * -1);
+	}
 }
 
-/* Dark panels keep their own colour in both modes; in dark they need an edge. */
-@utility panel-surface {
-	background: var(--color-panel);
-	@variant dark {
-		outline: 1px solid --alpha(#ffffff / 8%);
-		outline-offset: -1px;
+.marquee {
+	animation: marquee var(--marquee-period, 60s) linear infinite;
+}
+
+.marquee-reverse {
+	animation-direction: reverse;
+}
+
+@keyframes marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+.caret {
+	display: inline-block;
+	width: 0.55em;
+	height: 1.1em;
+	vertical-align: text-bottom;
+	background: currentColor;
+	animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+.bob {
+	animation: bob 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes bob {
+	50% {
+		transform: translateY(4px);
+	}
+}
+
+.spin {
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.pulse-dot {
+	position: relative;
+}
+
+.pulse-dot::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: inherit;
+	animation: pulse-ring 1.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+@keyframes pulse-ring {
+	from {
+		transform: scale(1);
+		opacity: 0.55;
+	}
+	to {
+		transform: scale(2.6);
+		opacity: 0;
+	}
+}
+
+html[data-intro] [data-intro-hide] {
+	opacity: 0;
+}
+
+html[data-intro='cascade'] [data-intro-hide] {
+	animation: intro-bail-in 0.3s ease 2.5s forwards;
+}
+
+@keyframes intro-bail-in {
+	to {
+		opacity: 1;
 	}
 }
 
 .motion-hidden {
 	opacity: 0;
-}
-
-/* ui.sh picker: `contents` outranks the UA hidden rule, so hidden options still render. */
-[data-uidotsh-option][hidden] {
-	display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -249,5 +273,13 @@ body {
 
 	.motion-hidden {
 		opacity: 1;
+	}
+
+	.wave-drift,
+	.marquee,
+	.caret,
+	.bob,
+	.pulse-dot::after {
+		animation: none;
 	}
 }

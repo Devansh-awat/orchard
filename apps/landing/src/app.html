@@ -22,21 +22,23 @@
 			href="%sveltekit.assets%/favicon/apple-touch-icon.png"
 		/>
 		<link rel="manifest" href="%sveltekit.assets%/favicon/site.webmanifest" />
+		<link
+			rel="preload"
+			href="%sveltekit.assets%/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf"
+			as="font"
+			type="font/ttf"
+			crossorigin
+		/>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<script>
-			// Resolve the theme before first paint so there is no flash.
 			(function () {
 				try {
-					var stored = localStorage.getItem('orchard-landing-theme');
-					var dark =
-						stored === 'dark' ||
-						(stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-					document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-				} catch (e) {
-					document.documentElement.dataset.theme = 'light';
-				}
+					if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+						document.documentElement.dataset.intro = 'cascade';
+					}
+				} catch (e) {}
 			})();
 		</script>
 		<div style="display: contents">%sveltekit.body%</div>
