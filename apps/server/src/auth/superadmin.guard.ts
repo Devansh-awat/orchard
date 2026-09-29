@@ -238,6 +238,7 @@ export class SuperAdminGuard implements CanActivate {
     // Try JWT first, then fall back to API token
     let authenticated = false;
     let orgScopeDenied = false;
+    let crossSiteDenied = false;
 
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
@@ -251,7 +252,7 @@ export class SuperAdminGuard implements CanActivate {
         throw new UnauthorizedException('Invalid token');
       }
       if (!request.headers.authorization && crossSiteMutation(request)) {
-        throw new ForbiddenException('Cross-site requests cannot use the session cookie');
+        crossSiteDenied = true;
       }
 
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
@@ -324,6 +325,9 @@ export class SuperAdminGuard implements CanActivate {
       // JWT failed — try API token lookup
     }
 
+    if (crossSiteDenied) {
+      throw new ForbiddenException('Cross-site requests cannot use the session cookie');
+    }
     if (orgScopeDenied) {
       throw new ForbiddenException(
         'This sign-in is scoped to a single organization and cannot manage account credentials'

@@ -143,7 +143,10 @@ async function bootstrap() {
       // a credentialed CORS match would let a tenant's JS read API
       // responses on behalf of a logged-in user. If you need to allow
       // additional first-party origins, add them to PLATFORM_ORIGINS.
-      callback(new Error('Not allowed by CORS'));
+      // Declined rather than thrown: the browser withholds the response
+      // either way, and a cookie-backed mutation is refused with a real 403
+      // by SuperAdminGuard instead of a 500 from here.
+      callback(null, false);
     },
     credentials: true
   };
