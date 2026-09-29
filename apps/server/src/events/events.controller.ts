@@ -12,6 +12,7 @@ import { Auth } from '../auth/decorators';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { OrgEventsService } from './org-events.service';
+import { SseStreamLimiter } from './sse-stream-limiter';
 
 @Auth()
 @Controller('events')
@@ -19,7 +20,8 @@ export class EventsController {
   constructor(
     private readonly orgEvents: OrgEventsService,
     private readonly memberships: MembershipCacheService,
-    private readonly authz: AuthorizationService
+    private readonly authz: AuthorizationService,
+    private readonly streams: SseStreamLimiter
   ) {}
 
   @Sse('orgs/:orgId')
@@ -52,6 +54,8 @@ export class EventsController {
       map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }))
     );
 
+    const release = this.streams.acquire(userId, `org:${orgId}`);
+
     // Track subscriber count per org so server-side pushers (metrics emitter)
     // can skip orgs nobody is currently watching.
     return defer(() => {
@@ -66,6 +70,11 @@ export class EventsController {
           )
         : live$;
       return merge(events$, heartbeat$);
-    }).pipe(finalize(() => this.orgEvents.removeSubscriber(orgId))) as Observable<MessageEvent>;
+    }).pipe(
+      finalize(() => {
+        this.orgEvents.removeSubscriber(orgId);
+        release();
+      })
+    ) as Observable<MessageEvent>;
   }
 }

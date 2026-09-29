@@ -10,9 +10,28 @@ import { ResourceBindingsService } from './resource-bindings.service';
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Generous ceilings — unreachable in normal use, but bound what a single env can
 // store so a client can't bloat the DB or blow past the 1MB k8s Secret limit.
-const MAX_VARS = 1000;
+export const MAX_ENV_VARS = 1000;
 const MAX_KEY_LEN = 256;
-const MAX_VALUE_BYTES = 64 * 1024;
+export const MAX_VALUE_BYTES = 64 * 1024;
+const ENCRYPTED_AT_REST_PREFIX = 'enc:v1:';
+
+export function assertEnvValueStorable(key: string, value: string): void {
+  if (value.startsWith(ENCRYPTED_AT_REST_PREFIX)) {
+    throw new BadRequestException(
+      `Value for ${key} may not start with ${ENCRYPTED_AT_REST_PREFIX}; that prefix is reserved for values encrypted at rest`
+    );
+  }
+  if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
+    throw new BadRequestException(`Value for ${key} exceeds ${MAX_VALUE_BYTES / 1024}KB`);
+  }
+}
+
+export function assertEnvSetStorable(env: { key: string; value: string }[]): void {
+  if (env.length > MAX_ENV_VARS) {
+    throw new BadRequestException(`Too many variables (max ${MAX_ENV_VARS})`);
+  }
+  for (const entry of env) assertEnvValueStorable(entry.key, entry.value);
+}
 
 export interface SharedVarInput {
   key: string;
@@ -147,13 +166,11 @@ export class EnvironmentSharedVarsService {
         value = String(raw.value);
         if (value === '' && secret && existing?.secret) value = existing.value;
       }
-      if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
-        throw new BadRequestException(`Value for ${key} exceeds ${MAX_VALUE_BYTES / 1024}KB`);
-      }
+      assertEnvValueStorable(key, value);
       seen.set(key, { key, value, secret });
     }
-    if (seen.size > MAX_VARS) {
-      throw new BadRequestException(`Too many variables (max ${MAX_VARS})`);
+    if (seen.size > MAX_ENV_VARS) {
+      throw new BadRequestException(`Too many variables (max ${MAX_ENV_VARS})`);
     }
     const vars = Array.from(seen.values());
 

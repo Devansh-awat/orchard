@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ApiThrottlerGuard, apiThrottlerLimit } from '../auth/api-throttler.guard';
 import { McpOAuthController } from './mcp-oauth.controller';
 import { McpTransportController } from './mcp-transport.controller';
 import { McpOAuthService } from './mcp-oauth.service';
@@ -19,10 +21,15 @@ import { SessionsService } from '../auth/sessions.service';
 // where SuperAdminGuard does not run and anyone could flip an instance toggle.
 // The MCP only needs the services, never the controllers.
 @Module({
-  imports: [PrismaModule, AnalyticsModule],
+  imports: [
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }]),
+    PrismaModule,
+    AnalyticsModule
+  ],
   controllers: [McpOAuthController, McpTransportController],
   providers: [
     { provide: APP_GUARD, useClass: McpEnabledGuard },
+    { provide: APP_GUARD, useClass: ApiThrottlerGuard },
     McpOAuthService,
     McpTransportService,
     SessionsService,

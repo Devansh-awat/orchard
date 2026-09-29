@@ -8,6 +8,7 @@ import { LeaderElectionService } from './leader-election.service';
 import { EventsController } from './events.controller';
 import { PrismaEventsBridge } from './prisma-events.bridge';
 import { MetricsPusherService } from './metrics-pusher.service';
+import { SseStreamLimiter } from './sse-stream-limiter';
 import { K8sPodInformerService } from '../kubernetes/k8s-pod-informer.service';
 import { K8sCnpgInformerService } from '../kubernetes/k8s-cnpg-informer.service';
 import { K8sNodeInformerService } from '../kubernetes/k8s-node-informer.service';
@@ -27,9 +28,10 @@ const legacyInformers =
     K8sNodeInformerService,
     PodLogCaptureService,
     MetricsPusherService,
+    SseStreamLimiter,
     ...legacyInformers
   ],
   controllers: [EventsController],
-  exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService]
+  exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService, SseStreamLimiter]
 })
 export class EventsModule {}

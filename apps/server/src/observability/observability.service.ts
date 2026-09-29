@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import {
   Observable,
@@ -50,8 +50,6 @@ interface RuntimeLogMessage {
     | { done: true; status: string }
     | { type: 'heartbeat'; ts: number };
 }
-
-const MAX_RUNTIME_STREAMS_PER_KEY = 5;
 
 export type { SeriesPoint };
 
@@ -205,8 +203,6 @@ export class ObservabilityService {
     return merge(logs$, heartbeat$).pipe(takeWhile((ev) => !(ev.data as any)?.done, true));
   }
 
-  private readonly activeRuntimeStreams = new Map<string, number>();
-
   /**
    * Live runtime log tail: one k8s follow=true stream per pod, fanned into a
    * single SSE flow with 100ms batching. Pod churn is reconciled from the
@@ -215,22 +211,15 @@ export class ObservabilityService {
    * from the last seen timestamp. The SSE id is the newest line timestamp, so
    * Last-Event-ID reconnects resume via sinceTime (k8s second granularity can
    * duplicate a boundary line; clients dedupe by exact (pod, ts, line)).
-   * Streams are capped per user+deployment to bound API-server connections.
+   * The controller caps streams per user+deployment to bound API-server
+   * connections.
    */
   streamRuntimeLogs(
     deploymentId: string,
-    userId: string,
     tailLines: number,
     sinceTime?: string
   ): Observable<RuntimeLogMessage> {
     return defer(() => {
-      const key = `${userId}:${deploymentId}`;
-      const current = this.activeRuntimeStreams.get(key) ?? 0;
-      if (current >= MAX_RUNTIME_STREAMS_PER_KEY) {
-        throw new BadRequestException('Too many concurrent log streams for this deployment');
-      }
-      this.activeRuntimeStreams.set(key, current + 1);
-
       const lines$ = new Subject<RuntimeLogLine>();
       const meta$ = new Subject<RuntimeLogMessage>();
       const aborts = new Map<string, () => void>();
@@ -337,9 +326,6 @@ export class ObservabilityService {
           if (reconcileTimer) clearInterval(reconcileTimer);
           for (const [, abort] of aborts) abort();
           aborts.clear();
-          const n = (this.activeRuntimeStreams.get(key) ?? 1) - 1;
-          if (n <= 0) this.activeRuntimeStreams.delete(key);
-          else this.activeRuntimeStreams.set(key, n);
         })
       );
     });

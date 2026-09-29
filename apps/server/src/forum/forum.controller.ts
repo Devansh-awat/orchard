@@ -95,7 +95,7 @@ export class ForumController {
 
   @Auth()
   @Post('uploads')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   async uploadImage(@Req() req: any, @UploadedFile() file?: Express.Multer.File) {
     await this.userId(req);
     if (!file) throw new BadRequestException('A file is required');

@@ -50,6 +50,7 @@ import { parseRepoUrl } from '../docker/repo-url';
 import { computePodStatus } from '../mirror/pod-status';
 import { normalizeRootDirectory } from '../docker/build-config';
 import { applyEnvKeepRules, EnvVarWrite } from './env-write-rules';
+import { assertEnvSetStorable } from './environment-shared-vars.service';
 import {
   coerceDockerfileHealthCheck,
   resolveHealthCheck,
@@ -2330,6 +2331,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       value: e.value,
       secret: e.secret
     }));
+    assertEnvSetStorable(envList);
 
     const resources = await this.resourceBindings.valuesFor(deployment.id);
     this.resolveOrReject(envList, [], resources);
@@ -2941,6 +2943,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         autoDeployBranch,
         ...(repoChanged
           ? {
+              githubRepoId: null,
               queuedCommitSha: null,
               queuedCommitMessage: null,
               queuedCommitAuthorName: null,
@@ -6161,6 +6164,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       value: e.value,
       secret: e.secret
     }));
+    assertEnvSetStorable(env);
 
     // Injected form resolves shared references against the environment's shared
     // vars (secrets — own or inherited — route to a k8s Secret downstream).
@@ -6688,6 +6692,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       value: e.value,
       secret: e.secret
     }));
+    assertEnvSetStorable(env);
 
     // Injected form resolves shared references against the environment's shared
     // vars (secrets — own or inherited — route to a k8s Secret downstream).
@@ -7062,6 +7067,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       value: e.value,
       secret: e.secret
     }));
+    assertEnvSetStorable(env);
 
     const rawPorts =
       Array.isArray(data.ports) && data.ports.length > 0

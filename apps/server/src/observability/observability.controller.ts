@@ -12,9 +12,10 @@ import {
   ServiceUnavailableException,
   ForbiddenException
 } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import { Observable, finalize } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
+import { SseStreamLimiter } from '../events/sse-stream-limiter';
 import { ObservabilityService } from './observability.service';
 import { MetricsStoreError } from '../metrics/victoria-metrics.service';
 import { ErrorIngestService } from './error-ingest.service';
@@ -28,7 +29,8 @@ export class ObservabilityController {
     private readonly observability: ObservabilityService,
     private readonly errorIngest: ErrorIngestService,
     private readonly timeline: TimelineService,
-    private readonly projectAccess: ProjectAccessService
+    private readonly projectAccess: ProjectAccessService,
+    private readonly streams: SseStreamLimiter
   ) {}
 
   @Get('deployments/:id/timeline')
@@ -85,7 +87,10 @@ export class ObservabilityController {
     const lastEventId =
       typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
     const offset = Math.max(0, Number(lastEventId ?? offsetStr) || 0);
-    return this.observability.streamBuildLogs(id, offset) as Observable<MessageEvent>;
+    const release = this.streams.acquire(req.user.sub, `build-logs:${id}`);
+    return this.observability
+      .streamBuildLogs(id, offset)
+      .pipe(finalize(release)) as Observable<MessageEvent>;
   }
 
   @Sse('deployments/:id/logs/stream')
@@ -100,12 +105,10 @@ export class ObservabilityController {
     const lastEventId =
       typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
     const sinceTime = lastEventId || sinceTimeQuery || undefined;
-    return this.observability.streamRuntimeLogs(
-      id,
-      req.user.sub,
-      tailLines,
-      sinceTime
-    ) as Observable<MessageEvent>;
+    const release = this.streams.acquire(req.user.sub, `logs:${id}`);
+    return this.observability
+      .streamRuntimeLogs(id, tailLines, sinceTime)
+      .pipe(finalize(release)) as Observable<MessageEvent>;
   }
 
   @Get('deployments/:id/logs/structured')
