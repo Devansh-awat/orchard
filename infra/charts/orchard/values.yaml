@@ -277,6 +277,9 @@ builders:
     hosts:
       - harbor-core.harbor.svc.cluster.local
       - harbor.1mp.dev
+  # Registries buildkit talks plain http to. Anything not listed is https.
+  httpRegistries:
+    - harbor-core.harbor.svc.cluster.local
   r2:
     accessKeyId: ""
     secretAccessKey: ""
@@ -467,6 +470,10 @@ r2Proxy:
   # Bucket used for organizations that never configured their own backup
   # storage. Pair it with R2_BACKUP_BUCKET on the server.
   defaultBucket: ""
+  # Password for the read-only orchard_r2_proxy postgres role. Left empty, the
+  # chart keeps whatever the orchard-r2-proxy-db secret already holds, or mints
+  # one on first install.
+  databasePassword: ""
   replicas: 2
   image:
     name: r2-proxy

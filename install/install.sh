@@ -1405,6 +1405,8 @@ builders:
     password: "$REGISTRY_PASSWORD"
     hosts:
       - zot.orchard.svc.cluster.local:5000
+  httpRegistries:
+    - zot.orchard.svc.cluster.local:5000
   # Builds are firewalled off from the rest of the cluster, so the registry they
   # push to has to be named or the push is refused. This installer runs zot in
   # the orchard namespace; the chart's defaults describe a different cluster.

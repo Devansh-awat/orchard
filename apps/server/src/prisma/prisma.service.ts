@@ -48,6 +48,24 @@ export class PrismaService
       this.logger.error(`Failed to connect to database: ${error.message}`);
       throw error;
     }
+    await this.grantBackupProxyReads();
+  }
+
+  private async grantBackupProxyReads() {
+    try {
+      await this.$executeRawUnsafe(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'orchard_r2_proxy') THEN
+            GRANT USAGE ON SCHEMA public TO orchard_r2_proxy;
+            GRANT SELECT ON TABLE databases, projects, organizations TO orchard_r2_proxy;
+          END IF;
+        END
+        $$
+      `);
+    } catch (error) {
+      this.logger.warn(`could not grant the backup proxy its reads: ${error.message}`);
+    }
   }
 
   async onModuleDestroy() {

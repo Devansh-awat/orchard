@@ -30,6 +30,9 @@ function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
   }));
 }
 
+import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
+import { tenantQuotaFloor, tenantQuotaHard } from './tenant-quota';
+
 export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
   { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
   { namespaceSelector: { matchExpressions: [{ key: 'orchard.dev/managed', operator: 'Exists' }] } }
@@ -108,44 +111,19 @@ export class K8sNamespaceService implements OnModuleInit {
     const quotaName = 'orchard-org-quota';
     const limitName = 'orchard-defaults';
 
-    const hardQuota: Record<string, string> = {};
-    if (options.cpuLimitMilli && options.cpuLimitMilli > 0) {
-      hardQuota['requests.cpu'] = `${options.cpuLimitMilli}m`;
-      hardQuota['limits.cpu'] = `${options.cpuLimitMilli}m`;
-    }
-    if (options.memoryLimitBytes && options.memoryLimitBytes > 0) {
-      hardQuota['requests.memory'] = String(options.memoryLimitBytes);
-      hardQuota['limits.memory'] = String(options.memoryLimitBytes);
-    }
-    if (options.maxPods && options.maxPods > 0) {
-      hardQuota['pods'] = String(options.maxPods);
-    }
-    if (options.maxServices && options.maxServices > 0) {
-      hardQuota['services'] = String(options.maxServices);
-    }
+    const hardQuota = tenantQuotaHard(options, tenantQuotaFloor(process.env));
 
-    // ResourceQuota
-    if (Object.keys(hardQuota).length === 0) {
-      try {
-        await api.deleteNamespacedResourceQuota(quotaName, ns);
-      } catch (error: any) {
-        if (error?.response?.statusCode !== 404) {
-          console.error('[K8s] delete ResourceQuota failed:', error?.message || error);
-        }
-      }
-    } else {
-      const quotaBody: k8s.V1ResourceQuota = {
-        metadata: { name: quotaName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
-        spec: { hard: hardQuota }
-      };
-      try {
-        await api.replaceNamespacedResourceQuota(quotaName, ns, quotaBody);
-      } catch (error: any) {
-        if (error?.response?.statusCode === 404) {
-          await api.createNamespacedResourceQuota(ns, quotaBody);
-        } else {
-          throw error;
-        }
+    const quotaBody: k8s.V1ResourceQuota = {
+      metadata: { name: quotaName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
+      spec: { hard: hardQuota }
+    };
+    try {
+      await api.replaceNamespacedResourceQuota(quotaName, ns, quotaBody);
+    } catch (error: any) {
+      if (error?.response?.statusCode === 404) {
+        await api.createNamespacedResourceQuota(ns, quotaBody);
+      } else {
+        throw error;
       }
     }
 
@@ -418,31 +396,19 @@ export class K8sNamespaceService implements OnModuleInit {
   async bootstrapTenantSecretsRbac(namespace: string): Promise<void> {
     const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
     const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
-    const labels = {
-      'app.kubernetes.io/name': 'server',
-      'app.kubernetes.io/managed-by': 'leaf'
-    };
-    const roleName = 'orchard-server-tenant-secrets';
-    try {
-      await rbacApi.createNamespacedRole(namespace, {
-        metadata: { name: roleName, namespace, labels },
-        rules: [
-          {
-            apiGroups: [''],
-            resources: ['secrets', 'configmaps'],
-            verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
-          }
-        ]
-      });
-    } catch (e: any) {
-      if (e?.response?.statusCode !== 409) throw e;
+    const clusterRole = process.env.TENANT_SECRETS_CLUSTER_ROLE || undefined;
+    if (!clusterRole) {
+      try {
+        await rbacApi.createNamespacedRole(namespace, tenantSecretsRole(namespace));
+      } catch (e: any) {
+        if (e?.response?.statusCode !== 409) throw e;
+      }
     }
     try {
-      await rbacApi.createNamespacedRoleBinding(namespace, {
-        metadata: { name: roleName, namespace, labels },
-        roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: roleName },
-        subjects: [{ kind: 'ServiceAccount', name: 'orchard-server', namespace: serverNamespace }]
-      });
+      await rbacApi.createNamespacedRoleBinding(
+        namespace,
+        tenantSecretsBinding(namespace, serverNamespace, clusterRole)
+      );
     } catch (e: any) {
       if (e?.response?.statusCode !== 409) throw e;
     }

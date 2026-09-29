@@ -139,6 +139,7 @@ still has to name it.
 
 {{- define "orchard.serverEnv" }}
             - { name: NODE_ENV, value: production }
+            - { name: TENANT_SECRETS_CLUSTER_ROLE, value: {{ printf "%s-tenant-secrets" .Release.Name | quote }} }
             {{- if .Values.datadog.enabled }}
             # Datadog agent service with internalTrafficPolicy: Local — each
             # pod reaches the agent on its own node. (hostPort 8126 is dead
@@ -343,3 +344,24 @@ still has to name it.
             {{- toYaml . | nindent 12 }}
             {{- end }}
 {{- end }}
+
+{{/*
+One password for the proxy's postgres role, stable across upgrades: an
+explicit value wins, then whatever the secret already holds, then a fresh
+random one that every template in this render sees.
+*/}}
+{{- define "orchard.r2ProxyDbPassword" -}}
+{{- if .Values.r2Proxy.databasePassword -}}
+{{- .Values.r2Proxy.databasePassword -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" .Values.namespace "orchard-r2-proxy-db") -}}
+{{- if and $existing $existing.data $existing.data.password -}}
+{{- $existing.data.password | b64dec -}}
+{{- else -}}
+{{- if not (index .Values.r2Proxy "generatedDatabasePassword") -}}
+{{- $_ := set .Values.r2Proxy "generatedDatabasePassword" (randAlphaNum 40) -}}
+{{- end -}}
+{{- index .Values.r2Proxy "generatedDatabasePassword" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

@@ -31,9 +31,9 @@ stringData:
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
   DEFAULT_BACKUP_BUCKET: {{ .Values.r2Proxy.defaultBucket | default "" | quote }}
 ---
-# Database URL for binding lookups. By default cloned from the existing CNPG
-# `<cluster>-app` Secret at helm-template time. Override via values if you
-# want to point the proxy at a read-only role (recommended in prod).
+# Database URL for binding lookups. The proxy connects as the read-only
+# orchard_r2_proxy role the postgres cluster manages; r2Proxy.databaseUrl
+# overrides it for a cluster the chart does not run.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -43,16 +43,10 @@ type: Opaque
 stringData:
 {{- if .Values.r2Proxy.databaseUrl }}
   DATABASE_URL: {{ .Values.r2Proxy.databaseUrl | quote }}
+{{- else if .Values.postgres.enabled }}
+  DATABASE_URL: {{ printf "postgresql://orchard_r2_proxy:%s@%s-r.%s.svc.cluster.local:5432/%s?sslmode=require" (include "orchard.r2ProxyDbPassword" . | urlquery) .Values.postgres.name .Values.namespace .Values.postgres.database | quote }}
 {{- else }}
-{{- $dbSecretName := printf "%s-app" .Values.postgres.name }}
-{{- $dbSecret := (lookup "v1" "Secret" .Values.namespace $dbSecretName) }}
-{{- if and $dbSecret $dbSecret.data $dbSecret.data.uri }}
-  DATABASE_URL: {{ $dbSecret.data.uri | b64dec | quote }}
-{{- else }}
-  # Set r2Proxy.databaseUrl in values or ensure {{ $dbSecretName }} exists
-  # in the {{ .Values.namespace }} namespace before installing this chart.
   DATABASE_URL: ""
-{{- end }}
 {{- end }}
 ---
 apiVersion: apps/v1

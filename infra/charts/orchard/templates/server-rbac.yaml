@@ -55,8 +55,11 @@ rules:
     resources: ["services", "persistentvolumeclaims", "limitranges", "resourcequotas"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
-    resources: ["endpoints", "events"]
+    resources: ["endpoints"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "patch"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -92,17 +95,30 @@ rules:
     resources: ["ciliumnetworkpolicies", "ciliumenvoyconfigs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 {{- end }}
-  # The server bootstraps a namespaced secrets/configmaps Role in each tenant
-  # namespace at create time (K8sNamespaceService.bootstrapTenantSecretsRbac)
-  # and a per-deployment Role for Tailscale state secrets.
-  #
-  # RBAC forbids granting permissions you don't already hold unless you have
-  # `escalate`. Rather than hand the control plane cluster-wide secrets write —
-  # the exact thing this split exists to avoid — `escalate`/`bind` let it create
-  # those narrow namespaced Roles and nothing broader.
+  # Each tenant namespace gets a RoleBinding to the fixed tenant-secrets
+  # ClusterRole below (K8sNamespaceService.bootstrapTenantSecretsRbac). `bind`
+  # is limited to that one ClusterRole by name, so the control plane can hand
+  # itself secrets access inside a namespace it provisions and nothing wider.
+  # Narrower per-deployment Roles (Tailscale state) are created after that
+  # binding exists, so every permission they grant is already held.
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
-    verbs: ["get", "list", "watch", "create", "update", "delete", "escalate", "bind"]
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    verbs: ["bind"]
+    resourceNames: ["{{ .Release.Name }}-tenant-secrets"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-tenant-secrets
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

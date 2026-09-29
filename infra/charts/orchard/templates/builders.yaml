@@ -112,11 +112,10 @@ data:
     [worker.containerd]
       enabled = false
 
-    [registry."harbor-core.harbor.svc.cluster.local"]
+{{- range .Values.builders.httpRegistries }}
+    [registry.{{ . | quote }}]
       http = true
-
-    [registry."178.156.144.127"]
-      http = true
+{{- end }}
 {{- if .Values.builders.localCache.enabled }}
 ---
 apiVersion: v1

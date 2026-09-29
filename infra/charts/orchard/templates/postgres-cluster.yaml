@@ -26,8 +26,11 @@ spec:
       pg_stat_statements.max: "10000"
       track_activity_query_size: "4096"
       track_io_timing: "on"
+  {{- end }}
+  {{- if or .Values.datadog.enabled .Values.r2Proxy.enabled }}
   managed:
     roles:
+      {{- if .Values.datadog.enabled }}
       # Read-only monitoring user the Datadog agent connects as. Password
       # lives in the orchard-db-datadog secret (kubeops, SOPS-encrypted).
       - name: datadog
@@ -37,10 +40,35 @@ spec:
         inRoles: [pg_monitor]
         passwordSecret:
           name: orchard-db-datadog
+      {{- end }}
+      {{- if .Values.r2Proxy.enabled }}
+      # The backup proxy only ever runs one SELECT. The server grants it read
+      # on the three tables it needs at boot; it never holds the app owner.
+      - name: orchard_r2_proxy
+        ensure: present
+        login: true
+        inherit: true
+        passwordSecret:
+          name: orchard-r2-proxy-db
+      {{- end }}
   {{- end }}
   storage:
     size: {{ .Values.postgres.storage.size }}
     storageClass: {{ .Values.postgres.storage.storageClass }}
   resources:
     {{- toYaml .Values.postgres.resources | nindent 4 }}
+{{- end }}
+{{- if and .Values.postgres.enabled .Values.r2Proxy.enabled }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchard-r2-proxy-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "postgres") | nindent 4 }}
+type: kubernetes.io/basic-auth
+stringData:
+  username: orchard_r2_proxy
+  password: {{ include "orchard.r2ProxyDbPassword" . | quote }}
 {{- end }}
