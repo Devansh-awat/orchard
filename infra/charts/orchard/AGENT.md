@@ -145,6 +145,8 @@ Every key the chart honors, with defaults from `values.yaml`.
 | `server.env` | `[]` | Extra env vars. `DATABASE_URL` is injected automatically from `orchard-db-app` when `postgres.enabled=true`. `APP_DOMAIN` and `PLATFORM_WILDCARD_DOMAINS` are derived from `gateway.http.appDomain`; list them here to override. |
 | `server.envFrom` | `[]` | `envFrom` list (configMapRef / secretRef). |
 
+The chart sets `TENANT_SECRETS_CLUSTER_ROLE` to `<release>-tenant-secrets`, the ClusterRole the server binds into each tenant namespace. The server's own ClusterRole may `bind` only that name and holds no `escalate`.
+
 ### Postgres / CloudNativePG (`postgres.*`)
 
 | Key | Default | Description |
@@ -216,6 +218,7 @@ is the single place the MCP's address is configured.
 | `builders.harbor.username` | `admin` | Harbor registry username (written to `harbor-registry-creds` dockerconfigjson). |
 | `builders.harbor.password` | `Harbor12345` | Harbor password. **Override this.** |
 | `builders.harbor.hosts` | `[harbor-core.harbor.svc.cluster.local, harbor.1mp.dev]` | Hosts the credentials apply to. |
+| `builders.httpRegistries` | `[harbor-core.harbor.svc.cluster.local]` | Registries BuildKit talks plain HTTP to. Anything not listed is HTTPS. A self-host running zot lists `zot.orchard.svc.cluster.local:5000`. |
 | `builders.r2.accessKeyId` | `""` | Cloudflare R2 access key for BuildKit S3-style cache. |
 | `builders.r2.secretAccessKey` | `""` | Cloudflare R2 secret. |
 | `builders.quota.requestsCpu` | `"16"` | Namespace ResourceQuota: total CPU requests. |
@@ -225,6 +228,19 @@ is the single place the MCP's address is configured.
 | `builders.quota.pods` | `"10"` | Max concurrent builder pods. |
 
 The chart also creates a ClusterRoleBinding granting the `default` ServiceAccount in `.namespace` permission to manage Jobs/Pods/Secrets in `builders.namespace`.
+
+### Backup proxy (`r2Proxy.*`)
+
+| Key | Default | Description |
+|---|---|---|
+| `r2Proxy.enabled` | `true` | Deploy the proxy that brokers per-cluster backup credentials. |
+| `r2Proxy.namespace` | `orchard-r2-proxy` | Its namespace. Tenant namespaces may reach it on 9000 and nothing else. |
+| `r2Proxy.upstream.*` | | Endpoint, region and the real R2 key pair. Only the proxy ever holds these. |
+| `r2Proxy.defaultBucket` | `""` | Bucket for organizations without their own. Also the default of the proxy's `ALLOWED_BUCKETS`. |
+| `r2Proxy.databasePassword` | `""` | Password for the read-only `orchard_r2_proxy` postgres role. Empty keeps whatever the `orchard-r2-proxy-db` secret already holds, or mints one on first install. |
+| `r2Proxy.databaseUrl` | `""` | Full override for a database the chart does not run. Give it a read-only role. |
+
+When `postgres.enabled`, the CNPG cluster manages the `orchard_r2_proxy` login role and the server grants it `SELECT` on `databases`, `projects` and `organizations` at boot. The proxy never holds the app owner's credentials.
 
 ### Metrics (`metrics.*`)
 
@@ -396,6 +412,20 @@ helm upgrade orchard oci://ghcr.io/hackclub/orchard/charts/orchard \
 CNPG handles rolling Postgres upgrades on its own. Bumping `postgres.instances`
 adds replicas; the chart does not configure backup — configure CNPG
 `ScheduledBackup` separately if needed.
+
+Upgrading across the 2026-09 security release:
+
+- the server's ClusterRole loses `escalate`; a new `<release>-tenant-secrets`
+  ClusterRole appears and tenant namespaces created from now on bind to it.
+  Existing namespaces keep their per-namespace Role, which stays valid.
+- the backup proxy switches to the `orchard_r2_proxy` role. Backup lookups can
+  fail for a few seconds after the rollout until the server's boot-time grant
+  lands, then recover.
+- `builders.httpRegistries` replaces the registries that were hardcoded in the
+  BuildKit config. If you pushed to a plaintext registry other than the
+  internal Harbor, list it.
+- identity-provider-initiated SAML sign-in stops working, and org owners only
+  sign in through providers they created; see the self-hosting guide.
 
 ---
 

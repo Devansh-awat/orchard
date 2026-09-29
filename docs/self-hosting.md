@@ -38,10 +38,16 @@ Because tenant namespaces are created at runtime, the write grants can't be
 namespaced Roles and are cluster-scoped: namespaces, pods (plus `exec` for the
 web terminal), Deployments, Services, Ingresses, PVCs, NetworkPolicies, Jobs,
 CronJobs, EndpointSlices, CNPG Clusters, and read/patch on nodes for the node
-informer. Secrets and configmaps are deliberately _not_ granted cluster-wide —
-the server holds `escalate`/`bind` so it can bootstrap a narrow per-namespace
-secrets Role when it creates a tenant namespace, without ever holding
-cluster-wide secrets access itself.
+informer. Secrets and configmaps are deliberately _not_ granted cluster-wide.
+The chart ships a second ClusterRole, `<release>-tenant-secrets`, that covers
+only secrets and configmaps, and the server's own role may `bind` that one
+ClusterRole by name and nothing else. When the server creates a tenant
+namespace it adds a RoleBinding to it there, so it gains secrets access inside
+namespaces it provisions and cannot write itself a broader role anywhere. The
+chart tells the server the ClusterRole's name through
+`TENANT_SECRETS_CLUSTER_ROLE`; without that variable (an older chart, or a
+control plane run from an external kubeconfig) the server falls back to
+minting a per-namespace Role as before.
 
 None of this applies if you point the server at an external kubeconfig with
 `KUBECONFIG_PATH` or `KUBECONFIG_BASE64`. It then acts as whatever identity
@@ -323,6 +329,10 @@ says which mode it is in at boot:
 [RedisThrottleService] REDIS_URL not set: attempt counters are per-pod, so every limit multiplies by replica count
 ```
 
+Attempts are counted when they are checked, atomically, in Redis or in
+Postgres. A burst of parallel guesses cannot outrun the counter: once the
+budget is spent every request in flight is refused.
+
 **The address has to be the caller's, not a proxy's.** This needs no
 configuration. A header carries no proof of who wrote it, so the only thing worth
 trusting is position: Orchard walks the hops from the one nearest itself and
@@ -353,6 +363,17 @@ address is inside Cloudflare's ranges: reaching the origin directly from there,
 they could name someone else and throttle that person instead. Restrict the
 origin to your CDN's address ranges, at the load balancer or with a network
 policy, and that goes away along with every other direct-to-origin concern.
+
+### Cross-site requests
+
+The session cookie is `SameSite=Lax`, and an app deployed on the platform can
+share a site with the platform itself, so a form on a tenant app could once
+post to the API with the visitor's cookie attached. Any request that changes
+state and authenticates by cookie now has to come from a platform origin: the
+browser's `Origin` header (or `Sec-Fetch-Site: same-origin`) must match
+`FRONTEND_URL` or one of `PLATFORM_ORIGINS`. Bearer tokens are unaffected,
+and so are reads. If a first-party page on another hostname posts to the API,
+list its origin in `PLATFORM_ORIGINS` or it gets a 403.
 
 ### Bot protection on the sign-in pages
 
@@ -410,17 +431,24 @@ the identity provider that owns them.
 The installer puts these on the host. They operate **this machine's** install
 through helm and kubectl.
 
-| Command                                           | Does                                           | Root |
-| ------------------------------------------------- | ---------------------------------------------- | ---- |
-| `orchardctl update`                               | `helm upgrade` to the latest chart and images  | yes  |
-| `orchardctl config <get\|set\|unset\|list\|edit>` | read and change chart values                   | yes  |
-| `orchardctl claim`                                | mint a link to claim the instance and sign in  | yes  |
-| `orchardctl logs [service]`                       | follow logs, default `server`                  | no   |
-| `orchardctl status`                               | control-plane pods                             | no   |
-| `orchardctl sync`                                 | refresh these commands from the deployed image | yes  |
+| Command                                           | Does                                                                     | Root |
+| ------------------------------------------------- | ------------------------------------------------------------------------ | ---- |
+| `orchardctl update`                               | `harden`, then `helm upgrade` to the latest chart and images             | yes  |
+| `orchardctl harden`                               | registry on loopback with a password, firewall rules, private kubeconfig | yes  |
+| `orchardctl config <get\|set\|unset\|list\|edit>` | read and change chart values                                             | yes  |
+| `orchardctl claim`                                | mint a link to claim the instance and sign in                            | yes  |
+| `orchardctl logs [service]`                       | follow logs, default `server`                                            | no   |
+| `orchardctl status`                               | control-plane pods                                                       | no   |
+| `orchardctl sync`                                 | refresh these commands from the deployed image                           | yes  |
 
 `update`, `config` and `claim` need root: the values file is mode 0600, so
 without it helm fails with `open /etc/orchard/values.yaml: permission denied`.
+
+`harden` is what a fresh install already does, applied to an existing one.
+Installs from before it existed published the image registry as a node port
+with no password, left the firewall for k3s to fight with, and wrote a
+world-readable kubeconfig. `update` runs it first, so an upgrade fixes an old
+box on its way through; it is idempotent and safe to run by hand.
 Each also exists hyphenated (`orchard-update`, `orchard-config`,
 `orchard-claim`) — those are the real entry points, and the nightly update
 timer calls `orchard-update` directly.
@@ -624,10 +652,59 @@ IdP URLs pointing at internal addresses (loopback, RFC1918, `.svc`,
 server-side fetches. If your IdP genuinely runs on internal DNS, set
 `SSO_ALLOW_INTERNAL_IDP=true`.
 
+Two rules keep an organization's provider from being turned against the
+organization. **Provider management is owner-only**: creating, editing,
+testing or deleting an org's identity providers and domains, and toggling
+enforcement, needs the org owner role; admins can read the configuration but
+not change it. **An owner only signs in through a provider they set up
+themselves.** The provider records who created it, and a sign-in that resolves
+to an owner is refused unless that owner is the creator, so an admin cannot
+point a provider at an identity provider they control and assert the owner's
+address. Providers that predate this rule are attributed to the organization's
+owner by the migration, so nobody is locked out; a second owner of the same
+org signs in another way.
+
+SAML requests are tracked and every assertion must answer one Orchard issued.
+That closes replay and login-CSRF, and it means identity-provider-initiated
+sign-in (clicking the app tile in the IdP's portal) no longer works: users
+start from the Orchard login page or the org's branded one. Request ids live
+in Redis when `REDIS_URL` is set, otherwise in memory, so a multi-replica
+instance without Redis will fail SAML sign-ins that land on a different
+replica.
+
 A single env-configured provider is still supported and renders alongside the
 database ones: `AUTH_PROVIDER=oidc` plus the `AUTH_OAUTH_*` env, or
 `AUTH_PROVIDER=hackclub` for the Hack Club preset. `AUTH_PROVIDER=none`
 disables it. SCIM provisioning is configured per organization in the UI.
+
+## Tenant quotas
+
+Every tenant namespace carries a ResourceQuota. Organization and project caps
+set the CPU, memory, pod and service lines; when a cap is unset the namespace
+still gets a floor of 200 pods, 100 services, 50 volume claims and 500 GiB of
+requested storage, so an uncapped instance cannot be filled by one tenant.
+The floor is tunable with `TENANT_QUOTA_FLOOR_PODS`,
+`TENANT_QUOTA_FLOOR_SERVICES`, `TENANT_QUOTA_FLOOR_PVCS` and
+`TENANT_QUOTA_FLOOR_STORAGE_BYTES` on the server.
+
+## Database backups and the proxy
+
+Managed databases archive to R2 through `r2-proxy`, a small service that
+holds the real bucket credentials and hands each database cluster a
+per-cluster key that only works for its own prefix. The proxy verifies the
+SigV4 signature on every request, refuses copy operations and every
+bucket-level write except a multi-object delete whose keys all sit inside the
+caller's prefix, and only serves the buckets named in `ALLOWED_BUCKETS`
+(default: the platform bucket). An organization that brought its own bucket
+and keys talks to it directly and never goes through the proxy.
+
+The proxy reads its bindings from the platform database as `orchard_r2_proxy`,
+a login role the CNPG cluster manages with a password the chart keeps in the
+`orchard-r2-proxy-db` secret and holds stable across upgrades. The server
+grants that role `SELECT` on the three tables it needs at every boot. On the
+first upgrade to this scheme backup lookups can fail for a few seconds until
+the grant lands, then recover on their own. `r2Proxy.databaseUrl` points the
+proxy somewhere else entirely for a database the chart does not run.
 
 ## Node scheduling
 

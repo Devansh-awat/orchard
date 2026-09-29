@@ -143,7 +143,10 @@ Build cache and registry each get a fifth of the free disk, capped at 60G and
 **Sandboxed builds and tenant isolation.** gVisor and Kata need node-level
 runtimes that vary by distro, so they are not installed. Without them, image
 builds run with host-level privileges, the same posture as Docker-based
-platforms, and fine when the person building the image owns the box.
+platforms, and fine when the person building the image owns the box. Be clear
+about what that means before you let anyone else deploy: a `RUN` line in a
+Dockerfile is root on this machine, and the registry password sits on the
+same node. If strangers will push code here, install a runtime first.
 
 If you are running other people's code and want isolation, install the runtime
 yourself, then flip the matching flag in `/etc/orchard/values.yaml` and run
