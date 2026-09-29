@@ -539,3 +539,120 @@ describe('Membership cache invalidation', () => {
     });
   });
 });
+
+describe('Hardening rules', () => {
+  test('viewer gets 403 on log routes, member does not', async () => {
+    const paths = [
+      `/deployments/${fx.deploymentA.id}/killed-containers/x/logs`,
+      `/observe/deployments/${fx.deploymentA.id}/logs/structured`
+    ];
+    for (const p of paths) {
+      assert.equal((await req(p, fx.viewer.token)).status, 403, p);
+      assert.notEqual((await req(p, fx.plainMember.token)).status, 403, p);
+    }
+  });
+
+  test('a member cannot delete an environment, only someone who may delete the project', async () => {
+    const envs = (await (
+      await req(`/projects/${fx.projectA.id}/environments`, fx.owner.token)
+    ).json()) as { id: string }[] | { environments?: { id: string }[] };
+    const list = Array.isArray(envs) ? envs : (envs.environments ?? []);
+    if (list.length === 0) return;
+    const res = await req(`/environments/${list[0].id}`, fx.plainMember.token, {
+      method: 'DELETE'
+    });
+    assert.equal(res.status, 403);
+  });
+
+  test('a read-scoped api token cannot mutate', async () => {
+    const minted = await req('/auth/tokens', fx.owner.token, {
+      method: 'POST',
+      body: JSON.stringify({ name: `${RUN_TAG}-read`, scopes: ['read'] })
+    });
+    assert.equal(minted.status, 201);
+    const { token } = (await minted.json()) as { token: string };
+    const res = await req(`/deployments/${fx.deploymentA.id}/restart`, token, { method: 'POST' });
+    assert.equal(res.status, 403);
+  });
+
+  test('a project-restricted token cannot mint a broader token', async () => {
+    const minted = await req('/auth/tokens', fx.owner.token, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `${RUN_TAG}-narrow`,
+        scopes: ['deploy'],
+        restrictedProjectIds: [fx.projectA.id]
+      })
+    });
+    assert.equal(minted.status, 201);
+    const { token } = (await minted.json()) as { token: string };
+    const wider = await req('/auth/tokens', token, {
+      method: 'POST',
+      body: JSON.stringify({ name: `${RUN_TAG}-wider`, scopes: ['exec'] })
+    });
+    assert.equal(wider.status, 403);
+    const unscoped = await req('/auth/tokens', token, {
+      method: 'POST',
+      body: JSON.stringify({ name: `${RUN_TAG}-unscoped`, scopes: ['deploy'] })
+    });
+    assert.equal(unscoped.status, 403);
+  });
+
+  test('an api token never reaches admin routes, even for a superadmin', async () => {
+    await prisma.user.update({ where: { id: fx.owner.id }, data: { isSuperAdmin: true } });
+    try {
+      assert.equal((await req('/admin/users', fx.owner.token)).status, 200);
+      const minted = await req('/auth/tokens', fx.owner.token, {
+        method: 'POST',
+        body: JSON.stringify({ name: `${RUN_TAG}-sa`, scopes: ['exec'] })
+      });
+      const { token } = (await minted.json()) as { token: string };
+      assert.equal((await req('/admin/users', token)).status, 403);
+    } finally {
+      await prisma.user.update({ where: { id: fx.owner.id }, data: { isSuperAdmin: false } });
+    }
+  });
+
+  test('a token carrying a type claim is not a session', async () => {
+    const session = await prisma.session.findFirst({ where: { userId: fx.owner.id } });
+    const typed = await new SignJWT({ sub: fx.owner.id, sessionId: session!.id, type: 'mcp' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(SECRET_BYTES);
+    assert.equal((await req('/auth/me', typed)).status, 401);
+  });
+
+  test('a cookie session cannot mutate from a foreign origin', async () => {
+    const attempt = (origin: string) =>
+      fetch(`${SERVER_URL}/${PREFIX}/organizations/${fx.orgA.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `session_token=${fx.owner.token}`,
+          Origin: origin
+        },
+        body: JSON.stringify({ description: RUN_TAG })
+      });
+    assert.equal((await attempt('https://evil.example')).status, 403);
+    assert.equal((await attempt('http://localhost:4000')).status, 200);
+  });
+
+  test('invitations to one address stop after five in an hour', async () => {
+    const target = `${RUN_TAG}-flood@example.test`;
+    let last = 0;
+    for (let i = 0; i < 6; i++) {
+      const res = await req(`/organizations/${fx.orgA.id}/members`, fx.owner.token, {
+        method: 'POST',
+        body: JSON.stringify({ email: target, role: 'member' })
+      });
+      last = res.status;
+      if (last === 429) break;
+    }
+    assert.equal(last, 429);
+    await prisma.organizationInvitation.deleteMany({ where: { email: target } });
+    await prisma.rateLimitRecord.deleteMany({
+      where: { identifier: { in: [target, fx.orgA.id] } }
+    });
+  });
+});
