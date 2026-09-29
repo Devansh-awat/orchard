@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   Controller,
   Get,
@@ -568,6 +569,7 @@ export class ProjectsController {
     return this.databases.getProjectDatabases(id, access.canEdit, user.id);
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @Post(':id/ingresses')
   async createProjectIngress(
     @Param('id') id: string,
@@ -1602,6 +1604,7 @@ export class DeploymentsController {
     });
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @Post(':id/ingresses')
   async createDeploymentIngress(
     @Param('id') id: string,

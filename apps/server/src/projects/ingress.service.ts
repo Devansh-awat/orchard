@@ -93,6 +93,8 @@ function isWildcardTlsSecret(name: string | null): boolean {
   return !!name && platformWildcardDomains().some((w) => w.secret === name);
 }
 
+import { ingressLimitReached, ingressLimits } from './ingress-limits';
+
 @Injectable()
 export class IngressService implements OnModuleInit {
   private readonly logger = new Logger(IngressService.name);
@@ -130,6 +132,17 @@ export class IngressService implements OnModuleInit {
    * Only the TLS block moves. An ingress already holding a per-host certificate
    * that is still correct is left alone, so this is safe to run on every boot.
    */
+  private async assertIngressCapacity(projectId: string, deploymentId?: string): Promise<void> {
+    const [project, deployment] = await Promise.all([
+      this.prisma.ingress.count({ where: { projectId } }),
+      deploymentId
+        ? this.prisma.ingress.count({ where: { deploymentId } })
+        : Promise.resolve(undefined)
+    ]);
+    const reason = ingressLimitReached({ project, deployment }, ingressLimits(process.env));
+    if (reason) throw new BadRequestException(reason);
+  }
+
   async reconcileWildcardTls(): Promise<{ checked: number; repointed: number }> {
     const ingresses = await this.prisma.ingress.findMany({
       select: {
@@ -610,6 +623,7 @@ export class IngressService implements OnModuleInit {
 
     const tlsHosts = tlsSecretName ? [rawHost] : [];
 
+    await this.assertIngressCapacity(deployment.projectId, deployment.id);
     await this.access.assertHostnameAvailable(rawHost, deployment.projectId);
 
     const ingressResult = await this.k8sNetwork.createIngress({
@@ -994,6 +1008,7 @@ export class IngressService implements OnModuleInit {
       }
     }
 
+    await this.assertIngressCapacity(deployment.projectId, deployment.id);
     await this.access.assertHostnameAvailable(rawHost, deployment.projectId);
 
     const basicAuthPlan = await this.planBasicAuth(data.basicAuth);
@@ -1206,6 +1221,7 @@ export class IngressService implements OnModuleInit {
       throw new BadRequestException('Select an app for this redirect');
     }
 
+    await this.assertIngressCapacity(project.id);
     await this.access.assertHostnameAvailable(rawHost, project.id);
     const spec = await this.redirectIngressSpec(project, rawHost, data.tlsEnabled !== false);
     const statusAddress = await this.applyRedirectIngress(project.namespace, rawHost, spec);
@@ -1638,6 +1654,7 @@ export class IngressService implements OnModuleInit {
       }
     }
 
+    await this.assertIngressCapacity(project.id);
     await this.access.assertHostnameAvailable(rawHost, project.id);
 
     const basicAuthPlan = await this.planBasicAuth(data.basicAuth);
