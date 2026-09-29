@@ -446,6 +446,9 @@ export class SetupService implements OnModuleInit {
 
     const claim = await this.readClaim();
     if (!claim) throw new BadRequestException('This instance has already been claimed');
+    if (!(await recoveryState(this.prisma)).claimable) {
+      throw new BadRequestException('This instance has already been claimed');
+    }
     if (SetupService.expired(claim)) {
       throw new BadRequestException(
         'That claim token has expired. Run `orchard-claim` to mint a new one.'

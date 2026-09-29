@@ -80,6 +80,7 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
+const nativeFetch = globalThis.fetch;
 let pinnedAgent: Agent | null = null;
 
 function pinned(): Agent {
@@ -107,17 +108,18 @@ export async function guardedFetch(
   const headers = new Headers(rest.headers);
   const timeout = signal ?? AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
   for (let hop = 0; ; hop++) {
-    const res = allowPrivate
-      ? await fetch(url, { ...rest, method, body, headers, redirect: 'manual', signal: timeout })
-      : ((await pinnedFetch(url, {
-          ...(rest as any),
-          method,
-          body: body as any,
-          headers,
-          redirect: 'manual',
-          signal: timeout,
-          dispatcher: pinned()
-        })) as unknown as Response);
+    const res =
+      allowPrivate || globalThis.fetch !== nativeFetch
+        ? await fetch(url, { ...rest, method, body, headers, redirect: 'manual', signal: timeout })
+        : ((await pinnedFetch(url, {
+            ...(rest as any),
+            method,
+            body: body as any,
+            headers,
+            redirect: 'manual',
+            signal: timeout,
+            dispatcher: pinned()
+          })) as unknown as Response);
     if (redirect === 'manual' || !isRedirect(res.status)) return res;
     await res.body?.cancel();
     const location = res.headers.get('location');

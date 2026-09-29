@@ -34,6 +34,7 @@ const PATH_METADATA = 'path';
 const METHOD_METADATA = 'method';
 const IS_PUBLIC_KEY = 'isPublic';
 const REQUIRES_AUTH_KEY = 'requiresAuth';
+const REQUIRES_SUPERADMIN_KEY = 'requires_superadmin';
 
 // Mirrors RequestMethod in @nestjs/common (verified at write-time against
 // node_modules/@nestjs/common/enums/request-method.enum.js).
@@ -72,9 +73,10 @@ function findControllerFiles(root: string): string[] {
 }
 
 function classify(
-  handlerMeta: { isPublic?: boolean; requiresAuth?: boolean },
-  classMeta: { isPublic?: boolean; requiresAuth?: boolean }
+  handlerMeta: { isPublic?: boolean; requiresAuth?: boolean; requiresSuperadmin?: boolean },
+  classMeta: { isPublic?: boolean; requiresAuth?: boolean; requiresSuperadmin?: boolean }
 ): Classification {
+  if (handlerMeta.requiresSuperadmin || classMeta.requiresSuperadmin) return 'superadmin';
   // Resolution order mirrors SuperAdminGuard.canActivate exactly:
   //   1. Handler-level @Public()             → public (short-circuit)
   //   2. @Auth() at handler OR class         → authenticated
@@ -106,7 +108,8 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
 
       const classMeta = {
         isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, cls) as boolean | undefined,
-        requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, cls) as boolean | undefined
+        requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, cls) as boolean | undefined,
+        requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, cls) as boolean | undefined
       };
 
       const proto = cls.prototype;
@@ -122,7 +125,8 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
           (Reflect.getMetadata(PATH_METADATA, handler) as string | string[] | undefined) ?? '';
         const handlerMeta = {
           isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, handler) as boolean | undefined,
-          requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, handler) as boolean | undefined
+          requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, handler) as boolean | undefined,
+          requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, handler) as boolean | undefined
         };
 
         // Catch self-contradictory decorators (would be a bug).

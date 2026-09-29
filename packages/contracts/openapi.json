@@ -50791,7 +50791,7 @@
         ]
       },
       "post": {
-        "description": "Auth: authenticated",
+        "description": "Auth: superadmin",
         "requestBody": {
           "content": {
             "application/json": {
@@ -50831,7 +50831,7 @@
     },
     "/templates/{id}": {
       "delete": {
-        "description": "Auth: authenticated",
+        "description": "Auth: superadmin",
         "parameters": [
           {
             "in": "path",
@@ -50907,7 +50907,7 @@
         ]
       },
       "put": {
-        "description": "Auth: authenticated",
+        "description": "Auth: superadmin",
         "parameters": [
           {
             "in": "path",

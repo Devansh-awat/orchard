@@ -300,8 +300,22 @@ test('a user can be provisioned straight in as an admin via roles', async () => 
 
 test('userType is accepted as the role when roles is absent', async () => {
   const { service, members } = makeService();
-  await service.createUser({ userName: 'grace@example.com', userType: 'owner' }, ctx);
-  assert.equal(members[0].role, 'owner');
+  await service.createUser({ userName: 'grace@example.com', userType: 'admin' }, ctx);
+  assert.equal(members[0].role, 'admin');
+});
+
+test('an identity provider cannot provision an owner', async () => {
+  const { service } = makeService();
+  await assert.rejects(
+    () => service.createUser({ userName: 'boss@example.com', userType: 'owner' }, ctx),
+    (err: any) => err.name === 'SCIMError' && err.status === 400 && err.scimType === 'invalidValue'
+  );
+});
+
+test('a provisioned account is not verified until its owner signs in', async () => {
+  const { service, users } = makeService();
+  await service.createUser({ userName: 'new@example.com' }, ctx);
+  assert.equal(users[0].emailVerified, false);
 });
 
 test('an unknown role is rejected rather than silently downgraded', async () => {
@@ -365,11 +379,12 @@ test('a write that omits roles leaves the role alone', async () => {
 });
 
 test('the last owner cannot be demoted, deactivated or deleted', async () => {
-  const { service } = makeService();
+  const { service, members } = makeService();
   const owner: any = await service.createUser(
-    { userName: 'boss@example.com', userType: 'owner' },
+    { userName: 'boss@example.com', userType: 'admin' },
     ctx
   );
+  members[0].role = 'owner';
 
   const lastOwner = (err: any) => err.name === 'SCIMError' && err.status === 400;
   await assert.rejects(
@@ -383,7 +398,8 @@ test('the last owner cannot be demoted, deactivated or deleted', async () => {
   await assert.rejects(() => service.deleteUser(owner.id, ctx), lastOwner);
 
   // With a second owner in place the guard lifts.
-  await service.createUser({ userName: 'cofounder@example.com', userType: 'owner' }, ctx);
+  await service.createUser({ userName: 'cofounder@example.com', userType: 'admin' }, ctx);
+  members[1].role = 'owner';
   const demoted: any = await service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx);
   assert.equal(demoted.roles[0].value, 'member');
 });

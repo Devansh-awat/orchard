@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net/url"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -80,6 +81,14 @@ func (p *orchardProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	if !secureAPIURL(apiURL) {
+		resp.Diagnostics.AddError(
+			"Insecure Orchard URL",
+			"The API URL must use https unless it points at localhost; the token would otherwise travel in clear text.",
+		)
+		return
+	}
+
 	client := api.New(apiURL, token)
 	resp.ResourceData = client
 	resp.DataSourceData = client
@@ -107,4 +116,16 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func secureAPIURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	host := u.Hostname()
+	return u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1" || host == "::1")
 }

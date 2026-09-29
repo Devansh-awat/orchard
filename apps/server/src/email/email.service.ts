@@ -300,7 +300,9 @@ export class EmailService {
   async sendOtpEmail(data: OtpEmailData): Promise<boolean> {
     if (!this.isConfigured()) {
       console.warn('Email service not configured. Skipping OTP email.');
-      console.log(`[DEV] OTP code for ${data.recipientEmail}: ${data.otpCode}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEV] OTP code for ${data.recipientEmail}: ${data.otpCode}`);
+      }
       return false;
     }
 
@@ -314,7 +316,7 @@ export class EmailService {
     const mailOptions = {
       from: `"${this.fromName}" <${this.fromEmail}>`,
       to: data.recipientEmail,
-      subject: `Your Orchard verification code: ${data.otpCode}`,
+      subject: 'Your Orchard verification code',
       html
     };
     console.log(

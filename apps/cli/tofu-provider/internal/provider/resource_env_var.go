@@ -42,7 +42,7 @@ func (r *envVarResource) Metadata(_ context.Context, req resource.MetadataReques
 
 func (r *envVarResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "One environment variable on an app. Other variables on the app are left alone. A value like `${{resource.db.connection_string}}` reads a connected database live; a secret is write-only and never read back into state.",
+		Description: "One environment variable on an app. Other variables on the app are left alone. A value like `${{resource.db.connection_string}}` reads a connected database live; a secret is marked sensitive, so it is redacted from plan output, but like every provider attribute it is stored in the state file: keep state encrypted.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

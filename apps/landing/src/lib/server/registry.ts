@@ -93,6 +93,7 @@ const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 type Fetch = typeof globalThis.fetch;
 
 const cache = new Map<string, { until: number; value: unknown }>();
+const CACHE_MAX = 512;
 
 export function registryBase() {
 	return (env.REGISTRY_URL || 'https://assets.orchard.my/registry').replace(/\/+$/, '');
@@ -117,6 +118,15 @@ async function remember<T>(key: string, load: () => Promise<T>): Promise<T> {
 	if (hit && hit.until > Date.now()) return hit.value as T;
 	try {
 		const value = await load();
+		if (value === null) {
+			cache.delete(key);
+			return value;
+		}
+		if (cache.size >= CACHE_MAX) {
+			const now = Date.now();
+			for (const [k, entry] of cache) if (entry.until <= now) cache.delete(k);
+			if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+		}
 		cache.set(key, { until: Date.now() + FRESH_MS, value });
 		return value;
 	} catch (error) {

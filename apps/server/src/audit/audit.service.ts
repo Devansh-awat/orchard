@@ -41,7 +41,8 @@ const METADATA_MAX_KEYS = 24;
 // diff tuples ([old, new]) so a "password changed from X to Y" entry doesn't
 // land X and Y in plaintext in the audit log.
 const REDACT_KEY_PATTERN =
-  /pass(word)?|secret|token|api[_-]?key|credential|connection[_-]?string|database[_-]?url|private[_-]?key|access[_-]?key/i;
+  /pass(word)?|secret|token|api[_-]?key|credential|connection[_-]?string|database[_-]?url|private[_-]?key|access[_-]?key|authorization|cookie|dsn|\burl\b|uri/i;
+const METADATA_MAX_DEPTH = 4;
 const REDACTED_PLACEHOLDER = '[redacted]';
 
 @Injectable()
@@ -219,7 +220,7 @@ export class AuditService {
 
     const rows = await this.prisma.auditLog.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {})
     });
@@ -289,11 +290,24 @@ export class AuditService {
     }
   }
 
-  private truncate(value: unknown): unknown {
+  private truncate(value: unknown, depth = 0): unknown {
     if (typeof value === 'string' && value.length > METADATA_VALUE_MAX_LEN) {
       return `${value.slice(0, METADATA_VALUE_MAX_LEN)}…`;
     }
     if (typeof value === 'bigint') return value.toString();
+    if (Array.isArray(value)) {
+      if (depth >= METADATA_MAX_DEPTH) return REDACTED_PLACEHOLDER;
+      return value.slice(0, METADATA_MAX_KEYS).map((v) => this.truncate(v, depth + 1));
+    }
+    if (value && typeof value === 'object') {
+      if (depth >= METADATA_MAX_DEPTH) return REDACTED_PLACEHOLDER;
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(value as Record<string, unknown>).slice(0, METADATA_MAX_KEYS)) {
+        const v = (value as Record<string, unknown>)[k];
+        out[k] = REDACT_KEY_PATTERN.test(k) ? REDACTED_PLACEHOLDER : this.truncate(v, depth + 1);
+      }
+      return out;
+    }
     return value;
   }
 

@@ -46,6 +46,7 @@ const ENTERPRISE_SCHEMA = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0
 // The org roles SCIM Groups project onto, and the set an IdP may provision
 // into via `roles` / `userType`.
 const ROLE_GROUPS = ['owner', 'admin', 'member', 'guest'] as const;
+const PROVISIONABLE_ROLES = ['admin', 'member', 'guest'] as const;
 
 const DEFAULT_ROLE = 'member';
 
@@ -86,7 +87,15 @@ function roleFromInstance(instance: any, currentRole?: string | null): string | 
   ].filter((r): r is string => r !== null);
 
   if (!candidates.length) return null;
-  return candidates.find((r) => r !== currentRole) ?? candidates[0];
+  const chosen = candidates.find((r) => r !== currentRole) ?? candidates[0];
+  if (chosen === 'owner' && currentRole !== 'owner') {
+    throw ScimError(
+      400,
+      'invalidValue',
+      `An identity provider cannot grant owner; expected one of ${PROVISIONABLE_ROLES.join(', ')}`
+    );
+  }
+  return chosen;
 }
 
 // RFC 7644 §3.5.1: a PUT replaces the resource, so an attribute the client
@@ -588,8 +597,8 @@ export class ScimService implements OnModuleInit {
             username: await this.ensureUniqueUsername(email),
             firstName: write.givenName,
             lastName: write.familyName,
-            emailVerified: true,
-            emailVerifiedAt: new Date()
+            emailVerified: false,
+            emailVerifiedAt: null
           }
         }));
 
