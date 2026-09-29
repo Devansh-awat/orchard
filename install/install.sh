@@ -9,6 +9,7 @@ STATE_DIR=${ORCHARD_STATE_DIR:-/etc/orchard}
 VALUES_FILE="$STATE_DIR/values.yaml"
 
 K3S_VERSION=${K3S_VERSION:-v1.31.5+k3s1}
+HELM_VERSION=${HELM_VERSION:-v4.3.0}
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.2.1}
 NODE_PORT_RANGE=${ORCHARD_NODE_PORT_RANGE:-30000-30100}
 HTTP_PORT=${ORCHARD_HTTP_PORT:-80}
@@ -267,6 +268,7 @@ usage() {
 
   Cluster
     --k3s-version <version>      K3S_VERSION
+                                 HELM_VERSION           helm release to install (default: v4.3.0)
     --gateway-api-version <ver>  GATEWAY_API_VERSION
     --node-port-range <lo-hi>    ORCHARD_NODE_PORT_RANGE  ports apps can claim
     --registry-port <port>       ORCHARD_REGISTRY_PORT    loopback port the kubelet pulls through
@@ -930,7 +932,7 @@ install_k3s() {
 }
 
 helm_download() {
-  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  curl -fsSL https://raw.githubusercontent.com/helm/helm/refs/tags/v4.3.0/scripts/get-helm-3 | bash -s -- --version "$HELM_VERSION"
 }
 
 ensure_helm() {

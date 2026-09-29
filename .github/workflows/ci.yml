@@ -26,8 +26,8 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
       landing: ${{ steps.filter.outputs.landing }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         id: filter
         with:
           filters: |
@@ -97,38 +97,47 @@ jobs:
     env:
       SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         id: app-token
         if: env.SAME_REPO == 'true'
         with:
           app-id: 1090304
           private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+          permission-contents: write
+          repositories: ${{ github.event.repository.name }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: env.SAME_REPO == 'true'
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: ${{ github.head_ref }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: env.SAME_REPO != 'true'
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Oxfmt (auto-fix + self-commit)
+        id: fmt
         if: env.SAME_REPO == 'true'
         run: |
-          pnpm format
+          pnpm exec oxfmt
           if git diff --quiet; then echo "already formatted"; exit 0; fi
-          if ! pnpm format:check >/dev/null 2>&1; then
+          if ! pnpm exec oxfmt --check >/dev/null 2>&1; then
             echo "oxfmt output failed re-validation — refusing to commit" >&2
             git checkout -- .; exit 1
           fi
           git config user.name "leafdbot[bot]"
           git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
           git commit -am "chore(ci): apply formatter fixes"
-          git push
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+      - name: Push formatter fixes
+        if: env.SAME_REPO == 'true' && steps.fmt.outputs.committed == 'true'
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${GITHUB_HEAD_REF}"
       - name: Oxfmt (check only)
         if: env.SAME_REPO != 'true'
         run: pnpm format:check
@@ -140,18 +149,18 @@ jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
 
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: trufflesecurity/trufflehog@main
+      - uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
         with:
           extra_args: --only-verified
 
@@ -160,9 +169,9 @@ jobs:
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -177,9 +186,9 @@ jobs:
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -198,9 +207,9 @@ jobs:
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -401,9 +410,9 @@ jobs:
       HACKCLUB_REDIRECT_URI: http://localhost:3001/apiv1/auth/callback
       SSO_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -435,8 +444,8 @@ jobs:
     if: needs.changes.outputs.hostctl == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/server/hostctl/go.mod
           cache-dependency-path: apps/server/hostctl/go.sum
@@ -447,8 +456,8 @@ jobs:
     if: needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/cli/go.mod
           cache-dependency-path: apps/cli/go.sum
@@ -459,8 +468,8 @@ jobs:
     if: needs.changes.outputs.gateway == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/gateway/go.mod
       - run: cd apps/gateway && go vet ./... && go build ./...
@@ -470,8 +479,8 @@ jobs:
     if: needs.changes.outputs.r2_proxy == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/r2-proxy/go.mod
       - run: cd apps/r2-proxy && go vet ./... && go build ./...
@@ -481,8 +490,8 @@ jobs:
     if: needs.changes.outputs.registry == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/registry/go.mod
       - run: cd apps/registry && go vet ./... && go test ./...
@@ -492,9 +501,9 @@ jobs:
     if: needs.changes.outputs.landing == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -507,14 +516,14 @@ jobs:
     if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       # The CLI reference is generated by running the CLI's own command dump.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache-dependency-path: apps/cli/go.sum
@@ -529,8 +538,8 @@ jobs:
     if: needs.changes.outputs.chart == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - run: helm lint infra/charts/orchard
 
   validate-images:
@@ -538,8 +547,8 @@ jobs:
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.r2_proxy == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Build changed images (no push)
         run: |
           build() { docker buildx build "$3" -f "$2" --build-arg VERSION=0.0.0-ci -t "ci/$1" --load=false; }

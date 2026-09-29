@@ -40,6 +40,8 @@
     "test:auto-deploy-match": "tsx --test test/auto-deploy-match.test.ts",
     "test:build-recovery": "tsx --test test/build-recovery.test.ts test/build-recovery-decision.test.ts test/build-job-informer-list.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
+    "test:mcp-refresh-rotation": "tsx --test test/mcp-refresh-rotation.test.ts",
+    "test:secret-crypto": "tsx --test test/secret-crypto-seal.test.ts",
     "test:mcp-tools": "tsx --test test/mcp-validate-dns.test.ts test/mcp-merge-semantics.test.ts",
     "test:email-avatar": "tsx --test test/email-avatar.test.ts",
     "test:internal-urls": "tsx --test test/internal-urls.test.ts",
@@ -85,7 +87,10 @@
     "test:status-page": "tsx --test test/status-page.test.ts",
     "test:resource-bindings": "tsx --test test/resource-binding-resolve.test.ts test/binding-reapply.test.ts",
     "test:git-providers": "tsx --test test/git-provider-webhook.test.ts test/git-provider-parse-push.test.ts test/git-oauth.test.ts test/git-webhook-register.test.ts test/git-change-source.test.ts test/log-redaction.test.ts test/repo-url.test.ts",
-    "test:score": "tsx --test test/score-parse.test.ts test/score-apply.test.ts"
+    "test:score": "tsx --test test/score-parse.test.ts test/score-apply.test.ts",
+    "test:session-jwt": "tsx --test test/session-jwt.test.ts",
+    "test:sse-limits": "tsx --test test/sse-stream-limiter.test.ts",
+    "test:env-bounds": "tsx --test test/env-value-bounds.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -111,7 +116,7 @@
     "@opentelemetry/sdk-logs": "^0.222.0",
     "@opentelemetry/sdk-node": "^0.222.0",
     "@prisma/client": "^6.18.0",
-    "@simplewebauthn/server": "^13.2.2",
+    "@simplewebauthn/server": "^13.3.3",
     "@types/multer": "^2.2.0",
     "@types/pg": "^8.20.0",
     "bcrypt": "^6.0.0",
@@ -126,8 +131,8 @@
     "jose": "^5.2.0",
     "js-yaml": "^4.3.2",
     "mjml": "^5.4.0",
-    "multer": "^2.3.0",
-    "nodemailer": "^9.1.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.12",
     "openai": "^6.38.0",
     "openid-client": "^6.8.2",
     "pg": "^8.20.0",
