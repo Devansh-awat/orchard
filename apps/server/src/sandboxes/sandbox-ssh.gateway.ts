@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
+import { assertBrowserSession } from '../auth/session-jwt';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
@@ -18,6 +19,43 @@ const RECHECK_INTERVAL_MS = 15_000;
 const ACTIVITY_INTERVAL_MS = 60_000;
 const WS_HIGH_WATER = 4 * 1024 * 1024;
 const WS_LOW_WATER = 1024 * 1024;
+const WS_MAX_PAYLOAD = 64 * 1024;
+const MAX_CONNECTIONS_PER_USER = 8;
+const MAX_CONNECTIONS_GLOBAL = 200;
+
+const connectionsByUser = new Map<string, number>();
+let connectionsTotal = 0;
+
+function overConnectionLimit(userId: string): boolean {
+  if (connectionsTotal >= MAX_CONNECTIONS_GLOBAL) return true;
+  return (connectionsByUser.get(userId) ?? 0) >= MAX_CONNECTIONS_PER_USER;
+}
+
+function trackConnection(userId: string): () => void {
+  connectionsTotal += 1;
+  connectionsByUser.set(userId, (connectionsByUser.get(userId) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    connectionsTotal -= 1;
+    const n = (connectionsByUser.get(userId) ?? 1) - 1;
+    if (n <= 0) connectionsByUser.delete(userId);
+    else connectionsByUser.set(userId, n);
+  };
+}
+
+function writeWithBackpressure(
+  ws: WebSocket,
+  sink: { write(chunk: string | Buffer): boolean; once(event: 'drain', cb: () => void): unknown },
+  chunk: string | Buffer
+): void {
+  if (sink.write(chunk)) return;
+  ws.pause();
+  sink.once('drain', () => {
+    if (ws.readyState === WebSocket.OPEN) ws.resume();
+  });
+}
 
 export function attachSandboxSshWebSocket(server: http.Server, app: INestApplication) {
   const prisma = app.get(PrismaService);
@@ -27,7 +65,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
   const sandboxK8s = app.get(SandboxK8sService);
   const analytics = app.get(AnalyticsService);
 
-  const wss = new WebSocket.Server({ noServer: true });
+  const wss = new WebSocket.Server({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
   const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '');
 
   server.on('upgrade', async (req: http.IncomingMessage, socket, head) => {
@@ -56,8 +94,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     let sessionIdForRecheck: string | undefined;
     try {
       const { payload } = await jwtVerify(token, jwtSecret);
-      const sessionId = payload.sessionId as string | undefined;
-      if (!sessionId) return reject(401, 'Unauthorized');
+      const sessionId = assertBrowserSession(payload);
       const sessionValid = await sessions.validateSession(sessionId);
       if (!sessionValid) return reject(401, 'Unauthorized');
       sessionIdForRecheck = sessionId;
@@ -122,6 +159,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
 
     const authzResult = await authorize();
     if (!authzResult.ok) return reject(404, 'Not Found');
+    if (overConnectionLimit(userId)) return reject(429, 'Too Many Requests');
 
     let podIp: string | null = null;
     if (kind === 'ssh') {
@@ -157,8 +195,11 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
       }
     };
 
+    const release = trackConnection(userId);
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
+      ws.on('close', release);
+      ws.on('error', release);
       if (kind === 'terminal') {
         handleShellSession(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
       } else if (tunnelMode === 'portforward') {
@@ -237,7 +278,7 @@ function handleShellSession(
         const parsed = JSON.parse(text);
         if (parsed?.type === 'resize') return;
       } catch {}
-      stdin.write(text);
+      writeWithBackpressure(ws, stdin, text);
     });
     ws.on('close', () => stdin.end());
 
@@ -371,7 +412,7 @@ function handlePortForwardTunnel(
         : Array.isArray(data)
           ? Buffer.concat(data)
           : Buffer.from(data as ArrayBuffer);
-      input.write(buf);
+      writeWithBackpressure(ws, input, buf);
     });
     ws.on('close', () => input.end());
 

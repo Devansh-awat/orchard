@@ -50,7 +50,13 @@ const ORG_SCOPED_DENY = [
 // Method-qualified: reading your own identity is fine, editing it is not.
 const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
 
-const API_TOKEN_DENY = ['auth/passkey/register', 'auth/password/set', 'auth/mcp-token', 'setup'];
+const API_TOKEN_DENY = [
+  'auth/passkey/register',
+  'auth/password/set',
+  'auth/mcp-token',
+  'setup',
+  'admin'
+];
 
 const PLATFORM_ORIGINS = new Set<string>(
   [
@@ -241,7 +247,7 @@ export class SuperAdminGuard implements CanActivate {
       // surface — a user authorising an MCP client never agreed to hand that
       // bearer to the first-party API. Sessions issued by oauth.service /
       // passwordless / SSO have no `type` claim and pass through.
-      if ((payload as any).type === 'mcp') {
+      if ((payload as any).type !== undefined) {
         throw new UnauthorizedException('Invalid token');
       }
       if (!request.headers.authorization && crossSiteMutation(request)) {
@@ -301,7 +307,7 @@ export class SuperAdminGuard implements CanActivate {
         orgScopeDenied = true;
       }
 
-      request['auth'] = { userId: dbUserId, sessionOrgId: orgScope };
+      request['auth'] = { userId: dbUserId, sessionOrgId: orgScope, sessionId };
       request['user'] = {
         sub: dbUserId,
         email: payload.email,

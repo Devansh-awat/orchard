@@ -272,21 +272,38 @@ export class SessionsService {
     return sessionRes.count;
   }
 
-  // Revokes only browser sessions, leaving API tokens and MCP grants intact.
-  // Used when a user is removed from one org/project but may still hold tokens
-  // scoped to other resources they still belong to — full revocation would nuke
+  // Revokes browser and MCP sessions, leaving API tokens intact. Used when a
+  // user is removed from one org/project but may still hold tokens scoped to
+  // other resources they still belong to — full revocation would nuke
   // unrelated work. Project-scoped tokens for the affected resource are pruned
   // at the call site. Use revokeAllSessions for "sign out everywhere".
   async revokeUserSessions(userId: string): Promise<number> {
     const res = await this.prisma.session.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-        authMethod: { not: MCP_SESSION_AUTH_METHOD }
-      },
+      where: { userId, revokedAt: null },
       data: { revokedAt: new Date() }
     });
     return res.count;
+  }
+
+  async refreshGeneration(sessionId: string): Promise<number | null> {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { refreshGeneration: true }
+    });
+    return session?.refreshGeneration ?? null;
+  }
+
+  async rotateRefreshGeneration(sessionId: string, expected: number): Promise<number | null> {
+    const res = await this.prisma.session.updateMany({
+      where: {
+        id: sessionId,
+        refreshGeneration: expected,
+        revokedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      data: { refreshGeneration: { increment: 1 } }
+    });
+    return res.count === 1 ? expected + 1 : null;
   }
 
   /**

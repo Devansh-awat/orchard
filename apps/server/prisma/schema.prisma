@@ -144,6 +144,7 @@ model Session {
   expiresAt    DateTime  @map("expires_at") @db.Timestamp(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+  refreshGeneration Int  @default(0) @map("refresh_generation")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -279,7 +280,7 @@ model Organization {
   backupR2Bucket    String? @map("backup_r2_bucket") @db.VarChar(255)
   backupR2Region    String? @map("backup_r2_region") @db.VarChar(100)
   backupR2AccessKey String? @map("backup_r2_access_key") @db.VarChar(255)
-  backupR2SecretKey String? @map("backup_r2_secret_key") @db.VarChar(500)
+  backupR2SecretKey String? @map("backup_r2_secret_key") @db.Text
 
   databasePublicIp String? @map("database_public_ip") @db.VarChar(45)
 
@@ -961,7 +962,7 @@ model GitConnection {
   baseUrl       String   @map("base_url") @db.VarChar(500)
   username      String?  @db.VarChar(255)
   token         String   @db.Text
-  webhookSecret String   @map("webhook_secret") @db.VarChar(128)
+  webhookSecret String   @map("webhook_secret") @db.Text
   // Set when the token came from an OAuth app the instance admin registered
   // rather than a pasted token. Refreshed before it expires; the refresh
   // token is encrypted like the access token.
@@ -1247,7 +1248,7 @@ model Ingress {
   protectionMode         IngressProtectionMode @default(none) @map("protection_mode")
   protectionUsername     String?               @map("protection_username") @db.VarChar(255)
   protectionPasswordHash String?               @map("protection_password_hash") @db.VarChar(255)
-  protectionBypassSecret String?               @map("protection_bypass_secret") @db.VarChar(128)
+  protectionBypassSecret String?               @map("protection_bypass_secret") @db.Text
   protectionBypassPaths  String[]              @default([]) @map("protection_bypass_paths")
   redirectTarget         String?               @map("redirect_target") @db.VarChar(2048)
   redirectStatus         Int?                  @map("redirect_status")
@@ -1361,7 +1362,7 @@ model Database {
   name                String  @db.VarChar(255)
   dbName              String  @map("db_name") @db.VarChar(63)
   dbUser              String  @map("db_user") @db.VarChar(63)
-  dbPassword          String  @map("db_password") @db.VarChar(255)
+  dbPassword          String  @map("db_password") @db.Text
   status              String  @default("pending") @db.VarChar(50)
   host                String  @default("postgresql-cluster-rw.postgresql.svc.cluster.local") @db.VarChar(255)
   port                Int     @default(5432)

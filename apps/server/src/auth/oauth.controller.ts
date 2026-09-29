@@ -361,7 +361,7 @@ export class OAuthController {
 
   @Auth()
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     if (!file) {
       throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);

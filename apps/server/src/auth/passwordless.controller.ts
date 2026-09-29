@@ -388,6 +388,8 @@ export class PasswordlessController {
       throw err;
     }
 
+    await this.sessionsService.revokeAllSessions(user.id, req['auth']?.sessionId);
+
     void this.audit.log({
       action: 'user.password.set',
       actorUserId: user.id,
@@ -452,6 +454,7 @@ export class PasswordlessController {
       body.response,
       body.friendlyName
     );
+    await this.sessionsService.revokeAllSessions(user.id, req['auth']?.sessionId);
 
     return result;
   }

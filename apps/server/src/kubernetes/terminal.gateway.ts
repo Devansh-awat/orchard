@@ -12,6 +12,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { requestAuthStorage } from '../auth/request-context';
+import { assertBrowserSession } from '../auth/session-jwt';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import {
@@ -43,6 +44,7 @@ interface ConnectionContext {
   projectId: string;
   organizationId: string;
   recheckAuth: () => Promise<boolean>;
+  sessionId: string | undefined;
   requested: string;
   isProxyHop: boolean;
   logAudit: (action: string, metadata?: Record<string, unknown>) => void;
@@ -70,6 +72,8 @@ const DIRECTORY_LOOKUP_MS = 200;
 const PROXY_DIAL_MS = 2_000;
 
 const EXEC_FAILED_CODE = 4500;
+
+const WS_MAX_PAYLOAD = 64 * 1024;
 
 function clampReason(reason: string): string {
   return reason.length > 120 ? `${reason.slice(0, 117)}...` : reason;
@@ -190,7 +194,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
   const sessionsService = app.get(SessionsService);
   const audit = app.get(AuditService);
 
-  const wss = new WebSocket.Server({ noServer: true });
+  const wss = new WebSocket.Server({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
   const kc = new k8s.KubeConfig();
   const base64Value = process.env.KUBECONFIG_BASE64;
@@ -260,6 +264,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         }
         userId = sub;
         isProxyHop = true;
+        if (typeof payload.sessionId === 'string' && payload.sessionId) {
+          sessionIdForRecheck = payload.sessionId;
+        }
       } catch {
         return reject(401, 'Unauthorized');
       }
@@ -279,8 +286,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         const { payload } = await jwtVerify(token, jwtSecret);
 
         // Require sessionId binding so revocation actually works for exec.
-        const sessionId = payload.sessionId as string | undefined;
-        if (!sessionId) return reject(401, 'Unauthorized');
+        const sessionId = assertBrowserSession(payload);
         const sessionValid = await sessionsService.validateSession(sessionId);
         if (!sessionValid) return reject(401, 'Unauthorized');
         sessionIdForRecheck = sessionId;
@@ -421,6 +427,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       projectId: project.id,
       organizationId: project.organizationId,
       recheckAuth,
+      sessionId: sessionIdForRecheck,
       requested,
       isProxyHop,
       logAudit
@@ -639,10 +646,10 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
           }
           return;
         }
-        session.stdin.write(msg);
+        writeStdin(session, ws, msg);
         return;
       }
-      session.stdin.write(data as Buffer);
+      writeStdin(session, ws, data as Buffer);
     });
 
     let alive = true;
@@ -668,6 +675,14 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     };
     ws.on('close', onGone);
     ws.on('error', onGone);
+  }
+
+  function writeStdin(session: ExecSession, ws: WebSocket, chunk: string | Buffer): void {
+    if (session.stdin.write(chunk)) return;
+    ws.pause();
+    session.stdin.once('drain', () => {
+      if (session.browser === ws && ws.readyState === WebSocket.OPEN) ws.resume();
+    });
   }
 
   function detachSession(session: ExecSession): void {
@@ -782,7 +797,10 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
   ): Promise<boolean> {
     let token: string;
     try {
-      token = await new SignJWT({ sid: sessionId })
+      token = await new SignJWT({
+        sid: sessionId,
+        ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {})
+      })
         .setProtectedHeader({ alg: 'HS256' })
         .setSubject(ctx.userId)
         .setAudience('exec-proxy')
