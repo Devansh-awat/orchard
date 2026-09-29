@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/hackclub/orchard/compare/r2-proxy/v0.4.0...r2-proxy/v0.4.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* the r2 proxy refuses copies, bucket writes and out-of-prefix deletes, cookie sessions cannot mutate from other origins, trusted images are docker hub only, the mcp consent page and asset proxy pin their origins, the cli token never enters a url, logout is a post, and the k3s kubeconfig is private ([90ac6fc](https://github.com/hackclub/orchard/commit/90ac6fcf5bafc0b05488449bdd72ece7c32e88d4))
+
 ## [0.4.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.3.0...r2-proxy/v0.4.0) (2026-09-28)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.44.1](https://github.com/hackclub/orchard/compare/frontend/v1.44.0...frontend/v1.44.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* outbound fetches pin dns at connect time, job run snapshots encrypt secret values, organization backup keys never leave the database by default, and the protect page stops naming the project ([7278788](https://github.com/hackclub/orchard/commit/7278788dbe3ac1f69ec095a977b85f03ea2ad968))
+* the r2 proxy refuses copies, bucket writes and out-of-prefix deletes, cookie sessions cannot mutate from other origins, trusted images are docker hub only, the mcp consent page and asset proxy pin their origins, the cli token never enters a url, logout is a post, and the k3s kubeconfig is private ([90ac6fc](https://github.com/hackclub/orchard/commit/90ac6fcf5bafc0b05488449bdd72ece7c32e88d4))
+
 ## [1.44.0](https://github.com/hackclub/orchard/compare/frontend/v1.43.0...frontend/v1.44.0) (2026-09-28)
 
 
