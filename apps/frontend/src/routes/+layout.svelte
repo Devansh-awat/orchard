@@ -20,6 +20,7 @@
 	import MobileTopBar from '$lib/components/MobileTopBar.svelte';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
 	import LogTimestampTooltip from '$lib/components/LogTimestampTooltip.svelte';
+	import TelemetryPrompt from '$lib/components/telemetry/TelemetryPrompt.svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { env } from '$env/dynamic/public';
@@ -220,6 +221,7 @@
 	<ToastContainer />
 	<OnboardingModal />
 	{#if !loading}
+		<TelemetryPrompt />
 		<UpdatesModal />
 	{/if}
 	<QuickSearch />

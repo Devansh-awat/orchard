@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { user, apiFetch, toasts } from '$lib/stores';
+	import { user, apiFetch, toasts, telemetry } from '$lib/stores';
 	import { transition, motionEnabled } from '$lib/utils/motion.svelte';
 	import SetupScene from './SetupScene.svelte';
 	import SetupCard from './SetupCard.svelte';
@@ -11,18 +11,26 @@
 	import SetupOrgStep from './SetupOrgStep.svelte';
 	import SetupGithubStep from './SetupGithubStep.svelte';
 	import SetupCertificateStep from './SetupCertificateStep.svelte';
+	import SetupTelemetryStep from './SetupTelemetryStep.svelte';
 	import SetupDoneStep from './SetupDoneStep.svelte';
 
 	type ServerStep = { id: string; done: boolean; skipped: boolean; required: boolean };
-	type Phase = 'passkey' | 'organization' | 'github' | 'certificate' | 'done';
+	type Phase = 'passkey' | 'organization' | 'github' | 'certificate' | 'telemetry' | 'done';
 
 	// 'github' and 'certificate' are client-side phases, not server steps: the
 	// server only tracks what it can verify about the user (passkey, org).
-	const ORDER: Phase[] = ['passkey', 'organization', 'github', 'certificate', 'done'];
-	const BAND = [0.2, 0.36, 0.52, 0.72, 1];
+	const BAND: Record<Phase, number> = {
+		passkey: 0.2,
+		organization: 0.34,
+		github: 0.48,
+		certificate: 0.62,
+		telemetry: 0.8,
+		done: 1
+	};
 
 	let steps = $state<ServerStep[]>([]);
 	let phase = $state<Phase>('passkey');
+	let askTelemetry = $state(false);
 	let ready = $state(false);
 	let finishing = $state(false);
 	let stage = $state<HTMLElement | null>(null);
@@ -30,8 +38,16 @@
 	let card = $state<ReturnType<typeof SetupCard> | null>(null);
 
 	const returning = $page.url.searchParams.has('created');
-	const index = $derived(ORDER.indexOf(phase));
-	const dots = $derived(ORDER.length - 1);
+	const order = $derived<Phase[]>([
+		'passkey',
+		'organization',
+		'github',
+		'certificate',
+		...(askTelemetry ? (['telemetry'] as const) : []),
+		'done'
+	]);
+	const index = $derived(order.indexOf(phase));
+	const dots = $derived(order.length - 1);
 
 	function firstUnsettled(list: ServerStep[]): Phase | null {
 		const next = list.find((s) => !s.done && !s.skipped)?.id;
@@ -39,6 +55,7 @@
 	}
 
 	async function load() {
+		void telemetry.reload().then((state) => (askTelemetry = !!state?.needsAnswer));
 		try {
 			const response = await apiFetch('/apiv1/setup/state');
 			if (!response.ok) throw new Error('unavailable');
@@ -63,7 +80,7 @@
 		phase = next;
 		await tick();
 		card?.grow();
-		scene?.raiseBand(BAND[ORDER.indexOf(next)]);
+		scene?.raiseBand(BAND[next]);
 		const to = stage?.firstElementChild;
 		if (to && motionEnabled()) {
 			animate(
@@ -134,7 +151,9 @@
 			{:else if phase === 'github'}
 				<SetupGithubStep onDone={() => move('certificate')} onSkip={() => move('certificate')} />
 			{:else if phase === 'certificate'}
-				<SetupCertificateStep onDone={() => move('done')} />
+				<SetupCertificateStep onDone={() => move(askTelemetry ? 'telemetry' : 'done')} />
+			{:else if phase === 'telemetry'}
+				<SetupTelemetryStep onDone={() => move('done')} />
 			{:else}
 				<SetupDoneStep onDone={finish} />
 			{/if}

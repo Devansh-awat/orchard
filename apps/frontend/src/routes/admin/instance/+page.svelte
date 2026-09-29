@@ -12,6 +12,7 @@
 	} from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
+	import TelemetryToggle from '$lib/components/admin/TelemetryToggle.svelte';
 
 	type Section = {
 		id: string;
@@ -248,6 +249,10 @@
 
 	<div {@attach motionStagger({ index: sections.length })}>
 		<McpToggle />
+	</div>
+
+	<div {@attach motionStagger({ index: sections.length + 1 })}>
+		<TelemetryToggle />
 	</div>
 {/if}
 

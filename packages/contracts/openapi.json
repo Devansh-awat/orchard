@@ -1925,6 +1925,104 @@
         ]
       }
     },
+    "/admin/telemetry": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/telemetry",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /admin/telemetry",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/telemetry/preview": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/telemetry/preview",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/usage": {
       "get": {
         "description": "Auth: superadmin",

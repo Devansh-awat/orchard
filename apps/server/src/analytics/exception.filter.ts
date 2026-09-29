@@ -10,6 +10,7 @@ import {
 import { BaseExceptionFilter } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { TelemetryService } from '../telemetry/telemetry.service';
 import { markSpanError } from './datadog';
 import { getClientIp } from '../auth/client-ip';
 import { k8sHttpException } from '../kubernetes/k8s-error';
@@ -28,7 +29,8 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
 
   constructor(
     private readonly analytics: AnalyticsService,
-    applicationRef?: HttpServer
+    applicationRef?: HttpServer,
+    private readonly telemetry?: TelemetryService
   ) {
     super(applicationRef);
   }
@@ -63,6 +65,11 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
             http_status: status,
             user_agent: req.headers['user-agent'] ?? null
           });
+          this.telemetry?.captureException(exception, {
+            method: req.method,
+            route: req.route?.path,
+            status
+          });
         }
         void res;
       } else {
@@ -70,6 +77,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
         this.analytics.captureException(exception, 'background', {
           context_type: host.getType()
         });
+        this.telemetry?.captureException(exception, { contextType: host.getType() });
       }
     } catch (e) {
       this.logger.warn(`forward to analytics failed: ${(e as Error).message}`);

@@ -17,6 +17,7 @@ import { attachSandboxSshWebSocket } from './sandboxes/sandbox-ssh.gateway';
 import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
+import { TelemetryService } from './telemetry/telemetry.service';
 import { ProtectionService } from './auth/protection.service';
 import { requestAuthStorage } from './auth/request-context';
 
@@ -85,7 +86,9 @@ async function bootstrap() {
   // app creation so HttpAdapterHost is resolvable for the BaseExceptionFilter.
   const { httpAdapter } = app.get(HttpAdapterHost);
   const analytics = app.get(AnalyticsService);
-  app.useGlobalFilters(new AnalyticsExceptionFilter(analytics, httpAdapter));
+  app.useGlobalFilters(
+    new AnalyticsExceptionFilter(analytics, httpAdapter, app.get(TelemetryService))
+  );
 
   // Configure trust proxy so req.ip honors X-Forwarded-For. Defaults to 1
   // (single trusted hop: Traefik in cluster, harmless in dev where no proxy

@@ -2,7 +2,7 @@
 	import { onMount, type Component } from 'svelte';
 	import { Sparkles, Waves, Activity, BellRing, Gauge, Rocket, ShieldCheck } from 'lucide-svelte';
 	import { page } from '$app/stores';
-	import { isSignedIn, showOnboarding, user } from '$lib/stores';
+	import { isSignedIn, isSuperAdmin, showOnboarding, telemetry, user } from '$lib/stores';
 	import { unseenUpdate, markUpdateSeen } from '$lib/stores/updates';
 	import { Modal, Button } from '$lib/components/ui';
 	import AsciiVine from '$lib/components/AsciiVine.svelte';
@@ -39,6 +39,7 @@
 		// lands on top of the setup they are in the middle of.
 		if ($user?.setupCompleted === false) return;
 		if (quietRoutes.some((route) => $page.url.pathname.startsWith(route))) return;
+		if ($isSuperAdmin && ($telemetry === undefined || $telemetry?.needsAnswer)) return;
 		const next = $unseenUpdate;
 		if (!next) return;
 		presented = true;

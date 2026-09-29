@@ -911,6 +911,48 @@ keys on its allowlist (`ALLOWED_INGRESS_ANNOTATION_KEYS` in
 `apps/server/src/kubernetes/kubernetes.service.ts`), and none of the ones above
 are on it yet, so add the ones you need there first.
 
+## Anonymous usage reports
+
+Orchard can send the Orchard team a short report once a day, so we know which
+features people rely on and which crashes to fix first. Nothing is sent until a
+superadmin says yes. A fresh instance asks during setup; an instance that
+predates this asks every superadmin once with a prompt, until one of them
+answers. Nobody else sees it. Change the answer any time under
+**Admin -> Configuration**, which also shows the exact report this instance
+would send.
+
+The daily report carries only counts and yes/no answers:
+
+- the Orchard and Node.js versions and the CPU architecture
+- how many users there are, and how many were active in the last day, week and
+  month
+- how many organizations, projects, deployments, databases, jobs, sandboxes
+  and nodes exist
+- how many builds succeeded and failed in the last 24 hours
+- whether GitHub, email, backups, SSO, MCP and node scheduling are turned on
+
+With reports on, an unexpected server error (a 5xx, or a crash outside a
+request) also sends its type, the route pattern (`/deployments/:id`, never the
+real URL), and the file, function and line in Orchard's own code where it
+happened. The error message is never sent, because messages are where data
+leaks in.
+
+No names, emails, domains, repositories, environment variables or logs are
+sent, and IP addresses are not stored. Every report is keyed to a random ID
+generated for this instance and nothing else. Reports go to PostHog at
+`us.i.posthog.com`, so that is the one host to allow if your egress is locked
+down.
+
+To decide for every superadmin up front, set `ORCHARD_TELEMETRY` on the server:
+`false` turns reports off and locks the switch, `true` turns them on without
+asking.
+
+```yaml
+server:
+  env:
+    - { name: ORCHARD_TELEMETRY, value: 'false' }
+```
+
 ## What is not included
 
 - Cluster bootstrap (nodes, CNI, operator installation): bring your own or

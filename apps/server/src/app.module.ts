@@ -31,6 +31,7 @@ import { EventsModule } from './events/events.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { TelemetryModule } from './telemetry/telemetry.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { AlertsModule } from './alerts/alerts.module';
@@ -85,6 +86,7 @@ import { ApplyModule } from './apply/apply.module';
     MetricsModule,
     AuditModule,
     AnalyticsModule,
+    TelemetryModule,
     AiChatModule,
     ObservabilityModule,
     AlertsModule,
