@@ -39,7 +39,8 @@ into the containerd mirror the kubelet pulls through and the credentials the
 builders push with.
 
 It also opens an active ufw or firewalld the way k3s needs, which is otherwise
-the thing that makes every pod time out against the API after a reboot.
+the thing that makes every pod time out against the API after a reboot, and
+makes the k3s kubeconfig readable by root only.
 
 orchardctl update runs this first, so an upgrade fixes an old install on its
 own. Running it by hand is for a box you do not want to upgrade yet. It is
@@ -57,7 +58,25 @@ func harden(c *cli.Context) error {
 	if err := lockdownRegistry(c); err != nil {
 		return err
 	}
-	return ensureFirewall(c)
+	if err := ensureFirewall(c); err != nil {
+		return err
+	}
+	return privateKubeconfig(c)
+}
+
+func privateKubeconfig(c *cli.Context) error {
+	info, err := os.Stat(c.Env.Kubeconfig)
+	if err != nil {
+		return nil
+	}
+	if info.Mode().Perm() == 0o600 {
+		return nil
+	}
+	if err := os.Chmod(c.Env.Kubeconfig, 0o600); err != nil {
+		return fmt.Errorf("could not make %s private: %w", c.Env.Kubeconfig, err)
+	}
+	c.Printf("%s is now readable by root only\n", c.Env.Kubeconfig)
+	return nil
 }
 
 func lockdownRegistry(c *cli.Context) error {
