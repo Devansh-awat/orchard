@@ -105,11 +105,7 @@ export class ProjectOrgTransferService {
     // Source: you must be able to edit the project. Destination: you must be
     // able to create projects there (member, not guest) — the same gate as
     // spawning a brand-new project in that org.
-    await this.authz.requireProjectEdit(
-      projectId,
-      user.id,
-      'move a project to another organization'
-    );
+    await this.authz.requireProjectDelete(projectId, user.id);
     await this.authz.requireOrgCanCreateProjects(destinationOrgId, user.id);
 
     const destOrg = (await this.prisma.organization.findUnique({

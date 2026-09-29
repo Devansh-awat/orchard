@@ -445,7 +445,7 @@ export class AuthorizationService {
   ): boolean {
     if (access.source === 'superadmin') return true;
     if (access.orgRole === 'owner' || access.orgRole === 'admin') return true;
-    return !!ownerId && ownerId === userId;
+    return !!ownerId && ownerId === userId && access.canEdit;
   }
 
   async requireProjectOwnershipTransfer(projectId: string, userId: string): Promise<ProjectAccess> {

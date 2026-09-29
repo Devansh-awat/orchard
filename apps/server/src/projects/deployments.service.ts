@@ -3684,8 +3684,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('User not found');
     }
 
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, deploymentId },
       include: {
         deployment: {
           include: {
@@ -3702,10 +3702,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (!service) {
       throw new NotFoundException(`Service ${serviceId} not found`);
-    }
-
-    if (service.deploymentId !== deploymentId) {
-      throw new BadRequestException('Service does not belong to deployment');
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
@@ -3992,8 +3988,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('User not found');
     }
 
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, deploymentId },
       include: {
         deployment: {
           include: {
@@ -4016,10 +4012,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (!service) {
       throw new NotFoundException(`Service ${serviceId} not found`);
-    }
-
-    if (service.deploymentId !== deploymentId) {
-      throw new BadRequestException('Service does not belong to deployment');
     }
 
     if (service.ingresses.length > 0) {
@@ -4145,8 +4137,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('User not found');
     }
 
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, deploymentId },
       include: {
         deployment: {
           include: {
@@ -4163,10 +4155,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (!service) {
       throw new NotFoundException(`Service ${serviceId} not found`);
-    }
-
-    if (service.deploymentId !== deploymentId) {
-      throw new BadRequestException('Service does not belong to deployment');
     }
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');

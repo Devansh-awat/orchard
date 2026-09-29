@@ -185,6 +185,10 @@ export class SuperAdminGuard implements CanActivate {
       if (!sessionValid) {
         throw new UnauthorizedException('Session has been revoked');
       }
+      const actingSession = await this.prisma.session.findUnique({
+        where: { id: actingSessionId },
+        select: { userId: true }
+      });
       this.sessionsService.touchSession(actingSessionId).catch(() => {});
 
       // Resolve to DB user id the same way the JWT path does, so superadmin
@@ -208,6 +212,9 @@ export class SuperAdminGuard implements CanActivate {
         dbUserId = dbUser.id;
       }
 
+      if (!actingSession || actingSession.userId !== dbUserId) {
+        throw new UnauthorizedException('Acting user does not own that session');
+      }
       request['auth'] = { userId: dbUserId, viaMcpGateway: true };
       request['user'] = {
         sub: dbUserId,
