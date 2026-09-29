@@ -3,16 +3,21 @@ import { browser } from '$app/environment';
 import { apiFetch } from './api';
 import { subscribeOrgEvents } from './orgEvents';
 
-export interface EngineHealth {
-	stale: boolean;
-	shards: { shard: string; holder: string | null; stale: boolean }[];
-}
+import {
+	settle,
+	CONFIRM_MS,
+	POLL_MS,
+	type EngineHealth,
+	type Settled
+} from './engineHealth.settle';
 
-const POLL_MS = 60_000;
+export { settle, CONFIRM_MS, POLL_MS, type EngineHealth, type Settled };
 
 const store = writable<EngineHealth>({ stale: false, shards: [] });
+let state: Settled = { shown: { stale: false, shards: [] }, pendingSince: null };
 let started = false;
 let timer: ReturnType<typeof setInterval> | null = null;
+let confirmTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function refresh() {
 	try {
@@ -20,7 +25,14 @@ async function refresh() {
 		if (!res.ok) return;
 		const data = await res.json();
 		const shards = (data.shards ?? []) as EngineHealth['shards'];
-		store.set({ stale: shards.some((s) => s.stale), shards });
+		state = settle(state, { stale: shards.some((s) => s.stale), shards }, Date.now());
+		store.set(state.shown);
+		if (state.pendingSince !== null && !confirmTimer) {
+			confirmTimer = setTimeout(() => {
+				confirmTimer = null;
+				void refresh();
+			}, CONFIRM_MS + 250);
+		}
 	} catch {}
 }
 
@@ -43,6 +55,8 @@ export function engineHealth(orgId: () => string | undefined): Readable<EngineHe
 
 export function stopEngineHealth() {
 	if (timer) clearInterval(timer);
+	if (confirmTimer) clearTimeout(confirmTimer);
 	timer = null;
+	confirmTimer = null;
 	started = false;
 }

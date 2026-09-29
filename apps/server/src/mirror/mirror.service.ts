@@ -5,6 +5,7 @@ import { resolveNamespaceScope } from '../projects/namespace-scope';
 import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
+import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './mirror-health';
 import { SandboxK8sService } from '../sandboxes/sandbox-k8s.service';
 import { sandboxFeatureEnabled } from '../sandboxes/sandbox-enabled.guard';
 import { MirrorInformer, MirrorRefs } from './mirror-informer';
@@ -24,7 +25,6 @@ const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DB_STATS_INTERVAL_MS = 30_000;
 const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
-const STALE_MS = 60_000;
 const TRANSITION_RETENTION_DAYS = 30;
 const NS_REF_TTL_MS = 10 * 60 * 1000;
 
@@ -38,9 +38,10 @@ interface ShardRuntime {
     resourceVersion: string | null;
     // Per-informer watch health. A shard is only healthy when every one of its
     // informers has a live watch.
-    unhealthy: Map<string, string>;
+    unhealthy: Map<string, Failure>;
   };
   resyncTimer?: ReturnType<typeof setInterval>;
+  graceTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface ShardHealth {
@@ -213,9 +214,11 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         lastError: row.lastError,
         // The heartbeat timestamp only proves the holder's process is alive —
         // it is written on a timer regardless of whether the watch works. A
-        // shard is stale when nobody holds it, when the holder stopped
-        // heartbeating, or when the holder says its watch is down.
-        stale: !row.holder || now - row.updatedAt.getTime() > STALE_MS || !row.healthy
+        // shard is stale when the holder stopped heartbeating, or when the
+        // holder says its watch has been down for longer than the grace. A
+        // released shard whose last heartbeat is fresh is a handoff, not an
+        // outage: the next replica claims it within the balance interval.
+        stale: shardIsStale(row, now)
       });
     }
     for (const runtime of this.shards.values()) {
@@ -282,9 +285,22 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
             runtime.activity.lastEventAt = new Date();
           },
           onHealthChange: (healthy, error) => {
-            if (healthy) runtime.activity.unhealthy.delete(config.kind);
-            else runtime.activity.unhealthy.set(config.kind, error ?? 'watch down');
-            void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+            if (healthy) {
+              runtime.activity.unhealthy.delete(config.kind);
+              void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+              return;
+            }
+            runtime.activity.unhealthy.set(config.kind, {
+              error: error ?? 'watch down',
+              since: Date.now()
+            });
+            if (runtime.graceTimer) clearTimeout(runtime.graceTimer);
+            runtime.graceTimer = setTimeout(() => {
+              runtime.graceTimer = undefined;
+              if (runtime.informers.length === 0) return;
+              void this.writeHeartbeat(runtime, this.lease.replicaIdentity);
+            }, UNHEALTHY_GRACE_MS + 500);
+            runtime.graceTimer.unref?.();
           }
         })
     );
@@ -307,6 +323,10 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     if (runtime.resyncTimer) {
       clearInterval(runtime.resyncTimer);
       runtime.resyncTimer = undefined;
+    }
+    if (runtime.graceTimer) {
+      clearTimeout(runtime.graceTimer);
+      runtime.graceTimer = undefined;
     }
     const informers = runtime.informers;
     runtime.informers = [];
@@ -373,7 +393,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async writeHeartbeat(runtime: ShardRuntime, holder: string): Promise<void> {
-    const failures = [...runtime.activity.unhealthy.entries()];
+    const failures = lastingFailures(runtime.activity.unhealthy, Date.now());
     const data = {
       holder,
       lastListAt: runtime.activity.lastListAt,
