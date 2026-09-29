@@ -2,13 +2,15 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 @Injectable()
 export class TailscaleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
-    private readonly k8sWorkload: K8sWorkloadService
+    private readonly k8sWorkload: K8sWorkloadService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   /**
@@ -31,11 +33,11 @@ export class TailscaleService {
       where: { userId },
       create: {
         userId,
-        accessToken: authKey,
+        accessToken: this.crypto.seal(authKey),
         tailnet: keyId
       },
       update: {
-        accessToken: authKey,
+        accessToken: this.crypto.seal(authKey),
         tailnet: keyId
       }
     });
@@ -149,7 +151,7 @@ export class TailscaleService {
     await this.k8sWorkload.addTailscaleSidecar(
       deployment.namespace,
       deployment.name,
-      connection.accessToken,
+      this.crypto.open(connection.accessToken),
       hostname,
       servicePorts
     );

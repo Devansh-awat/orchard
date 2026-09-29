@@ -7,6 +7,7 @@ process.env.FRONTEND_URL = 'https://orchard.test';
 
 // oxlint-disable-next-line import/first
 import { ProtectionService } from '../src/auth/protection.service';
+import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
 
 // Everything a user's private app is worth sits behind checkProtection. These
 // are the invariants that must not regress: a request without proof of identity
@@ -37,6 +38,7 @@ function buildService(row: Record<string, unknown> | null) {
   svc.negativeCache = new Map();
   svc.basicAuthFailures = new Map();
   svc.throttle = offlineThrottle();
+  svc.crypto = new SecretCryptoService();
   svc.prisma = { ingress: { findFirst: async () => row, findUnique: async () => row } };
   svc.authz = { resolveProjectAccess: async () => ({ canView: true }) };
   return svc as ProtectionService;

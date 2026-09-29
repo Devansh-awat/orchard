@@ -46,6 +46,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { platformBackupTarget } from '../instance-config/object-storage';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import type { ClusterSnapshot, DbStats, MirroredDbPod } from '../kubernetes/cnpg-status';
 
 /** The org fields that locate a managed database's backups in R2. */
@@ -91,8 +92,13 @@ export class DatabasesService {
     private readonly notifications: NotificationsService,
     private readonly instanceConfig: InstanceConfigService,
     private readonly moduleRef: ModuleRef,
-    private readonly bindings: ResourceBindingsService
+    private readonly bindings: ResourceBindingsService,
+    private readonly crypto: SecretCryptoService
   ) {}
+
+  private revealPassword<T extends { dbPassword: string }>(row: T): T {
+    return { ...row, dbPassword: this.crypto.open(row.dbPassword) };
+  }
 
   // Resolve a database cluster's placement: org hostname allow/deny + assigned
   // node pool + superadmin override, merged into affinity + tolerations that
@@ -194,7 +200,7 @@ export class DatabasesService {
             bucket: org.backupR2Bucket,
             region: org.backupR2Region || 'auto',
             accessKey: org.backupR2AccessKey,
-            secretKey: org.backupR2SecretKey
+            secretKey: this.crypto.open(org.backupR2SecretKey)
           }
         : null;
     const platform = own ? null : platformBackupTarget();
@@ -571,7 +577,7 @@ export class DatabasesService {
           name: nameInput,
           dbName,
           dbUser,
-          dbPassword,
+          dbPassword: this.crypto.seal(dbPassword),
           status: 'provisioning',
           mode: 'cnpg',
           pgMajor,
@@ -654,7 +660,7 @@ export class DatabasesService {
       metadata: { mode: 'cnpg', storageSize, replicas }
     });
 
-    return stripR2ProxyCreds(database as any);
+    return stripR2ProxyCreds(this.revealPassword(database as any));
   }
 
   private async mirroredPodsFor(ids: string[]): Promise<Map<string, MirroredDbPod[]>> {
@@ -789,6 +795,7 @@ export class DatabasesService {
         platformBackupTarget())
     );
 
+    const dbPassword = this.crypto.open(database.dbPassword);
     let publicHostname: string | null = null;
     let publicConnectionString: string | null = null;
     if (
@@ -802,8 +809,8 @@ export class DatabasesService {
       publicHostname =
         this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName) || null;
       publicConnectionString = publicHostname
-        ? `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
-        : `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}?sslmode=require`;
+        ? `postgresql://${database.dbUser}:${dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
+        : `postgresql://${database.dbUser}:${dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}?sslmode=require`;
       if (publicHostname) {
         // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
         try {
@@ -824,7 +831,8 @@ export class DatabasesService {
 
     const result: any = {
       ...database,
-      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.host}:${database.port}/${database.dbName}`,
+      dbPassword,
+      connectionString: `postgresql://${database.dbUser}:${dbPassword}@${database.host}:${database.port}/${database.dbName}`,
       internalHost: `${database.host}:${database.port}`,
       endpoints,
       maxReplicas: this.maxReplicas,
@@ -1156,7 +1164,7 @@ export class DatabasesService {
     }
     // Strip R2 proxy backup credentials from editor returns as well — they
     // are infrastructure secrets, not user-facing data.
-    return enriched.map((d) => stripR2ProxyCreds(d as any));
+    return enriched.map((d) => stripR2ProxyCreds(this.revealPassword(d as any)));
   }
 
   private async purgeBackupObjects(database: {
@@ -1194,7 +1202,7 @@ export class DatabasesService {
       ) {
         endpoint = org.backupR2Endpoint;
         accessKeyId = org.backupR2AccessKey;
-        secretAccessKey = org.backupR2SecretKey;
+        secretAccessKey = this.crypto.open(org.backupR2SecretKey);
       }
       if (!endpoint || !accessKeyId || !secretAccessKey) return;
 
@@ -1375,7 +1383,7 @@ export class DatabasesService {
     }
     await this.prisma.database.update({
       where: { id: database.id },
-      data: { dbPassword: password }
+      data: { dbPassword: this.crypto.seal(password) }
     });
     const reapplied = await this.followCredentialChange(database.id, 'password rotation');
     void this.audit.log({
@@ -1567,7 +1575,7 @@ export class DatabasesService {
     const desired = this.resolveReplicas(replicas);
     const current = Math.max(1, database.replicas ?? 1);
     if (desired === current) {
-      return stripR2ProxyCreds(database as any);
+      return stripR2ProxyCreds(this.revealPassword(database as any));
     }
 
     const delta = desired - current;
@@ -1616,7 +1624,7 @@ export class DatabasesService {
       metadata: { replicas: [current, desired] }
     });
 
-    return stripR2ProxyCreds(updated as any);
+    return stripR2ProxyCreds(this.revealPassword(updated as any));
   }
 
   async restartDatabase(databaseId: string, clerkId: string, userData?: any) {
@@ -1712,7 +1720,7 @@ export class DatabasesService {
       metadata: { name: [database.name, trimmed] }
     });
 
-    return updated;
+    return this.revealPassword(updated);
   }
 
   // ── Database backup management ──
@@ -2129,7 +2137,7 @@ export class DatabasesService {
           {
             dbName: database.dbName,
             dbUser: database.dbUser,
-            dbPassword: database.dbPassword,
+            dbPassword: this.crypto.open(database.dbPassword),
             storageSize: database.storageSize || '1Gi',
             parameters: (database.pgParameters as Record<string, string> | null) || undefined,
             sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || undefined,
@@ -2596,7 +2604,7 @@ export class DatabasesService {
         enabled: true,
         host: database.publicIp,
         port: database.publicPort,
-        connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}`
+        connectionString: `postgresql://${database.dbUser}:${this.crypto.open(database.dbPassword)}@${database.publicIp}:${database.publicPort}/${database.dbName}`
       };
     }
 
@@ -2650,7 +2658,7 @@ export class DatabasesService {
       host: hostname,
       ip,
       port,
-      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
+      connectionString: `postgresql://${database.dbUser}:${this.crypto.open(database.dbPassword)}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`
     };
   }
 

@@ -22,6 +22,7 @@ import { FaviconService } from './favicon.service';
 import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { SessionsService } from '../auth/sessions.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -65,7 +66,8 @@ export class ProjectsService {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => DeploymentsService))
     private readonly deployments: DeploymentsService,
-    private readonly environments: EnvironmentsService
+    private readonly environments: EnvironmentsService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   private scrubCreatorForViewer<C extends { email?: string | null }>(creator: C | null): C | null {
@@ -411,7 +413,7 @@ export class ProjectsService {
         status: 'restarting'
       }
     });
-    return stripR2ProxyCreds(updated);
+    return stripR2ProxyCreds({ ...updated, dbPassword: this.crypto.open(updated.dbPassword) });
   }
 
   async expandDatabaseStorage(databaseId: string, storageSize: string, userId?: string) {

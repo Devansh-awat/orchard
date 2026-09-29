@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { GitHubService } from '../src/github/github.service';
+import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
 
 const prisma = new PrismaClient();
 
@@ -25,7 +26,8 @@ function newService(): GitHubService {
     {
       isLeader: () => true,
       onAcquired: () => {}
-    } as never
+    } as never,
+    new SecretCryptoService()
   );
 }
 

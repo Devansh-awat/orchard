@@ -18,6 +18,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -32,7 +33,8 @@ export class OrganizationsService {
     private readonly membershipCache: MembershipCacheService,
     private readonly sessions: SessionsService,
     private readonly tailscale: TailscaleService,
-    private readonly instanceConfig: InstanceConfigService
+    private readonly instanceConfig: InstanceConfigService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
@@ -470,7 +472,7 @@ export class OrganizationsService {
     if (data.backupR2AccessKey !== undefined)
       updateData.backupR2AccessKey = data.backupR2AccessKey || null;
     if (data.backupR2SecretKey !== undefined)
-      updateData.backupR2SecretKey = data.backupR2SecretKey || null;
+      updateData.backupR2SecretKey = this.crypto.seal(data.backupR2SecretKey || null);
     if (data.databasePublicIp !== undefined) {
       const ip =
         data.databasePublicIp === null ? null : String(data.databasePublicIp).trim() || null;

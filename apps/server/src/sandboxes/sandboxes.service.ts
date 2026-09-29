@@ -316,7 +316,7 @@ export class SandboxesService {
     ]);
     return {
       authorizedKeys: keys,
-      githubToken: user?.githubAccessToken || null,
+      githubToken: this.crypto.open(user?.githubAccessToken) || null,
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
       setupScript,

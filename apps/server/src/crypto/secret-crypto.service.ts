@@ -77,4 +77,16 @@ export class SecretCryptoService {
   maybeDecrypt<T extends { value: string }>(row: T): T {
     return this.isEncrypted(row.value) ? { ...row, value: this.decrypt(row.value) } : row;
   }
+
+  seal<T extends string | null | undefined>(value: T): T {
+    if (!this.key || typeof value !== 'string' || value === '' || this.isEncrypted(value)) {
+      return value;
+    }
+    return this.encrypt(value) as T;
+  }
+
+  open<T extends string | null | undefined>(value: T): T {
+    if (typeof value !== 'string') return value;
+    return this.decrypt(value) as T;
+  }
 }

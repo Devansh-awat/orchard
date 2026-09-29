@@ -130,7 +130,7 @@ export class GitConnectionsService {
       baseUrl: row.baseUrl,
       username: row.username,
       token: this.crypto.decrypt(row.token),
-      webhookSecret: row.webhookSecret
+      webhookSecret: this.crypto.open(row.webhookSecret)
     };
   }
 
@@ -201,7 +201,7 @@ export class GitConnectionsService {
             provider,
             baseUrl: identity.baseUrl,
             oauth: true,
-            webhookSecret: randomBytes(32).toString('hex')
+            webhookSecret: this.crypto.seal(randomBytes(32).toString('hex'))
           }
         });
     void this.audit.log({
@@ -229,7 +229,7 @@ export class GitConnectionsService {
   }
 
   async webhookSecret(userId: string, connectionId: string): Promise<string> {
-    return (await this.rowOrThrow(userId, connectionId)).webhookSecret;
+    return this.crypto.open((await this.rowOrThrow(userId, connectionId)).webhookSecret);
   }
 
   async create(userId: string, input: GitConnectionInput): Promise<GitConnectionView> {
@@ -274,7 +274,7 @@ export class GitConnectionsService {
         baseUrl,
         username,
         token: this.crypto.encrypt(token),
-        webhookSecret: randomBytes(32).toString('hex')
+        webhookSecret: this.crypto.seal(randomBytes(32).toString('hex'))
       }
     });
     void this.audit.log({
@@ -506,7 +506,7 @@ export class GitConnectionsService {
       const status = await provider.ensureWebhook(
         repoPath,
         this.webhookUrlFor(row.id),
-        row.webhookSecret
+        this.crypto.open(row.webhookSecret)
       );
       return { status };
     } catch (e) {

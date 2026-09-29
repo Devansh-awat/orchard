@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 import { getClientIp, getRawClientIp } from './client-ip';
 import { RedisThrottleService, type ThrottleWindow } from './redis-throttle.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 export interface ProtectionDecision {
   allow: boolean;
@@ -148,7 +149,8 @@ export class ProtectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
-    private readonly throttle: RedisThrottleService
+    private readonly throttle: RedisThrottleService,
+    private readonly crypto: SecretCryptoService
   ) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
@@ -194,6 +196,7 @@ export class ProtectionService {
 
     const entry: CachedIngress = {
       ...ingress,
+      protectionBypassSecret: this.crypto.open(ingress.protectionBypassSecret),
       upstreamHost: ingress.service
         ? `${ingress.service.name}.${ingress.namespace}.svc.cluster.local`
         : null,

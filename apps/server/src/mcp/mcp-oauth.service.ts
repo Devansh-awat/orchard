@@ -7,6 +7,7 @@ import {
   MCP_SESSION_TTL_MS
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { checkRefreshGeneration, oauthCodeKey } from './mcp-oauth.helpers';
 
 interface OAuthClient {
   clientId: string;
@@ -50,11 +51,12 @@ export class McpOAuthService {
 
   // Auth codes and pending-authorize state live in Postgres (mcp_oauth_codes)
   // rather than process memory so the `/authorize` -> `/authorize/complete` ->
-  // `/token` flow survives restarts and works across replicas. The `id` is the
-  // lookup key: the one-time auth code, or `pending_<state>` /
-  // `client_state_<state>` for the in-flight handshake.
+  // `/token` flow survives restarts and works across replicas. Rows are keyed
+  // by the sha256 of the one-time auth code (or of `pending_<state>` /
+  // `client_state_<state>` for the in-flight handshake), so a database read
+  // cannot yield a redeemable code.
   private async getCode(id: string): Promise<AuthCodeEntry | undefined> {
-    const row = await this.prisma.mcpOauthCode.findUnique({ where: { id } });
+    const row = await this.prisma.mcpOauthCode.findUnique({ where: { id: oauthCodeKey(id) } });
     if (!row) return undefined;
     return {
       clientId: row.clientId,
@@ -75,16 +77,17 @@ export class McpOAuthService {
       orchardToken: entry.orchardToken,
       expiresAt: new Date(entry.expiresAt)
     };
+    const key = oauthCodeKey(id);
     await this.prisma.mcpOauthCode.upsert({
-      where: { id },
-      create: { id, ...data },
+      where: { id: key },
+      create: { id: key, ...data },
       update: data
     });
   }
 
   // deleteMany so a missing row is a no-op rather than a throw.
   private async deleteCode(id: string): Promise<void> {
-    await this.prisma.mcpOauthCode.deleteMany({ where: { id } });
+    await this.prisma.mcpOauthCode.deleteMany({ where: { id: oauthCodeKey(id) } });
   }
 
   private pruneExpiredCodes(): void {
@@ -423,7 +426,7 @@ export class McpOAuthService {
   // as bearer credentials, and the embedded clientId binds the token to the
   // client it was issued to. Session revocation is still honored because the
   // refresh grant re-validates sessionId against the DB before minting.
-  private mintRefreshToken(claims: McpTokenClaims, clientId: string): Promise<string> {
+  private mintRefreshToken(claims: McpTokenClaims, clientId: string, gen: number): Promise<string> {
     return new SignJWT({
       type: 'mcp_refresh',
       email: claims.email,
@@ -431,7 +434,8 @@ export class McpOAuthService {
       externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
       sessionId: claims.sessionId,
-      clientId
+      clientId,
+      gen
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -440,12 +444,17 @@ export class McpOAuthService {
       .sign(this.getJwtSecret());
   }
 
-  private async buildTokenResponse(claims: McpTokenClaims, clientId: string, accessToken?: string) {
+  private async buildTokenResponse(
+    claims: McpTokenClaims,
+    clientId: string,
+    gen: number,
+    accessToken?: string
+  ) {
     return {
       access_token: accessToken ?? (await this.mintAccessToken(claims)),
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
-      refresh_token: await this.mintRefreshToken(claims, clientId),
+      refresh_token: await this.mintRefreshToken(claims, clientId, gen),
       scope: 'mcp:access'
     };
   }
@@ -491,10 +500,21 @@ export class McpOAuthService {
       return { error: 'invalid_grant', error_description: 'malformed refresh token' };
     }
 
-    const sessionValid = await this.sessions.validateSession(payload.sessionId);
-    if (!sessionValid) {
+    const currentGen = await this.sessions.refreshGeneration(payload.sessionId);
+    if (currentGen === null) {
       console.error('[MCP OAuth] Refresh failed: session revoked or expired');
       return { error: 'invalid_grant', error_description: 'session revoked or expired' };
+    }
+    const check = checkRefreshGeneration(payload.gen, currentGen);
+    if (check.ok === false) {
+      console.error(`[MCP OAuth] Refresh failed: ${check.reason}, revoking session`);
+      await this.sessions.revokeSession(payload.sub, payload.sessionId);
+      return { error: 'invalid_grant', error_description: check.reason };
+    }
+    const nextGen = await this.sessions.rotateRefreshGeneration(payload.sessionId, check.gen);
+    if (nextGen === null) {
+      console.error('[MCP OAuth] Refresh failed: lost the rotation race');
+      return { error: 'invalid_grant', error_description: 'refresh token already rotated' };
     }
     // Sliding window: an actively-refreshing MCP client keeps its underlying
     // session alive instead of dying at the fixed 7-day mark.
@@ -502,7 +522,11 @@ export class McpOAuthService {
 
     console.error(`[MCP OAuth] Refresh succeeded for sub=${payload.sub}`);
     return {
-      token_response: await this.buildTokenResponse(this.claimsFromPayload(payload), body.client_id)
+      token_response: await this.buildTokenResponse(
+        this.claimsFromPayload(payload),
+        body.client_id,
+        nextGen
+      )
     };
   }
 
@@ -588,10 +612,16 @@ export class McpOAuthService {
       return { error: 'invalid_grant', error_description: 'authorization expired' };
     }
 
+    const gen = await this.sessions.refreshGeneration(payload.sessionId);
+    if (gen === null) {
+      return { error: 'invalid_grant', error_description: 'session revoked or expired' };
+    }
+
     return {
       token_response: await this.buildTokenResponse(
         this.claimsFromPayload(payload),
         body.client_id,
+        gen,
         orchardToken
       )
     };

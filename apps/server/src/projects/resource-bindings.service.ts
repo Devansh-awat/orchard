@@ -165,7 +165,7 @@ export class ResourceBindingsService {
         dbName: true
       }
     });
-    return new Map(rows.map((r) => [r.id, r]));
+    return new Map(rows.map((r) => [r.id, { ...r, dbPassword: this.crypto.open(r.dbPassword) }]));
   }
 
   private async deploymentsById(ids: string[]): Promise<Map<string, DeploymentRow>> {

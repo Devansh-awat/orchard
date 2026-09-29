@@ -25,6 +25,7 @@ import { SandboxesService, toSandboxDto } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 @Auth()
 @UseGuards(SandboxEnabledGuard)
@@ -36,7 +37,8 @@ export class SandboxesController {
     private readonly workspace: SandboxWorkspaceService,
     private readonly convos: SandboxConversationsService,
     private readonly usersService: UsersService,
-    private readonly analytics: AnalyticsService
+    private readonly analytics: AnalyticsService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   private async resolveUser(req: any): Promise<{ id: string; email: string | null }> {
@@ -352,7 +354,7 @@ export class SandboxesController {
     return this.workspace.createPullRequest(
       row,
       body?.repo || '',
-      identity.githubAccessToken || null,
+      this.crypto.open(identity.githubAccessToken) || null,
       body || {}
     );
   }

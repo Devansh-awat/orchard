@@ -12,6 +12,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { canonicalRepoUrl, isNullSha, repoUrlVariants } from './auto-deploy-match';
 import { changedFilesFromCompare } from './watch-paths';
 import { GithubAppConfigService } from './github-app-config.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { parseDockerfileEnvVars } from './dockerfile-env';
 import {
   detectApps,
@@ -171,7 +172,8 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
     private readonly appConfig: GithubAppConfigService,
-    private readonly leader: LeaderElectionService
+    private readonly leader: LeaderElectionService,
+    private readonly crypto: SecretCryptoService
   ) {}
 
   onModuleInit() {
@@ -294,7 +296,7 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       client_id: this.clientId,
       client_secret: this.clientSecret,
       grant_type: 'refresh_token',
-      refresh_token: user.githubRefreshToken
+      refresh_token: this.crypto.open(user.githubRefreshToken)
     });
 
     const response = await fetch('https://github.com/login/oauth/access_token', {
@@ -323,12 +325,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        githubAccessToken: parsed.accessToken,
+        githubAccessToken: this.crypto.seal(parsed.accessToken),
         githubTokenExpiresAt: parsed.expiresAt,
         // GitHub rotates the refresh token on each use — only overwrite if returned.
         ...(parsed.refreshToken
           ? {
-              githubRefreshToken: parsed.refreshToken,
+              githubRefreshToken: this.crypto.seal(parsed.refreshToken),
               githubRefreshTokenExpiresAt: parsed.refreshTokenExpiresAt
             }
           : {})
@@ -347,12 +349,12 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     if (!user?.githubAccessToken) return null;
 
     // Non-expiring token (app config has "Expire user authorization tokens" off).
-    if (!user.githubTokenExpiresAt) return user.githubAccessToken;
+    if (!user.githubTokenExpiresAt) return this.crypto.open(user.githubAccessToken);
 
     // Refresh if within 2 minutes of expiry.
     const bufferMs = 2 * 60 * 1000;
     if (user.githubTokenExpiresAt.getTime() - bufferMs > Date.now()) {
-      return user.githubAccessToken;
+      return this.crypto.open(user.githubAccessToken);
     }
 
     if (!user.githubRefreshToken) return null;
@@ -406,9 +408,9 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
       data: {
         githubId: String(githubUser.id),
         githubUsername: githubUser.login,
-        githubAccessToken: tokens.accessToken,
+        githubAccessToken: this.crypto.seal(tokens.accessToken),
         githubTokenExpiresAt: tokens.expiresAt,
-        githubRefreshToken: tokens.refreshToken,
+        githubRefreshToken: this.crypto.seal(tokens.refreshToken),
         githubRefreshTokenExpiresAt: tokens.refreshTokenExpiresAt
       }
     });

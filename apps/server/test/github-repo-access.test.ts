@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GitHubService } from '../src/github/github.service';
+import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
 
 interface FetchCall {
   url: string;
@@ -31,7 +32,13 @@ function stubFetch(handler: (url: string) => { status?: number; body?: any; link
 }
 
 function makeService(overrides: Partial<Record<string, any>> = {}) {
-  const svc = new GitHubService({} as any, {} as any);
+  const svc = new GitHubService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    new SecretCryptoService()
+  );
   Object.assign(svc, overrides);
   return svc;
 }
