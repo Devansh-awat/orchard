@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.2](https://github.com/hackclub/orchard/compare/frontend/v1.44.1...frontend/v1.44.2) (2026-09-29)
+
+
+### Bug Fixes
+
+* the engine banner waits out watch blips and shard handoffs ([babaaba](https://github.com/hackclub/orchard/commit/babaabae4d9edde79b67ce685e5f7ad8e35ff1b3))
+
 ## [1.44.1](https://github.com/hackclub/orchard/compare/frontend/v1.44.0...frontend/v1.44.1) (2026-09-29)
 
 

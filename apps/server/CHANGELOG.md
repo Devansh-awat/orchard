@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.51.3](https://github.com/hackclub/orchard/compare/server/v2.51.2...server/v2.51.3) (2026-09-29)
+
+
+### Bug Fixes
+
+* orchardctl harden makes the k3s kubeconfig private ([05139c9](https://github.com/hackclub/orchard/commit/05139c91280ef83130ea7a34ce3b62845375fc2f))
+* the engine banner waits out watch blips and shard handoffs ([babaaba](https://github.com/hackclub/orchard/commit/babaabae4d9edde79b67ce685e5f7ad8e35ff1b3))
+
 ## [2.51.2](https://github.com/hackclub/orchard/compare/server/v2.51.1...server/v2.51.2) (2026-09-29)
 
 
