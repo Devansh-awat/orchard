@@ -60,6 +60,16 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     windowMs: 15 * 60 * 1000, // 15 minutes
     blockDurationMs: 15 * 60 * 1000 // 15 minutes
   },
+  invite_email: {
+    maxAttempts: 5,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
+  invite_org: {
+    maxAttempts: 100,
+    windowMs: 60 * 60 * 1000,
+    blockDurationMs: 60 * 60 * 1000
+  },
   protection_password_ingress: {
     maxAttempts: 100,
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -67,7 +77,7 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   }
 };
 
-export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress';
+export type RateLimitIdentifierType = 'email' | 'ip' | 'ingress' | 'org' | 'user';
 
 @Injectable()
 export class RateLimitService {

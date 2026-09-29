@@ -18,6 +18,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { InstanceConfigService } from '../instance-config/instance-config.service';
+import { RateLimitService } from '../auth/rate-limit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
 @Injectable()
@@ -34,7 +35,8 @@ export class OrganizationsService {
     private readonly sessions: SessionsService,
     private readonly tailscale: TailscaleService,
     private readonly instanceConfig: InstanceConfigService,
-    private readonly crypto: SecretCryptoService
+    private readonly crypto: SecretCryptoService,
+    private readonly rateLimit: RateLimitService
   ) {}
 
   // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
@@ -753,6 +755,8 @@ export class OrganizationsService {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    await this.rateLimit.checkRateLimit(normalizedEmail, 'email', 'invite');
+    await this.rateLimit.checkRateLimit(organizationId, 'org', 'invite');
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail }

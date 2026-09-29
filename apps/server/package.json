@@ -81,6 +81,7 @@
     "test:tenant-rbac": "tsx --test test/tenant-rbac.test.ts",
     "test:chart": "tsx --test test/chart-render.test.ts",
     "test:mirror-health": "tsx --test test/mirror-health.test.ts",
+    "test:ingress-limits": "tsx --test test/ingress-limits.test.ts",
     "test:timeline": "tsx --test test/timeline.test.ts",
     "test:rollout-gate": "tsx --test test/rollout-gate.test.ts",
     "test:metric-alerts": "tsx --test test/metric-alerts.test.ts",
