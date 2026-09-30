@@ -8,7 +8,15 @@ import {
   NotificationMessage,
   ResourceScopeType
 } from './notification-events';
-import { backupKey, dbArchivingKey, dbStateKey, deployKey, jobRunKey, podKey } from './dedupe-keys';
+import {
+  backupKey,
+  dbArchivingKey,
+  dbStateKey,
+  dbStorageKey,
+  deployKey,
+  jobRunKey,
+  podKey
+} from './dedupe-keys';
 import { NotificationFanoutService } from './notification-fanout.service';
 
 interface EmitInput {
@@ -223,6 +231,47 @@ export class NotificationsService {
         body: failing
           ? `WAL archiving for ${db.name} is failing${detail ? `: ${truncate(detail, 300)}` : '.'} Restores are falling behind and disk usage will grow until it recovers.`
           : `WAL archiving for ${db.name} is healthy again.`,
+        url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+        projectId: db.project.id,
+        projectName: db.project.name,
+        targetId: db.id,
+        targetName: db.name
+      }
+    });
+  }
+
+  async notifyDbStorage(databaseId: string, state: 'pressure' | 'recovered', detail?: string) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        name: true,
+        createdBy: true,
+        storageSize: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } }
+          }
+        }
+      }
+    });
+    if (!db) return;
+    const pressure = state === 'pressure';
+    await this.emit({
+      organizationId: db.project.organizationId,
+      scopeType: 'database',
+      scopeId: db.id,
+      actorUserId: db.createdBy,
+      dedupeKey: dbStorageKey(db.id, state),
+      message: {
+        event: pressure ? 'db.storage_pressure' : 'db.storage_recovered',
+        title: pressure ? `Storage running out: ${db.name}` : `Storage back to normal: ${db.name}`,
+        body: pressure
+          ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} PostgreSQL refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
+          : `${db.name} has disk headroom again.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,

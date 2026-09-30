@@ -23,7 +23,14 @@ import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory 
 import { deriveDbTuning, walSlotKeepSize } from './db-tuning';
 import { optionalDomain } from '../env/platform-domains';
 import { syncTlsSecret } from './tls-secret-sync';
-import { repairedCaBundle, walCapPatchFor } from './cnpg-defaults';
+import {
+  laggingDataVolumes,
+  repairedCaBundle,
+  walArchivePatchFor,
+  walCapPatchFor,
+  WAL_ARCHIVE_MAX_PARALLEL
+} from './cnpg-defaults';
+import { dbStatsCommand, parseDbStatsOutput, SampledDbStats } from './db-stats';
 import { ModuleRef } from '@nestjs/core';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -83,6 +90,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
   async reconcileClusterDefaults(): Promise<{
     walCapped: number;
+    archiveParallel: number;
+    volumesResized: number;
     caRepaired: number;
     failed: number;
   } | null> {
@@ -94,6 +103,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       select: { namespace: true, clusterName: true }
     });
     let walCapped = 0;
+    let archiveParallel = 0;
+    let volumesResized = 0;
     let caRepaired = 0;
     let failed = 0;
     const namespaces = new Set<string>();
@@ -112,21 +123,29 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         if (cluster.spec?.certificates?.serverCASecret === this.PUBLIC_TLS_LOCAL_SECRET) {
           namespaces.add(ns);
         }
-        const patch = walCapPatchFor(cluster);
-        if (!patch) continue;
+        const synced = await this.syncDataVolumes(ns, name, cluster);
+        volumesResized += synced.resized.length;
+        failed += synced.failed.length;
+        const capPatch = walCapPatchFor(cluster);
+        const archivePatch = walArchivePatchFor(cluster);
+        if (!capPatch && !archivePatch) continue;
+        const spec: any = {};
+        if (capPatch) spec.postgresql = { parameters: capPatch };
+        if (archivePatch) spec.backup = { barmanObjectStore: { wal: archivePatch } };
         await customApi.patchNamespacedCustomObject(
           this.CNPG_GROUP,
           this.CNPG_VERSION,
           ns,
           this.CNPG_PLURAL,
           name,
-          { spec: { postgresql: { parameters: patch } } },
+          { spec },
           undefined,
           undefined,
           undefined,
           { headers: { 'Content-Type': 'application/merge-patch+json' } }
         );
-        walCapped += 1;
+        if (capPatch) walCapped += 1;
+        if (archivePatch) archiveParallel += 1;
       } catch (e: any) {
         if (e?.response?.statusCode === 404) continue;
         failed += 1;
@@ -161,12 +180,72 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         this.logger.warn(`server ca bundle in ${ns} not repaired: ${e?.message || e}`);
       }
     }
-    if (walCapped || caRepaired || failed) {
+    if (walCapped || archiveParallel || volumesResized || caRepaired || failed) {
       this.logger.log(
-        `cnpg defaults reconciled: ${walCapped} clusters capped, ${caRepaired} ca bundles completed, ${failed} failed`
+        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${volumesResized} volumes resized, ${caRepaired} ca bundles completed, ${failed} failed`
       );
     }
-    return { walCapped, caRepaired, failed };
+    return { walCapped, archiveParallel, volumesResized, caRepaired, failed };
+  }
+
+  // CNPG only pushes spec.storage.size down to the PVCs while it has a healthy
+  // primary to reconcile against. A cluster that is crashlooping on a full disk
+  // or hibernated never gets its bigger volume, which is the one moment it needs
+  // it, so the request goes straight to the PVC. Longhorn grows it online and the
+  // operator's own reconcile is a no-op once the sizes agree.
+  async syncDataVolumes(
+    namespace: string,
+    clusterName: string,
+    cluster?: any
+  ): Promise<{ resized: string[]; failed: string[] }> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    let spec = cluster;
+    if (!spec) {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const { body } = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_PLURAL,
+        clusterName
+      );
+      spec = body;
+    }
+    const size = String(spec?.spec?.storage?.size ?? '').trim();
+    const resized: string[] = [];
+    const failed: string[] = [];
+    if (!size) return { resized, failed };
+    const { body: list } = await coreApi.listNamespacedPersistentVolumeClaim(
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `cnpg.io/cluster=${clusterName}`
+    );
+    for (const pvcName of laggingDataVolumes(spec, (list.items ?? []) as any[])) {
+      try {
+        await coreApi.patchNamespacedPersistentVolumeClaim(
+          pvcName,
+          namespace,
+          { spec: { resources: { requests: { storage: size } } } },
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+        resized.push(pvcName);
+      } catch (e: any) {
+        failed.push(pvcName);
+        this.logger.warn(
+          `volume ${namespace}/${pvcName} not resized to ${size}: ${e?.body?.message || e?.message || e}`
+        );
+      }
+    }
+    return { resized, failed };
   }
 
   async ensureCnpgOperatorIngress(namespace: string): Promise<void> {
@@ -408,7 +487,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     namespace: string,
     clusterName: string,
     newSize: string
-  ): Promise<{ previousSize: string; archivingFailure: string | null }> {
+  ): Promise<{
+    previousSize: string;
+    archivingFailure: string | null;
+    resizedVolumes: string[];
+    failedVolumes: string[];
+  }> {
     this.ensureKubeConfig();
     if (!this.kc) {
       throw new ServiceUnavailableException('Kubernetes API not available');
@@ -426,6 +510,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     if (!previousSize) {
       throw new BadRequestException('Cluster has no storage size configured');
     }
+    const parameters: Record<string, string> = cluster.body?.spec?.postgresql?.parameters ?? {};
 
     const conditions: any[] = Array.isArray(cluster.body?.status?.conditions)
       ? cluster.body.status.conditions
@@ -441,26 +526,44 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     if (!newBytes) {
       throw new BadRequestException(`Invalid storage size: ${newSize}`);
     }
-    if (newBytes <= previousBytes) {
+    if (newBytes < previousBytes) {
       throw new BadRequestException(
         `Storage can only be expanded, never shrunk: requested ${newSize}, current size is ${previousSize}`
       );
     }
 
-    await customApi.patchNamespacedCustomObject(
-      'postgresql.cnpg.io',
-      'v1',
-      namespace,
-      'clusters',
-      clusterName,
-      [{ op: 'replace', path: '/spec/storage/size', value: newSize }],
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/json-patch+json' } }
-    );
+    if (newBytes > previousBytes) {
+      const ops: any[] = [{ op: 'replace', path: '/spec/storage/size', value: newSize }];
+      if (parameters.max_slot_wal_keep_size === walSlotKeepSize(previousSize)) {
+        ops.push({
+          op: 'add',
+          path: '/spec/postgresql/parameters/max_slot_wal_keep_size',
+          value: walSlotKeepSize(newSize)
+        });
+      }
+      await customApi.patchNamespacedCustomObject(
+        'postgresql.cnpg.io',
+        'v1',
+        namespace,
+        'clusters',
+        clusterName,
+        ops,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/json-patch+json' } }
+      );
+      cluster.body.spec.storage.size = newSize;
+    }
 
-    return { previousSize, archivingFailure };
+    const volumes = await this.syncDataVolumes(namespace, clusterName, cluster.body);
+
+    return {
+      previousSize,
+      archivingFailure,
+      resizedVolumes: volumes.resized,
+      failedVolumes: volumes.failed
+    };
   }
 
   // ── PostgreSQL Database Management (via kubectl exec into CNPG pod) ──
@@ -1660,24 +1763,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     namespace: string,
     pod: string,
     dbName: string
-  ): Promise<{ sizeBytes: number; connections: number } | null> {
+  ): Promise<SampledDbStats | null> {
     const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
     if (safeDb !== dbName) return null;
-    const r = await this.execInPod(namespace, pod, 'postgres', [
-      'psql',
-      '-U',
-      'postgres',
-      '-t',
-      '-A',
-      '-c',
-      `SELECT pg_database_size('${safeDb}') || '|' || (SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}');`
-    ]);
+    const r = await this.execInPod(namespace, pod, 'postgres', dbStatsCommand(safeDb));
     if (!r.success) return null;
-    const [sizeRaw, connRaw] = r.stdout.trim().split('|');
-    const sizeBytes = Number(sizeRaw);
-    if (!Number.isFinite(sizeBytes)) return null;
-    const connections = parseInt(connRaw, 10);
-    return { sizeBytes, connections: Number.isFinite(connections) ? connections : 0 };
+    return parseDbStatsOutput(r.stdout);
   }
 
   // Detailed provisioning view for the CNPG cluster: PVC, instance pod, optional
@@ -2494,7 +2585,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         // time, which fits in any budget. The base backup streams the whole
         // PGDATA through gzip inside the postgres container's own cgroup, so on
         // small instances that's the thing that OOMKills the database.
-        wal: { compression: 'gzip' },
+        wal: { compression: 'gzip', maxParallel: WAL_ARCHIVE_MAX_PARALLEL },
         ...(dataCompression ? { data: { compression: dataCompression } } : {})
       },
       retentionPolicy: '30d'

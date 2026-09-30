@@ -28,6 +28,11 @@
 	);
 	const total = $derived(totalAllocatedStorage(value, instances));
 	const canExpand = $derived(dirty && validationError == null && !saving);
+	const volume = $derived(database.liveStatus?.volume ?? null);
+	const walPending = $derived(database.liveStatus?.walPendingSegments ?? 0);
+	const fillTone = $derived(
+		volume == null ? 'ok' : volume.percent >= 85 ? 'critical' : volume.percent >= 70 ? 'warn' : 'ok'
+	);
 </script>
 
 <section class="sc-card">
@@ -46,10 +51,27 @@
 				<span class="sc-label">PostgreSQL data size</span>
 			</div>
 			<div>
-				<span class="sc-value">{instances}</span>
-				<span class="sc-label">{instances === 1 ? 'volume' : 'volumes'}</span>
+				<span class="sc-value"
+					>{volume ? `${volume.used} of ${volume.capacity}` : 'Unavailable'}</span
+				>
+				<span class="sc-label">volume used, including WAL</span>
 			</div>
 		</div>
+
+		{#if volume}
+			<div class="sc-fill" data-tone={fillTone}>
+				<div class="sc-fill-track">
+					<div class="sc-fill-bar" style:width={`${Math.min(100, volume.percent)}%`}></div>
+				</div>
+				<span class="sc-fill-label">
+					{volume.percent}% full
+					{#if walPending > 0}
+						<span class="sc-fill-sep">·</span>
+						{walPending} WAL {walPending === 1 ? 'segment' : 'segments'} waiting to archive
+					{/if}
+				</span>
+			</div>
+		{/if}
 
 		<Field
 			label="New capacity"
@@ -189,6 +211,42 @@
 		font-size: var(--text-caption);
 		color: var(--text-muted);
 		margin: 0;
+	}
+	.sc-fill {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		color: var(--text-muted);
+	}
+	.sc-fill[data-tone='warn'] {
+		color: var(--status-warning);
+	}
+	.sc-fill[data-tone='critical'] {
+		color: var(--status-error);
+	}
+	.sc-fill-track {
+		height: 0.375rem;
+		border-radius: var(--radius-pill);
+		background-color: color-mix(in srgb, currentColor 12%, transparent);
+		overflow: hidden;
+	}
+	.sc-fill-bar {
+		height: 100%;
+		border-radius: inherit;
+		background-color: var(--accent);
+		transition: width var(--dur-base);
+	}
+	.sc-fill[data-tone='warn'] .sc-fill-bar,
+	.sc-fill[data-tone='critical'] .sc-fill-bar {
+		background-color: currentColor;
+	}
+	.sc-fill-label {
+		font-size: var(--text-micro);
+		font-family: var(--font-mono);
+	}
+	.sc-fill-sep {
+		margin: 0 0.375rem;
+		opacity: 0.6;
 	}
 	.sc-actions {
 		display: flex;

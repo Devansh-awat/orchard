@@ -439,11 +439,8 @@ export class ProjectsService {
       throw new BadRequestException('Storage size cannot exceed 200Gi');
     }
 
-    const { previousSize, archivingFailure } = await this.k8sCnpg.expandCnpgClusterStorage(
-      database.namespace,
-      database.clusterName,
-      size
-    );
+    const { previousSize, archivingFailure, resizedVolumes, failedVolumes } =
+      await this.k8sCnpg.expandCnpgClusterStorage(database.namespace, database.clusterName, size);
 
     await this.prisma.database.update({
       where: { id: databaseId },
@@ -458,15 +455,26 @@ export class ProjectsService {
       targetType: 'database',
       targetId: databaseId,
       targetLabel: database.name,
-      metadata: { storageSize: [previousSize, size] }
+      metadata: { storageSize: [previousSize, size], resizedVolumes, failedVolumes }
     });
+
+    const warnings: string[] = [];
+    if (failedVolumes.length > 0) {
+      warnings.push(
+        `The cluster now asks for ${size}, but ${failedVolumes.join(', ')} could not be resized directly and will only grow once the operator reconciles it.`
+      );
+    }
+    if (archivingFailure) {
+      warnings.push(
+        `WAL archiving on this cluster is failing (${archivingFailure}). PostgreSQL cannot recycle WAL segments while archiving fails, so the volume will keep filling and eventually run out of space again regardless of size. Fix or disable the backup/archiving configuration to stop WAL accumulation.`
+      );
+    }
 
     return {
       previousSize,
       storageSize: size,
-      warning: archivingFailure
-        ? `WAL archiving on this cluster is failing (${archivingFailure}). PostgreSQL cannot recycle WAL segments while archiving fails, so the volume will keep filling and eventually run out of space again regardless of size. Fix or disable the backup/archiving configuration to stop WAL accumulation.`
-        : null
+      resizedVolumes,
+      warning: warnings.length > 0 ? warnings.join(' ') : null
     };
   }
 

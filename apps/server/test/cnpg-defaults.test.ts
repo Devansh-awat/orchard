@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { repairedCaBundle, walCapPatchFor } from '../src/kubernetes/cnpg-defaults';
+import {
+  laggingDataVolumes,
+  repairedCaBundle,
+  walArchivePatchFor,
+  walCapPatchFor
+} from '../src/kubernetes/cnpg-defaults';
 import { pemCertificates, completeChain } from '../src/kubernetes/tls-secret-sync';
 
 const intermediates = pemCertificates(
@@ -27,6 +32,44 @@ test('a cluster without the slot cap gets one sized to its disk, one that has it
   );
 });
 
+test('archiving gets parallel uploads only where a backup store exists and has none yet', () => {
+  assert.deepEqual(walArchivePatchFor({ spec: { backup: { barmanObjectStore: {} } } }), {
+    maxParallel: 4
+  });
+  assert.deepEqual(
+    walArchivePatchFor({
+      spec: { backup: { barmanObjectStore: { wal: { maxParallel: 1 } } } }
+    }),
+    { maxParallel: 4 }
+  );
+  assert.equal(
+    walArchivePatchFor({
+      spec: { backup: { barmanObjectStore: { wal: { maxParallel: 8 } } } }
+    }),
+    null
+  );
+  assert.equal(walArchivePatchFor({ spec: {} }), null);
+  assert.equal(walArchivePatchFor({ spec: { backup: { barmanObjectStore: null } } }), null);
+});
+
+test('only data volumes smaller than the cluster spec are lagging', () => {
+  const cluster = { spec: { storage: { size: '11Gi' } } };
+  const pvc = (name: string, storage: string, role = 'PG_DATA') => ({
+    metadata: { name, labels: { 'cnpg.io/pvcRole': role } },
+    spec: { resources: { requests: { storage } } }
+  });
+  assert.deepEqual(
+    laggingDataVolumes(cluster, [
+      pvc('db-1', '3Gi'),
+      pvc('db-2', '11Gi'),
+      pvc('db-3', '20Gi'),
+      pvc('db-1-wal', '1Gi', 'PG_WAL')
+    ]),
+    ['db-1']
+  );
+  assert.deepEqual(laggingDataVolumes({ spec: {} }, [pvc('db-1', '3Gi')]), []);
+});
+
 test('a ca.crt that stops at a cross-signed intermediate is completed, a full one is untouched', () => {
   const repaired = repairedCaBundle({ 'ca.crt': b64(intermediates) });
   assert.ok(repaired);
@@ -49,20 +92,37 @@ import { K8sCnpgService } from '../src/kubernetes/k8s-cnpg.service';
 test('the reconcile only patches what is missing and never runs off a non-member replica', async () => {
   const patches: string[] = [];
   const secretPatches: string[] = [];
+  const pvcPatches: string[] = [];
   const clusters: Record<string, any> = {
     'ns-a/db-a': {
       spec: {
         storage: { size: '10Gi' },
         postgresql: { parameters: {} },
+        backup: { barmanObjectStore: { wal: { compression: 'gzip' } } },
         certificates: { serverCASecret: 'wildcard-db-tls' }
       }
     },
     'ns-b/db-b': {
       spec: {
         storage: { size: '5Gi' },
-        postgresql: { parameters: { max_slot_wal_keep_size: '1GB' } }
+        postgresql: { parameters: { max_slot_wal_keep_size: '1GB' } },
+        backup: { barmanObjectStore: { wal: { compression: 'gzip', maxParallel: 4 } } }
       }
     }
+  };
+  const pvcs: Record<string, any[]> = {
+    'ns-a': [
+      {
+        metadata: { name: 'db-a-1', labels: { 'cnpg.io/pvcRole': 'PG_DATA' } },
+        spec: { resources: { requests: { storage: '3Gi' } } }
+      }
+    ],
+    'ns-b': [
+      {
+        metadata: { name: 'db-b-1', labels: { 'cnpg.io/pvcRole': 'PG_DATA' } },
+        spec: { resources: { requests: { storage: '5Gi' } } }
+      }
+    ]
   };
   const svc = Object.create(K8sCnpgService.prototype) as any;
   const kc = {
@@ -84,11 +144,18 @@ test('the reconcile only patches what is missing and never runs off a non-member
               name: string,
               body: any
             ) => {
-              patches.push(`${ns}/${name}:${JSON.stringify(body.spec.postgresql.parameters)}`);
+              patches.push(`${ns}/${name}:${JSON.stringify(body.spec)}`);
               return {};
             }
           }
         : {
+            listNamespacedPersistentVolumeClaim: async (ns: string) => ({
+              body: { items: pvcs[ns] ?? [] }
+            }),
+            patchNamespacedPersistentVolumeClaim: async (name: string, ns: string, body: any) => {
+              pvcPatches.push(`${ns}/${name}:${body.spec.resources.requests.storage}`);
+              return {};
+            },
             readNamespacedSecret: async (_n: string, ns: string) => ({
               body: { data: { 'ca.crt': b64(intermediates) }, metadata: { namespace: ns } }
             }),
@@ -101,7 +168,7 @@ test('the reconcile only patches what is missing and never runs off a non-member
   let member = true;
   Object.assign(svc, {
     logger: { warn() {}, log() {} },
-    kubernetes: { kc },
+    kubernetes: { kc, ensureKubeConfig() {} },
     prisma: {
       database: {
         findMany: async () => [
@@ -121,8 +188,17 @@ test('the reconcile only patches what is missing and never runs off a non-member
   });
   Object.defineProperty(svc, 'kc', { get: () => kc });
   const result = await svc.reconcileClusterDefaults();
-  assert.deepEqual(result, { walCapped: 1, caRepaired: 1, failed: 0 });
-  assert.deepEqual(patches, ['ns-a/db-a:{"max_slot_wal_keep_size":"2GB"}']);
+  assert.deepEqual(result, {
+    walCapped: 1,
+    archiveParallel: 1,
+    volumesResized: 1,
+    caRepaired: 1,
+    failed: 0
+  });
+  assert.deepEqual(patches, [
+    'ns-a/db-a:{"postgresql":{"parameters":{"max_slot_wal_keep_size":"2GB"}},"backup":{"barmanObjectStore":{"wal":{"maxParallel":4}}}}'
+  ]);
+  assert.deepEqual(pvcPatches, ['ns-a/db-a-1:10Gi']);
   assert.deepEqual(secretPatches, ['ns-a']);
 
   member = false;

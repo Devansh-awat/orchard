@@ -1,5 +1,6 @@
 import { X509Certificate } from 'node:crypto';
 import { walSlotKeepSize } from './db-tuning';
+import { parseMemory } from './quantity';
 import { completeChain, pemCertificates } from './tls-secret-sync';
 
 export interface ClusterLike {
@@ -7,13 +8,40 @@ export interface ClusterLike {
     storage?: { size?: string };
     postgresql?: { parameters?: Record<string, string> };
     certificates?: { serverCASecret?: string | null };
+    backup?: { barmanObjectStore?: { wal?: { maxParallel?: number } } | null } | null;
   };
 }
+
+export interface PvcLike {
+  metadata?: { name?: string; labels?: Record<string, string> };
+  spec?: { resources?: { requests?: { storage?: string } } };
+}
+
+export const WAL_ARCHIVE_MAX_PARALLEL = 4;
+
+export const CNPG_DATA_PVC_ROLE = 'PG_DATA';
 
 export function walCapPatchFor(cluster: ClusterLike): Record<string, string> | null {
   const params = cluster.spec?.postgresql?.parameters ?? {};
   if (params.max_slot_wal_keep_size) return null;
   return { max_slot_wal_keep_size: walSlotKeepSize(cluster.spec?.storage?.size) };
+}
+
+export function walArchivePatchFor(cluster: ClusterLike): { maxParallel: number } | null {
+  const store = cluster.spec?.backup?.barmanObjectStore;
+  if (!store) return null;
+  if (store.wal?.maxParallel && store.wal.maxParallel > 1) return null;
+  return { maxParallel: WAL_ARCHIVE_MAX_PARALLEL };
+}
+
+export function laggingDataVolumes(cluster: ClusterLike, pvcs: PvcLike[]): string[] {
+  const target = parseMemory(String(cluster.spec?.storage?.size ?? ''));
+  if (!target) return [];
+  return pvcs
+    .filter((pvc) => pvc.metadata?.labels?.['cnpg.io/pvcRole'] === CNPG_DATA_PVC_ROLE)
+    .filter((pvc) => parseMemory(String(pvc.spec?.resources?.requests?.storage ?? '')) < target)
+    .map((pvc) => pvc.metadata?.name ?? '')
+    .filter(Boolean);
 }
 
 function endsAtRoot(certs: string[]): boolean {

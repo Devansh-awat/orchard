@@ -48,6 +48,39 @@ test('size and connections come from the sampled columns, never from the readine
   assert.equal(s.statsAt, new Date(NOW - 50_000).toISOString());
 });
 
+test('volume usage and the archive backlog ride along with the sampled columns', () => {
+  const GiB = 1024 * 1024 * 1024;
+  const s = buildCnpgLiveStatus(
+    cluster,
+    [pod()],
+    {
+      sizeBytes: 3 * GiB,
+      connections: 1,
+      statsAt: new Date(NOW),
+      volumeUsedBytes: BigInt(11 * GiB),
+      volumeCapacityBytes: BigInt(20 * GiB),
+      walPendingSegments: 418
+    },
+    NOW
+  );
+  assert.deepEqual(s.volume, {
+    usedBytes: 11 * GiB,
+    capacityBytes: 20 * GiB,
+    used: '11 GB',
+    capacity: '20 GB',
+    percent: 55
+  });
+  assert.equal(s.walPendingSegments, 418);
+  const bare = buildCnpgLiveStatus(
+    cluster,
+    [pod()],
+    { sizeBytes: 1, connections: 0, statsAt: null },
+    NOW
+  );
+  assert.equal(bare.volume, null);
+  assert.equal(bare.walPendingSegments, undefined);
+});
+
 test('a fresh OOM is surfaced, a stale one after ten clean minutes is not', () => {
   const fresh = foldPods(
     [pod({ lastTerminationReason: 'OOMKilled', lastExitCode: 137, restartCount: 3 })],
@@ -102,12 +135,21 @@ test('sizes format the way pg_size_pretty did', () => {
 test('the sampler writes the columns, emits once, and never runs twice inside the gap', async () => {
   const updates: any[] = [];
   const emits: unknown[] = [];
+  const notified: unknown[] = [];
   let execs = 0;
+  let sample: any = {
+    sizeBytes: 2048,
+    connections: 7,
+    volumeUsedBytes: 900,
+    volumeCapacityBytes: 1000,
+    walPendingSegments: 3
+  };
   const svc = Object.create(CnpgMirrorConsumer.prototype) as any;
   Object.assign(svc, {
     logger: { warn() {} },
     lastSample: new Map(),
     sampling: new Set(),
+    storageState: new Map(),
     prisma: {
       database: {
         findUnique: async () => ({ dbName: 'app' }),
@@ -120,7 +162,12 @@ test('the sampler writes the columns, emits once, and never runs twice inside th
     cnpg: {
       sampleDatabaseStats: async () => {
         execs += 1;
-        return { sizeBytes: 2048, connections: 7 };
+        return sample;
+      }
+    },
+    notifications: {
+      notifyDbStorage: async (...args: unknown[]) => {
+        notified.push(args);
       }
     },
     scheduleEmit: (_ctx: unknown, payload: unknown) => emits.push(payload)
@@ -132,8 +179,28 @@ test('the sampler writes the columns, emits once, and never runs twice inside th
   assert.equal(updates.length, 1);
   assert.equal(updates[0].sizeBytes, 2048n);
   assert.equal(updates[0].connections, 7);
+  assert.equal(updates[0].volumeUsedBytes, 900n);
+  assert.equal(updates[0].volumeCapacityBytes, 1000n);
+  assert.equal(updates[0].walPendingSegments, 3);
   assert.ok(updates[0].statsAt instanceof Date);
   assert.deepEqual(emits, [{ stats: true }]);
+  assert.deepEqual(notified, [['db-1', 'pressure', 'the volume is 90% full']]);
+
+  svc.lastSample.clear();
+  sample = { ...sample, volumeUsedBytes: 800 };
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  assert.equal(notified.length, 1);
+
+  svc.lastSample.clear();
+  sample = { ...sample, volumeUsedBytes: 500 };
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  assert.deepEqual(notified[1], ['db-1', 'recovered', undefined]);
+
+  svc.lastSample.clear();
+  sample = { ...sample, volumeUsedBytes: null, volumeCapacityBytes: null };
+  await svc.sampleStats(ctx, 'db-1-1', 'ns');
+  assert.equal(updates.at(-1).volumeUsedBytes, null);
+  assert.equal(notified.length, 2);
 });
 
 test('a pod event writes the row with its primary flag and only reconciles crash state on a status change', async () => {

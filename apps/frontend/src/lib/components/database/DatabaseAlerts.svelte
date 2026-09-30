@@ -15,6 +15,7 @@
 		RotateCcw,
 		CloudOff,
 		DatabaseBackup,
+		HardDrive,
 		ServerCrash
 	} from 'lucide-svelte';
 	import type { DatabaseDetail } from './types';
@@ -53,6 +54,19 @@
 	);
 	const archivingMessage = $derived((archiving?.message || '').split('\n')[0].slice(0, 180));
 
+	const volume = $derived(database.liveStatus?.volume ?? null);
+	const storageFull = $derived(
+		database.mode === 'cnpg' &&
+			database.status !== 'stopped' &&
+			volume != null &&
+			volume.percent >= 85
+	);
+	const walPending = $derived(database.liveStatus?.walPendingSegments ?? 0);
+	const walBacklog = $derived(
+		database.mode === 'cnpg' && database.status !== 'stopped' && walPending >= 64
+	);
+	const walBacklogGib = $derived(((walPending * 16) / 1024).toFixed(1));
+
 	const noBackups = $derived(
 		database.mode === 'cnpg' &&
 			!!database.backupsEnabled &&
@@ -85,6 +99,8 @@
 	const hasAlert = $derived(
 		(!isRestarting && (isOOM || isCrashLoop || highRestarts || noPods)) ||
 			archivingFailing ||
+			storageFull ||
+			walBacklog ||
 			noBackups
 	);
 </script>
@@ -211,6 +227,62 @@
 					</div>
 					{#if onViewLogs}
 						<button class="dba-action" onclick={onViewLogs}> View logs </button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if storageFull && volume}
+			<div
+				class="dba-alert dba-alert--storage"
+				{@attach motionStagger({
+					index: 1,
+					from: { y: -8, opacity: 0 }
+				})}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap">
+						<HardDrive size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<span class="dba-title">Storage almost full: {volume.percent}% used</span>
+						<span class="dba-desc">
+							{volume.used} of {volume.capacity} is in use, including WAL. PostgreSQL refuses to start
+							once the volume fills, so expand storage before it does.
+						</span>
+					</div>
+					{#if onGoToResources}
+						<button class="dba-action" onclick={onGoToResources}>
+							<HardDrive size={13} />
+							Expand storage
+						</button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if walBacklog && !archivingFailing}
+			<div
+				class="dba-alert dba-alert--archiving"
+				{@attach motionStagger({
+					index: 1,
+					from: { y: -8, opacity: 0 }
+				})}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap">
+						<CloudOff size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<span class="dba-title">Backup archiving is falling behind</span>
+						<span class="dba-desc">
+							{walPending} WAL segments ({walBacklogGib} GiB) are waiting to be uploaded. PostgreSQL cannot
+							recycle them until they are archived, so they take up volume space until the upload catches
+							up.
+						</span>
+					</div>
+					{#if onGoToBackups}
+						<button class="dba-action" onclick={onGoToBackups}> View backups </button>
 					{/if}
 				</div>
 			</div>
@@ -420,6 +492,12 @@
 	}
 
 	.dba-alert--archiving {
+		background-color: color-mix(in srgb, var(--status-error) 6%, transparent);
+		border-color: color-mix(in srgb, var(--status-error) 18%, transparent);
+		color: var(--status-error);
+	}
+
+	.dba-alert--storage {
 		background-color: color-mix(in srgb, var(--status-error) 6%, transparent);
 		border-color: color-mix(in srgb, var(--status-error) 18%, transparent);
 		color: var(--status-error);

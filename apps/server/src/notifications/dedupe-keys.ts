@@ -35,6 +35,13 @@ export function dbArchivingKey(databaseId: string, state: 'failing' | 'recovered
   return clamp(`dbarch:${databaseId}:${state}:${bucket(300_000)}`);
 }
 
+// The sampler holds its own hysteresis, so a transition is already confirmed
+// by the time this is asked for. The bucket only guards against a restarted
+// replica re-observing pressure it had already reported.
+export function dbStorageKey(databaseId: string, state: 'pressure' | 'recovered'): string {
+  return clamp(`dbstorage:${databaseId}:${state}:${bucket(6 * 3_600_000)}`);
+}
+
 // Same backstop role as podKey: the CNPG informer only calls on a confirmed
 // transition, so this catches two replicas seeing the same one.
 export function dbStateKey(databaseId: string, state: 'crashing' | 'recovered'): string {

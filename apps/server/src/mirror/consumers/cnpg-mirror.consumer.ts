@@ -9,6 +9,7 @@ import { computePodStatus } from '../pod-status';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { clusterSnapshot } from '../../kubernetes/cnpg-status';
+import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
@@ -41,6 +42,8 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
   private readonly pending = new Map<string, PendingEmit>();
 
   private readonly archivingState = new Map<string, boolean>();
+
+  private readonly storageState = new Map<string, boolean>();
 
   private readonly lastSample = new Map<string, number>();
 
@@ -306,10 +309,18 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
         data: {
           sizeBytes: BigInt(Math.round(stats.sizeBytes)),
           connections: stats.connections,
-          statsAt: new Date()
+          statsAt: new Date(),
+          volumeUsedBytes:
+            stats.volumeUsedBytes == null ? null : BigInt(Math.round(stats.volumeUsedBytes)),
+          volumeCapacityBytes:
+            stats.volumeCapacityBytes == null
+              ? null
+              : BigInt(Math.round(stats.volumeCapacityBytes)),
+          walPendingSegments: stats.walPendingSegments ?? null
         }
       });
       this.scheduleEmit(ctx, { stats: true });
+      await this.trackStorage(ctx, stats);
     } catch (err) {
       this.logger.warn(`sampleStats(${ctx.databaseId}) failed: ${(err as Error)?.message ?? err}`);
     } finally {
@@ -377,6 +388,27 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     if (next !== db.status) {
       await this.prisma.database.update({ where: { id: ctx.databaseId }, data: { status: next } });
     }
+  }
+
+  private async trackStorage(
+    ctx: Ctx,
+    stats: {
+      volumeUsedBytes: number | null;
+      volumeCapacityBytes: number | null;
+      walPendingSegments: number | null;
+    }
+  ): Promise<void> {
+    const prev = this.storageState.get(ctx.databaseId);
+    const pressured = storagePressure(prev, stats);
+    this.storageState.set(ctx.databaseId, pressured);
+    if (prev === pressured || (prev === undefined && !pressured)) return;
+    await this.notifications
+      .notifyDbStorage(
+        ctx.databaseId,
+        pressured ? 'pressure' : 'recovered',
+        pressured ? storagePressureDetail(stats) : undefined
+      )
+      .catch(() => {});
   }
 
   private async trackArchiving(ctx: Ctx, ns: string, name: string, cluster: any): Promise<void> {

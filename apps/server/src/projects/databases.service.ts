@@ -873,7 +873,10 @@ export class DatabasesService {
         clusterSyncedAt: true,
         sizeBytes: true,
         connections: true,
-        statsAt: true
+        statsAt: true,
+        volumeUsedBytes: true,
+        volumeCapacityBytes: true,
+        walPendingSegments: true
       }
     });
     if (!database) throw new NotFoundException('Database not found');
@@ -2706,6 +2709,9 @@ function clusterMirror(db: {
   sizeBytes?: bigint | number | null;
   connections?: number | null;
   statsAt?: Date | null;
+  volumeUsedBytes?: bigint | number | null;
+  volumeCapacityBytes?: bigint | number | null;
+  walPendingSegments?: number | null;
 }): { cluster: ClusterSnapshot | null; stats: DbStats } {
   const cluster =
     db.clusterSyncedAt && db.clusterStatus && typeof db.clusterStatus === 'object'
@@ -2716,7 +2722,10 @@ function clusterMirror(db: {
     stats: {
       sizeBytes: db.sizeBytes ?? null,
       connections: db.connections ?? null,
-      statsAt: db.statsAt ?? null
+      statsAt: db.statsAt ?? null,
+      volumeUsedBytes: db.volumeUsedBytes ?? null,
+      volumeCapacityBytes: db.volumeCapacityBytes ?? null,
+      walPendingSegments: db.walPendingSegments ?? null
     }
   };
 }

@@ -37,6 +37,14 @@ export interface DatabaseDetail {
 	liveStatus?: {
 		exists: boolean;
 		size?: string;
+		volume?: {
+			usedBytes: number;
+			capacityBytes: number;
+			used?: string;
+			capacity?: string;
+			percent: number;
+		} | null;
+		walPendingSegments?: number;
 		connections?: number;
 		statsAt?: string;
 		ready?: boolean;

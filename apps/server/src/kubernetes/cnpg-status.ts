@@ -1,3 +1,5 @@
+import { volumeFraction } from './db-stats';
+
 export interface MirroredDbPod {
   status: string;
   restartCount: number;
@@ -28,6 +30,21 @@ export interface DbStats {
   sizeBytes: bigint | number | null;
   connections: number | null;
   statsAt: Date | null;
+  volumeUsedBytes?: bigint | number | null;
+  volumeCapacityBytes?: bigint | number | null;
+  walPendingSegments?: number | null;
+}
+
+export function volumeUsage(stats: DbStats) {
+  const fraction = volumeFraction(stats);
+  if (fraction == null) return null;
+  return {
+    usedBytes: Number(stats.volumeUsedBytes),
+    capacityBytes: Number(stats.volumeCapacityBytes),
+    used: formatDbSize(stats.volumeUsedBytes),
+    capacity: formatDbSize(stats.volumeCapacityBytes),
+    percent: Math.round(fraction * 100)
+  };
 }
 
 const STALE_TERMINATION_MS = 10 * 60 * 1000;
@@ -136,6 +153,8 @@ export function buildCnpgLiveStatus(
     replicas: cluster.instances,
     currentPrimary: cluster.currentPrimary ?? undefined,
     size: formatDbSize(stats.sizeBytes),
+    volume: volumeUsage(stats),
+    walPendingSegments: stats.walPendingSegments ?? undefined,
     connections: stats.connections ?? undefined,
     statsAt: stats.statsAt ? stats.statsAt.toISOString() : undefined,
     conditions: cluster.conditions,

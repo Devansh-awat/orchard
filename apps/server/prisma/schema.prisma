@@ -1380,6 +1380,9 @@ model Database {
   sizeBytes           BigInt?   @map("size_bytes")
   connections         Int?
   statsAt             DateTime? @map("stats_at") @db.Timestamp(6)
+  volumeUsedBytes     BigInt?   @map("volume_used_bytes")
+  volumeCapacityBytes BigInt?   @map("volume_capacity_bytes")
+  walPendingSegments  Int?      @map("wal_pending_segments")
   // Total CNPG instances: 1 primary + (replicas - 1) hot standbys. Every
   // instance gets its own pod and its own PVC, so this multiplies the
   // cluster's CPU/memory footprint against the org cap and member allowance.
