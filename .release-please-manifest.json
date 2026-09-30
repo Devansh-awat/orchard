@@ -1,8 +1,8 @@
 {
-  "apps/server": "2.51.3",
-  "apps/frontend": "1.44.2",
+  "apps/server": "2.52.0",
+  "apps/frontend": "1.45.0",
   "apps/gateway": "0.2.1",
-  "apps/cli": "0.18.1",
+  "apps/cli": "0.18.2",
   "apps/r2-proxy": "0.4.1",
   "apps/registry": "0.3.0",
   "registry": "0.3.0"

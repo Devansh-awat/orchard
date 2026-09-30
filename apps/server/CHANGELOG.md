@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.52.0](https://github.com/hackclub/orchard/compare/server/v2.51.3...server/v2.52.0) (2026-09-30)
+
+
+### Features
+
+* opt-in anonymous usage reports for self-hosted instances ([91bbb19](https://github.com/hackclub/orchard/commit/91bbb19010cb72518a09b1556740b16347aa9823))
+
+
+### Bug Fixes
+
+* cap domains per app and per project ([acd3203](https://github.com/hackclub/orchard/commit/acd320334579d3f4ba30c8543e67d90f581233c8))
+* caps on streams, uploads, env payloads and mcp oauth ([741a874](https://github.com/hackclub/orchard/commit/741a874e255c89d0815f17d819878cd624f4ce92))
+* cross-site cookie mutations get a 403, not a 401 or 500 ([817f6a2](https://github.com/hackclub/orchard/commit/817f6a2a7ed97bdd836b71cd1b9a6d340f5b6dd3))
+* database storage expansion resizes volumes directly, wal archives in parallel, disk pressure alerts ([577c5a4](https://github.com/hackclub/orchard/commit/577c5a47bf050d700f31fa5c85ba91d99f555edc))
+* moving a project needs delete rights, demoted owners cannot transfer it, mcp acting users own their session ([1fc1e74](https://github.com/hackclub/orchard/commit/1fc1e748ad3992f04618aec5e4a4476e826965cd))
+* only browser sessions pass the guard, refresh tokens rotate for real ([3209660](https://github.com/hackclub/orchard/commit/32096603c2a721870503dec6d93495f39eaeb6d3))
+* otp stays out of logs, scim cannot mint owners, deeper audit redaction ([912db6a](https://github.com/hackclub/orchard/commit/912db6ad1a2c22a860744d65c662d99ae7515c8e))
+* rate limit invitations per recipient and per organization ([d45c854](https://github.com/hackclub/orchard/commit/d45c854b23b3c820a02bb913e439dbd372a203be))
+* stored credentials are encrypted at rest ([77409e2](https://github.com/hackclub/orchard/commit/77409e22f0339d7775a83fb79d5773d0ff5af49f))
+* the builder role only grants what the server holds, so builds create their job again ([3ead11f](https://github.com/hackclub/orchard/commit/3ead11f57dd2c7a91b6c6e19832f1534cc57d282))
+
 ## [2.51.3](https://github.com/hackclub/orchard/compare/server/v2.51.2...server/v2.51.3) (2026-09-29)
 
 

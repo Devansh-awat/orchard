@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/hackclub/orchard/compare/cli/v0.18.1...cli/v0.18.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* otp stays out of logs, scim cannot mint owners, deeper audit redaction ([912db6a](https://github.com/hackclub/orchard/commit/912db6ad1a2c22a860744d65c662d99ae7515c8e))
+
 ## [0.18.1](https://github.com/hackclub/orchard/compare/cli/v0.18.0...cli/v0.18.1) (2026-09-29)
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.45.0](https://github.com/hackclub/orchard/compare/frontend/v1.44.2...frontend/v1.45.0) (2026-09-30)
+
+
+### Features
+
+* opt-in anonymous usage reports for self-hosted instances ([91bbb19](https://github.com/hackclub/orchard/commit/91bbb19010cb72518a09b1556740b16347aa9823))
+
+
+### Bug Fixes
+
+* database storage expansion resizes volumes directly, wal archives in parallel, disk pressure alerts ([577c5a4](https://github.com/hackclub/orchard/commit/577c5a47bf050d700f31fa5c85ba91d99f555edc))
+
 ## [1.44.2](https://github.com/hackclub/orchard/compare/frontend/v1.44.1...frontend/v1.44.2) (2026-09-29)
 
 
