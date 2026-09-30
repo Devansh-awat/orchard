@@ -19,6 +19,8 @@ import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import { redactUrlUserinfo } from '../git/clone-credential';
 import { injectBuildArgsScript } from './build-args';
 import { BUILDER_NAMESPACE } from './builder-namespace';
+import { BUILDER_ROLE_RULES } from './builder-rbac';
+import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { isSandboxStartFault } from './build-faults';
 import { summarizeBuildFailure } from './build-summary';
 import {
@@ -3683,7 +3685,7 @@ exit $rc`
         }
       }
 
-      const errorMsg = `Build failed: ${error.message}`;
+      const errorMsg = `Build failed: ${k8sErrorMessage(error)}`;
       const errorStack = error.stack || 'No stack trace available';
 
       console.error('[ImageBuilder] Build failed:', {
@@ -3753,46 +3755,26 @@ exit $rc`
 
     // Create or update Role for the builder
     const roleName = 'image-builder-role';
-    const roleRules = [
-      {
-        apiGroups: [''],
-        resources: ['pods', 'pods/log'],
-        verbs: ['get', 'list', 'watch']
-      },
-      {
-        apiGroups: [''],
-        resources: ['secrets'],
-        verbs: ['get']
-      },
-      {
-        apiGroups: ['batch'],
-        resources: ['jobs'],
-        verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
-      }
-    ];
+    const roleRules = BUILDER_ROLE_RULES;
 
     try {
-      await rbacApi.readNamespacedRole(roleName, this.builderNamespace);
-      // Role exists, update it to ensure it has the correct permissions
-      await rbacApi.replaceNamespacedRole(roleName, this.builderNamespace, {
-        metadata: {
-          name: roleName,
-          namespace: this.builderNamespace
-        },
-        rules: roleRules
-      });
-    } catch (error) {
-      if (error.statusCode === 404) {
-        await rbacApi.createNamespacedRole(this.builderNamespace, {
-          metadata: {
-            name: roleName,
-            namespace: this.builderNamespace
-          },
+      try {
+        await rbacApi.readNamespacedRole(roleName, this.builderNamespace);
+        await rbacApi.replaceNamespacedRole(roleName, this.builderNamespace, {
+          metadata: { name: roleName, namespace: this.builderNamespace },
           rules: roleRules
         });
-      } else {
-        throw error;
+      } catch (error) {
+        if (error.statusCode !== 404 && error.response?.statusCode !== 404) throw error;
+        await rbacApi.createNamespacedRole(this.builderNamespace, {
+          metadata: { name: roleName, namespace: this.builderNamespace },
+          rules: roleRules
+        });
       }
+    } catch (error) {
+      console.warn(
+        `[ImageBuilder] could not reconcile ${roleName} in ${this.builderNamespace}, builds continue without it: ${k8sErrorMessage(error)}`
+      );
     }
 
     // Create RoleBinding

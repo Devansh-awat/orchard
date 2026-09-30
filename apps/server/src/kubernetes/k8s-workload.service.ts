@@ -93,6 +93,7 @@ function resolvePvcClaimName(vol: { name?: string; pvcName?: string | null }): s
   return claimName;
 }
 
+import { tailscaleRoleRules } from './tailscale-rbac';
 @Injectable()
 export class K8sWorkloadService {
   private readonly logger = new Logger(K8sWorkloadService.name);
@@ -3453,24 +3454,7 @@ export class K8sWorkloadService {
     const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
     const roleBody: k8s.V1Role = {
       metadata: { name: tsDeployName, labels: orchardLabels },
-      rules: [
-        {
-          apiGroups: [''],
-          resources: ['secrets'],
-          verbs: ['create']
-        },
-        {
-          apiGroups: [''],
-          resources: ['secrets'],
-          verbs: ['get', 'update', 'patch'],
-          resourceNames: [secretName]
-        },
-        {
-          apiGroups: [''],
-          resources: ['events'],
-          verbs: ['get', 'create', 'patch']
-        }
-      ]
+      rules: tailscaleRoleRules(secretName)
     };
     try {
       await rbacApi.createNamespacedRole(namespace, roleBody);
