@@ -21,6 +21,27 @@ import { InstanceConfigService } from '../instance-config/instance-config.servic
 import { RateLimitService } from '../auth/rate-limit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 
+export function normalizeBackupEndpoint(input: string | null): string | null {
+  const raw = (input ?? '').trim().replace(/\/+$/, '');
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new BadRequestException(
+      'backupR2Endpoint must be a full URL such as https://<account-id>.r2.cloudflarestorage.com'
+    );
+  }
+  const schemeOk = url.protocol === 'https:' || url.protocol === 'http:';
+  const hostOk = url.hostname.includes('.') || url.hostname === 'localhost';
+  if (!schemeOk || !hostOk || url.search || url.hash) {
+    throw new BadRequestException(
+      'backupR2Endpoint must be a full URL such as https://<account-id>.r2.cloudflarestorage.com'
+    );
+  }
+  return raw;
+}
+
 @Injectable()
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
@@ -468,7 +489,7 @@ export class OrganizationsService {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.backupR2Endpoint !== undefined)
-      updateData.backupR2Endpoint = data.backupR2Endpoint || null;
+      updateData.backupR2Endpoint = normalizeBackupEndpoint(data.backupR2Endpoint);
     if (data.backupR2Bucket !== undefined) updateData.backupR2Bucket = data.backupR2Bucket || null;
     if (data.backupR2Region !== undefined) updateData.backupR2Region = data.backupR2Region || null;
     if (data.backupR2AccessKey !== undefined)

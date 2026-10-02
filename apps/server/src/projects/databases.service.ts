@@ -203,13 +203,14 @@ export class DatabasesService {
             secretKey: this.crypto.open(org.backupR2SecretKey)
           }
         : null;
-    const platform = own ? null : platformBackupTarget();
+    const platform = platformBackupTarget();
     const target = own ?? (platform ? { ...platform, region: 'auto' } : null);
     if (!target) {
       return { r2: undefined, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
     }
 
-    if (this.r2Proxy.isEnabled() && !own) {
+    const sharesInstanceBucket = Boolean(own && platform && own.bucket === platform.bucket);
+    if (this.r2Proxy.isEnabled() && (!own || sharesInstanceBucket)) {
       const minted = this.r2Proxy.mintCredentials();
       await this.r2Proxy.addBinding({
         accessKey: minted.accessKey,

@@ -25,6 +25,7 @@ function svc(extra: Record<string, unknown> = {}) {
   const s = Object.create(DatabasesService.prototype) as any;
   Object.assign(s, {
     logger: { warn() {}, log() {} },
+    crypto: { open: (v: string) => v },
     r2Proxy: {
       isEnabled: () => false,
       mintCredentials: () => ({ accessKey: 'a', secret: 'b' }),
@@ -114,5 +115,48 @@ test('the pass archives only clusters with no backup and creates the missing sch
     assert.match(schedules[0], /^pg-a:/);
     member = false;
     assert.equal(await s.reconcileDefaultBackups(), null);
+  });
+});
+
+test('an organization pointing at the instance bucket still goes through the proxy', async () => {
+  await withPlatformBucket(async () => {
+    const bindings: string[] = [];
+    const s = svc({
+      r2Proxy: {
+        isEnabled: () => true,
+        getEndpoint: () => 'http://r2-proxy:9000',
+        mintCredentials: () => ({ accessKey: 'orch-a', secret: 'b' }),
+        addBinding: async (b: any) => {
+          bindings.push(`${b.bucket}:${b.prefix}`);
+        }
+      }
+    });
+    const shared = await s.buildBackupR2Config(
+      {
+        backupR2Endpoint: 'https://acct.r2.cloudflarestorage.com',
+        backupR2Bucket: 'orchard-backups',
+        backupR2AccessKey: 'real',
+        backupR2SecretKey: 's'
+      },
+      'ns',
+      'pg-x'
+    );
+    assert.equal(shared.r2.endpoint, 'http://r2-proxy:9000');
+    assert.equal(shared.r2.accessKey, 'orch-a');
+    assert.deepEqual(bindings, ['orchard-backups:ns/pg-x/']);
+
+    const elsewhere = await s.buildBackupR2Config(
+      {
+        backupR2Endpoint: 'https://other.r2.cloudflarestorage.com',
+        backupR2Bucket: 'their-bucket',
+        backupR2AccessKey: 'real',
+        backupR2SecretKey: 's'
+      },
+      'ns',
+      'pg-x'
+    );
+    assert.equal(elsewhere.r2.endpoint, 'https://other.r2.cloudflarestorage.com');
+    assert.equal(elsewhere.r2.accessKey, 'real');
+    assert.equal(elsewhere.r2ProxyAccessKey, undefined);
   });
 });
