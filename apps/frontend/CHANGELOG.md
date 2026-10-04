@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.0](https://github.com/hackclub/orchard/compare/frontend/v1.46.0...frontend/v1.47.0) (2026-10-04)
+
+
+### Features
+
+* **mcp:** accept API tokens as bearer credentials ([3e28db5](https://github.com/hackclub/orchard/commit/3e28db5e4be3f189e9903805e221bb3ba4a5c89e))
+
 ## [1.46.0](https://github.com/hackclub/orchard/compare/frontend/v1.45.0...frontend/v1.46.0) (2026-10-04)
 
 
