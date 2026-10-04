@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.54.0](https://github.com/hackclub/orchard/compare/server/v2.53.0...server/v2.54.0) (2026-10-04)
+
+
+### Features
+
+* **mcp:** accept API tokens as bearer credentials ([3e28db5](https://github.com/hackclub/orchard/commit/3e28db5e4be3f189e9903805e221bb3ba4a5c89e))
+
 ## [2.53.0](https://github.com/hackclub/orchard/compare/server/v2.52.0...server/v2.53.0) (2026-10-04)
 
 
