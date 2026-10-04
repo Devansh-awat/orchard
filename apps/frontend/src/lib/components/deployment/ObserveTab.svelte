@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack, tick } from 'svelte';
 	import { browser } from '$app/environment';
+	import { watchLiveLogActivity } from '$lib/utils/live-log-activity';
 	import { page } from '$app/stores';
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
@@ -206,6 +207,12 @@
 		return { include, exclude };
 	}
 	let liveTail = $state(false);
+	let livePauseReason = $state<'idle' | 'hidden' | 'away' | null>(null);
+
+	function toggleLiveTail() {
+		livePauseReason = null;
+		liveTail = !liveTail;
+	}
 	let logTail = $state(1000);
 	let logsAtMax = $state(false);
 	let loadingMoreLogs = $state(false);
@@ -775,9 +782,19 @@
 	});
 
 	$effect(() => {
-		if (!liveTail || !active) return;
+		if (!liveTail) return;
+		if (!active || activeTab !== 'logs') {
+			livePauseReason = 'away';
+			liveTail = false;
+			return;
+		}
 		const id = deployment?.id;
 		if (!id) return;
+		const stopWatching = watchLiveLogActivity(document, (reason) => {
+			livePauseReason = reason;
+			liveTail = false;
+		});
+		if (!untrack(() => liveTail)) return stopWatching;
 		// The SSE stream is the wake-up signal: refetch structured entries only
 		// when new lines actually arrive. The 2s poll only runs while the stream
 		// has not connected (older server or proxy trouble).
@@ -793,16 +810,17 @@
 				if (data.type === 'heartbeat' || debounce) return;
 				debounce = setTimeout(() => {
 					debounce = null;
-					fetchLogs();
+					if (liveTail && active && activeTab === 'logs') fetchLogs();
 				}, 250);
 			} catch {
 				/* ignore malformed frames */
 			}
 		};
 		liveTailHandle = setInterval(() => {
-			if (!streamHealthy) fetchLogs();
+			if (!streamHealthy && liveTail && active && activeTab === 'logs') fetchLogs();
 		}, 2000);
 		return () => {
+			stopWatching();
 			es.close();
 			if (debounce) clearTimeout(debounce);
 			if (liveTailHandle) {
@@ -1027,12 +1045,13 @@
 				<Button
 					size="sm"
 					variant={liveTail ? 'primary' : 'secondary'}
-					onclick={() => (liveTail = !liveTail)}
+					onclick={toggleLiveTail}
+					aria-label={liveTail ? 'Pause live logs' : 'Resume live logs'}
 				>
 					{#if liveTail}
 						<span class="observe-tail-dot"></span>
 					{/if}
-					Live
+					{livePauseReason ? 'Resume' : 'Live'}
 				</Button>
 			{:else if activeTab === 'errors'}
 				<SegmentedControl
@@ -1077,6 +1096,15 @@
 				bind:groupBy={metricsGroupBy}
 			/>
 		{:else if activeTab === 'logs'}
+			{#if livePauseReason}
+				<p class="px-4 py-2 text-sm text-muted" role="status">
+					Live logs paused {livePauseReason === 'idle'
+						? 'after 5 minutes without interaction'
+						: livePauseReason === 'hidden'
+							? 'because this browser tab was hidden'
+							: 'because you left the logs view'}. Click Resume to continue.
+				</p>
+			{/if}
 			{#if showLogFilters}
 				<div class="lg-filters" transition:slide={{ duration: 150 }}>
 					<div class="lg-filter-group">

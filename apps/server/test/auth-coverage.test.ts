@@ -126,7 +126,9 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
         const handlerMeta = {
           isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, handler) as boolean | undefined,
           requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, handler) as boolean | undefined,
-          requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, handler) as boolean | undefined
+          requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, handler) as
+            | boolean
+            | undefined
         };
 
         // Catch self-contradictory decorators (would be a bug).
