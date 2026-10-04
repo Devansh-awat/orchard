@@ -11,6 +11,7 @@ export const NOTIFICATION_EVENTS = [
   'db.archiving_recovered',
   'db.storage_pressure',
   'db.storage_recovered',
+  'db.storage_expanded',
   'db.crashing',
   'db.recovered',
   'job.succeeded',
@@ -50,10 +51,11 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
   'backup.failed': 'data',
   'db.archiving_failing': 'data',
   'db.archiving_recovered': 'data',
-  'db.storage_pressure': 'data',
-  'db.storage_recovered': 'data',
-  'db.crashing': 'data',
-  'db.recovered': 'data',
+  'db.storage_pressure': 'health',
+  'db.storage_recovered': 'health',
+  'db.storage_expanded': 'health',
+  'db.crashing': 'health',
+  'db.recovered': 'health',
   'job.succeeded': 'jobs',
   'job.failed': 'jobs',
   'security.signed_in': 'security',
@@ -62,9 +64,9 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
 
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   deploys: 'Deploys',
-  health: 'App health',
+  health: 'App and database health',
   jobs: 'Jobs',
-  data: 'Databases and backups',
+  data: 'Backups and archiving',
   security: 'Security'
 };
 
@@ -93,6 +95,7 @@ export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeTy
   'db.archiving_recovered': 'database',
   'db.storage_pressure': 'database',
   'db.storage_recovered': 'database',
+  'db.storage_expanded': 'database',
   'db.crashing': 'database',
   'db.recovered': 'database',
   'job.succeeded': 'job',
@@ -165,6 +168,7 @@ export const EVENT_TONE: Record<NotificationEventName, EventTone> = {
   'db.archiving_recovered': 'success',
   'db.storage_pressure': 'failure',
   'db.storage_recovered': 'success',
+  'db.storage_expanded': 'notice',
   'db.crashing': 'failure',
   'db.recovered': 'success',
   'job.succeeded': 'success',

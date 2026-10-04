@@ -23,6 +23,8 @@ const FLUSH_INTERVAL_MS = 10_000;
 const RESYNC_INTERVAL_MS = 10 * 60 * 1000;
 const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DB_STATS_INTERVAL_MS = 30_000;
+const VOLUME_SWEEP_INTERVAL_MS = 60_000;
+const POD_ROWS_REBUILD_INTERVAL_MS = 10 * 60 * 1000;
 const CRASH_SWEEP_INTERVAL_MS = 5_000;
 const PRESENCE_FRESH_MS = 30_000;
 const TRANSITION_RETENTION_DAYS = 30;
@@ -165,8 +167,17 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       }, CRASH_SWEEP_INTERVAL_MS),
       setInterval(() => {
         void this.sampleDatabaseStats();
-      }, DB_STATS_INTERVAL_MS)
+      }, DB_STATS_INTERVAL_MS),
+      setInterval(() => {
+        void this.sweepVolumes();
+      }, VOLUME_SWEEP_INTERVAL_MS),
+      setInterval(() => {
+        void this.rebuildPodRows();
+      }, POD_ROWS_REBUILD_INTERVAL_MS)
     ];
+    this.lease.onAcquired(GLOBAL_LEADER_LEASE, () => {
+      void this.rebuildPodRows().then(() => this.sweepVolumes());
+    });
     for (const t of this.timers) t.unref?.();
     this.logger.log(
       `mirror initialized with ${defs.length} shards (${this.lease.replicaIdentity})`
@@ -443,6 +454,22 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
     await this.podConsumer.sweepCrashStates();
     await this.cnpgConsumer.sweepCrashStates();
+  }
+
+  private async sweepVolumes(): Promise<void> {
+    if (!this.enabled) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
+    await this.cnpgConsumer.sweepVolumes().catch((err) => {
+      this.logger.warn(`volume sweep failed: ${(err as Error)?.message ?? err}`);
+    });
+  }
+
+  private async rebuildPodRows(): Promise<void> {
+    if (!this.enabled) return;
+    if (!this.lease.isHolder(GLOBAL_LEADER_LEASE)) return;
+    await this.cnpgConsumer.rebuildPodRows().catch((err) => {
+      this.logger.warn(`database pod rebuild failed: ${(err as Error)?.message ?? err}`);
+    });
   }
 
   private async sampleDatabaseStats(): Promise<void> {

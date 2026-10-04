@@ -123,27 +123,28 @@ export const EVENT_GROUPS: {
 		]
 	},
 	{
-		label: 'App health',
+		label: 'App and database health',
 		category: 'health',
 		options: [
 			{ value: 'pod.crashing', label: 'Crashing', tone: 'fail' },
 			{ value: 'pod.recovered', label: 'Recovered', tone: 'ok' },
 			{ value: 'alert.firing', label: 'Alert firing', tone: 'fail' },
-			{ value: 'alert.resolved', label: 'Alert resolved', tone: 'ok' }
+			{ value: 'alert.resolved', label: 'Alert resolved', tone: 'ok' },
+			{ value: 'db.crashing', label: 'Database restarting', tone: 'fail' },
+			{ value: 'db.recovered', label: 'Database recovered', tone: 'ok' },
+			{ value: 'db.storage_pressure', label: 'Storage running out', tone: 'fail' },
+			{ value: 'db.storage_expanded', label: 'Storage expanded automatically', tone: 'ok' },
+			{ value: 'db.storage_recovered', label: 'Storage recovered', tone: 'ok' }
 		]
 	},
 	{
-		label: 'Databases and backups',
+		label: 'Backups and archiving',
 		category: 'data',
 		options: [
 			{ value: 'backup.completed', label: 'Backup completed', tone: 'ok' },
 			{ value: 'backup.failed', label: 'Backup failed', tone: 'fail' },
 			{ value: 'db.archiving_failing', label: 'Archiving failing', tone: 'fail' },
-			{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' },
-			{ value: 'db.storage_pressure', label: 'Storage running out', tone: 'fail' },
-			{ value: 'db.storage_recovered', label: 'Storage recovered', tone: 'ok' },
-			{ value: 'db.crashing', label: 'Database restarting', tone: 'fail' },
-			{ value: 'db.recovered', label: 'Database recovered', tone: 'ok' }
+			{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' }
 		]
 	},
 	{
@@ -158,9 +159,9 @@ export const EVENT_GROUPS: {
 
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
 	deploys: 'Deploys',
-	health: 'App health',
+	health: 'App and database health',
 	jobs: 'Jobs',
-	data: 'Databases and backups',
+	data: 'Backups and archiving',
 	security: 'Security'
 };
 
@@ -215,6 +216,7 @@ const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 		'db.archiving_failing',
 		'db.archiving_recovered',
 		'db.storage_pressure',
+		'db.storage_expanded',
 		'db.storage_recovered',
 		'db.crashing',
 		'db.recovered'

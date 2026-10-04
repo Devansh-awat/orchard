@@ -1347,8 +1347,7 @@
 		{@const isUnhealthy = !!(
 			(ls?.message &&
 				/oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
-			(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
-			(ls?.restartCount ?? 0) >= 5
+			(ls?.exists !== false && ls?.ready === false && database.status === 'ready')
 		)}
 		<Breadcrumb
 			crumbs={[

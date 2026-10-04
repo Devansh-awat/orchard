@@ -35,17 +35,29 @@
 	// --- Detect conditions from liveStatus ---
 	// Check both `message` (current condition) and `lastTerminationReason` (history),
 	// so OOMs surface even when the pod is currently "running" between restarts.
-	const oomSignal = $derived(
-		(database.liveStatus?.message || '') + ' ' + (database.liveStatus?.lastTerminationReason || '')
+	const lastTerminationAgoMs = $derived.by(() => {
+		const at = database.liveStatus?.lastTerminationAt;
+		const t = at ? Date.parse(at) : NaN;
+		return Number.isFinite(t) ? Date.now() - t : Infinity;
+	});
+	const recentTermination = $derived(lastTerminationAgoMs < 60 * 60 * 1000);
+	const lastTerminationAgo = $derived.by(() => {
+		const minutes = Math.max(1, Math.round(lastTerminationAgoMs / 60000));
+		return minutes < 60 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`;
+	});
+
+	const isOOM = $derived(
+		/oomkilled|out of memory/i.test(database.liveStatus?.message || '') ||
+			(recentTermination &&
+				/oomkilled|out of memory/i.test(database.liveStatus?.lastTerminationReason || ''))
 	);
-	const isOOM = $derived(/oomkilled|out of memory/i.test(oomSignal));
 
 	const isCrashLoop = $derived(
 		/crashloopbackoff|back-?off/i.test(database.liveStatus?.message || '')
 	);
 
 	const restartCount = $derived(database.liveStatus?.restartCount ?? 0);
-	const highRestarts = $derived(restartCount >= 5);
+	const highRestarts = $derived(restartCount >= 1 && recentTermination);
 	const isRestarting = $derived(database.status === 'restarting');
 
 	const archiving = $derived(database.liveStatus?.archiving);
@@ -219,7 +231,10 @@
 					</div>
 					<div class="dba-body">
 						<div class="dba-title-row">
-							<span class="dba-title">Restarted {restartCount} times</span>
+							<span class="dba-title"
+								>Restarted {restartCount}
+								{restartCount === 1 ? 'time' : 'times'}, last {lastTerminationAgo}</span
+							>
 						</div>
 						<span class="dba-desc">
 							Frequent restarts often mean resource pressure or instability. Check logs for errors.

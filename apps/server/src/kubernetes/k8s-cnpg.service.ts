@@ -45,6 +45,8 @@ import { LeaderElectionService } from '../events/leader-election.service';
  * core KubernetesService via injection; the moved bodies still reference
  * `this.kc`, `this.ensureKubeConfig()`, `this.createPVC()` — delegated below.
  */
+import { parseKubeletSummary, VolumeUsage } from './volume-stats';
+
 export function normalizeBackupEndpointURL(raw: string): string {
   const trimmed = raw.trim().replace(/\/+$/, '');
   return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -2611,6 +2613,28 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       clusterName
     );
     return Boolean(cluster?.body?.spec?.backup?.barmanObjectStore);
+  }
+
+  async listVolumeUsage(): Promise<{ usage: Map<string, VolumeUsage>; nodesFailed: number }> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const { body } = await coreApi.listNode();
+    const usage = new Map<string, VolumeUsage>();
+    let nodesFailed = 0;
+    for (const node of body.items) {
+      const name = node.metadata?.name;
+      if (!name) continue;
+      try {
+        const res: any = await coreApi.connectGetNodeProxyWithPath(name, 'stats/summary');
+        const raw = res?.body;
+        const summary = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        for (const [key, value] of parseKubeletSummary(summary)) usage.set(key, value);
+      } catch (e: any) {
+        nodesFailed += 1;
+        this.logger.warn(`volume stats for node ${name} unavailable: ${e?.message ?? e}`);
+      }
+    }
+    return { usage, nodesFailed };
   }
 
   async getCnpgBackupState(

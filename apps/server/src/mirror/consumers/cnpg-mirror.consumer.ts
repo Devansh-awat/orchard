@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
@@ -10,6 +11,8 @@ import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
 import { clusterSnapshot } from '../../kubernetes/cnpg-status';
 import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
+import { dataVolumesOf, fullestVolume, nextStorageSize } from '../../kubernetes/volume-stats';
+import { ProjectsService } from '../../projects/projects.service';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
@@ -18,6 +21,7 @@ const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
 const STATS_MIN_GAP_MS = 10 * 1000;
+const AUTO_EXPAND_MIN_GAP_MS = 15 * 60 * 1000;
 
 interface Ctx {
   databaseId: string;
@@ -49,6 +53,8 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
 
   private readonly sampling = new Set<string>();
 
+  private readonly lastAutoExpand = new Map<string, number>();
+
   private stopped = false;
 
   constructor(
@@ -56,7 +62,8 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     private readonly orgEvents: OrgEventsService,
     private readonly notifications: NotificationsService,
     private readonly logCapture: PodLogCaptureService,
-    private readonly cnpg: K8sCnpgService
+    private readonly cnpg: K8sCnpgService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   onModuleDestroy() {
@@ -254,6 +261,117 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     } catch (err) {
       this.logger.warn(`database crash sweep failed: ${(err as Error)?.message ?? err}`);
     }
+  }
+
+  async rebuildPodRows(): Promise<{ synced: number; changed: number }> {
+    if (this.stopped) return { synced: 0, changed: 0 };
+    const objects = await this.prisma.k8sObject.findMany({
+      where: { shard: 'cnpg', kind: 'Pod', databaseId: { not: null } },
+      select: { databaseId: true, manifest: true }
+    });
+    const touched = new Set<string>();
+    let synced = 0;
+    for (const obj of objects) {
+      const databaseId = obj.databaseId!;
+      try {
+        const changed = await this.syncPod('update', databaseId, obj.manifest as k8s.V1Pod);
+        synced += 1;
+        if (changed) touched.add(databaseId);
+      } catch (err) {
+        this.logger.warn(`rebuildPodRows(${databaseId}) failed: ${(err as Error)?.message ?? err}`);
+      }
+    }
+    for (const databaseId of touched) await this.reconcileCrashState(databaseId);
+    if (touched.size > 0) {
+      this.logger.log(
+        `database pod rows rebuilt: ${synced} synced, ${touched.size} databases changed`
+      );
+    }
+    return { synced, changed: touched.size };
+  }
+
+  async sweepVolumes(): Promise<{ sampled: number; expanded: number } | null> {
+    if (this.stopped) return null;
+    const { usage, nodesFailed } = await this.cnpg.listVolumeUsage();
+    if (usage.size === 0) {
+      if (nodesFailed > 0) this.logger.warn('volume sweep skipped: no node answered');
+      return null;
+    }
+    const databases = await this.prisma.database.findMany({
+      where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
+      select: {
+        id: true,
+        namespace: true,
+        clusterName: true,
+        storageSize: true,
+        status: true,
+        projectId: true,
+        walPendingSegments: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    let sampled = 0;
+    let expanded = 0;
+    for (const db of databases) {
+      const volume = fullestVolume(dataVolumesOf(usage, db.namespace!, db.clusterName!));
+      if (!volume) continue;
+      sampled += 1;
+      const ctx: Ctx = {
+        databaseId: db.id,
+        orgId: db.project.organizationId,
+        projectId: db.projectId
+      };
+      try {
+        await this.prisma.database.update({
+          where: { id: db.id },
+          data: {
+            volumeUsedBytes: BigInt(Math.round(volume.usedBytes)),
+            volumeCapacityBytes: BigInt(Math.round(volume.capacityBytes))
+          }
+        });
+        await this.trackStorage(ctx, {
+          volumeUsedBytes: volume.usedBytes,
+          volumeCapacityBytes: volume.capacityBytes,
+          walPendingSegments: db.walPendingSegments
+        });
+        if (await this.maybeAutoExpand(db, volume.usedBytes, volume.capacityBytes)) expanded += 1;
+      } catch (err) {
+        this.logger.warn(
+          `volume sweep for ${db.namespace}/${db.clusterName} failed: ${(err as Error)?.message ?? err}`
+        );
+      }
+    }
+    if (expanded > 0) this.logger.log(`volume sweep: ${sampled} sampled, ${expanded} expanded`);
+    return { sampled, expanded };
+  }
+
+  private async maybeAutoExpand(
+    db: {
+      id: string;
+      namespace: string | null;
+      clusterName: string | null;
+      storageSize: string | null;
+      status: string;
+    },
+    usedBytes: number,
+    capacityBytes: number
+  ): Promise<boolean> {
+    const target = nextStorageSize(db.storageSize, usedBytes, capacityBytes);
+    if (!target) return false;
+    const last = this.lastAutoExpand.get(db.id) ?? 0;
+    if (Date.now() - last < AUTO_EXPAND_MIN_GAP_MS) return false;
+    this.lastAutoExpand.set(db.id, Date.now());
+    const projects = this.moduleRef.get(ProjectsService, { strict: false });
+    const from = db.storageSize ?? `${Math.round(capacityBytes / 1024 ** 3)}Gi`;
+    const fillPercent = Math.round((usedBytes / capacityBytes) * 100);
+    this.logger.warn(
+      `[DB/storage] ${db.namespace}/${db.clusterName} is ${fillPercent}% full at ${from}, expanding to ${target}`
+    );
+    await projects.expandDatabaseStorage(db.id, target);
+    await this.notifications
+      .notifyDbStorageExpanded(db.id, from, target, fillPercent)
+      .catch(() => {});
+    return true;
   }
 
   async sampleAllStats(): Promise<void> {

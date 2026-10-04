@@ -104,7 +104,12 @@ test('the pass archives only clusters with no backup and creates the missing sch
                 destinationPath: 's3://orchard-backups/ns/pg-b',
                 secretAccessKeyId: 'ak'
               }
-            : { configured: false, endpointURL: null, destinationPath: null, secretAccessKeyId: null },
+            : {
+                configured: false,
+                endpointURL: null,
+                destinationPath: null,
+                secretAccessKeyId: null
+              },
         enableCnpgBackup: async (_ns: string, name: string, r2: any) => {
           enabled.push(`${name}@${r2.bucket}`);
         },
@@ -208,7 +213,8 @@ test('a cluster archiving to a stale endpoint is re-pointed by the pass', async 
         hasScheduledBackup: async () => true
       },
       moduleRef: {
-        get: (cls: any) => (cls.name === 'LeaseService' ? { canCoordinate: true } : { isLeader: () => true })
+        get: (cls: any) =>
+          cls.name === 'LeaseService' ? { canCoordinate: true } : { isLeader: () => true }
       }
     });
     assert.deepEqual(await s.reconcileDefaultBackups(), {

@@ -12,6 +12,7 @@ import {
   backupKey,
   dbArchivingKey,
   dbStateKey,
+  dbStorageExpandedKey,
   dbStorageKey,
   deployKey,
   jobRunKey,
@@ -272,6 +273,43 @@ export class NotificationsService {
         body: pressure
           ? `${db.name} is running out of disk${detail ? `: ${truncate(detail, 300)}` : '.'} PostgreSQL refuses to start once the volume is full, so expand storage${db.storageSize ? ` (currently ${db.storageSize})` : ''} before that happens.`
           : `${db.name} has disk headroom again.`,
+        url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+        projectId: db.project.id,
+        projectName: db.project.name,
+        targetId: db.id,
+        targetName: db.name
+      }
+    });
+  }
+
+  async notifyDbStorageExpanded(databaseId: string, from: string, to: string, fillPercent: number) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        name: true,
+        createdBy: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } }
+          }
+        }
+      }
+    });
+    if (!db) return;
+    await this.emit({
+      organizationId: db.project.organizationId,
+      scopeType: 'database',
+      scopeId: db.id,
+      actorUserId: db.createdBy,
+      dedupeKey: dbStorageExpandedKey(db.id, to),
+      message: {
+        event: 'db.storage_expanded',
+        title: `Storage expanded: ${db.name}`,
+        body: `${db.name} reached ${fillPercent}% of its ${from} volume, so Orchard grew it to ${to}. Nothing to do unless the growth is unexpected.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,
