@@ -60,25 +60,6 @@ export class ProjectOrgTransferService {
     private readonly audit: AuditService
   ) {}
 
-  private hasR2(
-    org:
-      | {
-          backupR2Endpoint: string | null;
-          backupR2Bucket: string | null;
-          backupR2AccessKey: string | null;
-          backupR2SecretKey: string | null;
-        }
-      | null
-      | undefined
-  ): boolean {
-    return Boolean(
-      org?.backupR2Endpoint &&
-      org?.backupR2Bucket &&
-      org?.backupR2AccessKey &&
-      org?.backupR2SecretKey
-    );
-  }
-
   /** Authorize the move and load the project + destination org. */
   private async resolve(
     projectId: string,
@@ -198,8 +179,8 @@ export class ProjectOrgTransferService {
     // backups stay where they were taken (still restorable); only the archive
     // target moves. If the destination has no R2, new backups pause.
     const databaseCount = await this.prisma.database.count({ where: { projectId: project.id } });
-    const sourceHasR2 = this.hasR2(project.organization);
-    const destHasR2 = this.hasR2(destOrg);
+    const sourceHasR2 = this.databases.hasBackupStorage(project.organization);
+    const destHasR2 = this.databases.hasBackupStorage(destOrg);
     const backups = {
       databaseCount,
       willContinue: databaseCount > 0 && destHasR2,

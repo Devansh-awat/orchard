@@ -45,6 +45,11 @@ import { LeaderElectionService } from '../events/leader-election.service';
  * core KubernetesService via injection; the moved bodies still reference
  * `this.kc`, `this.ensureKubeConfig()`, `this.createPVC()` — delegated below.
  */
+export function normalizeBackupEndpointURL(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 @Injectable()
 export class K8sCnpgService implements OnApplicationBootstrap {
   private readonly logger = new Logger(K8sCnpgService.name);
@@ -2571,8 +2576,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     // enabled the endpoint is http:// (plaintext, in-cluster); when going
     // direct to R2 it's https://. Stripping then re-prefixing https broke
     // the proxy path.
-    const endpointRaw = r2.endpoint.replace(/\/$/, '');
-    const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
+    const endpointURL = normalizeBackupEndpointURL(r2.endpoint);
     return {
       barmanObjectStore: {
         destinationPath: `s3://${r2.bucket}/${namespace}/${clusterName}`,
@@ -2607,6 +2611,53 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       clusterName
     );
     return Boolean(cluster?.body?.spec?.backup?.barmanObjectStore);
+  }
+
+  async getCnpgBackupState(
+    namespace: string,
+    clusterName: string
+  ): Promise<{
+    configured: boolean;
+    endpointURL: string | null;
+    destinationPath: string | null;
+    secretAccessKeyId: string | null;
+  }> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const cluster: any = await customApi.getNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName
+    );
+    const store = cluster?.body?.spec?.backup?.barmanObjectStore;
+    if (!store) {
+      return {
+        configured: false,
+        endpointURL: null,
+        destinationPath: null,
+        secretAccessKeyId: null
+      };
+    }
+    const secretName: string =
+      store.s3Credentials?.accessKeyId?.name || this.r2SecretName(clusterName);
+    const secretKey: string = store.s3Credentials?.accessKeyId?.key || 'ACCESS_KEY_ID';
+    let secretAccessKeyId: string | null = null;
+    try {
+      const { body } = await coreApi.readNamespacedSecret(secretName, namespace);
+      const raw = body.data?.[secretKey];
+      secretAccessKeyId = raw ? Buffer.from(raw, 'base64').toString('utf8') : null;
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+    return {
+      configured: true,
+      endpointURL: store.endpointURL ?? null,
+      destinationPath: store.destinationPath ?? null,
+      secretAccessKeyId
+    };
   }
 
   async enableCnpgBackup(

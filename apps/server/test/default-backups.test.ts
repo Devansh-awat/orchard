@@ -96,6 +96,15 @@ test('the pass archives only clusters with no backup and creates the missing sch
       },
       k8sCnpg: {
         isCnpgBackupConfigured: async (_ns: string, name: string) => name === 'pg-b',
+        getCnpgBackupState: async (_ns: string, name: string) =>
+          name === 'pg-b'
+            ? {
+                configured: true,
+                endpointURL: 'https://acct.r2.cloudflarestorage.com',
+                destinationPath: 's3://orchard-backups/ns/pg-b',
+                secretAccessKeyId: 'ak'
+              }
+            : { configured: false, endpointURL: null, destinationPath: null, secretAccessKeyId: null },
         enableCnpgBackup: async (_ns: string, name: string, r2: any) => {
           enabled.push(`${name}@${r2.bucket}`);
         },
@@ -109,7 +118,12 @@ test('the pass archives only clusters with no backup and creates the missing sch
           cls.name === 'LeaseService' ? { canCoordinate: member } : { isLeader: () => member }
       }
     });
-    assert.deepEqual(await s.reconcileDefaultBackups(), { archived: 1, scheduled: 1, failed: 0 });
+    assert.deepEqual(await s.reconcileDefaultBackups(), {
+      archived: 1,
+      repaired: 0,
+      scheduled: 1,
+      failed: 0
+    });
     assert.deepEqual(enabled, ['pg-a@orchard-backups']);
     assert.equal(schedules.length, 1);
     assert.match(schedules[0], /^pg-a:/);
@@ -158,5 +172,51 @@ test('an organization pointing at the instance bucket still goes through the pro
     assert.equal(elsewhere.r2.endpoint, 'https://other.r2.cloudflarestorage.com');
     assert.equal(elsewhere.r2.accessKey, 'real');
     assert.equal(elsewhere.r2ProxyAccessKey, undefined);
+  });
+});
+
+test('a cluster archiving to a stale endpoint is re-pointed by the pass', async () => {
+  await withPlatformBucket(async () => {
+    const enabled: string[] = [];
+    const s = svc({
+      prisma: {
+        database: {
+          findMany: async () => [
+            {
+              id: '1',
+              namespace: 'ns',
+              clusterName: 'pg-a',
+              r2ProxyAccessKey: null,
+              backupScheduleCron: null,
+              project: { organizationId: 'o' }
+            }
+          ],
+          update: async () => ({})
+        },
+        organization: { findUnique: async () => ({}) }
+      },
+      k8sCnpg: {
+        getCnpgBackupState: async () => ({
+          configured: true,
+          endpointURL: 'https://65928e7e7265894b499567219490de12',
+          destinationPath: 's3://orchard-backups/ns/pg-a',
+          secretAccessKeyId: 'stale'
+        }),
+        enableCnpgBackup: async (_ns: string, name: string, r2: any) => {
+          enabled.push(`${name}@${r2.endpoint}`);
+        },
+        hasScheduledBackup: async () => true
+      },
+      moduleRef: {
+        get: (cls: any) => (cls.name === 'LeaseService' ? { canCoordinate: true } : { isLeader: () => true })
+      }
+    });
+    assert.deepEqual(await s.reconcileDefaultBackups(), {
+      archived: 0,
+      repaired: 1,
+      scheduled: 0,
+      failed: 0
+    });
+    assert.deepEqual(enabled, ['pg-a@https://acct.r2.cloudflarestorage.com']);
   });
 });

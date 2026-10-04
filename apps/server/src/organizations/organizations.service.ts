@@ -6,6 +6,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
@@ -153,6 +154,36 @@ export class OrganizationsService {
       backupR2AccessKeyLast4: accessKey && accessKey.length >= 4 ? accessKey.slice(-4) : null
     };
     return clone;
+  }
+
+  private async probeBackupStorage(target: {
+    endpoint: string;
+    bucket: string;
+    region: string | null;
+    accessKey: string;
+    secretKey: string;
+  }): Promise<void> {
+    const s3 = new S3Client({
+      endpoint: target.endpoint,
+      region: target.region || 'auto',
+      credentials: { accessKeyId: target.accessKey, secretAccessKey: target.secretKey },
+      forcePathStyle: true
+    });
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 10_000);
+    try {
+      await s3.send(new ListObjectsV2Command({ Bucket: target.bucket, MaxKeys: 1 }), {
+        abortSignal: abort.signal
+      });
+    } catch (e: any) {
+      const reason = e?.name === 'AbortError' ? 'timed out after 10s' : e?.message || String(e);
+      throw new BadRequestException(
+        `Backup storage check failed against ${target.endpoint} bucket ${target.bucket}: ${reason}`
+      );
+    } finally {
+      clearTimeout(timer);
+      s3.destroy();
+    }
   }
 
   async getBackupSettings(organizationId: string, clerkId: string, userData?: any) {
@@ -481,6 +512,7 @@ export class OrganizationsService {
         backupR2Bucket: true,
         backupR2Region: true,
         backupR2AccessKey: true,
+        backupR2SecretKey: true,
         databasePublicIp: true
       }
     });
@@ -503,6 +535,36 @@ export class OrganizationsService {
         throw new BadRequestException('databasePublicIp must be a valid IPv4 or IPv6 address');
       }
       updateData.databasePublicIp = ip;
+    }
+
+    const backupFields = [
+      'backupR2Endpoint',
+      'backupR2Bucket',
+      'backupR2Region',
+      'backupR2AccessKey',
+      'backupR2SecretKey'
+    ];
+    if (backupFields.some((field) => field in updateData)) {
+      const pick = (field: string) =>
+        field in updateData ? updateData[field] : (before as any)?.[field];
+      const secretKey =
+        'backupR2SecretKey' in updateData
+          ? data.backupR2SecretKey || null
+          : before?.backupR2SecretKey
+            ? this.crypto.open(before.backupR2SecretKey)
+            : null;
+      const endpoint = pick('backupR2Endpoint');
+      const bucket = pick('backupR2Bucket');
+      const accessKey = pick('backupR2AccessKey');
+      if (endpoint && bucket && accessKey && secretKey) {
+        await this.probeBackupStorage({
+          endpoint,
+          bucket,
+          region: pick('backupR2Region'),
+          accessKey,
+          secretKey
+        });
+      }
     }
 
     const updated = await this.prisma.organization.update({

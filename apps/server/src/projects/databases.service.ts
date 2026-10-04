@@ -17,7 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
-import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
+import { K8sCnpgService, normalizeBackupEndpointURL } from '../kubernetes/k8s-cnpg.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
@@ -57,6 +57,8 @@ export type OrgR2 = {
   backupR2AccessKey: string | null;
   backupR2SecretKey: string | null;
 };
+
+const BACKUP_RECONCILE_MS = 10 * 60_000;
 
 export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -164,17 +166,35 @@ export class DatabasesService {
    * to talk to the proxy instead of real R2 — so real R2 credentials never
    * land in the tenant's namespace.
    */
+  hasBackupStorage(org: Partial<OrgR2> | null | undefined): boolean {
+    return this.describeBackupRoute(org) !== null;
+  }
+
+  private describeBackupRoute(
+    org: Partial<OrgR2> | null | undefined
+  ): { endpoint: string; bucket: string; region: string; viaProxy: boolean; own: boolean } | null {
+    const own = Boolean(
+      org?.backupR2Endpoint &&
+      org?.backupR2Bucket &&
+      org?.backupR2AccessKey &&
+      org?.backupR2SecretKey
+    );
+    const platform = platformBackupTarget();
+    const bucket = own ? org!.backupR2Bucket! : platform?.bucket;
+    if (!bucket) return null;
+    const viaProxy =
+      this.r2Proxy.isEnabled() && (!own || Boolean(platform && bucket === platform.bucket));
+    const endpoint = viaProxy
+      ? this.r2Proxy.getEndpoint()
+      : own
+        ? org!.backupR2Endpoint!
+        : platform!.endpoint;
+    const region = (own && org?.backupR2Region) || 'auto';
+    return { endpoint, bucket, region, viaProxy, own };
+  }
+
   private async buildBackupR2Config(
-    org:
-      | {
-          backupR2Endpoint: string | null;
-          backupR2Bucket: string | null;
-          backupR2Region: string | null;
-          backupR2AccessKey: string | null;
-          backupR2SecretKey: string | null;
-        }
-      | null
-      | undefined,
+    org: Partial<OrgR2> | null | undefined,
     namespace: string,
     clusterName: string
   ): Promise<{
@@ -190,39 +210,24 @@ export class DatabasesService {
     r2ProxyAccessKey: string | undefined;
     r2ProxySecret: string | undefined;
   }> {
-    const own =
-      org?.backupR2Endpoint &&
-      org?.backupR2Bucket &&
-      org?.backupR2AccessKey &&
-      org?.backupR2SecretKey
-        ? {
-            endpoint: org.backupR2Endpoint,
-            bucket: org.backupR2Bucket,
-            region: org.backupR2Region || 'auto',
-            accessKey: org.backupR2AccessKey,
-            secretKey: this.crypto.open(org.backupR2SecretKey)
-          }
-        : null;
-    const platform = platformBackupTarget();
-    const target = own ?? (platform ? { ...platform, region: 'auto' } : null);
-    if (!target) {
+    const route = this.describeBackupRoute(org);
+    if (!route) {
       return { r2: undefined, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
     }
 
-    const sharesInstanceBucket = Boolean(own && platform && own.bucket === platform.bucket);
-    if (this.r2Proxy.isEnabled() && (!own || sharesInstanceBucket)) {
+    if (route.viaProxy) {
       const minted = this.r2Proxy.mintCredentials();
       await this.r2Proxy.addBinding({
         accessKey: minted.accessKey,
         secret: minted.secret,
-        bucket: target.bucket,
+        bucket: route.bucket,
         prefix: `${namespace}/${clusterName}/`
       });
       return {
         r2: {
-          endpoint: this.r2Proxy.getEndpoint(),
-          bucket: target.bucket,
-          region: target.region,
+          endpoint: route.endpoint,
+          bucket: route.bucket,
+          region: route.region,
           accessKey: minted.accessKey,
           secretKey: minted.secret
         },
@@ -231,7 +236,32 @@ export class DatabasesService {
       };
     }
 
-    return { r2: target, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
+    if (route.own) {
+      return {
+        r2: {
+          endpoint: route.endpoint,
+          bucket: route.bucket,
+          region: route.region,
+          accessKey: org!.backupR2AccessKey!,
+          secretKey: this.crypto.open(org!.backupR2SecretKey!)
+        },
+        r2ProxyAccessKey: undefined,
+        r2ProxySecret: undefined
+      };
+    }
+
+    const platform = platformBackupTarget()!;
+    return {
+      r2: {
+        endpoint: platform.endpoint,
+        bucket: platform.bucket,
+        region: 'auto',
+        accessKey: platform.accessKey,
+        secretKey: platform.secretKey
+      },
+      r2ProxyAccessKey: undefined,
+      r2ProxySecret: undefined
+    };
   }
 
   private async validateImportSource(src: {
@@ -1187,7 +1217,8 @@ export class DatabasesService {
     } | null;
   }): Promise<void> {
     const org = database.project?.organization;
-    const bucket = org?.backupR2Bucket;
+    const platform = platformBackupTarget();
+    const bucket = org?.backupR2Bucket ?? platform?.bucket;
     if (!database.namespace || !database.clusterName || !bucket) return;
 
     try {
@@ -1207,6 +1238,10 @@ export class DatabasesService {
         endpoint = org.backupR2Endpoint;
         accessKeyId = org.backupR2AccessKey;
         secretAccessKey = this.crypto.open(org.backupR2SecretKey);
+      } else if (platform) {
+        endpoint = platform.endpoint;
+        accessKeyId = platform.accessKey;
+        secretAccessKey = platform.secretKey;
       }
       if (!endpoint || !accessKeyId || !secretAccessKey) return;
 
@@ -1292,14 +1327,8 @@ export class DatabasesService {
   ): Promise<void> {
     if (!db.namespace || !db.clusterName) return;
     const previousProxyKey = db.r2ProxyAccessKey;
-    const destHasR2 = Boolean(
-      destOrg?.backupR2Endpoint &&
-      destOrg?.backupR2Bucket &&
-      destOrg?.backupR2AccessKey &&
-      destOrg?.backupR2SecretKey
-    );
-
-    if (!destHasR2) {
+    const built = await this.buildBackupR2Config(destOrg, db.namespace, db.clusterName);
+    if (!built.r2) {
       // Nowhere to archive to in the new org: stop writing into the old org's
       // bucket. Existing backups stay restorable; new backups pause until the
       // destination configures R2.
@@ -1319,12 +1348,7 @@ export class DatabasesService {
       return;
     }
 
-    const {
-      r2: destR2,
-      r2ProxyAccessKey: destProxyKey,
-      r2ProxySecret: destProxySecret
-    } = await this.buildBackupR2Config(destOrg, db.namespace, db.clusterName);
-    if (!destR2) return;
+    const { r2: destR2, r2ProxyAccessKey: destProxyKey, r2ProxySecret: destProxySecret } = built;
 
     await this.k8sCnpg.enableCnpgBackup(db.namespace, db.clusterName, destR2);
     if (destProxyKey) {
@@ -1335,6 +1359,13 @@ export class DatabasesService {
       if (this.r2Proxy.isEnabled() && previousProxyKey && previousProxyKey !== destProxyKey) {
         await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
       }
+    }
+    if (!destProxyKey && previousProxyKey) {
+      await this.r2Proxy.removeBinding(previousProxyKey).catch(() => {});
+      await this.prisma.database.update({
+        where: { id: db.id },
+        data: { r2ProxyAccessKey: null, r2ProxySecret: null }
+      });
     }
     this.logger.log(
       `[DB/move] re-pointed backups for ${db.namespace}/${db.clusterName} to ${destR2.bucket}`
@@ -1729,22 +1760,6 @@ export class DatabasesService {
 
   // ── Database backup management ──
 
-  private async getOrgR2Config(organizationId: string) {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
-    });
-    if (
-      !org?.backupR2Endpoint ||
-      !org?.backupR2Bucket ||
-      !org?.backupR2AccessKey ||
-      !org?.backupR2SecretKey
-    ) {
-      throw new BadRequestException('R2 backup storage is not configured for this organization');
-    }
-    return org;
-  }
-
   /**
    * Make sure the cluster is actually archiving before anything tries to back
    * it up. Clusters provisioned before their org had backup storage carry no
@@ -1811,10 +1826,17 @@ export class DatabasesService {
   private defaultBackupsTimer?: ReturnType<typeof setInterval>;
 
   onApplicationBootstrap() {
-    setTimeout(() => this.reconcileDefaultBackups().catch(() => {}), 120_000).unref?.();
+    try {
+      const leader = this.moduleRef.get(LeaderElectionService, { strict: false });
+      leader?.onAcquired(() => {
+        void this.reconcileDefaultBackups().catch(() => {});
+      });
+    } catch {
+      setTimeout(() => this.reconcileDefaultBackups().catch(() => {}), 120_000).unref?.();
+    }
     this.defaultBackupsTimer = setInterval(
       () => this.reconcileDefaultBackups().catch(() => {}),
-      6 * 60 * 60_000
+      BACKUP_RECONCILE_MS
     );
     this.defaultBackupsTimer.unref?.();
   }
@@ -1835,11 +1857,11 @@ export class DatabasesService {
 
   async reconcileDefaultBackups(): Promise<{
     archived: number;
+    repaired: number;
     scheduled: number;
     failed: number;
   } | null> {
     if (!this.canRunClusterWide()) return null;
-    if (!platformBackupTarget()) return { archived: 0, scheduled: 0, failed: 0 };
     const rows = await this.prisma.database.findMany({
       where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
       select: {
@@ -1851,16 +1873,42 @@ export class DatabasesService {
         project: { select: { organizationId: true } }
       }
     });
+    const orgs = new Map<string, OrgR2 | null>();
     let archived = 0;
+    let repaired = 0;
     let scheduled = 0;
     let failed = 0;
     for (const db of rows) {
+      const namespace = db.namespace!;
+      const clusterName = db.clusterName!;
       try {
-        if (await this.ensureBackupsConfigured(db)) archived += 1;
-        if (!(await this.k8sCnpg.hasScheduledBackup(db.namespace!, db.clusterName!))) {
+        const orgId = db.project.organizationId;
+        if (!orgs.has(orgId)) {
+          orgs.set(
+            orgId,
+            await this.prisma.organization.findUnique({
+              where: { id: orgId },
+              omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+            })
+          );
+        }
+        const org = orgs.get(orgId) ?? null;
+        const route = this.describeBackupRoute(org);
+        if (!route) continue;
+        const state = await this.k8sCnpg.getCnpgBackupState(namespace, clusterName);
+        if (!state.configured) {
+          if (await this.ensureBackupsConfigured(db)) archived += 1;
+        } else if (this.backupTargetDrifted(state, route, db.r2ProxyAccessKey)) {
+          await this.repointDatabaseBackups(db, org);
+          repaired += 1;
+          this.logger.warn(
+            `[DB/backup] re-pointed ${namespace}/${clusterName}: archiving target was ${state.endpointURL ?? 'unset'} with key ${state.secretAccessKeyId ?? 'missing'}, expected ${route.endpoint}`
+          );
+        }
+        if (!(await this.k8sCnpg.hasScheduledBackup(namespace, clusterName))) {
           await this.k8sCnpg.upsertScheduledBackup(
-            db.namespace!,
-            db.clusterName!,
+            namespace,
+            clusterName,
             toQuartzCron(db.backupScheduleCron || DEFAULT_BACKUP_CRON)
           );
           scheduled += 1;
@@ -1869,16 +1917,26 @@ export class DatabasesService {
         if (e?.response?.statusCode === 404) continue;
         failed += 1;
         this.logger.warn(
-          `[DB/backup] default backups for ${db.namespace}/${db.clusterName} not applied: ${e?.message || e}`
+          `[DB/backup] default backups for ${namespace}/${clusterName} not applied: ${e?.message || e}`
         );
       }
     }
-    if (archived || scheduled || failed) {
+    if (archived || repaired || scheduled || failed) {
       this.logger.log(
-        `[DB/backup] defaults reconciled: ${archived} clusters now archiving, ${scheduled} schedules created, ${failed} failed`
+        `[DB/backup] defaults reconciled: ${archived} clusters now archiving, ${repaired} re-pointed, ${scheduled} schedules created, ${failed} failed`
       );
     }
-    return { archived, scheduled, failed };
+    return { archived, repaired, scheduled, failed };
+  }
+
+  private backupTargetDrifted(
+    state: { endpointURL: string | null; secretAccessKeyId: string | null },
+    route: { endpoint: string; viaProxy: boolean },
+    proxyAccessKey: string | null
+  ): boolean {
+    if (!state.secretAccessKeyId) return true;
+    if (state.endpointURL !== normalizeBackupEndpointURL(route.endpoint)) return true;
+    return route.viaProxy && state.secretAccessKeyId !== proxyAccessKey;
   }
 
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
@@ -2082,7 +2140,15 @@ export class DatabasesService {
     }
     if (!backupId) throw new BadRequestException('backupId is required');
 
-    const org = await this.getOrgR2Config(database.project.organizationId);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: database.project.organizationId },
+      omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+    });
+    if (!this.hasBackupStorage(org)) {
+      throw new BadRequestException(
+        'No backup storage: configure it for this organization, or set a backup bucket on the instance'
+      );
+    }
 
     const backup = await this.prisma.databaseBackup.findUnique({ where: { id: backupId } });
     if (!backup || backup.databaseId !== database.id)
