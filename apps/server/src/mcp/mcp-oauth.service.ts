@@ -7,6 +7,7 @@ import {
   MCP_SESSION_TTL_MS
 } from '../auth/sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { hashApiToken } from '../auth/api-tokens.service';
 import { checkRefreshGeneration, oauthCodeKey } from './mcp-oauth.helpers';
 
 interface OAuthClient {
@@ -630,6 +631,24 @@ export class McpOAuthService {
   async validateBearerToken(authHeader?: string): Promise<string | null> {
     const result = await this.validateBearerTokenWithSub(authHeader);
     return result?.token ?? null;
+  }
+
+  async validateApiToken(authHeader?: string): Promise<{ token: string; sub: string } | null> {
+    if (!authHeader?.startsWith('Bearer orch_')) return null;
+    const token = authHeader.substring(7);
+    const apiToken = await this.prisma.apiToken.findUnique({
+      where: { tokenHash: hashApiToken(token) },
+      select: { userId: true, expiresAt: true }
+    });
+    if (!apiToken) {
+      console.error('[MCP OAuth] API token rejected: unknown token');
+      return null;
+    }
+    if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
+      console.error('[MCP OAuth] API token rejected: expired');
+      return null;
+    }
+    return { token, sub: apiToken.userId };
   }
 
   /**

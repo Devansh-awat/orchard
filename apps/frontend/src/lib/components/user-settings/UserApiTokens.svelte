@@ -226,8 +226,9 @@
 		{#if showCreate}
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Tokens have the same permissions as your account. Use them with the Orchard MCP server or
-					API.
+					Tokens created here can read anything your account can, but cannot change anything. Use
+					them with the Orchard MCP server or API. For deploy or exec access, use
+					<code>orchard auth token create --scope deploy</code>.
 				</p>
 				<div class="token-create-form">
 					<Input
@@ -343,8 +344,8 @@
 				<pre class="code-block usage-code">{`{
   "mcpServers": {
     "orchard": {
-      "type": "url",
-      "url": "https://mcp.yourdomain.com/mcp",
+      "type": "http",
+      "url": "https://mcp.yourdomain.com/",
       "headers": {
         "Authorization": "Bearer orch_..."
       }

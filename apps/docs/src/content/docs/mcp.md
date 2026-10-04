@@ -21,14 +21,89 @@ https://mcp.your-orchard-domain
 along with ready-made configuration for Claude.ai, Claude Code, VS Code and
 Cursor. Copy it from there rather than guessing.
 
-Authorisation goes through OAuth against your Orchard instance. The agent acts
-**as you**: it sees what you can see and can change what you can change. It does
-not get a privileged service account, and it cannot reach another organization's
-resources because you connected an agent.
+Whichever way it authenticates, the agent acts **as you**: it sees what you can
+see and can change what you can change. It does not get a privileged service
+account, and it cannot reach another organization's resources because you
+connected an agent.
 
 If that page says the instance has not published an MCP endpoint, it has not been
 turned on. See
 [Turn the MCP endpoint on or off](/operate/finishing-setup/#turn-the-mcp-endpoint-on-or-off).
+
+## Authenticating
+
+There are two ways in. Use OAuth when a person is at the keyboard, and an API
+token when nobody is.
+
+### OAuth (interactive)
+
+Add the URL with no credentials. On first use the client opens a browser, you
+sign in to Orchard and approve the connection, and the client stores and
+refreshes the token itself. Access tokens last a day and refresh without asking;
+a connection left unused for 30 days has to sign in again.
+
+### API token (non-interactive)
+
+For CI, headless agents, or a client without OAuth support, send a personal API
+token (`orch_…`) as a bearer token:
+
+```json
+{
+  "mcpServers": {
+    "orchard": {
+      "type": "http",
+      "url": "https://mcp.your-orchard-domain/",
+      "headers": {
+        "Authorization": "Bearer orch_your_token_here"
+      }
+    }
+  }
+}
+```
+
+With Claude Code:
+
+```sh
+claude mcp add --transport http orchard https://mcp.your-orchard-domain/ \
+  --header "Authorization: Bearer orch_your_token_here"
+```
+
+When an `Authorization` header is set, Claude Code does not fall back to OAuth.
+A rejected token is a hard `401`, not a sign-in prompt.
+
+The MCP server calls the Orchard API with your token, so the token's own limits
+apply to every tool call:
+
+| Scope    | Lets the agent                                                                 |
+| -------- | ------------------------------------------------------------------------------ |
+| `read`   | Run the read-only tools: list, get, logs, metrics                              |
+| `deploy` | Everything `read` can, plus anything that changes state: deploy, scale, delete |
+| `exec`   | Everything `deploy` can, plus `exec_in_pod`                                    |
+
+Scopes nest, so `exec` covers `deploy` and `deploy` covers `read`. A tool that
+needs more than the token has fails with `Token lacks required scope: …`.
+
+Tokens created in **Settings → API Tokens** get the `read` scope only. That is
+enough for diagnosis. For an agent that acts, create the token with the CLI:
+
+```sh
+orchard auth token create --name "ci-agent" --scope deploy
+orchard auth token create --name "ops-agent" --scope exec --project my-app
+```
+
+`--project` (repeatable) restricts the token to those projects; leave it out
+and the token reaches everything you can. Tokens live at most 90 days
+(`--expires-in` sets a shorter lifetime), so plan to rotate them. Whatever its
+scope, a token can never register a passkey, set a password, or reach the
+instance setup and admin routes.
+
+### When it fails
+
+| Response                     | Meaning                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `401` on connect             | The token is unknown, expired or revoked, or the header is not `Bearer orch_…`              |
+| `Token lacks required scope` | The token is valid but its scope is too narrow for that tool; create one with a wider scope |
+| `503 MCP is disabled`        | An operator has switched MCP off for the instance; see [Turning it off](#turning-it-off)    |
 
 ## What it can do
 
@@ -46,9 +121,13 @@ ones without you configuring anything.
 
 ## Revoking access
 
-An MCP connection is backed by an auth session, so revoking it is the same as
+An OAuth connection is backed by an auth session, so revoking it is the same as
 revoking any other session for your account. There is no separate list of agent
 grants to forget about.
+
+A token-authenticated agent loses access as soon as you revoke the token, in
+**Settings → API Tokens** or with `orchard auth token revoke <id>`. Signing out
+everywhere revokes your sessions and all of your API tokens.
 
 MCP grants hold their own session, so an ordinary role change does not silently
 kill a working agent connection mid-task.

@@ -17,6 +17,7 @@ interface McpAuthExtra {
   email?: string;
   externalAuthId?: string;
   sessionId: string;
+  apiToken?: boolean;
 }
 
 @Injectable()
@@ -51,6 +52,9 @@ export class McpTransportService implements OnModuleDestroy {
     // authInfo is always present: authenticateAndDispatch refuses the request
     // before calling handler.fetch when the bearer is missing or invalid.
     const extra = (ctx.authInfo?.extra ?? {}) as Partial<McpAuthExtra>;
+    if (extra.apiToken) {
+      return createOrchardMcpServer(ctx.authInfo?.token);
+    }
     return createOrchardMcpServer(ctx.authInfo?.token, {
       sub: extra.sub as string,
       email: extra.email,
@@ -67,9 +71,21 @@ export class McpTransportService implements OnModuleDestroy {
     // built for this call holds an OrchardClient minted with this caller's
     // identity, so validating here (and caching nothing) is what keeps one
     // user's tool calls from ever running as another.
-    const auth = await this.oauth.validateBearerTokenWithSub(
-      request.headers.get('authorization') ?? undefined
-    );
+    const authHeader = request.headers.get('authorization') ?? undefined;
+    const apiToken = await this.oauth.validateApiToken(authHeader);
+    if (apiToken) {
+      return this.handler.fetch(request, {
+        ...options,
+        authInfo: {
+          token: apiToken.token,
+          clientId: '',
+          scopes: ['mcp:access'],
+          extra: { sub: apiToken.sub, sessionId: '', apiToken: true } satisfies McpAuthExtra
+        }
+      });
+    }
+
+    const auth = await this.oauth.validateBearerTokenWithSub(authHeader);
     if (!auth) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,

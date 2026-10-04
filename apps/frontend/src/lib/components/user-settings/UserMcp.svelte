@@ -265,6 +265,12 @@
 					Create one in <a href="/user/api-tokens">API Tokens</a>, then pass it as a Bearer token in
 					the Authorization header.
 				</p>
+				<p class="mcp-hint">
+					Tokens created on that page can only read. For an agent that deploys or changes things,
+					create one with the CLI: <code>orchard auth token create --name agent --scope deploy</code
+					>
+					(or <code>--scope exec</code> to allow running commands in pods).
+				</p>
 
 				<div class="mcp-field">
 					<div class="mcp-block-head">
