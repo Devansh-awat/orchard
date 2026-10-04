@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.53.0](https://github.com/hackclub/orchard/compare/server/v2.52.0...server/v2.53.0) (2026-10-04)
+
+
+### Features
+
+* a database near a full disk goes read-only instead of growing or dying ([8558b0f](https://github.com/hackclub/orchard/commit/8558b0f1fae04e23b98965cbff966171ef60d408))
+* databases grow their volume before it fills, and never go unwatched ([a0e2815](https://github.com/hackclub/orchard/commit/a0e28153ba05816b1524818e12f4c828f1cb5a63))
+* pause live logs while idle and hidden ([#112](https://github.com/hackclub/orchard/issues/112)) ([afb0cbe](https://github.com/hackclub/orchard/commit/afb0cbe2ad7428dfbcfacd98c6a7631a5c4cc8b7))
+
+
+### Bug Fixes
+
+* backup endpoints must be full urls, and organizations on the instance bucket keep going through the r2-proxy ([0f1a5bb](https://github.com/hackclub/orchard/commit/0f1a5bb41de2333695a04b949cdd7d8cf3ee34a0))
+* backup targets are repaired on the leader and probed on save ([7203e5d](https://github.com/hackclub/orchard/commit/7203e5d66a680ab22239949b5f6ca3eed57aa9c3))
+
 ## [2.52.0](https://github.com/hackclub/orchard/compare/server/v2.51.3...server/v2.52.0) (2026-09-30)
 
 

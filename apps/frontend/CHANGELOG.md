@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.46.0](https://github.com/hackclub/orchard/compare/frontend/v1.45.0...frontend/v1.46.0) (2026-10-04)
+
+
+### Features
+
+* a database near a full disk goes read-only instead of growing or dying ([8558b0f](https://github.com/hackclub/orchard/commit/8558b0f1fae04e23b98965cbff966171ef60d408))
+* databases grow their volume before it fills, and never go unwatched ([a0e2815](https://github.com/hackclub/orchard/commit/a0e28153ba05816b1524818e12f4c828f1cb5a63))
+* pause live logs while idle and hidden ([#112](https://github.com/hackclub/orchard/issues/112)) ([afb0cbe](https://github.com/hackclub/orchard/commit/afb0cbe2ad7428dfbcfacd98c6a7631a5c4cc8b7))
+
+
+### Bug Fixes
+
+* the project page judges a database by its current state, not lifetime restarts ([0828c80](https://github.com/hackclub/orchard/commit/0828c802356cc58aa9f0e80bf42f810ba9d55e59))
+
 ## [1.45.0](https://github.com/hackclub/orchard/compare/frontend/v1.44.2...frontend/v1.45.0) (2026-09-30)
 
 
