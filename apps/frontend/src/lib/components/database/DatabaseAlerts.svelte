@@ -73,6 +73,9 @@
 			volume != null &&
 			volume.percent >= 85
 	);
+	const writesPaused = $derived(
+		database.mode === 'cnpg' && database.status !== 'stopped' && !!database.liveStatus?.writeGuard
+	);
 	const walPending = $derived(database.liveStatus?.walPendingSegments ?? 0);
 	const walBacklog = $derived(
 		database.mode === 'cnpg' && database.status !== 'stopped' && walPending >= 64
@@ -112,6 +115,7 @@
 		(!isRestarting && (isOOM || isCrashLoop || highRestarts || noPods)) ||
 			archivingFailing ||
 			storageFull ||
+			writesPaused ||
 			walBacklog ||
 			noBackups
 	);
@@ -247,7 +251,39 @@
 			</div>
 		{/if}
 
-		{#if storageFull && volume}
+		{#if writesPaused}
+			<div
+				class="dba-alert dba-alert--storage"
+				{@attach motionStagger({
+					index: 1,
+					from: { y: -8, opacity: 0 }
+				})}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap">
+						<HardDrive size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<span class="dba-title"
+							>Writes paused: the volume is {volume ? `${volume.percent}%` : 'almost'} full</span
+						>
+						<span class="dba-desc">
+							Orchard switched this database to read-only so it stays up instead of crashing on a
+							full disk. Reads and backups keep working. Expand storage or free space and writes
+							resume on their own.
+						</span>
+					</div>
+					{#if onGoToResources}
+						<button class="dba-action" onclick={onGoToResources}>
+							<HardDrive size={13} />
+							Expand storage
+						</button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if storageFull && volume && !writesPaused}
 			<div
 				class="dba-alert dba-alert--storage"
 				{@attach motionStagger({

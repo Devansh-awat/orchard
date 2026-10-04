@@ -12,7 +12,7 @@ import {
   backupKey,
   dbArchivingKey,
   dbStateKey,
-  dbStorageExpandedKey,
+  dbWriteGuardKey,
   dbStorageKey,
   deployKey,
   jobRunKey,
@@ -282,13 +282,14 @@ export class NotificationsService {
     });
   }
 
-  async notifyDbStorageExpanded(databaseId: string, from: string, to: string, fillPercent: number) {
+  async notifyDbWriteGuard(databaseId: string, state: 'on' | 'off', fillPercent: number) {
     const db = await this.prisma.database.findUnique({
       where: { id: databaseId },
       select: {
         id: true,
         name: true,
         createdBy: true,
+        storageSize: true,
         project: {
           select: {
             id: true,
@@ -300,16 +301,19 @@ export class NotificationsService {
       }
     });
     if (!db) return;
+    const on = state === 'on';
     await this.emit({
       organizationId: db.project.organizationId,
       scopeType: 'database',
       scopeId: db.id,
       actorUserId: db.createdBy,
-      dedupeKey: dbStorageExpandedKey(db.id, to),
+      dedupeKey: dbWriteGuardKey(db.id, state),
       message: {
-        event: 'db.storage_expanded',
-        title: `Storage expanded: ${db.name}`,
-        body: `${db.name} reached ${fillPercent}% of its ${from} volume, so Orchard grew it to ${to}. Nothing to do unless the growth is unexpected.`,
+        event: on ? 'db.read_only' : 'db.writes_resumed',
+        title: on ? `Writes paused: ${db.name}` : `Writes resumed: ${db.name}`,
+        body: on
+          ? `${db.name} is ${fillPercent}% full${db.storageSize ? ` on a ${db.storageSize} volume` : ''}, so Orchard switched it to read-only to keep it alive. Reads and backups continue. Expand storage or free space and writes resume on their own.`
+          : `${db.name} has disk headroom again (${fillPercent}% full), so writes are back on.`,
         url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
         projectId: db.project.id,
         projectName: db.project.name,

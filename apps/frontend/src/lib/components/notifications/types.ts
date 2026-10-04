@@ -133,7 +133,8 @@ export const EVENT_GROUPS: {
 			{ value: 'db.crashing', label: 'Database restarting', tone: 'fail' },
 			{ value: 'db.recovered', label: 'Database recovered', tone: 'ok' },
 			{ value: 'db.storage_pressure', label: 'Storage running out', tone: 'fail' },
-			{ value: 'db.storage_expanded', label: 'Storage expanded automatically', tone: 'ok' },
+			{ value: 'db.read_only', label: 'Writes paused (disk full)', tone: 'fail' },
+			{ value: 'db.writes_resumed', label: 'Writes resumed', tone: 'ok' },
 			{ value: 'db.storage_recovered', label: 'Storage recovered', tone: 'ok' }
 		]
 	},
@@ -216,7 +217,8 @@ const SCOPE_EVENTS: Record<NotificationScopeType, string[] | null> = {
 		'db.archiving_failing',
 		'db.archiving_recovered',
 		'db.storage_pressure',
-		'db.storage_expanded',
+		'db.read_only',
+		'db.writes_resumed',
 		'db.storage_recovered',
 		'db.crashing',
 		'db.recovered'

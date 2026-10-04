@@ -12,8 +12,11 @@ export interface MirroredDbPod {
   waitingReason?: string | null;
 }
 
+export const WRITE_GUARD_ANNOTATION = 'orchard.io/write-guard';
+
 export interface ClusterSnapshot {
   exists: boolean;
+  writeGuard: boolean;
   phase: string;
   instances: number;
   readyInstances: number;
@@ -59,6 +62,7 @@ export function clusterSnapshot(cluster: any): ClusterSnapshot {
     readyInstances: status.readyInstances || 0,
     currentPrimary: status.currentPrimary ?? null,
     hibernated: cluster?.metadata?.annotations?.['cnpg.io/hibernation'] === 'on',
+    writeGuard: cluster?.metadata?.annotations?.[WRITE_GUARD_ANNOTATION] === 'storage',
     conditions: status.conditions || [],
     firstRecoverabilityPoint: status.firstRecoverabilityPoint || null,
     lastSuccessfulBackup: status.lastSuccessfulBackup || null,
@@ -169,6 +173,7 @@ export function buildCnpgLiveStatus(
     lastSuccessfulBackup: cluster.lastSuccessfulBackup,
     danglingPVC: cluster.danglingPVC,
     unusablePVC: cluster.unusablePVC,
+    writeGuard: cluster.writeGuard,
     ...folded
   };
 }

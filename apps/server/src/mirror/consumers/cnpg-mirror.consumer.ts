@@ -9,10 +9,10 @@ import { latestTermination } from './pod-mirror.consumer';
 import { computePodStatus } from '../pod-status';
 import { PodLogCaptureService } from '../../kubernetes/pod-log-capture.service';
 import { K8sCnpgService } from '../../kubernetes/k8s-cnpg.service';
-import { clusterSnapshot } from '../../kubernetes/cnpg-status';
+import { clusterSnapshot, WRITE_GUARD_ANNOTATION } from '../../kubernetes/cnpg-status';
 import { storagePressure, storagePressureDetail } from '../../kubernetes/db-stats';
-import { dataVolumesOf, fullestVolume, nextStorageSize } from '../../kubernetes/volume-stats';
-import { ProjectsService } from '../../projects/projects.service';
+import { dataVolumesOf, fullestVolume, writeGuardDecision } from '../../kubernetes/volume-stats';
+import { DatabasesService } from '../../projects/databases.service';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
@@ -21,7 +21,6 @@ const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 const CRASH_CONFIRM_MS = 30_000;
 const RECOVER_CONFIRM_MS = 60_000;
 const STATS_MIN_GAP_MS = 10 * 1000;
-const AUTO_EXPAND_MIN_GAP_MS = 15 * 60 * 1000;
 
 interface Ctx {
   databaseId: string;
@@ -52,8 +51,6 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
   private readonly lastSample = new Map<string, number>();
 
   private readonly sampling = new Set<string>();
-
-  private readonly lastAutoExpand = new Map<string, number>();
 
   private stopped = false;
 
@@ -290,7 +287,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
     return { synced, changed: touched.size };
   }
 
-  async sweepVolumes(): Promise<{ sampled: number; expanded: number } | null> {
+  async sweepVolumes(): Promise<{ sampled: number; guarded: number } | null> {
     if (this.stopped) return null;
     const { usage, nodesFailed } = await this.cnpg.listVolumeUsage();
     if (usage.size === 0) {
@@ -310,8 +307,17 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
         project: { select: { organizationId: true } }
       }
     });
+    const clusters = await this.prisma.k8sObject.findMany({
+      where: { shard: 'cnpg', kind: 'Cluster', databaseId: { in: databases.map((d) => d.id) } },
+      select: { databaseId: true, manifest: true }
+    });
+    const guardOn = new Map<string, boolean>();
+    for (const c of clusters) {
+      const annotations = (c.manifest as any)?.metadata?.annotations ?? {};
+      guardOn.set(c.databaseId!, annotations[WRITE_GUARD_ANNOTATION] === 'storage');
+    }
     let sampled = 0;
-    let expanded = 0;
+    let guarded = 0;
     for (const db of databases) {
       const volume = fullestVolume(dataVolumesOf(usage, db.namespace!, db.clusterName!));
       if (!volume) continue;
@@ -334,44 +340,50 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
           volumeCapacityBytes: volume.capacityBytes,
           walPendingSegments: db.walPendingSegments
         });
-        if (await this.maybeAutoExpand(db, volume.usedBytes, volume.capacityBytes)) expanded += 1;
+        const decision = writeGuardDecision(
+          guardOn.get(db.id) ?? false,
+          volume.usedBytes,
+          volume.capacityBytes
+        );
+        if (decision) {
+          await this.applyWriteGuard(db, decision, volume.usedBytes, volume.capacityBytes);
+          guarded += 1;
+        }
       } catch (err) {
         this.logger.warn(
           `volume sweep for ${db.namespace}/${db.clusterName} failed: ${(err as Error)?.message ?? err}`
         );
       }
     }
-    if (expanded > 0) this.logger.log(`volume sweep: ${sampled} sampled, ${expanded} expanded`);
-    return { sampled, expanded };
+    if (guarded > 0) {
+      this.logger.log(`volume sweep: ${sampled} sampled, ${guarded} write guards changed`);
+    }
+    return { sampled, guarded };
   }
 
-  private async maybeAutoExpand(
-    db: {
-      id: string;
-      namespace: string | null;
-      clusterName: string | null;
-      storageSize: string | null;
-      status: string;
-    },
+  private async applyWriteGuard(
+    db: { id: string; namespace: string | null; clusterName: string | null },
+    decision: 'on' | 'off',
     usedBytes: number,
     capacityBytes: number
-  ): Promise<boolean> {
-    const target = nextStorageSize(db.storageSize, usedBytes, capacityBytes);
-    if (!target) return false;
-    const last = this.lastAutoExpand.get(db.id) ?? 0;
-    if (Date.now() - last < AUTO_EXPAND_MIN_GAP_MS) return false;
-    this.lastAutoExpand.set(db.id, Date.now());
-    const projects = this.moduleRef.get(ProjectsService, { strict: false });
-    const from = db.storageSize ?? `${Math.round(capacityBytes / 1024 ** 3)}Gi`;
+  ): Promise<void> {
     const fillPercent = Math.round((usedBytes / capacityBytes) * 100);
     this.logger.warn(
-      `[DB/storage] ${db.namespace}/${db.clusterName} is ${fillPercent}% full at ${from}, expanding to ${target}`
+      `[DB/storage] ${db.namespace}/${db.clusterName} is ${fillPercent}% full, write guard ${decision}`
     );
-    await projects.expandDatabaseStorage(db.id, target);
-    await this.notifications
-      .notifyDbStorageExpanded(db.id, from, target, fillPercent)
-      .catch(() => {});
-    return true;
+    await this.cnpg.setCnpgWriteGuard(db.namespace!, db.clusterName!, decision === 'on');
+    await this.notifications.notifyDbWriteGuard(db.id, decision, fillPercent).catch(() => {});
+  }
+
+  private repairArchivingTarget(databaseId: string): void {
+    try {
+      const databases = this.moduleRef.get(DatabasesService, { strict: false });
+      void databases.repairBackupTarget(databaseId).catch((err: any) => {
+        this.logger.warn(`archiving repair for ${databaseId} failed: ${err?.message ?? err}`);
+      });
+    } catch {
+      this.logger.warn(`archiving repair for ${databaseId} skipped: databases service unavailable`);
+    }
   }
 
   async sampleAllStats(): Promise<void> {
@@ -544,6 +556,7 @@ export class CnpgMirrorConsumer implements OnModuleDestroy {
       const fresh = !Number.isNaN(t) && Date.now() - t < FRESH_TRANSITION_MS;
       if (ok || !fresh) return;
     }
+    if (!ok) this.repairArchivingTarget(ctx.databaseId);
     this.scheduleEmit(ctx, { archiving: ok });
     await this.notifications
       .notifyDbArchiving(ctx.databaseId, ok ? 'recovered' : 'failing', cond.message || undefined)

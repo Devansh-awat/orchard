@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   dataVolumesOf,
   fullestVolume,
-  nextStorageSize,
+  writeGuardDecision,
   parseKubeletSummary
 } from '../src/kubernetes/volume-stats';
 
@@ -58,16 +58,10 @@ test('only the numbered data volumes of a cluster count, and the fullest one win
   assert.equal(fullestVolume([]), null);
 });
 
-test('a volume past eighty percent grows by a third, at least two gibibytes, never past the cap', () => {
-  assert.equal(nextStorageSize('20Gi', 15 * GI, 20 * GI), null);
-  assert.equal(nextStorageSize('20Gi', 16.5 * GI, 20 * GI), '28Gi');
-  assert.equal(nextStorageSize('2Gi', 1.9 * GI, 2 * GI), '4Gi');
-  assert.equal(nextStorageSize('20Gi', 19.9 * GI, 20 * GI), '34Gi');
-  assert.equal(nextStorageSize('200Gi', 199 * GI, 200 * GI), null);
-  assert.equal(nextStorageSize('190Gi', 189 * GI, 190 * GI), '200Gi');
-});
-
-test('an expansion already in flight is not stacked', () => {
-  assert.equal(nextStorageSize('30Gi', 19 * GI, 20 * GI), null);
-  assert.equal(nextStorageSize(null, 19 * GI, 20 * GI), '32Gi');
+test('the write guard engages at ninety-two percent and releases under eighty-five', () => {
+  assert.equal(writeGuardDecision(false, 18 * GI, 20 * GI), null);
+  assert.equal(writeGuardDecision(false, 18.5 * GI, 20 * GI), 'on');
+  assert.equal(writeGuardDecision(true, 18 * GI, 20 * GI), null);
+  assert.equal(writeGuardDecision(true, 16.9 * GI, 20 * GI), 'off');
+  assert.equal(writeGuardDecision(false, 1, 0), null);
 });

@@ -1,16 +1,6 @@
-import { parseMemory } from './quantity';
+export const WRITE_GUARD_ENTER = 0.92;
 
-export const AUTO_EXPAND_ENTER = 0.8;
-
-export const AUTO_EXPAND_TARGET_FILL = 0.6;
-
-export const AUTO_EXPAND_GROWTH = 1.3;
-
-export const AUTO_EXPAND_MIN_STEP_GI = 2;
-
-export const STORAGE_HARD_CAP = '200Gi';
-
-const GI = 1024 ** 3;
+export const WRITE_GUARD_EXIT = 0.85;
 
 export interface VolumeUsage {
   usedBytes: number;
@@ -69,20 +59,14 @@ export function fullestVolume(volumes: VolumeUsage[]): VolumeUsage | null {
   return fullest;
 }
 
-export function nextStorageSize(
-  specSize: string | null | undefined,
+export function writeGuardDecision(
+  guardOn: boolean,
   usedBytes: number,
   capacityBytes: number
-): string | null {
+): 'on' | 'off' | null {
   if (!(capacityBytes > 0) || usedBytes < 0) return null;
-  if (usedBytes / capacityBytes < AUTO_EXPAND_ENTER) return null;
-  const specBytes = specSize ? parseMemory(specSize) : 0;
-  if (specBytes > capacityBytes * 1.05) return null;
-  const wanted = Math.max(capacityBytes * AUTO_EXPAND_GROWTH, usedBytes / AUTO_EXPAND_TARGET_FILL);
-  const currentGi = Math.ceil(Math.max(specBytes, capacityBytes) / GI);
-  const targetGi = Math.max(Math.ceil(wanted / GI), currentGi + AUTO_EXPAND_MIN_STEP_GI);
-  const capGi = Math.floor(parseMemory(STORAGE_HARD_CAP) / GI);
-  const finalGi = Math.min(targetGi, capGi);
-  if (finalGi <= currentGi) return null;
-  return `${finalGi}Gi`;
+  const fraction = usedBytes / capacityBytes;
+  if (!guardOn && fraction >= WRITE_GUARD_ENTER) return 'on';
+  if (guardOn && fraction < WRITE_GUARD_EXIT) return 'off';
+  return null;
 }

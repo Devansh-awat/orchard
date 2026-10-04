@@ -44,8 +44,8 @@ export function dbStorageKey(databaseId: string, state: 'pressure' | 'recovered'
 
 // Same backstop role as podKey: the CNPG informer only calls on a confirmed
 // transition, so this catches two replicas seeing the same one.
-export function dbStorageExpandedKey(databaseId: string, size: string): string {
-  return clamp(`dbstorage:${databaseId}:expanded:${size}`);
+export function dbWriteGuardKey(databaseId: string, state: 'on' | 'off'): string {
+  return clamp(`dbwriteguard:${databaseId}:${state}:${bucket(6 * 3_600_000)}`);
 }
 
 export function dbStateKey(databaseId: string, state: 'crashing' | 'recovered'): string {

@@ -56,6 +56,7 @@ export interface DatabaseDetail {
 		lastTerminationReason?: string;
 		lastTerminationExitCode?: number;
 		lastTerminationAt?: string;
+		writeGuard?: boolean;
 		archiving?: { ok: boolean; message?: string | null; since?: string | null } | null;
 		firstRecoverabilityPoint?: string | null;
 		lastSuccessfulBackup?: string | null;

@@ -46,6 +46,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
  * `this.kc`, `this.ensureKubeConfig()`, `this.createPVC()` — delegated below.
  */
 import { parseKubeletSummary, VolumeUsage } from './volume-stats';
+import { WRITE_GUARD_ANNOTATION } from './cnpg-status';
 
 export function normalizeBackupEndpointURL(raw: string): string {
   const trimmed = raw.trim().replace(/\/+$/, '');
@@ -2535,6 +2536,26 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       this.CNPG_PLURAL,
       clusterName,
       { metadata: { annotations } },
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } }
+    );
+  }
+
+  async setCnpgWriteGuard(namespace: string, clusterName: string, on: boolean): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      namespace,
+      this.CNPG_PLURAL,
+      clusterName,
+      {
+        metadata: { annotations: { [WRITE_GUARD_ANNOTATION]: on ? 'storage' : null } },
+        spec: { postgresql: { parameters: { default_transaction_read_only: on ? 'on' : null } } }
+      },
       undefined,
       undefined,
       undefined,

@@ -1879,45 +1879,16 @@ export class DatabasesService {
     let scheduled = 0;
     let failed = 0;
     for (const db of rows) {
-      const namespace = db.namespace!;
-      const clusterName = db.clusterName!;
       try {
-        const orgId = db.project.organizationId;
-        if (!orgs.has(orgId)) {
-          orgs.set(
-            orgId,
-            await this.prisma.organization.findUnique({
-              where: { id: orgId },
-              omit: { backupR2AccessKey: false, backupR2SecretKey: false }
-            })
-          );
-        }
-        const org = orgs.get(orgId) ?? null;
-        const route = this.describeBackupRoute(org);
-        if (!route) continue;
-        const state = await this.k8sCnpg.getCnpgBackupState(namespace, clusterName);
-        if (!state.configured) {
-          if (await this.ensureBackupsConfigured(db)) archived += 1;
-        } else if (this.backupTargetDrifted(state, route, db.r2ProxyAccessKey)) {
-          await this.repointDatabaseBackups(db, org);
-          repaired += 1;
-          this.logger.warn(
-            `[DB/backup] re-pointed ${namespace}/${clusterName}: archiving target was ${state.endpointURL ?? 'unset'} with key ${state.secretAccessKeyId ?? 'missing'}, expected ${route.endpoint}`
-          );
-        }
-        if (!(await this.k8sCnpg.hasScheduledBackup(namespace, clusterName))) {
-          await this.k8sCnpg.upsertScheduledBackup(
-            namespace,
-            clusterName,
-            toQuartzCron(db.backupScheduleCron || DEFAULT_BACKUP_CRON)
-          );
-          scheduled += 1;
-        }
+        const one = await this.reconcileDatabaseBackup(db, orgs);
+        if (one.archived) archived += 1;
+        if (one.repaired) repaired += 1;
+        if (one.scheduled) scheduled += 1;
       } catch (e: any) {
         if (e?.response?.statusCode === 404) continue;
         failed += 1;
         this.logger.warn(
-          `[DB/backup] default backups for ${namespace}/${clusterName} not applied: ${e?.message || e}`
+          `[DB/backup] default backups for ${db.namespace}/${db.clusterName} not applied: ${e?.message || e}`
         );
       }
     }
@@ -1927,6 +1898,73 @@ export class DatabasesService {
       );
     }
     return { archived, repaired, scheduled, failed };
+  }
+
+  private async reconcileDatabaseBackup(
+    db: {
+      id: string;
+      namespace: string | null;
+      clusterName: string | null;
+      r2ProxyAccessKey: string | null;
+      backupScheduleCron: string | null;
+      project: { organizationId: string };
+    },
+    orgs: Map<string, OrgR2 | null>
+  ): Promise<{ archived: boolean; repaired: boolean; scheduled: boolean }> {
+    const out = { archived: false, repaired: false, scheduled: false };
+    const namespace = db.namespace!;
+    const clusterName = db.clusterName!;
+    const orgId = db.project.organizationId;
+    if (!orgs.has(orgId)) {
+      orgs.set(
+        orgId,
+        await this.prisma.organization.findUnique({
+          where: { id: orgId },
+          omit: { backupR2AccessKey: false, backupR2SecretKey: false }
+        })
+      );
+    }
+    const org = orgs.get(orgId) ?? null;
+    const route = this.describeBackupRoute(org);
+    if (!route) return out;
+    const state = await this.k8sCnpg.getCnpgBackupState(namespace, clusterName);
+    if (!state.configured) {
+      if (await this.ensureBackupsConfigured(db)) out.archived = true;
+    } else if (this.backupTargetDrifted(state, route, db.r2ProxyAccessKey)) {
+      await this.repointDatabaseBackups(db, org);
+      out.repaired = true;
+      this.logger.warn(
+        `[DB/backup] re-pointed ${namespace}/${clusterName}: archiving target was ${state.endpointURL ?? 'unset'} with key ${state.secretAccessKeyId ?? 'missing'}, expected ${route.endpoint}`
+      );
+    }
+    if (!(await this.k8sCnpg.hasScheduledBackup(namespace, clusterName))) {
+      await this.k8sCnpg.upsertScheduledBackup(
+        namespace,
+        clusterName,
+        toQuartzCron(db.backupScheduleCron || DEFAULT_BACKUP_CRON)
+      );
+      out.scheduled = true;
+    }
+    return out;
+  }
+
+  async repairBackupTarget(databaseId: string): Promise<boolean> {
+    if (!this.canRunClusterWide()) return false;
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        mode: true,
+        namespace: true,
+        clusterName: true,
+        r2ProxyAccessKey: true,
+        backupScheduleCron: true,
+        project: { select: { organizationId: true } }
+      }
+    });
+    if (!db || db.mode !== 'cnpg' || !db.namespace || !db.clusterName) return false;
+    const one = await this.reconcileDatabaseBackup(db, new Map());
+    return one.archived || one.repaired;
   }
 
   private backupTargetDrifted(
