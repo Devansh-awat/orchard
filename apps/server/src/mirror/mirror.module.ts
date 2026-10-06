@@ -8,6 +8,7 @@ import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
+import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
 
 @Module({
   imports: [KubernetesModule, JobsModule, SandboxesModule],
@@ -16,7 +17,8 @@ import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
     PodMirrorConsumer,
     CnpgMirrorConsumer,
     WorkloadMirrorConsumer,
-    SandboxMirrorConsumer
+    SandboxMirrorConsumer,
+    IngressMirrorConsumer
   ],
   controllers: [MirrorHealthController]
 })

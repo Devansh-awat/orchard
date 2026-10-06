@@ -21,6 +21,7 @@ import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
+import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
@@ -39,6 +40,7 @@ export interface MirrorShardDeps {
   jobs: JobMirrorConsumer;
   workloads: WorkloadMirrorConsumer;
   sandboxes: SandboxMirrorConsumer;
+  ingresses: IngressMirrorConsumer;
   // Null when this install runs no sandboxes, or could not work out which
   // sandboxes are its own. The shard is then not built at all: there is no
   // useful half-scoped version of a watch whose whole job is to see exactly
@@ -255,7 +257,9 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                   opts.limit
                 )
             ),
-          mapRefs: byNamespace
+          mapRefs: byNamespace,
+          onEvent: (type, obj) => deps.ingresses.onEvent(type, obj),
+          onListComplete: (seen) => deps.ingresses.pruneStaleRows(seen)
         },
         {
           kind: 'Service',

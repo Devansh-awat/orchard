@@ -15,6 +15,7 @@ import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
+import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -84,6 +85,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly jobConsumer: JobMirrorConsumer,
     private readonly workloadConsumer: WorkloadMirrorConsumer,
     private readonly sandboxConsumer: SandboxMirrorConsumer,
+    private readonly ingressConsumer: IngressMirrorConsumer,
     private readonly sandboxK8s: SandboxK8sService
   ) {}
 
@@ -114,6 +116,7 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       jobs: this.jobConsumer,
       workloads: this.workloadConsumer,
       sandboxes: this.sandboxConsumer,
+      ingresses: this.ingressConsumer,
       sandboxScope: await this.resolveSandboxScope(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });

@@ -4,6 +4,7 @@ import * as https from 'https';
 import { PassThrough } from 'stream';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
 import {
   KubernetesService,
@@ -101,7 +102,8 @@ export class K8sWorkloadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
-    private readonly namespaces: K8sNamespaceService
+    private readonly namespaces: K8sNamespaceService,
+    private readonly audit: AuditService
   ) {}
 
   private get kc(): k8s.KubeConfig | null {
@@ -1866,7 +1868,7 @@ export class K8sWorkloadService {
         }
 
         const existingRecord = await this.prisma.deployment.findFirst({
-          where: { projectId: project.id, name: deploymentName }
+          where: { projectId: project.id, namespace, name: deploymentName }
         });
         let deploymentRecord;
         if (existingRecord) {
@@ -2073,19 +2075,34 @@ export class K8sWorkloadService {
       const dbDeployments = await this.prisma.deployment.findMany({
         where: {
           projectId: project.id,
+          namespace,
           buildStatus: 'succeeded'
+        },
+        select: {
+          id: true,
+          name: true,
+          project: { select: { organizationId: true } }
         }
       });
 
       for (const dbDeployment of dbDeployments) {
-        if (!dbDeploymentNames.has(dbDeployment.name)) {
-          this.logger.warn(
-            `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`
-          );
-          await this.prisma.deployment.delete({
-            where: { id: dbDeployment.id }
-          });
-        }
+        if (dbDeploymentNames.has(dbDeployment.name)) continue;
+        this.logger.warn(
+          `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`
+        );
+        await this.prisma.deployment.delete({
+          where: { id: dbDeployment.id }
+        });
+        void this.audit.log({
+          action: 'deployment.deleted',
+          organizationId: dbDeployment.project.organizationId,
+          projectId: project.id,
+          deploymentId: dbDeployment.id,
+          targetType: 'deployment',
+          targetId: dbDeployment.id,
+          targetLabel: dbDeployment.name,
+          metadata: { reason: 'resource eliminated in k8s', source: 'sync', namespace }
+        });
       }
 
       console.log('[Sync] Successfully synced namespace:', namespace);

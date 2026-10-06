@@ -2245,9 +2245,11 @@ export class IngressService implements OnModuleInit {
       }
     }
 
-    await this.prisma.ingress.delete({
-      where: { id: ingressId }
-    });
+    try {
+      await this.prisma.ingress.delete({ where: { id: ingressId } });
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'P2025') throw error;
+    }
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -2373,9 +2375,11 @@ export class IngressService implements OnModuleInit {
       }
     }
 
-    await this.prisma.ingress.delete({
-      where: { id: ingressId }
-    });
+    try {
+      await this.prisma.ingress.delete({ where: { id: ingressId } });
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'P2025') throw error;
+    }
 
     void this.audit.log({
       action: 'ingress.deleted',
