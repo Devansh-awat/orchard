@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.54.1](https://github.com/hackclub/orchard/compare/server/v2.54.0...server/v2.54.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* namespace sync only prunes its own namespace and the mirror drops ingress rows the cluster lost ([7684945](https://github.com/hackclub/orchard/commit/76849455a892d3683554b0bc26ad20cb8e90b798))
+
 ## [2.54.0](https://github.com/hackclub/orchard/compare/server/v2.53.0...server/v2.54.0) (2026-10-04)
 
 
