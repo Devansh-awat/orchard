@@ -151,6 +151,17 @@ export class ImageBuilderService {
   private readonly harborRegistryPush =
     process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
 
+  private readonly plainHttpRegistries = new Set<string>(
+    (process.env.REGISTRY_HTTP_HOSTS || 'harbor-core.harbor.svc.cluster.local,178.156.144.127')
+      .split(',')
+      .filter(Boolean)
+  );
+
+  private readonly pusherRegistryHost =
+    this.plainHttpRegistries.has(this.harborRegistryPush) && !/:\d+$/.test(this.harborRegistryPush)
+      ? `${this.harborRegistryPush}:80`
+      : this.harborRegistryPush;
+
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
 
   private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
@@ -708,6 +719,7 @@ export class ImageBuilderService {
     const auth = registryAuth(username, password);
     return {
       [this.harborRegistryPush]: auth,
+      [this.pusherRegistryHost]: auth,
       [this.harborRegistryPull]: auth
     };
   }
@@ -830,12 +842,7 @@ export class ImageBuilderService {
 
     const configMapName = 'buildkit-config';
 
-    // Internal registries that use plain HTTP (no TLS)
-    const httpRegistries = new Set<string>(
-      (process.env.REGISTRY_HTTP_HOSTS || 'harbor-core.harbor.svc.cluster.local,178.156.144.127')
-        .split(',')
-        .filter(Boolean)
-    );
+    const httpRegistries = this.plainHttpRegistries;
 
     // For plain HTTP registries, use ONLY http=true
     // insecure=true means "HTTPS with self-signed cert", NOT "allow HTTP"
@@ -1971,6 +1978,7 @@ fi
     // BuildKit cannot read the pusher container's
     // /root/.docker/config.json.
     // No pusher in daemon mode — the daemon pushes directly (it has creds).
+    const pusherImageRef = fullImageName.replace(/^[^/]+/, this.pusherRegistryHost);
     const pusherContainer: k8s.V1Container | null =
       buildkitContainer && this.sidecarPushEnabled && !daemonIp
         ? {
@@ -1988,15 +1996,15 @@ while [ ! -f /output/.done ] && [ ! -f /output/.failed ]; do
     echo "[pusher] timed out waiting for build to produce a marker"
     exit 1
   fi
-  sleep 5
-  ELAPSED=$((ELAPSED + 5))
+  sleep 1
+  ELAPSED=$((ELAPSED + 1))
 done
 if [ -f /output/.failed ]; then
   echo "[pusher] build wrote .failed marker — not pushing"
   exit 1
 fi
 echo "[pusher] build done, pushing..."
-exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oci-archive:/output/image.tar 'docker://${fullImageName.replace(/'/g, `'\\''`)}'`
+exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oci-archive:/output/image.tar 'docker://${pusherImageRef.replace(/'/g, `'\\''`)}'`
             ],
             volumeMounts: [
               { name: 'output', mountPath: '/output' },
