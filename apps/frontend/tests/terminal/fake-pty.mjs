@@ -1,9 +1,9 @@
+import { createRequire } from 'node:module';
 import { WebSocketServer } from 'ws';
-import headless from '@xterm/headless';
-import serialize from '@xterm/addon-serialize';
 
-const { Terminal } = headless;
-const { SerializeAddon } = serialize;
+const require = createRequire(import.meta.url);
+const { Terminal } = require('@xterm/headless');
+const { SerializeAddon } = require('@xterm/addon-serialize');
 
 const port = Number(process.env.FAKE_PTY_PORT ?? 7681);
 const wss = new WebSocketServer({ port, path: '/pty' });

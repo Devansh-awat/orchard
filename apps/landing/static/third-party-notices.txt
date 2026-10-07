@@ -5114,6 +5114,16 @@ Copyright (c) 2017, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 The rest of LICENSE is word for word the text printed under @anthropic-ai/sdk 0.97.1.
 
 ================================================================================
+@xterm/addon-serialize 0.14.0
+Ships in: API server
+Project: https://github.com/xtermjs/xterm.js/tree/master/addons/addon-serialize
+Source for this version: https://registry.npmjs.org/@xterm/addon-serialize/-/addon-serialize-0.14.0.tgz
+License: MIT
+
+No license file ships with this package. It declares MIT in its package.json.
+Copyright The xterm.js authors
+
+================================================================================
 @xterm/addon-unicode11 0.9.0
 Ships in: Web app
 Project: https://github.com/xtermjs/xterm.js/tree/master/addons/addon-unicode11
@@ -5142,6 +5152,16 @@ License: MIT
 
 Copyright (c) 2018, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 The rest of LICENSE is word for word the text printed under @anthropic-ai/sdk 0.97.1.
+
+================================================================================
+@xterm/headless 6.0.0
+Ships in: API server
+Project: https://github.com/xtermjs/xterm.js
+Source for this version: https://registry.npmjs.org/@xterm/headless/-/headless-6.0.0.tgz
+License: MIT
+
+No license file ships with this package. It declares MIT in its package.json.
+Copyright xtermjs
 
 ================================================================================
 @xterm/xterm 6.0.0
@@ -11312,7 +11332,7 @@ The rest of LICENSE is word for word the text printed under Go standard library 
 
 ================================================================================
 golang.org/x/term v0.44.0
-Ships in: CLI
+Ships in: CLI, Terraform provider
 Project: https://pkg.go.dev/golang.org/x/term
 Source for this version: https://proxy.golang.org/golang.org/x/term/@v/v0.44.0.zip
 License: BSD-3-Clause

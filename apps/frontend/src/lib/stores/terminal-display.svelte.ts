@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 
 export type TerminalCursor = 'bar' | 'block' | 'underline';
 export type TerminalBell = 'visual' | 'off';
+export type TerminalRenderer = 'gpu' | 'dom';
 
 export interface TerminalDisplay {
 	predictiveEcho: boolean;
@@ -9,6 +10,7 @@ export interface TerminalDisplay {
 	cursorStyle: TerminalCursor;
 	cursorBlink: boolean;
 	bell: TerminalBell;
+	renderer: TerminalRenderer;
 }
 
 const KEY = 'terminal-display';
@@ -21,7 +23,8 @@ const DEFAULTS: TerminalDisplay = {
 	fontSize: 12,
 	cursorStyle: 'bar',
 	cursorBlink: true,
-	bell: 'visual'
+	bell: 'visual',
+	renderer: 'gpu'
 };
 
 function clampFont(n: unknown): number {
@@ -45,7 +48,8 @@ function load(): TerminalDisplay {
 					: DEFAULTS.cursorStyle,
 			cursorBlink:
 				typeof saved.cursorBlink === 'boolean' ? saved.cursorBlink : DEFAULTS.cursorBlink,
-			bell: saved.bell === 'off' ? 'off' : DEFAULTS.bell
+			bell: saved.bell === 'off' ? 'off' : DEFAULTS.bell,
+			renderer: saved.renderer === 'dom' ? 'dom' : DEFAULTS.renderer
 		};
 	} catch {
 		return { ...DEFAULTS };

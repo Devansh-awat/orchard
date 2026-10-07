@@ -4,9 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/coder/websocket"
+	"golang.org/x/term"
 )
 
 // DialExec opens the interactive pod terminal websocket
@@ -20,6 +23,10 @@ func (c *Client) DialExec(ctx context.Context, pod, namespace, container string)
 	}
 	if container != "" {
 		q.Set("container", container)
+	}
+	if cols, rows, err := term.GetSize(int(os.Stdin.Fd())); err == nil && cols > 0 && rows > 0 {
+		q.Set("cols", strconv.Itoa(cols))
+		q.Set("rows", strconv.Itoa(rows))
 	}
 	target := wsBase + "/apiv1/pods/" + url.PathEscape(pod) + "/exec"
 	if len(q) > 0 {

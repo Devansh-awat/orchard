@@ -43,6 +43,7 @@
 		scaleReplicas = $bindable(),
 		consoleExpanded,
 		consoleAnimating,
+		consoleVisible = true,
 		consoleRef = $bindable(),
 		consoleInlineRect,
 		isDragging,
@@ -84,6 +85,7 @@
 		scaleReplicas: number;
 		consoleExpanded: boolean;
 		consoleAnimating: boolean;
+		consoleVisible?: boolean;
 		consoleRef: HTMLDivElement | null;
 		consoleInlineRect: { top: number; left: number; width: number; height: number } | null;
 		isDragging: boolean;
@@ -449,7 +451,7 @@
 						podName={ttab.podName}
 						namespace={deployment.namespace || 'default'}
 						container={ttab.container}
-						visible={activeConsoleTab === ttab.id}
+						visible={consoleVisible && activeConsoleTab === ttab.id}
 						resizeFrozen={consoleAnimating}
 						sessionHandle={ttab.sessionHandle}
 						onTitle={(title) => onTerminalTitle?.(ttab.id, title)}

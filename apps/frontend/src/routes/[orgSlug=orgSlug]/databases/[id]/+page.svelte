@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import {
 		apiFetch,
 		toasts,
@@ -242,6 +243,7 @@
 	let expandedKilled = $state<string | null>(null);
 	let terminalTabs = $state<TerminalTabType[]>([]);
 	let terminalCounter = 0;
+	let restoredTabsFor: string | null = null;
 	let consoleExpanded = $state(false);
 
 	// Delete modal
@@ -1095,6 +1097,37 @@
 		return parts.length > 2 ? parts.slice(-2).join('-') : name;
 	}
 
+	$effect(() => {
+		const id = dbId;
+		if (!id || restoredTabsFor === id) return;
+		restoredTabsFor = id;
+		const storedTabs = loadTerminalTabs(terminalTabsKey('database', id));
+		if (!storedTabs) return;
+		terminalTabs = storedTabs.tabs.map((t) => ({ ...t }));
+		activeConsoleTab = storedTabs.active;
+		terminalCounter = storedTabs.counter;
+		terminalVisited = true;
+	});
+
+	$effect(() => {
+		const id = dbId;
+		const tabsSnapshot = terminalTabs.map((t) => ({
+			id: t.id,
+			podName: t.podName,
+			container: t.container,
+			label: t.label,
+			title: t.title,
+			sessionHandle: t.sessionHandle
+		}));
+		const active = activeConsoleTab;
+		if (!id || restoredTabsFor !== id) return;
+		saveTerminalTabs(terminalTabsKey('database', id), {
+			tabs: tabsSnapshot,
+			active,
+			counter: terminalCounter
+		});
+	});
+
 	function openShellTab(podName: string, container: string) {
 		terminalCounter++;
 		const id = `term-${Date.now()}-${terminalCounter}`;
@@ -1610,6 +1643,7 @@
 				<section class="db-tab-panel" hidden={activeTab !== 'terminal'}>
 					<TerminalTab
 						{database}
+						visible={activeTab === 'terminal'}
 						{logs}
 						{logsLoading}
 						bind:logsRef

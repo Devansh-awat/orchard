@@ -1237,6 +1237,15 @@ Copyright 2009 The Go Authors.
 The rest of LICENSE is word for word the text printed under Go standard library 1.26.3.
 
 ================================================================================
+golang.org/x/term v0.44.0
+Project: https://pkg.go.dev/golang.org/x/term
+Source for this version: https://proxy.golang.org/golang.org/x/term/@v/v0.44.0.zip
+License: BSD-3-Clause
+
+Copyright 2009 The Go Authors.
+The rest of LICENSE is word for word the text printed under Go standard library 1.26.3.
+
+================================================================================
 golang.org/x/text v0.32.0
 Project: https://pkg.go.dev/golang.org/x/text
 Source for this version: https://proxy.golang.org/golang.org/x/text/@v/v0.32.0.zip

@@ -13,6 +13,8 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { sandboxFeatureEnabled } from './sandbox-enabled.guard';
+import { ResizableOutput } from '../kubernetes/exec-sessions';
+import { parseClientFrame, parseHandshake } from '../kubernetes/exec-protocol';
 
 const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/(ssh|terminal)$/;
 const RECHECK_INTERVAL_MS = 15_000;
@@ -201,7 +203,11 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
       ws.on('close', release);
       ws.on('error', release);
       if (kind === 'terminal') {
-        handleShellSession(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
+        const size = parseHandshake(url.searchParams);
+        handleShellSession(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth, {
+          cols: size.cols,
+          rows: size.rows
+        });
       } else if (tunnelMode === 'portforward') {
         handlePortForwardTunnel(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
       } else {
@@ -247,7 +253,8 @@ function handleShellSession(
   sandboxK8s: SandboxK8sService,
   sandboxId: string,
   prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>
+  recheckAuth: () => Promise<boolean>,
+  size: { cols: number; rows: number }
 ) {
   void (async () => {
     if (!kubernetes.kc) {
@@ -261,7 +268,8 @@ function handleShellSession(
     }
     const { PassThrough } = await import('stream');
     const stdin = new PassThrough();
-    const stdout = new PassThrough();
+    const stdout = new ResizableOutput();
+    stdout.setSize(size.cols, size.rows);
     const stderr = new PassThrough();
 
     attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => stdin.end());
@@ -272,13 +280,19 @@ function handleShellSession(
     stdout.on('data', forward);
     stderr.on('data', forward);
 
-    ws.on('message', (data: WebSocket.Data) => {
-      const text = typeof data === 'string' ? data : data.toString();
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed?.type === 'resize') return;
-      } catch {}
-      writeWithBackpressure(ws, stdin, text);
+    ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
+      const frame = parseClientFrame(data as Buffer | string, isBinary);
+      if (frame.kind === 'resize') {
+        stdout.setSize(frame.cols, frame.rows);
+        return;
+      }
+      if (frame.kind === 'stdin') {
+        writeWithBackpressure(
+          ws,
+          stdin,
+          typeof frame.data === 'string' ? frame.data : frame.data.toString()
+        );
+      }
     });
     ws.on('close', () => stdin.end());
 

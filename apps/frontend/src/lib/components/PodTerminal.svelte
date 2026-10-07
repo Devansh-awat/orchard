@@ -115,7 +115,8 @@
 				backgroundToken: '--console-bg',
 				fontSize: terminalDisplay.fontSize,
 				cursorStyle: terminalDisplay.cursorStyle,
-				cursorBlink: visible && terminalDisplay.cursorBlink
+				cursorBlink: visible && terminalDisplay.cursorBlink,
+				gpu: terminalDisplay.renderer !== 'dom'
 			});
 			if (disposed) {
 				created.dispose();
@@ -159,7 +160,7 @@
 					onKeyDown: (event) => predictor?.noteKeyDown(event),
 					onClear: () => {
 						predictor?.flush('guard');
-						term.clear();
+						term.input('\x0c', true);
 					},
 					onZoom: (step) => {
 						if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);

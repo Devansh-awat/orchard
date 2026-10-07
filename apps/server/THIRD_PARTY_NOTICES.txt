@@ -4636,6 +4636,26 @@ Copyright 2012 - 2017 @jindw <jindw@xidea.org> and other contributors, as listed
 The rest of LICENSE is word for word the text printed under @anthropic-ai/sdk 0.97.1.
 
 ================================================================================
+@xterm/addon-serialize 0.14.0
+Ships in: API server
+Project: https://github.com/xtermjs/xterm.js/tree/master/addons/addon-serialize
+Source for this version: https://registry.npmjs.org/@xterm/addon-serialize/-/addon-serialize-0.14.0.tgz
+License: MIT
+
+No license file ships with this package. It declares MIT in its package.json.
+Copyright The xterm.js authors
+
+================================================================================
+@xterm/headless 6.0.0
+Ships in: API server
+Project: https://github.com/xtermjs/xterm.js
+Source for this version: https://registry.npmjs.org/@xterm/headless/-/headless-6.0.0.tgz
+License: MIT
+
+No license file ships with this package. It declares MIT in its package.json.
+Copyright xtermjs
+
+================================================================================
 abbrev 2.0.0
 Ships in: API server
 Project: https://github.com/npm/abbrev-js

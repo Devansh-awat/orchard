@@ -19,6 +19,7 @@
 
 	let {
 		database,
+		visible = true,
 		logs,
 		logsLoading,
 		logsRef = $bindable(),
@@ -44,6 +45,7 @@
 		podShortName
 	}: {
 		database: DatabaseDetail;
+		visible?: boolean;
 		logs: string;
 		logsLoading: boolean;
 		logsRef: HTMLPreElement | null;
@@ -292,7 +294,7 @@
 					podName={ttab.podName}
 					namespace={database.namespace!}
 					container={ttab.container}
-					visible={activeConsoleTab === ttab.id}
+					visible={visible && activeConsoleTab === ttab.id}
 					sessionHandle={ttab.sessionHandle}
 					onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
 					onBell={() => onTerminalBell?.(ttab.id)}

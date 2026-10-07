@@ -6,6 +6,7 @@
 	import { Tabs } from 'melt/builders';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
+	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import { deploymentQueryOptions } from '$lib/queries/deployment';
 	import { mergeInto, syncListBy, shallowEq } from '$lib/utils/sync';
 	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
@@ -2658,7 +2659,31 @@
 		autoDeployPaths = '';
 		projectIngressesFetched = false;
 
+		const storedTabs = loadTerminalTabs(terminalTabsKey('deployment', deploymentId));
+		terminalTabs = storedTabs ? storedTabs.tabs.map((t) => ({ ...t })) : [];
+		activeConsoleTab = storedTabs ? storedTabs.active : 'logs';
+		terminalCounter = storedTabs?.counter ?? 0;
+
 		if ($tailscaleEnabled) tailscale.checkStatus();
+	});
+
+	$effect(() => {
+		const id = deploymentId;
+		const tabsSnapshot = terminalTabs.map((t) => ({
+			id: t.id,
+			podName: t.podName,
+			container: t.container,
+			label: t.label,
+			title: t.title,
+			sessionHandle: t.sessionHandle
+		}));
+		const active = activeConsoleTab;
+		if (!id || id !== lastSeenDeploymentId) return;
+		saveTerminalTabs(terminalTabsKey('deployment', id), {
+			tabs: tabsSnapshot,
+			active,
+			counter: terminalCounter
+		});
 	});
 
 	$effect(() => {
@@ -3164,6 +3189,7 @@
 					{#if tab.id === 'overview'}
 						<OverviewTab
 							{deployment}
+							consoleVisible={tabs.value === 'overview'}
 							{activePods}
 							{resourcePressure}
 							bind:selectedPod
