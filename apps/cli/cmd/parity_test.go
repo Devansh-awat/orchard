@@ -254,11 +254,8 @@ var routeCoverage = map[string]string{
 	"GET /job-runs/:runId/steps/:order/logs": "job-run logs",
 
 	// templates
-	"GET /templates":                               "template list",
-	"GET /templates/:id":                           "template get",
-	"POST /templates":                              "template admin create",
-	"PUT /templates/:id":                           "template admin update",
-	"DELETE /templates/:id":                        "template admin delete",
+	"GET /templates":     "template list",
+	"GET /templates/:id": "template get",
 	"POST /projects/:projectId/template-instances": "template deploy",
 	"GET /projects/:projectId/template-instances":  "template instance list",
 	"GET /template-instances/:id":                  "template instance get",

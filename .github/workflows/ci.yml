@@ -404,6 +404,7 @@ jobs:
       JWT_SECRET: ci-e2e-secret-ci-e2e-secret-ci-e2e-secret
       PORT: '3001'
       SERVER_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:4000
       NODE_ENV: test
       DD_TRACE_ENABLED: 'false'
       OTEL_SDK_DISABLED: 'true'
