@@ -13,9 +13,11 @@
 		"format": "oxfmt .",
 		"lint": "oxlint .",
 		"check:design": "node scripts/check-design.mjs",
-		"test": "tsx --test src/**/*.test.ts"
+		"test": "tsx --test src/**/*.test.ts",
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
+		"@playwright/test": "^1.63.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.70.3",
