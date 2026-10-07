@@ -33,10 +33,15 @@ function namespacePeers(names: string[]): k8s.V1NetworkPolicyPeer[] {
 import { tenantSecretsBinding, tenantSecretsRole } from './tenant-rbac';
 import { tenantQuotaFloor, tenantQuotaHard } from './tenant-quota';
 
-export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
-  { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
-  { namespaceSelector: { matchExpressions: [{ key: 'orchard.dev/managed', operator: 'Exists' }] } }
-];
+export const TENANT_NAMESPACE_LABELS = ['orchard.my/managed', 'orchard.dev/managed'] as const;
+
+export const TENANT_NAMESPACE_LABEL_SELECTORS = TENANT_NAMESPACE_LABELS.map(
+  (label) => `${label}=true`
+);
+
+export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = TENANT_NAMESPACE_LABELS.map(
+  (key) => ({ namespaceSelector: { matchExpressions: [{ key, operator: 'Exists' }] } })
+);
 
 /**
  * Per-tenant namespace lifecycle: creation, deletion, ResourceQuota +
@@ -470,17 +475,21 @@ export class K8sNamespaceService implements OnModuleInit {
     const updated: string[] = [];
     const failed: string[] = [];
 
-    const namespaces = await api.listNamespace(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'orchard.my/managed=true'
-    );
+    const names = new Set<string>();
+    for (const selector of TENANT_NAMESPACE_LABEL_SELECTORS) {
+      const namespaces = await api.listNamespace(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        selector
+      );
+      for (const ns of namespaces.body.items) {
+        if (ns.metadata?.name) names.add(ns.metadata.name);
+      }
+    }
 
-    for (const ns of namespaces.body.items) {
-      const name = ns.metadata?.name;
-      if (!name) continue;
+    for (const name of names) {
       try {
         await this.createNetworkPolicy(name);
         updated.push(name);
