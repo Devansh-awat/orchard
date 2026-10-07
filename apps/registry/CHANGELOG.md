@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/hackclub/orchard/compare/registry/v0.3.0...registry/v0.4.0) (2026-10-07)
+
+
+### Features
+
+* web terminal on xterm.js with overlay predictions and stable database consoles ([f743331](https://github.com/hackclub/orchard/commit/f743331f72ffb1b8dec6912c9e4fc5f1dd34ec98))
+
 ## [0.3.0](https://github.com/hackclub/orchard/compare/registry/v0.2.0...registry/v0.3.0) (2026-09-28)
 
 

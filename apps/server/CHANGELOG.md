@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.57.0](https://github.com/hackclub/orchard/compare/server/v2.56.0...server/v2.57.0) (2026-10-07)
+
+
+### Features
+
+* web terminal on xterm.js with overlay predictions and stable database consoles ([f743331](https://github.com/hackclub/orchard/commit/f743331f72ffb1b8dec6912c9e4fc5f1dd34ec98))
+
 ## [2.56.0](https://github.com/hackclub/orchard/compare/server/v2.55.0...server/v2.56.0) (2026-10-07)
 
 
