@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.56.0](https://github.com/hackclub/orchard/compare/server/v2.55.0...server/v2.56.0) (2026-10-07)
+
+
+### Features
+
+* add registry credentials from the image card and require encryption at rest for tokens ([e697d5d](https://github.com/hackclub/orchard/commit/e697d5d624636481a7a4fab3aa6254361062f9e7))
+
 ## [2.55.0](https://github.com/hackclub/orchard/compare/server/v2.54.1...server/v2.55.0) (2026-10-07)
 
 

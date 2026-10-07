@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.0](https://github.com/hackclub/orchard/compare/frontend/v1.48.0...frontend/v1.49.0) (2026-10-07)
+
+
+### Features
+
+* add registry credentials from the image card and require encryption at rest for tokens ([e697d5d](https://github.com/hackclub/orchard/commit/e697d5d624636481a7a4fab3aa6254361062f9e7))
+
 ## [1.48.0](https://github.com/hackclub/orchard/compare/frontend/v1.47.0...frontend/v1.48.0) (2026-10-07)
 
 
