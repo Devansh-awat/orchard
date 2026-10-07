@@ -1534,6 +1534,13 @@ export class DatabasesService {
       throw new BadRequestException('Stop and start require a CNPG-backed database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, true);
+    await this.k8sCnpg
+      .setScheduledBackupSuspended(database.namespace, database.clusterName, true)
+      .catch((e: any) => {
+        console.warn(
+          `[DB/backup] could not suspend the schedule for ${database.clusterName}: ${e?.message ?? e}`
+        );
+      });
     await this.prisma.database.update({
       where: { id: databaseId },
       data: { status: 'stopped' }
@@ -1561,6 +1568,13 @@ export class DatabasesService {
       throw new BadRequestException('Stop and start require a CNPG-backed database');
     }
     await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, false);
+    await this.k8sCnpg
+      .setScheduledBackupSuspended(database.namespace, database.clusterName, false)
+      .catch((e: any) => {
+        console.warn(
+          `[DB/backup] could not resume the schedule for ${database.clusterName}: ${e?.message ?? e}`
+        );
+      });
     await this.prisma.database.update({
       where: { id: databaseId },
       data: { status: 'restarting' }

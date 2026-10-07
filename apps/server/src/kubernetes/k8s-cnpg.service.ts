@@ -2829,6 +2829,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         name
       );
       (body.metadata as any).resourceVersion = (existing as any).metadata?.resourceVersion;
+      if ((existing as any).spec?.suspend === true) (body.spec as any).suspend = true;
       await customApi.replaceNamespacedCustomObject(
         this.CNPG_GROUP,
         this.CNPG_VERSION,
@@ -2849,6 +2850,31 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       } else {
         throw e;
       }
+    }
+  }
+
+  async setScheduledBackupSuspended(
+    namespace: string,
+    clusterName: string,
+    suspended: boolean
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.patchNamespacedCustomObject(
+        this.CNPG_GROUP,
+        this.CNPG_VERSION,
+        namespace,
+        this.CNPG_SCHEDULED_BACKUP_PLURAL,
+        this.scheduledBackupName(clusterName),
+        { spec: { suspend: suspended } },
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } }
+      );
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
     }
   }
 
