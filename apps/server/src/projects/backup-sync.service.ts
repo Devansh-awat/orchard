@@ -6,9 +6,8 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { DEFAULT_BACKUP_CRON, toQuartzCron } from './projects.utils';
+import { backupTransition } from './backup-transition';
 
-const MISSING_CR_GRACE_MS = 10 * 60 * 1000;
-const BACKUP_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const NOTIFY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const INGEST_EVERY_N_TICKS = 5;
 const MAX_COMPLETED_BACKUPS = 10;
@@ -159,29 +158,10 @@ export class BackupSyncService {
     for (const row of rows) {
       try {
         const live = await this.k8sCnpg.getCnpgBackup(database.namespace, row.backupName);
-        const phase: string | undefined = live?.status?.phase;
-        const ageMs = Date.now() - row.createdAt.getTime();
-
-        let newStatus: 'completed' | 'failed' | 'running' | null = null;
-        let errorMessage: string | null = null;
-        if (!live) {
-          if (ageMs > MISSING_CR_GRACE_MS) {
-            newStatus = 'failed';
-            errorMessage = 'Backup resource not found in cluster';
-          }
-        } else if (phase === 'completed') {
-          newStatus = 'completed';
-        } else if (phase === 'failed') {
-          newStatus = 'failed';
-          errorMessage = String(live.status?.error || '').substring(0, 2000) || null;
-        } else if ((phase === 'running' || phase === 'started') && row.status === 'pending') {
-          newStatus = 'running';
-        } else if (ageMs > BACKUP_TIMEOUT_MS) {
-          newStatus = 'failed';
-          errorMessage = 'Backup timed out';
-        }
-
-        if (!newStatus || newStatus === row.status) continue;
+        const transition = backupTransition(row, live);
+        if (!transition || transition.status === row.status) continue;
+        const newStatus = transition.status;
+        const { errorMessage } = transition;
         const terminal = newStatus === 'completed' || newStatus === 'failed';
         const claimed = await this.prisma.databaseBackup.updateMany({
           where: { id: row.id, status: { in: ['pending', 'running'] } },
