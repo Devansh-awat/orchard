@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.59.0](https://github.com/hackclub/orchard/compare/server/v2.58.0...server/v2.59.0) (2026-10-07)
+
+
+### Features
+
+* a build finishes when the image is applied, not when the pods are ready ([cb7fc1f](https://github.com/hackclub/orchard/commit/cb7fc1fbfdc0f5570c32a50e9a65b0d5c3e9bbb0))
+* startup and readiness probes run every 5s, liveness keeps the interval ([307415b](https://github.com/hackclub/orchard/commit/307415bdd86f14854ebd8232d3754bd581df5950))
+
+
+### Bug Fixes
+
+* pusher names port 80 so skopeo skips the 30s https dial timeout ([0b9f017](https://github.com/hackclub/orchard/commit/0b9f017bc5e9b2b248eb17d0220999952494e442))
+
 ## [2.58.0](https://github.com/hackclub/orchard/compare/server/v2.57.0...server/v2.58.0) (2026-10-07)
 
 

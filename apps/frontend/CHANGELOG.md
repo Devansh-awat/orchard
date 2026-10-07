@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.0](https://github.com/hackclub/orchard/compare/frontend/v1.51.0...frontend/v1.52.0) (2026-10-07)
+
+
+### Features
+
+* a build finishes when the image is applied, not when the pods are ready ([cb7fc1f](https://github.com/hackclub/orchard/commit/cb7fc1fbfdc0f5570c32a50e9a65b0d5c3e9bbb0))
+
 ## [1.51.0](https://github.com/hackclub/orchard/compare/frontend/v1.50.0...frontend/v1.51.0) (2026-10-07)
 
 
