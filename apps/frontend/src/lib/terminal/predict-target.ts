@@ -1,116 +1,74 @@
-import type { IDecoration, IMarker, Terminal } from '@xterm/xterm';
 import type { PredictTarget } from '$lib/utils/terminal-predict';
+import type { TerminalHandle } from './create';
 
 export interface DisposablePredictTarget extends PredictTarget {
 	dispose(): void;
 }
 
-export function xtermPredictTarget(term: Terminal): DisposablePredictTarget {
-	let marker: IMarker | null = null;
-	let decoration: IDecoration | null = null;
-	let shownText = '';
-	let shownX = -1;
+export const PREDICT_OVERLAY_CLASS = 'term-predict-overlay';
+
+function liveRow(host: HTMLElement, rows: number, row: number): HTMLElement | null {
+	const grid = host.querySelector<HTMLElement>(':scope > .term-grid');
+	if (!grid) return null;
+	const all = grid.querySelectorAll<HTMLElement>(':scope > .term-row');
+	return all[all.length - rows + row] ?? null;
+}
+
+export function wtermPredictTarget(handle: TerminalHandle): DisposablePredictTarget {
+	const host = handle.wt.element;
+	const core = handle.core;
+	let overlay: HTMLDivElement | null = null;
 
 	function hideOverlay(): void {
-		decoration?.dispose();
-		marker?.dispose();
-		decoration = null;
-		marker = null;
-		shownText = '';
-		shownX = -1;
+		overlay?.remove();
+		overlay = null;
 	}
 
-	function paint(el: HTMLElement, text: string): void {
-		const theme = term.options.theme ?? {};
-		el.textContent = text;
-		el.style.whiteSpace = 'pre';
-		el.style.pointerEvents = 'none';
-		el.style.overflow = 'hidden';
-		el.style.font = `${term.options.fontSize ?? 14}px ${term.options.fontFamily ?? 'monospace'}`;
-		el.style.lineHeight = el.style.height;
-		el.style.color = theme.foreground ?? 'inherit';
-		el.style.background = theme.background ?? 'transparent';
-		el.style.textDecoration = 'underline';
-		el.style.textDecorationStyle = 'dotted';
-		el.style.boxShadow = `inset -1px 0 0 ${theme.cursor ?? 'currentColor'}`;
-	}
-
-	function showOverlay(_row: number, x: number, text: string): void {
-		if (decoration && !decoration.marker.isDisposed && shownX === x) {
-			shownText = text;
-			if (decoration.element) {
-				const width = Math.max(1, text.length);
-				decoration.element.style.width = `${width * cellWidth()}px`;
-				paint(decoration.element, text);
-			}
+	function showOverlay(row: number, x: number, text: string): void {
+		const rowEl = liveRow(host, handle.rows, row);
+		const grid = rowEl?.parentElement;
+		if (!rowEl || !grid) {
+			hideOverlay();
 			return;
 		}
-		hideOverlay();
-		marker = term.registerMarker(0);
-		if (!marker || marker.isDisposed) {
-			marker = null;
-			return;
+		const cell = parseFloat(getComputedStyle(host).getPropertyValue('--term-cell-width')) || 0;
+		if (!overlay) {
+			overlay = document.createElement('div');
+			overlay.className = PREDICT_OVERLAY_CLASS;
+			overlay.setAttribute('aria-hidden', 'true');
 		}
-		const created = term.registerDecoration({
-			marker,
-			x,
-			width: Math.max(1, text.length),
-			layer: 'top'
-		});
-		if (!created) {
-			marker.dispose();
-			marker = null;
-			return;
-		}
-		decoration = created;
-		shownText = text;
-		shownX = x;
-		created.onRender((el) => paint(el, shownText));
-		created.onDispose(() => {
-			if (decoration === created) {
-				decoration = null;
-				marker = null;
-				shownText = '';
-				shownX = -1;
-			}
-		});
-	}
-
-	function cellWidth(): number {
-		const el = term.element?.querySelector('.xterm-screen') as HTMLElement | null;
-		if (!el || term.cols === 0) return 0;
-		return el.clientWidth / term.cols;
+		if (overlay.parentElement !== host) host.appendChild(overlay);
+		overlay.textContent = text;
+		overlay.style.top = `${grid.offsetTop + rowEl.offsetTop}px`;
+		overlay.style.left = `${grid.offsetLeft + x * cell}px`;
+		overlay.style.width = `${Math.max(1, text.length) * cell}px`;
 	}
 
 	return {
 		get cols() {
-			return term.cols;
+			return handle.cols;
 		},
 		cursor() {
-			const b = term.buffer.active;
-			return { x: b.cursorX, y: b.cursorY };
+			const c = core.getCursor();
+			return { x: c.col, y: c.row };
 		},
 		cellAt(row, col) {
-			const b = term.buffer.active;
-			const line = b.getLine(b.baseY + row);
-			const cell = line?.getCell(col);
-			if (!cell) return ' ';
-			if (cell.getWidth() === 0) return '\u0000';
-			const chars = cell.getChars();
-			return chars === '' ? ' ' : chars;
+			const cell = core.getCell(row, col);
+			if (cell.width === 0) return '\u0000';
+			if (cell.chars) return cell.chars;
+			return cell.char > 0 ? String.fromCodePoint(cell.char) : ' ';
 		},
 		isAlternate() {
-			return term.buffer.active.type === 'alternate';
+			return core.usingAltScreen();
 		},
 		mouseTracking() {
-			return term.modes.mouseTrackingMode !== 'none';
+			return core.mouseTracking() !== 0;
 		},
 		scrolledBack() {
-			const b = term.buffer.active;
-			return b.viewportY !== b.baseY;
+			return handle.scrolledBack();
 		},
 		write(data, done) {
-			term.write(data, done);
+			handle.write(data, done);
 		},
 		showOverlay,
 		hideOverlay,

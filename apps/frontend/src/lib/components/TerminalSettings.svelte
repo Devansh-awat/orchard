@@ -83,13 +83,6 @@
 				onchange={() => setTerminalDisplay('cursorBlink', !terminalDisplay.cursorBlink)}
 			/>
 			<ToggleRow
-				label="GPU rendering"
-				hint="Applies to shells opened from now on"
-				checked={terminalDisplay.renderer !== 'dom'}
-				onchange={() =>
-					setTerminalDisplay('renderer', terminalDisplay.renderer === 'dom' ? 'gpu' : 'dom')}
-			/>
-			<ToggleRow
 				label="Predictive echo"
 				hint="Draws what you type before the pod echoes it back"
 				checked={terminalDisplay.predictiveEcho}

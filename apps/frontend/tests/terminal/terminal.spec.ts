@@ -7,16 +7,8 @@ declare global {
 		__orchardTerminal?: {
 			cols: number;
 			rows: number;
-			buffer: {
-				active: {
-					length: number;
-					baseY: number;
-					cursorX: number;
-					cursorY: number;
-					type: string;
-					getLine(i: number): { translateToString(trim?: boolean): string } | undefined;
-				};
-			};
+			alternate(): boolean;
+			lines(): string[];
 			focus(): void;
 		};
 		__orchardPredictor?: { state: string; metrics: { pending: number } };
@@ -24,17 +16,7 @@ declare global {
 }
 
 async function screenLines(page: Page): Promise<string[]> {
-	return page.evaluate(() => {
-		const t = window.__orchardTerminal;
-		if (!t) return [];
-		const b = t.buffer.active;
-		const out: string[] = [];
-		for (let i = 0; i < b.length; i++) {
-			const line = b.getLine(i)?.translateToString(true) ?? '';
-			if (line) out.push(line);
-		}
-		return out;
-	});
+	return page.evaluate(() => (window.__orchardTerminal?.lines() ?? []).filter(Boolean));
 }
 
 async function waitForPrompt(page: Page, text = 'fake pty ready') {
@@ -42,7 +24,7 @@ async function waitForPrompt(page: Page, text = 'fake pty ready') {
 }
 
 async function typeCommand(page: Page, command: string) {
-	await page.locator('.xterm-helper-textarea').pressSequentially(command);
+	await page.locator('.wterm textarea').pressSequentially(command);
 	await page.keyboard.press('Enter');
 }
 
@@ -117,11 +99,22 @@ test('the clear chord asks the shell to redraw instead of wiping locally', async
 
 test('the alternate screen blocks predictions and comes back intact', async ({ page }) => {
 	await typeCommand(page, 'alt');
-	await expect
-		.poll(() => page.evaluate(() => window.__orchardTerminal?.buffer.active.type))
-		.toBe('alternate');
+	await expect.poll(() => page.evaluate(() => window.__orchardTerminal?.alternate())).toBe(true);
 	await page.keyboard.press('x');
 	const pending = await page.evaluate(() => window.__orchardPredictor?.metrics.pending ?? -1);
 	expect(pending).toBe(0);
-	await expect(page.locator('.xterm-decoration')).toHaveCount(0);
+	await expect(page.locator('.term-predict-overlay')).toHaveCount(0);
+});
+
+test('a modifier click on a printed url opens it in a new tab', async ({ page, context }) => {
+	await page.evaluate(() => {
+		const w = window as unknown as { __orchardTerminalHandle: { write(data: string): void } };
+		w.__orchardTerminalHandle.write('\r\nhttp://localhost:5173/app ready\r\n$ ');
+	});
+	const row = page.locator('.term-row', { hasText: 'http://localhost:5173/app ready' });
+	await expect(row).toHaveCount(1);
+	await context.route('http://localhost:5173/**', (route) => route.fulfill({ body: 'ok' }));
+	const opened = context.waitForEvent('page');
+	await row.click({ position: { x: 40, y: 5 }, modifiers: ['ControlOrMeta'] });
+	expect((await opened).url()).toBe('http://localhost:5173/app');
 });

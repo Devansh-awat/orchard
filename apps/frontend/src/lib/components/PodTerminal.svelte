@@ -3,8 +3,9 @@
 	import {
 		createTerminal,
 		createFitScheduler,
-		makeKeyHandler,
-		xtermPredictTarget,
+		attachKeyHandler,
+		attachLinkOpener,
+		wtermPredictTarget,
 		type TerminalHandle,
 		type FitScheduler
 	} from '$lib/terminal';
@@ -45,6 +46,7 @@
 	let fitScheduler: FitScheduler | null = null;
 	let target: DisposablePredictTarget | null = null;
 	let predictor: PredictiveEcho | null = null;
+	let detachInput: (() => void) | null = null;
 	let ws: WebSocket | null = null;
 	let decoder = new TextDecoder('utf-8');
 	let connected = $state(false);
@@ -62,6 +64,8 @@
 	let wasReconnect = false;
 
 	const encoder = new TextEncoder();
+	const isMac =
+		typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4400, 4401, 4403, 4404, 4409, 4429, 4500]);
 	const MAX_RETRIES = 40;
 	const DEFAULT_FONT_SIZE = 12;
@@ -92,12 +96,17 @@
 		if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(frame));
 	}
 
+	function userData(data: string) {
+		predictor?.onUserData(data);
+		send(encoder.encode(data));
+	}
+
 	function sendResize(force = false) {
 		if (!handle) return;
 		sendJson({
 			type: 'resize',
-			cols: handle.term.cols,
-			rows: handle.term.rows,
+			cols: handle.cols,
+			rows: handle.rows,
 			...(force ? { force } : {})
 		});
 	}
@@ -115,8 +124,17 @@
 				backgroundToken: '--console-bg',
 				fontSize: terminalDisplay.fontSize,
 				cursorStyle: terminalDisplay.cursorStyle,
-				cursorBlink: visible && terminalDisplay.cursorBlink,
-				gpu: terminalDisplay.renderer !== 'dom'
+				cursorBlink: terminalDisplay.cursorBlink,
+				onData: userData,
+				onBinary: send,
+				onResize: (cols, rows) => {
+					predictor?.flush('resize');
+					sendJson({ type: 'resize', cols, rows });
+				},
+				onTitle: (title) => onTitle?.(title),
+				onBell: () => {
+					if (terminalDisplay.bell === 'visual') onBell?.();
+				}
 			});
 			if (disposed) {
 				created.dispose();
@@ -124,50 +142,38 @@
 			}
 			handle = created;
 			appliedFontSize = terminalDisplay.fontSize;
-			const { term } = created;
+			created.setPaused(!visible);
+			if (!visible) created.blur();
 
-			target = xtermPredictTarget(term);
+			target = wtermPredictTarget(created);
 			predictor = new PredictiveEcho(target, { enabled: () => terminalDisplay.predictiveEcho });
 
 			fitScheduler = createFitScheduler({
 				host,
-				term,
-				propose: () => created.fit.proposeDimensions(),
+				term: created,
+				propose: () => created.propose(),
 				enabled: () => visible && !resizeFrozen && !disposed
 			});
 			fitScheduler.fitNow();
 
-			term.onData((data) => {
-				predictor?.onUserData(data);
-				send(encoder.encode(data));
+			const stopKeys = attachKeyHandler(host, {
+				optionIsMeta: () => isMac && created.core.kittyKeyboardFlags() === 0,
+				onInput: userData,
+				onKeyDown: (event) => predictor?.noteKeyDown(event),
+				onClear: () => {
+					predictor?.flush('guard');
+					userData('\x0c');
+				},
+				onZoom: (step) => {
+					if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
+					else setTerminalDisplay('fontSize', terminalDisplay.fontSize + step);
+				}
 			});
-			term.onBinary((data) => {
-				const bytes = new Uint8Array(data.length);
-				for (let i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 0xff;
-				send(bytes);
-			});
-			term.onResize(({ cols, rows }) => {
-				predictor?.flush('resize');
-				sendJson({ type: 'resize', cols, rows });
-			});
-			term.onTitleChange((title) => onTitle?.(title));
-			term.onBell(() => {
-				if (terminalDisplay.bell === 'visual') onBell?.();
-			});
-			term.attachCustomKeyEventHandler(
-				makeKeyHandler({
-					term,
-					onKeyDown: (event) => predictor?.noteKeyDown(event),
-					onClear: () => {
-						predictor?.flush('guard');
-						term.input('\x0c', true);
-					},
-					onZoom: (step) => {
-						if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
-						else setTerminalDisplay('fontSize', terminalDisplay.fontSize + step);
-					}
-				})
-			);
+			const stopLinks = attachLinkOpener(host);
+			detachInput = () => {
+				stopKeys();
+				stopLinks();
+			};
 
 			ready = true;
 			onReady?.(created, predictor);
@@ -232,7 +238,7 @@
 			if (reconnecting) status('reconnected, session resumed');
 			if (attached.truncated) status('some scrollback was lost while disconnected');
 			if (v2) {
-				if (handle && (attached.cols !== handle.term.cols || attached.rows !== handle.term.rows)) {
+				if (handle && (attached.cols !== handle.cols || attached.rows !== handle.rows)) {
 					sendResize();
 				}
 			} else {
@@ -241,7 +247,7 @@
 			return;
 		}
 		if (!reconnecting) return;
-		handle?.term.reset();
+		handle?.reset();
 		decoder = new TextDecoder('utf-8');
 		const reattaching = attached.reusedId === true;
 		if (attached.reason === 'expired') {
@@ -264,14 +270,14 @@
 	function applySnapshot(snapshot: string) {
 		if (!handle) return;
 		predictor?.flush('disconnect');
-		handle.term.reset();
+		handle.reset();
 		decoder = new TextDecoder('utf-8');
-		handle.term.write(`\x1b[?2026h${snapshot}\x1b[?2026l`);
+		handle.write(`\x1b[?2026h${snapshot}\x1b[?2026l`);
 	}
 
 	function socketUrl(): string {
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const size = handle ? `&proto=2&cols=${handle.term.cols}&rows=${handle.term.rows}` : '&proto=2';
+		const size = handle ? `&proto=2&cols=${handle.cols}&rows=${handle.rows}` : '&proto=2';
 		const session = currentHandle ? `&session=${encodeURIComponent(currentHandle)}` : '';
 		const extra = `${size}${session}`;
 		if (endpoint) {
@@ -293,7 +299,7 @@
 			error = null;
 			retries = 0;
 			sendResize();
-			if (visible) handle?.term.focus();
+			if (visible) handle?.focus();
 		};
 
 		socket.onmessage = (event) => {
@@ -302,13 +308,13 @@
 				const frame = parseControl(event.data);
 				if (frame) handleControl(frame);
 				else if (predictor) predictor.applyRemote(event.data);
-				else handle.term.write(event.data);
+				else handle.write(event.data);
 				return;
 			}
 			if (!(event.data instanceof ArrayBuffer)) return;
 			const text = decoder.decode(event.data, { stream: true });
 			if (predictor) predictor.applyRemote(text);
-			else handle.term.write(text);
+			else handle.write(text);
 		};
 
 		socket.onclose = (event: CloseEvent) => {
@@ -381,17 +387,23 @@
 		const show = visible;
 		const h = handle;
 		if (!h) return;
-		h.term.options.cursorStyle = terminalDisplay.cursorStyle;
-		h.term.options.cursorBlink = show && terminalDisplay.cursorBlink;
+		h.setPaused(!show);
 		if (show) {
 			requestAnimationFrame(() => {
 				if (disposed) return;
 				fitNow();
-				h.term.focus();
+				h.focus();
 			});
 		} else {
-			h.term.blur();
+			h.blur();
 		}
+	});
+
+	$effect(() => {
+		void ready;
+		const style = terminalDisplay.cursorStyle;
+		const blink = terminalDisplay.cursorBlink;
+		handle?.setCursor(style, blink);
 	});
 
 	$effect(() => {
@@ -442,6 +454,8 @@
 		if (noteTimer) clearTimeout(noteTimer);
 		fitScheduler?.dispose();
 		fitScheduler = null;
+		detachInput?.();
+		detachInput = null;
 		detachSocket();
 		predictor?.dispose();
 		predictor = null;
@@ -486,11 +500,29 @@
 		flex: 1;
 		min-height: 0;
 		padding: 0.75rem;
-		overflow: hidden;
+		border-radius: 0;
+		box-shadow: none;
+		scrollbar-gutter: stable;
+		scrollbar-width: thin;
+		scrollbar-color: var(--console-faint) transparent;
 	}
 
-	.pod-terminal-canvas :global(.xterm) {
-		height: 100%;
+	.pod-terminal-canvas :global(::selection) {
+		background: var(--accent-subtle);
+	}
+
+	.pod-terminal-canvas :global(.term-predict-overlay) {
+		position: absolute;
+		z-index: 3;
+		height: var(--term-row-height);
+		line-height: var(--term-row-height);
+		white-space: pre;
+		overflow: hidden;
+		pointer-events: none;
+		color: var(--term-fg);
+		background: var(--term-bg);
+		text-decoration: underline dotted;
+		box-shadow: inset -1px 0 0 var(--term-cursor);
 	}
 
 	.pod-terminal-status {

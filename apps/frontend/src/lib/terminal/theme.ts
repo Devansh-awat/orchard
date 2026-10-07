@@ -1,4 +1,4 @@
-import type { ITheme } from '@xterm/xterm';
+import type { TerminalThemeColors } from '@wterm/dom';
 
 type Rgba = [number, number, number, number];
 
@@ -17,52 +17,58 @@ function readRgba(probe: HTMLElement, token: string): Rgba {
 	];
 }
 
-function channel(value: number): string {
-	return Math.max(0, Math.min(255, Math.round(value)))
-		.toString(16)
-		.padStart(2, '0');
+function channel(value: number): number {
+	return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function flatten(color: Rgba, backdrop: Rgba): string {
+function flatten(color: Rgba, backdrop: Rgba): number {
 	const alpha = color[3];
-	const mix = (i: number) => color[i] * alpha + backdrop[i] * (1 - alpha);
-	return `#${channel(mix(0))}${channel(mix(1))}${channel(mix(2))}`;
+	const mix = (i: number) => channel(color[i] * alpha + backdrop[i] * (1 - alpha));
+	return (mix(0) << 16) | (mix(1) << 8) | mix(2);
 }
+
+export function hex(rgb: number): string {
+	return `#${rgb.toString(16).padStart(6, '0')}`;
+}
+
+const PALETTE_TOKENS = [
+	'--bg-sunken',
+	'--status-error',
+	'--status-success',
+	'--status-warning',
+	'--hue-blue',
+	'--hue-violet',
+	'--hue-emerald',
+	'--text-muted',
+	'--text-faint',
+	'--hue-red',
+	'--hue-green',
+	'--hue-amber',
+	'--hue-blue',
+	'--hue-pink',
+	'--hue-emerald',
+	'--text-default'
+];
 
 export interface TerminalThemeOpts {
 	background?: string;
 }
 
-export function buildTerminalTheme(host: HTMLElement, opts: TerminalThemeOpts = {}): ITheme {
+export function buildTerminalTheme(
+	host: HTMLElement,
+	opts: TerminalThemeOpts = {}
+): TerminalThemeColors {
 	const bgToken = opts.background ?? '--bg-app';
 	const probe = document.createElement('span');
 	probe.style.display = 'none';
 	host.appendChild(probe);
 	const backdrop = readRgba(probe, bgToken);
 	const pick = (token: string) => flatten(readRgba(probe, token), backdrop);
-	const theme: ITheme = {
+	const theme: TerminalThemeColors = {
 		background: pick(bgToken),
 		foreground: pick('--text-default'),
 		cursor: pick('--accent'),
-		cursorAccent: pick(bgToken),
-		selectionBackground: pick('--accent-subtle'),
-		selectionInactiveBackground: pick('--accent-subtle'),
-		black: pick('--bg-sunken'),
-		red: pick('--status-error'),
-		green: pick('--status-success'),
-		yellow: pick('--status-warning'),
-		blue: pick('--hue-blue'),
-		magenta: pick('--hue-violet'),
-		cyan: pick('--hue-emerald'),
-		white: pick('--text-muted'),
-		brightBlack: pick('--text-faint'),
-		brightRed: pick('--hue-red'),
-		brightGreen: pick('--hue-green'),
-		brightYellow: pick('--hue-amber'),
-		brightBlue: pick('--hue-blue'),
-		brightMagenta: pick('--hue-pink'),
-		brightCyan: pick('--hue-emerald'),
-		brightWhite: pick('--text-default')
+		palette: PALETTE_TOKENS.map(pick)
 	};
 	probe.remove();
 	return theme;
@@ -70,7 +76,7 @@ export function buildTerminalTheme(host: HTMLElement, opts: TerminalThemeOpts = 
 
 export function watchTerminalTheme(
 	host: HTMLElement,
-	apply: (theme: ITheme) => void,
+	apply: (theme: TerminalThemeColors) => void,
 	opts: TerminalThemeOpts = {}
 ): () => void {
 	let queued = false;

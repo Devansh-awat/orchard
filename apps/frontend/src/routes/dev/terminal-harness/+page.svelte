@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import type { TerminalHandle } from '$lib/terminal';
+	import type { CellData } from '@wterm/dom';
 	import type { PredictiveEcho } from '$lib/utils/terminal-predict';
 
 	let { data } = $props();
@@ -8,9 +9,42 @@
 	let height = $state(480);
 	let visible = $state(true);
 
+	function rowText(cell: (col: number) => CellData, len: number): string {
+		let text = '';
+		for (let col = 0; col < len; col++) {
+			const c = cell(col);
+			if (c.width === 0) continue;
+			text += c.chars ?? (c.char > 0 ? String.fromCodePoint(c.char) : ' ');
+		}
+		return text.trimEnd();
+	}
+
 	function expose(handle: TerminalHandle, predictor: PredictiveEcho) {
+		const { core } = handle;
 		const w = window as unknown as Record<string, unknown>;
-		w.__orchardTerminal = handle.term;
+		w.__orchardTerminal = {
+			get cols() {
+				return handle.cols;
+			},
+			get rows() {
+				return handle.rows;
+			},
+			alternate: () => core.usingAltScreen(),
+			cursor: () => core.getCursor(),
+			lines() {
+				const out: string[] = [];
+				for (let offset = core.getScrollbackCount() - 1; offset >= 0; offset--) {
+					out.push(
+						rowText((col) => core.getScrollbackCell(offset, col), core.getScrollbackLineLen(offset))
+					);
+				}
+				for (let row = 0; row < handle.rows; row++) {
+					out.push(rowText((col) => core.getCell(row, col), handle.cols));
+				}
+				return out;
+			},
+			focus: () => handle.focus()
+		};
 		w.__orchardTerminalHandle = handle;
 		w.__orchardPredictor = predictor;
 	}
@@ -21,7 +55,6 @@
 		<label>width <input type="number" bind:value={width} step="40" /></label>
 		<label>height <input type="number" bind:value={height} step="40" /></label>
 		<label><input type="checkbox" bind:checked={visible} /> visible</label>
-		<span data-testid="renderer"></span>
 	</div>
 	<div class="harness-frame" style="width:{width}px;height:{height}px">
 		<PodTerminal endpoint={data.endpoint} {visible} onReady={expose} />
