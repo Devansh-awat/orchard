@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/hackclub/orchard/compare/frontend/v1.47.0...frontend/v1.48.0) (2026-10-07)
+
+
+### Features
+
+* per-project registry credentials for pulling private images ([3b28852](https://github.com/hackclub/orchard/commit/3b28852869cb2d343ad8c534e6962a4757392ef1))
+
 ## [1.47.0](https://github.com/hackclub/orchard/compare/frontend/v1.46.0...frontend/v1.47.0) (2026-10-04)
 
 

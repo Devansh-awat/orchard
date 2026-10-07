@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/hackclub/orchard/compare/cli/v0.18.2...cli/v0.19.0) (2026-10-07)
+
+
+### Features
+
+* per-project registry credentials for pulling private images ([3b28852](https://github.com/hackclub/orchard/commit/3b28852869cb2d343ad8c534e6962a4757392ef1))
+
 ## [0.18.2](https://github.com/hackclub/orchard/compare/cli/v0.18.1...cli/v0.18.2) (2026-09-30)
 
 

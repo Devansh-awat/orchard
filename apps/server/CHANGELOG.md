@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.0](https://github.com/hackclub/orchard/compare/server/v2.54.1...server/v2.55.0) (2026-10-07)
+
+
+### Features
+
+* per-project registry credentials for pulling private images ([3b28852](https://github.com/hackclub/orchard/commit/3b28852869cb2d343ad8c534e6962a4757392ef1))
+
 ## [2.54.1](https://github.com/hackclub/orchard/compare/server/v2.54.0...server/v2.54.1) (2026-10-06)
 
 
