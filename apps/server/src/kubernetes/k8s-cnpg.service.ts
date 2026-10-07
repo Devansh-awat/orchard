@@ -27,6 +27,7 @@ import {
   laggingDataVolumes,
   repairedCaBundle,
   walArchivePatchFor,
+  tuningPatchFor,
   walCapPatchFor,
   WAL_ARCHIVE_MAX_PARALLEL
 } from './cnpg-defaults';
@@ -99,6 +100,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
   async reconcileClusterDefaults(): Promise<{
     walCapped: number;
     archiveParallel: number;
+    retuned: number;
     volumesResized: number;
     caRepaired: number;
     failed: number;
@@ -108,10 +110,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const rows = await this.prisma.database.findMany({
       where: { mode: 'cnpg', namespace: { not: null }, clusterName: { not: null } },
-      select: { namespace: true, clusterName: true }
+      select: { namespace: true, clusterName: true, pgParameters: true, backupCompression: true }
     });
     let walCapped = 0;
     let archiveParallel = 0;
+    let retuned = 0;
     let volumesResized = 0;
     let caRepaired = 0;
     let failed = 0;
@@ -136,10 +139,17 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         failed += synced.failed.length;
         const capPatch = walCapPatchFor(cluster);
         const archivePatch = walArchivePatchFor(cluster);
-        if (!capPatch && !archivePatch) continue;
-        const spec: any = {};
-        if (capPatch) spec.postgresql = { parameters: capPatch };
-        if (archivePatch) spec.backup = { barmanObjectStore: { wal: archivePatch } };
+        const tuningPatch = tuningPatchFor(cluster, row);
+        if (!capPatch && !archivePatch && !tuningPatch) continue;
+        const spec: any = tuningPatch ? structuredClone(tuningPatch) : {};
+        if (capPatch) {
+          spec.postgresql = { parameters: { ...(spec.postgresql?.parameters ?? {}), ...capPatch } };
+        }
+        if (archivePatch) {
+          spec.backup = {
+            barmanObjectStore: { ...(spec.backup?.barmanObjectStore ?? {}), wal: archivePatch }
+          };
+        }
         await customApi.patchNamespacedCustomObject(
           this.CNPG_GROUP,
           this.CNPG_VERSION,
@@ -154,6 +164,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         );
         if (capPatch) walCapped += 1;
         if (archivePatch) archiveParallel += 1;
+        if (tuningPatch) retuned += 1;
       } catch (e: any) {
         if (e?.response?.statusCode === 404) continue;
         failed += 1;
@@ -188,12 +199,12 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         this.logger.warn(`server ca bundle in ${ns} not repaired: ${e?.message || e}`);
       }
     }
-    if (walCapped || archiveParallel || volumesResized || caRepaired || failed) {
+    if (walCapped || archiveParallel || retuned || volumesResized || caRepaired || failed) {
       this.logger.log(
-        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${volumesResized} volumes resized, ${caRepaired} ca bundles completed, ${failed} failed`
+        `cnpg defaults reconciled: ${walCapped} clusters capped, ${archiveParallel} archives parallelised, ${retuned} retuned, ${volumesResized} volumes resized, ${caRepaired} ca bundles completed, ${failed} failed`
       );
     }
-    return { walCapped, archiveParallel, volumesResized, caRepaired, failed };
+    return { walCapped, archiveParallel, retuned, volumesResized, caRepaired, failed };
   }
 
   // CNPG only pushes spec.storage.size down to the PVCs while it has a healthy

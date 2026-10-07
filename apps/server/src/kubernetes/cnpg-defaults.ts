@@ -1,15 +1,31 @@
 import { X509Certificate } from 'node:crypto';
-import { walSlotKeepSize } from './db-tuning';
-import { parseMemory } from './quantity';
+import {
+  deriveDbTuning,
+  MANAGED_DB_MIN_MEMORY_BYTES,
+  parsePgMemory,
+  walSlotKeepSize
+} from './db-tuning';
+import { memoryBytesToK8s, parseMemory } from './quantity';
 import { completeChain, pemCertificates } from './tls-secret-sync';
 
 export interface ClusterLike {
   spec?: {
     storage?: { size?: string };
+    resources?: { requests?: Record<string, string>; limits?: Record<string, string> };
     postgresql?: { parameters?: Record<string, string> };
     certificates?: { serverCASecret?: string | null };
-    backup?: { barmanObjectStore?: { wal?: { maxParallel?: number } } | null } | null;
+    backup?: {
+      barmanObjectStore?: {
+        wal?: { maxParallel?: number };
+        data?: { compression?: string } | null;
+      } | null;
+    } | null;
   };
+}
+
+export interface TuningOwnership {
+  pgParameters?: unknown;
+  backupCompression?: string | null;
 }
 
 export interface PvcLike {
@@ -32,6 +48,38 @@ export function walArchivePatchFor(cluster: ClusterLike): { maxParallel: number 
   if (!store) return null;
   if (store.wal?.maxParallel && store.wal.maxParallel > 1) return null;
   return { maxParallel: WAL_ARCHIVE_MAX_PARALLEL };
+}
+
+export function tuningPatchFor(
+  cluster: ClusterLike,
+  owned: TuningOwnership
+): Record<string, unknown> | null {
+  const limit = parseMemory(String(cluster.spec?.resources?.limits?.memory ?? ''));
+  if (!limit) return null;
+  const target = Math.max(limit, MANAGED_DB_MIN_MEMORY_BYTES);
+  const tuning = deriveDbTuning({
+    memoryLimitBytes: target,
+    overrides: {
+      sharedBuffers: (owned.pgParameters as Record<string, string> | null)?.shared_buffers,
+      backupCompression: owned.backupCompression
+    }
+  });
+  const spec: Record<string, unknown> = {};
+  if (limit < target) {
+    const memory = memoryBytesToK8s(target);
+    spec.resources = { requests: { memory }, limits: { memory } };
+  }
+  const liveSharedBuffers = parsePgMemory(
+    cluster.spec?.postgresql?.parameters?.shared_buffers ?? ''
+  );
+  if (liveSharedBuffers > parsePgMemory(tuning.sharedBuffers)) {
+    spec.postgresql = { parameters: { shared_buffers: tuning.sharedBuffers } };
+  }
+  const store = cluster.spec?.backup?.barmanObjectStore;
+  if (store && store.data?.compression === 'gzip' && tuning.dataCompression === null) {
+    spec.backup = { barmanObjectStore: { data: null } };
+  }
+  return Object.keys(spec).length > 0 ? spec : null;
 }
 
 export function laggingDataVolumes(cluster: ClusterLike, pvcs: PvcLike[]): string[] {

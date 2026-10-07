@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   laggingDataVolumes,
   repairedCaBundle,
+  tuningPatchFor,
   walArchivePatchFor,
   walCapPatchFor
 } from '../src/kubernetes/cnpg-defaults';
@@ -50,6 +51,50 @@ test('archiving gets parallel uploads only where a backup store exists and has n
   );
   assert.equal(walArchivePatchFor({ spec: {} }), null);
   assert.equal(walArchivePatchFor({ spec: { backup: { barmanObjectStore: null } } }), null);
+});
+
+test('a database below the memory floor is raised and retuned, a healthy one is never grown', () => {
+  const small = {
+    spec: {
+      resources: {
+        requests: { cpu: '100m', memory: '128Mi' },
+        limits: { cpu: '100m', memory: '128Mi' }
+      },
+      postgresql: { parameters: { shared_buffers: '128MB' } },
+      backup: { barmanObjectStore: { data: { compression: 'gzip' }, wal: { maxParallel: 4 } } }
+    }
+  };
+  assert.deepEqual(tuningPatchFor(small, {}), {
+    resources: { requests: { memory: '256Mi' }, limits: { memory: '256Mi' } },
+    postgresql: { parameters: { shared_buffers: '64MB' } },
+    backup: { barmanObjectStore: { data: null } }
+  });
+  assert.deepEqual(
+    tuningPatchFor(small, { pgParameters: { shared_buffers: '128MB' }, backupCompression: 'gzip' }),
+    { resources: { requests: { memory: '256Mi' }, limits: { memory: '256Mi' } } }
+  );
+  const overReserved = {
+    spec: {
+      resources: { limits: { memory: '256Mi' } },
+      postgresql: { parameters: { shared_buffers: '128MB' } },
+      backup: { barmanObjectStore: {} }
+    }
+  };
+  assert.deepEqual(tuningPatchFor(overReserved, {}), {
+    postgresql: { parameters: { shared_buffers: '64MB' } }
+  });
+  const underTuned = {
+    spec: {
+      resources: { limits: { memory: '1Gi' } },
+      postgresql: { parameters: { shared_buffers: '128MB' } },
+      backup: { barmanObjectStore: { data: { compression: 'gzip' } } }
+    }
+  };
+  assert.equal(tuningPatchFor(underTuned, {}), null);
+  assert.equal(
+    tuningPatchFor({ spec: { postgresql: { parameters: { shared_buffers: '128MB' } } } }, {}),
+    null
+  );
 });
 
 test('only data volumes smaller than the cluster spec are lagging', () => {
@@ -191,6 +236,7 @@ test('the reconcile only patches what is missing and never runs off a non-member
   assert.deepEqual(result, {
     walCapped: 1,
     archiveParallel: 1,
+    retuned: 0,
     volumesResized: 1,
     caRepaired: 1,
     failed: 0
