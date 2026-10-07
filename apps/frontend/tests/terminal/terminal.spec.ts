@@ -67,7 +67,7 @@ test('a width change settles into exactly one resize frame', async ({ page }) =>
 		.toContainEqual(expect.stringMatching(/^\d+ resize frames$/));
 	const before = Number(
 		(await screenLines(page))
-			.filter((l) => / resize frames$/.test(l))
+			.filter((l) => l.endsWith(' resize frames'))
 			.at(-1)
 			?.split(' ')[0]
 	);
@@ -82,7 +82,7 @@ test('a width change settles into exactly one resize frame', async ({ page }) =>
 		.poll(async () =>
 			Number(
 				(await screenLines(page))
-					.filter((l) => / resize frames$/.test(l))
+					.filter((l) => l.endsWith(' resize frames'))
 					.at(-1)
 					?.split(' ')[0]
 			)
