@@ -12,7 +12,7 @@ const ORDER: { id: string; label: string; from: string; to: string }[] = [
 	{ id: 'clone', label: 'Clone', from: 'cloning', to: 'building' },
 	{ id: 'build', label: 'Build', from: 'building', to: 'pushing' },
 	{ id: 'push', label: 'Push', from: 'pushing', to: 'deploying' },
-	{ id: 'rollout', label: 'Rollout', from: 'deploying', to: 'complete' }
+	{ id: 'rollout', label: 'Apply', from: 'deploying', to: 'complete' }
 ];
 
 export function buildPhases(

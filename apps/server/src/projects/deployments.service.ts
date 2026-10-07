@@ -3136,57 +3136,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  // The deploy is not done when the image is patched; it is done when the
-  // pods that run it are ready. A rollout that crashloops or exceeds its
-  // deadline is put back on the previous image and reported as a failure,
-  // so "succeeded" means what it says.
-  private async gateRollout(
-    deploymentId: string,
-    name: string,
-    namespace: string,
-    opts: {
-      sinceMs: number;
-      image: string;
-      previousImage: string | null;
-      strategy: DeployStrategy;
-    }
-  ): Promise<void> {
-    await this.appendBuildLog(deploymentId, 'Waiting for the new pods to become ready');
-    const verdict = await this.k8sWorkload.waitForRollout(name, namespace, {
-      sinceMs: opts.sinceMs,
-      onProgress: (detail) => {
-        this.appendBuildLog(deploymentId, `rollout: ${detail}`).catch(() => {});
-      }
-    });
-    if (verdict.state === 'ready') {
-      await this.appendBuildLog(deploymentId, 'All pods are ready');
-      return;
-    }
-    const reason = verdict.state === 'failed' ? verdict.reason : 'pods were not ready';
-    await this.releases.record(deploymentId, {
-      image: opts.image,
-      strategy: opts.strategy,
-      status: 'failed',
-      reason
-    });
-    if (opts.previousImage && opts.previousImage !== opts.image) {
-      await this.appendBuildLog(
-        deploymentId,
-        `Deploy failed: ${reason}. Rolling back to ${opts.previousImage}`
-      );
-      const { healthCheck, args } = await this.rolloutInputs(deploymentId);
-      await this.k8sWorkload
-        .updateDeploymentImage(name, namespace, opts.previousImage, healthCheck, args)
-        .catch((err) =>
-          this.logger.error(
-            `rollback after a failed rollout failed for ${deploymentId}: ${err?.message ?? err}`
-          )
-        );
-      throw new Error(`Deploy failed: ${reason}. Rolled back to the previous release.`);
-    }
-    throw new Error(`Deploy failed: ${reason}.`);
-  }
-
   private async runBlueGreen(
     deploymentId: string,
     name: string,
@@ -7814,15 +7763,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       let deploymentResult: any;
       let shouldCreateNew = false;
 
-      const rolloutStartedAt = Date.now();
       const rolloutRow = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { image: true, deployStrategy: true }
+        select: { deployStrategy: true }
       });
       const rolloutStrategy: DeployStrategy =
         (rolloutRow?.deployStrategy as DeployStrategy | undefined) ?? 'rollingUpdate';
-      const previousImage = rolloutRow?.image ?? null;
-      let rolloutGated = false;
 
       if (data.isRebuild && k8sDeploymentExists) {
         const healthCheck = await this.resolveStoredHealthCheck(deploymentId);
@@ -7836,7 +7782,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             healthCheck,
             startArgs
           );
-          rolloutGated = true;
         } else {
           await this.k8sWorkload.updateDeploymentImage(
             data.name,
@@ -8013,7 +7958,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               healthCheck,
               startArgs
             );
-            rolloutGated = true;
           } else {
             await this.k8sWorkload.updateDeploymentImage(
               data.name,
@@ -8048,14 +7992,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         .then((row) => row?.stopped ?? false);
       if (stillStopped) {
         await this.appendBuildLog(deploymentId, 'App is stopped; the new image waits for Start');
-      }
-      if (!rolloutGated && !stillStopped) {
-        await this.gateRollout(deploymentId, data.name, data.namespace, {
-          sinceMs: rolloutStartedAt,
-          image,
-          previousImage: shouldCreateNew ? null : previousImage,
-          strategy: rolloutStrategy
-        });
+      } else if (rolloutStrategy !== 'blueGreen') {
+        await this.appendBuildLog(
+          deploymentId,
+          'Image applied; Kubernetes is rolling the new pods out'
+        );
       }
 
       await saveImageHistory();
