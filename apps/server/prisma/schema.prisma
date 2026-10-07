@@ -460,10 +460,30 @@ model Project {
   composeStacks     ComposeStack[]
   jobs              Job[]
   environments      Environment[]
+  registryCredentials RegistryCredential[]
 
   @@unique([organizationId, slug])
   @@index([organizationId], map: "idx_projects_organization")
   @@map("projects")
+}
+
+model RegistryCredential {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  // Normalised registry host: "ghcr.io", "docker.io", "registry.gitlab.com".
+  registry  String   @db.VarChar(255)
+  username  String   @db.VarChar(255)
+  // Encrypted at rest with SecretCryptoService; never returned by the API.
+  password  String   @db.Text
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, registry])
+  @@index([projectId], map: "idx_registry_credentials_project")
+  @@map("registry_credentials")
 }
 
 model Environment {

@@ -181,6 +181,7 @@ export interface CreateDeploymentOptions {
   // IfNotPresent, which is right for the unique per-build tags a GitHub deploy
   // produces and wrong for an image-source app pinned to a mutable tag.
   imagePullPolicy?: 'Always' | 'IfNotPresent';
+  imagePullSecrets?: { name: string }[];
   // Pods that must stay ready through a node drain. Omitted means 1, and the
   // budget is skipped entirely unless `replicas` exceeds it — see
   // K8sWorkloadService.applyPodDisruptionBudget.

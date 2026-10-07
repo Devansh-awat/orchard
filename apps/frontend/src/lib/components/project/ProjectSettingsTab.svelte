@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { Crown, FolderInput, Trash2 } from 'lucide-svelte';
 	import { Button, SectionCard } from '$lib/components/ui';
+	import RegistryCredentials from './RegistryCredentials.svelte';
 
 	let {
+		projectId,
+		canEdit = false,
 		canDelete = false,
 		canTransferOwnership = false,
 		canMoveToOrg = false,
@@ -12,6 +15,8 @@
 		onTransferOwnership,
 		onMoveToOrg
 	}: {
+		projectId: string;
+		canEdit?: boolean;
 		canDelete?: boolean;
 		canTransferOwnership?: boolean;
 		canMoveToOrg?: boolean;
@@ -23,46 +28,56 @@
 	} = $props();
 </script>
 
-<SectionCard title="Danger zone">
-	<div class="ps-rows">
-		{#if canTransferOwnership}
-			<div class="ps-row">
-				<span class="ps-name">Transfer ownership</span>
-				<Button
-					variant="secondary"
-					size="sm"
-					disabled={transferPending}
-					onclick={onTransferOwnership}
-				>
-					<Crown class="h-3.5 w-3.5" />
-					{transferPending ? 'Transfer pending' : 'Transfer'}
-				</Button>
-			</div>
-		{/if}
+<div class="ps-stack">
+	<RegistryCredentials {projectId} {canEdit} />
 
-		{#if canMoveToOrg}
-			<div class="ps-row">
-				<span class="ps-name">Move to another organization</span>
-				<Button variant="secondary" size="sm" onclick={onMoveToOrg}>
-					<FolderInput class="h-3.5 w-3.5" />
-					Move
-				</Button>
-			</div>
-		{/if}
+	<SectionCard title="Danger zone">
+		<div class="ps-rows">
+			{#if canTransferOwnership}
+				<div class="ps-row">
+					<span class="ps-name">Transfer ownership</span>
+					<Button
+						variant="secondary"
+						size="sm"
+						disabled={transferPending}
+						onclick={onTransferOwnership}
+					>
+						<Crown class="h-3.5 w-3.5" />
+						{transferPending ? 'Transfer pending' : 'Transfer'}
+					</Button>
+				</div>
+			{/if}
 
-		{#if canDelete}
-			<div class="ps-row">
-				<span class="ps-name">Delete project</span>
-				<Button variant="danger" size="sm" loading={deleting} onclick={onDelete}>
-					<Trash2 class="h-3.5 w-3.5" />
-					Delete
-				</Button>
-			</div>
-		{/if}
-	</div>
-</SectionCard>
+			{#if canMoveToOrg}
+				<div class="ps-row">
+					<span class="ps-name">Move to another organization</span>
+					<Button variant="secondary" size="sm" onclick={onMoveToOrg}>
+						<FolderInput class="h-3.5 w-3.5" />
+						Move
+					</Button>
+				</div>
+			{/if}
+
+			{#if canDelete}
+				<div class="ps-row">
+					<span class="ps-name">Delete project</span>
+					<Button variant="danger" size="sm" loading={deleting} onclick={onDelete}>
+						<Trash2 class="h-3.5 w-3.5" />
+						Delete
+					</Button>
+				</div>
+			{/if}
+		</div>
+	</SectionCard>
+</div>
 
 <style>
+	.ps-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
 	.ps-rows {
 		display: flex;
 		flex-direction: column;

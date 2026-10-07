@@ -33,6 +33,7 @@ func projectCmd() *cobra.Command {
 		projectMemberCmd(),
 		projectInvitationCmd(),
 		projectTransferCmd(),
+		projectRegistryCmd(),
 	)
 	return c
 }

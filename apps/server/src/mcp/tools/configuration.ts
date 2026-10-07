@@ -267,7 +267,7 @@ To remove all volumes, pass an empty array.`,
   server.registerTool(
     'update_deployment_image',
     {
-      description: `Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image.
+      description: `Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image. If the image lives in a private registry, add the registry's credential to the project first with \`set_registry_credential\`; the pull secret is attached automatically whenever the image host matches.
 Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_deployment\` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
@@ -334,6 +334,76 @@ Changing this rolls the pods on its own; no separate restart is needed.`,
       const result = await client.patch(`/deployments/${deploymentId}/pull-policy`, {
         imagePullPolicy
       });
+      return json(result);
+    }
+  );
+
+  // ── Registry credentials ──────────────────────────────────────────
+
+  server.registerTool(
+    'list_registry_credentials',
+    {
+      description: `List the container registries a project can pull private images from. Passwords and tokens are never returned, only the registry host and username.
+
+A deployment or job whose image comes from one of these registries (ghcr.io/org/app, docker.io/user/app, a bare \`user/app\` for Docker Hub) gets the credential attached automatically. Use this to work out why an image is stuck in ImagePullBackOff: if the registry is not listed, the pull is anonymous.`,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID')
+      }
+    },
+    async ({ projectId }) => {
+      const result = await client.get(`/projects/${projectId}/registry-credentials`);
+      return json(result);
+    }
+  );
+
+  server.registerTool(
+    'set_registry_credential',
+    {
+      description: `Add or replace the credential a project uses to pull private images from one registry. One credential per registry per project; setting it again overwrites the old one.
+
+The credential is checked against the registry before it is stored, so a wrong token fails here instead of as ImagePullBackOff later. Once saved it is attached to every app and job in the project whose image is hosted on that registry, existing ones included, and those pods roll to pick it up.
+
+What to pass per registry:
+- \`ghcr.io\` (GitHub Packages): the GitHub username and a personal access token (classic) with the \`read:packages\` scope. Fine-grained tokens cannot read packages.
+- \`docker.io\` (Docker Hub): the Docker Hub username and an access token.
+- \`registry.gitlab.com\`: a deploy token (username starts with \`gitlab+deploy-token\`) or a personal access token with \`read_registry\`.
+- \`quay.io\`: a robot account name and token.
+- anything else that speaks the Docker registry v2 API with basic or bearer auth.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID'),
+        registry: z
+          .string()
+          .describe('Registry host such as ghcr.io, docker.io or registry.gitlab.com'),
+        username: z.string().describe('Registry username'),
+        password: z.string().describe('Password or access token for that username')
+      }
+    },
+    async ({ projectId, registry, username, password }) => {
+      const result = await client.put(`/projects/${projectId}/registry-credentials`, {
+        registry,
+        username,
+        password
+      });
+      return json(result);
+    }
+  );
+
+  server.registerTool(
+    'delete_registry_credential',
+    {
+      description: `Remove a registry credential from a project. Apps and jobs pulling from that registry lose the credential and roll; if their images are private the new pods will fail to pull.`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID'),
+        credentialId: z.string().describe('The credential UUID from list_registry_credentials')
+      }
+    },
+    async ({ projectId, credentialId }) => {
+      const result = await client.delete(
+        `/projects/${projectId}/registry-credentials/${credentialId}`
+      );
       return json(result);
     }
   );

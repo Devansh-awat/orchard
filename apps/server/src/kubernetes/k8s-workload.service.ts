@@ -957,6 +957,9 @@ export class K8sWorkloadService {
                 ? undefined
                 : process.env.TENANT_RUNTIME_CLASS || undefined,
               containers: [container],
+              imagePullSecrets: options.imagePullSecrets?.length
+                ? options.imagePullSecrets
+                : undefined,
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,
               tolerations: placement.tolerations
@@ -2396,6 +2399,111 @@ export class K8sWorkloadService {
     }
 
     return { success: true, deployment: cleanName, namespace: cleanNamespace, policy };
+  }
+
+  async updateDeploymentPullSecrets(
+    deploymentName: string,
+    namespace: string,
+    secrets: { name: string }[]
+  ) {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const cleanName = String(deploymentName).trim();
+    const cleanNamespace = String(namespace).trim();
+
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            imagePullSecrets: secrets.length ? secrets : null
+          }
+        }
+      }
+    };
+
+    try {
+      await api.patchNamespacedDeployment(
+        cleanName,
+        cleanNamespace,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } }
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Deployment not found',
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`
+        });
+      }
+      throw new BadRequestException({
+        error: 'Failed to update image pull secrets',
+        message: error.message
+      });
+    }
+
+    return { success: true, deployment: cleanName, namespace: cleanNamespace };
+  }
+
+  async readDeploymentPullSecrets(deploymentName: string, namespace: string): Promise<string[]> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const live = await api.readNamespacedDeployment(
+      String(deploymentName).trim(),
+      String(namespace).trim()
+    );
+    return (live.body.spec?.template?.spec?.imagePullSecrets ?? [])
+      .map((s) => s.name ?? '')
+      .filter(Boolean);
+  }
+
+  async upsertDockerConfigSecret(
+    namespace: string,
+    name: string,
+    auths: Record<string, { username: string; password: string; auth: string }> | null
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    if (!auths || Object.keys(auths).length === 0) {
+      await coreApi.deleteNamespacedSecret(name, namespace).catch((err: any) => {
+        const code = err?.statusCode ?? err?.response?.statusCode;
+        if (code !== 404) throw err;
+      });
+      return;
+    }
+    const body: k8s.V1Secret = {
+      metadata: {
+        name,
+        labels: { 'app.kubernetes.io/managed-by': 'orchard' }
+      },
+      type: 'kubernetes.io/dockerconfigjson',
+      data: {
+        '.dockerconfigjson': Buffer.from(JSON.stringify({ auths })).toString('base64')
+      }
+    };
+    const write = async () => {
+      try {
+        const existing = await coreApi.readNamespacedSecret(name, namespace);
+        body.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
+        await coreApi.replaceNamespacedSecret(name, namespace, body);
+      } catch (err: any) {
+        const code = err?.statusCode ?? err?.response?.statusCode;
+        if (code !== 404) throw err;
+        await coreApi.createNamespacedSecret(namespace, body);
+      }
+    };
+    try {
+      await write();
+    } catch (err: any) {
+      const code = err?.statusCode ?? err?.response?.statusCode;
+      if (code !== 403) throw err;
+      await this.namespaces.bootstrapTenantSecretsRbac(namespace);
+      await write();
+    }
   }
 
   /**

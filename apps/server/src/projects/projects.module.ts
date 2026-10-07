@@ -38,6 +38,8 @@ import {
 import { EnvironmentsController } from './environments.controller';
 import { OverviewController } from './overview.controller';
 import { ProjectTransfersController } from './project-transfers.controller';
+import { RegistryCredentialsService } from './registry-credentials.service';
+import { RegistryCredentialsController } from './registry-credentials.controller';
 
 @Module({
   imports: [
@@ -71,7 +73,8 @@ import { ProjectTransfersController } from './project-transfers.controller';
     ProjectOrgTransferService,
     BuildQueueService,
     IngressService,
-    FaviconService
+    FaviconService,
+    RegistryCredentialsService
   ],
   controllers: [
     ProjectsController,
@@ -81,7 +84,8 @@ import { ProjectTransfersController } from './project-transfers.controller';
     DatabasesController,
     EnvironmentsController,
     OverviewController,
-    ProjectTransfersController
+    ProjectTransfersController,
+    RegistryCredentialsController
   ],
   exports: [
     ResourceBindingsService,
@@ -91,7 +95,8 @@ import { ProjectTransfersController } from './project-transfers.controller';
     EnvironmentSharedVarsService,
     DatabasesService,
     DeploymentsService,
-    IngressService
+    IngressService,
+    RegistryCredentialsService
   ]
 })
 export class ProjectsModule {}

@@ -913,6 +913,8 @@
 			{#if activeTab === 'settings'}
 				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<ProjectSettingsTab
+						projectId={project?.id ?? ''}
+						{canEdit}
 						{canDelete}
 						{canTransferOwnership}
 						{canMoveToOrg}

@@ -26,9 +26,40 @@ anything with no HTTP surface.
 
 ## Private registries
 
-If the image lives somewhere that needs credentials, the pull secret is
-configured at the instance level by whoever operates Orchard. Tenants do not
-manage registry credentials themselves.
+If the image needs credentials to pull, add them under **Project settings →
+Registry credentials**. One credential per registry, per project. Orchard checks
+it against the registry when you save it, so a bad token fails right there
+instead of as `ImagePullBackOff` later.
+
+Once saved, the credential is attached to every app and job in the project whose
+image is hosted on that registry, including ones that already exist, and those
+pods roll to pick it up. `ghcr.io/org/app` uses the `ghcr.io` credential; a bare
+`user/app` or `docker.io/user/app` uses the Docker Hub one. Nothing else in the
+project is touched.
+
+What each registry wants:
+
+| Registry              | Username                                               | Token                                                  |
+| --------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| `ghcr.io`             | Your GitHub username                                   | A personal access token (classic) with `read:packages` |
+| `docker.io`           | Your Docker Hub username                               | A Docker Hub access token                              |
+| `registry.gitlab.com` | A deploy token user (`gitlab+deploy-token-…`) or yours | The deploy token, or a PAT with `read_registry`        |
+| `quay.io`             | A robot account name                                   | The robot account token                                |
+| Anything else         | Whatever its basic or bearer auth expects              | Same                                                   |
+
+GitHub fine-grained tokens cannot read packages yet, so for `ghcr.io` it has to
+be a classic token. If the package belongs to an organisation, the token also
+needs SSO authorised for that organisation.
+
+The same thing from the CLI:
+
+```sh
+orchard project registry set ghcr.io --username octocat --password-stdin < token.txt
+orchard project registry list
+```
+
+Removing a credential rolls the apps that used it. If their images are private,
+the new pods will not start.
 
 ## Updating the image
 

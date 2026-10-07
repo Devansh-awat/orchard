@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **346 commands** are available.
+override the saved context. **350 commands** are available.
 
 ## alert
 
@@ -2840,6 +2840,50 @@ Change a member's project role (admin\|member\|viewer)
 ```bash
 orchard set-role <memberId> <role>
 ```
+
+### `orchard project registry`
+
+Manage credentials for pulling private images into the scoped project
+
+```bash
+orchard registry
+```
+
+Aliases: `registries`, `pull-secret`
+
+### `orchard project registry list`
+
+List the registries this project can pull private images from
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+### `orchard project registry remove`
+
+Remove a registry credential
+
+```bash
+orchard remove <id>
+```
+
+Aliases: `rm`, `delete`
+
+### `orchard project registry set`
+
+Add or replace the credential for a registry (ghcr.io, docker.io, registry.gitlab.com, ...)
+
+```bash
+orchard set <registry>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `-p`, `--password` | string |  | password or access token |
+| `--password-stdin` | bool | `false` | read the password or token from stdin |
+| `-u`, `--username` | string |  | registry username |
 
 ### `orchard project sync`
 

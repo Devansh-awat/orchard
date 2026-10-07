@@ -43,6 +43,7 @@ import {
   type ResourceValues
 } from '../env/env-resolver';
 import { ResourceBindingsService } from './resource-bindings.service';
+import { RegistryCredentialsService } from './registry-credentials.service';
 import { GitConnectionsService } from '../git/git-connections.service';
 import { ScoreService } from '../score/score.service';
 import { hostOf } from '../git/git-provider';
@@ -181,6 +182,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly storage: StorageService,
     private readonly applyQueue: ApplyQueueService,
     private readonly resourceBindings: ResourceBindingsService,
+    private readonly registryCredentials: RegistryCredentialsService,
     @Inject(forwardRef(() => GitConnectionsService))
     private readonly gitConnections: GitConnectionsService,
     @Inject(forwardRef(() => ScoreService))
@@ -5899,6 +5901,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // updateDeploymentImage patches k8s AND writes deployment.image in Prisma.
     await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, trimmed);
+    await this.registryCredentials
+      .applyToDeployment(deployment.projectId, deployment, trimmed)
+      .catch((e: any) => {
+        console.warn(
+          `[Deployments] pull secret re-apply failed for ${deployment.name}: ${e?.message ?? e}`
+        );
+      });
 
     // The pull policy is derived from the tag, so moving from a pinned tag to a
     // moving one has to re-derive it. Only when the user has not pinned it: an
@@ -6251,6 +6260,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       resources: podResources,
       deployStrategy: initialStrategy,
       imagePullPolicy: resolvePullPolicy(pullPolicyOverride, image),
+      imagePullSecrets: await this.registryCredentials.pullSecretsFor(project.id, image),
       pdbMinAvailable: initialPdbMinAvailable,
       args: startArgs
     });

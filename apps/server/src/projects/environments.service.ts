@@ -12,6 +12,7 @@ import { QuotasService } from '../quotas/quotas.service';
 import { AuditService } from '../audit/audit.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { formatSlug } from './projects.utils';
+import { RegistryCredentialsService } from './registry-credentials.service';
 
 const RESERVED_NAMESPACES = new Set<string>([
   'kube-system',
@@ -44,7 +45,8 @@ export class EnvironmentsService {
     private readonly tailscale: TailscaleService,
     private readonly quotas: QuotasService,
     private readonly audit: AuditService,
-    private readonly orgEvents: OrgEventsService
+    private readonly orgEvents: OrgEventsService,
+    private readonly registryCredentials: RegistryCredentialsService
   ) {}
 
   async listEnvironments(projectId: string) {
@@ -182,6 +184,11 @@ export class EnvironmentsService {
     await this.quotas
       .applyProjectQuota(projectId)
       .catch((e) => this.logger.warn(`applyProjectQuota after env create failed: ${e?.message}`));
+    await this.registryCredentials
+      .syncNamespace(projectId, namespace)
+      .catch((e) =>
+        this.logger.warn(`registry secret sync after env create failed: ${e?.message}`)
+      );
 
     this.emitChanged(project.organizationId, projectId, env.id);
     void this.audit.log({
