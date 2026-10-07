@@ -64,7 +64,11 @@ test('an image and its readiness probes land in one pod-template patch', async (
   assert.equal(container.readinessProbe.exec, null);
   assert.equal(container.readinessProbe.tcpSocket, null);
   assert.equal(container.readinessProbe.grpc, null);
-  assert.equal(container.startupProbe.failureThreshold, 9);
+  assert.equal(container.livenessProbe.periodSeconds, 10);
+  assert.equal(container.readinessProbe.periodSeconds, 5);
+  assert.equal(container.readinessProbe.failureThreshold, 6);
+  assert.equal(container.startupProbe.periodSeconds, 5);
+  assert.equal(container.startupProbe.failureThreshold, 18);
 });
 
 test('an exec probe patch removes every incompatible probe handler', async () => {

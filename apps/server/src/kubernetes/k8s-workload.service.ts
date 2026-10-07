@@ -47,6 +47,7 @@ import {
   type RolloutAssessment
 } from './rollout-strategy';
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
+import { livenessProbe, probesFor, readinessProbe, startupProbe } from './probes';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -59,15 +60,19 @@ import { k8sErrorMessage, k8sHttpException } from './k8s-error';
  * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
  * below so the bodies stay byte-identical.
  */
-function probeExecCommand(command?: string | null, execCommand?: string[] | null): string[] {
-  if (execCommand && execCommand.length > 0) return execCommand;
-  if (command) return command.split(' ');
-  return ['/bin/sh', '-c', 'exit 0'];
-}
-
 // Only the fields Orchard sets. The API server fills in the rest (scheme,
 // successThreshold, termination grace), and comparing those would report drift
 // on every read.
+function probePatch(probe: k8s.V1Probe) {
+  return {
+    ...probe,
+    exec: probe.exec ?? null,
+    httpGet: probe.httpGet ?? null,
+    tcpSocket: probe.tcpSocket ?? null,
+    grpc: probe.grpc ?? null
+  };
+}
+
 function probeSignature(probe: k8s.V1Probe | null | undefined): string {
   if (!probe) return 'none';
 
@@ -882,25 +887,10 @@ export class K8sWorkloadService {
 
       // Apply health checks if configured
       if (options.healthCheck?.enabled) {
-        const hc = options.healthCheck;
-        const buildProbe = (failureThreshold?: number): k8s.V1Probe => {
-          const probe: k8s.V1Probe = {
-            periodSeconds: hc.interval,
-            timeoutSeconds: hc.timeout,
-            failureThreshold: failureThreshold ?? hc.retries
-          };
-          if (hc.type === 'http') {
-            probe.httpGet = { path: hc.path || '/', port: hc.port || 80 };
-          } else if (hc.type === 'tcp') {
-            probe.tcpSocket = { port: hc.port || 80 };
-          } else if (hc.type === 'exec') {
-            probe.exec = { command: probeExecCommand(hc.command, hc.execCommand) };
-          }
-          return probe;
-        };
-        if (hc.livenessEnabled) container.livenessProbe = buildProbe();
-        if (hc.readinessEnabled) container.readinessProbe = buildProbe();
-        if (hc.startupEnabled) container.startupProbe = buildProbe(hc.startupFailureThreshold);
+        const probes = probesFor(options.healthCheck);
+        if (probes.liveness) container.livenessProbe = probes.liveness;
+        if (probes.readiness) container.readinessProbe = probes.readiness;
+        if (probes.startup) container.startupProbe = probes.startup;
       }
 
       const placement = buildPlacement({
@@ -1411,46 +1401,11 @@ export class K8sWorkloadService {
 
       const containerName = containers[0].name;
 
-      let livenessProbe: k8s.V1Probe | null = null;
-      let readinessProbe: k8s.V1Probe | null = null;
-      let startupProbe: k8s.V1Probe | null = null;
-
-      if (options.enabled) {
-        const buildProbe = (failureThreshold?: number): k8s.V1Probe => {
-          const probe: k8s.V1Probe = {
-            periodSeconds: options.interval,
-            timeoutSeconds: options.timeout,
-            failureThreshold: failureThreshold ?? options.retries
-          };
-
-          if (options.type === 'http') {
-            probe.httpGet = {
-              path: options.path || '/',
-              port: options.port || 80
-            };
-          } else if (options.type === 'tcp') {
-            probe.tcpSocket = {
-              port: options.port || 80
-            };
-          } else if (options.type === 'exec') {
-            probe.exec = {
-              command: probeExecCommand(options.command, options.execCommand)
-            };
-          }
-
-          return probe;
-        };
-
-        if (options.livenessEnabled) {
-          livenessProbe = buildProbe();
-        }
-        if (options.readinessEnabled) {
-          readinessProbe = buildProbe();
-        }
-        if (options.startupEnabled) {
-          startupProbe = buildProbe(options.startupFailureThreshold);
-        }
-      }
+      const {
+        liveness: livenessProbe,
+        readiness: readinessProbe,
+        startup: startupProbe
+      } = probesFor(options);
 
       // The patch stamps an annotation, so every call that reaches the API
       // server restarts the pods. Callers re-apply on every rebuild to heal
@@ -2626,15 +2581,15 @@ export class K8sWorkloadService {
           ? {
               livenessProbe:
                 healthCheck.enabled && healthCheck.livenessEnabled
-                  ? this.buildProbePatch(healthCheck)
+                  ? probePatch(livenessProbe(healthCheck))
                   : null,
               readinessProbe:
                 healthCheck.enabled && healthCheck.readinessEnabled
-                  ? this.buildProbePatch(healthCheck)
+                  ? probePatch(readinessProbe(healthCheck))
                   : null,
               startupProbe:
                 healthCheck.enabled && healthCheck.startupEnabled
-                  ? this.buildProbePatch(healthCheck, healthCheck.startupFailureThreshold)
+                  ? probePatch(startupProbe(healthCheck))
                   : null
             }
           : {})
@@ -2722,27 +2677,6 @@ export class K8sWorkloadService {
         message: k8sErrorMessage(error)
       });
     }
-  }
-
-  private buildProbe(
-    healthCheck: NonNullable<CreateDeploymentOptions['healthCheck']>,
-    failureThreshold = healthCheck.retries
-  ): k8s.V1Probe {
-    const probe: k8s.V1Probe = {
-      periodSeconds: healthCheck.interval,
-      timeoutSeconds: healthCheck.timeout,
-      failureThreshold
-    };
-    if (healthCheck.type === 'http') {
-      probe.httpGet = { path: healthCheck.path || '/', port: healthCheck.port || 80 };
-    } else if (healthCheck.type === 'tcp') {
-      probe.tcpSocket = { port: healthCheck.port || 80 };
-    } else if (healthCheck.type === 'exec') {
-      probe.exec = {
-        command: probeExecCommand(healthCheck.command, healthCheck.execCommand)
-      };
-    }
-    return probe;
   }
 
   /**
@@ -2983,33 +2917,10 @@ export class K8sWorkloadService {
     if (!healthCheck) return;
     const container = body.spec?.template?.spec?.containers?.[0];
     if (!container) return;
-    const on = healthCheck.enabled;
-    container.livenessProbe =
-      on && healthCheck.livenessEnabled
-        ? this.buildProbe(healthCheck, healthCheck.retries)
-        : undefined;
-    container.readinessProbe =
-      on && healthCheck.readinessEnabled
-        ? this.buildProbe(healthCheck, healthCheck.retries)
-        : undefined;
-    container.startupProbe =
-      on && healthCheck.startupEnabled
-        ? this.buildProbe(healthCheck, healthCheck.startupFailureThreshold)
-        : undefined;
-  }
-
-  private buildProbePatch(
-    healthCheck: NonNullable<CreateDeploymentOptions['healthCheck']>,
-    failureThreshold = healthCheck.retries
-  ) {
-    const probe = this.buildProbe(healthCheck, failureThreshold);
-    return {
-      ...probe,
-      exec: probe.exec ?? null,
-      httpGet: probe.httpGet ?? null,
-      tcpSocket: probe.tcpSocket ?? null,
-      grpc: probe.grpc ?? null
-    };
+    const probes = probesFor(healthCheck);
+    container.livenessProbe = probes.liveness ?? undefined;
+    container.readinessProbe = probes.readiness ?? undefined;
+    container.startupProbe = probes.startup ?? undefined;
   }
 
   async getPodEvents(podName: string, namespace: string) {
