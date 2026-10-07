@@ -81,6 +81,12 @@ export class RegistryCredentialsService {
       throw new BadRequestException('Password or token is required');
     }
 
+    if (!this.crypto.enabled) {
+      throw new BadRequestException(
+        'This instance has no SECRETS_ENCRYPTION_KEY, so registry tokens cannot be stored encrypted. Ask the operator to set one.'
+      );
+    }
+
     await this.verify(registry, username, password);
 
     const project = await this.prisma.project.findUnique({

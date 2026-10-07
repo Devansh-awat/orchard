@@ -3,6 +3,7 @@
 	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
 	import { Button, SectionCard, SegmentedControl } from '$lib/components/ui';
 	import { isMutableTag } from './deployment-helpers';
+	import RegistryAccess from './RegistryAccess.svelte';
 
 	let {
 		deployment,
@@ -124,6 +125,11 @@
 					</p>
 				{/if}
 			</div>
+
+			<RegistryAccess
+				projectId={deployment?.projectId ?? ''}
+				image={imageInput || deployment?.image || ''}
+			/>
 		</SectionCard>
 	{/if}
 

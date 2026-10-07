@@ -3,6 +3,7 @@
 	import { KeyRound, Trash2 } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { Button, Field, Input, SectionCard, Select, Skeleton } from '$lib/components/ui';
+	import { REGISTRY_PRESETS, registryHint, tokenLabel } from '$lib/utils/registry';
 
 	let { projectId, canEdit = false }: { projectId: string; canEdit?: boolean } = $props();
 
@@ -11,24 +12,6 @@
 		registry: string;
 		username: string;
 		updatedAt: string;
-	};
-
-	const PRESETS = [
-		{ value: 'ghcr.io', label: 'GitHub Packages (ghcr.io)' },
-		{ value: 'docker.io', label: 'Docker Hub' },
-		{ value: 'registry.gitlab.com', label: 'GitLab (registry.gitlab.com)' },
-		{ value: 'quay.io', label: 'Quay (quay.io)' },
-		{ value: 'custom', label: 'Another registry' }
-	];
-
-	const HINTS: Record<string, string> = {
-		'ghcr.io':
-			'Your GitHub username and a personal access token (classic) with the read:packages scope. Fine-grained tokens cannot read packages.',
-		'docker.io': 'Your Docker Hub username and an access token from Account settings, Security.',
-		'registry.gitlab.com':
-			'A deploy token (username starts with gitlab+deploy-token) or a personal access token with the read_registry scope.',
-		'quay.io': 'A robot account name and its token.',
-		custom: 'Any registry that speaks the Docker v2 API with basic or bearer auth.'
 	};
 
 	let credentials = $state<Credential[]>([]);
@@ -156,7 +139,7 @@
 			<div class="rc-grid">
 				<Field label="Registry" for="rc-preset">
 					<Select id="rc-preset" bind:value={preset}>
-						{#each PRESETS as p (p.value)}
+						{#each REGISTRY_PRESETS as p (p.value)}
 							<option value={p.value}>{p.label}</option>
 						{/each}
 					</Select>
@@ -175,10 +158,7 @@
 				<Field label="Username" for="rc-username">
 					<Input id="rc-username" bind:value={username} autocomplete="off" spellcheck="false" />
 				</Field>
-				<Field
-					label={preset === 'docker.io' ? 'Access token' : 'Token or password'}
-					for="rc-password"
-				>
+				<Field label={tokenLabel(preset)} for="rc-password">
 					<Input
 						id="rc-password"
 						type="password"
@@ -187,7 +167,7 @@
 					/>
 				</Field>
 			</div>
-			<p class="rc-hint">{HINTS[preset]}</p>
+			<p class="rc-hint">{registryHint(preset)}</p>
 			<div class="rc-actions">
 				<Button type="submit" variant="primary" size="sm" loading={saving} disabled={!canSave}>
 					{credentials.some((c) => c.registry === registry)
