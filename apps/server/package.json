@@ -93,7 +93,8 @@
     "test:score": "tsx --test test/score-parse.test.ts test/score-apply.test.ts",
     "test:session-jwt": "tsx --test test/session-jwt.test.ts",
     "test:sse-limits": "tsx --test test/sse-stream-limiter.test.ts",
-    "test:env-bounds": "tsx --test test/env-value-bounds.test.ts"
+    "test:env-bounds": "tsx --test test/env-value-bounds.test.ts",
+    "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -122,6 +123,8 @@
     "@simplewebauthn/server": "^13.3.3",
     "@types/multer": "^2.2.0",
     "@types/pg": "^8.20.0",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/headless": "^6.0.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.6",
     "cron": "4.4.0",

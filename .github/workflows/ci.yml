@@ -220,6 +220,8 @@ jobs:
         run: pnpm --filter server build
       - name: Auth-coverage snapshot test
         run: pnpm --filter server test:auth-coverage
+      - name: Exec session protocol tests
+        run: pnpm --filter server test:exec
       - name: SCIM protocol test
         run: pnpm --filter server test:scim
       - name: Ingress URL test

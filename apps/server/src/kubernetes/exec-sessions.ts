@@ -2,10 +2,11 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { hostname } from 'os';
 import Redis from 'ioredis';
 import type WebSocket from 'ws';
-import type { PassThrough } from 'stream';
+import { PassThrough } from 'stream';
+import type { SessionScreen } from './exec-screen';
+import type { Proto } from './exec-protocol';
 
 export const DETACH_GRACE_MS = Number(process.env.EXEC_DETACH_GRACE_MS ?? 10 * 60 * 1000);
-export const RING_BYTES = 256 * 1024;
 export const MAX_SESSIONS_PER_USER = 8;
 export const MAX_DETACHED_PER_USER = 3;
 export const MAX_SESSIONS_GLOBAL = 200;
@@ -20,49 +21,26 @@ export const replicaId = hostname();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KEY_PREFIX = 'orchard:exec:sess:';
 
-export class RingBuffer {
-  private chunks: Buffer[] = [];
-
-  private size = 0;
-
-  truncated = false;
-
-  constructor(private readonly cap = RING_BYTES) {}
-
-  push(chunk: Buffer): void {
-    this.chunks.push(chunk);
-    this.size += chunk.length;
-    while (this.size > this.cap && this.chunks.length > 0) {
-      const head = this.chunks[0];
-      const excess = this.size - this.cap;
-      if (head.length <= excess) {
-        this.chunks.shift();
-        this.size -= head.length;
-      } else {
-        this.chunks[0] = head.subarray(excess);
-        this.size = this.cap;
-      }
-      this.truncated = true;
-    }
-  }
-
-  drain(): Buffer {
-    const out = Buffer.concat(this.chunks, this.size);
-    this.chunks = [];
-    this.size = 0;
-    return out;
-  }
-
-  get length(): number {
-    return this.size;
-  }
-}
-
 export interface SizedOutput extends PassThrough {
   columns: number;
   rows: number;
   setSize(columns: number, rows: number): void;
-  forceResize(columns: number, rows: number): void;
+}
+
+export class ResizableOutput extends PassThrough implements SizedOutput {
+  columns = 80;
+
+  rows = 24;
+
+  setSize(columns: number, rows: number): void {
+    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
+    const nextCols = Math.max(1, Math.min(1000, Math.floor(columns)));
+    const nextRows = Math.max(1, Math.min(1000, Math.floor(rows)));
+    if (nextCols === this.columns && nextRows === this.rows) return;
+    this.columns = nextCols;
+    this.rows = nextRows;
+    this.emit('resize');
+  }
 }
 
 export interface ExecSession {
@@ -78,7 +56,9 @@ export interface ExecSession {
   stdin: PassThrough;
   stdout: SizedOutput;
   stderr: PassThrough;
-  ring: RingBuffer;
+  screen: SessionScreen;
+  proto: Proto;
+  reusedId: boolean;
   browser: WebSocket | null;
   state: SessionState;
   createdAt: number;

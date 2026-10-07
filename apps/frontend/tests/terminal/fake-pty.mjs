@@ -1,15 +1,34 @@
 import { WebSocketServer } from 'ws';
+import headless from '@xterm/headless';
+import serialize from '@xterm/addon-serialize';
+
+const { Terminal } = headless;
+const { SerializeAddon } = serialize;
 
 const port = Number(process.env.FAKE_PTY_PORT ?? 7681);
 const wss = new WebSocketServer({ port, path: '/pty' });
 const encoder = new TextEncoder();
 
 const state = { resizes: [], connections: 0 };
+const screens = new Map();
+
+function screenFor(handle, cols, rows) {
+	let entry = screens.get(handle);
+	if (!entry) {
+		const term = new Terminal({ cols, rows, scrollback: 500, allowProposedApi: true });
+		const serializer = new SerializeAddon();
+		term.loadAddon(serializer);
+		entry = { term, serializer };
+		screens.set(handle, entry);
+	}
+	return entry;
+}
 
 const delayMs = Number(process.env.FAKE_PTY_DELAY_MS ?? 0);
 
 function send(ws, text) {
 	const push = () => {
+		ws.screen?.term.write(text);
 		if (ws.readyState === ws.OPEN) ws.send(encoder.encode(text), { binary: true });
 	};
 	if (delayMs > 0) setTimeout(push, delayMs);
@@ -19,19 +38,48 @@ function send(ws, text) {
 wss.on('connection', (ws, req) => {
 	state.connections += 1;
 	const url = new URL(req.url, 'http://localhost');
-	const resumed = url.searchParams.has('session');
+	const requested = url.searchParams.get('session');
+	const proto = url.searchParams.get('proto') === '2' ? 2 : 1;
+	const cols = Number(url.searchParams.get('cols') ?? 80) || 80;
+	const rows = Number(url.searchParams.get('rows') ?? 24) || 24;
+	const resumed = Boolean(requested && screens.has(requested));
+	const handle = resumed ? requested : 'v1.fake.' + state.connections;
+	const screen = screenFor(handle, cols, rows);
+	ws.screen = screen;
+	if (screen.term.cols !== cols || screen.term.rows !== rows) screen.term.resize(cols, rows);
 	let line = '';
-	ws.send(
-		JSON.stringify({
-			type: 'attached',
-			handle: 'v1.fake.' + state.connections,
-			resumed,
-			reason: resumed ? 'resumed' : 'new',
-			replayedBytes: 0,
-			truncated: false
-		})
-	);
-	if (!resumed) send(ws, 'fake pty ready\r\n$ ');
+	const attach = () => {
+		if (proto === 2) {
+			ws.send(
+				JSON.stringify({
+					type: 'attached',
+					proto: 2,
+					handle,
+					resumed,
+					reason: resumed ? 'resumed' : 'new',
+					reusedId: false,
+					cols,
+					rows,
+					snapshot: resumed ? screen.serializer.serialize({ scrollback: 500 }) : undefined,
+					truncated: false
+				})
+			);
+		} else {
+			ws.send(
+				JSON.stringify({
+					type: 'attached',
+					handle,
+					resumed,
+					reason: resumed ? 'resumed' : 'new',
+					replayedBytes: 0,
+					truncated: false
+				})
+			);
+		}
+		console.log(`attached proto=${proto} ${cols}x${rows}${resumed ? ' (resumed)' : ''}`);
+		if (!resumed) send(ws, 'fake pty ready\r\n$ ');
+	};
+	screen.term.write('', attach);
 
 	ws.on('message', (data, isBinary) => {
 		if (!isBinary) {

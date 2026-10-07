@@ -18,7 +18,7 @@ import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
 import {
   DETACH_GRACE_MS,
   ExecSessionDirectory,
-  RingBuffer,
+  ResizableOutput,
   SESSION_LIMIT_CODE,
   SESSION_TAKEOVER_CODE,
   makeHandle,
@@ -32,6 +32,17 @@ import {
   type AttachReason,
   type ExecSession
 } from './exec-sessions';
+import { SessionScreen } from './exec-screen';
+import {
+  CLEAR_SCREEN_AND_SCROLLBACK,
+  parseClientFrame,
+  parseHandshake,
+  rejectionCloseCode,
+  statusBytes,
+  statusFrame,
+  type Proto,
+  type StatusKind
+} from './exec-protocol';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -47,6 +58,9 @@ interface ConnectionContext {
   sessionId: string | undefined;
   requested: string;
   isProxyHop: boolean;
+  proto: Proto;
+  cols: number;
+  rows: number;
   logAudit: (action: string, metadata?: Record<string, unknown>) => void;
 }
 
@@ -64,8 +78,6 @@ const WS_HIGH_WATER = 1024 * 1024;
 const WS_LOW_WATER = 256 * 1024;
 
 const DRAIN_POLL_MS = 50;
-
-const FORCE_RESIZE_BOUNCE_MS = 30;
 
 const DIRECTORY_LOOKUP_MS = 200;
 
@@ -142,35 +154,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
-class ResizableOutput extends PassThrough {
-  columns = 80;
-
-  rows = 24;
-
-  setSize(columns: number, rows: number): void {
-    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
-    const nextCols = Math.max(1, Math.min(1000, Math.floor(columns)));
-    const nextRows = Math.max(1, Math.min(1000, Math.floor(rows)));
-    if (nextCols === this.columns && nextRows === this.rows) return;
-    this.columns = nextCols;
-    this.rows = nextRows;
-    this.emit('resize');
-  }
-
-  forceResize(columns: number, rows: number): void {
-    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return;
-    const cols = Math.max(1, Math.min(1000, Math.floor(columns)));
-    const target = Math.max(1, Math.min(1000, Math.floor(rows)));
-    this.columns = cols;
-    this.rows = Math.max(1, target - 1);
-    this.emit('resize');
-    setTimeout(() => {
-      this.rows = target;
-      this.emit('resize');
-    }, FORCE_RESIZE_BOUNCE_MS);
-  }
-}
-
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
   cookieHeader.split(';').forEach((pair) => {
@@ -225,15 +208,28 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     const match = url.pathname.match(/^\/apiv1\/pods\/([^/]+)\/exec$/);
     if (!match) return; // Not our route — let other handlers deal with it
 
+    const proxyHeader = req.headers['x-orchard-exec-proxy'];
+    const viaProxy = typeof proxyHeader === 'string' && proxyHeader.length > 0;
     const reject = (code: number, msg: string) => {
-      socket.write(`HTTP/1.1 ${code} ${msg}\r\n\r\n`);
-      socket.destroy();
+      if (viaProxy) {
+        socket.write(`HTTP/1.1 ${code} ${msg}\r\n\r\n`);
+        socket.destroy();
+        return;
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        try {
+          ws.close(rejectionCloseCode(code), msg);
+        } catch {
+          socket.destroy();
+        }
+      });
     };
 
     const podName = match[1];
     const namespace = url.searchParams.get('namespace') || '';
     const container = url.searchParams.get('container') || '';
     const requested = url.searchParams.get('session') || '';
+    const handshake = parseHandshake(url.searchParams);
     if (!namespace) return reject(400, 'Bad Request');
 
     let userId: string | undefined;
@@ -252,10 +248,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     let sessionIdForRecheck: string | undefined;
     let sessionOrgScope: string | undefined;
 
-    const proxyHeader = req.headers['x-orchard-exec-proxy'];
-    if (typeof proxyHeader === 'string' && proxyHeader) {
+    if (viaProxy) {
       try {
-        const { payload } = await jwtVerify(proxyHeader, jwtSecret, { audience: 'exec-proxy' });
+        const { payload } = await jwtVerify(proxyHeader as string, jwtSecret, {
+          audience: 'exec-proxy'
+        });
         const sub = payload.sub;
         const sid = payload.sid;
         const parsed = requested ? parseHandle(requested) : null;
@@ -430,6 +427,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       sessionId: sessionIdForRecheck,
       requested,
       isProxyHop,
+      proto: handshake.proto,
+      cols: handshake.cols,
+      rows: handshake.rows,
       logAudit
     };
 
@@ -465,8 +465,8 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         createSession(ws, ctx, 'expired', parsed.id);
         return;
       }
-      ctx.logAudit('deployment.pod.exec.reattach', { session: parsed.id });
-      attachSession(existing, ws, ctx, 'resumed');
+      ctx.logAudit('deployment.pod.exec.reattach', { session: parsed.id, proto: ctx.proto });
+      void attachSession(existing, ws, ctx, 'resumed');
       return;
     }
     if (!ctx.isProxyHop && proxyEnabled) {
@@ -494,7 +494,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
   ): void {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (overLimit(ctx.userId)) {
-      sendBytes(ws, '\r\n\x1b[2K\x1b[31mToo many open shells. Close one and try again.\x1b[0m\r\n');
+      notify(ws, ctx.proto, 'limit', 'Too many open shells. Close one and try again.', 'error');
       ws.close(SESSION_LIMIT_CODE, 'too many sessions');
       return;
     }
@@ -502,6 +502,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     const id = reuseId && !sessions.has(reuseId) ? reuseId : randomUUID();
     const stdin = new PassThrough();
     const stdout = new ResizableOutput();
+    stdout.setSize(ctx.cols, ctx.rows);
     const stderr = new PassThrough();
 
     const session: ExecSession = {
@@ -517,7 +518,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       stdin,
       stdout,
       stderr,
-      ring: new RingBuffer(),
+      screen: new SessionScreen(ctx.cols, ctx.rows),
+      proto: ctx.proto,
+      reusedId: id === reuseId,
       browser: null,
       state: 'attached',
       createdAt: Date.now(),
@@ -531,7 +534,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     };
     track(session);
     publish(session);
-    ctx.logAudit('deployment.pod.exec', { session: id, reason });
+    ctx.logAudit('deployment.pod.exec', { session: id, reason, proto: ctx.proto });
 
     session.recheckTimer = setInterval(() => {
       void session.recheckAuth().then((ok) => {
@@ -541,7 +544,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
     forward(session, stdout);
     forward(session, stderr);
-    attachSession(session, ws, ctx, reason);
+    void attachSession(session, ws, ctx, reason);
 
     const exec = new k8s.Exec(ctx.kc);
     exec
@@ -581,12 +584,29 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       });
   }
 
-  function attachSession(
+  function notify(
+    ws: WebSocket,
+    proto: Proto,
+    kind: StatusKind,
+    message: string,
+    tone: 'quiet' | 'error' = 'quiet'
+  ): void {
+    if (proto === 2) {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      try {
+        ws.send(statusFrame(kind, message));
+      } catch {}
+      return;
+    }
+    sendBytes(ws, statusBytes(message, tone));
+  }
+
+  async function attachSession(
     session: ExecSession,
     ws: WebSocket,
     ctx: ConnectionContext,
     reason: AttachReason
-  ): void {
+  ): Promise<void> {
     const incumbent = session.browser;
     if (incumbent && incumbent !== ws) {
       unbind(incumbent);
@@ -598,29 +618,51 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       clearTimeout(session.graceTimer);
       session.graceTimer = null;
     }
+    session.browser = null;
+    session.recheckAuth = ctx.recheckAuth;
+    session.proto = ctx.proto;
+
+    const resumed = reason === 'resumed';
+    let snapshot: { data: string; truncated: boolean } | null = null;
+    if (resumed) {
+      session.screen.resize(ctx.cols, ctx.rows);
+      session.stdout.setSize(ctx.cols, ctx.rows);
+      snapshot = await session.screen.snapshot();
+      if (ws.readyState !== WebSocket.OPEN || session.state === 'dying') return;
+    }
+
     session.browser = ws;
     session.state = 'attached';
     session.detachedAt = null;
-    session.recheckAuth = ctx.recheckAuth;
 
-    const resumed = reason === 'resumed';
-    const truncated = session.ring.truncated;
-    const replay = resumed ? session.ring.drain() : Buffer.alloc(0);
-    session.ring.truncated = false;
-
-    sendJson(ws, {
-      type: 'attached',
-      handle: session.handle,
-      resumed,
-      reason,
-      replayedBytes: replay.length,
-      truncated: resumed && truncated
-    });
-    if (resumed) {
-      if (truncated) {
-        sendBytes(ws, '\r\n\x1b[2K\x1b[90m--- output truncated while disconnected ---\x1b[0m\r\n');
+    if (ctx.proto === 2) {
+      sendJson(ws, {
+        type: 'attached',
+        proto: 2,
+        handle: session.handle,
+        resumed,
+        reason,
+        reusedId: session.reusedId,
+        cols: session.stdout.columns,
+        rows: session.stdout.rows,
+        snapshot: snapshot?.data,
+        truncated: snapshot?.truncated ?? false
+      });
+    } else {
+      sendJson(ws, {
+        type: 'attached',
+        handle: session.handle,
+        resumed,
+        reason,
+        replayedBytes: snapshot?.data.length ?? 0,
+        truncated: snapshot?.truncated ?? false
+      });
+      if (snapshot) {
+        if (snapshot.truncated) sendBytes(ws, statusBytes('output truncated while disconnected'));
+        if (snapshot.data.length > 0) {
+          sendBytes(ws, CLEAR_SCREEN_AND_SCROLLBACK + snapshot.data);
+        }
       }
-      if (replay.length > 0) ws.send(replay, { binary: true });
     }
     if (session.paused && session.upstream) {
       session.paused = false;
@@ -629,27 +671,13 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
     ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
       if (session.browser !== ws) return;
-      if (isBinary === false || typeof data === 'string') {
-        const msg = typeof data === 'string' ? data : data.toString();
-        let frame: { type?: unknown; cols?: unknown; rows?: unknown; force?: unknown } | null =
-          null;
-        try {
-          frame = JSON.parse(msg);
-        } catch {}
-        if (frame && typeof frame === 'object' && 'type' in frame) {
-          if (frame.type === 'resize') {
-            if (frame.force === true) {
-              session.stdout.forceResize(Number(frame.cols), Number(frame.rows));
-            } else {
-              session.stdout.setSize(Number(frame.cols), Number(frame.rows));
-            }
-          }
-          return;
-        }
-        writeStdin(session, ws, msg);
+      const frame = parseClientFrame(data as Buffer | string, isBinary);
+      if (frame.kind === 'resize') {
+        session.stdout.setSize(frame.cols, frame.rows);
+        session.screen.resize(session.stdout.columns, session.stdout.rows);
         return;
       }
-      writeStdin(session, ws, data as Buffer);
+      if (frame.kind === 'stdin') writeStdin(session, ws, frame.data);
     });
 
     let alive = true;
@@ -722,11 +750,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
           ws.close(1000, 'exited');
           break;
         case 'failed':
-          sendBytes(ws, `\r\n\x1b[2K\x1b[31m${detail ?? 'exec failed'}\x1b[0m\r\n`);
+          notify(ws, session.proto, 'failed', detail ?? 'exec failed', 'error');
           ws.close(EXEC_FAILED_CODE, clampReason(detail ?? 'exec failed'));
           break;
         case 'revoked':
-          sendBytes(ws, '\r\nSession terminated: access revoked.\r\n');
+          notify(ws, session.proto, 'revoked', 'Session terminated: access revoked.', 'error');
           ws.close(4401, 'access revoked');
           break;
         case 'expired':
@@ -734,6 +762,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
           break;
       }
     }
+    session.screen.dispose();
 
     try {
       session.stdin.end();
@@ -747,11 +776,13 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
   function forward(session: ExecSession, source: PassThrough): void {
     source.on('data', (chunk: Buffer) => {
-      const ws = session.browser;
-      if (session.state !== 'attached' || !ws || ws.readyState !== WebSocket.OPEN) {
-        if (session.state === 'detached') session.ring.push(chunk);
-        return;
+      try {
+        session.screen.write(chunk);
+      } catch (error) {
+        console.warn(`[Terminal] screen write failed: ${(error as Error).message}`);
       }
+      const ws = session.browser;
+      if (session.state !== 'attached' || !ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(chunk, { binary: true });
       if (ws.bufferedAmount <= WS_HIGH_WATER) return;
       const pausable = session.upstream ?? source;
@@ -814,6 +845,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     target.searchParams.set('namespace', ctx.namespace);
     target.searchParams.set('container', ctx.container);
     target.searchParams.set('session', ctx.requested);
+    target.searchParams.set('cols', String(ctx.cols));
+    target.searchParams.set('rows', String(ctx.rows));
+    if (ctx.proto === 2) target.searchParams.set('proto', '2');
 
     return new Promise<boolean>((resolve) => {
       let settled = false;

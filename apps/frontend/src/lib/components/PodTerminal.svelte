@@ -180,12 +180,25 @@
 
 	interface AttachedFrame {
 		type: 'attached';
+		proto?: number;
 		handle: string;
 		resumed: boolean;
 		reason: 'new' | 'resumed' | 'expired' | 'moved' | 'denied';
-		replayedBytes: number;
+		reusedId?: boolean;
+		cols?: number;
+		rows?: number;
+		snapshot?: string;
+		replayedBytes?: number;
 		truncated: boolean;
 	}
+
+	interface StatusFrame {
+		type: 'status';
+		kind: string;
+		message: string;
+	}
+
+	const STICKY_STATUS = new Set(['limit', 'revoked', 'failed', 'exited']);
 
 	function parseControl(raw: string): Record<string, unknown> | null {
 		if (!raw.startsWith('{')) return null;
@@ -199,6 +212,11 @@
 	}
 
 	function handleControl(frame: Record<string, unknown>) {
+		if (frame.type === 'status') {
+			const st = frame as unknown as Partial<StatusFrame>;
+			if (typeof st.message === 'string') status(st.message, STICKY_STATUS.has(st.kind ?? ''));
+			return;
+		}
 		if (frame.type !== 'attached') return;
 		const attached = frame as unknown as Partial<AttachedFrame>;
 		if (typeof attached.handle !== 'string') return;
@@ -207,31 +225,59 @@
 		predictor?.flush('disconnect');
 		const reconnecting = wasReconnect;
 		wasReconnect = false;
+		const v2 = attached.proto === 2;
 		if (attached.resumed) {
+			if (v2 && typeof attached.snapshot === 'string') applySnapshot(attached.snapshot);
 			if (reconnecting) status('reconnected, session resumed');
-			if (attached.truncated) status('some output was lost while disconnected');
-			sendResize(true);
+			if (attached.truncated) status('some scrollback was lost while disconnected');
+			if (v2) {
+				if (handle && (attached.cols !== handle.term.cols || attached.rows !== handle.term.rows)) {
+					sendResize();
+				}
+			} else {
+				sendResize(true);
+			}
 			return;
 		}
 		if (!reconnecting) return;
 		handle?.term.reset();
-		if (attached.reason === 'expired') status('previous session expired, started a new shell');
-		else if (attached.reason === 'moved') {
-			status('reconnected on a different server, started a new shell');
+		decoder = new TextDecoder('utf-8');
+		const reattaching = attached.reusedId === true;
+		if (attached.reason === 'expired') {
+			status(
+				reattaching
+					? 'reconnected, reattaching your shell'
+					: 'previous session expired, started a new shell'
+			);
+		} else if (attached.reason === 'moved') {
+			status(
+				reattaching
+					? 'reconnected on a different server, reattaching your shell'
+					: 'reconnected on a different server, started a new shell'
+			);
 		} else if (attached.reason === 'denied') {
 			status('could not resume that session, started a new shell');
 		} else status('reconnected, started a new shell');
 	}
 
+	function applySnapshot(snapshot: string) {
+		if (!handle) return;
+		predictor?.flush('disconnect');
+		handle.term.reset();
+		decoder = new TextDecoder('utf-8');
+		handle.term.write(`\x1b[?2026h${snapshot}\x1b[?2026l`);
+	}
+
 	function socketUrl(): string {
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const size = handle ? `&proto=2&cols=${handle.term.cols}&rows=${handle.term.rows}` : '&proto=2';
 		const session = currentHandle ? `&session=${encodeURIComponent(currentHandle)}` : '';
+		const extra = `${size}${session}`;
 		if (endpoint) {
 			const base = /^wss?:\/\//.test(endpoint) ? endpoint : `${proto}//${location.host}${endpoint}`;
-			if (!session) return base;
-			return base.includes('?') ? `${base}${session}` : `${base}?${session.slice(1)}`;
+			return base.includes('?') ? `${base}${extra}` : `${base}?${extra.slice(1)}`;
 		}
-		return `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${session}`;
+		return `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${extra}`;
 	}
 
 	function connectWebSocket() {
