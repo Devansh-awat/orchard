@@ -1,156 +1,181 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import {
-		applyTerminalTheme,
-		buildTerminalTheme,
-		ensureTerminalFont,
-		monoFontFor,
-		watchTerminalTheme
-	} from '$lib/utils/terminal-theme';
+		createTerminal,
+		createFitScheduler,
+		makeKeyHandler,
+		xtermPredictTarget,
+		type TerminalHandle,
+		type FitScheduler
+	} from '$lib/terminal';
+	import type { DisposablePredictTarget } from '$lib/terminal/predict-target';
 	import { PredictiveEcho } from '$lib/utils/terminal-predict';
-	import { attachMouseReporting } from '$lib/utils/terminal-mouse';
 	import { terminalDisplay, setTerminalDisplay } from '$lib/stores/terminal-display.svelte';
 
 	interface Props {
-		podName: string;
-		namespace: string;
-		container: string;
+		podName?: string;
+		namespace?: string;
+		container?: string;
+		endpoint?: string;
 		visible?: boolean;
+		resizeFrozen?: boolean;
 		sessionHandle?: string;
 		onTitle?: (title: string) => void;
 		onBell?: () => void;
 		onSession?: (handle: string) => void;
+		onReady?: (handle: TerminalHandle, predictor: PredictiveEcho) => void;
 	}
 
 	let {
-		podName,
-		namespace,
-		container,
+		podName = '',
+		namespace = '',
+		container = '',
+		endpoint,
 		visible = true,
+		resizeFrozen = false,
 		sessionHandle,
 		onTitle,
 		onBell,
-		onSession
+		onSession,
+		onReady
 	}: Props = $props();
 
 	let terminalRef = $state<HTMLDivElement | null>(null);
-	let terminal: any = null;
-	let fitAddon: any = null;
-	let ghosttyModule: any = null;
-	let ws: WebSocket | null = null;
+	let handle: TerminalHandle | null = null;
+	let fitScheduler: FitScheduler | null = null;
+	let target: DisposablePredictTarget | null = null;
 	let predictor: PredictiveEcho | null = null;
+	let ws: WebSocket | null = null;
+	let decoder = new TextDecoder('utf-8');
 	let connected = $state(false);
 	let error = $state<string | null>(null);
 	let mounted = $state(false);
-	let termGen = $state(0);
+	let ready = $state(false);
+	let note = $state<string | null>(null);
+	let noteTimer: ReturnType<typeof setTimeout> | null = null;
 
-	let resizeObserver: ResizeObserver | null = null;
-	let stopThemeWatch: (() => void) | null = null;
-	let stopMouse: (() => void) | null = null;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let retries = 0;
 	let disposed = false;
 	let appliedFontSize = 0;
-	let lastChunkHadOsc = false;
-	let currentHandle: string | null = sessionHandle ?? null;
+	let currentHandle: string | null = null;
 	let wasReconnect = false;
 
 	const encoder = new TextEncoder();
-	const decoder = new TextDecoder('utf-8');
-	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4401, 4403, 4404, 4409, 4429, 4500]);
+	const PERMANENT_CLOSE_CODES = new Set([1000, 1005, 4400, 4401, 4403, 4404, 4409, 4429, 4500]);
 	const MAX_RETRIES = 40;
 	const DEFAULT_FONT_SIZE = 12;
+	const NOTE_MS = 4000;
 
-	function status(text: string) {
-		const line = `\r\n\x1b[2K\x1b[90m--- ${text} ---\x1b[0m\r\n`;
-		if (predictor) predictor.writeLocal(line);
-		else terminal?.write(line);
+	function status(text: string, sticky = false) {
+		note = text;
+		if (noteTimer) clearTimeout(noteTimer);
+		noteTimer = sticky
+			? null
+			: setTimeout(() => {
+					noteTimer = null;
+					note = null;
+				}, NOTE_MS);
 	}
 
-	function focusTerminal() {
-		if (!terminal) return;
-		if (terminal.textarea) terminal.textarea.focus();
-		else terminal.focus();
+	function clearNote() {
+		if (noteTimer) clearTimeout(noteTimer);
+		noteTimer = null;
+		note = null;
 	}
 
-	function sendRaw(seq: string) {
-		terminal?.input(seq, true);
+	function send(bytes: Uint8Array) {
+		if (ws && ws.readyState === WebSocket.OPEN) ws.send(bytes);
+	}
+
+	function sendJson(frame: Record<string, unknown>) {
+		if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(frame));
+	}
+
+	function sendResize(force = false) {
+		if (!handle) return;
+		sendJson({
+			type: 'resize',
+			cols: handle.term.cols,
+			rows: handle.term.rows,
+			...(force ? { force } : {})
+		});
+	}
+
+	function fitNow() {
+		fitScheduler?.fitNow();
 	}
 
 	async function init() {
-		if (!terminalRef) return;
-
+		const host = terminalRef;
+		if (!host) return;
 		try {
-			ghosttyModule = await import('ghostty-web');
-			await Promise.all([
-				ghosttyModule.init(),
-				ensureTerminalFont(terminalRef, terminalDisplay.fontSize)
-			]);
+			const created = await createTerminal({
+				host,
+				backgroundToken: '--console-bg',
+				fontSize: terminalDisplay.fontSize,
+				cursorStyle: terminalDisplay.cursorStyle,
+				cursorBlink: visible && terminalDisplay.cursorBlink
+			});
+			if (disposed) {
+				created.dispose();
+				return;
+			}
+			handle = created;
+			appliedFontSize = terminalDisplay.fontSize;
+			const { term } = created;
+
+			target = xtermPredictTarget(term);
+			predictor = new PredictiveEcho(target, { enabled: () => terminalDisplay.predictiveEcho });
+
+			fitScheduler = createFitScheduler({
+				host,
+				term,
+				propose: () => created.fit.proposeDimensions(),
+				enabled: () => visible && !resizeFrozen && !disposed
+			});
+			fitScheduler.fitNow();
+
+			term.onData((data) => {
+				predictor?.onUserData(data);
+				send(encoder.encode(data));
+			});
+			term.onBinary((data) => {
+				const bytes = new Uint8Array(data.length);
+				for (let i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 0xff;
+				send(bytes);
+			});
+			term.onResize(({ cols, rows }) => {
+				predictor?.flush('resize');
+				sendJson({ type: 'resize', cols, rows });
+			});
+			term.onTitleChange((title) => onTitle?.(title));
+			term.onBell(() => {
+				if (terminalDisplay.bell === 'visual') onBell?.();
+			});
+			term.attachCustomKeyEventHandler(
+				makeKeyHandler({
+					term,
+					onKeyDown: (event) => predictor?.noteKeyDown(event),
+					onClear: () => {
+						predictor?.flush('guard');
+						term.clear();
+					},
+					onZoom: (step) => {
+						if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
+						else setTerminalDisplay('fontSize', terminalDisplay.fontSize + step);
+					}
+				})
+			);
+
+			ready = true;
+			onReady?.(created, predictor);
+			currentHandle = sessionHandle ?? null;
 			connectWebSocket();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load terminal';
 			console.error('[PodTerminal] init error:', e);
 		}
-	}
-
-	function pasteFromClipboard() {
-		const read = navigator.clipboard?.readText?.bind(navigator.clipboard);
-		if (!read) return;
-		void read()
-			.then((text) => {
-				if (text && terminal) terminal.paste(text);
-			})
-			.catch(() => {});
-	}
-
-	function handleKey(event: KeyboardEvent): boolean {
-		if (event.type !== 'keydown') return false;
-		predictor?.noteKeyDown(event);
-		const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
-
-		if (plain && event.shiftKey && event.key === 'Tab') {
-			sendRaw('\x1b[Z');
-			return true;
-		}
-
-		if (event.ctrlKey && event.shiftKey && !event.metaKey && !event.altKey) {
-			if (event.code === 'KeyC') {
-				if (!terminal.hasSelection()) return false;
-				void navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
-				return true;
-			}
-			if (event.code === 'KeyV') {
-				pasteFromClipboard();
-				return true;
-			}
-		}
-
-		if (event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyK') {
-			event.stopPropagation();
-			terminal.clear();
-			return true;
-		}
-
-		const mod = (event.metaKey || event.ctrlKey) && !event.altKey;
-		if (mod) {
-			if (event.code === 'Equal' || event.code === 'NumpadAdd') {
-				event.stopPropagation();
-				setTerminalDisplay('fontSize', terminalDisplay.fontSize + 1);
-				return true;
-			}
-			if (!event.shiftKey && (event.code === 'Minus' || event.code === 'NumpadSubtract')) {
-				event.stopPropagation();
-				setTerminalDisplay('fontSize', terminalDisplay.fontSize - 1);
-				return true;
-			}
-			if (!event.shiftKey && (event.code === 'Digit0' || event.code === 'Numpad0')) {
-				event.stopPropagation();
-				setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	interface AttachedFrame {
@@ -162,134 +187,81 @@
 		truncated: boolean;
 	}
 
-	function handleControl(raw: string) {
-		let frame: Partial<AttachedFrame> | null = null;
+	function parseControl(raw: string): Record<string, unknown> | null {
+		if (!raw.startsWith('{')) return null;
 		try {
-			frame = JSON.parse(raw);
+			const frame = JSON.parse(raw);
+			if (frame && typeof frame === 'object' && typeof frame.type === 'string') return frame;
 		} catch {
-			return;
+			return null;
 		}
-		if (!frame || frame.type !== 'attached' || typeof frame.handle !== 'string') return;
-		currentHandle = frame.handle;
-		onSession?.(frame.handle);
+		return null;
+	}
+
+	function handleControl(frame: Record<string, unknown>) {
+		if (frame.type !== 'attached') return;
+		const attached = frame as unknown as Partial<AttachedFrame>;
+		if (typeof attached.handle !== 'string') return;
+		currentHandle = attached.handle;
+		onSession?.(attached.handle);
 		predictor?.flush('disconnect');
 		const reconnecting = wasReconnect;
 		wasReconnect = false;
-		if (frame.resumed) {
+		if (attached.resumed) {
 			if (reconnecting) status('reconnected, session resumed');
-			if (terminal && ws && ws.readyState === WebSocket.OPEN) {
-				ws.send(
-					JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows, force: true })
-				);
-			}
+			if (attached.truncated) status('some output was lost while disconnected');
+			sendResize(true);
 			return;
 		}
 		if (!reconnecting) return;
-		terminal?.write('\x1b[H\x1b[2J\x1b[3J');
-		if (frame.reason === 'expired') status('previous session expired, started a new shell');
-		else if (frame.reason === 'moved') {
+		handle?.term.reset();
+		if (attached.reason === 'expired') status('previous session expired, started a new shell');
+		else if (attached.reason === 'moved') {
 			status('reconnected on a different server, started a new shell');
-		} else if (frame.reason === 'denied') {
+		} else if (attached.reason === 'denied') {
 			status('could not resume that session, started a new shell');
 		} else status('reconnected, started a new shell');
 	}
 
-	function onFocusIn() {
-		if (terminal?.getMode?.(1004)) sendRaw('\x1b[I');
-	}
-
-	function onFocusOut() {
-		if (terminal?.getMode?.(1004)) sendRaw('\x1b[O');
-	}
-
-	function openTerminal() {
-		if (!ghosttyModule || !terminalRef || terminal) return;
-
-		terminal = new ghosttyModule.Terminal({
-			fontSize: terminalDisplay.fontSize,
-			fontFamily: monoFontFor(terminalRef),
-			cursorBlink: terminalDisplay.cursorBlink,
-			cursorStyle: terminalDisplay.cursorStyle,
-			scrollback: 10_000,
-			smoothScrollDuration: 0,
-			theme: buildTerminalTheme(terminalRef, { background: '--console-bg' })
-		});
-		appliedFontSize = terminalDisplay.fontSize;
-
-		stopThemeWatch = watchTerminalTheme(terminalRef, (next) => applyTerminalTheme(terminal, next), {
-			background: '--console-bg'
-		});
-
-		fitAddon = new ghosttyModule.FitAddon();
-		terminal.loadAddon(fitAddon);
-		terminal.open(terminalRef);
-		fitAddon.fit();
-		predictor = new PredictiveEcho(terminal, { enabled: () => terminalDisplay.predictiveEcho });
-		stopMouse = attachMouseReporting(terminal, terminalRef);
-		terminalRef.addEventListener('focusin', onFocusIn);
-		terminalRef.addEventListener('focusout', onFocusOut);
-
-		resizeObserver = new ResizeObserver(() => {
-			if (visible) fitWhenSized();
-		});
-		resizeObserver.observe(terminalRef);
-
-		terminal.onData((data: string) => {
-			predictor?.onUserData(data);
-			if (ws && ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
-		});
-
-		terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-			predictor?.flush('resize');
-			if (ws && ws.readyState === WebSocket.OPEN) {
-				ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-			}
-		});
-
-		terminal.onTitleChange((title: string) => {
-			onTitle?.(title);
-		});
-
-		terminal.onBell(() => {
-			if (lastChunkHadOsc) return;
-			if (terminalDisplay.bell !== 'visual') return;
-			onBell?.();
-		});
-
-		terminal.attachCustomKeyEventHandler(handleKey);
-
-		termGen += 1;
-		focusTerminal();
+	function socketUrl(): string {
+		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const session = currentHandle ? `&session=${encodeURIComponent(currentHandle)}` : '';
+		if (endpoint) {
+			const base = /^wss?:\/\//.test(endpoint) ? endpoint : `${proto}//${location.host}${endpoint}`;
+			if (!session) return base;
+			return base.includes('?') ? `${base}${session}` : `${base}?${session.slice(1)}`;
+		}
+		return `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${session}`;
 	}
 
 	function connectWebSocket() {
-		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const session = currentHandle ? `&session=${encodeURIComponent(currentHandle)}` : '';
-		const wsUrl = `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${session}`;
-
-		const socket = new WebSocket(wsUrl);
+		const socket = new WebSocket(socketUrl());
 		socket.binaryType = 'arraybuffer';
 		ws = socket;
+		decoder = new TextDecoder('utf-8');
 
 		socket.onopen = () => {
 			if (ws !== socket) return;
 			connected = true;
 			error = null;
 			retries = 0;
-			openTerminal();
+			sendResize();
+			if (visible) handle?.term.focus();
 		};
 
 		socket.onmessage = (event) => {
-			if (ws !== socket || !terminal) return;
+			if (ws !== socket || !handle) return;
 			if (typeof event.data === 'string') {
-				handleControl(event.data);
+				const frame = parseControl(event.data);
+				if (frame) handleControl(frame);
+				else if (predictor) predictor.applyRemote(event.data);
+				else handle.term.write(event.data);
 				return;
 			}
 			if (!(event.data instanceof ArrayBuffer)) return;
 			const text = decoder.decode(event.data, { stream: true });
-			lastChunkHadOsc = text.includes('\x1b]');
 			if (predictor) predictor.applyRemote(text);
-			else terminal.write(text);
+			else handle.term.write(text);
 		};
 
 		socket.onclose = (event: CloseEvent) => {
@@ -298,14 +270,16 @@
 			predictor?.flush('disconnect');
 			if (disposed) return;
 			if (PERMANENT_CLOSE_CODES.has(event.code)) {
+				clearNote();
 				error = event.reason || 'Session ended';
 				return;
 			}
 			if (retries >= MAX_RETRIES) {
+				clearNote();
 				error = 'Lost connection to the pod';
 				return;
 			}
-			if (terminal && retries === 0) status('disconnected, reconnecting');
+			if (retries === 0) status('disconnected, reconnecting', true);
 			wasReconnect = true;
 			scheduleReconnect();
 		};
@@ -314,7 +288,6 @@
 			if (ws !== socket) return;
 			connected = false;
 			predictor?.flush('disconnect');
-			error = 'Connection failed';
 		};
 	}
 
@@ -352,44 +325,46 @@
 		}
 		detachSocket();
 		predictor?.flush('disconnect');
-		wasReconnect = terminal !== null;
+		wasReconnect = handle !== null;
 		connectWebSocket();
 	}
 
-	function fitWhenSized(attempt = 0) {
-		if (!fitAddon || !terminalRef) return;
-		if (terminalRef.clientWidth > 0 && terminalRef.clientHeight > 0) {
-			fitAddon.fit();
-			return;
-		}
-		if (attempt < 10) requestAnimationFrame(() => fitWhenSized(attempt + 1));
-	}
-
 	$effect(() => {
-		void termGen;
-		if (!terminal) return;
-		terminal.options.cursorStyle = terminalDisplay.cursorStyle;
-		terminal.options.cursorBlink = visible && terminalDisplay.cursorBlink;
-		if (visible) {
+		void ready;
+		const show = visible;
+		const h = handle;
+		if (!h) return;
+		h.term.options.cursorStyle = terminalDisplay.cursorStyle;
+		h.term.options.cursorBlink = show && terminalDisplay.cursorBlink;
+		if (show) {
 			requestAnimationFrame(() => {
-				fitWhenSized();
-				focusTerminal();
+				if (disposed) return;
+				fitNow();
+				h.term.focus();
 			});
 		} else {
-			terminal.blur();
+			h.term.blur();
 		}
 	});
 
 	$effect(() => {
-		void termGen;
+		void ready;
+		const frozen = resizeFrozen;
+		if (!handle || frozen) return;
+		requestAnimationFrame(() => {
+			if (!disposed) fitNow();
+		});
+	});
+
+	$effect(() => {
+		void ready;
 		const size = terminalDisplay.fontSize;
-		const host = terminalRef;
-		if (!terminal || !host || size === appliedFontSize) return;
+		const h = handle;
+		if (!h || size === appliedFontSize) return;
 		appliedFontSize = size;
-		void ensureTerminalFont(host, size).then(() => {
-			if (!terminal || disposed) return;
-			terminal.options.fontSize = size;
-			fitWhenSized();
+		predictor?.flush('guard');
+		void h.setFontSize(size).then(() => {
+			if (!disposed) fitNow();
 		});
 	});
 
@@ -403,7 +378,7 @@
 			reconnectTimer = null;
 		}
 		detachSocket();
-		wasReconnect = terminal !== null;
+		wasReconnect = handle !== null;
 		connectWebSocket();
 	}
 
@@ -417,17 +392,16 @@
 		disposed = true;
 		document.removeEventListener('visibilitychange', onVisibilityChange);
 		if (reconnectTimer) clearTimeout(reconnectTimer);
-		stopThemeWatch?.();
-		stopMouse?.();
-		resizeObserver?.disconnect();
-		terminalRef?.removeEventListener('focusin', onFocusIn);
-		terminalRef?.removeEventListener('focusout', onFocusOut);
+		if (noteTimer) clearTimeout(noteTimer);
+		fitScheduler?.dispose();
+		fitScheduler = null;
 		detachSocket();
 		predictor?.dispose();
 		predictor = null;
-		terminal?.dispose();
-		terminal?.wasmTerm?.free?.();
-		terminal = null;
+		target?.dispose();
+		target = null;
+		handle?.dispose();
+		handle = null;
 	});
 </script>
 
@@ -437,6 +411,8 @@
 			<span>{error}</span>
 			<button onclick={reconnect}>Reconnect</button>
 		</div>
+	{:else if note}
+		<div class="pod-terminal-status pod-terminal-note">{note}</div>
 	{/if}
 	<div class="pod-terminal-canvas" bind:this={terminalRef}></div>
 	{#if !connected && !error && mounted}
@@ -463,17 +439,11 @@
 		flex: 1;
 		min-height: 0;
 		padding: 0.75rem;
+		overflow: hidden;
 	}
 
-	.pod-terminal-canvas :global(textarea) {
-		caret-color: transparent !important;
-		color: transparent !important;
-		opacity: 0 !important;
-		position: fixed !important;
-		left: -9999px !important;
-		top: -9999px !important;
-		width: 0 !important;
-		height: 0 !important;
+	.pod-terminal-canvas :global(.xterm) {
+		height: 100%;
 	}
 
 	.pod-terminal-status {
@@ -510,6 +480,7 @@
 		background: color-mix(in srgb, var(--status-error) 32%, transparent);
 	}
 
+	.pod-terminal-note,
 	.pod-terminal-connecting {
 		background: var(--console-quiet);
 		color: var(--console-faint);

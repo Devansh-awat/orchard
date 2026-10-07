@@ -450,6 +450,7 @@
 						namespace={deployment.namespace || 'default'}
 						container={ttab.container}
 						visible={activeConsoleTab === ttab.id}
+						resizeFrozen={consoleAnimating}
 						sessionHandle={ttab.sessionHandle}
 						onTitle={(title) => onTerminalTitle?.(ttab.id, title)}
 						onBell={() => onTerminalBell?.(ttab.id)}

@@ -11,22 +11,16 @@ export type FlushReason =
 	| 'altscreen'
 	| 'guard';
 
-export interface PredictCursor {
-	x: number;
-	y: number;
-	visible: boolean;
-}
-
-export interface PredictTerminal {
-	cols: number;
-	write(data: string): void;
-	getViewportY(): number;
-	hasMouseTracking(): boolean;
-	wasmTerm?: {
-		getCursor(): PredictCursor;
-		getGraphemeString(row: number, col: number): string;
-		isAlternateScreen(): boolean;
-	};
+export interface PredictTarget {
+	readonly cols: number;
+	cursor(): { x: number; y: number };
+	cellAt(row: number, col: number): string;
+	isAlternate(): boolean;
+	mouseTracking(): boolean;
+	scrolledBack(): boolean;
+	write(data: string, done: () => void): void;
+	showOverlay(row: number, x: number, text: string): void;
+	hideOverlay(): void;
 }
 
 export interface PredictiveEchoOptions {
@@ -54,7 +48,6 @@ interface Burst {
 	anchorX: number;
 	ops: Op[];
 	sentAt: number[];
-	drawn: number;
 }
 
 interface Token {
@@ -62,8 +55,6 @@ interface Token {
 	at: number;
 }
 
-const SGR_UNDERLINE_ON = '\x1b[4m';
-const SGR_UNDERLINE_OFF = '\x1b[24m';
 const TOKEN_MAX_AGE_MS = 8;
 const MAX_PENDING = 24;
 const TAIL_BYTES = 160;
@@ -72,14 +63,6 @@ const PASSWORD_RE =
 	/(password|passphrase|passcode|pin|verification code)\s*(for [^\n]{0,60})?[:：]?\s*$/i;
 const ESC = String.fromCharCode(0x1b);
 const ALT_OR_MOUSE_RE = new RegExp(`${ESC}\\[\\?(?:1049|1047|47|100[0-6]|1015)[hl]`);
-
-function cub(n: number): string {
-	return n === 1 ? '\x1b[D' : `\x1b[${n}D`;
-}
-
-function teardownSeq(drawn: number): string {
-	return `${cub(drawn)}${' '.repeat(drawn)}${cub(drawn)}`;
-}
 
 function netOf(ops: Op[], m = ops.length): number {
 	let n = 0;
@@ -114,7 +97,7 @@ function simulate(baseX: number, ops: Op[], m: number): Map<number, string> {
 }
 
 export class PredictiveEcho {
-	private term: PredictTerminal | null;
+	private term: PredictTarget | null;
 	private readonly enabled: () => boolean;
 	private readonly minRttMs: number;
 	private readonly confirmsToEnable: number;
@@ -135,7 +118,7 @@ export class PredictiveEcho {
 	private confirms = 0;
 	private retracts = 0;
 
-	constructor(term: PredictTerminal, opts: PredictiveEchoOptions = {}) {
+	constructor(term: PredictTarget, opts: PredictiveEchoOptions = {}) {
 		this.term = term;
 		this.enabled = opts.enabled ?? (() => true);
 		this.minRttMs = opts.minRttMs ?? 40;
@@ -194,40 +177,33 @@ export class PredictiveEcho {
 	applyRemote(data: string): void {
 		const term = this.term;
 		if (!term) return;
+		const leavingLineMode = this.scanTail(data);
 		this.inApply = true;
 		try {
-			const leavingLineMode = this.scanTail(data);
-			const burst = this.burst;
-			if (burst && burst.drawn > 0) {
-				this.emit(teardownSeq(burst.drawn) + data);
-				burst.drawn = 0;
-			} else {
-				this.emit(data);
-			}
-			if (leavingLineMode) {
-				this.flush('altscreen');
-				return;
-			}
-			if (this.burst) this.validate();
+			term.write(data, () => {
+				if (this.term !== term) return;
+				this.inApply = true;
+				try {
+					if (leavingLineMode) {
+						this.flush('altscreen');
+						return;
+					}
+					if (this.burst) this.validate();
+				} finally {
+					this.inApply = false;
+				}
+			});
+		} catch {
+			this.disable();
 		} finally {
 			this.inApply = false;
 		}
 	}
 
-	writeLocal(data: string): void {
-		this.flush('guard');
-		this.emit(data);
-	}
-
 	flush(reason: FlushReason): void {
 		const burst = this.burst;
-		if (burst) {
-			if (burst.ops.length > 0) this.retracts += 1;
-			if (burst.drawn > 0) {
-				this.emit(teardownSeq(burst.drawn));
-				burst.drawn = 0;
-			}
-		}
+		if (burst && burst.ops.length > 0) this.retracts += 1;
+		this.hideOverlay();
 		this.endBurst();
 		if (reason === 'disconnect') {
 			this.streak = 0;
@@ -238,6 +214,7 @@ export class PredictiveEcho {
 
 	dispose(): void {
 		this.clearTimer();
+		this.hideOverlay();
 		this.burst = null;
 		this.token = null;
 		this.term = null;
@@ -250,47 +227,49 @@ export class PredictiveEcho {
 		this.onStateChange?.(next);
 	}
 
-	private emit(seq: string): void {
-		const term = this.term;
-		if (!term || !seq) return;
+	private hideOverlay(): void {
 		try {
-			term.write(seq);
+			this.term?.hideOverlay();
 		} catch {
-			this.clearTimer();
-			this.burst = null;
-			this.setState('disabled');
+			this.disable();
 		}
+	}
+
+	private disable(): void {
+		this.clearTimer();
+		this.burst = null;
+		this.setState('disabled');
 	}
 
 	private canPredict(): boolean {
 		const term = this.term;
-		if (!term || !term.wasmTerm) return false;
+		if (!term) return false;
 		if (!this.enabled()) {
 			this.setState('disabled');
 			return false;
 		}
 		if (this._state === 'disabled') this.setState('shadow');
-		if (term.wasmTerm.isAlternateScreen()) return false;
-		if (term.hasMouseTracking()) return false;
-		if (term.getViewportY() !== 0) return false;
+		if (term.isAlternate()) return false;
+		if (term.mouseTracking()) return false;
+		if (term.scrolledBack()) return false;
 		if (this.now() < this.suppressUntil) return false;
 		return true;
 	}
 
 	private pushInsert(ch: string): void {
 		const term = this.term;
-		if (!term?.wasmTerm || !this.canPredict()) {
+		if (!term || !this.canPredict()) {
 			this.flush('guard');
 			return;
 		}
-		const cur = term.wasmTerm.getCursor();
+		const cur = term.cursor();
 		let burst = this.burst;
 		if (burst && burst.row !== cur.y) {
 			this.flush('mismatch');
 			burst = null;
 		}
 		if (!burst) {
-			burst = { row: cur.y, baseX: cur.x, anchorX: cur.x, ops: [], sentAt: [], drawn: 0 };
+			burst = { row: cur.y, baseX: cur.x, anchorX: cur.x, ops: [], sentAt: [] };
 			this.burst = burst;
 		}
 		if (burst.ops.length >= MAX_PENDING) {
@@ -302,7 +281,7 @@ export class PredictiveEcho {
 			this.flush('guard');
 			return;
 		}
-		if (term.wasmTerm.getGraphemeString(burst.row, target) !== ' ') {
+		if (term.cellAt(burst.row, target) !== ' ') {
 			this.flush('guard');
 			return;
 		}
@@ -326,24 +305,29 @@ export class PredictiveEcho {
 
 	private redraw(): void {
 		const burst = this.burst;
-		if (!burst) return;
+		const term = this.term;
+		if (!burst || !term) return;
 		if (this._state !== 'active') {
-			burst.drawn = 0;
+			this.hideOverlay();
 			return;
 		}
 		const glyphs = replay(burst.ops);
-		let seq = '';
-		if (burst.drawn > 0) seq += teardownSeq(burst.drawn);
-		if (glyphs.length > 0) seq += SGR_UNDERLINE_ON + glyphs.join('') + SGR_UNDERLINE_OFF;
-		this.emit(seq);
-		burst.drawn = this.burst ? glyphs.length : 0;
+		if (glyphs.length === 0) {
+			this.hideOverlay();
+			return;
+		}
+		try {
+			term.showOverlay(burst.row, burst.baseX, glyphs.join(''));
+		} catch {
+			this.disable();
+		}
 	}
 
 	private validate(): void {
 		const term = this.term;
 		const burst = this.burst;
-		if (!term?.wasmTerm || !burst) return;
-		const cur = term.wasmTerm.getCursor();
+		if (!term || !burst) return;
+		const cur = term.cursor();
 		if (cur.y !== burst.row) {
 			this.fail();
 			return;
@@ -380,6 +364,7 @@ export class PredictiveEcho {
 			this.setState('active');
 		}
 		if (burst.ops.length === 0) {
+			this.hideOverlay();
 			this.endBurst();
 		} else {
 			this.redraw();
@@ -389,10 +374,10 @@ export class PredictiveEcho {
 
 	private cellsMatch(burst: Burst, m: number): boolean {
 		const term = this.term;
-		if (!term?.wasmTerm) return false;
+		if (!term) return false;
 		for (const [x, ch] of simulate(burst.baseX, burst.ops, m)) {
 			if (x < 0 || x >= term.cols) return false;
-			if (term.wasmTerm.getGraphemeString(burst.row, x) !== ch) return false;
+			if (term.cellAt(burst.row, x) !== ch) return false;
 		}
 		return true;
 	}
@@ -401,13 +386,8 @@ export class PredictiveEcho {
 		this.streak = 0;
 		if (this._state === 'active') this.setState('shadow');
 		const burst = this.burst;
-		if (burst) {
-			if (burst.ops.length > 0) this.retracts += 1;
-			if (burst.drawn > 0) {
-				this.emit(teardownSeq(burst.drawn));
-				burst.drawn = 0;
-			}
-		}
+		if (burst && burst.ops.length > 0) this.retracts += 1;
+		this.hideOverlay();
 		this.endBurst();
 	}
 

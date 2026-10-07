@@ -63,8 +63,10 @@
 	// definition, and a tenant's branded login screen should not open on the
 	// app's boot spinner.
 	const isOrgLoginRoute = $derived($page.route.id === '/[orgSlug=orgSlug]/login');
+	const isDevHarness = $derived(dev && ($page.route.id?.startsWith('/dev/') ?? false));
 
 	function isPublicPath(pathname: string) {
+		if (dev && pathname.startsWith('/dev/')) return true;
 		if (pathname === '/' || publicRoutes.some((route) => pathname.startsWith(route))) return true;
 		return /^\/[^/]+\/login\/?$/.test(pathname);
 	}
@@ -188,7 +190,7 @@
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
-	{#if loading && !isOrgLoginRoute}
+	{#if loading && !isOrgLoginRoute && !isDevHarness}
 		<div
 			class="flex h-screen items-center justify-center"
 			style="background-color: var(--center-channel-bg);"

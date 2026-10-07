@@ -488,7 +488,11 @@
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}?fast=1`);
 			if (!response.ok) throw new Error('Failed to fetch database');
-			database = await response.json();
+			const incoming = await response.json();
+			database = {
+				...incoming,
+				pods: incoming?.pods?.length ? incoming.pods : (database?.pods ?? [])
+			};
 			error = null;
 			if (database?.backupsEnabled) fetchBackups();
 			if (!resourcesDirty) {

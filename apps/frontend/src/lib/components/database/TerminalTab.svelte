@@ -88,13 +88,8 @@
 		title="Terminal needs a dedicated database"
 		description="Terminal access requires a managed database (CNPG or container mode)."
 	/>
-{:else if !database.pods || !database.pods.length}
-	<div class="backups-empty">
-		<Loader2 class="h-4 w-4 animate-spin" />
-		<p class="db-hint" style="margin: 0;">Waiting for the Postgres pod to be scheduled…</p>
-	</div>
 {:else}
-	{@const pod = database.pods[0]}
+	{@const pod = database.pods?.[0] ?? null}
 	<div
 		class="console-panel"
 		class:console-expanded={consoleExpanded}
@@ -142,7 +137,7 @@
 					{#if (database.pods?.length ?? 0) > 1}
 						<div class="tt-pod-select">
 							<Select
-								value={logsPodName || pod.name}
+								value={logsPodName || pod?.name || ''}
 								aria-label="Pod to read logs from"
 								onchange={(e: Event) => {
 									logsPodName = (e.currentTarget as HTMLSelectElement).value;
@@ -178,7 +173,7 @@
 						title="Cycle tail size"
 					>
 						<Container class="h-3 w-3 opacity-40" />
-						<span>{podShortName(logsPodName || pod.name)} / postgres</span>
+						<span>{podShortName(logsPodName || pod?.name || '')} / postgres</span>
 						<ChevronDown class="h-2.5 w-2.5 opacity-40" />
 					</Button>
 					<Button
@@ -195,8 +190,9 @@
 				<Button
 					variant="secondary"
 					size="sm"
-					onclick={() => onOpenShellTab(pod.name, 'postgres')}
-					title="Open shell in pod"
+					disabled={!pod}
+					onclick={() => pod && onOpenShellTab(pod.name, 'postgres')}
+					title={pod ? 'Open shell in pod' : 'Waiting for the Postgres pod'}
 				>
 					<TerminalIcon class="h-3 w-3" />
 					Shell
@@ -272,7 +268,12 @@
 					</div>
 				{/if}
 			{:else if activeConsoleTab === 'logs'}
-				{#if logsLoading && !logs}
+				{#if !pod}
+					<div class="console-empty">
+						<Loader2 class="h-4 w-4 animate-spin" />
+						<span>Waiting for the Postgres pod to be scheduled</span>
+					</div>
+				{:else if logsLoading && !logs}
 					<div class="console-empty">
 						<Loader2 class="h-4 w-4 animate-spin" />
 						<span>Loading logs...</span>

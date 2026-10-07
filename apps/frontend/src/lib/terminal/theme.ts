@@ -1,3 +1,5 @@
+import type { ITheme } from '@xterm/xterm';
+
 type Rgba = [number, number, number, number];
 
 function readRgba(probe: HTMLElement, token: string): Rgba {
@@ -31,19 +33,20 @@ export interface TerminalThemeOpts {
 	background?: string;
 }
 
-export function buildTerminalTheme(host: HTMLElement, opts: TerminalThemeOpts = {}) {
+export function buildTerminalTheme(host: HTMLElement, opts: TerminalThemeOpts = {}): ITheme {
 	const bgToken = opts.background ?? '--bg-app';
 	const probe = document.createElement('span');
 	probe.style.display = 'none';
 	host.appendChild(probe);
 	const backdrop = readRgba(probe, bgToken);
 	const pick = (token: string) => flatten(readRgba(probe, token), backdrop);
-	const theme = {
+	const theme: ITheme = {
 		background: pick(bgToken),
 		foreground: pick('--text-default'),
 		cursor: pick('--accent'),
 		cursorAccent: pick(bgToken),
 		selectionBackground: pick('--accent-subtle'),
+		selectionInactiveBackground: pick('--accent-subtle'),
 		black: pick('--bg-sunken'),
 		red: pick('--status-error'),
 		green: pick('--status-success'),
@@ -65,51 +68,9 @@ export function buildTerminalTheme(host: HTMLElement, opts: TerminalThemeOpts = 
 	return theme;
 }
 
-export type TerminalTheme = ReturnType<typeof buildTerminalTheme>;
-
-export function applyTerminalTheme(terminal: any, theme: TerminalTheme): void {
-	const renderer = terminal?.renderer;
-	if (!renderer?.setTheme) return;
-	renderer.setTheme(theme);
-	if (!terminal.wasmTerm) return;
-	try {
-		renderer.render(
-			terminal.wasmTerm,
-			true,
-			terminal.viewportY,
-			terminal,
-			terminal.scrollbarOpacity
-		);
-	} catch {}
-}
-
-export async function ensureTerminalFont(el: HTMLElement, sizePx: number): Promise<void> {
-	if (typeof document === 'undefined' || !document.fonts?.load) return;
-	const family = monoFontFor(el).split(',')[0].trim();
-	if (!family.startsWith("'") && !family.startsWith('"')) return;
-	try {
-		await Promise.all([
-			document.fonts.load(`${sizePx}px ${family}`),
-			document.fonts.load(`bold ${sizePx}px ${family}`)
-		]);
-	} catch {}
-}
-
-const TERMINAL_MONO =
-	"ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
-
-export function monoFontFor(el: HTMLElement): string {
-	const styles = getComputedStyle(el);
-	return (
-		styles.getPropertyValue('--font-mono-terminal').trim() ||
-		styles.getPropertyValue('--font-mono').trim() ||
-		TERMINAL_MONO
-	);
-}
-
 export function watchTerminalTheme(
 	host: HTMLElement,
-	apply: (theme: ReturnType<typeof buildTerminalTheme>) => void,
+	apply: (theme: ITheme) => void,
 	opts: TerminalThemeOpts = {}
 ): () => void {
 	let queued = false;

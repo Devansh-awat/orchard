@@ -1,47 +1,71 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PredictiveEcho, type PredictTerminal } from './terminal-predict';
+import { PredictiveEcho, type PredictTarget } from './terminal-predict';
 
-class FakeTerm implements PredictTerminal {
+class FakeTerm implements PredictTarget {
 	cols: number;
 	rows: number;
 	grid: string[][];
-	ul: boolean[][];
 	x = 0;
 	y = 0;
 	viewportY = 0;
 	mouse = false;
 	alt = false;
-	underline = false;
 	writes: string[] = [];
+	overlay: { row: number; x: number; text: string } | null = null;
+	overlayShows = 0;
 	onWrite: ((s: string) => void) | null = null;
 
 	constructor(cols = 40, rows = 5) {
 		this.cols = cols;
 		this.rows = rows;
 		this.grid = Array.from({ length: rows }, () => Array(cols).fill(' '));
-		this.ul = Array.from({ length: rows }, () => Array(cols).fill(false));
 	}
 
-	wasmTerm = {
-		getCursor: () => ({ x: this.x, y: this.y, visible: true }),
-		getGraphemeString: (row: number, col: number) => this.grid[row]?.[col] ?? ' ',
-		isAlternateScreen: () => this.alt
-	};
-
-	getViewportY() {
-		return this.viewportY;
+	cursor() {
+		return { x: this.x, y: this.y };
 	}
 
-	hasMouseTracking() {
+	cellAt(row: number, col: number) {
+		return this.grid[row]?.[col] ?? ' ';
+	}
+
+	isAlternate() {
+		return this.alt;
+	}
+
+	mouseTracking() {
 		return this.mouse;
+	}
+
+	scrolledBack() {
+		return this.viewportY !== 0;
+	}
+
+	showOverlay(row: number, x: number, text: string) {
+		this.overlayShows += 1;
+		this.overlay = { row, x, text };
+	}
+
+	hideOverlay() {
+		this.overlay = null;
 	}
 
 	row(y = this.y) {
 		return this.grid[y].join('').replace(/\s+$/, '');
 	}
 
-	write(s: string) {
+	shown(y = this.y) {
+		const cells = [...this.grid[y]];
+		if (this.overlay && this.overlay.row === y) {
+			for (let i = 0; i < this.overlay.text.length; i++) {
+				cells[this.overlay.x + i] = this.overlay.text[i];
+			}
+		}
+		return cells.join('').replace(/\s+$/, '');
+	}
+
+	write(s: string, done: () => void) {
 		this.writes.push(s);
 		this.onWrite?.(s);
 		let i = 0;
@@ -62,12 +86,12 @@ class FakeTerm implements PredictTerminal {
 			else if (ch >= ' ') {
 				if (this.x < this.cols) {
 					this.grid[this.y][this.x] = ch;
-					this.ul[this.y][this.x] = this.underline;
 					this.x += 1;
 				}
 			}
 			i += 1;
 		}
+		done();
 	}
 
 	private csi(params: string, final: string) {
@@ -82,18 +106,11 @@ class FakeTerm implements PredictTerminal {
 			case 'K':
 				for (let c = params === '2' ? 0 : this.x; c < this.cols; c++) {
 					this.grid[this.y][c] = ' ';
-					this.ul[this.y][c] = false;
 				}
 				break;
 			case 'H':
 				this.x = 0;
 				this.y = 0;
-				break;
-			case 'm':
-				for (const p of params.split(';')) {
-					if (p === '4') this.underline = true;
-					else if (p === '24' || p === '0' || p === '') this.underline = false;
-				}
 				break;
 			case 'h':
 			case 'l':
@@ -137,7 +154,7 @@ function mk(opts: { minRttMs?: number; floor?: number; ceil?: number } = {}) {
 		timeoutFloorMs: opts.floor ?? 150,
 		timeoutCeilMs: opts.ceil ?? 600
 	});
-	t.write('$ ');
+	t.write('$ ', () => {});
 	return { p, t, clock };
 }
 
@@ -163,6 +180,7 @@ test('shadow mode tracks but draws nothing', () => {
 	assert.equal(p.state, 'shadow');
 	assert.equal(p.metrics.pending, 1);
 	assert.equal(t.row(), '$');
+	assert.equal(t.overlay, null);
 	assert.equal(t.x, 2);
 });
 
@@ -176,17 +194,17 @@ test('a fast link never leaves shadow', () => {
 	assert.equal(p.state, 'shadow');
 	assert.equal(p.metrics.confirms, 5);
 	assert.equal(t.row(), '$ hello');
-	assert.ok(t.writes.every((w) => !w.includes('\x1b[4m')));
+	assert.equal(t.overlayShows, 0);
 });
 
-test('active draws the glyph underlined at the cursor', () => {
+test('active shows the glyph as an overlay at the cursor without touching the buffer', () => {
 	const { p, t, clock } = mk();
 	activate(p, t, clock);
 	type(p, 'A');
-	assert.equal(t.row(), '$ abA');
-	assert.equal(t.ul[0][4], true);
-	assert.equal(t.x, 5);
-	assert.equal(t.underline, false);
+	assert.equal(t.row(), '$ ab');
+	assert.equal(t.shown(), '$ abA');
+	assert.deepEqual(t.overlay, { row: 0, x: 4, text: 'A' });
+	assert.equal(t.x, 4);
 });
 
 test('the real echo confirms and clears the underline', () => {
@@ -196,7 +214,7 @@ test('the real echo confirms and clears the underline', () => {
 	clock.advance(80);
 	p.applyRemote('A');
 	assert.equal(t.row(), '$ abA');
-	assert.equal(t.ul[0][4], false);
+	assert.equal(t.overlay, null);
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(p.metrics.confirms, 3);
 });
@@ -206,13 +224,13 @@ test('two predictions confirmed by one chunk', () => {
 	activate(p, t, clock);
 	type(p, 'A');
 	type(p, 'B');
-	assert.equal(t.row(), '$ abAB');
+	assert.equal(t.shown(), '$ abAB');
+	assert.equal(t.row(), '$ ab');
 	clock.advance(80);
 	p.applyRemote('AB');
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(t.row(), '$ abAB');
-	assert.equal(t.ul[0][4], false);
-	assert.equal(t.ul[0][5], false);
+	assert.equal(t.overlay, null);
 });
 
 test('a partial echo confirms the prefix and redraws the rest', () => {
@@ -223,10 +241,10 @@ test('a partial echo confirms the prefix and redraws the rest', () => {
 	clock.advance(80);
 	p.applyRemote('A');
 	assert.equal(p.metrics.pending, 1);
-	assert.equal(t.row(), '$ abAB');
-	assert.equal(t.ul[0][4], false);
-	assert.equal(t.ul[0][5], true);
-	assert.equal(t.x, 6);
+	assert.equal(t.row(), '$ abA');
+	assert.equal(t.shown(), '$ abAB');
+	assert.deepEqual(t.overlay, { row: 0, x: 5, text: 'B' });
+	assert.equal(t.x, 5);
 });
 
 test('a mismatched echo retracts and demotes to shadow', () => {
@@ -236,7 +254,7 @@ test('a mismatched echo retracts and demotes to shadow', () => {
 	clock.advance(80);
 	p.applyRemote('X');
 	assert.equal(t.row(), '$ abX');
-	assert.equal(t.ul[0][4], false);
+	assert.equal(t.overlay, null);
 	assert.equal(p.state, 'shadow');
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(p.metrics.retracts, 1);
@@ -246,9 +264,10 @@ test('an unconfirmed prediction times out, retracts and demotes', async () => {
 	const { p, t, clock } = mk({ floor: 1, ceil: 1 });
 	activate(p, t, clock);
 	type(p, 'A');
-	assert.equal(t.row(), '$ abA');
+	assert.equal(t.shown(), '$ abA');
 	await new Promise((r) => setTimeout(r, 25));
-	assert.equal(t.row(), '$ ab');
+	assert.equal(t.shown(), '$ ab');
+	assert.equal(t.overlay, null);
 	assert.equal(t.x, 4);
 	assert.equal(p.state, 'shadow');
 	assert.equal(p.metrics.pending, 0);
@@ -259,7 +278,8 @@ test('backspace nets out a pending insert and both confirm together', () => {
 	activate(p, t, clock);
 	type(p, 'A');
 	type(p, '\x7f');
-	assert.equal(t.row(), '$ ab');
+	assert.equal(t.shown(), '$ ab');
+	assert.equal(t.overlay, null);
 	assert.equal(t.x, 4);
 	assert.equal(p.metrics.pending, 2);
 	clock.advance(80);
@@ -392,11 +412,11 @@ test('a disconnect flush restores the screen and clears the queue', () => {
 	activate(p, t, clock);
 	type(p, 'A');
 	type(p, 'B');
-	assert.equal(t.row(), '$ abAB');
+	assert.equal(t.shown(), '$ abAB');
 	p.flush('disconnect');
-	assert.equal(t.row(), '$ ab');
+	assert.equal(t.shown(), '$ ab');
+	assert.equal(t.overlay, null);
 	assert.equal(t.x, 4);
-	assert.equal(t.ul[0][4], false);
 	assert.equal(p.metrics.pending, 0);
 });
 
@@ -405,7 +425,7 @@ test('the kill switch disables drawing', () => {
 	let enabled = true;
 	let now = 0;
 	const p = new PredictiveEcho(t, { now: () => now, enabled: () => enabled });
-	t.write('$ ');
+	t.write('$ ', () => {});
 	type(p, 'a');
 	now += 80;
 	p.applyRemote('a');
@@ -417,4 +437,5 @@ test('the kill switch disables drawing', () => {
 	type(p, 'A');
 	assert.equal(p.state, 'disabled');
 	assert.equal(t.row(), '$ ab');
+	assert.equal(t.overlay, null);
 });
