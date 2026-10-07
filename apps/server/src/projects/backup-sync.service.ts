@@ -6,7 +6,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { DEFAULT_BACKUP_CRON, toQuartzCron } from './projects.utils';
-import { backupTransition } from './backup-transition';
+import { backupTransition, SUPERSEDED_MESSAGE, supersededBackups } from './backup-transition';
 
 const NOTIFY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const INGEST_EVERY_N_TICKS = 5;
@@ -185,20 +185,49 @@ export class BackupSyncService {
     }
 
     if (opts.ingest) {
-      anyNewlyCompleted = (await this.ingestUntrackedBackups(database)) || anyNewlyCompleted;
+      let liveBackups: any[] = [];
+      try {
+        liveBackups = await this.k8sCnpg.listCnpgBackups(
+          database.namespace!,
+          database.clusterName!
+        );
+      } catch {
+        return anyNewlyCompleted;
+      }
+      await this.sweepSupersededBackups(database, liveBackups).catch((e) => {
+        this.logger.warn(`superseded sweep failed for ${database.clusterName}: ${e?.message ?? e}`);
+      });
+      anyNewlyCompleted =
+        (await this.ingestUntrackedBackups(database, liveBackups)) || anyNewlyCompleted;
     }
 
     return anyNewlyCompleted;
   }
 
-  private async ingestUntrackedBackups(database: DatabaseRef): Promise<boolean> {
-    let anyNewlyCompleted = false;
-    let liveBackups: any[] = [];
-    try {
-      liveBackups = await this.k8sCnpg.listCnpgBackups(database.namespace!, database.clusterName!);
-    } catch {
-      return false;
+  private async sweepSupersededBackups(database: DatabaseRef, liveBackups: any[]): Promise<void> {
+    const names = supersededBackups(liveBackups);
+    if (names.length === 0) return;
+    for (const name of names) {
+      await this.k8sCnpg.deleteCnpgBackup(database.namespace!, name);
     }
+    await this.prisma.databaseBackup.updateMany({
+      where: {
+        databaseId: database.id,
+        backupName: { in: names },
+        status: { in: ['pending', 'running'] }
+      },
+      data: { status: 'failed', errorMessage: SUPERSEDED_MESSAGE, completedAt: new Date() }
+    });
+    this.logger.log(
+      `[DB/backup] swept ${names.length} superseded scheduled backup(s) from ${database.namespace}/${database.clusterName}`
+    );
+  }
+
+  private async ingestUntrackedBackups(
+    database: DatabaseRef,
+    liveBackups: any[]
+  ): Promise<boolean> {
+    let anyNewlyCompleted = false;
     if (liveBackups.length === 0) return false;
 
     const existing = await this.prisma.databaseBackup.findMany({

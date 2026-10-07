@@ -4,7 +4,8 @@ import {
   backupTransition,
   BACKUP_TIMEOUT_MS,
   WAL_ARCHIVING_FAILING_MESSAGE,
-  WAL_ARCHIVING_GRACE_MS
+  WAL_ARCHIVING_GRACE_MS,
+  supersededBackups
 } from '../src/projects/backup-transition';
 
 const MINUTE = 60 * 1000;
@@ -62,4 +63,35 @@ test('terminal phases, missing resources and timeouts map as before', () => {
     backupTransition(row('running', BACKUP_TIMEOUT_MS + MINUTE), live('running'), now),
     { status: 'failed', errorMessage: 'Backup timed out' }
   );
+});
+
+test('older scheduled backups still waiting behind a newer one are superseded, running and manual ones are kept', () => {
+  const at = (minutesAgo: number) => new Date(now - minutesAgo * MINUTE).toISOString();
+  const scheduled = (name: string, minutesAgo: number, phase?: string) => ({
+    metadata: {
+      name,
+      creationTimestamp: at(minutesAgo),
+      labels: { 'cnpg.io/scheduled-backup': 'sched' }
+    },
+    status: phase === undefined ? undefined : { phase }
+  });
+  const items = [
+    scheduled('s-old-pending', 180, 'pending'),
+    scheduled('s-old-nophase', 120),
+    scheduled('s-old-archiving', 90, 'walArchivingFailing'),
+    scheduled('s-running', 60, 'running'),
+    scheduled('s-young', 10, 'pending'),
+    scheduled('s-newest', 5, 'pending'),
+    scheduled('s-done', 240, 'completed'),
+    {
+      metadata: { name: 'manual', creationTimestamp: at(300) },
+      status: { phase: 'pending' }
+    }
+  ];
+  assert.deepEqual(supersededBackups(items, now).sort(), [
+    's-old-archiving',
+    's-old-nophase',
+    's-old-pending'
+  ]);
+  assert.deepEqual(supersededBackups([scheduled('only', 500, 'pending')], now), []);
 });

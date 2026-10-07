@@ -47,3 +47,32 @@ export function backupTransition(
   if (ageMs > BACKUP_TIMEOUT_MS) return { status: 'failed', errorMessage: 'Backup timed out' };
   return null;
 }
+
+export const SUPERSEDED_GRACE_MS = 30 * 60 * 1000;
+export const SUPERSEDED_MESSAGE = 'Superseded by a newer scheduled backup before it could start';
+
+export interface QueuedBackupLike {
+  metadata?: {
+    name?: string;
+    creationTimestamp?: string;
+    labels?: Record<string, string>;
+  };
+  status?: { phase?: string } | null;
+}
+
+const WAITING_PHASES = new Set(['', 'pending', 'walArchivingFailing']);
+
+export function supersededBackups(items: QueuedBackupLike[], now = Date.now()): string[] {
+  const waiting = items
+    .filter((b) => b.metadata?.name && b.metadata.labels?.['cnpg.io/scheduled-backup'])
+    .filter((b) => WAITING_PHASES.has(b.status?.phase ?? ''))
+    .map((b) => ({
+      name: b.metadata!.name!,
+      createdAt: Date.parse(b.metadata!.creationTimestamp ?? '') || 0
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
+  return waiting
+    .slice(1)
+    .filter((b) => now - b.createdAt > SUPERSEDED_GRACE_MS)
+    .map((b) => b.name);
+}
