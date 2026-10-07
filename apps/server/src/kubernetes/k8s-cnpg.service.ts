@@ -2096,6 +2096,28 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return items.filter((b) => b.spec?.cluster?.name === clusterName);
   }
 
+  async listAllCnpgBackups(): Promise<any[]> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const { body } = await customApi.listClusterCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      this.CNPG_BACKUP_PLURAL
+    );
+    return (body as any).items || [];
+  }
+
+  async listAllCnpgClusters(): Promise<any[]> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const { body } = await customApi.listClusterCustomObject(
+      this.CNPG_GROUP,
+      this.CNPG_VERSION,
+      this.CNPG_PLURAL
+    );
+    return (body as any).items || [];
+  }
+
   async deleteCnpgBackup(namespace: string, backupName: string): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);

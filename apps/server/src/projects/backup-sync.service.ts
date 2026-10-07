@@ -7,6 +7,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { DEFAULT_BACKUP_CRON, toQuartzCron } from './projects.utils';
 import { backupTransition, SUPERSEDED_MESSAGE, supersededBackups } from './backup-transition';
+import { backupFleetGauges } from './backup-telemetry';
+import { gauge } from '../analytics/datadog';
 
 const NOTIFY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const INGEST_EVERY_N_TICKS = 5;
@@ -73,6 +75,11 @@ export class BackupSyncService {
           this.logger.warn(`schedule sweep failed: ${e?.message ?? e}`);
         });
       }
+      if (ingest) {
+        await this.emitFleetGauges().catch((e) => {
+          this.logger.warn(`backup telemetry failed: ${e?.message ?? e}`);
+        });
+      }
     } catch (e: any) {
       this.logger.warn(`backup sync tick failed: ${e?.message ?? e}`);
     } finally {
@@ -93,6 +100,14 @@ export class BackupSyncService {
    * A database that has taken backups and then had its schedule cleared is
    * someone choosing manual backups, so it is left alone.
    */
+  private async emitFleetGauges(): Promise<void> {
+    const [clusters, backups] = await Promise.all([
+      this.k8sCnpg.listAllCnpgClusters(),
+      this.k8sCnpg.listAllCnpgBackups()
+    ]);
+    for (const g of backupFleetGauges(clusters, backups)) gauge(g.metric, g.value, g.tags);
+  }
+
   private async ensureBackupSchedules(): Promise<void> {
     const databases = await this.prisma.database.findMany({
       where: {

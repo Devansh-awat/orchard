@@ -30,6 +30,19 @@ export function initDatadog(): void {
   });
 }
 
+export function gauge(name: string, value: number, tags: string[] = []): void {
+  try {
+    const statsd = (
+      tracer as unknown as {
+        dogstatsd?: { gauge(name: string, value: number, tags?: string[]): void };
+      }
+    ).dogstatsd;
+    statsd?.gauge(name, value, tags);
+  } catch {
+    /* telemetry must never break the caller */
+  }
+}
+
 /**
  * Heuristic: did the build fail because of the user's code/config, or
  * because of our infrastructure? Tagged on the build span so dashboards can
