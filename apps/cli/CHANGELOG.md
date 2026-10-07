@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0](https://github.com/hackclub/orchard/compare/cli/v0.20.0...cli/v0.21.0) (2026-10-07)
+
+
+### Features
+
+* shell tabs survive a reload, sandbox shells resize, cli sends its size, gpu rendering toggle ([0b713f1](https://github.com/hackclub/orchard/commit/0b713f1a58e0049c3e7f8ae6a7cd027a657c4d59))
+
+
+### Bug Fixes
+
+* ci exec tests, e2e frontend origin, and superadmin template routes out of cli parity ([d4696a2](https://github.com/hackclub/orchard/commit/d4696a210d7d21c178656c90c3494f86d24dc946))
+
 ## [0.20.0](https://github.com/hackclub/orchard/compare/cli/v0.19.0...cli/v0.20.0) (2026-10-07)
 
 

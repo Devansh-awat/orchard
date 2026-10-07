@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.58.0](https://github.com/hackclub/orchard/compare/server/v2.57.0...server/v2.58.0) (2026-10-07)
+
+
+### Features
+
+* pod shell reattach restores an exact screen snapshot and speaks protocol v2 ([7cbfd19](https://github.com/hackclub/orchard/commit/7cbfd19ca25530659337465a8601fe8586c84cb3))
+* shell tabs survive a reload, sandbox shells resize, cli sends its size, gpu rendering toggle ([0b713f1](https://github.com/hackclub/orchard/commit/0b713f1a58e0049c3e7f8ae6a7cd027a657c4d59))
+
 ## [2.57.0](https://github.com/hackclub/orchard/compare/server/v2.56.0...server/v2.57.0) (2026-10-07)
 
 
