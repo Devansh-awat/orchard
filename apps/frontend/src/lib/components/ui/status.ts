@@ -148,8 +148,10 @@ export function sandboxStatus(status: SandboxStatus, ctx: SandboxStatusContext =
 	}
 	if (ctx.applyError) return meta('warning', status === 'running' ? 'Running' : 'Stopped');
 	if (ctx.applying) {
-		if (ctx.desiredState === 'stopped' && status !== 'stopped') return meta('progress', 'Stopping', true);
-		if (ctx.desiredState === 'running' && status !== 'running') return meta('progress', 'Starting', true);
+		if (ctx.desiredState === 'stopped' && status !== 'stopped')
+			return meta('progress', 'Stopping', true);
+		if (ctx.desiredState === 'running' && status !== 'running')
+			return meta('progress', 'Starting', true);
 		return meta('progress', 'Applying', true);
 	}
 	switch (status) {
@@ -165,6 +167,33 @@ export function sandboxStatus(status: SandboxStatus, ctx: SandboxStatusContext =
 			return meta('error', 'Error');
 		default:
 			return meta('neutral', capitalize(status));
+	}
+}
+
+export type PreviewDeployStatus =
+	| 'building'
+	| 'deploying'
+	| 'ready'
+	| 'failed'
+	| 'stopped'
+	| 'gone';
+
+export function previewStatus(status: PreviewDeployStatus | null | undefined): StatusMeta {
+	switch (status) {
+		case 'building':
+			return meta('progress', 'Building', true);
+		case 'deploying':
+			return meta('progress', 'Deploying', true);
+		case 'ready':
+			return meta('success', 'Live');
+		case 'failed':
+			return meta('error', 'Failed');
+		case 'stopped':
+			return meta('neutral', 'Stopped');
+		case 'gone':
+			return meta('neutral', 'Removed');
+		default:
+			return meta('neutral', 'Pending');
 	}
 }
 

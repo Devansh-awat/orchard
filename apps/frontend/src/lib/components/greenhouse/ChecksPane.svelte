@@ -1,14 +1,27 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ExternalLink, GitPullRequest, RefreshCw, Wand2 } from 'lucide-svelte';
+	import { ExternalLink, GitPullRequest, RefreshCw, Rocket, Trash2, Wand2 } from 'lucide-svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { statusMeta, type StatusMeta } from '$lib/components/ui/status';
+	import { previewStatus, statusMeta, type StatusMeta } from '$lib/components/ui/status';
+	import { getGreenhouseApp } from './app.svelte';
 	import * as api from './api';
-	import { VIEWER_ONLY, isLegacy, type MachineWorkspace } from './workspace.svelte';
+	import { VIEWER_ONLY, hostOnly, isLegacy, type MachineWorkspace } from './workspace.svelte';
 	import type { GhCheck, GhChecks, GhSession } from './types';
 
 	let { ws, session }: { ws: MachineWorkspace; session: GhSession } = $props();
+
+	const app = getGreenhouseApp();
+	const hasPreview = $derived(!!session.previewDeploymentId || !!session.previewUrl);
+	const preview = $derived(previewStatus(session.previewStatus));
+	let removing = $state(false);
+
+	async function removePreview() {
+		if (removing) return;
+		removing = true;
+		await ws.removePreview(session);
+		removing = false;
+	}
 
 	let data = $state.raw<GhChecks | null>(null);
 	let phase = $state<'loading' | 'ready' | 'unavailable'>('loading');
@@ -81,6 +94,61 @@
 </script>
 
 <div class="checks gh-scroll">
+	{#if hasPreview}
+		<section class="group" aria-label="Preview deploy">
+			<div class="head">
+				<span class="head-title">Preview</span>
+			</div>
+			<div class="check">
+				<svelte:element
+					this={session.previewUrl ? 'a' : 'div'}
+					class="check-row preview-row"
+					href={session.previewUrl ?? undefined}
+					target={session.previewUrl ? '_blank' : undefined}
+					rel={session.previewUrl ? 'noopener' : undefined}
+					title={session.previewUrl ? `Open ${session.previewUrl}` : undefined}
+				>
+					<span class="ico" data-align="right-edge"><StatusDot meta={preview} size={8} /></span>
+					<span class="check-name gh-mono preview-url"
+						>{session.previewUrl?.replace(/^https?:\/\//, '') ?? 'Waiting for an address'}</span
+					>
+					<span class="check-state" class:check-state--failed={preview.kind === 'error'}
+						>{preview.label}</span
+					>
+				</svelte:element>
+				{#if session.previewUrl}
+					<a
+						class="gh-ibtn"
+						href={session.previewUrl}
+						target="_blank"
+						rel="noopener"
+						aria-label="Open the preview"
+						title="Open the preview"
+					>
+						<ExternalLink size={14} strokeWidth={1.75} />
+					</a>
+				{/if}
+				<button
+					type="button"
+					class="gh-ibtn"
+					aria-label="Remove preview"
+					title={ws.isOwner ? 'Remove preview' : hostOnly('remove previews')}
+					disabled={!ws.isOwner || removing}
+					onclick={removePreview}
+				>
+					<Trash2 size={14} strokeWidth={1.75} />
+				</button>
+			</div>
+		</section>
+	{:else if ws.isOwner && !isLegacy(session)}
+		<div class="fix fix--preview">
+			<button type="button" class="gh-btn gh-btn--ghost" onclick={() => (app.sheet = 'preview')}>
+				<Rocket size={14} strokeWidth={1.75} /> Deploy preview…
+			</button>
+			<span class="fix-note">Runs this branch as its own Orchard environment.</span>
+		</div>
+	{/if}
+
 	{#if phase === 'loading'}
 		<div class="skeletons">
 			<Skeleton height="0.625rem" width="55%" />
@@ -321,6 +389,22 @@
 
 	.note {
 		padding: 0.5rem;
+	}
+
+	.preview-row {
+		color: var(--gh-text);
+	}
+
+	a.preview-row:hover {
+		background: var(--gh-hover);
+	}
+
+	.preview-url {
+		font-size: var(--gh-caption);
+	}
+
+	.fix--preview {
+		padding: 0 0.5rem 0.5rem;
 	}
 
 	.skeletons {

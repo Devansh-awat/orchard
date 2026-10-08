@@ -39,7 +39,7 @@
 	});
 
 	async function clone(repoUrl = url.trim()) {
-		if (!ws || !repoUrl || busy) return;
+		if (!ws?.isOwner || !repoUrl || busy) return;
 		busy = true;
 		try {
 			const res = await api.addRepo(ws.sandboxId, repoUrl);

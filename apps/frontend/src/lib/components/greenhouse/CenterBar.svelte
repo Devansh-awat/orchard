@@ -4,6 +4,7 @@
 		ChevronRight,
 		Copy,
 		Ellipsis,
+		ExternalLink,
 		GitFork,
 		Link,
 		PanelLeft,
@@ -14,7 +15,9 @@
 	} from 'lucide-svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import { previewStatus } from '$lib/components/ui/status';
+	import { toasts } from '$lib/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import AvatarStack from './AvatarStack.svelte';
 	import OpenIn from './OpenIn.svelte';
@@ -28,6 +31,12 @@
 	const session = $derived(ws?.session ?? null);
 	const mod = modKey();
 
+	const preview = $derived(
+		session && (session.previewDeploymentId || session.previewUrl)
+			? previewStatus(session.previewStatus)
+			: null
+	);
+
 	let menuOpen = $state(false);
 	let branchOpen = $state(false);
 
@@ -40,33 +49,6 @@
 		if (!session || !app.machine) return;
 		const url = `${location.origin}/sandboxes/${app.machine.id}?session=${session.id}`;
 		void copy(url, 'Session link copied');
-	}
-
-	async function deployPreview() {
-		if (!session || !app.machine) return;
-		try {
-			const res = await apiFetch(
-				`/apiv1/sandboxes/${app.machine.id}/sessions/${session.id}/preview-deploy`,
-				{ method: 'POST' }
-			);
-			if (res.status === 404) {
-				toasts.add({
-					title: 'Preview deploys are not available yet',
-					description: 'This server cannot deploy sessions as preview environments.',
-					color: 'info'
-				});
-				return;
-			}
-			if (!res.ok)
-				throw new Error((await res.json().catch(() => null))?.message ?? 'Deploy failed');
-			toasts.add({ title: 'Preview deploy started', color: 'success' });
-		} catch (e) {
-			toasts.add({
-				title: 'Could not deploy a preview',
-				description: e instanceof Error ? e.message : undefined,
-				color: 'error'
-			});
-		}
 	}
 
 	function follow(userId: string) {
@@ -144,16 +126,17 @@
 				>
 					<GitFork size={14} /> Fork session
 				</MenuItem>
-				<MenuItem onclick={shareLink}><Link size={14} /> Copy share link</MenuItem>
+				<MenuItem onclick={shareLink}><Link size={14} /> Copy link for guests</MenuItem>
 				<MenuItem onclick={() => (app.sheet = 'share')}
 					><Share2 size={14} /> {ws.isOwner ? 'Share machine…' : 'People on this machine'}</MenuItem
 				>
 				<MenuItem
-					onclick={deployPreview}
-					disabled={!ws.isOwner}
+					onclick={() => (app.sheet = 'preview')}
+					disabled={!ws.isOwner || isLegacy(session)}
 					title={ws.isOwner ? undefined : hostOnly('deploy previews')}
 				>
-					<Rocket size={14} /> Deploy preview
+					<Rocket size={14} />
+					{session.previewDeploymentId ? 'Preview deploy…' : 'Deploy preview…'}
 				</MenuItem>
 				<div class="gh-menu-sep"></div>
 				<MenuItem
@@ -180,6 +163,31 @@
 			size={20}
 			onpick={(u) => follow(u.id)}
 		/>
+	{/if}
+	{#if session && preview && !compact}
+		{#if session.previewUrl}
+			<a
+				class="preview"
+				href={session.previewUrl}
+				target="_blank"
+				rel="noopener"
+				title="Preview: {preview.label}. Opens {session.previewUrl}"
+			>
+				<StatusDot meta={preview} size={8} />
+				<span data-align="title">Preview</span>
+				<ExternalLink size={14} strokeWidth={1.75} />
+			</a>
+		{:else}
+			<button
+				type="button"
+				class="preview"
+				title="Preview: {preview.label}"
+				onclick={() => (app.sheet = 'preview')}
+			>
+				<StatusDot meta={preview} size={8} />
+				<span data-align="title">Preview · {preview.label}</span>
+			</button>
+		{/if}
 	{/if}
 	{#if session && !compact}
 		<OpenIn />
@@ -275,5 +283,25 @@
 
 	.grow {
 		flex: 1;
+	}
+
+	.preview {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: none;
+		height: var(--gh-icon);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-control);
+		color: var(--gh-muted);
+		white-space: nowrap;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
+	}
+
+	.preview:hover {
+		background: var(--gh-hover);
+		color: var(--gh-text);
 	}
 </style>

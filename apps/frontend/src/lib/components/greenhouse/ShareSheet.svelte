@@ -6,6 +6,7 @@
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import { HOST_DISCLOSURE, shareAcknowledged, acknowledgeShare } from './disclosure';
+	import ShareLinks from './ShareLinks.svelte';
 	import { hostOnly } from './workspace.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -225,9 +226,13 @@
 				{/if}
 			{/each}
 		</div>
+
+		{#if manage}
+			<ShareLinks active={open} />
+		{/if}
 	</div>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={copyLink}><Link size={14} /> Copy link</Button>
+		<Button variant="ghost" onclick={copyLink}><Link size={14} /> Copy link for guests</Button>
 		<span class="grow"></span>
 		<Button variant="secondary" onclick={() => (open = false)}>Done</Button>
 	{/snippet}

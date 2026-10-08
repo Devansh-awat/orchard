@@ -12,6 +12,7 @@
 	} from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import McpToggle from '$lib/components/admin/McpToggle.svelte';
+	import SandboxesToggle from '$lib/components/admin/SandboxesToggle.svelte';
 	import TelemetryToggle from '$lib/components/admin/TelemetryToggle.svelte';
 
 	type Section = {
@@ -103,6 +104,41 @@
 				enabled: 'Challenge the sign-in pages',
 				strict: 'Refuse sign-in when Cloudflare is unreachable'
 			}
+		},
+		'sandbox-runners': {
+			title: 'Greenhouse runners',
+			description:
+				'Where Greenhouse machines run. Kubernetes uses this cluster; Vercel runs them as Vercel Sandboxes on your team. People pick one when they create a machine, and the default is used when they do not.',
+			fields: {
+				defaultRunner: 'Default runner',
+				vercelToken: 'Vercel token',
+				vercelTeamId: 'Vercel team ID',
+				vercelProjectId: 'Vercel project ID',
+				vercelImage: 'Vercel base image',
+				vercelVcpus: 'Vercel vCPUs',
+				vercelTimeoutMinutes: 'Vercel timeout (minutes)',
+				bridgeBinaryUrl: 'Bridge binary URL',
+				bridgeBinarySha256: 'Bridge binary SHA-256',
+				previewDomain: 'Preview domain',
+				kubernetesEnabled: 'Kubernetes runner',
+				vercelEnabled: 'Vercel runner'
+			}
+		},
+		'slack-app': {
+			title: 'Slack app',
+			description:
+				'Lets people start Greenhouse sessions with /greenhouse and app mentions, with status posted back to the thread. Point the slash command at <origin>/apiv1/integrations/slack/commands and events at <origin>/apiv1/integrations/slack/events.',
+			fields: {
+				signingSecret: 'Signing secret',
+				botToken: 'Bot token',
+				appId: 'App ID'
+			}
+		},
+		linear: {
+			title: 'Linear',
+			description:
+				'A Linear webhook so a comment starting with /greenhouse on an issue starts a session. Point it at <origin>/apiv1/integrations/linear/webhook. Issue pickers work without it; people connect their own API key in their settings.',
+			fields: { webhookSecret: 'Webhook signing secret' }
 		}
 	};
 
@@ -119,7 +155,24 @@
 		strict: 'Off lets sign-in through unchallenged if the check cannot be reached, and logs it.',
 		baseUrl: 'Leave blank for gitlab.com. Callback URL: <origin>/apiv1/git/oauth/gitlab/callback',
 		clientId: 'Scopes: read_api, read_repository, read_user',
-		key: 'Callback URL: <origin>/apiv1/git/oauth/bitbucket/callback'
+		key: 'Callback URL: <origin>/apiv1/git/oauth/bitbucket/callback',
+		defaultRunner: 'kubernetes or vercel. Leave blank to use the first enabled runner.',
+		vercelToken: 'A Vercel access token scoped to the team. Leave blank to keep the stored one.',
+		vercelTeamId: 'team_..., from the team settings page',
+		vercelProjectId: 'prj_..., the project sandboxes are billed to',
+		vercelImage: 'Leave blank for the default Greenhouse image',
+		vercelVcpus: 'Whole number from 1 to 8',
+		vercelTimeoutMinutes: 'How long a Vercel machine may run before it is stopped, up to 1440',
+		bridgeBinaryUrl: 'https:// address of the orchard bridge tarball used for SSH on Vercel',
+		bridgeBinarySha256: 'The 64 character hex checksum of that tarball',
+		previewDomain:
+			'Bare domain whose wildcard points at Orchard, for example preview.example.com. Must not share the Orchard cookie domain.',
+		kubernetesEnabled: 'Machines run as Kata VMs in this cluster.',
+		vercelEnabled: 'Needs a token, team and project.',
+		signingSecret: 'From Basic Information in the Slack app. Never leaves the server.',
+		botToken: 'xoxb-..., from OAuth and Permissions',
+		appId: 'A0123456789. Optional, used to ignore the app talking to itself.',
+		webhookSecret: 'Shown once when you create the webhook in Linear'
 	};
 
 	let sections = $state<Section[]>([]);
@@ -190,6 +243,11 @@
 	{#each sections as section, i (section.id)}
 		{@const meta = META[section.id]}
 		{@const allLocked = section.lockedFields.length === Object.keys(meta.fields).length}
+		{#if section.id === 'sandbox-runners'}
+			<div {@attach motionStagger({ index: i })}>
+				<SandboxesToggle />
+			</div>
+		{/if}
 		<div {@attach motionStagger({ index: i })}>
 			<SectionCard title={meta.title} description={meta.description}>
 				{#if allLocked}

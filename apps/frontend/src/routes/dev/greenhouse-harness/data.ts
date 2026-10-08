@@ -20,7 +20,9 @@ const caps = {
 	homeMode: 'block' as const,
 	tcpTunnel: 'native' as const,
 	pty: 'native' as const,
-	maxRunMs: null
+	maxRunMs: null,
+	fork: true,
+	previews: 'proxy' as const
 };
 
 function machine(over: Partial<Sandbox>): Sandbox {
@@ -114,6 +116,7 @@ function session(over: Partial<GhSession>): GhSession {
 		prState: null,
 		previewDeploymentId: null,
 		previewUrl: null,
+		previewStatus: null,
 		createdBy: SEB,
 		createdAt: iso(40),
 		updatedAt: iso(1),
@@ -343,3 +346,204 @@ export const members: GhMembers = {
 	],
 	myRole: 'owner'
 };
+
+export const projects = [
+	{ id: 'prj-web', name: 'orchard-web', slug: 'orchard-web' },
+	{ id: 'prj-api', name: 'orchard-api', slug: 'orchard-api' },
+	{ id: 'prj-docs', name: 'docs', slug: 'docs' }
+];
+
+export const projectRows = projects.map((p, i) => ({
+	...p,
+	members: [{ user: { id: SEB.id }, role: { name: i === 2 ? 'viewer' : 'admin' } }],
+	deployments:
+		p.id === 'prj-web'
+			? [
+					{ id: 'dep-web', name: 'web', displayName: 'Web' },
+					{ id: 'dep-worker', name: 'worker', displayName: 'Worker' }
+				]
+			: [{ id: `dep-${p.slug}`, name: p.slug, displayName: null }]
+}));
+
+export const environments = [
+	{ id: 'env-prod', name: 'production', slug: 'production', isDefault: true },
+	{ id: 'env-staging', name: 'staging', slug: 'staging', isDefault: false }
+];
+
+export const projectLinks = [
+	{
+		id: 'lnk-1',
+		projectId: 'prj-api',
+		project: { id: 'prj-api', name: 'orchard-api', slug: 'orchard-api' },
+		environment: { id: 'env-staging', name: 'staging', slug: 'staging' },
+		envFile: '~/.config/orchard/env/orchard-api.env',
+		createdBy: SEB,
+		createdAt: iso(600)
+	}
+];
+
+export const shareLinks = [
+	{
+		id: 'shr-1',
+		sandboxId: 'sbx-leaf',
+		sessionId: '11111111-1111-4111-8111-111111111111',
+		session: { id: '11111111-1111-4111-8111-111111111111', title: 'Fix the login redirect loop' },
+		createdBy: SEB,
+		state: 'active' as const,
+		expiresAt: new Date(NOW + 6 * 86_400_000).toISOString(),
+		revokedAt: null,
+		lastUsedAt: iso(35),
+		createdAt: iso(60 * 24)
+	},
+	{
+		id: 'shr-2',
+		sandboxId: 'sbx-leaf',
+		sessionId: null,
+		session: null,
+		createdBy: SEB,
+		state: 'revoked' as const,
+		expiresAt: new Date(NOW + 20 * 86_400_000).toISOString(),
+		revokedAt: iso(120),
+		lastUsedAt: null,
+		createdAt: iso(60 * 30)
+	}
+];
+
+const issue = (
+	provider: 'github' | 'linear',
+	ref: string,
+	title: string,
+	labels: string[] = []
+) => ({
+	provider,
+	ref,
+	title,
+	url: null,
+	labels,
+	state: provider === 'linear' ? 'In Progress' : 'open',
+	updatedAt: iso(90)
+});
+
+export const githubIssues = [
+	issue(
+		'github',
+		'hackclub/orchard#431',
+		'Login bounces back to the login page on app.orchard.my',
+		['bug']
+	),
+	issue('github', 'hackclub/orchard#428', 'Preview tokens are not rate limited'),
+	issue('github', 'hackclub/orchard#419', 'CLI guide has typos in the sandbox section', ['docs']),
+	issue('github', 'hackclub/orchard#402', 'Show build cache hits in the build log')
+];
+
+export const linearIssues = [
+	issue('linear', 'ORC-212', 'Greenhouse: attach project variables to a machine'),
+	issue('linear', 'ORC-207', 'Slack kickoff should reply in the thread'),
+	issue('linear', 'ORC-198', 'Fork machines from a snapshot')
+];
+
+export const shareView = {
+	link: {
+		id: 'shr-1',
+		sessionId: null,
+		expiresAt: new Date(NOW + 6 * 86_400_000).toISOString(),
+		createdBy: { id: SEB.id, name: 'Seb', avatarUrl: null }
+	},
+	sandbox: { id: 'sbx-leaf', name: 'leaf-box', status: 'running' },
+	sessions: [
+		{
+			id: '11111111-1111-4111-8111-111111111111',
+			title: 'Fix the login redirect loop',
+			repo: 'orchard',
+			branch: 'orchard/fix-login',
+			baseBranch: 'main',
+			status: 'active' as const,
+			prUrl: null,
+			createdAt: iso(40)
+		},
+		{
+			id: '22222222-2222-4222-8222-222222222222',
+			title: 'Rate limit the preview token route',
+			repo: 'orchard',
+			branch: 'orchard/rate-limit',
+			baseBranch: 'main',
+			status: 'active' as const,
+			prUrl: null,
+			createdAt: iso(60)
+		}
+	]
+};
+
+export const shareTranscript = {
+	sessionId: '11111111-1111-4111-8111-111111111111',
+	chatId: 'ses_login',
+	title: 'Fix the login redirect loop',
+	messages: [
+		{
+			id: 'msg_u1',
+			role: 'user' as const,
+			text: 'Logging in on app.orchard.my bounces me back to the login page forever. Can you find out why and fix it?',
+			truncated: false,
+			createdAt: iso(40),
+			author: { id: SEB.id, name: 'Seb', avatarUrl: null }
+		},
+		{
+			id: 'msg_a1',
+			role: 'assistant' as const,
+			text: 'The redirect loop comes from the session cookie being scoped to `app.orchard.my` while the login callback lands on `orchard.my`. I scoped it to the parent domain and added a regression test.\n\nTwo things changed:\n\n1. `auth.controller.ts` now sets `domain` from `COOKIE_DOMAIN` instead of the request host\n2. the callback keeps `returnTo` through the OAuth state, so you land where you started',
+			truncated: false,
+			createdAt: iso(38),
+			author: null
+		},
+		{
+			id: 'msg_u3',
+			role: 'user' as const,
+			text: 'Nice. Now make the callback keep returnTo.',
+			truncated: false,
+			createdAt: iso(20),
+			author: { id: ALEX.id, name: ALEX.name, avatarUrl: null }
+		},
+		{
+			id: 'msg_a3',
+			role: 'assistant' as const,
+			text: 'Done. `readReturnTo(state)` validates the path is same-origin before redirecting, and the new test covers a `returnTo` of `/projects`.',
+			truncated: false,
+			createdAt: iso(18),
+			author: null
+		}
+	]
+};
+
+export const shareDiff = `diff --git a/apps/server/src/auth/auth.controller.ts b/apps/server/src/auth/auth.controller.ts
+index 3f1a2b4..9c8d7e6 100644
+--- a/apps/server/src/auth/auth.controller.ts
++++ b/apps/server/src/auth/auth.controller.ts
+@@ -1,15 +1,24 @@
+ import { Controller, Get, Query, Res } from '@nestjs/common';
+ import type { Response } from 'express';
+ import { AuthService } from './auth.service';
++import { readReturnTo } from './oauth-state';
+ 
+ @Controller('auth')
+ export class AuthController {
+   constructor(private readonly auth: AuthService) {}
+ 
+   @Get('callback')
+-  async callback(@Query('code') code: string, @Res() res: Response) {
++  async callback(
++    @Query('code') code: string,
++    @Query('state') state: string,
++    @Res() res: Response
++  ) {
+     const token = await this.auth.exchange(code);
+-    res.cookie('session', token, { sameSite: 'lax' });
+-    return res.redirect('/');
++    res.cookie('session', token, {
++      domain: process.env.COOKIE_DOMAIN,
++      sameSite: 'lax',
++      secure: true
++    });
++    return res.redirect(readReturnTo(state) ?? '/');
+   }
+ }
+`;

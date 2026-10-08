@@ -67,9 +67,11 @@
 	let loadedFor: string | null = null;
 	$effect(() => {
 		const sid = ws.sessionId;
-		if (!sid || sid === loadedFor) return;
-		loadedFor = sid;
-		selected = null;
+		const key = sid ? `${sid}:${ready}` : null;
+		if (!sid || key === loadedFor) return;
+		const switched = !loadedFor?.startsWith(`${sid}:`);
+		loadedFor = key;
+		if (switched) selected = null;
 		untrack(() => {
 			void ws.loadChats(sid);
 			void ws.refreshChanges(sid);

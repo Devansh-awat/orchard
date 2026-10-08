@@ -18,7 +18,12 @@
 		hostBadge?: boolean;
 	} = $props();
 
-	const shown = $derived(users.slice(0, max));
+	const ordered = $derived(
+		hostBadge
+			? [...users].sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner'))
+			: users
+	);
+	const shown = $derived(ordered.slice(0, max));
 	const extra = $derived(Math.max(0, users.length - max));
 </script>
 
@@ -71,7 +76,7 @@
 		{#if extra > 0}
 			<span
 				class="more"
-				title={users
+				title={ordered
 					.slice(max)
 					.map((u) => u.name)
 					.join(', ')}>+{extra}</span
@@ -103,9 +108,13 @@
 	}
 
 	.face + .face,
-	.face + .more,
-	.host + .face {
+	.face + .more {
 		margin-left: calc(var(--av) * 0.72 - var(--hit));
+	}
+
+	.host + .face,
+	.host + .more {
+		margin-left: 0;
 	}
 
 	.disc {

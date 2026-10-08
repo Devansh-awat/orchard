@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { PreviewDeployStatus } from '$lib/components/ui/status';
 
 export type SessionActivityState = 'idle' | 'working' | 'needs_input' | 'done';
 
@@ -25,6 +26,7 @@ export interface GhSession {
 	prState: 'open' | 'merged' | 'closed' | null;
 	previewDeploymentId: string | null;
 	previewUrl: string | null;
+	previewStatus?: PreviewDeployStatus | null;
 	createdBy: PersonRef | null;
 	createdAt: string;
 	updatedAt: string;
@@ -177,3 +179,69 @@ export interface RunnerChoice {
 }
 
 export type EditorTarget = 'vscode' | 'cursor' | 'zed' | 'terminal';
+
+export interface GhProjectLink {
+	id: string;
+	projectId: string;
+	project: { id: string; name: string; slug: string };
+	environment: { id: string; name: string; slug: string };
+	envFile: string;
+	createdBy: PersonRef | null;
+	createdAt: string;
+}
+
+export interface GhPreviewResult {
+	session: GhSession;
+	deploymentId: string;
+	environmentId: string;
+	url: string | null;
+	branch: string;
+	commit: string | null;
+	redeployed: boolean;
+	skippedEnv: string[];
+}
+
+export type GhShareState = 'active' | 'expired' | 'revoked';
+
+export interface GhShareLink {
+	id: string;
+	sandboxId: string;
+	sessionId: string | null;
+	session: { id: string; title: string } | null;
+	createdBy: PersonRef | null;
+	state: GhShareState;
+	expiresAt: string | null;
+	revokedAt: string | null;
+	lastUsedAt: string | null;
+	createdAt: string;
+	token?: string;
+	url?: string;
+}
+
+export type IssueProvider = 'github' | 'linear';
+
+export type PickedIssue = { provider: IssueProvider; ref: string; title: string | null };
+
+export interface GhIssue {
+	provider: IssueProvider;
+	ref: string;
+	title: string;
+	url: string | null;
+	labels: string[];
+	state: string | null;
+	updatedAt: string | null;
+}
+
+export interface GhOrchardProject {
+	id: string;
+	name: string;
+	slug: string;
+	deployments: { id: string; name: string; displayName: string | null }[];
+}
+
+export interface GhEnvironment {
+	id: string;
+	name: string;
+	slug: string;
+	isDefault: boolean;
+}

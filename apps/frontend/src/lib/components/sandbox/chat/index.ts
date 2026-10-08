@@ -25,3 +25,5 @@ export type {
 	ToolEntry,
 	UserEntry
 } from './session-store.svelte';
+export { default as HumanMessage } from './parts/HumanMessage.svelte';
+export { default as TextPart } from './parts/TextPart.svelte';

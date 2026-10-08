@@ -11,11 +11,13 @@
 	import { GreenhouseApp, setGreenhouseApp, type GreenhouseNav } from './app.svelte';
 	import CenterBar from './CenterBar.svelte';
 	import CenterPane from './CenterPane.svelte';
+	import ForkSheet from './ForkSheet.svelte';
 	import { setGreenhouseEnv, type GreenhouseEnv } from './env';
 	import Home from './Home.svelte';
 	import JoinNotice from './JoinNotice.svelte';
 	import { LEFT, RIGHT } from './layout.svelte';
 	import NewMachineSheet from './NewMachineSheet.svelte';
+	import PreviewSheet from './PreviewSheet.svelte';
 	import ResizeHandle from './ResizeHandle.svelte';
 	import RightPanel from './RightPanel.svelte';
 	import SettingsSheet from './SettingsSheet.svelte';
@@ -345,6 +347,10 @@
 	<AddRepoSheet
 		bind:open={() => app.sheet === 'add-repo', (v) => (app.sheet = v ? 'add-repo' : null)}
 	/>
+	<PreviewSheet
+		bind:open={() => app.sheet === 'preview', (v) => (app.sheet = v ? 'preview' : null)}
+	/>
+	<ForkSheet bind:open={() => app.sheet === 'fork', (v) => (app.sheet = v ? 'fork' : null)} />
 	<JoinNotice />
 	<Modal bind:open={renameOpen} title="Rename session" size="sm">
 		<Input

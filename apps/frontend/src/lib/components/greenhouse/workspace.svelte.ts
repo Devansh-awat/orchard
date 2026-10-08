@@ -399,7 +399,31 @@ export class MachineWorkspace {
 		if (!session || isLegacy(session)) return;
 		const res = await api.listChats(this.sandboxId, sid);
 		if (this.#disposed || !res.ok) return;
-		this.chats.set(sid, res.data.chats ?? []);
+		const chats = res.data.chats ?? [];
+		this.chats.set(sid, chats);
+		if (chats.length === 0 && !session.opencodeSessionId) await this.#firstChat(session);
+	}
+
+	#creatingChat = new Set<string>();
+
+	async #firstChat(session: GhSession) {
+		if (this.#creatingChat.has(session.id)) return;
+		if (!untrack(() => this.canEdit) || !untrack(() => this.running)) return;
+		this.#creatingChat.add(session.id);
+		try {
+			const chat = await api.createChat(this.sandboxId, session.id);
+			if (this.#disposed) return;
+			this.chats.set(session.id, [chat]);
+			if (untrack(() => this.sessionId) === session.id) this.host.openTab(chatTabId(chat.id));
+		} catch (e) {
+			toasts.add({
+				title: 'Could not open a chat for this session',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			this.#creatingChat.delete(session.id);
+		}
 	}
 
 	upsert(session: GhSession) {
@@ -563,6 +587,14 @@ export class MachineWorkspace {
 					return legacy;
 				}
 			}
+			if (input.issue && e instanceof api.GhApiError && e.status === 403) {
+				toasts.add({
+					title: 'Only the host can start from this issue',
+					description: e.message,
+					color: 'error'
+				});
+				return null;
+			}
 			toasts.add({
 				title: 'Could not start the session',
 				description: e instanceof Error ? e.message : undefined,
@@ -651,6 +683,47 @@ export class MachineWorkspace {
 			});
 		} finally {
 			this.busy = null;
+		}
+	}
+
+	async retryApply() {
+		const machine = this.machine;
+		if (!machine || this.busy || !this.canLifecycle) return;
+		this.busy = 'retry';
+		try {
+			await api.retryApply(this.sandboxId);
+			await queryClient.invalidateQueries({ queryKey: ['sandboxes'] });
+			toasts.add({ title: `Retrying the last change on ${machine.name}`, color: 'success' });
+		} catch (e) {
+			const missing = e instanceof api.GhApiError && (e.status === 404 || e.status === 405);
+			toasts.add({
+				title: missing ? 'Retry is not available on this server yet' : 'Retry failed',
+				description: missing
+					? 'Stop and start the machine to apply it again.'
+					: e instanceof Error
+						? e.message
+						: undefined,
+				color: missing ? 'info' : 'error'
+			});
+		} finally {
+			this.busy = null;
+		}
+	}
+
+	async removePreview(session: GhSession) {
+		if (!this.isOwner) return false;
+		try {
+			const res = await api.removePreview(this.sandboxId, session.id);
+			this.upsert(res.session);
+			toasts.add({ title: 'Preview removed', color: 'success' });
+			return true;
+		} catch (e) {
+			toasts.add({
+				title: 'Could not remove the preview',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			return false;
 		}
 	}
 

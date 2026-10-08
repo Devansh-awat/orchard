@@ -22,6 +22,8 @@ export interface SandboxRunnerCapabilities {
 	execStdin?: boolean;
 	maxRunMs: number | null;
 	diskSizeConfigurable?: boolean;
+	fork?: boolean;
+	previews?: 'proxy' | 'public' | 'none';
 }
 
 export interface SandboxRunnerInfo {

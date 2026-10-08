@@ -1,9 +1,12 @@
 import type { LiveTransport } from '$lib/components/greenhouse';
+import type { GhProjectLink, GhShareLink } from '$lib/components/greenhouse/types';
 import * as data from './data';
 
 type Handler = (url: URL, init: RequestInit) => unknown;
 
-function json(body: unknown, status = 200): Response {
+export type Route = [RegExp, string, Handler];
+
+export function json(body: unknown, status = 200): Response {
 	return new Response(body === undefined ? null : JSON.stringify(body), {
 		status,
 		headers: { 'Content-Type': 'application/json' }
@@ -13,6 +16,15 @@ function json(body: unknown, status = 200): Response {
 export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 	const result = { list: data.list() };
 	const list = result.list;
+	const q = new URLSearchParams(location.search);
+	if (q.get('apply') === 'error') {
+		const m = list.sandboxes.find((x) => x.id === 'sbx-leaf');
+		if (m) {
+			m.applyError =
+				'Kubernetes refused the pod: exceeded quota sandbox-cpu, requested 4, limited 2';
+			m.applying = false;
+		}
+	}
 	if (role !== 'owner') {
 		for (const m of list.sandboxes)
 			if (m.id === 'sbx-leaf') {
@@ -21,7 +33,152 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 			}
 	}
 	let sessions = data.sessions();
-	const routes: [RegExp, string, Handler][] = [
+	if (q.get('preview') === '1') {
+		sessions = sessions.map((x, i) =>
+			i === 0
+				? {
+						...x,
+						previewDeploymentId: 'dep-preview-1',
+						previewUrl: 'https://gh-fix-login.orchard-web.apps.orchard.my',
+						previewStatus: 'ready' as const
+					}
+				: x
+		);
+	}
+	let links: GhProjectLink[] = [...data.projectLinks];
+	let shares: GhShareLink[] = [...data.shareLinks];
+	const routes: Route[] = [
+		...integrationRoutes(),
+		[
+			/\/sessions\/[^/]+\/preview-deploy$/,
+			'POST',
+			(u, init) => {
+				const body = JSON.parse(String(init.body ?? '{}'));
+				const sid = u.pathname.split('/sessions/')[1].split('/')[0];
+				const s = sessions.find((x) => x.id === sid) ?? sessions[0];
+				const next = {
+					...s,
+					previewDeploymentId: 'dep-preview-1',
+					previewUrl: null,
+					previewStatus: 'building' as const
+				};
+				sessions = sessions.map((x) => (x.id === next.id ? next : x));
+				return {
+					session: next,
+					deploymentId: 'dep-preview-1',
+					environmentId: 'env-gh',
+					url: null,
+					branch: s.branch,
+					commit: '9f3c2ab7d1',
+					redeployed: false,
+					skippedEnv: body.projectId ? ['DATABASE_URL', 'REDIS_URL'] : []
+				};
+			}
+		],
+		[
+			/\/sessions\/[^/]+\/preview-deploy$/,
+			'DELETE',
+			(u) => {
+				const sid = u.pathname.split('/sessions/')[1].split('/')[0];
+				const s = sessions.find((x) => x.id === sid) ?? sessions[0];
+				const next = { ...s, previewDeploymentId: null, previewUrl: null, previewStatus: null };
+				sessions = sessions.map((x) => (x.id === next.id ? next : x));
+				return { session: next, removed: true };
+			}
+		],
+		[/\/sandboxes\/[^/]+\/links$/, 'GET', () => ({ links })],
+		[
+			/\/sandboxes\/[^/]+\/links$/,
+			'POST',
+			(_u, init) => {
+				const body = JSON.parse(String(init.body ?? '{}'));
+				const project = data.projects.find((p) => p.id === body.projectId) ?? data.projects[0];
+				const link = {
+					id: crypto.randomUUID(),
+					projectId: project.id,
+					project: { id: project.id, name: project.name, slug: project.slug },
+					environment: { id: 'env-prod', name: 'production', slug: 'production' },
+					envFile: `~/.config/orchard/env/${project.slug}.env`,
+					createdBy: data.SEB,
+					createdAt: new Date().toISOString()
+				};
+				links = [...links, link];
+				return link;
+			}
+		],
+		[
+			/\/sandboxes\/[^/]+\/links\/[^/]+$/,
+			'DELETE',
+			(u) => {
+				const id = u.pathname.split('/').pop();
+				links = links.filter((l) => l.projectId !== id);
+				return { success: true };
+			}
+		],
+		[/\/share-links$/, 'GET', () => ({ links: shares })],
+		[
+			/\/share-links$/,
+			'POST',
+			(_u, init) => {
+				const body = JSON.parse(String(init.body ?? '{}'));
+				const s = sessions.find((x) => x.id === body.sessionId);
+				const link = {
+					id: crypto.randomUUID(),
+					sandboxId: 'sbx-leaf',
+					sessionId: s?.id ?? null,
+					session: s ? { id: s.id, title: s.title } : null,
+					createdBy: data.SEB,
+					state: 'active' as const,
+					expiresAt: new Date(Date.now() + body.expiresInHours * 3_600_000).toISOString(),
+					revokedAt: null,
+					lastUsedAt: null,
+					createdAt: new Date().toISOString(),
+					token: 'hX2_kq9-Zt4mW8rB1nVc7yLp0sDf3gJa5eUo6iQ_w-E',
+					url: ''
+				};
+				shares = [link, ...shares];
+				return link;
+			}
+		],
+		[
+			/\/share-links\/[^/]+$/,
+			'DELETE',
+			(u) => {
+				const id = u.pathname.split('/').pop();
+				shares = shares.map((l) =>
+					l.id === id ? { ...l, state: 'revoked' as const, revokedAt: new Date().toISOString() } : l
+				);
+				return shares.find((l) => l.id === id);
+			}
+		],
+		[
+			/\/fork$/,
+			'POST',
+			() =>
+				q.get('fork') === 'conflict'
+					? json(
+							{
+								message:
+									'The storage class longhorn-sandbox cannot take volume snapshots, so this machine cannot be forked'
+							},
+							409
+						)
+					: { id: 'sbx-fork', name: 'leaf-box-fork' }
+		],
+		[/\/apply\/retry$/, 'POST', () => ({ ok: true })],
+		[
+			/\/sandboxes\/[^/]+\/issues$/,
+			'GET',
+			(u) => {
+				const term = (u.searchParams.get('q') ?? '').toLowerCase();
+				return {
+					repo: 'hackclub/orchard',
+					issues: data.githubIssues.filter((i) => !term || i.title.toLowerCase().includes(term))
+				};
+			}
+		],
+		[/^\/apiv1\/projects$/, 'GET', () => data.projectRows],
+		[/^\/apiv1\/projects\/[^/]+\/environments$/, 'GET', () => data.environments],
 		[/^\/apiv1\/sandboxes$/, 'GET', () => list],
 		[
 			/^\/apiv1\/sandboxes\/[^/]+\/sessions$/,
@@ -148,7 +305,10 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 		const path = url.pathname.slice(at);
 		const method = (init.method ?? 'GET').toUpperCase();
 		for (const [re, m, handler] of routes) {
-			if (m === method && re.test(path)) return json(handler(url, init));
+			if (m === method && re.test(path)) {
+				const out = handler(url, init);
+				return out instanceof Response ? out : json(out);
+			}
 		}
 		if (method !== 'GET') return json({ ok: true, output: '' });
 		return json({ message: 'Not found' }, 404);
@@ -185,5 +345,82 @@ export function fakeLive(role: 'owner' | 'collaborator' | 'viewer'): LiveTranspo
 			}, 30);
 			return { send() {}, close() {} };
 		}
+	};
+}
+
+export function integrationRoutes(): Route[] {
+	const q = new URLSearchParams(location.search);
+	const linearOn = q.get('linear') !== 'off';
+	return [
+		[
+			/^\/apiv1\/integrations\/linear\/issues$/,
+			'GET',
+			(u) => {
+				if (!linearOn) return { connected: false, issues: [] };
+				const term = (u.searchParams.get('q') ?? '').toLowerCase();
+				return {
+					connected: true,
+					issues: data.linearIssues.filter((i) => !term || i.title.toLowerCase().includes(term))
+				};
+			}
+		],
+		[
+			/^\/apiv1\/users\/me\/integrations$/,
+			'GET',
+			() => ({
+				integrations: [
+					{ provider: 'github', account: 'seb', linkedAt: '2026-09-01T10:00:00Z' },
+					...(linearOn
+						? [{ provider: 'linear', account: 'Hack Club', linkedAt: '2026-10-01T10:00:00Z' }]
+						: []),
+					...(q.get('slack') === 'on'
+						? [{ provider: 'slack', account: 'T0123ABCD', linkedAt: '2026-10-02T10:00:00Z' }]
+						: [])
+				]
+			})
+		],
+		[
+			/^\/apiv1\/users\/me\/integrations\/linear$/,
+			'GET',
+			() => ({ connected: linearOn, workspaceName: linearOn ? 'Hack Club' : null })
+		],
+		[
+			/^\/apiv1\/users\/me\/integrations\/linear$/,
+			'PUT',
+			() => ({ connected: true, workspaceName: 'Hack Club' })
+		],
+		[
+			/^\/apiv1\/integrations\/slack\/link$/,
+			'POST',
+			() =>
+				q.get('slack') === 'expired'
+					? json(
+							{
+								message:
+									'This link has expired or was already used. Run /greenhouse link in Slack for a new one.'
+							},
+							400
+						)
+					: { connected: true, teamId: 'T0123ABCD' }
+		]
+	];
+}
+
+export function installRoutes(routes: Route[]) {
+	const real = window.fetch.bind(window);
+	window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+		const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+		const url = new URL(raw, location.origin);
+		const at = url.pathname.indexOf('/apiv1/');
+		if (at === -1) return real(input, init);
+		const path = url.pathname.slice(at);
+		const method = (init.method ?? 'GET').toUpperCase();
+		for (const [re, m, handler] of routes) {
+			if (m === method && re.test(path)) {
+				const out = handler(url, init);
+				return out instanceof Response ? out : json(out);
+			}
+		}
+		return json({ message: `Cannot ${method} ${path}` }, 404);
 	};
 }

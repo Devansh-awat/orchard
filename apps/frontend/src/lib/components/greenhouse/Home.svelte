@@ -3,25 +3,26 @@
 		ArrowUp,
 		Check,
 		ChevronDown,
-		CircleDot,
 		ClipboardList,
 		GitBranch,
 		Monitor,
 		Play,
 		Plus,
+		RotateCw,
 		Square
 	} from 'lucide-svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
-	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { sandboxStatus } from '$lib/components/ui/status';
 	import { toasts } from '$lib/stores';
 	import type { Sandbox } from '$lib/types/sandbox';
 	import { getGreenhouseApp } from './app.svelte';
+	import IssuePicker from './IssuePicker.svelte';
 	import SessionGlyph from './SessionGlyph.svelte';
 	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
-	import { VIEWER_ONLY } from './workspace.svelte';
+	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
+	import type { PickedIssue } from './types';
 
 	let { initialRepo = null }: { initialRepo?: string | null } = $props();
 
@@ -32,8 +33,7 @@
 
 	let prompt = $state('');
 	let repo = $state<string | null>(null);
-	let issueRef = $state('');
-	let issueOpen = $state(false);
+	let issue = $state<PickedIssue | null>(null);
 	let machineOpen = $state(false);
 	let repoOpen = $state(false);
 	let modelOpen = $state(false);
@@ -74,20 +74,18 @@
 		});
 	}
 
-	function parseIssue(): { provider: 'github' | 'linear'; ref: string } | undefined {
-		const ref = issueRef.trim();
-		if (!ref) return undefined;
-		return { provider: /^[A-Z][A-Z0-9]+-\d+$/.test(ref) ? 'linear' : 'github', ref };
-	}
-
 	async function launchNow(name: string, text: string) {
 		if (!ws) return;
 		launching = true;
 		try {
-			const session = await ws.createSession({ repo: name, prompt: text, issue: parseIssue() });
+			const session = await ws.createSession({
+				repo: name,
+				prompt: text,
+				issue: issue ? { provider: issue.provider, ref: issue.ref } : undefined
+			});
 			if (session) {
 				prompt = '';
-				issueRef = '';
+				issue = null;
 			}
 		} finally {
 			launching = false;
@@ -217,36 +215,22 @@
 						</MenuItem>
 					{/each}
 					{#if repos.length > 0}<div class="gh-menu-sep"></div>{/if}
-					<MenuItem onclick={() => (app.sheet = 'add-repo')} disabled={!ws?.running || !ws.canEdit}>
+					<MenuItem
+						onclick={() => (app.sheet = 'add-repo')}
+						disabled={!ws?.running || !ws.isOwner}
+						title={ws && !ws.isOwner ? hostOnly('clone repositories') : undefined}
+					>
 						<Plus size={14} /> Clone a repository…
 					</MenuItem>
 				</Menu>
 
-				<PopoverPanel bind:open={issueOpen} placement="bottom-start">
-					{#snippet trigger(props, isOpen)}
-						<button
-							{...props}
-							type="button"
-							class="chip"
-							class:chip--set={!!issueRef.trim()}
-							aria-expanded={isOpen}
-						>
-							<CircleDot size={14} strokeWidth={1.75} />
-							<span>{issueRef.trim() || 'Issue'}</span>
-						</button>
-					{/snippet}
-					<div class="issue">
-						<p class="issue-head">Start from an issue</p>
-						<input
-							class="gh-field gh-mono"
-							bind:value={issueRef}
-							placeholder="owner/repo#123 or ENG-42"
-							aria-label="Issue reference"
-							onkeydown={(e) => e.key === 'Enter' && (issueOpen = false)}
-						/>
-						<p class="issue-note">The agent reads the issue and its comments before it starts.</p>
-					</div>
-				</PopoverPanel>
+				<IssuePicker
+					bind:value={issue}
+					sandboxId={ws?.sandboxId ?? null}
+					repo={chosen?.name ?? null}
+					running={!!ws?.running}
+					disabled={!ws?.canEdit}
+				/>
 
 				<span class="grow"></span>
 
@@ -345,14 +329,27 @@
 						<span class="ico"><StatusDot meta={mm} size={8} /></span>
 						<span class="item-title">{m.name}</span>
 						<span class="item-meta"
-							>{runnerLabel(m.runner)} · {mm.label}{m.owner && m.myRole && m.myRole !== 'owner'
+							>{runnerLabel(m.runner)} · {m.applyError
+								? `Change failed: ${m.applyError}`
+								: mm.label}{m.owner && m.myRole && m.myRole !== 'owner'
 								? ` · hosted by ${m.owner.username ?? m.owner.email}`
 								: ''}</span
 						>
 
 						<span class="item-time">{m.lastActiveAt ? ago(m.lastActiveAt) : ''}</span>
 					</button>
-					{#if m.id === machine?.id && (isStopped ? ws?.canStart : ws?.canLifecycle)}
+					{#if m.id === machine?.id && m.applyError && ws?.canLifecycle}
+						<button
+							type="button"
+							class="gh-ibtn"
+							aria-label="Retry the change on {m.name}"
+							title="The last change failed: {m.applyError}. Retry"
+							disabled={!!ws.busy}
+							onclick={() => ws?.retryApply()}
+						>
+							<RotateCw size={16} strokeWidth={1.75} />
+						</button>
+					{:else if m.id === machine?.id && (isStopped ? ws?.canStart : ws?.canLifecycle)}
 						{#if isStopped}
 							<button
 								type="button"
@@ -547,25 +544,6 @@
 	.hint {
 		margin: 0.75rem 0 0;
 		text-align: center;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--gh-faint);
-	}
-
-	.issue {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		width: 18rem;
-	}
-
-	.issue-head {
-		margin: 0;
-		font-weight: 600;
-	}
-
-	.issue-note {
-		margin: 0;
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);

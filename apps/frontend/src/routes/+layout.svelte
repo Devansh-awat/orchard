@@ -202,7 +202,7 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.url.pathname.startsWith('/sandboxes') || $page.route.id?.startsWith('/status'))}
+	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.url.pathname.startsWith('/sandboxes') || $page.url.pathname.startsWith('/share/sandbox') || $page.route.id?.startsWith('/status'))}
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="app-shell">

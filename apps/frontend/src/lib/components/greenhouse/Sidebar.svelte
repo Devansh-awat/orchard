@@ -117,8 +117,10 @@
 				type="button"
 				class="gh-ibtn add"
 				aria-label="Add repository"
-				title={ws && !ws.canEdit ? VIEWER_ONLY : 'Clone a repository onto this machine'}
-				disabled={!ws?.canEdit || !ws?.running}
+				title={ws && !ws.isOwner
+					? hostOnly('clone repositories')
+					: 'Clone a repository onto this machine'}
+				disabled={!ws?.isOwner || !ws?.running}
 				onclick={() => (app.sheet = 'add-repo')}
 			>
 				<Plus size={16} strokeWidth={1.75} />

@@ -41,6 +41,7 @@
 		UserAppearance,
 		UserNotifications,
 		UserSshIdentities,
+		UserGreenhouseAccounts,
 		UserLogs
 	} from '$lib/components/user-settings';
 
@@ -871,8 +872,9 @@
 			{/if}
 
 			{#if activeTab === 'sandbox' && sandboxOn}
-				<UserSshIdentities index={0} />
-				<SandboxCredentialsPanel index={1} />
+				<UserGreenhouseAccounts index={0} />
+				<UserSshIdentities index={1} />
+				<SandboxCredentialsPanel index={2} />
 			{/if}
 
 			{#if activeTab === 'notifications' && $notificationsEnabled}

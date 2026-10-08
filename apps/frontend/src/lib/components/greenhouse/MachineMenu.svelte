@@ -3,7 +3,10 @@
 		ArrowLeft,
 		Check,
 		ChevronDown,
+		CircleAlert,
+		GitFork,
 		Play,
+		RotateCw,
 		Plus,
 		Settings2,
 		Square,
@@ -25,6 +28,16 @@
 	const stopped = $derived(machine?.status === 'stopped' || machine?.status === 'error');
 	const transitional = $derived(
 		machine ? ['creating', 'starting', 'stopping', 'deleting'].includes(machine.status) : false
+	);
+
+	const runner = $derived(app.runners.find((r) => r.id === machine?.runner) ?? null);
+	const canFork = $derived(runner?.capabilities.fork === true);
+	const forkBlocked = $derived(
+		!ws?.isOwner
+			? hostOnly('fork the machine')
+			: !canFork
+				? `${runnerLabel(machine?.runner)} machines cannot be forked on this server`
+				: undefined
 	);
 
 	let open = $state(false);
@@ -68,6 +81,25 @@
 		<div class="gh-menu-sep"></div>
 	{/if}
 	{#if machine && ws}
+		{#if machine.applyError}
+			<div class="apply" role="status">
+				<p class="apply-title">
+					<span class="apply-glyph"><CircleAlert size={14} strokeWidth={1.75} /></span>
+					The last change failed to apply
+				</p>
+				<p class="apply-text">{machine.applyError}</p>
+			</div>
+			<MenuItem
+				onclick={() => ws.retryApply()}
+				disabled={!ws.canLifecycle || !!ws.busy}
+				title={ws.canLifecycle ? 'Apply the desired state again' : hostOnly('retry the change')}
+			>
+				<RotateCw size={14} /> Retry
+			</MenuItem>
+			<div class="gh-menu-sep"></div>
+		{:else if machine.applying}
+			<div class="gh-menu-head">Applying changes…</div>
+		{/if}
 		{#if stopped}
 			<MenuItem
 				onclick={() => ws.lifecycle('start')}
@@ -95,6 +127,9 @@
 		<MenuItem onclick={() => (app.sheet = 'share')}>
 			<Users size={14} />
 			{ws.isOwner ? 'Share' : 'People'}
+		</MenuItem>
+		<MenuItem onclick={() => (app.sheet = 'fork')} disabled={!!forkBlocked} title={forkBlocked}>
+			<GitFork size={14} /> Fork machine…
 		</MenuItem>
 	{/if}
 	<MenuItem onclick={() => (app.sheet = 'new-machine')}>
@@ -151,6 +186,40 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+
+	.apply {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		max-width: 20rem;
+		padding: 0.5rem;
+	}
+
+	.apply-title,
+	.apply-text {
+		margin: 0;
+	}
+
+	.apply-title {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 600;
+		color: var(--gh-text);
+	}
+
+	.apply-glyph {
+		display: inline-grid;
+		color: var(--status-error);
+	}
+
+	.apply-text {
+		padding-left: 1.375rem;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-muted);
+		overflow-wrap: anywhere;
 	}
 
 	.item-cap {

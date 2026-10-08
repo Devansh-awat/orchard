@@ -12,7 +12,8 @@
 	import { goto } from '$app/navigation';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { toasts } from '$lib/stores';
+	import { getGreenhouseApp } from './app.svelte';
 	import * as api from './api';
 	import {
 		LINK_GITHUB,
@@ -102,22 +103,7 @@
 		});
 	}
 
-	function preview() {
-		const current = session;
-		if (!current) return;
-		return run('Preview deploy', async () => {
-			const res = await apiFetch(
-				`/apiv1/sandboxes/${ws.sandboxId}/sessions/${current.id}/preview-deploy`,
-				{ method: 'POST' }
-			);
-			if (res.status === 404) {
-				toasts.add({ title: 'Preview deploys are not available yet', color: 'info' });
-				return;
-			}
-			if (!res.ok) throw new Error('The server refused the deploy');
-			toasts.add({ title: 'Preview deploy started', color: 'success' });
-		});
-	}
+	const app = getGreenhouseApp();
 
 	function primary() {
 		if (pr?.prUrl) {
@@ -192,11 +178,12 @@
 			{/if}
 			<div class="gh-menu-sep"></div>
 			<MenuItem
-				onclick={preview}
-				disabled={!owner}
+				onclick={() => (app.sheet = 'preview')}
+				disabled={!owner || isLegacy(session)}
 				title={owner ? undefined : hostOnly('deploy previews')}
 			>
-				<Rocket size={14} /> Deploy preview
+				<Rocket size={14} />
+				{session?.previewDeploymentId ? 'Preview deploy…' : 'Deploy preview…'}
 			</MenuItem>
 		</Menu>
 	</div>

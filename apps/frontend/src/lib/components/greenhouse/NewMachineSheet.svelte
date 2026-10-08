@@ -146,7 +146,7 @@
 				</Select>
 			</Field>
 		{/if}
-		<Field label="Setup script" hint="Runs as the dev user on every boot" for="gh-setup">
+		<Field label="Setup script" hint="Runs once, on the machine's first boot" for="gh-setup">
 			<textarea
 				id="gh-setup"
 				class="script gh-mono"

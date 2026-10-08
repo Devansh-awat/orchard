@@ -4,12 +4,19 @@ import type {
 	GhChat,
 	GhChecks,
 	GhConnect,
+	GhEnvironment,
 	GhFileNode,
 	GhGitIdentity,
+	GhIssue,
 	GhMembers,
+	GhOrchardProject,
 	GhPort,
+	GhPreviewResult,
+	GhProjectLink,
 	GhRepo,
 	GhSession,
+	GhShareLink,
+	IssueProvider,
 	LiveComment,
 	PersonRef
 } from './types';
@@ -239,7 +246,7 @@ export function gitFetch(sandboxId: string, scope: Scope) {
 export function createPr(
 	sandboxId: string,
 	scope: Scope,
-	body: { title: string; body?: string; draft?: boolean }
+	body: { title: string; body?: string; draft?: boolean; base?: string }
 ) {
 	return send<{ url: string; number?: number }>(`${base(sandboxId)}/git/pr`, 'POST', {
 		...scoped(scope),
@@ -352,4 +359,122 @@ export async function listOrgMembers(organizationId: string): Promise<OrgMemberL
 		email: m.user.email ?? null,
 		avatarUrl: m.user.imageUrl ?? null
 	}));
+}
+
+export function retryApply(sandboxId: string) {
+	return send<unknown>(`${base(sandboxId)}/apply/retry`, 'POST');
+}
+
+export function forkMachine(sandboxId: string, name?: string) {
+	return send<{ id: string; name: string }>(
+		`${base(sandboxId)}/fork`,
+		'POST',
+		name ? { name } : {}
+	);
+}
+
+export function listLinks(sandboxId: string) {
+	return get<{ links: GhProjectLink[] }>(`${base(sandboxId)}/links`);
+}
+
+export function attachProject(
+	sandboxId: string,
+	body: { projectId: string; environmentId?: string | null }
+) {
+	return send<GhProjectLink>(`${base(sandboxId)}/links`, 'POST', body);
+}
+
+export function detachProject(sandboxId: string, projectId: string) {
+	return send<{ success: boolean }>(`${base(sandboxId)}/links/${projectId}`, 'DELETE');
+}
+
+export function previewDeploy(
+	sandboxId: string,
+	sid: string,
+	body: { projectId: string; deploymentId?: string | null }
+) {
+	return send<GhPreviewResult>(`${base(sandboxId)}/sessions/${sid}/preview-deploy`, 'POST', body);
+}
+
+export function removePreview(sandboxId: string, sid: string) {
+	return send<{ session: GhSession; removed: boolean }>(
+		`${base(sandboxId)}/sessions/${sid}/preview-deploy`,
+		'DELETE'
+	);
+}
+
+export function listShareLinks(sandboxId: string) {
+	return get<{ links: GhShareLink[] }>(`${base(sandboxId)}/share-links`);
+}
+
+export function createShareLink(
+	sandboxId: string,
+	body: { sessionId?: string | null; expiresInHours: number }
+) {
+	return send<GhShareLink & { token: string; url: string }>(
+		`${base(sandboxId)}/share-links`,
+		'POST',
+		body
+	);
+}
+
+export function revokeShareLink(sandboxId: string, linkId: string) {
+	return send<GhShareLink>(`${base(sandboxId)}/share-links/${linkId}`, 'DELETE');
+}
+
+export type IssueList = { connected?: boolean; repo?: string | null; issues: GhIssue[] };
+
+export function listIssues(
+	sandboxId: string,
+	provider: IssueProvider,
+	params: { repo?: string | null; q?: string }
+) {
+	return get<IssueList>(
+		`${base(sandboxId)}/issues${qs({ provider, repo: params.repo, q: params.q })}`
+	);
+}
+
+type ProjectRow = {
+	id: string;
+	name: string;
+	slug: string;
+	members?: { user?: { id?: string } | null; role?: { name?: string } | null }[];
+	deployments?: { id: string; name: string; displayName?: string | null }[];
+};
+
+export async function listEditableProjects(
+	organizationId: string,
+	who: { userId: string | null; orgRole: string | null; superAdmin: boolean }
+): Promise<Maybe<GhOrchardProject[]>> {
+	const res = await get<ProjectRow[]>(`/apiv1/projects${qs({ orgId: organizationId })}`);
+	if (!res.ok) return res;
+	const broad = who.superAdmin || who.orgRole === 'owner' || who.orgRole === 'admin';
+	const rows = Array.isArray(res.data) ? res.data : [];
+	return {
+		ok: true,
+		data: rows
+			.filter(
+				(p) =>
+					broad ||
+					(p.members ?? []).some(
+						(m) =>
+							m.user?.id === who.userId && (m.role?.name === 'admin' || m.role?.name === 'member')
+					)
+			)
+			.map((p) => ({
+				id: p.id,
+				name: p.name,
+				slug: p.slug,
+				deployments: (p.deployments ?? []).map((d) => ({
+					id: d.id,
+					name: d.name,
+					displayName: d.displayName ?? null
+				}))
+			}))
+	};
+}
+
+export async function listEnvironments(projectId: string): Promise<GhEnvironment[]> {
+	const res = await get<GhEnvironment[]>(`/apiv1/projects/${projectId}/environments`);
+	return res.ok && Array.isArray(res.data) ? res.data : [];
 }

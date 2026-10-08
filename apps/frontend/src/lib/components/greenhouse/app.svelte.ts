@@ -14,7 +14,15 @@ export interface GreenhouseNav {
 	go(target: NavTarget, opts?: { replace?: boolean }): void;
 }
 
-export type Sheet = 'new-machine' | 'share' | 'settings' | 'quick-open' | 'add-repo' | null;
+export type Sheet =
+	| 'new-machine'
+	| 'share'
+	| 'settings'
+	| 'quick-open'
+	| 'add-repo'
+	| 'preview'
+	| 'fork'
+	| null;
 
 type HistoryEntry = { machine: string | null; session: string | null; tab: string | null };
 

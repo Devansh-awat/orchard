@@ -5,6 +5,8 @@
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago, runnerLabel } from './format';
+	import FormError from './FormError.svelte';
+	import ProjectLinks from './ProjectLinks.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -88,7 +90,7 @@
 			<Field label="Name" for="gh-set-name">
 				<Input id="gh-set-name" bind:value={name} maxlength={63} disabled={!owner} />
 			</Field>
-			<Field label="Setup script" hint="Runs as the dev user on every boot" for="gh-set-setup">
+			<Field label="Setup script" hint="Runs once, on the machine's first boot" for="gh-set-setup">
 				<textarea
 					id="gh-set-setup"
 					class="script gh-mono"
@@ -97,8 +99,19 @@
 					disabled={!owner}></textarea>
 			</Field>
 			{#if machine.applyError}
-				<p class="error">The last change failed to apply: {machine.applyError}</p>
+				<div class="apply">
+					<FormError message="The last change failed to apply: {machine.applyError}" />
+					<Button
+						variant="secondary"
+						size="sm"
+						disabled={!ws?.canLifecycle || !!ws?.busy}
+						onclick={() => ws?.retryApply()}
+					>
+						{ws?.busy === 'retry' ? 'Retrying…' : 'Retry'}
+					</Button>
+				</div>
 			{/if}
+			<ProjectLinks active={open} />
 			{#if owner}
 				<div class="danger">
 					<p class="danger-title">Delete this machine</p>
@@ -161,11 +174,11 @@
 		box-shadow: 0 0 0 2px var(--focus-ring);
 	}
 
-	.error {
-		margin: 0;
-		font-size: var(--text-footnote);
-		line-height: var(--gh-lh-ui);
-		color: var(--status-error);
+	.apply {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
 	}
 
 	.danger {

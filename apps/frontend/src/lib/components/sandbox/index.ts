@@ -1,16 +1,3 @@
 export { default as SandboxBootProgress } from './SandboxBootProgress.svelte';
-export { default as SandboxCard } from './SandboxCard.svelte';
-export { default as SandboxChatPanel } from './SandboxChatPanel.svelte';
-export { default as SandboxCreateModal } from './SandboxCreateModal.svelte';
-export { default as SandboxConnectPanel } from './SandboxConnectPanel.svelte';
 export { default as SandboxCredentialsPanel } from './SandboxCredentialsPanel.svelte';
-export { default as SandboxDiffView } from './SandboxDiffView.svelte';
-export { default as SandboxEditorPane } from './SandboxEditorPane.svelte';
-export { default as SandboxEmptyState } from './SandboxEmptyState.svelte';
-export { default as SandboxFileTree } from './SandboxFileTree.svelte';
-export { default as SandboxGitPanel } from './SandboxGitPanel.svelte';
-export { default as SandboxMcpPanel } from './SandboxMcpPanel.svelte';
-export { default as SandboxReposPanel } from './SandboxReposPanel.svelte';
-export { default as SandboxSettingsCard } from './SandboxSettingsCard.svelte';
-export { default as SandboxTerminalPanel } from './SandboxTerminalPanel.svelte';
 export { default as SandboxUsageTab } from './SandboxUsageTab.svelte';
