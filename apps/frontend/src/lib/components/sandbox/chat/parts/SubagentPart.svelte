@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Bot, ChevronRight, Loader2 } from 'lucide-svelte';
-	import { StatusBadge, statusMeta } from '$lib/components/ui';
+	import { Bot, ChevronRight, CircleX, LoaderCircle } from 'lucide-svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import type { AgentEntry } from '../session-store.svelte';
@@ -19,49 +18,46 @@
 	} = $props();
 
 	const running = $derived(entry.status === 'running' || entry.status === 'pending');
-	const state = $derived(
-		running
-			? statusMeta('progress', 'Running', true)
-			: entry.status === 'error'
-				? statusMeta('error', 'Failed')
-				: statusMeta('success', 'Done')
-	);
+	const failed = $derived(entry.status === 'error');
 </script>
 
 {#if nested}
-	<div class="agent-row agent-row--static">
-		<Bot class="h-3.5 w-3.5 shrink-0 text-faint" />
-		<span class="agent-type">{entry.agentType}</span>
-		<span class="agent-desc">{entry.description}</span>
+	<div class="step step--static">
+		<span class="step-glyph" aria-hidden="true"><Bot size={16} strokeWidth={1.75} /></span>
+		<span class="step-verb">{entry.agentType}</span>
+		<span class="step-desc">{entry.description}</span>
 	</div>
 {:else}
-	<div class="agent" class:agent--open={entry.expanded}>
+	<div class="agent">
 		<button
 			type="button"
-			class="agent-row"
+			class="step"
+			data-align="step"
 			aria-expanded={entry.expanded}
 			onclick={() => ontoggle(entry)}
 		>
-			<span class="agent-icon">
+			<span class="step-glyph" class:step-glyph--failed={failed} aria-hidden="true">
 				{#if running}
-					<Loader2 class="h-3.5 w-3.5 animate-spin" data-motion="progress" />
+					<span class="spin" data-motion="progress"
+						><LoaderCircle size={16} strokeWidth={1.75} /></span
+					>
+				{:else if failed}
+					<CircleX size={16} strokeWidth={1.75} />
 				{:else}
-					<Bot class="h-3.5 w-3.5" />
+					<Bot size={16} strokeWidth={1.75} />
 				{/if}
 			</span>
-			<span class="agent-type">{entry.agentType}</span>
-			<span class="agent-desc">{entry.description}</span>
-			<StatusBadge meta={state} variant="plain" />
-			<span class="agent-chev" {@attach springRotate(() => entry.expanded, { rest: 0, on: 90 })}>
-				<ChevronRight class="h-3 w-3" />
+			<span class="step-verb">{entry.agentType} agent</span>
+			<span class="step-desc">{entry.description}</span>
+			{#if failed}<span class="step-failed">Failed</span>{/if}
+			<span class="step-chev" {@attach springRotate(() => entry.expanded, { rest: 0, on: 90 })}>
+				<ChevronRight size={16} strokeWidth={1.75} />
 			</span>
 		</button>
 		{#if entry.expanded}
 			<div class="agent-body" transition:slide>
 				{#if entry.loading}
-					<p class="agent-empty">
-						<Loader2 class="h-3.5 w-3.5 animate-spin" data-motion="progress" /> Loading sub-agent
-					</p>
+					<p class="agent-empty">Loading the sub-agent transcript</p>
 				{:else if !entry.childID}
 					<p class="agent-empty">No transcript yet.</p>
 				{:else if entry.entries.length === 0}
@@ -79,87 +75,103 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		margin: 0.125rem 0 0.125rem -0.5rem;
-		border-radius: var(--radius-md);
-		transition: background-color var(--dur-fast);
 	}
 
-	.agent--open {
-		background: var(--fill-quiet);
-	}
-
-	.agent-row {
+	.step {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		min-width: 0;
-		width: 100%;
-		padding: 0.3125rem 0.5rem;
+		max-width: 100%;
+		width: fit-content;
+		min-height: 1.75rem;
+		padding: 0;
 		border: none;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-xs);
 		background: none;
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		color: var(--text-muted);
 		text-align: left;
 		cursor: pointer;
-		transition: background-color var(--dur-fast);
+		transition: color var(--dur-fast);
 	}
 
-	.agent-row:hover {
-		background: var(--bg-hover);
-	}
-
-	.agent-row--static {
-		cursor: default;
-		padding-left: 0;
-	}
-
-	.agent-row--static:hover {
-		background: none;
-	}
-
-	.agent-icon {
-		display: inline-flex;
-		flex-shrink: 0;
-		color: var(--text-faint);
-	}
-
-	.agent-type {
-		flex-shrink: 0;
-		font-weight: 500;
+	.step:hover {
 		color: var(--text-default);
 	}
 
-	.agent-desc {
-		flex: 1;
+	.step--static {
+		cursor: default;
+	}
+
+	.step-glyph {
+		display: inline-flex;
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+		color: var(--text-faint);
+	}
+
+	.step-glyph--failed {
+		color: var(--status-error);
+	}
+
+	.spin {
+		display: inline-flex;
+		animation: spin 1s linear infinite;
+	}
+
+	.step-verb {
+		flex-shrink: 0;
+	}
+
+	.step-desc {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		color: var(--text-faint);
 	}
 
-	.agent-chev {
+	.step-failed {
+		flex-shrink: 0;
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.step-chev {
 		display: inline-flex;
 		flex-shrink: 0;
 		color: var(--text-faint);
+		opacity: 0;
+		transition: opacity var(--dur-fast);
+	}
+
+	.step:hover .step-chev,
+	.step:focus-visible .step-chev,
+	.step[aria-expanded='true'] .step-chev {
+		opacity: 1;
 	}
 
 	.agent-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		padding: 0.25rem 0.75rem 0.625rem 2rem;
+		gap: var(--space-1);
 		max-height: 24rem;
+		margin: 0 0 var(--space-2) var(--space-6);
 		overflow-y: auto;
 	}
 
 	.agent-empty {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
 		color: var(--text-faint);
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

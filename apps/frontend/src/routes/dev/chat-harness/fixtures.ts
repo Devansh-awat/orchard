@@ -305,3 +305,204 @@ export function fixtureStore(): ChatSessionStore {
 	store.authorOf = (id) => (id === 'msg_u1' ? SEB : null);
 	return store;
 }
+
+function tool(
+	key: string,
+	time: number,
+	name: string,
+	input: Record<string, unknown>,
+	summary: string,
+	extra: Partial<Extract<ChatEntry, { kind: 'tool' }>> = {}
+): ChatEntry {
+	return {
+		kind: 'tool',
+		key,
+		time,
+		id: `prt_${key}`,
+		name,
+		input,
+		output: null,
+		summary,
+		title: summary,
+		diff: null,
+		status: 'completed',
+		failed: false,
+		expanded: false,
+		...extra
+	};
+}
+
+function longEntries(): ChatEntry[] {
+	const first = entries().slice(0, 9);
+	const T2 = BASE + 300_000;
+	const T3 = BASE + 900_000;
+	const T4 = BASE + 1_500_000;
+	return [
+		...first,
+		{
+			kind: 'user',
+			key: 'u2',
+			text: 'Nice. Now make the callback keep returnTo.',
+			time: T2,
+			messageID: 'msg_u2',
+			author: ALEX
+		},
+		{
+			kind: 'thinking',
+			key: 'th2',
+			time: T2 + 4000,
+			text: 'returnTo needs to survive the provider round trip. The OAuth state param is already signed, so it can carry the path.',
+			done: true,
+			expanded: false
+		},
+		tool(
+			't5',
+			T2 + 9000,
+			'Write',
+			{ file_path: 'apps/server/src/auth/return-to.ts', content: 'export {}' },
+			'return-to.ts',
+			{ status: 'error', failed: true, diff: { add: 3, del: 0 } }
+		),
+		tool(
+			't6',
+			T2 + 14000,
+			'Write',
+			{
+				file_path: 'apps/server/src/auth/return-to.ts',
+				content:
+					'export function safeReturnTo(value: string) {\n  return value.startsWith("/") ? value : "/";\n}\n'
+			},
+			'return-to.ts',
+			{ diff: { add: 3, del: 0 } }
+		),
+		tool(
+			't7',
+			T2 + 19000,
+			'Edit',
+			{ file_path: 'apps/server/src/auth/oauth-state.ts' },
+			'oauth-state.ts',
+			{ diff: { add: 9, del: 1 } }
+		),
+		tool(
+			't8',
+			T2 + 26000,
+			'Bash',
+			{ command: 'pnpm --filter server lint' },
+			'pnpm --filter server lint',
+			{ output: 'Done in 4.2s' }
+		),
+		{
+			kind: 'text',
+			key: 'x2',
+			time: T2 + 31000,
+			text: 'The callback now reads `returnTo` from the signed state and only accepts relative paths, so it cannot become an open redirect. Lint is clean.'
+		},
+		{
+			kind: 'result',
+			key: 'r2',
+			time: T2 + 33000,
+			cost: 0.08,
+			duration: 33_400,
+			files: [
+				{ name: 'return-to.ts', path: 'apps/server/src/auth/return-to.ts', add: 3, del: 0 },
+				{ name: 'oauth-state.ts', path: 'apps/server/src/auth/oauth-state.ts', add: 9, del: 1 },
+				{
+					name: 'auth.controller.ts',
+					path: 'apps/server/src/auth/auth.controller.ts',
+					add: 2,
+					del: 1
+				},
+				{
+					name: 'auth-redirect.test.ts',
+					path: 'apps/server/test/auth-redirect.test.ts',
+					add: 31,
+					del: 0
+				},
+				{
+					name: '+page.svelte',
+					path: 'apps/frontend/src/routes/login/+page.svelte',
+					add: 2,
+					del: 0
+				}
+			]
+		},
+		{
+			kind: 'user',
+			key: 'u3',
+			text: 'What would break if COOKIE_DOMAIN is unset in a self hosted install?',
+			time: T3,
+			messageID: 'msg_u3'
+		},
+		{
+			kind: 'text',
+			key: 'x3',
+			time: T3 + 6000,
+			text: 'Nothing breaks. When `COOKIE_DOMAIN` is unset the cookie falls back to the request host, which is exactly the old behaviour. Single host installs never see the loop because the callback and the app share a host.'
+		},
+		{ kind: 'result', key: 'r3', time: T3 + 6500, cost: 0.01, duration: 6_200, files: [] },
+		{
+			kind: 'user',
+			key: 'u4',
+			text: 'Deploy it to staging so I can try the flow.',
+			time: T4,
+			messageID: 'msg_u4',
+			author: SAM
+		},
+		tool(
+			't9',
+			T4 + 5000,
+			'Bash',
+			{ command: 'orchard deploy --env staging' },
+			'orchard deploy --env staging',
+			{ status: 'error', failed: true, output: 'error: no staging environment linked' }
+		),
+		{
+			kind: 'error',
+			key: 'e4',
+			time: T4 + 6000,
+			detail: 'This sandbox has no staging environment linked. Link one in the project settings.'
+		},
+		{ kind: 'result', key: 'r4', time: T4 + 6500, cost: 0.02, duration: 6_500, files: [] }
+	];
+}
+
+function longComments(): ChatComment[] {
+	return [
+		...comments().slice(0, 2),
+		{
+			id: 'c4',
+			author: ALEX,
+			body: 'Also worth checking the mobile app, it uses the same cookie.',
+			createdAt: BASE + 260_000,
+			sessionId: 'ses_login'
+		},
+		{
+			id: 'c5',
+			author: SEB,
+			body: 'Looks right to me. One question for the agent first.',
+			createdAt: BASE + 850_000,
+			sessionId: 'ses_login'
+		},
+		{
+			id: 'c6',
+			author: SAM,
+			body: 'I will try it on staging.',
+			createdAt: BASE + 1_400_000,
+			sessionId: 'ses_login'
+		}
+	];
+}
+
+export function longStore(): ChatSessionStore {
+	const store = fixtureStore();
+	const thread = store.active;
+	if (thread) {
+		thread.entries = longEntries();
+		thread.busy = false;
+		thread.queue = [];
+	}
+	store.activity.set('ses_login', 'idle');
+	store.comments = longComments();
+	store.authorOf = (id) => (id === 'msg_u1' || id === 'msg_u3' ? SEB : null);
+	return store;
+}

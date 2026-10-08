@@ -128,7 +128,7 @@
 		align-items: stretch;
 		gap: var(--space-1);
 		flex-shrink: 0;
-		height: 2.25rem;
+		height: 2.5rem;
 		padding: 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
@@ -162,12 +162,12 @@
 	.tab-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-2);
 		border: none;
 		background: none;
 		padding: 0 0.125rem 0 var(--space-2);
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		font-weight: 400;
 		color: var(--text-muted);
 		cursor: pointer;
@@ -176,7 +176,7 @@
 	}
 
 	.tab--active .tab-btn {
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.tab--active .tab-btn,
@@ -188,8 +188,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.125rem;
-		height: 1.125rem;
+		width: 1.5rem;
+		height: 1.5rem;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;
@@ -224,7 +224,7 @@
 		border-radius: var(--radius-xs);
 		background: var(--bg-sunken);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		line-height: 1rem;
 		color: var(--text-default);
 	}
 
@@ -236,8 +236,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		flex-shrink: 0;
 		align-self: center;
 		border: none;

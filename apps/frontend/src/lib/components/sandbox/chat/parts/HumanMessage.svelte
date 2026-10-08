@@ -41,202 +41,188 @@
 
 	const comment = $derived(variant === 'comment');
 	const showActions = $derived(!comment && actions && !!messageID && !!onfork && !!onrevert);
+	const clock = $derived(time !== null && Number.isFinite(time) ? fmtClock(time) : null);
+	const showMeta = $derived(!grouped && (!own || comment));
+	const align = $derived(own ? 'own' : 'content');
 </script>
 
 <div
 	class="hm"
 	class:hm--own={own}
 	class:hm--other={!own}
-	class:hm--grouped={grouped}
 	class:hm--comment={comment}
 	class:hm--reverted={reverted}
+	data-human={comment ? 'comment' : 'prompt'}
 >
-	{#if !own}
-		<span class="hm-avatar" aria-hidden={grouped}>
-			{#if !grouped && author}
+	{#if showMeta}
+		<div class="hm-meta" data-align={align}>
+			{#if !own && author}<span class="hm-name">{author.name}</span>{/if}
+			{#if clock}<span class="hm-time">{clock}</span>{/if}
+			<span class="hm-kind">
+				{#if comment}
+					<MessageCircle size={12} strokeWidth={2} />
+					comment
+				{:else}
+					<Bot size={12} strokeWidth={2} />
+					to agent
+				{/if}
+			</span>
+		</div>
+	{/if}
+	<div class="hm-line">
+		{#if !own && !grouped && author}
+			<span class="hm-avatar" aria-hidden="true">
 				<Avatar
 					user={{ id: author.id, name: author.name, imageUrl: author.avatarUrl ?? null }}
-					alt={author.name}
+					alt=""
 					size={24}
 					style="width: 1.5rem; height: 1.5rem; border-radius: 999px; object-fit: cover;"
 				/>
+			</span>
+		{/if}
+		<div class="hm-bubble" data-align={align}>
+			{#if text}<p class="hm-text">{text}</p>{/if}
+			{#if attachments.length > 0}
+				<div class="hm-files"><FileParts files={attachments} /></div>
 			{/if}
-		</span>
-	{/if}
-	<div class="hm-body">
-		{#if !grouped && (!own || comment)}
-			<div class="hm-meta">
-				{#if !own && author}<span class="hm-name">{author.name}</span>{/if}
-				{#if comment}
-					<span class="hm-kind"><MessageCircle class="h-3 w-3" /> comment</span>
-				{:else if !own}
-					<span class="hm-kind"><Bot class="h-3 w-3" /> to agent</span>
-				{/if}
-				{#if comment && time !== null && Number.isFinite(time)}
-					<span class="hm-time">{fmtClock(time)}</span>
-				{/if}
+		</div>
+		{#if showActions && messageID}
+			{@const id = messageID}
+			<div class="hm-actions">
+				<button
+					type="button"
+					class="hm-action"
+					disabled={locked}
+					title="Fork a new session from here"
+					onclick={() => onfork?.(id)}
+				>
+					<GitFork size={14} strokeWidth={1.75} /> Fork
+				</button>
+				<button
+					type="button"
+					class="hm-action"
+					disabled={locked}
+					title="Undo everything from this prompt on"
+					onclick={() => onrevert?.(id)}
+				>
+					<Undo2 size={14} strokeWidth={1.75} /> Revert
+				</button>
 			</div>
 		{/if}
-		<div class="hm-line">
-			{#if showActions && messageID}
-				{@const id = messageID}
-				<div class="hm-actions">
-					<button
-						type="button"
-						class="hm-action"
-						disabled={locked}
-						title="Fork a new session from here"
-						onclick={() => onfork?.(id)}
-					>
-						<GitFork class="h-3 w-3" /> Fork
-					</button>
-					<button
-						type="button"
-						class="hm-action"
-						disabled={locked}
-						title="Undo everything from this prompt on"
-						onclick={() => onrevert?.(id)}
-					>
-						<Undo2 class="h-3 w-3" /> Revert
-					</button>
-				</div>
-			{/if}
-			<div class="hm-bubble">
-				{#if text}<div class="hm-text">{text}</div>{/if}
-				{#if attachments.length > 0}
-					<div class="hm-files"><FileParts files={attachments} /></div>
-				{/if}
-			</div>
+	</div>
+	{#if reverted}
+		<div class="hm-reverted" transition:slide data-align={align}>
+			<span>Reverted from here</span>
+			<button type="button" class="hm-action" disabled={locked} onclick={() => onunrevert?.()}>
+				Undo
+			</button>
 		</div>
-	</div>
+	{/if}
 </div>
-{#if reverted}
-	<div class="hm-reverted" transition:slide>
-		<span>Reverted from here</span>
-		<button type="button" class="hm-action" disabled={locked} onclick={() => onunrevert?.()}>
-			Undo
-		</button>
-	</div>
-{/if}
 
 <style>
 	.hm {
 		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		margin: 1.25rem 0 0.75rem;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
 	}
 
 	.hm--own {
-		justify-content: flex-end;
-	}
-
-	.hm--grouped {
-		margin-top: -0.875rem;
-	}
-
-	.hm-avatar {
-		display: inline-flex;
-		flex-shrink: 0;
-		width: 1.5rem;
-		height: 1.5rem;
-		margin-top: 1.125rem;
-	}
-
-	.hm--grouped .hm-avatar {
-		margin-top: 0;
-		height: 0;
-	}
-
-	.hm-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0.1875rem;
-		min-width: 0;
-		max-width: min(38rem, 85%);
-	}
-
-	.hm--own .hm-body {
 		align-items: flex-end;
+	}
+
+	.hm--other {
+		align-items: flex-start;
 	}
 
 	.hm-meta {
 		display: flex;
-		align-items: baseline;
-		gap: 0.375rem;
-		padding: 0 0.25rem;
+		align-items: center;
+		gap: var(--space-2);
+		max-width: 100%;
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		line-height: 1rem;
+		color: var(--text-muted);
 	}
 
 	.hm-name {
-		font-weight: 500;
-		color: var(--text-muted);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.hm-time {
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.hm-kind {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		align-self: center;
-		color: var(--text-faint);
-	}
-
-	.hm-time {
-		font-variant-numeric: tabular-nums;
-		color: var(--text-faint);
+		gap: var(--space-1);
+		flex-shrink: 0;
 	}
 
 	.hm-line {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-2);
+		width: 100%;
 		min-width: 0;
-		max-width: 100%;
 	}
 
-	.hm--other .hm-line {
+	.hm--own .hm-line {
 		flex-direction: row-reverse;
-		justify-content: flex-end;
+	}
+
+	.hm-avatar {
+		position: absolute;
+		top: var(--space-2);
+		left: calc(-1 * var(--chat-gutter));
+		display: flex;
+		justify-content: center;
+		width: var(--chat-gutter);
 	}
 
 	.hm-bubble {
 		min-width: 0;
-		padding: 0.5625rem 0.875rem;
-		border-radius: var(--radius-xl);
-		background: var(--bg-raised);
+		max-width: min(36rem, 85%);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: linear-gradient(var(--fill-soft), var(--fill-soft)) var(--bg-raised);
 		box-shadow: var(--elev-1);
 	}
 
 	.hm--own .hm-bubble {
-		border-bottom-right-radius: var(--radius-xs);
-	}
-
-	.hm--other .hm-bubble {
-		border-bottom-left-radius: var(--radius-xs);
-	}
-
-	.hm--comment .hm-bubble {
-		background: var(--fill-quiet);
+		border-color: transparent;
+		background: var(--fill-soft);
 		box-shadow: none;
-		padding: 0.4375rem 0.75rem;
+	}
+
+	.hm--comment .hm-bubble,
+	.hm--own.hm--comment .hm-bubble {
+		border-color: var(--border-default);
+		background: none;
+		box-shadow: none;
 	}
 
 	.hm-text {
+		margin: 0;
 		font-size: var(--text-body);
-		line-height: 1.55;
+		line-height: 1.5rem;
 		color: var(--text-default);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
 
-	.hm--comment .hm-text {
-		font-size: var(--text-callout);
-		color: var(--text-muted);
-	}
-
 	.hm-text + .hm-files {
-		margin-top: 0.5rem;
+		margin-top: var(--space-2);
 	}
 
 	.hm--reverted .hm-bubble {
@@ -250,7 +236,7 @@
 	.hm-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.125rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
 		opacity: 0;
 		transition: opacity var(--dur-fast);
@@ -264,14 +250,15 @@
 	.hm-action {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		padding: 0.125rem 0.375rem;
+		gap: var(--space-1);
+		height: 1.75rem;
+		padding: 0 var(--space-2);
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
+		line-height: 1rem;
+		color: var(--text-muted);
 		cursor: pointer;
 		transition:
 			background-color var(--dur-fast),
@@ -291,11 +278,9 @@
 	.hm-reverted {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin: -0.25rem 0 0.75rem;
+		gap: var(--space-2);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		color: var(--text-faint);
+		line-height: 1rem;
+		color: var(--text-muted);
 	}
 </style>

@@ -44,9 +44,9 @@
 	.ctx {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3125rem;
-		padding: 0 0.25rem;
-		color: var(--text-faint);
+		gap: var(--space-1);
+		height: 1.75rem;
+		color: var(--text-muted);
 	}
 
 	.ctx-track {
@@ -81,8 +81,8 @@
 	}
 
 	.ctx-label {
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
+		font-size: var(--text-caption);
+		line-height: 1rem;
 		font-variant-numeric: tabular-nums;
 	}
 </style>

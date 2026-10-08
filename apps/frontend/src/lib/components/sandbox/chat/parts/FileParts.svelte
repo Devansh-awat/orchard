@@ -77,7 +77,7 @@
 		border-radius: var(--radius-sm);
 		background: var(--bg-sunken);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		line-height: 1rem;
 		color: var(--text-muted);
 	}
 

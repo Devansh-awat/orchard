@@ -52,7 +52,9 @@
 	<Transcript {store} />
 	{#if ready}
 		<div class="chat-dock">
-			<Composer {store} {remoteDrafts} {commands} onComment={comment} />
+			<div class="chat-col">
+				<Composer {store} {remoteDrafts} {commands} onComment={comment} />
+			</div>
 		</div>
 	{/if}
 {/if}
@@ -69,12 +71,13 @@
 	.chat-cred {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-2);
 		flex-shrink: 0;
 		padding: var(--space-2) var(--space-4);
 		border-bottom: 1px solid var(--border-default);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		line-height: 1rem;
 		color: var(--text-muted);
 	}
 
@@ -89,6 +92,14 @@
 
 	.chat-dock {
 		flex-shrink: 0;
-		padding: 0 var(--space-4) var(--space-4);
+		padding: 0 0 var(--space-4);
+	}
+
+	.chat-col {
+		--chat-gutter: 2rem;
+		width: 100%;
+		max-width: calc(42.5rem + 2 * var(--chat-gutter));
+		margin: 0 auto;
+		padding: 0 var(--chat-gutter);
 	}
 </style>

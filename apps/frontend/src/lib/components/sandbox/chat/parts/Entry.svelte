@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MessageSquareText } from 'lucide-svelte';
 	import type { ChatEntry, ChatSessionStore } from '../session-store.svelte';
 	import Entry from './Entry.svelte';
 	import ErrorPart from './ErrorPart.svelte';
@@ -6,12 +7,10 @@
 	import SubagentPart from './SubagentPart.svelte';
 	import TextPart from './TextPart.svelte';
 	import ToolPart from './ToolPart.svelte';
-	import TurnFooter from './TurnFooter.svelte';
 
 	let {
 		entry,
 		store,
-		index = 0,
 		depth = 0,
 		live = false
 	}: {
@@ -21,44 +20,62 @@
 		depth?: number;
 		live?: boolean;
 	} = $props();
+
+	const nested = $derived(depth > 0);
 </script>
 
 {#if entry.kind === 'user'}
 	<p class="sub-prompt">{entry.text}</p>
 {:else if entry.kind === 'thinking'}
-	<ReasoningPart {entry} {live} />
+	<ReasoningPart {entry} {live} {nested} />
 {:else if entry.kind === 'text'}
-	<TextPart text={entry.text} compact={depth > 0} />
+	<div class="note" data-align={nested ? undefined : 'step'}>
+		<span class="note-glyph" aria-hidden="true">
+			<MessageSquareText size={16} strokeWidth={1.75} />
+		</span>
+		<div class="note-text"><TextPart text={entry.text} compact /></div>
+	</div>
 {:else if entry.kind === 'tool'}
-	<ToolPart {entry} />
+	<ToolPart {entry} {nested} />
 {:else if entry.kind === 'agent'}
-	<SubagentPart {entry} nested={depth > 0} ontoggle={(agent) => store.toggleAgent(agent)}>
+	<SubagentPart {entry} {nested} ontoggle={(agent) => store.toggleAgent(agent)}>
 		{#each entry.entries as child, ci (child.key)}
 			<Entry entry={child} {store} index={ci} depth={depth + 1} />
 		{/each}
 	</SubagentPart>
-{:else if entry.kind === 'result'}
-	{#if depth === 0}
-		<TurnFooter
-			{entry}
-			promptId={store.busy ? null : store.turnPromptId(index)}
-			locked={store.revertBusy !== null}
-			onfork={(id) => store.fork(id)}
-			onrevert={(id) => store.revert(id)}
-			oncopy={() => navigator.clipboard.writeText(store.turnText(index))}
-		/>
-	{/if}
-{:else}
+{:else if entry.kind === 'error'}
 	<ErrorPart detail={entry.detail} />
 {/if}
 
 <style>
 	.sub-prompt {
 		font-size: var(--text-footnote);
-		line-height: 1.5;
+		line-height: 1.25rem;
 		font-weight: 600;
 		color: var(--text-muted);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.note {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		min-width: 0;
+		padding: var(--space-1) 0;
+	}
+
+	.note-glyph {
+		display: inline-flex;
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+		margin-top: 0.125rem;
+		color: var(--text-faint);
+	}
+
+	.note-text {
+		min-width: 0;
+		color: var(--text-muted);
 	}
 </style>

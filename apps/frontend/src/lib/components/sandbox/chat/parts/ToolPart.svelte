@@ -1,17 +1,15 @@
 <script lang="ts">
-	import { ChevronRight, Loader2 } from 'lucide-svelte';
-	import { StatusBadge, statusMeta } from '$lib/components/ui';
+	import { ChevronRight, CircleX, LoaderCircle } from 'lucide-svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import type { ToolEntry } from '../session-store.svelte';
 	import { pretty, toolVerb } from '../format';
 
-	let { entry }: { entry: ToolEntry } = $props();
+	let { entry, nested = false }: { entry: ToolEntry; nested?: boolean } = $props();
 
 	const running = $derived(entry.status === 'running' || entry.status === 'pending');
 	const verb = $derived(toolVerb(entry.name, running));
 	const Icon = $derived(verb.icon);
-	const failedMeta = statusMeta('error', 'Failed');
 	const lines = $derived.by(() => {
 		if (!entry.expanded) return null;
 		const input = (entry.input ?? {}) as Record<string, unknown>;
@@ -32,49 +30,54 @@
 	});
 </script>
 
-<div class="tool" class:tool--failed={entry.failed}>
+<div class="tool">
 	<button
 		type="button"
-		class="tool-row"
+		class="step"
+		data-align={nested ? undefined : 'step'}
 		aria-expanded={entry.expanded}
 		title={entry.title ?? undefined}
 		onclick={() => (entry.expanded = !entry.expanded)}
 	>
-		<span class="tool-icon" aria-hidden="true">
+		<span class="step-glyph" class:step-glyph--failed={entry.failed} aria-hidden="true">
 			{#if running}
-				<Loader2 class="h-3.5 w-3.5 animate-spin" data-motion="progress" />
+				<span class="spin" data-motion="progress"
+					><LoaderCircle size={16} strokeWidth={1.75} /></span
+				>
+			{:else if entry.failed}
+				<CircleX size={16} strokeWidth={1.75} />
 			{:else}
-				<Icon class="h-3.5 w-3.5" />
+				<Icon size={16} strokeWidth={1.75} />
 			{/if}
 		</span>
-		<span class="tool-verb">{verb.verb}</span>
-		{#if entry.summary}<span class="tool-target">{entry.summary}</span>{/if}
+		<span class="step-verb">{verb.verb}</span>
+		{#if entry.summary}<span class="step-target">{entry.summary}</span>{/if}
 		{#if entry.diff && (entry.diff.add > 0 || entry.diff.del > 0)}
-			<span class="tool-diff">
+			<span class="step-diff">
 				{#if entry.diff.add > 0}<span class="diff-add">+{entry.diff.add}</span>{/if}
 				{#if entry.diff.del > 0}<span class="diff-del">−{entry.diff.del}</span>{/if}
 			</span>
 		{/if}
-		{#if entry.failed}<StatusBadge meta={failedMeta} />{/if}
-		<span class="tool-chev" {@attach springRotate(() => entry.expanded, { rest: 0, on: 90 })}>
-			<ChevronRight class="h-3 w-3" />
+		{#if entry.failed}<span class="step-failed">Failed</span>{/if}
+		<span class="step-chev" {@attach springRotate(() => entry.expanded, { rest: 0, on: 90 })}>
+			<ChevronRight size={16} strokeWidth={1.75} />
 		</span>
 	</button>
 	{#if entry.expanded}
-		<div class="tool-detail" transition:slide>
+		<div class="detail" transition:slide>
 			{#if command !== null}
-				<pre class="tool-pre tool-pre--cmd">$ {command}</pre>
+				<pre class="detail-pre detail-pre--cmd">$ {command}</pre>
 			{:else if lines}
-				<pre class="tool-pre">{#each lines as line, li (li)}<span
-							class="tool-line"
+				<pre class="detail-pre">{#each lines as line, li (li)}<span
+							class="detail-line"
 							class:diff-add={line.sign === '+'}
 							class:diff-del={line.sign === '−'}>{line.sign} {line.text}</span
 						>{/each}</pre>
 			{:else}
-				<pre class="tool-pre">{pretty(entry.input)}</pre>
+				<pre class="detail-pre">{pretty(entry.input)}</pre>
 			{/if}
 			{#if entry.output}
-				<pre class="tool-pre tool-pre--out">{entry.output}</pre>
+				<pre class="detail-pre detail-pre--out">{entry.output}</pre>
 			{/if}
 		</div>
 	{/if}
@@ -87,63 +90,65 @@
 		min-width: 0;
 	}
 
-	.tool-row {
+	.step {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		min-width: 0;
-		width: fit-content;
 		max-width: 100%;
-		padding: 0.1875rem 0.5rem 0.1875rem 0.375rem;
-		margin-left: -0.375rem;
+		width: fit-content;
+		min-height: 1.75rem;
+		padding: 0;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		color: var(--text-muted);
 		text-align: left;
 		cursor: pointer;
-		transition: background-color var(--dur-fast);
+		transition: color var(--dur-fast);
 	}
 
-	.tool-row:hover {
-		background: var(--bg-hover);
-	}
-
-	.tool-icon {
-		display: inline-flex;
-		flex-shrink: 0;
-		color: var(--text-faint);
-	}
-
-	.tool-verb {
-		flex-shrink: 0;
-		font-weight: 500;
+	.step:hover {
 		color: var(--text-default);
 	}
 
-	.tool--failed .tool-icon,
-	.tool--failed .tool-verb {
+	.step-glyph {
+		display: inline-flex;
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+		color: var(--text-faint);
+	}
+
+	.step-glyph--failed {
 		color: var(--status-error);
 	}
 
-	.tool-target {
+	.spin {
+		display: inline-flex;
+		animation: spin 1s linear infinite;
+	}
+
+	.step-verb {
+		flex-shrink: 0;
+	}
+
+	.step-target {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--font-mono, monospace);
-		font-size: var(--text-caption);
+		font-size: var(--text-footnote);
 		color: var(--text-muted);
 	}
 
-	.tool-diff {
+	.step-diff {
 		display: inline-flex;
-		gap: 0.3125rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
-		font-family: var(--font-mono, monospace);
-		font-size: var(--text-caption);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -155,7 +160,13 @@
 		color: var(--status-error);
 	}
 
-	.tool-chev {
+	.step-failed {
+		flex-shrink: 0;
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.step-chev {
 		display: inline-flex;
 		flex-shrink: 0;
 		color: var(--text-faint);
@@ -163,46 +174,52 @@
 		transition: opacity var(--dur-fast);
 	}
 
-	.tool-row:hover .tool-chev,
-	.tool-row:focus-visible .tool-chev,
-	.tool-row[aria-expanded='true'] .tool-chev {
+	.step:hover .step-chev,
+	.step:focus-visible .step-chev,
+	.step[aria-expanded='true'] .step-chev {
 		opacity: 1;
 	}
 
-	.tool-detail {
+	.detail {
 		display: flex;
 		flex-direction: column;
-		margin: 0.25rem 0 0.5rem 1.5rem;
+		margin: var(--space-1) 0 var(--space-2) var(--space-6);
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-md);
 		background: var(--bg-sunken);
 		overflow: hidden;
 	}
 
-	.tool-pre {
+	.detail-pre {
 		margin: 0;
-		padding: 0.5rem 0.75rem;
+		padding: var(--space-2) var(--space-3);
 		max-height: 16rem;
 		overflow: auto;
 		font-family: var(--font-mono, monospace);
-		font-size: var(--text-micro);
-		line-height: 1.55;
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
 		color: var(--text-muted);
 		white-space: pre;
 	}
 
-	.tool-line {
+	.detail-line {
 		display: block;
 	}
 
-	.tool-pre--cmd {
+	.detail-pre--cmd {
 		color: var(--text-default);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
 
-	.tool-pre--out {
+	.detail-pre--out {
 		border-top: 1px solid var(--border-default);
 		color: var(--text-faint);
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

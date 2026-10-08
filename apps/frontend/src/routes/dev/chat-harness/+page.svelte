@@ -2,13 +2,13 @@
 	import { page } from '$app/state';
 	import ChatPanel from '$lib/components/sandbox/chat/ChatPanel.svelte';
 	import type { RemoteDraft } from '$lib/components/sandbox/chat/session-store.svelte';
-	import { fixtureStore } from './fixtures';
+	import { fixtureStore, longStore } from './fixtures';
 
 	const view = page.url.searchParams.get('view') ?? 'busy';
-	const store = fixtureStore();
+	const store = view === 'long' ? longStore() : fixtureStore();
 
 	if (view === 'unreachable') store.connection = 'unreachable';
-	if (view !== 'busy' && view !== 'unreachable' && store.active) {
+	if (!['busy', 'unreachable', 'long'].includes(view) && store.active) {
 		store.active.busy = false;
 		store.active.queue = [];
 		store.active.entries = store.active.entries.slice(0, 9);
@@ -20,7 +20,7 @@
 
 	const remoteDrafts: RemoteDraft[] =
 		view === 'busy'
-			? [{ userId: 'user-alex', name: 'Alex', text: 'also check the staging cookie' }]
+			? [{ userId: 'user-alex', name: 'Alex Rivera', text: 'also check the staging cookie domain' }]
 			: [];
 
 	function onComment(text: string) {

@@ -181,83 +181,37 @@
 		if (text) store.updateQueued(id, text);
 		else store.removeQueued(id);
 	}
+
+	const typingLabel = $derived.by(() => {
+		if (typing.length === 0) return '';
+		const first = (name: string) => name.split(' ')[0] || name;
+		if (typing.length === 1) return `${first(typing[0].name)} is typing`;
+		if (typing.length === 2) {
+			return `${first(typing[0].name)} and ${first(typing[1].name)} are typing`;
+		}
+		return `${first(typing[0].name)} and ${typing.length - 1} others are typing`;
+	});
 </script>
 
 <div class="composer-wrap">
 	{#if typing.length > 0}
-		<div class="ghosts" transition:slide aria-live="polite">
-			{#each typing as draft (draft.userId)}
-				<div class="ghost">
-					<Avatar
-						user={{ id: draft.userId, name: draft.name, imageUrl: draft.avatarUrl }}
-						alt={draft.name}
-						size={16}
-						style="width: 1rem; height: 1rem; border-radius: 999px; object-fit: cover; flex-shrink: 0;"
-					/>
-					<span class="ghost-name">{draft.name} is typing…</span>
-					<span class="ghost-text">{truncate(draft.text, 140)}</span>
-				</div>
-			{/each}
-		</div>
-	{/if}
-	{#if queue.length > 0}
-		<div class="queue" transition:slide>
-			{#each queue as item, qi (item.id)}
-				<div class="queued" class:queued--editing={editingId === item.id}>
-					<span class="queued-index">{qi + 1}</span>
-					{#if editingId === item.id}
-						<input
-							class="queued-input"
-							bind:value={editText}
-							aria-label="Edit queued prompt"
-							onkeydown={(e) => {
-								if (e.key === 'Enter') commitEdit();
-								else if (e.key === 'Escape') editingId = null;
-							}}
-							onblur={commitEdit}
-							{@attach (el) => (el as HTMLInputElement).focus()}
-						/>
-					{:else}
-						<button
-							type="button"
-							class="queued-text"
-							title="Edit queued prompt"
-							onclick={() => {
-								editingId = item.id;
-								editText = item.text;
-							}}
-						>
-							{item.text || `${item.attachments.length} attachment(s)`}
-						</button>
-					{/if}
-					{#if !store.busy}
-						<button
-							type="button"
-							class="queued-btn"
-							aria-label="Send now"
-							title="Send now"
-							onclick={() => store.sendQueuedNow(item.id)}
-						>
-							<ArrowUp class="h-3 w-3" />
-						</button>
-					{/if}
-					<button
-						type="button"
-						class="queued-btn"
-						aria-label="Remove from queue"
-						title="Remove from queue"
-						onclick={() => store.removeQueued(item.id)}
-					>
-						<X class="h-3 w-3" />
-					</button>
-				</div>
-			{/each}
+		<div class="typing" transition:slide aria-live="polite" data-align="content">
+			<span class="typing-avatar" aria-hidden="true">
+				<Avatar
+					user={{ id: typing[0].userId, name: typing[0].name, imageUrl: typing[0].avatarUrl }}
+					alt=""
+					size={16}
+					style="width: 1rem; height: 1rem; border-radius: 999px; object-fit: cover;"
+				/>
+			</span>
+			<span class="typing-who">{typingLabel}</span>
+			{#if typing.length === 1}
+				<span class="typing-text">{truncate(typing[0].text, 140)}</span>
+			{/if}
 		</div>
 	{/if}
 	<form
 		class="cmp"
-		class:cmp--plan={store.plan && !commenting}
-		class:cmp--comment={commenting}
 		class:cmp--drop={dropActive}
 		ondragover={onDragOver}
 		ondragleave={onDragLeave}
@@ -279,15 +233,71 @@
 						onmouseenter={() => (pick = ci)}
 						onclick={() => complete(command)}
 					>
-						<span class="slash-name">/{command.name}</span>
+						<span class="slash-name" data-align="content">/{command.name}</span>
 						<span class="slash-desc">{command.description}</span>
 					</button>
 				{/each}
 			</div>
 		{/if}
+		{#if queue.length > 0}
+			<ol class="queue" transition:slide aria-label="Queued prompts">
+				{#each queue as item, qi (item.id)}
+					<li class="queued" data-align="content">
+						<span class="queued-index">{qi + 1}</span>
+						{#if editingId === item.id}
+							<input
+								class="queued-edit"
+								bind:value={editText}
+								aria-label="Edit queued prompt"
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitEdit();
+									else if (e.key === 'Escape') editingId = null;
+								}}
+								onblur={commitEdit}
+								{@attach (el) => (el as HTMLInputElement).focus()}
+							/>
+						{:else}
+							<button
+								type="button"
+								class="queued-text"
+								title="Edit queued prompt"
+								onclick={() => {
+									editingId = item.id;
+									editText = item.text;
+								}}
+							>
+								{item.text || `${item.attachments.length} attachment(s)`}
+							</button>
+						{/if}
+						<span class="queued-actions">
+							{#if !store.busy}
+								<button
+									type="button"
+									class="icon"
+									aria-label="Send now"
+									title="Send now"
+									onclick={() => store.sendQueuedNow(item.id)}
+								>
+									<ArrowUp size={16} strokeWidth={1.75} />
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="icon"
+								aria-label="Remove from queue"
+								title="Remove from queue"
+								onclick={() => store.removeQueued(item.id)}
+							>
+								<X size={16} strokeWidth={1.75} />
+							</button>
+						</span>
+					</li>
+				{/each}
+			</ol>
+		{/if}
 		{#if commenting}
-			<div class="cmp-mode" transition:slide>
-				<MessageCircle class="h-3.5 w-3.5 shrink-0" />
+			<div class="cmp-mode" transition:slide data-align="content">
+				<MessageCircle size={14} strokeWidth={1.75} />
 				Comment to the people in this session. The agent will not see it.
 			</div>
 		{/if}
@@ -304,10 +314,15 @@
 			bind:this={inputEl}
 			bind:value={store.draft}
 			class="cmp-input"
-			rows="3"
-			placeholder="Ask to make changes, @mention files, run /commands"
+			rows="2"
+			placeholder={commenting
+				? 'Write a comment'
+				: store.busy
+					? 'Queue a follow up'
+					: 'Ask to make changes, @mention files, run /commands'}
 			aria-label="Message"
 			aria-autocomplete="list"
+			data-align="content"
 			oninput={autosize}
 			onkeydown={onKey}
 			onpaste={onPaste}></textarea>
@@ -319,11 +334,12 @@
 						class="model"
 						class:model--open={open}
 						aria-label="Model and effort"
+						title="Model and effort"
 						{...props}
 					>
-						<span class="model-name">{modelLabel}</span>
+						<span class="model-name" data-align="content">{modelLabel}</span>
 						{#if variantLabel}<span class="model-effort">{variantLabel}</span>{/if}
-						<ChevronDown class="h-3.5 w-3.5 shrink-0" />
+						<ChevronDown size={16} strokeWidth={1.75} />
 					</button>
 				{/snippet}
 				<div class="menu-scroll">
@@ -359,10 +375,11 @@
 				<button
 					type="button"
 					class="plan-chip"
+					aria-pressed="true"
 					title="Plan mode: the agent reads but does not edit. Click to leave plan mode."
 					onclick={() => store.setPlan(false)}
 				>
-					<ListChecks class="h-3.5 w-3.5 shrink-0" /> Plan
+					<ListChecks size={16} strokeWidth={1.75} /> Plan
 				</button>
 			{/if}
 			<span class="bar-spacer"></span>
@@ -384,10 +401,10 @@
 						class="icon"
 						class:icon--open={open}
 						aria-label="Add context"
-						title="Add context"
+						title="Add files, plan mode or a comment"
 						{...props}
 					>
-						<Plus class="h-4 w-4" />
+						<Plus size={16} strokeWidth={1.75} />
 					</button>
 				{/snippet}
 				<MenuItem
@@ -421,7 +438,7 @@
 					title="Stop (Esc)"
 					onclick={() => store.abort()}
 				>
-					<Square class="h-2.5 w-2.5" fill="currentColor" />
+					<span class="stop-ring"><Square size={8} fill="currentColor" strokeWidth={0} /></span>
 				</button>
 			{/if}
 			<button
@@ -432,11 +449,11 @@
 				title={commenting ? 'Comment (↵)' : store.busy ? 'Queue (↵)' : 'Send (↵)'}
 			>
 				{#if commenting}
-					<MessageCircle class="h-4 w-4" />
+					<MessageCircle size={16} strokeWidth={2} />
 				{:else if store.busy}
-					<ListPlus class="h-4 w-4" />
+					<ListPlus size={16} strokeWidth={2} />
 				{:else}
-					<ArrowUp class="h-4 w-4" />
+					<ArrowUp size={16} strokeWidth={2} />
 				{/if}
 			</button>
 		</div>
@@ -445,84 +462,107 @@
 
 <style>
 	.composer-wrap {
+		font-weight: 400;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		width: 100%;
 	}
 
-	.ghosts {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: 0 0.75rem;
-	}
-
-	.ghost {
+	.typing {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-2);
 		min-width: 0;
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-	}
-
-	.ghost-name {
-		flex-shrink: 0;
-		font-weight: 500;
+		line-height: 1rem;
 		color: var(--text-muted);
 	}
 
-	.ghost-text {
+	.typing-avatar {
+		position: absolute;
+		top: 0;
+		left: calc(-1 * var(--chat-gutter, 2rem));
+		display: flex;
+		justify-content: center;
+		width: var(--chat-gutter, 2rem);
+	}
+
+	.typing-who {
+		flex-shrink: 0;
+	}
+
+	.typing-text {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-style: italic;
 		color: var(--text-faint);
+	}
+
+	.cmp {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin: 0 calc(-1 * var(--space-4));
+		padding: var(--space-3) var(--space-4) var(--space-2);
+		border: none;
+		border-radius: var(--radius-lg);
+		background: var(--bg-raised);
+		box-shadow:
+			0 0 0 1px var(--border-default),
+			var(--elev-1);
+		transition: box-shadow var(--dur-fast);
+	}
+
+	.cmp:focus-within {
+		box-shadow:
+			0 0 0 1px var(--border-strong),
+			var(--elev-1);
+	}
+
+	.cmp--drop {
+		outline: 1px dashed var(--border-strong);
+		outline-offset: 2px;
 	}
 
 	.queue {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		margin: calc(-1 * var(--space-1)) 0 0;
+		padding: 0 0 var(--space-2);
+		border-bottom: 1px solid var(--border-default);
+		list-style: none;
 	}
 
 	.queued {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-2);
 		min-width: 0;
-		height: 2rem;
-		padding: 0 0.375rem 0 0.625rem;
-		border-radius: var(--radius-md);
-		background: var(--fill-quiet);
-	}
-
-	.queued--editing {
-		background: var(--bg-sunken);
-		box-shadow: 0 0 0 1px var(--border-strong);
+		height: 1.75rem;
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
 	}
 
 	.queued-index {
 		flex-shrink: 0;
-		width: 1rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		min-width: 1rem;
 		font-variant-numeric: tabular-nums;
-		text-align: center;
 		color: var(--text-faint);
 	}
 
 	.queued-text,
-	.queued-input {
+	.queued-edit {
 		flex: 1;
 		min-width: 0;
 		padding: 0;
 		border: none;
 		background: none;
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		color: var(--text-muted);
 		text-align: left;
 	}
@@ -532,94 +572,50 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		cursor: text;
+		transition: color var(--dur-fast);
 	}
 
-	.queued-input {
+	.queued-text:hover {
 		color: var(--text-default);
 	}
 
-	.queued-input:focus-visible {
+	.queued-edit {
+		color: var(--text-default);
+	}
+
+	.queued-edit:focus-visible {
 		outline: none;
 	}
 
-	.queued-btn {
+	.queued-actions {
 		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
-		border: none;
-		border-radius: var(--radius-xs);
-		background: none;
-		color: var(--text-faint);
-		cursor: pointer;
-		transition:
-			background-color var(--dur-fast),
-			color var(--dur-fast);
-	}
-
-	.queued-btn:hover {
-		background: var(--bg-hover);
-		color: var(--text-default);
-	}
-
-	.cmp {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0.875rem 0.75rem 0.625rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-xl);
-		background: var(--bg-raised);
-		box-shadow: var(--elev-2);
-		transition:
-			border-color var(--dur-fast),
-			background-color var(--dur-fast);
-	}
-
-	.cmp:focus-within {
-		border-color: var(--border-strong);
-	}
-
-	.cmp--plan {
-		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-		background: color-mix(in srgb, var(--accent-subtle) 50%, var(--bg-raised));
-	}
-
-	.cmp--comment {
-		background: color-mix(in srgb, var(--fill-soft) 100%, var(--bg-raised));
-	}
-
-	.cmp--drop {
-		outline: 1px dashed var(--accent);
-		outline-offset: 2px;
 	}
 
 	.cmp-mode {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0 0.375rem;
+		gap: var(--space-2);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
+		line-height: 1rem;
 		color: var(--text-muted);
 	}
 
 	.cmp-files {
-		padding: 0.25rem 0.25rem 0;
+		padding-top: var(--space-1);
 	}
 
 	.cmp-input {
 		width: 100%;
-		min-height: 4.5rem;
-		padding: 0 0.375rem;
+		min-height: 3rem;
+		padding: 0;
 		border: none;
 		background: none;
 		resize: none;
 		font-size: var(--text-body);
-		line-height: 1.55;
+		line-height: 1.5rem;
 		color: var(--text-default);
 	}
 
@@ -633,27 +629,29 @@
 
 	.slash {
 		position: absolute;
-		left: 0.5rem;
-		right: 0.5rem;
-		bottom: calc(100% + 0.375rem);
+		left: 0;
+		right: 0;
+		bottom: calc(100% + var(--space-2));
 		z-index: 2;
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
-		padding: 0.25rem;
+		padding: var(--space-1);
 		border-radius: var(--radius-md);
 		background: var(--bg-overlay);
-		box-shadow: var(--elev-3);
+		box-shadow:
+			0 0 0 1px var(--border-default),
+			var(--elev-3);
 	}
 
 	.slash-item {
 		display: flex;
-		align-items: baseline;
-		gap: 0.75rem;
+		align-items: center;
+		gap: var(--space-3);
 		min-width: 0;
-		padding: 0.375rem 0.625rem;
+		height: 1.75rem;
+		padding: 0 var(--space-3);
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: none;
 		text-align: left;
 		cursor: pointer;
@@ -667,7 +665,7 @@
 		flex-shrink: 0;
 		font-family: var(--font-mono, monospace);
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		color: var(--text-default);
 	}
 
@@ -677,20 +675,21 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
+		line-height: 1.25rem;
 		color: var(--text-muted);
 	}
 
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-2);
 		min-width: 0;
+		height: 2rem;
 	}
 
 	.bar-spacer {
 		flex: 1;
-		min-width: 0.5rem;
+		min-width: var(--space-2);
 	}
 
 	.file-input {
@@ -700,17 +699,17 @@
 	.model {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-1);
 		min-width: 0;
 		max-width: 16rem;
 		height: 1.75rem;
-		padding: 0 0.5rem;
+		margin-left: calc(-1 * var(--space-2));
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: none;
 		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		font-weight: 500;
+		line-height: 1.25rem;
 		color: var(--text-default);
 		cursor: pointer;
 		white-space: nowrap;
@@ -729,24 +728,32 @@
 	}
 
 	.model-effort {
-		font-weight: 400;
 		color: var(--text-muted);
+	}
+
+	.model :global(svg) {
+		flex-shrink: 0;
+		color: var(--text-faint);
 	}
 
 	.plan-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		height: 1.5rem;
-		padding: 0 0.5rem;
-		border: none;
-		border-radius: var(--radius-pill);
-		background: var(--accent-subtle);
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 500;
-		color: var(--accent);
+		gap: var(--space-1);
+		height: 1.75rem;
+		padding: 0 var(--space-2) 0 var(--space-1);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+		background: var(--fill-quiet);
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
+		color: var(--text-default);
 		cursor: pointer;
+		transition: background-color var(--dur-fast);
+	}
+
+	.plan-chip:hover {
+		background: var(--bg-hover);
 	}
 
 	.icon {
@@ -757,7 +764,7 @@
 		height: 1.75rem;
 		flex-shrink: 0;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
@@ -772,18 +779,22 @@
 		color: var(--text-default);
 	}
 
+	.icon:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
 	.icon--stop {
-		width: 1.625rem;
-		height: 1.625rem;
-		margin: 0 0.125rem;
-		border-radius: var(--radius-pill);
-		box-shadow: inset 0 0 0 1.5px var(--text-default);
 		color: var(--text-default);
 	}
 
-	.icon--stop:disabled {
-		opacity: 0.5;
-		cursor: default;
+	.stop-ring {
+		display: inline-grid;
+		place-items: center;
+		width: 1rem;
+		height: 1rem;
+		border-radius: var(--radius-pill);
+		box-shadow: inset 0 0 0 1.5px currentColor;
 	}
 
 	.menu-scroll {
@@ -792,10 +803,9 @@
 	}
 
 	.menu-group {
-		padding: 0.5rem 0.75rem 0.125rem;
+		padding: var(--space-2) var(--space-3) var(--space-1);
 		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 500;
+		line-height: 1rem;
 		color: var(--text-faint);
 	}
 
@@ -816,13 +826,17 @@
 		height: 1.75rem;
 		flex-shrink: 0;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xs);
 		background: var(--accent);
 		color: var(--text-on-accent);
 		cursor: pointer;
 		transition:
 			opacity var(--dur-fast),
 			background-color var(--dur-fast);
+	}
+
+	.send:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--accent) 88%, var(--text-default));
 	}
 
 	.send:disabled {
