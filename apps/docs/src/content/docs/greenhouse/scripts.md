@@ -21,10 +21,10 @@ Commit it at `.orchard/greenhouse.json` in the repository root:
 }
 ```
 
-| Key     | Type                        | What it does                                                                                                                                   |
-| ------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setup` | string, or array of strings | Runs once, automatically, when a session's worktree is created.                                                                                |
-| `run`   | string, or array of strings | Runs when someone presses **Run** in the terminal dock.                                                                                        |
+| Key     | Type                        | What it does                                                                                                                                                                                                                                                                                                            |
+| ------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup` | string, or array of strings | Runs once, automatically, when a session's worktree is created.                                                                                                                                                                                                                                                         |
+| `run`   | string, or array of strings | Runs when someone presses **Run** in the terminal dock.                                                                                                                                                                                                                                                                 |
 | `ports` | array of numbers            | Declares the ports your app serves on: up to 10, from 1024 to 65535, not 2222 or 4096. They show in the **Ports** tab before anything listens on them, and on Kubernetes machines they can be previewed even when they are not one of the standard preview ports. Listening ports are detected on their own either way. |
 
 All keys are optional. An array is joined with newlines, so it reads as a

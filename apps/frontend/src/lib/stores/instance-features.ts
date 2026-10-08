@@ -16,7 +16,11 @@ export const instanceFeatures = {
 		const response = await apiFetch('/apiv1/instance/features');
 		if (!response.ok) return get(features);
 		loaded = true;
-		const next = { mcp: true, sandboxes: false, ...((await response.json()) as Partial<InstanceFeatures>) };
+		const next = {
+			mcp: true,
+			sandboxes: false,
+			...((await response.json()) as Partial<InstanceFeatures>)
+		};
 		features.set(next);
 		return next;
 	}

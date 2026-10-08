@@ -27,7 +27,7 @@ tools. Full parameter lists are in the generated
 | `prompt_sandbox_session`         | Send a prompt to a session's agent, attributed to you.                                                            | guest or host     |
 | `get_sandbox_session_diff`       | Changed files with line counts and the unified diff (up to 200 KB), or one file's diff.                           | any role          |
 | `get_sandbox_session_transcript` | The latest messages of the session's chat as text, with who sent each prompt.                                     | any role          |
-| `create_sandbox_session_pr`      | Open a GitHub pull request (optionally a draft) for the session's branch, pushing it first when needed.          | see below         |
+| `create_sandbox_session_pr`      | Open a GitHub pull request (optionally a draft) for the session's branch, pushing it first when needed.           | see below         |
 
 Pull requests opened over MCP follow the same rule as in the browser: they use
 the GitHub account of the person the MCP connection belongs to. Push the branch

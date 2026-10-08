@@ -3,12 +3,12 @@
 Most suites here are pure: they build services with fakes and never open a
 database. A few write real rows and need Postgres:
 
-| Script                         | File                           |
-| ------------------------------ | ------------------------------ |
-| `pnpm test:apply-queue`        | `apply-queue.test.ts`          |
-| `pnpm test:mirror`             | `mirror-engine.test.ts`        |
-| `pnpm test:repo-link`          | `github-repo-link.test.ts`     |
-| `pnpm test:rbac`               | `rbac.e2e.ts`                  |
+| Script                          | File                          |
+| ------------------------------- | ----------------------------- |
+| `pnpm test:apply-queue`         | `apply-queue.test.ts`         |
+| `pnpm test:mirror`              | `mirror-engine.test.ts`       |
+| `pnpm test:repo-link`           | `github-repo-link.test.ts`    |
+| `pnpm test:rbac`                | `rbac.e2e.ts`                 |
 | `pnpm test:rate-limit-postgres` | `rate-limit-postgres.test.ts` |
 
 They get their client from `support/test-database.ts`, which refuses to run

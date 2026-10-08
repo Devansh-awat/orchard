@@ -152,11 +152,11 @@ the commit carries a `Co-authored-by` trailer for each of them. See
 
 The dock sits under the right panel. **⌘J** collapses or expands it.
 
-| Tab          | What it is                                                                                                                         |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**    | The live output of the session's setup script. Read only.                                                                          |
-| **Run**      | The output of the run script, with **Run** to start it and a stop button. See [Setup and run scripts](/greenhouse/scripts/).       |
-| **Terminal** | A shell in the session's worktree. **+** opens another; **⌘`** jumps to the terminal.                                              |
+| Tab          | What it is                                                                                                                                                                                                                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**    | The live output of the session's setup script. Read only.                                                                                                                                                                   |
+| **Run**      | The output of the run script, with **Run** to start it and a stop button. See [Setup and run scripts](/greenhouse/scripts/).                                                                                                |
+| **Terminal** | A shell in the session's worktree. **+** opens another; **⌘`** jumps to the terminal.                                                                                                                                       |
 | **Ports**    | Every port a process on the machine is listening on, with which process, whether it belongs to this session, and **Open preview**. Ports declared in `.orchard/greenhouse.json` are listed before anything listens on them. |
 
 Terminals run inside `tmux` on the machine, so they survive a page reload, a
