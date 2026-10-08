@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.61.0](https://github.com/hackclub/orchard/compare/server/v2.60.0...server/v2.61.0) (2026-10-08)
+
+
+### Features
+
+* require single sign-on for a whole instance, sessions that got in another way are signed out when enforcement turns on ([0db4711](https://github.com/hackclub/orchard/commit/0db471187f5e8978f23a43ab903e449d2f2b9701))
+
+
+### Bug Fixes
+
+* growing a deployment volume resizes the existing pvc instead of only recording the new size ([682729b](https://github.com/hackclub/orchard/commit/682729ba50d4f82128d2ad370e47f2e004c3dd10))
+
 ## [2.60.0](https://github.com/hackclub/orchard/compare/server/v2.59.0...server/v2.60.0) (2026-10-08)
 
 

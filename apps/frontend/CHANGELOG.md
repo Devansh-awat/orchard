@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/hackclub/orchard/compare/frontend/v1.53.0...frontend/v1.54.0) (2026-10-08)
+
+
+### Features
+
+* require single sign-on for a whole instance, sessions that got in another way are signed out when enforcement turns on ([0db4711](https://github.com/hackclub/orchard/commit/0db471187f5e8978f23a43ab903e449d2f2b9701))
+
 ## [1.53.0](https://github.com/hackclub/orchard/compare/frontend/v1.52.0...frontend/v1.53.0) (2026-10-08)
 
 
