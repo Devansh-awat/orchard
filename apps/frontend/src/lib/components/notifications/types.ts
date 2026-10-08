@@ -1,6 +1,6 @@
 export type NotificationScopeType = 'org' | 'project' | 'deployment' | 'database' | 'job';
 
-export type NotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 'security';
+export type NotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 'security' | 'agents';
 
 export type SettingValue = 'always' | 'subscribed' | 'never';
 
@@ -163,7 +163,8 @@ export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
 	health: 'App and database health',
 	jobs: 'Jobs',
 	data: 'Backups and archiving',
-	security: 'Security'
+	security: 'Security',
+	agents: 'Greenhouse sessions'
 };
 
 export const SETTING_LABELS: Record<SettingValue, { label: string; hint: string }> = {
@@ -181,7 +182,8 @@ export const CATEGORY_OPTIONS: Record<NotificationCategory, SettingValue[]> = {
 	health: ['always', 'subscribed', 'never'],
 	jobs: ['always', 'subscribed', 'never'],
 	data: ['always', 'subscribed', 'never'],
-	security: ['always', 'never']
+	security: ['always', 'never'],
+	agents: ['always', 'never']
 };
 
 const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
@@ -192,11 +194,17 @@ const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: strin
 	never: { label: 'Off', hint: 'No alerts when something signs in to your account' }
 };
 
+const AGENT_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
+	always: { label: 'On', hint: 'Told when an agent session is waiting for you' },
+	never: { label: 'Off', hint: 'No alerts when an agent session is waiting for you' }
+};
+
 export function settingLabel(
 	category: NotificationCategory,
 	value: SettingValue
 ): { label: string; hint: string } {
 	if (category === 'security') return SECURITY_LABELS[value] ?? SETTING_LABELS[value];
+	if (category === 'agents') return AGENT_LABELS[value] ?? SETTING_LABELS[value];
 	return SETTING_LABELS[value];
 }
 

@@ -7,6 +7,31 @@ export type SandboxStatus =
 	| 'deleting'
 	| 'error';
 
+export type SandboxRunnerId = 'kubernetes' | 'vercel';
+
+export type SandboxDesiredState = 'running' | 'stopped' | 'deleted';
+
+export type SandboxRole = 'owner' | 'collaborator' | 'viewer' | 'admin';
+
+export interface SandboxRunnerCapabilities {
+	statusSource: 'watch' | 'poll';
+	persistence: 'volume' | 'snapshot';
+	homeMode: 'block' | 'filesystem' | 'none';
+	tcpTunnel: 'native' | 'bridge' | 'none';
+	pty: 'native' | 'none';
+	execStdin?: boolean;
+	maxRunMs: number | null;
+	diskSizeConfigurable?: boolean;
+}
+
+export interface SandboxRunnerInfo {
+	id: SandboxRunnerId;
+	label: string;
+	capabilities: SandboxRunnerCapabilities;
+	available: boolean;
+	reason: string | null;
+}
+
 export interface SandboxSshIdentityRef {
 	id: string;
 	name: string;
@@ -17,6 +42,12 @@ export interface Sandbox {
 	name: string;
 	status: SandboxStatus;
 	statusMessage: string | null;
+	runner?: SandboxRunnerId;
+	desiredState?: SandboxDesiredState;
+	applying?: boolean;
+	applyError?: string | null;
+	diskObserved?: string | null;
+	myRole?: SandboxRole;
 	repoUrl: string | null;
 	sshIdentity: SandboxSshIdentityRef | null;
 	setupScript: string | null;
@@ -31,6 +62,8 @@ export interface Sandbox {
 export interface SandboxListResponse {
 	sandboxes: Sandbox[];
 	maxSandboxes: number | null;
+	runners?: SandboxRunnerInfo[];
+	defaultRunner?: SandboxRunnerId | null;
 }
 
 export interface SandboxCredentials {
@@ -46,6 +79,8 @@ export interface SandboxOwnerRef {
 
 export interface SandboxCreateInput {
 	organizationId?: string;
+	runner?: SandboxRunnerId;
+	size?: string;
 	name?: string;
 	repoUrl?: string;
 	sshIdentityId?: string;

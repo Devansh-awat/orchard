@@ -3,6 +3,12 @@ import { dev } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import { featureFlag } from '$lib/posthog';
 
+export function sandboxEnvOverride(): boolean | null {
+	if (env.PUBLIC_SANDBOX_ENABLED === 'true') return true;
+	if (env.PUBLIC_SANDBOX_ENABLED === 'false') return false;
+	return null;
+}
+
 export function sandboxEnabled(): boolean {
 	if (env.PUBLIC_SANDBOX_ENABLED === 'true') return true;
 	if (env.PUBLIC_SANDBOX_ENABLED === 'false') return false;

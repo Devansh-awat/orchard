@@ -1,0 +1,291 @@
+.gh {
+	--gh-editor: var(--bg-app);
+	--gh-sidebar: color-mix(in oklab, var(--text-default) 3.5%, var(--bg-app));
+	--gh-panel: var(--bg-app);
+	--gh-line: var(--border-default);
+	--gh-line-soft: color-mix(in oklab, var(--border-default) 60%, transparent);
+	--gh-hover: color-mix(in oklab, var(--text-default) 5.5%, transparent);
+	--gh-selected: color-mix(in oklab, var(--text-default) 8.5%, transparent);
+	--gh-pressed: color-mix(in oklab, var(--text-default) 12%, transparent);
+	--gh-field: color-mix(in oklab, var(--text-default) 2.5%, var(--bg-app));
+	--gh-composer: color-mix(in oklab, var(--text-default) 2%, var(--bg-raised));
+	--gh-composer-edge: color-mix(in oklab, var(--text-default) 12%, transparent);
+	--gh-composer-shadow:
+		0 1px 2px color-mix(in oklab, var(--ink, black) 6%, transparent),
+		0 8px 24px -12px color-mix(in oklab, var(--ink, black) 18%, transparent);
+	--gh-text: var(--text-default);
+	--gh-muted: var(--text-muted);
+	--gh-faint: var(--text-faint);
+	--gh-add: var(--status-success);
+	--gh-del: var(--status-error);
+	--gh-mod: var(--status-warning);
+	--gh-new: var(--status-success);
+	--gh-accent: var(--accent);
+	--gh-bar: 2.5rem;
+	--gh-tab: 2.25rem;
+	--gh-row: 2rem;
+	--gh-session-row: 2.25rem;
+	--gh-icon: 1.75rem;
+	--gh-ui: var(--text-footnote);
+	--gh-caption: var(--text-caption);
+	--gh-mono: var(--font-mono-terminal);
+	--console-bg: var(--gh-panel);
+	--console-quiet: var(--gh-hover);
+	--console-faint: var(--text-faint);
+	color: var(--gh-text);
+	font-size: var(--gh-ui);
+	line-height: var(--lh-footnote);
+	-webkit-font-smoothing: antialiased;
+}
+
+.gh-ibtn {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: var(--gh-icon);
+	height: var(--gh-icon);
+	border-radius: var(--radius-xs);
+	color: var(--gh-muted);
+	transition:
+		color var(--dur-fast) ease,
+		background-color var(--dur-fast) ease;
+}
+
+.gh-ibtn:hover:not(:disabled),
+.gh-ibtn[aria-expanded='true'],
+.gh-ibtn[aria-pressed='true'] {
+	color: var(--gh-text);
+	background: var(--gh-hover);
+}
+
+.gh-ibtn:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gh-ibtn:focus-visible,
+.gh-btn:focus-visible,
+.gh-row:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.gh-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	height: 1.75rem;
+	padding: 0 0.625rem;
+	border-radius: var(--radius-xs);
+	border: 1px solid var(--gh-line);
+	background: var(--gh-editor);
+	color: var(--gh-text);
+	font-size: var(--gh-ui);
+	font-weight: 500;
+	white-space: nowrap;
+	transition:
+		background-color var(--dur-fast) ease,
+		border-color var(--dur-fast) ease,
+		color var(--dur-fast) ease;
+}
+
+.gh-btn:hover:not(:disabled) {
+	background: var(--gh-hover);
+}
+
+.gh-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gh-btn--primary {
+	border-color: transparent;
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+.gh-btn--primary:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--accent) 88%, var(--text-default));
+}
+
+.gh-btn--ghost {
+	border-color: transparent;
+	background: transparent;
+	color: var(--gh-muted);
+}
+
+.gh-btn--ghost:hover:not(:disabled) {
+	color: var(--gh-text);
+}
+
+.gh-split {
+	display: inline-flex;
+	align-items: stretch;
+	height: 1.75rem;
+	border-radius: var(--radius-xs);
+	border: 1px solid var(--gh-line);
+	background: var(--gh-editor);
+}
+
+.gh-split > button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	color: var(--gh-text);
+	font-size: var(--gh-ui);
+	font-weight: 500;
+	white-space: nowrap;
+	transition: background-color var(--dur-fast) ease;
+}
+
+.gh-split > button:first-of-type {
+	padding: 0 0.625rem;
+	border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+}
+
+.gh-split > button:last-of-type {
+	justify-content: center;
+	width: 1.625rem;
+	border-left: 1px solid var(--gh-line);
+	border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+	color: var(--gh-muted);
+}
+
+.gh-split > button:hover:not(:disabled),
+.gh-split > button[aria-expanded='true'] {
+	background: var(--gh-hover);
+	color: var(--gh-text);
+}
+
+.gh-split > button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gh-split--primary {
+	border-color: transparent;
+	background: var(--accent);
+}
+
+.gh-split--primary > button,
+.gh-split--primary > button:last-of-type {
+	color: var(--text-on-accent);
+}
+
+.gh-split--primary > button:last-of-type {
+	border-left-color: color-mix(in oklab, var(--text-on-accent) 25%, transparent);
+}
+
+.gh-split--primary > button:hover:not(:disabled),
+.gh-split--primary > button[aria-expanded='true'] {
+	background: color-mix(in oklab, var(--text-on-accent) 12%, transparent);
+	color: var(--text-on-accent);
+}
+
+.gh-kbd {
+	font-family: var(--font-sans);
+	font-size: var(--gh-caption);
+	color: var(--gh-faint);
+	letter-spacing: 0.02em;
+}
+
+.gh-mono {
+	font-family: var(--gh-mono);
+	font-feature-settings: 'calt' 0;
+}
+
+.gh-add {
+	color: var(--gh-add);
+}
+
+.gh-del {
+	color: var(--gh-del);
+}
+
+.gh-num {
+	font-family: var(--gh-mono);
+	font-size: var(--gh-caption);
+	font-variant-numeric: tabular-nums;
+}
+
+.gh-scroll {
+	overflow: auto;
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--text-default) 18%, transparent) transparent;
+}
+
+.gh-field {
+	width: 100%;
+	height: 1.875rem;
+	padding: 0 0.625rem;
+	border-radius: var(--radius-xs);
+	border: 1px solid var(--gh-line);
+	background: var(--gh-field);
+	color: var(--gh-text);
+	font-size: var(--gh-ui);
+	outline: none;
+	transition: border-color var(--dur-fast) ease;
+}
+
+.gh-field:focus {
+	border-color: var(--focus-ring-color);
+	box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.gh-field::placeholder {
+	color: var(--gh-faint);
+}
+
+.gh-menu-head {
+	padding: 0.375rem 0.625rem 0.25rem;
+	font-size: var(--gh-caption);
+	color: var(--gh-faint);
+}
+
+.gh-menu-sep {
+	height: 1px;
+	margin: 0.25rem 0;
+	background: var(--gh-line);
+}
+
+.gh-menu-kbd {
+	margin-left: auto;
+	padding-left: 1rem;
+	font-size: var(--gh-caption);
+	color: var(--gh-faint);
+}
+
+.gh .ui-menu {
+	padding: 0.25rem;
+	min-width: 13rem;
+}
+
+.gh .ui-menu-item {
+	gap: 0.5rem;
+	padding: 0.3125rem 0.5rem;
+	border-radius: var(--radius-xs);
+	font-weight: 400;
+	color: var(--gh-text);
+}
+
+.gh .ui-menu-item svg {
+	flex: none;
+	color: var(--gh-muted);
+}
+
+.gh .ui-menu-item--danger,
+.gh .ui-menu-item--danger svg {
+	color: var(--status-error);
+}
+
+.gh .ui-popover {
+	padding: 0.5rem;
+}
+
+.gh-split--primary:has(> button:first-of-type:disabled) {
+	opacity: 0.5;
+}
+
+.gh-split--primary > button:disabled {
+	opacity: 1;
+}

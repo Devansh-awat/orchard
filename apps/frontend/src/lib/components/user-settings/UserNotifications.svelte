@@ -28,7 +28,14 @@
 
 	let { index = 0 }: { index?: number } = $props();
 
-	const CATEGORIES: NotificationCategory[] = ['deploys', 'health', 'jobs', 'data', 'security'];
+	const CATEGORIES: NotificationCategory[] = [
+		'deploys',
+		'health',
+		'jobs',
+		'data',
+		'security',
+		'agents'
+	];
 
 	const DEST_META: Record<string, { label: string; icon: typeof Webhook; hue: string }> = {
 		email: { label: 'Email', icon: Mail, hue: 'var(--hue-amber)' },

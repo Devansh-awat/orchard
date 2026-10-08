@@ -133,7 +133,25 @@ export function runStatus(status: RunStatus): StatusMeta {
 	}
 }
 
-export function sandboxStatus(status: SandboxStatus): StatusMeta {
+export interface SandboxStatusContext {
+	applying?: boolean;
+	applyError?: string | null;
+	desiredState?: 'running' | 'stopped' | 'deleted';
+}
+
+export function sandboxStatus(status: SandboxStatus, ctx: SandboxStatusContext = {}): StatusMeta {
+	if (status === 'deleting' || ctx.desiredState === 'deleted') {
+		return meta('error', 'Deleting', true);
+	}
+	if (ctx.applyError && status !== 'running' && status !== 'stopped') {
+		return meta('error', 'Apply failed');
+	}
+	if (ctx.applyError) return meta('warning', status === 'running' ? 'Running' : 'Stopped');
+	if (ctx.applying) {
+		if (ctx.desiredState === 'stopped' && status !== 'stopped') return meta('progress', 'Stopping', true);
+		if (ctx.desiredState === 'running' && status !== 'running') return meta('progress', 'Starting', true);
+		return meta('progress', 'Applying', true);
+	}
 	switch (status) {
 		case 'running':
 			return meta('success', 'Running');
@@ -143,8 +161,6 @@ export function sandboxStatus(status: SandboxStatus): StatusMeta {
 			return meta('progress', capitalize(status), true);
 		case 'stopped':
 			return meta('neutral', 'Stopped');
-		case 'deleting':
-			return meta('error', 'Deleting', true);
 		case 'error':
 			return meta('error', 'Error');
 		default:

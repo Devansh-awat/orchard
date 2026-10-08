@@ -67,6 +67,7 @@
 		"lucide-svelte": "^0.510.0",
 		"marked": "^18.0.4",
 		"melt": "^0.42.0",
+		"monaco-editor": "^0.57.0",
 		"motion": "^12.38.0",
 		"pixi-filters": "^6.1.5",
 		"pixi.js": "^8.19.0",

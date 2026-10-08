@@ -1,8 +1,8 @@
 import type { TerminalThemeColors } from '@wterm/dom';
 
-type Rgba = [number, number, number, number];
+export type Rgba = [number, number, number, number];
 
-function readRgba(probe: HTMLElement, token: string): Rgba {
+export function readRgba(probe: HTMLElement, token: string): Rgba {
 	probe.style.color = '';
 	probe.style.color = `var(${token})`;
 	const value = getComputedStyle(probe).color;
