@@ -1,4 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { parseMemory } from './quantity';
 import * as k8s from '@kubernetes/client-node';
 import { clusterPods } from './cluster-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -520,16 +521,30 @@ export class KubernetesService {
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
-    // Check if PVC already exists
     try {
-      await coreApi.readNamespacedPersistentVolumeClaim(cleanName, cleanNamespace);
-      // PVC already exists, no need to create
+      const { body: existing } = await coreApi.readNamespacedPersistentVolumeClaim(
+        cleanName,
+        cleanNamespace
+      );
+      const current = parseMemory(String(existing.spec?.resources?.requests?.storage ?? ''));
+      if (parseMemory(storageSize) > current) {
+        await coreApi.patchNamespacedPersistentVolumeClaim(
+          cleanName,
+          cleanNamespace,
+          { spec: { resources: { requests: { storage: storageSize } } } },
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/merge-patch+json' } }
+        );
+      }
       return;
     } catch (error) {
       if (error.response?.statusCode !== 404) {
         throw error;
       }
-      // 404 = doesn't exist, proceed to create
     }
 
     const pvc: k8s.V1PersistentVolumeClaim = {
