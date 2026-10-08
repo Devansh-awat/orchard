@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.60.0](https://github.com/hackclub/orchard/compare/server/v2.59.0...server/v2.60.0) (2026-10-08)
+
+
+### Features
+
+* backup fleet gauges for datadog, backups waiting, archiving failing and hours since the last backup ([6a87030](https://github.com/hackclub/orchard/commit/6a870304dd67f2601b32103be1ef7cf0cb5833ed))
+* scheduled backups still waiting behind a newer one are swept so a stalled cluster cannot pile up ([11b5baf](https://github.com/hackclub/orchard/commit/11b5baf5363e37556edd64bdf2048c52520af920))
+* the defaults reconcile lifts databases to the memory floor and drops over-reserved shared_buffers ([8019169](https://github.com/hackclub/orchard/commit/8019169069920bbb198e346dca7b08806c10b5e0))
+
+
+### Bug Fixes
+
+* a backup whose cluster cannot archive wal fails in minutes instead of six hours ([afd0f57](https://github.com/hackclub/orchard/commit/afd0f5745f856d02d52b0f750090529ef4116c6d))
+* stopping a database suspends its backup schedule instead of minting backups that can never run ([71c42bb](https://github.com/hackclub/orchard/commit/71c42bb5c80cafe008aeb86e302de0ea11c720b5))
+* the tenant policy reconcile covers namespaces under either managed label ([67adf9c](https://github.com/hackclub/orchard/commit/67adf9c38f9f56167b9ebdc57ed86eb72c0705a5))
+
 ## [2.59.0](https://github.com/hackclub/orchard/compare/server/v2.58.0...server/v2.59.0) (2026-10-07)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.53.0](https://github.com/hackclub/orchard/compare/frontend/v1.52.0...frontend/v1.53.0) (2026-10-08)
+
+
+### Features
+
+* terminal keystrokes draw instantly on high latency links, predictions start on the first key and cover backspace and enter ([a1c48cc](https://github.com/hackclub/orchard/commit/a1c48cc81bc6e64031b84c60a1bd1d89ad71e3cd))
+* web terminal renders with wterm on the ghostty core, crisp dom text at any zoom ([2c23674](https://github.com/hackclub/orchard/commit/2c23674bd472c3d0ae7259c56c69cfa9ea130187))
+
 ## [1.52.0](https://github.com/hackclub/orchard/compare/frontend/v1.51.0...frontend/v1.52.0) (2026-10-07)
 
 
