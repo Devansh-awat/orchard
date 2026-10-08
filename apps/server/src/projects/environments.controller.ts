@@ -59,11 +59,19 @@ export class EnvironmentsController {
   }
 
   @Delete('environments/:id')
-  async remove(@Param('id') id: string, @Request() req) {
+  async remove(
+    @Param('id') id: string,
+    @Body() body: { confirmName?: string } | undefined,
+    @Request() req
+  ) {
     const { user } = await this.resolveEnvView(id, req);
     const projectId = await this.environments.projectIdForEnv(id);
     await this.authz.requireProjectDelete(projectId, user.id);
-    return this.environments.deleteEnvironment(id, user.id);
+    return this.environments.deleteEnvironment(
+      id,
+      { userId: user.id, email: user.email ?? undefined },
+      body?.confirmName
+    );
   }
 
   @Get('environments/:id/shared-vars')

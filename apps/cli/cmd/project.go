@@ -396,10 +396,12 @@ func projectDeleteCmd() *cobra.Command {
 				return err
 			}
 			label := pick(p, "slug", "name", "id")
-			if err := output.Confirm(fmt.Sprintf("delete project %s and all of its deployments, databases, and ingresses?", label), yesFlag); err != nil {
+			name := str(p["name"])
+			if err := output.ConfirmTyped(fmt.Sprintf("delete project %s and all of its deployments, databases (with their data and backups), domains, jobs and environments", label), name, yesFlag); err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodDelete, "/projects/"+url.PathEscape(str(p["id"])), nil, nil); err != nil {
+			body := map[string]string{"confirmName": name}
+			if err := cl.Send(cmd.Context(), http.MethodDelete, "/projects/"+url.PathEscape(str(p["id"])), body, nil); err != nil {
 				return err
 			}
 			output.Successf("deleted project %s", label)

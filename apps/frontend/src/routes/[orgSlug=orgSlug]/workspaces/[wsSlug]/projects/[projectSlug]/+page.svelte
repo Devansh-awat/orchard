@@ -193,7 +193,9 @@
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/projects/${project.id}`, {
-				method: 'DELETE'
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ confirmName: project.name })
 			});
 
 			if (!response.ok) {
@@ -632,9 +634,10 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
-		description="This will permanently <strong>delete this project</strong> and all its resources (apps, databases, ingresses). This cannot be undone."
+		description="This <strong>permanently deletes the project</strong> and everything in every one of its environments: apps, databases with their data and backups, domains, jobs and container images. There is no undo and no recovery."
 		html
-		confirmLabel="Delete Project"
+		confirmText={project.name}
+		confirmLabel="Delete project forever"
 		onconfirm={deleteProject}
 		oncancel={() => {}}
 	/>

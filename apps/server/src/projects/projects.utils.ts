@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 /**
  * Pure helpers shared between ProjectsService, DatabasesService and friends.
  * Kept dependency-free so any service in the projects module can import them
@@ -261,4 +262,11 @@ export function desiredWildcardTls(
   return desired
     ? { secretName: desired, clusterIssuer: null }
     : { secretName: null, clusterIssuer: newIssuer };
+}
+
+export function assertDeleteConfirmation(expected: string, provided: unknown, noun: string): void {
+  if (typeof provided === 'string' && provided.trim() === expected.trim()) return;
+  throw new BadRequestException(
+    `Type the ${noun} name "${expected}" to confirm. This deletion is permanent and cannot be undone.`
+  );
 }

@@ -5,6 +5,7 @@
 	import { queryClient } from '$lib/query';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
 	import { Modal, Button, Input } from '$lib/components/ui';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { envBadgeColor } from '$lib/utils/format';
 	import type { Environment } from '$lib/types/environments';
 
@@ -96,8 +97,31 @@
 		}
 	}
 
-	async function remove(env: Environment) {
-		const res = await apiFetch(`/apiv1/environments/${env.id}`, { method: 'DELETE' });
+	let toDelete = $state<Environment | null>(null);
+	let showDelete = $state(false);
+
+	function describeContents(env: Environment): string {
+		const c = env._count;
+		if (!c) return 'everything in it';
+		const parts = [
+			c.deployments ? `${c.deployments} ${c.deployments === 1 ? 'app' : 'apps'}` : null,
+			c.databases
+				? `${c.databases} ${c.databases === 1 ? 'database' : 'databases'} with their data and backups`
+				: null,
+			c.ingresses ? `${c.ingresses} ${c.ingresses === 1 ? 'domain' : 'domains'}` : null
+		].filter((p): p is string => p !== null);
+		return parts.length ? parts.join(', ') : 'everything in it';
+	}
+
+	async function remove() {
+		const env = toDelete;
+		toDelete = null;
+		if (!env) return;
+		const res = await apiFetch(`/apiv1/environments/${env.id}`, {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ confirmName: env.name })
+		});
 		if (!res.ok) {
 			const d = await res.json().catch(() => ({}));
 			toasts.add({ title: d.message || 'Failed to delete', color: 'error' });
@@ -169,7 +193,10 @@
 								class="env-icon-btn env-icon-btn--danger"
 								title="Delete"
 								aria-label="Delete"
-								onclick={() => remove(env)}
+								onclick={() => {
+									toDelete = env;
+									showDelete = true;
+								}}
 							>
 								<Trash2 size={14} />
 							</button>
@@ -194,6 +221,21 @@
 		</div>
 	{/snippet}
 </Modal>
+
+{#if toDelete}
+	<ConfirmModal
+		bind:open={showDelete}
+		title={`Delete "${toDelete.name}"?`}
+		description={`This <strong>permanently deletes the environment</strong> and its namespace <code>${toDelete.namespace}</code>: ${describeContents(toDelete)}. There is no undo and no recovery.`}
+		html
+		confirmText={toDelete.name}
+		confirmLabel="Delete environment forever"
+		onconfirm={remove}
+		oncancel={() => {
+			toDelete = null;
+		}}
+	/>
+{/if}
 
 <style>
 	.env-modal-list {

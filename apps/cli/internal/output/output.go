@@ -181,6 +181,22 @@ func Confirm(prompt string, yes bool) error {
 	return errors.New("aborted")
 }
 
+func ConfirmTyped(prompt, expected string, yes bool) error {
+	if yes {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !IsTTY() {
+		return ErrPromptRefused
+	}
+	fmt.Fprintf(os.Stderr, "%s\nThis is permanent and cannot be undone. Type %q to confirm: ", prompt, expected)
+	var line string
+	_, _ = fmt.Fscanln(os.Stdin, &line)
+	if strings.TrimSpace(line) == expected {
+		return nil
+	}
+	return errors.New("aborted: name did not match")
+}
+
 // Status colorizes common lifecycle states for table cells.
 func Status(s string) string {
 	switch strings.ToLower(s) {

@@ -100,7 +100,7 @@ export class OrchardClient {
     return this.request<T>('PATCH', path, body);
   }
 
-  delete<T = any>(path: string) {
-    return this.request<T>('DELETE', path);
+  delete<T = any>(path: string, body?: any) {
+    return this.request<T>('DELETE', path, body);
   }
 }

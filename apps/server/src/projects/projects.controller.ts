@@ -371,14 +371,23 @@ export class ProjectsController {
   }
 
   @Delete(':id')
-  async deleteProject(@Param('id') id: string, @Request() req) {
-    return this.projectsService.deleteProject(id, req.user.sub, {
-      email: req.user.email,
-      username: req.user.username,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      imageUrl: req.user.imageUrl
-    });
+  async deleteProject(
+    @Param('id') id: string,
+    @Body() body: { confirmName?: string } | undefined,
+    @Request() req
+  ) {
+    return this.projectsService.deleteProject(
+      id,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl
+      },
+      body?.confirmName
+    );
   }
 
   @Get(':id')

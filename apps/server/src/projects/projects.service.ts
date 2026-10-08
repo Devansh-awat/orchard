@@ -29,12 +29,14 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
+import { NamespaceTeardownService } from './namespace-teardown.service';
 import { DeploymentsService } from './deployments.service';
 import {
   formatSlug,
   redactDatabaseForViewer,
   scrubIngress,
-  stripR2ProxyCreds
+  stripR2ProxyCreds,
+  assertDeleteConfirmation
 } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
 import { deriveDbTuning } from '../kubernetes/db-tuning';
@@ -67,6 +69,7 @@ export class ProjectsService {
     @Inject(forwardRef(() => DeploymentsService))
     private readonly deployments: DeploymentsService,
     private readonly environments: EnvironmentsService,
+    private readonly teardown: NamespaceTeardownService,
     private readonly crypto: SecretCryptoService
   ) {}
 
@@ -487,7 +490,8 @@ export class ProjectsService {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    confirmName?: unknown
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -497,7 +501,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { organization: true }
+      include: { organization: true, environments: { select: { namespace: true } } }
     });
 
     if (!project) {
@@ -505,6 +509,35 @@ export class ProjectsService {
     }
 
     await this.authz.requireProjectDelete(project.id, user.id);
+    assertDeleteConfirmation(project.name, confirmName, 'project');
+    return this.destroyProject(project, { userId: user.id, email: user.email ?? undefined }, {});
+  }
+
+  async deleteProjectFromCluster(
+    projectId: string,
+    cause: { reason: string; source: string; namespace: string }
+  ) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { organization: true, environments: { select: { namespace: true } } }
+    });
+    if (!project) return null;
+    return this.destroyProject(project, null, cause);
+  }
+
+  private async destroyProject(
+    project: {
+      id: string;
+      name: string;
+      slug: string;
+      namespace: string;
+      organizationId: string;
+      environments: { namespace: string }[];
+    },
+    actor: { userId: string; email?: string } | null,
+    cause: Record<string, unknown>
+  ) {
+    const projectId = project.id;
 
     // Capture guests on this project who'll be orphaned by its deletion so we
     // can drop their OrganizationMember rows below. Spec: a guest with zero
@@ -523,17 +556,28 @@ export class ProjectsService {
       select: { userId: true }
     });
 
-    // Clean up Tailscale sidecars before deleting the namespace
-    try {
-      await this.tailscaleService.cleanupNamespace(project.namespace);
-    } catch (error) {
-      console.error(
-        `[Projects] Failed to clean up Tailscale for namespace ${project.namespace}:`,
-        error
-      );
-    }
+    const summary = await this.teardown.teardown({
+      projectId: project.id,
+      organizationId: project.organizationId,
+      namespace: project.namespace,
+      reason: 'project.deleted',
+      actor: actor ?? { userId: undefined }
+    });
 
-    await this.k8sNamespace.deleteNamespace(project.namespace);
+    const namespaces = new Set<string>([
+      project.namespace,
+      ...project.environments.map((env) => env.namespace)
+    ]);
+    for (const namespace of namespaces) {
+      if (namespace === project.namespace) {
+        await this.k8sNamespace.deleteNamespace(namespace);
+        continue;
+      }
+      await this.tailscaleService.cleanupNamespace(namespace).catch(() => {});
+      await this.k8sNamespace
+        .deleteNamespace(namespace)
+        .catch((e) => console.error(`[Projects] deleteNamespace(${namespace}) failed:`, e));
+    }
 
     // Atomically delete the project and orphan-clean any affected guests.
     // Without the surrounding transaction, a concurrent add to another project
@@ -541,7 +585,7 @@ export class ProjectsService {
     // that was just legitimately attached elsewhere.
     const droppedGuests: string[] = [];
     await this.prisma.$transaction(async (tx) => {
-      await tx.project.delete({ where: { id: projectId } });
+      await tx.project.deleteMany({ where: { id: projectId } });
 
       for (const g of guestsOnProject) {
         const remaining = await tx.projectMember.count({
@@ -580,19 +624,26 @@ export class ProjectsService {
 
     void this.audit.log({
       action: 'project.deleted',
-      actorUserId: user.id,
-      actorEmail: user.email,
+      actorUserId: actor?.userId,
+      actorEmail: actor?.email,
       organizationId: project.organizationId,
       targetType: 'project',
       targetId: projectId,
       targetLabel: project.name,
-      metadata: { slug: project.slug, namespace: project.namespace }
+      metadata: {
+        slug: project.slug,
+        namespace: project.namespace,
+        namespaces: [...namespaces],
+        ...cause,
+        ...summary
+      }
     });
 
     return {
       success: true,
       projectId,
-      namespace: project.namespace
+      namespace: project.namespace,
+      ...summary
     };
   }
 

@@ -60,7 +60,13 @@
 
 			{#if canDelete}
 				<div class="ps-row">
-					<span class="ps-name">Delete project</span>
+					<span class="ps-text">
+						<span class="ps-name">Delete project</span>
+						<span class="ps-hint">
+							Permanently removes every environment, app, database, backup, domain and job in it.
+							You will be asked to type the project name.
+						</span>
+					</span>
 					<Button variant="danger" size="sm" loading={deleting} onclick={onDelete}>
 						<Trash2 class="h-3.5 w-3.5" />
 						Delete
@@ -93,6 +99,19 @@
 
 	.ps-row + .ps-row {
 		box-shadow: inset 0 1px 0 var(--rule);
+	}
+
+	.ps-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+
+	.ps-hint {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 
 	.ps-name {

@@ -195,11 +195,12 @@ func envDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			prompt := fmt.Sprintf("delete environment %s and everything in namespace %s", pick(env, "name"), pick(env, "namespace"))
-			if err := output.Confirm(prompt, yesFlag); err != nil {
+			prompt := fmt.Sprintf("delete environment %s and everything in namespace %s: every app, database (with its data and backups), domain and job in it", pick(env, "name"), pick(env, "namespace"))
+			if err := output.ConfirmTyped(prompt, pick(env, "name"), yesFlag); err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodDelete, "/environments/"+url.PathEscape(pick(env, "id")), nil, nil); err != nil {
+			body := map[string]string{"confirmName": pick(env, "name")}
+			if err := cl.Send(cmd.Context(), http.MethodDelete, "/environments/"+url.PathEscape(pick(env, "id")), body, nil); err != nil {
 				return err
 			}
 			output.Successf("deleted environment %s", pick(env, "name"))

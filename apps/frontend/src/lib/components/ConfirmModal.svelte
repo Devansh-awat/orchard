@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { AlertTriangle, Trash2 } from 'lucide-svelte';
-	import { Modal, Button } from '$lib/components/ui';
+	import { Modal, Button, Input } from '$lib/components/ui';
 
 	interface Props {
 		open: boolean;
@@ -10,6 +10,7 @@
 		confirmLabel?: string;
 		cancelLabel?: string;
 		danger?: boolean;
+		confirmText?: string | null;
 		onconfirm: () => void;
 		oncancel: () => void;
 	}
@@ -22,9 +23,20 @@
 		confirmLabel = 'Delete',
 		cancelLabel = 'Cancel',
 		danger = true,
+		confirmText = null,
 		onconfirm,
 		oncancel
 	}: Props = $props();
+
+	let typed = $state('');
+	let wasOpen = false;
+
+	$effect(() => {
+		if (open && !wasOpen) typed = '';
+		wasOpen = open;
+	});
+
+	const confirmReady = $derived(!confirmText || typed.trim() === confirmText.trim());
 
 	function handleCancel() {
 		open = false;
@@ -32,6 +44,7 @@
 	}
 
 	function handleConfirm() {
+		if (!confirmReady) return;
 		open = false;
 		onconfirm?.();
 	}
@@ -49,9 +62,33 @@
 	{:else}
 		<p class="cm-desc">{description}</p>
 	{/if}
+	{#if confirmText}
+		<form
+			class="cm-confirm"
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleConfirm();
+			}}
+		>
+			<label class="cm-confirm-label" for="cm-confirm-input">
+				Type <strong>{confirmText}</strong> to confirm
+			</label>
+			<Input
+				id="cm-confirm-input"
+				bind:value={typed}
+				placeholder={confirmText}
+				autocomplete="off"
+				spellcheck={false}
+			/>
+		</form>
+	{/if}
 	{#snippet footer()}
 		<Button variant="secondary" onclick={handleCancel}>{cancelLabel}</Button>
-		<Button variant={danger ? 'danger' : 'primary'} onclick={handleConfirm}>
+		<Button
+			variant={danger ? 'danger' : 'primary'}
+			disabled={!confirmReady}
+			onclick={handleConfirm}
+		>
 			{#if danger}
 				<Trash2 class="h-4 w-4" />
 			{/if}
@@ -98,5 +135,24 @@
 	.cm-desc :global(strong) {
 		color: var(--status-error);
 		font-weight: 600;
+	}
+
+	.cm-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		margin-top: 1rem;
+	}
+
+	.cm-confirm-label {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+
+	.cm-confirm-label strong {
+		color: var(--text-default);
+		font-weight: 600;
+		font-family: var(--font-mono);
 	}
 </style>

@@ -7,12 +7,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { TailscaleService } from '../tailscale/tailscale.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { AuditService } from '../audit/audit.service';
 import { OrgEventsService } from '../events/org-events.service';
-import { formatSlug } from './projects.utils';
+import { assertDeleteConfirmation, formatSlug } from './projects.utils';
 import { RegistryCredentialsService } from './registry-credentials.service';
+import { NamespaceTeardownService } from './namespace-teardown.service';
 
 const RESERVED_NAMESPACES = new Set<string>([
   'kube-system',
@@ -42,11 +42,11 @@ export class EnvironmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sNamespace: K8sNamespaceService,
-    private readonly tailscale: TailscaleService,
     private readonly quotas: QuotasService,
     private readonly audit: AuditService,
     private readonly orgEvents: OrgEventsService,
-    private readonly registryCredentials: RegistryCredentialsService
+    private readonly registryCredentials: RegistryCredentialsService,
+    private readonly teardown: NamespaceTeardownService
   ) {}
 
   async listEnvironments(projectId: string) {
@@ -247,7 +247,11 @@ export class EnvironmentsService {
     return this.prisma.environment.findUnique({ where: { id: environmentId } });
   }
 
-  async deleteEnvironment(environmentId: string, userId: string) {
+  async deleteEnvironment(
+    environmentId: string,
+    actor: { userId: string; email?: string },
+    confirmName: unknown
+  ) {
     const env = await this.getEnvOrThrow(environmentId);
     if (env.isDefault || env.isProduction) {
       throw new BadRequestException('The default production environment cannot be deleted');
@@ -256,25 +260,67 @@ export class EnvironmentsService {
     if (count <= 1) {
       throw new BadRequestException('A project must have at least one environment');
     }
+    assertDeleteConfirmation(env.name, confirmName, 'environment');
+    return this.destroyEnvironment(env, actor, {});
+  }
 
-    await this.tailscale.cleanupNamespace(env.namespace).catch(() => {});
+  async deleteEnvironmentFromCluster(
+    environmentId: string,
+    cause: { reason: string; source: string; namespace: string }
+  ) {
+    const env = await this.prisma.environment.findUnique({
+      where: { id: environmentId },
+      include: { project: { select: { id: true, organizationId: true, namespace: true } } }
+    });
+    if (!env) return null;
+    const result = await this.destroyEnvironment(env, null, cause);
+    if (env.isDefault) {
+      await this.prisma.environment.updateMany({
+        where: { projectId: env.projectId, namespace: env.project.namespace },
+        data: { isDefault: true }
+      });
+    }
+    return result;
+  }
+
+  private async destroyEnvironment(
+    env: {
+      id: string;
+      projectId: string;
+      name: string;
+      slug: string;
+      namespace: string;
+      project: { organizationId: string };
+    },
+    actor: { userId: string; email?: string } | null,
+    cause: Record<string, unknown>
+  ) {
+    const summary = await this.teardown.teardown({
+      projectId: env.projectId,
+      organizationId: env.project.organizationId,
+      environmentId: env.id,
+      namespace: env.namespace,
+      reason: 'environment.deleted',
+      actor: actor ?? { userId: undefined }
+    });
     await this.k8sNamespace
       .deleteNamespace(env.namespace)
       .catch((e) => this.logger.warn(`deleteNamespace(${env.namespace}) failed: ${e?.message}`));
-    await this.prisma.environment.delete({ where: { id: environmentId } });
+    await this.prisma.environment.deleteMany({ where: { id: env.id } });
 
     this.emitChanged(env.project.organizationId, env.projectId, env.id);
     void this.audit.log({
       action: 'environment.deleted',
-      actorUserId: userId,
+      actorUserId: actor?.userId,
+      actorEmail: actor?.email,
       organizationId: env.project.organizationId,
       projectId: env.projectId,
       targetType: 'environment',
       targetId: env.id,
       targetLabel: env.name,
-      metadata: { slug: env.slug, namespace: env.namespace }
+      metadata: { slug: env.slug, namespace: env.namespace, ...cause, ...summary }
     });
-    return { success: true };
+    return { success: true, ...summary };
   }
 
   async projectIdForEnv(environmentId: string): Promise<string> {

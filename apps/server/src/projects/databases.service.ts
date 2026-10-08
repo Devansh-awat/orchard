@@ -720,6 +720,34 @@ export class DatabasesService {
     return out;
   }
 
+  private async mirroredClusterPods(databaseId: string): Promise<any[]> {
+    const objects = await this.prisma.k8sObject.findMany({
+      where: { shard: 'cnpg', kind: 'Pod', databaseId },
+      select: { manifest: true }
+    });
+    return objects.map(({ manifest }) => {
+      const pod = manifest as any;
+      return {
+        name: pod.metadata?.name,
+        namespace: pod.metadata?.namespace,
+        status: pod.status?.phase,
+        podIP: pod.status?.podIP,
+        hostIP: pod.status?.hostIP,
+        startTime: pod.status?.startTime,
+        conditions: pod.status?.conditions,
+        containerStatuses: pod.status?.containerStatuses?.map((container: any) => ({
+          name: container.name,
+          ready: container.ready,
+          restartCount: container.restartCount,
+          image: container.image,
+          state: container.state
+        })),
+        labels: pod.metadata?.labels,
+        annotations: pod.metadata?.annotations
+      };
+    });
+  }
+
   private async mirroredPods(databaseId: string): Promise<MirroredDbPod[]> {
     return (await this.mirroredPodsFor([databaseId])).get(databaseId) ?? [];
   }
@@ -760,14 +788,7 @@ export class DatabasesService {
         mirrored,
         clusterMirror(database)
       );
-      try {
-        const podList = await this.k8sWorkload.listPods(database.namespace);
-        pods = (podList?.pods || []).filter(
-          (p: any) => p.labels?.['cnpg.io/cluster'] === database.clusterName
-        );
-      } catch {
-        /* ignore */
-      }
+      pods = await this.mirroredClusterPods(database.id);
 
       // Reconcile stored status with live cluster state.
       // 'restarting' flips to 'ready' once the new pod becomes ready — same path
@@ -1201,7 +1222,7 @@ export class DatabasesService {
     return enriched.map((d) => stripR2ProxyCreds(this.revealPassword(d as any)));
   }
 
-  private async purgeBackupObjects(database: {
+  async purgeBackupObjects(database: {
     namespace: string | null;
     clusterName: string | null;
     r2ProxyAccessKey: string | null;

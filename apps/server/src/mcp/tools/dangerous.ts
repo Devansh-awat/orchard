@@ -7,15 +7,20 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
   server.registerTool(
     'delete_project',
     {
-      description: 'DANGEROUS: Delete a project and ALL its deployments, databases, and ingresses.',
+      description: `DANGEROUS and PERMANENT: Delete a project and ALL its deployments, databases (with their data and backups), ingresses, jobs and environments. Nothing is recoverable afterwards.
+
+Confirm with the user first, then pass the project's exact name as confirmName; the server refuses the call otherwise.`,
       annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
       inputSchema: {
-        projectId: z.string().describe('The project UUID to delete')
+        projectId: z.string().describe('The project UUID to delete'),
+        confirmName: z
+          .string()
+          .describe('The exact project name, typed back to confirm the permanent deletion')
       }
     },
-    async ({ projectId }) => {
-      await client.delete(`/projects/${projectId}`);
-      return text('Project deleted successfully.');
+    async ({ projectId, confirmName }) => {
+      const result = await client.delete(`/projects/${projectId}`, { confirmName });
+      return json(result);
     }
   );
 
@@ -39,14 +44,17 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
     {
       description: `DANGEROUS: Delete an environment. This deletes its whole Kubernetes namespace, so every deployment, database, ingress and shared variable inside it goes with it. Databases in that environment are destroyed with their data.
 
-List what is in it with \`list_deployments\` / \`list_databases\` and confirm with the user before calling. The default production environment cannot be deleted, and neither can the last environment in a project.`,
+List what is in it with \`list_deployments\` / \`list_databases\` and confirm with the user before calling, then pass the environment's exact name as confirmName; the server refuses the call otherwise. This is permanent. The default production environment cannot be deleted, and neither can the last environment in a project.`,
       annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
       inputSchema: {
-        environmentId: z.string().describe('The environment UUID to delete')
+        environmentId: z.string().describe('The environment UUID to delete'),
+        confirmName: z
+          .string()
+          .describe('The exact environment name, typed back to confirm the permanent deletion')
       }
     },
-    async ({ environmentId }) => {
-      const result = await client.delete(`/environments/${environmentId}`);
+    async ({ environmentId, confirmName }) => {
+      const result = await client.delete(`/environments/${environmentId}`, { confirmName });
       return json(result);
     }
   );

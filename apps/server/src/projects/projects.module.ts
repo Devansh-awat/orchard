@@ -40,6 +40,7 @@ import { OverviewController } from './overview.controller';
 import { ProjectTransfersController } from './project-transfers.controller';
 import { RegistryCredentialsService } from './registry-credentials.service';
 import { RegistryCredentialsController } from './registry-credentials.controller';
+import { NamespaceTeardownService } from './namespace-teardown.service';
 
 @Module({
   imports: [
@@ -74,7 +75,8 @@ import { RegistryCredentialsController } from './registry-credentials.controller
     BuildQueueService,
     IngressService,
     FaviconService,
-    RegistryCredentialsService
+    RegistryCredentialsService,
+    NamespaceTeardownService
   ],
   controllers: [
     ProjectsController,
@@ -96,7 +98,8 @@ import { RegistryCredentialsController } from './registry-credentials.controller
     DatabasesService,
     DeploymentsService,
     IngressService,
-    RegistryCredentialsService
+    RegistryCredentialsService,
+    NamespaceTeardownService
   ]
 })
 export class ProjectsModule {}
