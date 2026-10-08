@@ -60,6 +60,7 @@ export interface SandboxExecTarget {
   index: string;
   mode: 'rw' | 'ro';
   worktreePath: string | null;
+  terminalUserId?: string | null;
 }
 
 export type ExecTarget = PodExecTarget | SandboxExecTarget;
@@ -68,7 +69,8 @@ export function targetKey(target: ExecTarget): string {
   if (target.kind === 'pod') {
     return `pod:${target.namespace}/${target.podName}/${target.container}`;
   }
-  return `sandbox:${target.sandboxId}/${target.sessionId ?? '-'}/${target.index}/${target.mode}`;
+  const base = `sandbox:${target.sandboxId}/${target.sessionId ?? '-'}/${target.index}/${target.mode}`;
+  return target.terminalUserId ? `${base}/${target.terminalUserId}` : base;
 }
 
 export function clampTerminalSize(

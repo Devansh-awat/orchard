@@ -1,6 +1,12 @@
 import * as http from 'http';
 import * as https from 'https';
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { SandboxConversation } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +32,12 @@ import {
   shellQuote,
   type FsOp
 } from './sandbox-session-commands';
+import {
+  SandboxGitActorService,
+  gitAuthFlags,
+  gitExecPrelude,
+  gitTokenStdin
+} from './sandbox-git-identity';
 
 const OPENCODE_PORT = 4096;
 const PROXY_TIMEOUT_MS = 120000;
@@ -98,8 +110,14 @@ export class SandboxWorkspaceService {
   constructor(
     private readonly registry: SandboxRunnerRegistry,
     private readonly probes: SandboxProbesService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Optional() private readonly gitActors?: SandboxGitActorService
   ) {}
+
+  private actors(): SandboxGitActorService {
+    if (!this.gitActors) throw new Error('git identity is not available');
+    return this.gitActors;
+  }
 
   private requireRunning(sandbox: { status: string }): void {
     if (sandbox.status !== 'running') throw new SandboxNotRunningError();
@@ -235,7 +253,7 @@ export class SandboxWorkspaceService {
     dir: string,
     guardRoot: string | null,
     script: string,
-    opts: { timeoutMs?: number } = {}
+    opts: { timeoutMs?: number; stdin?: Buffer } = {}
   ): Promise<{ stdout: string; ok: boolean; exitCode: number | null }> {
     this.requireRunning(sandbox);
     const guard = guardRoot ? `${realpathGuard('.', guardRoot, 3)}; ` : '';
@@ -244,8 +262,32 @@ export class SandboxWorkspaceService {
       .exec(
         refOf(sandbox),
         ['su', '-l', 'dev', '-c', `cd ${shellQuote(dir)} 2>/dev/null || exit 3; ${guard}${script}`],
-        opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}
+        {
+          ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
+          ...(opts.stdin ? { stdin: opts.stdin } : {})
+        }
       );
+  }
+
+  private async runGit(
+    sandbox: WorkspaceSandbox,
+    selector: WorkdirSelector | string | null | undefined,
+    actorUserId: string,
+    script: (git: string) => string,
+    opts: { network?: boolean } = {}
+  ): Promise<{ stdout: string; ok: boolean; exitCode: number | null }> {
+    const actor = await this.actors().resolve(actorUserId);
+    const token = opts.network ? this.actors().requireToken(actor) : null;
+    this.requireRunning(sandbox);
+    const { dir, guardRoot } = await this.resolveDir(sandbox, selector);
+    const git = token ? `git ${gitAuthFlags()}` : 'git';
+    return this.runIn(
+      sandbox,
+      dir,
+      guardRoot,
+      `${gitExecPrelude(actor.identity, !!token)}\n${script(git)}`,
+      token ? { stdin: gitTokenStdin(token) } : {}
+    );
   }
 
   private devExec(sandbox: WorkspaceSandbox, script: string) {
@@ -275,7 +317,7 @@ export class SandboxWorkspaceService {
     repo: WorkdirSelector | string,
     message: string,
     files: string[] | undefined,
-    author: { name: string; email: string },
+    actorUserId: string,
     opts: { amend?: boolean; signoff?: boolean; trackedOnly?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     if (!opts.amend && (!message?.trim() || message.length > 2000)) {
@@ -293,19 +335,25 @@ export class SandboxWorkspaceService {
     ]
       .filter(Boolean)
       .join(' ');
-    const script = `${stage}\ngit -c user.name=${this.q(author.name)} -c user.email=${this.q(author.email)} commit ${flags} 2>&1`;
-    const result = await this.run(sandbox, script, repo);
+    const result = await this.runGit(
+      sandbox,
+      repo,
+      actorUserId,
+      (git) => `${stage}\n${git} commit ${flags} 2>&1`
+    );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
   async gitUncommit(
     sandbox: WorkspaceSandbox,
-    repo: WorkdirSelector | string
+    repo: WorkdirSelector | string,
+    actorUserId: string
   ): Promise<{ ok: boolean; output: string }> {
-    const result = await this.run(
+    const result = await this.runGit(
       sandbox,
-      'git reset --soft HEAD~1 2>&1 && git log -1 --oneline 2>&1',
-      repo
+      repo,
+      actorUserId,
+      (git) => `${git} reset --soft HEAD~1 2>&1 && ${git} log -1 --oneline 2>&1`
     );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
@@ -313,28 +361,49 @@ export class SandboxWorkspaceService {
   async gitPush(
     sandbox: WorkspaceSandbox,
     repo: WorkdirSelector | string,
+    actorUserId: string,
     opts: { force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.force ? ' --force-with-lease' : '';
-    const result = await this.run(sandbox, `git push${flags} origin HEAD 2>&1`, repo);
+    const result = await this.runGit(
+      sandbox,
+      repo,
+      actorUserId,
+      (git) => `${git} push${flags} origin HEAD 2>&1`,
+      { network: true }
+    );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
   async gitFetch(
     sandbox: WorkspaceSandbox,
-    repo: WorkdirSelector | string
+    repo: WorkdirSelector | string,
+    actorUserId: string
   ): Promise<{ ok: boolean; output: string }> {
-    const result = await this.run(sandbox, 'git fetch --all --prune 2>&1', repo);
+    const result = await this.runGit(
+      sandbox,
+      repo,
+      actorUserId,
+      (git) => `${git} fetch --all --prune 2>&1`,
+      { network: true }
+    );
     return { ok: result.ok, output: result.stdout.slice(-2000) || 'up to date' };
   }
 
   async gitPull(
     sandbox: WorkspaceSandbox,
     repo: WorkdirSelector | string,
+    actorUserId: string,
     opts: { rebase?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.rebase ? ' --rebase' : '';
-    const result = await this.run(sandbox, `git pull${flags} 2>&1`, repo);
+    const result = await this.runGit(
+      sandbox,
+      repo,
+      actorUserId,
+      (git) => `${git} pull${flags} 2>&1`,
+      { network: true }
+    );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
@@ -392,26 +461,34 @@ export class SandboxWorkspaceService {
     sandbox: WorkspaceSandbox,
     repo: WorkdirSelector | string,
     branch: string,
+    actorUserId: string,
     opts: { remote?: boolean; force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     this.validateBranch(branch);
-    const script = opts.remote
-      ? `git push origin --delete ${this.q(branch)} 2>&1`
-      : `git branch ${opts.force ? '-D' : '-d'} ${this.q(branch)} 2>&1`;
-    const result = await this.run(sandbox, script, repo);
+    const result = opts.remote
+      ? await this.runGit(
+          sandbox,
+          repo,
+          actorUserId,
+          (git) => `${git} push origin --delete ${this.q(branch)} 2>&1`,
+          { network: true }
+        )
+      : await this.run(
+          sandbox,
+          `git branch ${opts.force ? '-D' : '-d'} ${this.q(branch)} 2>&1`,
+          repo
+        );
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
   async createPullRequest(
     sandbox: WorkspaceSandbox,
     repo: WorkdirSelector | string,
-    githubToken: string | null,
+    actorUserId: string,
     body: { title?: string; body?: string; base?: string }
   ): Promise<{ url: string; number: number | null }> {
     if (!body.title?.trim()) throw new BadRequestException('A PR title is required');
-    if (!githubToken) {
-      throw new BadRequestException('No GitHub account is linked to your user');
-    }
+    const githubToken = await this.actors().requireActorToken(actorUserId);
     if (body.base !== undefined && body.base !== '' && !isValidGitRef(body.base)) {
       throw new BadRequestException('Invalid base branch');
     }

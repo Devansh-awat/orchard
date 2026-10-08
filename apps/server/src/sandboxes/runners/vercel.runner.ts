@@ -29,7 +29,8 @@ import {
   SandboxRunner,
   SandboxRunnerCapabilities,
   SandboxSecrets,
-  WriteFilesOptions
+  WriteFilesOptions,
+  forkSourceOf
 } from './sandbox-runner';
 import { SandboxSecretsService, deriveSandboxSecret } from './sandbox-secrets';
 import { SECRET_INIT_FILES, stagedInitFiles } from './sandbox-init-files';
@@ -40,6 +41,7 @@ export const VERCEL_OP_START = 'vercel.start';
 export const VERCEL_OP_STOP = 'vercel.stop';
 export const VERCEL_OP_DESTROY = 'vercel.destroy';
 export const VERCEL_OP_SECRET = 'vercel.secret.sync';
+export const VERCEL_OP_FORK = 'vercel.fork';
 
 export const vercelLifecycleKey = (id: string) => `sandbox:${id}:vercel`;
 export const vercelSecretKey = (id: string) => `sandbox:${id}:vercel.secret`;
@@ -138,6 +140,9 @@ export interface VercelSdk {
   get(
     params: { name: string; resume?: boolean; signal?: AbortSignal } & VercelCredentials
   ): Promise<VercelSandboxLike>;
+  fork?(
+    params: Record<string, unknown> & { sourceSandbox: string } & VercelCredentials
+  ): Promise<VercelSandboxLike>;
 }
 
 let vercelModule: Promise<typeof VercelSandboxModule> | null = null;
@@ -153,7 +158,9 @@ const realSdk: VercelSdk = {
       await loadVercelModule()
     ).Sandbox.create(params as never)) as unknown as VercelSandboxLike,
   get: async (params) =>
-    (await (await loadVercelModule()).Sandbox.get(params as never)) as unknown as VercelSandboxLike
+    (await (await loadVercelModule()).Sandbox.get(params as never)) as unknown as VercelSandboxLike,
+  fork: async (params) =>
+    (await (await loadVercelModule()).Sandbox.fork(params as never)) as unknown as VercelSandboxLike
 };
 
 export async function vercelInteractiveSupported(): Promise<boolean> {
@@ -250,12 +257,29 @@ export function exposedPort(port: number): boolean {
   );
 }
 
+export const VERCEL_HOST_GIT_PLACEHOLDER = 'orchard-host-git-token';
+
+function basicAuth(token: string): string {
+  return `Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
+}
+
 export function githubNetworkPolicy(token: string | null): unknown {
   if (!token) return 'allow-all';
-  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
   return {
     allow: {
-      'github.com': [{ transform: [{ headers: { authorization: `Basic ${basic}` } }] }],
+      'github.com': [
+        {
+          match: {
+            headers: [
+              {
+                key: { regex: '(?i)^authorization$' },
+                value: { exact: basicAuth(VERCEL_HOST_GIT_PLACEHOLDER) }
+              }
+            ]
+          },
+          transform: [{ headers: { authorization: basicAuth(token) } }]
+        }
+      ],
       'api.github.com': [{ transform: [{ headers: { authorization: `Bearer ${token}` } }] }],
       '*': []
     }
@@ -546,7 +570,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     private readonly executor: ApplyExecutorService,
     private readonly secrets: SandboxSecretsService
   ) {
-    for (const op of [VERCEL_OP_PROVISION, VERCEL_OP_START, VERCEL_OP_STOP]) {
+    for (const op of [VERCEL_OP_PROVISION, VERCEL_OP_START, VERCEL_OP_STOP, VERCEL_OP_FORK]) {
       this.executor.registerHandler(op, (item) =>
         this.serialized(item, () => this.applyLifecycle(item))
       );
@@ -706,6 +730,24 @@ export class VercelSandboxRunner implements SandboxRunner {
     await this.enqueue(ref, vercelSecretKey(ref.id), VERCEL_OP_SECRET, requestedById);
   }
 
+  async forkSupport(): Promise<string | null> {
+    return this.configError();
+  }
+
+  async requestFork(
+    source: SandboxRef,
+    target: SandboxRef,
+    requestedById?: string | null
+  ): Promise<void> {
+    await this.queue.enqueue({
+      dedupeKey: vercelLifecycleKey(target.id),
+      opType: VERCEL_OP_FORK,
+      manifest: { sandboxId: target.id, sourceSandboxId: source.id },
+      sandboxId: target.id,
+      requestedById: requestedById ?? undefined
+    });
+  }
+
   private async find(
     name: string,
     credentials: VercelCredentials
@@ -814,7 +856,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     } catch (e) {
       if (!isNotFound(e)) throw e;
       this.markApiOk();
-      sandbox = await this.create(row, credentials, policy);
+      sandbox = await this.createOrFork(row, credentials, policy);
     }
     sandbox = await this.waitRunning(sandbox, row.podName, credentials);
     this.live.set(row.id, { sandbox, at: Date.now() });
@@ -828,6 +870,46 @@ export class VercelSandboxRunner implements SandboxRunner {
       where: { id: row.id, desiredState: 'running', status: { in: ['creating', 'starting'] } },
       data: { status: 'running', statusMessage: null, externalId: row.podName }
     });
+  }
+
+  private async createOrFork(
+    row: LifecycleRow,
+    credentials: VercelCredentials,
+    networkPolicy: unknown
+  ): Promise<VercelSandboxLike> {
+    const fork = forkSourceOf(row.runnerState);
+    const state =
+      row.runnerState && typeof row.runnerState === 'object'
+        ? (row.runnerState as Record<string, unknown>)
+        : {};
+    if (!fork || state.forkedAt) return this.create(row, credentials, networkPolicy);
+    if (!this.sdk.fork) throw new Error('This @vercel/sandbox version cannot fork sandboxes');
+    const settings = this.settings();
+    let sandbox: VercelSandboxLike;
+    try {
+      sandbox = await this.sdk.fork({
+        sourceSandbox: fork.podName,
+        name: row.podName,
+        timeout: settings.timeoutMs,
+        ports: vercelPorts(),
+        persistent: true,
+        tags: {
+          orchard_instance: await this.instanceId(),
+          orchard_sandbox: row.id,
+          orchard_user: row.userId,
+          orchard_fork_of: fork.sandboxId
+        },
+        networkPolicy,
+        ...credentials,
+        signal: AbortSignal.timeout(CREATE_TIMEOUT_MS)
+      });
+    } catch (e) {
+      if (isNotFound(e)) throw new Error('The machine being forked no longer exists on Vercel');
+      throw e;
+    }
+    this.markApiOk();
+    await this.mergeRunnerState(row.id, { forkedAt: new Date().toISOString() });
+    return sandbox;
   }
 
   private async create(
@@ -883,6 +965,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       SANDBOX_REPO_URL: row.repoUrl || '',
       CLAUDE_CODE_OAUTH_TOKEN: secrets.claudeToken || '',
       OPENAI_API_KEY: secrets.openaiToken || '',
+      GIT_TOKEN: secrets.githubToken ? VERCEL_HOST_GIT_PLACEHOLDER : '',
       ORCHARD_BRIDGE_URL: this.settings().bridgeUrl
     };
   }

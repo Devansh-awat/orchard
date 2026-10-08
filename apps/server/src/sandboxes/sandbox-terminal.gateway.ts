@@ -12,11 +12,20 @@ import { SANDBOX_REF_SELECT, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService } from './sandbox-access.service';
 import { sandboxTerminalMode } from './sandbox-role-gate';
 import {
+  isScriptedTerminal,
   isTerminalIndex,
   isUuid,
   isWorktreePath,
-  sandboxTerminalCommand
+  sandboxTerminalCommand,
+  type TerminalShellEnv
 } from './sandbox-session-commands';
+import {
+  SandboxGitActorService,
+  terminalEnvFile,
+  terminalEnvPath,
+  terminalTmuxEnvScript,
+  writeTerminalEnvScript
+} from './sandbox-git-identity';
 
 const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/terminal$/;
 
@@ -24,22 +33,41 @@ export interface SandboxTerminalQuery {
   sessionId: string | null;
   index: string;
   mode: 'rw' | 'ro';
+  user?: string;
 }
 
 export function parseSandboxTerminalQuery(params: URLSearchParams): SandboxTerminalQuery | null {
   const sid = params.get('sid');
   const n = params.get('n') || '0';
   const mode = params.get('mode');
+  const user = params.get('user');
   if (sid && !isUuid(sid)) return null;
   if (!isTerminalIndex(n)) return null;
   if (mode && mode !== 'rw' && mode !== 'ro') return null;
   if (!sid && n !== '0') return null;
+  if (user && (!sid || !isUuid(user))) return null;
   const scripted = n === 'setup' || n === 'run';
   return {
     sessionId: sid ? sid.toLowerCase() : null,
     index: n,
-    mode: mode === 'rw' || mode === 'ro' ? mode : scripted ? 'ro' : 'rw'
+    mode: mode === 'rw' || mode === 'ro' ? mode : scripted ? 'ro' : 'rw',
+    ...(user ? { user: user.toLowerCase() } : {})
   };
+}
+
+export function sandboxTerminalOwner(input: {
+  query: SandboxTerminalQuery;
+  grantedMode: 'rw' | 'ro';
+  principal: string;
+  hostUserId: string;
+}): { mode: 'rw' | 'ro'; terminalUserId: string | null } {
+  const { query, grantedMode, principal, hostUserId } = input;
+  if (query.sessionId && isScriptedTerminal(query)) {
+    return { mode: grantedMode, terminalUserId: null };
+  }
+  const owner = (query.user ?? (grantedMode === 'rw' ? principal : hostUserId)).toLowerCase();
+  const mode = owner === principal.toLowerCase() ? grantedMode : 'ro';
+  return { mode, terminalUserId: owner === hostUserId.toLowerCase() ? null : owner };
 }
 
 export function attachSandboxTerminalWebSocket(server: http.Server, app: INestApplication) {
@@ -50,6 +78,7 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
   const settings = app.get(InstanceSettingsService);
   const registry = app.get(SandboxRunnerRegistry);
   const accessService = app.get(SandboxAccessService);
+  const gitActors = app.get(SandboxGitActorService);
 
   const loadSession = async (sandboxId: string, sessionId: string) =>
     prisma.sandboxConversation.findFirst({
@@ -86,6 +115,13 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
       if (!access) return { reject: 404, message: 'Not Found' };
       if (!query.sessionId && access.mode !== 'rw') return { reject: 403, message: 'Forbidden' };
       if (access.row.status !== 'running') return { reject: 404, message: 'Not Found' };
+      const owned = sandboxTerminalOwner({
+        query,
+        grantedMode: access.mode,
+        principal: auth.userId,
+        hostUserId: access.row.userId
+      });
+      const mode = owned.mode;
       let worktreePath: string | null = null;
       if (query.sessionId) {
         const session = await loadSession(sandboxId, query.sessionId);
@@ -99,8 +135,9 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
         sandboxId,
         sessionId: query.sessionId,
         index: query.index,
-        mode: access.mode,
-        worktreePath
+        mode,
+        worktreePath,
+        terminalUserId: owned.terminalUserId
       };
       const principal = auth.userId;
       return {
@@ -119,7 +156,8 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
                 runner: access.row.runner,
                 sessionId: query.sessionId,
                 index: query.index,
-                mode: access.mode,
+                mode,
+                terminalUserId: owned.terminalUserId,
                 ...metadata
               }
             })
@@ -135,10 +173,10 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
               accessService,
               sandboxId,
               principal,
-              access.mode,
+              mode,
               scope
             );
-            if (!again || again.mode !== access.mode) return false;
+            if (!again || again.mode !== mode) return false;
             if (again.row.status !== 'running') return false;
             if (query.sessionId && !(await loadSession(sandboxId, query.sessionId))) return false;
             return true;
@@ -156,8 +194,23 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
       });
       if (!row) throw new Error('sandbox not found');
       const ref = refOf(row);
-      return registry.for(ref).openPty(ref, {
-        command: sandboxTerminalCommand(target, sessionId),
+      const runner = registry.for(ref);
+      let shellEnv: TerminalShellEnv | null = null;
+      const guest = target.terminalUserId && target.terminalUserId !== row.userId;
+      if (guest && target.mode === 'rw' && !isScriptedTerminal(target)) {
+        const actor = await gitActors.resolve(target.terminalUserId!);
+        const envFile = terminalEnvPath(sessionId);
+        const written = await runner
+          .exec(ref, ['su', '-l', 'dev', '-c', writeTerminalEnvScript(envFile)], {
+            stdin: Buffer.from(terminalEnvFile(actor), 'utf8'),
+            timeoutMs: 20_000
+          })
+          .catch(() => null);
+        if (!written?.ok) throw new Error('could not set up your git identity in the sandbox');
+        shellEnv = { envFile, tmuxEnv: terminalTmuxEnvScript(actor.identity, !!actor.token) };
+      }
+      return runner.openPty(ref, {
+        command: sandboxTerminalCommand(target, sessionId, shellEnv),
         cols: size.cols,
         rows: size.rows
       });
@@ -166,6 +219,7 @@ export function attachSandboxTerminalWebSocket(server: http.Server, app: INestAp
       if (target.kind !== 'sandbox') throw new Error('not a sandbox target');
       const params: Record<string, string> = { n: target.index, mode: target.mode };
       if (target.sessionId) params.sid = target.sessionId;
+      if (target.sessionId && target.terminalUserId) params.user = target.terminalUserId;
       return { path: `/apiv1/sandboxes/${target.sandboxId}/terminal`, params };
     },
     onActivity(target) {

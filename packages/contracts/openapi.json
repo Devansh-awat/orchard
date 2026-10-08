@@ -32485,6 +32485,300 @@
         ]
       }
     },
+    "/integrations/linear/issues": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "issues": {
+                      "items": {
+                        "properties": {
+                          "labels": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "provider": {
+                            "enum": [
+                              "github",
+                              "linear"
+                            ],
+                            "type": "string"
+                          },
+                          "ref": {
+                            "description": "Pass back as issue.ref when creating a session (owner/repo#123 or ENG-123)",
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "ref",
+                          "title",
+                          "url",
+                          "labels",
+                          "state",
+                          "updatedAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "issues"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open Linear issues assigned to you, or matching ?q= (title or ENG-123)",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/integrations/linear/webhook": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "action": {
+                      "enum": [
+                        "queued",
+                        "ignored"
+                      ],
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "received": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Linear webhook receiver (Linear-Signature HMAC). A comment starting with /greenhouse starts a session",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/integrations/slack/commands": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "response_type": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Slack slash command receiver (/greenhouse <prompt>), signed with the app signing secret",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/integrations/slack/events": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "challenge": {
+                      "type": "string"
+                    },
+                    "ignored": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Slack Events API receiver: url_verification and app_mention",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/integrations/slack/link": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "maxLength": 43,
+                    "minLength": 43,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    },
+                    "teamId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "teamId"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Confirm a one-time Slack link token from /greenhouse link (10 minutes, single use) and link that Slack user to you",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
     "/invitations/{token}": {
       "get": {
         "description": "Auth: public",
@@ -48190,6 +48484,236 @@
         ]
       }
     },
+    "/sandboxes/{id}/fork": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "maxLength": 63,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
+                    "repoUrl",
+                    "sshIdentity",
+                    "setupScript",
+                    "image",
+                    "organizationId",
+                    "owner",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Fork the machine (host only): a new machine owned by you restored from this one, with its sessions. 409 when the runner or the storage class cannot snapshot",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/fs/delete": {
       "post": {
         "description": "Auth: authenticated (scope: exec)",
@@ -48509,7 +49033,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Delete a local branch, or a remote branch with remote:true",
+        "summary": "Delete a local branch, or a remote branch with remote:true (pushed with the caller's own GitHub token)",
         "tags": [
           "sandboxes"
         ]
@@ -48841,7 +49365,79 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Fetch all remotes and prune deleted branches",
+        "summary": "Fetch all remotes and prune deleted branches with the caller's own GitHub token (409 github_not_linked without one)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/identity": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "canCommit": {
+                      "type": "boolean"
+                    },
+                    "canPush": {
+                      "description": "false means show \"Link your GitHub account to push\"",
+                      "type": "boolean"
+                    },
+                    "email": {
+                      "description": "<githubId>+<login>@users.noreply.github.com when GitHub is linked",
+                      "type": "string"
+                    },
+                    "githubLinked": {
+                      "type": "boolean"
+                    },
+                    "githubLogin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "email",
+                    "githubLogin",
+                    "githubLinked",
+                    "canCommit",
+                    "canPush"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The git identity the caller commits and pushes as in this sandbox, and whether they can push",
         "tags": [
           "sandboxes"
         ]
@@ -48931,7 +49527,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Open a GitHub pull request from the current branch of a sandbox repo",
+        "summary": "Open a GitHub pull request from the current branch of a sandbox repo with the caller's own GitHub account (409 github_not_linked without one)",
         "tags": [
           "sandboxes"
         ]
@@ -49004,7 +49600,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Pull the current branch, optionally with rebase",
+        "summary": "Pull the current branch, optionally with rebase, as the caller with the caller's own GitHub token (409 github_not_linked without one)",
         "tags": [
           "sandboxes"
         ]
@@ -49077,7 +49673,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Push the current branch to origin (force uses --force-with-lease)",
+        "summary": "Push the current branch to origin as the caller, with the caller's own GitHub token injected for that command only (force uses --force-with-lease). 409 github_not_linked when the caller has no linked GitHub account",
         "tags": [
           "sandboxes"
         ]
@@ -49188,6 +49784,498 @@
           }
         ],
         "summary": "GET /sandboxes/:id/hostkey",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/issues": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "enum": [
+                "github",
+                "linear"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repo",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "issues": {
+                      "items": {
+                        "properties": {
+                          "labels": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "provider": {
+                            "enum": [
+                              "github",
+                              "linear"
+                            ],
+                            "type": "string"
+                          },
+                          "ref": {
+                            "description": "Pass back as issue.ref when creating a session (owner/repo#123 or ENG-123)",
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "ref",
+                          "title",
+                          "url",
+                          "labels",
+                          "state",
+                          "updatedAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "repo": {
+                      "description": "owner/name the repo directory maps to",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "repo",
+                    "issues"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open GitHub issues for a repo cloned in the sandbox (?provider=github&repo=<dir>&q=), or Linear issues with provider=linear. Guest role required",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/links": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "links": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "envFile": {
+                            "description": "Where the env file lands in the box, ~/.config/orchard/env/<slug>.env",
+                            "type": "string"
+                          },
+                          "environment": {
+                            "properties": {
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug"
+                            ],
+                            "type": "object"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "project": {
+                            "properties": {
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug"
+                            ],
+                            "type": "object"
+                          },
+                          "projectId": {
+                            "format": "uuid",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "project",
+                          "environment",
+                          "envFile",
+                          "createdBy",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Orchard projects attached to the sandbox and where their env files land",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "environmentId": {
+                    "description": "Defaults to the project default environment",
+                    "format": "uuid",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "projectId": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "projectId"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "envFile": {
+                      "description": "Where the env file lands in the box, ~/.config/orchard/env/<slug>.env",
+                      "type": "string"
+                    },
+                    "environment": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "slug"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "project": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "slug"
+                      ],
+                      "type": "object"
+                    },
+                    "projectId": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectId",
+                    "project",
+                    "environment",
+                    "envFile",
+                    "createdBy",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Attach a project environment (host only, needs env-read on the project, same org). Its shared vars and DATABASE_URL are written to the box at sync time; secret values stay write-only",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/links/{projectId}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Detach a project (host only); its env file is removed on the next sync",
         "tags": [
           "sandboxes"
         ]
@@ -50065,7 +51153,23 @@
                               "null"
                             ]
                           },
+                          "previewStatus": {
+                            "description": "Build and rollout state of the preview deployment, null without a preview",
+                            "enum": [
+                              "building",
+                              "deploying",
+                              "ready",
+                              "failed",
+                              "stopped",
+                              "gone"
+                            ],
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "previewUrl": {
+                            "description": "Server-computed from the preview ingress; never build it from the host",
                             "type": [
                               "string",
                               "null"
@@ -50148,6 +51252,7 @@
                           "prState",
                           "previewDeploymentId",
                           "previewUrl",
+                          "previewStatus",
                           "createdBy",
                           "createdAt",
                           "updatedAt",
@@ -50383,7 +51488,23 @@
                         "null"
                       ]
                     },
+                    "previewStatus": {
+                      "description": "Build and rollout state of the preview deployment, null without a preview",
+                      "enum": [
+                        "building",
+                        "deploying",
+                        "ready",
+                        "failed",
+                        "stopped",
+                        "gone"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "previewUrl": {
+                      "description": "Server-computed from the preview ingress; never build it from the host",
                       "type": [
                         "string",
                         "null"
@@ -50466,6 +51587,7 @@
                     "prState",
                     "previewDeploymentId",
                     "previewUrl",
+                    "previewStatus",
                     "createdBy",
                     "createdAt",
                     "updatedAt",
@@ -50701,7 +51823,23 @@
                         "null"
                       ]
                     },
+                    "previewStatus": {
+                      "description": "Build and rollout state of the preview deployment, null without a preview",
+                      "enum": [
+                        "building",
+                        "deploying",
+                        "ready",
+                        "failed",
+                        "stopped",
+                        "gone"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "previewUrl": {
+                      "description": "Server-computed from the preview ingress; never build it from the host",
                       "type": [
                         "string",
                         "null"
@@ -50784,6 +51922,7 @@
                     "prState",
                     "previewDeploymentId",
                     "previewUrl",
+                    "previewStatus",
                     "createdBy",
                     "createdAt",
                     "updatedAt",
@@ -50982,7 +52121,23 @@
                         "null"
                       ]
                     },
+                    "previewStatus": {
+                      "description": "Build and rollout state of the preview deployment, null without a preview",
+                      "enum": [
+                        "building",
+                        "deploying",
+                        "ready",
+                        "failed",
+                        "stopped",
+                        "gone"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "previewUrl": {
+                      "description": "Server-computed from the preview ingress; never build it from the host",
                       "type": [
                         "string",
                         "null"
@@ -51065,6 +52220,7 @@
                     "prState",
                     "previewDeploymentId",
                     "previewUrl",
+                    "previewStatus",
                     "createdBy",
                     "createdAt",
                     "updatedAt",
@@ -51773,7 +52929,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Merge the session's pull request on GitHub (owner only, squash or rebase, never a merge commit)",
+        "summary": "Merge the session's pull request on GitHub with the caller's own GitHub account (squash or rebase, never a merge commit; 409 github_not_linked without one)",
         "tags": [
           "sandboxes"
         ]
@@ -51867,6 +53023,738 @@
           }
         ],
         "summary": "TCP ports the dev user is listening on, flagged when started from this worktree",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/preview-deploy": {
+      "delete": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    },
+                    "session": {
+                      "properties": {
+                        "activity": {
+                          "description": "Best effort from opencode /session/status while the box runs",
+                          "enum": [
+                            "idle",
+                            "working",
+                            "needs_input",
+                            "done"
+                          ],
+                          "type": "string"
+                        },
+                        "agent": {
+                          "enum": [
+                            "opencode"
+                          ],
+                          "type": "string"
+                        },
+                        "aheadBehind": {
+                          "properties": {
+                            "ahead": {
+                              "type": "integer"
+                            },
+                            "behind": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "ahead",
+                            "behind"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "archivedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "baseBranch": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "baseCommit": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "branch": {
+                          "description": "orchard/<slug>",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "createdBy": {
+                          "properties": {
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "avatarUrl"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "diffstat": {
+                          "description": "Changes against the base branch, including uncommitted work",
+                          "properties": {
+                            "additions": {
+                              "type": "integer"
+                            },
+                            "deletions": {
+                              "type": "integer"
+                            },
+                            "files": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "files",
+                            "additions",
+                            "deletions"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "opencodeSessionId": {
+                          "description": "The primary opencode chat",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewDeploymentId": {
+                          "format": "uuid",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewStatus": {
+                          "description": "Build and rollout state of the preview deployment, null without a preview",
+                          "enum": [
+                            "building",
+                            "deploying",
+                            "ready",
+                            "failed",
+                            "stopped",
+                            "gone"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewUrl": {
+                          "description": "Server-computed from the preview ingress; never build it from the host",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "prNumber": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "prState": {
+                          "enum": [
+                            "open",
+                            "merged",
+                            "closed"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "prUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "repo": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sandboxId": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "active",
+                            "archived"
+                          ],
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "worktreePath": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sandboxId",
+                        "title",
+                        "slug",
+                        "repo",
+                        "branch",
+                        "baseBranch",
+                        "baseCommit",
+                        "worktreePath",
+                        "agent",
+                        "opencodeSessionId",
+                        "status",
+                        "activity",
+                        "diffstat",
+                        "aheadBehind",
+                        "prUrl",
+                        "prNumber",
+                        "prState",
+                        "previewDeploymentId",
+                        "previewUrl",
+                        "previewStatus",
+                        "createdBy",
+                        "createdAt",
+                        "updatedAt",
+                        "archivedAt"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "removed"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Tear down the session preview environment (host only, needs project edit)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "deploymentId": {
+                    "description": "Deployment whose config is copied; defaults to the one building the same repo",
+                    "format": "uuid",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "projectId": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "projectId"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "branch": {
+                      "type": "string"
+                    },
+                    "commit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "deploymentId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "environmentId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "redeployed": {
+                      "description": "True when an existing preview was rebuilt from the latest push",
+                      "type": "boolean"
+                    },
+                    "session": {
+                      "properties": {
+                        "activity": {
+                          "description": "Best effort from opencode /session/status while the box runs",
+                          "enum": [
+                            "idle",
+                            "working",
+                            "needs_input",
+                            "done"
+                          ],
+                          "type": "string"
+                        },
+                        "agent": {
+                          "enum": [
+                            "opencode"
+                          ],
+                          "type": "string"
+                        },
+                        "aheadBehind": {
+                          "properties": {
+                            "ahead": {
+                              "type": "integer"
+                            },
+                            "behind": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "ahead",
+                            "behind"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "archivedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "baseBranch": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "baseCommit": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "branch": {
+                          "description": "orchard/<slug>",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "createdBy": {
+                          "properties": {
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "avatarUrl"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "diffstat": {
+                          "description": "Changes against the base branch, including uncommitted work",
+                          "properties": {
+                            "additions": {
+                              "type": "integer"
+                            },
+                            "deletions": {
+                              "type": "integer"
+                            },
+                            "files": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "files",
+                            "additions",
+                            "deletions"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "opencodeSessionId": {
+                          "description": "The primary opencode chat",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewDeploymentId": {
+                          "format": "uuid",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewStatus": {
+                          "description": "Build and rollout state of the preview deployment, null without a preview",
+                          "enum": [
+                            "building",
+                            "deploying",
+                            "ready",
+                            "failed",
+                            "stopped",
+                            "gone"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previewUrl": {
+                          "description": "Server-computed from the preview ingress; never build it from the host",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "prNumber": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "prState": {
+                          "enum": [
+                            "open",
+                            "merged",
+                            "closed"
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "prUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "repo": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sandboxId": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "active",
+                            "archived"
+                          ],
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "worktreePath": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sandboxId",
+                        "title",
+                        "slug",
+                        "repo",
+                        "branch",
+                        "baseBranch",
+                        "baseCommit",
+                        "worktreePath",
+                        "agent",
+                        "opencodeSessionId",
+                        "status",
+                        "activity",
+                        "diffstat",
+                        "aheadBehind",
+                        "prUrl",
+                        "prNumber",
+                        "prState",
+                        "previewDeploymentId",
+                        "previewUrl",
+                        "previewStatus",
+                        "createdBy",
+                        "createdAt",
+                        "updatedAt",
+                        "archivedAt"
+                      ],
+                      "type": "object"
+                    },
+                    "skippedEnv": {
+                      "description": "Copied vars left out because they reference resources bound to the source",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "deploymentId",
+                    "environmentId",
+                    "url",
+                    "branch",
+                    "commit",
+                    "redeployed",
+                    "skippedEnv"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Push the session branch and deploy it to the gh-<slug> preview environment of a project (host only, needs project edit). Calling it again redeploys the latest commit",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/prompt": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "text": {
+                    "maxLength": 32768,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "chatId": {
+                      "type": "string"
+                    },
+                    "messageId": {
+                      "type": "string"
+                    },
+                    "sessionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "messageId",
+                    "chatId",
+                    "sessionId"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Prompt the session agent as yourself (guest or host): the prompt is attributed to you like one sent from the web composer",
         "tags": [
           "sandboxes"
         ]
@@ -52062,6 +53950,629 @@
           }
         ],
         "summary": "Setup/run scripts and ports from .orchard/greenhouse.json, plus their state",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/transcript": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "chatId": {
+                      "description": "The opencode chat the messages come from",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "messages": {
+                      "items": {
+                        "properties": {
+                          "author": {
+                            "description": "Who sent a user prompt, when it was attributed",
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "enum": [
+                              "user",
+                              "assistant"
+                            ],
+                            "type": "string"
+                          },
+                          "text": {
+                            "description": "Text parts only; tool calls and reasoning are left out",
+                            "type": "string"
+                          },
+                          "truncated": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "text",
+                          "truncated",
+                          "createdAt",
+                          "author"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sessionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "chatId",
+                    "title",
+                    "messages"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The latest messages of the session agent chat as plain text (?limit=1..200, default 30)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/share-links": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "links": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "lastUsedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "revokedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sandboxId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "session": {
+                            "properties": {
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "sessionId": {
+                            "description": "null shares every active session of the machine",
+                            "format": "uuid",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "state": {
+                            "enum": [
+                              "active",
+                              "expired",
+                              "revoked"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sandboxId",
+                          "sessionId",
+                          "session",
+                          "createdBy",
+                          "state",
+                          "expiresAt",
+                          "revokedAt",
+                          "lastUsedAt",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Read-only share links for this machine (host only); tokens are never returned again",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expiresInHours": {
+                    "description": "Default 168 (7 days)",
+                    "maximum": 720,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "sessionId": {
+                    "format": "uuid",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "lastUsedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "revokedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "session": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "sessionId": {
+                      "description": "null shares every active session of the machine",
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "active",
+                        "expired",
+                        "revoked"
+                      ],
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sandboxId",
+                    "sessionId",
+                    "session",
+                    "createdBy",
+                    "state",
+                    "expiresAt",
+                    "revokedAt",
+                    "lastUsedAt",
+                    "createdAt",
+                    "token",
+                    "url"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Create a read-only share link for org teammates (host only). The token is returned once; only its sha256 is stored",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/share-links/{linkId}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "linkId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "lastUsedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "revokedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "session": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "sessionId": {
+                      "description": "null shares every active session of the machine",
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "active",
+                        "expired",
+                        "revoked"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sandboxId",
+                    "sessionId",
+                    "session",
+                    "createdBy",
+                    "state",
+                    "expiresAt",
+                    "revokedAt",
+                    "lastUsedAt",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Revoke a share link (host only); open viewers lose access on their next request",
         "tags": [
           "sandboxes"
         ]
@@ -53631,6 +56142,501 @@
         "summary": "GET /setup/status",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/share/sandbox/{token}": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "link": {
+                      "properties": {
+                        "createdBy": {
+                          "properties": {
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "avatarUrl"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "expiresAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "format": "uuid",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sessionId",
+                        "expiresAt",
+                        "createdBy"
+                      ],
+                      "type": "object"
+                    },
+                    "sandbox": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "creating",
+                            "starting",
+                            "running",
+                            "stopping",
+                            "stopped",
+                            "deleting",
+                            "error"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "status"
+                      ],
+                      "type": "object"
+                    },
+                    "sessions": {
+                      "items": {
+                        "properties": {
+                          "baseBranch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "branch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "prUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "repo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "status": {
+                            "enum": [
+                              "active",
+                              "archived"
+                            ],
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "repo",
+                          "branch",
+                          "baseBranch",
+                          "status",
+                          "prUrl",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "link",
+                    "sandbox",
+                    "sessions"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open a share link: requires a signed-in member of the machine's organization; returns the shared sessions",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/{token}/sessions/{sid}/changes": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "branch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "files": {
+                      "items": {
+                        "properties": {
+                          "additions": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "deletions": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "status",
+                          "additions",
+                          "deletions"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "isRepo": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "isRepo",
+                    "branch",
+                    "files"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Changed files in a shared session worktree (machine must be running)",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/{token}/sessions/{sid}/diff": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "file",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "diff": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "diff",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Diff of a shared session worktree, whole tree or one file via ?file=",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/{token}/sessions/{sid}/transcript": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "chatId": {
+                      "description": "The opencode chat the messages come from",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "messages": {
+                      "items": {
+                        "properties": {
+                          "author": {
+                            "description": "Who sent a user prompt, when it was attributed",
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "enum": [
+                              "user",
+                              "assistant"
+                            ],
+                            "type": "string"
+                          },
+                          "text": {
+                            "description": "Text parts only; tool calls and reasoning are left out",
+                            "type": "string"
+                          },
+                          "truncated": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "text",
+                          "truncated",
+                          "createdAt",
+                          "author"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sessionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "chatId",
+                    "title",
+                    "messages"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Read-only transcript of a shared session",
+        "tags": [
+          "share"
         ]
       }
     },
@@ -55283,6 +58289,261 @@
           }
         ],
         "summary": "GET /users/me/git-connections/oauth",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/integrations": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "integrations": {
+                      "items": {
+                        "properties": {
+                          "account": {
+                            "description": "GitHub login, Linear workspace name or Slack team id",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "linkedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "provider": {
+                            "enum": [
+                              "github",
+                              "linear",
+                              "slack"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "account",
+                          "linkedAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "integrations"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Accounts linked for Greenhouse kickoffs (github, linear, slack); never returns secrets",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/integrations/linear": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "workspaceName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "workspaceName"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Forget the stored Linear API key",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "workspaceName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "workspaceName"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Whether a Linear API key is connected, and its workspace name",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "apiKey": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "apiKey"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "workspaceName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "workspaceName"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Connect a Linear personal API key; it is checked against Linear and stored encrypted",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/integrations/slack": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "connected": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "connected"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Unlink your Slack account",
         "tags": [
           "users"
         ]

@@ -1,0 +1,57 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards
+} from '@nestjs/common';
+import { Auth, RequireScope } from '../auth/decorators';
+import { UsersService } from '../users/users.service';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { SandboxEnabledGuard } from './sandbox-enabled.guard';
+import { SandboxAccessService } from './sandbox-access.service';
+import { SandboxAgentService } from './sandbox-agent.service';
+import { requireSandboxAccess } from './sandbox-role-gate';
+import { resolveGreenhouseUser } from './sandbox-greenhouse-user';
+
+@Auth()
+@UseGuards(SandboxEnabledGuard)
+@Controller('sandboxes')
+export class SandboxAgentController {
+  constructor(
+    private readonly access: SandboxAccessService,
+    private readonly agent: SandboxAgentService,
+    private readonly usersService: UsersService,
+    private readonly analytics: AnalyticsService
+  ) {}
+
+  @Post(':id/sessions/:sid/prompt')
+  @RequireScope('exec')
+  async prompt(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Body() body: { text?: string }
+  ) {
+    const user = await resolveGreenhouseUser(this.usersService, this.analytics, req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.agent.prompt(row, sid, user.id, body?.text);
+  }
+
+  @Get(':id/sessions/:sid/transcript')
+  @RequireScope('exec')
+  async transcript(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Query('limit') limit?: string
+  ) {
+    const user = await resolveGreenhouseUser(this.usersService, this.analytics, req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'viewer');
+    return this.agent.transcript(row, sid, { limit });
+  }
+}

@@ -164,6 +164,28 @@ export class GitHubService implements OnModuleInit, OnModuleDestroy {
     return this.appConfig.get().clientId;
   }
 
+  private issueCommentHandler:
+    | ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>)
+    | null = null;
+
+  setIssueCommentHandler(
+    handler:
+      | ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>)
+      | null
+  ): void {
+    this.issueCommentHandler = handler;
+  }
+
+  async handleIssueCommentEvent(
+    deliveryId: string | undefined,
+    body: unknown
+  ): Promise<Record<string, unknown>> {
+    if (!this.issueCommentHandler) {
+      return { received: true, action: 'ignored', reason: 'issue comments are not handled' };
+    }
+    return this.issueCommentHandler(deliveryId, body);
+  }
+
   private readonly repoCache = new Map<string, CachedRepos>();
 
   private readonly CACHE_TTL = 5 * 60 * 1000;

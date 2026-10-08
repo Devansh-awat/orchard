@@ -74,6 +74,11 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     maxAttempts: 100,
     windowMs: 15 * 60 * 1000, // 15 minutes
     blockDurationMs: 15 * 60 * 1000 // 15 minutes
+  },
+  sandbox_share_user: {
+    maxAttempts: 300,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
   }
 };
 

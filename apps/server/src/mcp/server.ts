@@ -8,6 +8,7 @@ import { registerNotificationTools } from './tools/notifications';
 import { registerJobTools } from './tools/jobs';
 import { registerEnvironmentTools } from './tools/environments';
 import { registerDangerousTools } from './tools/dangerous';
+import { registerSandboxTools } from './tools/sandboxes';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
   const server = new McpServer(
@@ -43,6 +44,8 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
 
   // Environments (namespaces per project) and their shared variables
   registerEnvironmentTools(server, client);
+
+  registerSandboxTools(server, client);
 
   // Destructive operations (all deletes)
   registerDangerousTools(server, client);

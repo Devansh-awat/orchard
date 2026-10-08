@@ -6,6 +6,7 @@ import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { referencedSharedKeys, resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { ResourceBindingsService } from './resource-bindings.service';
+import { signalEnvironmentEnvChanged } from '../env/env-change-signal';
 
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Generous ceilings — unreachable in normal use, but bound what a single env can
@@ -232,6 +233,7 @@ export class EnvironmentSharedVarsService {
       id: env.id,
       projectId: env.project.id
     });
+    signalEnvironmentEnvChanged({ projectId: env.project.id, environmentId: env.id });
 
     return { vars: await this.getSharedVars(environmentId, true), warnings };
   }

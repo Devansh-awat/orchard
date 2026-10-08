@@ -49,6 +49,9 @@ func sandboxCmd() *cobra.Command {
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
 		sandboxBridgeCmd(),
+		sandboxForkCmd(),
+		sandboxShareCmd(),
+		sandboxLinkCmd(),
 	)
 	return c
 }

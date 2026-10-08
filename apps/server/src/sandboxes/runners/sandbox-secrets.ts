@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash, createHmac } from 'crypto';
 import { SignJWT } from 'jose';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SecretCryptoService } from '../../crypto/secret-crypto.service';
 import type { SandboxSecrets } from './sandbox-runner';
+import { SandboxProjectEnvService } from '../links/sandbox-project-env.service';
+import { gitIdentity } from '../sandbox-git-identity';
 
 export type SandboxSecretPurpose = 'opencode-password' | 'bridge-token' | 'spec-hash';
 
@@ -42,7 +44,8 @@ const MCP_SESSION_DEVICE = 'sandbox-mcp';
 export class SandboxSecretsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly crypto: SecretCryptoService
+    private readonly crypto: SecretCryptoService,
+    @Optional() private readonly projectEnv?: SandboxProjectEnvService
   ) {}
 
   async authorizedKeys(userId: string): Promise<string[]> {
@@ -59,14 +62,24 @@ export class SandboxSecretsService {
     userId: string;
     setupScript: string | null;
   }): Promise<SandboxSecrets> {
-    const [authorizedKeys, user, credential, mcpToken] = await Promise.all([
+    const [authorizedKeys, user, credential, mcpToken, attachedEnv] = await Promise.all([
       this.authorizedKeys(row.userId),
       this.prisma.user.findUnique({
         where: { id: row.userId },
-        select: { githubAccessToken: true }
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          githubId: true,
+          githubUsername: true,
+          githubAccessToken: true
+        }
       }),
       this.prisma.sandboxCredential.findUnique({ where: { userId: row.userId } }),
-      this.mintMcpToken(row.userId).catch(() => null)
+      this.mintMcpToken(row.userId).catch(() => null),
+      this.projectEnv ? this.projectEnv.filesFor(row.id) : Promise.resolve({})
     ]);
     return {
       authorizedKeys,
@@ -76,7 +89,9 @@ export class SandboxSecretsService {
       setupScript: row.setupScript,
       mcpToken,
       opencodePassword: deriveSandboxSecret('opencode-password', row.id),
-      bridgeToken: deriveSandboxSecret('bridge-token', row.id)
+      bridgeToken: deriveSandboxSecret('bridge-token', row.id),
+      attachedEnv,
+      gitIdentity: user ? gitIdentity(user) : null
     };
   }
 

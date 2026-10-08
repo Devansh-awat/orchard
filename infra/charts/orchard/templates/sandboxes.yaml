@@ -121,6 +121,9 @@ rules:
   - apiGroups: [""]
     resources: ["secrets", "persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -137,5 +140,36 @@ subjects:
 roleRef:
   kind: Role
   name: {{ .Release.Name }}-sandbox-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-sandbox-snapshot-classes
+  labels:
+    app.kubernetes.io/name: sandbox
+    app.kubernetes.io/managed-by: leaf
+rules:
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-sandbox-snapshot-classes
+  labels:
+    app.kubernetes.io/name: sandbox
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ $appNs }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-sandbox-snapshot-classes
   apiGroup: rbac.authorization.k8s.io
 {{- end }}

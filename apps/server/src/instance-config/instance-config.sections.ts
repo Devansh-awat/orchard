@@ -224,6 +224,36 @@ export const SANDBOX_RUNNERS = section(
   }
 );
 
+const SLACK_APP_ID = /^[A-Z0-9]{6,32}$/;
+
+export const SLACK_APP = section(
+  'slack-app',
+  'slack_app',
+  [
+    { name: 'signingSecret', env: 'SLACK_SIGNING_SECRET', secret: true },
+    { name: 'botToken', env: 'SLACK_BOT_TOKEN', secret: true },
+    { name: 'appId', env: 'SLACK_APP_ID' }
+  ],
+  ['signingSecret', 'botToken'],
+  (values) => {
+    const token = (values.botToken || '').trim();
+    if (token && !token.startsWith('xoxb-')) {
+      throw new Error('botToken must be a bot token starting with xoxb-');
+    }
+    const appId = (values.appId || '').trim();
+    if (appId && !SLACK_APP_ID.test(appId)) {
+      throw new Error('appId must look like A0123456789');
+    }
+  }
+);
+
+export const LINEAR = section(
+  'linear',
+  'linear_integration',
+  [{ name: 'webhookSecret', env: 'LINEAR_WEBHOOK_SECRET', secret: true }],
+  ['webhookSecret']
+);
+
 export const SECTIONS: ConfigSection[] = [
   STORAGE,
   EMAIL,
@@ -234,7 +264,9 @@ export const SECTIONS: ConfigSection[] = [
   TURNSTILE,
   GIT_GITLAB,
   GIT_BITBUCKET,
-  SANDBOX_RUNNERS
+  SANDBOX_RUNNERS,
+  SLACK_APP,
+  LINEAR
 ];
 
 export const sectionById = (id: string): ConfigSection | undefined =>

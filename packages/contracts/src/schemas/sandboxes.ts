@@ -113,6 +113,8 @@ const sessionComment = z.object({
   createdAt: z.string()
 });
 
+const previewStatus = z.enum(['building', 'deploying', 'ready', 'failed', 'stopped', 'gone']);
+
 const sandboxSession = z.object({
   id: sessionId,
   sandboxId: z.string().uuid(),
@@ -138,7 +140,13 @@ const sandboxSession = z.object({
   prNumber: z.number().int().nullable(),
   prState: z.enum(['open', 'merged', 'closed']).nullable(),
   previewDeploymentId: z.string().uuid().nullable(),
-  previewUrl: z.string().nullable(),
+  previewUrl: z
+    .string()
+    .nullable()
+    .describe('Server-computed from the preview ingress; never build it from the host'),
+  previewStatus: previewStatus
+    .nullable()
+    .describe('Build and rollout state of the preview deployment, null without a preview'),
   createdBy: sessionUser.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -158,6 +166,79 @@ const fsRequest = z.object({
   repo: z.string().optional(),
   path: z.string().max(1024).describe('Relative to the session worktree or repo'),
   to: z.string().max(1024).optional()
+});
+
+const workspaceChanges = z.object({
+  isRepo: z.boolean(),
+  branch: z.string().nullable(),
+  files: z.array(
+    z.object({
+      path: z.string(),
+      status: z.string(),
+      additions: z.number().int().nullable(),
+      deletions: z.number().int().nullable()
+    })
+  )
+});
+
+const workspaceDiff = z.object({ diff: z.string(), truncated: z.boolean() });
+
+const sessionTranscript = z.object({
+  sessionId,
+  chatId: z.string().nullable().describe('The opencode chat the messages come from'),
+  title: z.string(),
+  messages: z.array(
+    z.object({
+      id: z.string(),
+      role: z.enum(['user', 'assistant']),
+      text: z.string().describe('Text parts only; tool calls and reasoning are left out'),
+      truncated: z.boolean(),
+      createdAt: z.string().nullable(),
+      author: sessionUser.nullable().describe('Who sent a user prompt, when it was attributed')
+    })
+  )
+});
+
+const shareLinkState = z.enum(['active', 'expired', 'revoked']);
+
+const shareLink = z.object({
+  id: z.string().uuid(),
+  sandboxId: z.string().uuid(),
+  sessionId: sessionId.nullable().describe('null shares every active session of the machine'),
+  session: z.object({ id: sessionId, title: z.string() }).nullable(),
+  createdBy: sessionUser.nullable(),
+  state: shareLinkState,
+  expiresAt: z.string().nullable(),
+  revokedAt: z.string().nullable(),
+  lastUsedAt: z.string().nullable(),
+  createdAt: z.string()
+});
+
+const projectLink = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  project: z.object({ id: z.string().uuid(), name: z.string(), slug: z.string() }),
+  environment: z.object({ id: z.string().uuid(), name: z.string(), slug: z.string() }),
+  envFile: z
+    .string()
+    .describe('Where the env file lands in the box, ~/.config/orchard/env/<slug>.env'),
+  createdBy: sessionUser.nullable(),
+  createdAt: z.string()
+});
+
+const previewDeployResult = z.object({
+  session: sandboxSession,
+  deploymentId: z.string().uuid(),
+  environmentId: z.string().uuid(),
+  url: z.string().nullable(),
+  branch: z.string(),
+  commit: z.string().nullable(),
+  redeployed: z
+    .boolean()
+    .describe('True when an existing preview was rebuilt from the latest push'),
+  skippedEnv: z
+    .array(z.string())
+    .describe('Copied vars left out because they reference resources bound to the source')
 });
 
 const credentialPresence = z.object({
@@ -276,7 +357,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/push': {
-    summary: 'Push the current branch to origin (force uses --force-with-lease)',
+    summary:
+      "Push the current branch to origin as the caller, with the caller's own GitHub token injected for that command only (force uses --force-with-lease). 409 github_not_linked when the caller has no linked GitHub account",
     request: z.object({
       repo: z.string().optional(),
       session: sessionId
@@ -288,7 +370,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/fetch': {
-    summary: 'Fetch all remotes and prune deleted branches',
+    summary:
+      "Fetch all remotes and prune deleted branches with the caller's own GitHub token (409 github_not_linked without one)",
     request: z.object({
       repo: z.string().optional(),
       session: sessionId
@@ -299,7 +382,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/pull': {
-    summary: 'Pull the current branch, optionally with rebase',
+    summary:
+      "Pull the current branch, optionally with rebase, as the caller with the caller's own GitHub token (409 github_not_linked without one)",
     request: z.object({
       repo: z.string().optional(),
       session: sessionId
@@ -320,6 +404,20 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
     scope: 'exec'
+  },
+  'GET /sandboxes/:id/git/identity': {
+    summary:
+      'The git identity the caller commits and pushes as in this sandbox, and whether they can push',
+    response: z.object({
+      name: z.string(),
+      email: z
+        .string()
+        .describe('<githubId>+<login>@users.noreply.github.com when GitHub is linked'),
+      githubLogin: z.string().nullable(),
+      githubLinked: z.boolean(),
+      canCommit: z.boolean(),
+      canPush: z.boolean().describe('false means show "Link your GitHub account to push"')
+    })
   },
   'GET /sandboxes/:id/git/branches': {
     summary: 'List local branches with tracking info and remote branches',
@@ -352,7 +450,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/branch/delete': {
-    summary: 'Delete a local branch, or a remote branch with remote:true',
+    summary:
+      "Delete a local branch, or a remote branch with remote:true (pushed with the caller's own GitHub token)",
     request: z.object({
       repo: z.string().optional(),
       session: sessionId
@@ -366,7 +465,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/pr': {
-    summary: 'Open a GitHub pull request from the current branch of a sandbox repo',
+    summary:
+      "Open a GitHub pull request from the current branch of a sandbox repo with the caller's own GitHub account (409 github_not_linked without one)",
     request: z.object({
       repo: z.string().optional(),
       session: sessionId
@@ -627,7 +727,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'POST /sandboxes/:id/sessions/:sid/git/merge': {
     summary:
-      "Merge the session's pull request on GitHub (owner only, squash or rebase, never a merge commit)",
+      "Merge the session's pull request on GitHub with the caller's own GitHub account (squash or rebase, never a merge commit; 409 github_not_linked without one)",
     request: z.object({ method: z.enum(['squash', 'rebase']).optional() }),
     response: z.object({ merged: z.boolean(), sha: z.string().nullable(), message: z.string() }),
     scope: 'exec'
@@ -697,6 +797,51 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ authors: z.record(z.string(), sessionUser) }),
     scope: 'read'
   },
+  'GET /sandboxes/:id/links': {
+    summary: 'Orchard projects attached to the sandbox and where their env files land',
+    response: z.object({ links: z.array(projectLink) }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/links': {
+    summary:
+      'Attach a project environment (host only, needs env-read on the project, same org). Its shared vars and DATABASE_URL are written to the box at sync time; secret values stay write-only',
+    request: z.object({
+      projectId: z.string().uuid(),
+      environmentId: z
+        .string()
+        .uuid()
+        .nullable()
+        .optional()
+        .describe('Defaults to the project default environment')
+    }),
+    response: projectLink,
+    scope: 'exec'
+  },
+  'DELETE /sandboxes/:id/links/:projectId': {
+    summary: 'Detach a project (host only); its env file is removed on the next sync',
+    response: z.object({ success: z.boolean() }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/sessions/:sid/preview-deploy': {
+    summary:
+      'Push the session branch and deploy it to the gh-<slug> preview environment of a project (host only, needs project edit). Calling it again redeploys the latest commit',
+    request: z.object({
+      projectId: z.string().uuid(),
+      deploymentId: z
+        .string()
+        .uuid()
+        .nullable()
+        .optional()
+        .describe('Deployment whose config is copied; defaults to the one building the same repo')
+    }),
+    response: previewDeployResult,
+    scope: 'deploy'
+  },
+  'DELETE /sandboxes/:id/sessions/:sid/preview-deploy': {
+    summary: 'Tear down the session preview environment (host only, needs project edit)',
+    response: z.object({ session: sandboxSession, removed: z.boolean() }),
+    scope: 'deploy'
+  },
   'GET /sandboxes/:id/preview-token': {
     summary:
       'A one-time preview link for ?port= (Kubernetes: 60s single-use exchange for a cookie on the preview host; Vercel: the public port URL)',
@@ -706,5 +851,89 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       expiresAt: z.string().nullable()
     }),
     scope: 'exec'
+  },
+  'POST /sandboxes/:id/sessions/:sid/prompt': {
+    summary:
+      'Prompt the session agent as yourself (guest or host): the prompt is attributed to you like one sent from the web composer',
+    request: z.object({ text: z.string().min(1).max(32768) }),
+    response: z.object({ messageId: z.string(), chatId: z.string(), sessionId }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/transcript': {
+    summary:
+      'The latest messages of the session agent chat as plain text (?limit=1..200, default 30)',
+    request: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+    response: sessionTranscript,
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/fork': {
+    summary:
+      'Fork the machine (host only): a new machine owned by you restored from this one, with its sessions. 409 when the runner or the storage class cannot snapshot',
+    request: z.object({ name: sandboxName.optional() }),
+    response: sandbox,
+    scope: 'deploy'
+  },
+  'GET /sandboxes/:id/share-links': {
+    summary: 'Read-only share links for this machine (host only); tokens are never returned again',
+    response: z.object({ links: z.array(shareLink) }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/share-links': {
+    summary:
+      'Create a read-only share link for org teammates (host only). The token is returned once; only its sha256 is stored',
+    request: z.object({
+      sessionId: sessionId.nullable().optional(),
+      expiresInHours: z.number().int().min(1).max(720).optional().describe('Default 168 (7 days)')
+    }),
+    response: shareLink.extend({ token: z.string(), url: z.string() }),
+    scope: 'deploy'
+  },
+  'DELETE /sandboxes/:id/share-links/:linkId': {
+    summary: 'Revoke a share link (host only); open viewers lose access on their next request',
+    response: shareLink,
+    scope: 'deploy'
+  },
+  'GET /share/sandbox/:token': {
+    summary:
+      "Open a share link: requires a signed-in member of the machine's organization; returns the shared sessions",
+    response: z.object({
+      link: z.object({
+        id: z.string().uuid(),
+        sessionId: sessionId.nullable(),
+        expiresAt: z.string().nullable(),
+        createdBy: sessionUser.nullable()
+      }),
+      sandbox: z.object({ id: z.string().uuid(), name: z.string(), status: sandboxStatus }),
+      sessions: z.array(
+        z.object({
+          id: sessionId,
+          title: z.string(),
+          repo: z.string().nullable(),
+          branch: z.string().nullable(),
+          baseBranch: z.string().nullable(),
+          status: z.enum(['active', 'archived']),
+          prUrl: z.string().nullable(),
+          createdAt: z.string()
+        })
+      )
+    }),
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/transcript': {
+    summary: 'Read-only transcript of a shared session',
+    request: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+    response: sessionTranscript,
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/changes': {
+    summary: 'Changed files in a shared session worktree (machine must be running)',
+    response: workspaceChanges,
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/diff': {
+    summary: 'Diff of a shared session worktree, whole tree or one file via ?file=',
+    request: z.object({ file: z.string().optional() }),
+    response: workspaceDiff,
+    scope: 'read'
   }
 };

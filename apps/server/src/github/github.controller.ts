@@ -731,6 +731,10 @@ export class GitHubController {
       };
     }
 
+    if (event === 'issue_comment') {
+      return this.githubService.handleIssueCommentEvent(deliveryId, body);
+    }
+
     // Ignore other events
     return { received: true, action: 'ignored', reason: `unhandled event type: ${event}` };
   }

@@ -18,7 +18,14 @@ func sandboxSessionCmd() *cobra.Command {
 		Aliases: []string{"sessions"},
 		Short:   "Manage worktree agent sessions inside a sandbox",
 	}
-	c.AddCommand(sandboxSessionListCmd(), sandboxSessionCreateCmd(), sandboxSessionArchiveCmd())
+	c.AddCommand(
+		sandboxSessionListCmd(),
+		sandboxSessionCreateCmd(),
+		sandboxSessionArchiveCmd(),
+		sandboxSessionPromptCmd(),
+		sandboxSessionTranscriptCmd(),
+		sandboxSessionPreviewCmd(),
+	)
 	return c
 }
 

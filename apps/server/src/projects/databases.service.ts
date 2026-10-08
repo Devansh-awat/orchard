@@ -47,6 +47,7 @@ import { platformBackupTarget } from '../instance-config/object-storage';
 import { LeaseService } from '../coordination/lease.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import { signalEnvironmentEnvChanged } from '../env/env-change-signal';
 import type { ClusterSnapshot, DbStats, MirroredDbPod } from '../kubernetes/cnpg-status';
 
 /** The org fields that locate a managed database's backups in R2. */
@@ -2795,6 +2796,10 @@ export class DatabasesService {
       where: { id: database.id },
       data: { publicEnabled: true, publicIp: ip, publicPort: port }
     });
+    signalEnvironmentEnvChanged({
+      projectId: database.projectId,
+      environmentId: database.environmentId
+    });
 
     return {
       enabled: true,
@@ -2823,6 +2828,10 @@ export class DatabasesService {
     await this.prisma.database.update({
       where: { id: database.id },
       data: { publicEnabled: false, publicIp: null, publicPort: null }
+    });
+    signalEnvironmentEnvChanged({
+      projectId: database.projectId,
+      environmentId: database.environmentId
     });
     return { enabled: false };
   }

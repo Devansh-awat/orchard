@@ -125,10 +125,14 @@ function sandboxesRoutes(
       { min: 'collaborator' },
       () => c.gitUncommit(req(), SANDBOX, {})
     ],
-    'POST /sandboxes/:id/git/push': [{ min: 'owner' }, () => c.gitPush(req(), SANDBOX, {})],
-    'POST /sandboxes/:id/git/fetch': [{ min: 'owner' }, () => c.gitFetch(req(), SANDBOX, {})],
-    'POST /sandboxes/:id/git/pull': [{ min: 'owner' }, () => c.gitPull(req(), SANDBOX, {})],
+    'POST /sandboxes/:id/git/push': [{ min: 'collaborator' }, () => c.gitPush(req(), SANDBOX, {})],
+    'POST /sandboxes/:id/git/fetch': [
+      { min: 'collaborator' },
+      () => c.gitFetch(req(), SANDBOX, {})
+    ],
+    'POST /sandboxes/:id/git/pull': [{ min: 'collaborator' }, () => c.gitPull(req(), SANDBOX, {})],
     'GET /sandboxes/:id/git/branches': [{ min: 'viewer' }, () => c.gitBranches(req(), SANDBOX)],
+    'GET /sandboxes/:id/git/identity': [{ min: 'viewer' }, () => c.gitIdentity(req(), SANDBOX)],
     'POST /sandboxes/:id/git/checkout': [
       { min: 'collaborator' },
       () => c.gitCheckout(req(), SANDBOX, {})
@@ -138,10 +142,10 @@ function sandboxesRoutes(
       () => c.gitDeleteBranch(req(), SANDBOX, {})
     ],
     'POST /sandboxes/:id/git/branch/delete (remote)': [
-      { min: 'owner' },
+      { min: 'collaborator' },
       () => c.gitDeleteBranch(req(), SANDBOX, { remote: true })
     ],
-    'POST /sandboxes/:id/git/pr': [{ min: 'owner' }, () => c.gitPr(req(), SANDBOX, {})],
+    'POST /sandboxes/:id/git/pr': [{ min: 'collaborator' }, () => c.gitPr(req(), SANDBOX, {})],
     'GET /sandboxes/:id/file': [{ min: 'viewer' }, () => c.readFile(req(), SANDBOX)],
     'PUT /sandboxes/:id/file': [{ min: 'collaborator' }, () => c.writeFile(req(), SANDBOX, {})],
     'GET /sandboxes/:id/opencode/session/:id/message': [
@@ -215,7 +219,7 @@ function sessionRoutes(
       () => c.checks(req(), SANDBOX, SID)
     ],
     'POST /sandboxes/:id/sessions/:sid/git/merge': [
-      { min: 'owner' },
+      { min: 'collaborator' },
       () => c.merge(req(), SANDBOX, SID, {})
     ],
     'POST /sandboxes/:id/fs/mkdir': [
@@ -353,6 +357,7 @@ test('sandboxes controller routes declare the contract minimum role', async () =
     'gitFetch',
     'gitPull',
     'gitBranches',
+    'gitIdentity',
     'gitCheckout',
     'gitDeleteBranch',
     'gitPr',
@@ -457,8 +462,13 @@ test('host-only and guest-level contract items hold for each principal', async (
   await check('POST /sandboxes/:id/stop', 'guest', false);
   await check('POST /sandboxes/:id/stop', 'orgAdmin', true);
   await check('DELETE /sandboxes/:id', 'guest', false);
-  await check('POST /sandboxes/:id/git/push', 'guest', false);
+  await check('POST /sandboxes/:id/git/push', 'guest', true);
+  await check('POST /sandboxes/:id/git/push', 'viewer', false);
+  await check('POST /sandboxes/:id/git/push', 'orgAdmin', false);
+  await check('POST /sandboxes/:id/git/pr', 'guest', true);
   await check('POST /sandboxes/:id/git/pr', 'orgAdmin', false);
+  await check('POST /sandboxes/:id/git/branch/delete (remote)', 'guest', true);
+  await check('POST /sandboxes/:id/git/branch/delete (remote)', 'viewer', false);
   await check('GET /sandboxes/:id/ssh', 'guest', false);
   await check('POST /sandboxes/:id/git/commit', 'guest', true);
   await check('POST /sandboxes/:id/git/commit', 'viewer', false);

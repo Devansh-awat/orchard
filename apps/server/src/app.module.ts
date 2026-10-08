@@ -43,6 +43,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
 import { SandboxesModule } from './sandboxes/sandboxes.module';
+import { SandboxIntegrationsModule } from './sandboxes/integrations/sandbox-integrations.module';
 import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
 import { CoordinationModule } from './coordination/coordination.module';
 import { MirrorModule } from './mirror/mirror.module';
@@ -98,6 +99,7 @@ import { ApplyModule } from './apply/apply.module';
     JobsModule,
     ForumModule,
     SandboxesModule,
+    SandboxIntegrationsModule,
     SshIdentitiesModule,
     MirrorModule
   ],

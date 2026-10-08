@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException
@@ -13,6 +14,12 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SandboxNotRunningError, refOf } from './runners/sandbox-runner';
 import { SandboxWorkspaceService, type WorkspaceSandbox } from './sandbox-workspace.service';
+import {
+  PREVIEW_DEPLOYMENT_SELECT,
+  previewSnapshotOf,
+  type PreviewSnapshot,
+  type PreviewStatus
+} from './links/preview-state';
 import {
   WORKTREE_EXIT,
   buildDiffstatBatchScript,
@@ -76,6 +83,7 @@ export interface SessionDto {
   prState: PrState | null;
   previewDeploymentId: string | null;
   previewUrl: string | null;
+  previewStatus: PreviewStatus | null;
   createdBy: SessionUserDto | null;
   createdAt: Date;
   updatedAt: Date;
@@ -146,7 +154,11 @@ export function displayName(user: SessionRow['createdBy']): string {
 
 export function toSessionDto(
   row: SessionRow,
-  extras: { activity?: SessionActivity; stats?: SessionGitStats | null } = {}
+  extras: {
+    activity?: SessionActivity;
+    stats?: SessionGitStats | null;
+    preview?: PreviewSnapshot | null;
+  } = {}
 ): SessionDto {
   const prState =
     row.prState === 'open' || row.prState === 'merged' || row.prState === 'closed'
@@ -172,7 +184,10 @@ export function toSessionDto(
     prNumber: row.prNumber,
     prState,
     previewDeploymentId: row.previewDeploymentId,
-    previewUrl: row.previewUrl,
+    previewUrl: !row.previewDeploymentId
+      ? null
+      : (extras.preview?.url ?? (extras.preview?.status === 'gone' ? null : row.previewUrl)),
+    previewStatus: row.previewDeploymentId ? (extras.preview?.status ?? null) : null,
     createdBy: row.createdBy
       ? {
           id: row.createdBy.id,
@@ -241,9 +256,33 @@ export function excerptLog(text: string): string {
   return tail;
 }
 
+export interface SessionIssueContext {
+  title: string | null;
+  text: string;
+  slugHint?: string | null;
+}
+
+export interface SessionPreviewHooks {
+  teardown(
+    sandbox: WorkspaceSandbox,
+    row: SandboxConversation,
+    reason: 'archived' | 'deleted'
+  ): Promise<void>;
+}
+
+export type SessionIssueResolver = (input: {
+  sandbox: WorkspaceSandbox;
+  repo: string;
+  actorUserId: string;
+  provider: 'github' | 'linear';
+  ref: string;
+}) => Promise<SessionIssueContext | null>;
+
 @Injectable()
 export class SandboxSessionsService {
   private readonly logger = new Logger(SandboxSessionsService.name);
+
+  private issueResolver: SessionIssueResolver | null = null;
 
   readonly events = new EventEmitter();
 
@@ -254,6 +293,33 @@ export class SandboxSessionsService {
     private readonly crypto: SecretCryptoService
   ) {
     this.events.setMaxListeners(0);
+  }
+
+  private previewHooks: SessionPreviewHooks | null = null;
+
+  setPreviewHooks(hooks: SessionPreviewHooks | null): void {
+    this.previewHooks = hooks;
+  }
+
+  private previewTeardown(
+    sandbox: WorkspaceSandbox,
+    row: SandboxConversation,
+    reason: 'archived' | 'deleted'
+  ): void {
+    if (!this.previewHooks || (!row.previewDeploymentId && !row.previewEnvironmentId)) return;
+    void this.previewHooks
+      .teardown(sandbox, row, reason)
+      .catch((e) => this.logger.warn(`preview teardown failed for ${row.id}: ${e?.message}`));
+  }
+
+  async notifyChanged(sandbox: WorkspaceSandbox, sessionId: string): Promise<SessionDto> {
+    const dto = await this.get(sandbox, sessionId);
+    this.emit(dto);
+    return dto;
+  }
+
+  setIssueResolver(resolver: SessionIssueResolver | null): void {
+    this.issueResolver = resolver;
   }
 
   onSessionChanged(listener: (sandboxId: string, session: SessionDto) => void): () => void {
@@ -325,10 +391,35 @@ export class SandboxSessionsService {
     return { sessions: await this.decorate(sandbox, rows) };
   }
 
+  private async previewSnapshots(rows: SessionRow[]): Promise<Map<string, PreviewSnapshot>> {
+    const ids = [
+      ...new Set(rows.map((r) => r.previewDeploymentId).filter((id): id is string => !!id))
+    ];
+    if (ids.length === 0) return new Map();
+    try {
+      const deployments = await this.prisma.deployment.findMany({
+        where: { id: { in: ids } },
+        select: PREVIEW_DEPLOYMENT_SELECT
+      });
+      const byId = new Map(deployments.map((d) => [d.id, d]));
+      const out = new Map<string, PreviewSnapshot>();
+      for (const r of rows) {
+        if (r.previewDeploymentId) {
+          out.set(r.id, previewSnapshotOf(byId.get(r.previewDeploymentId)));
+        }
+      }
+      return out;
+    } catch (e: any) {
+      this.logger.warn(`preview status lookup failed: ${e?.message}`);
+      return new Map();
+    }
+  }
+
   private async decorate(sandbox: WorkspaceSandbox, rows: SessionRow[]): Promise<SessionDto[]> {
+    const previews = await this.previewSnapshots(rows);
     const active = rows.filter((r) => !r.archivedAt && isWorktreePath(r.worktreePath));
     if (sandbox.status !== 'running' || active.length === 0) {
-      return rows.map((r) => toSessionDto(r));
+      return rows.map((r) => toSessionDto(r, { preview: previews.get(r.id) }));
     }
     const [stats, activity] = await Promise.all([
       this.batchStats(sandbox, active).catch((e) => {
@@ -340,7 +431,8 @@ export class SandboxSessionsService {
     return rows.map((r) =>
       toSessionDto(r, {
         stats: stats.get(r.id.toLowerCase()) ?? null,
-        activity: activity.get(r.worktreePath ?? '') ?? 'idle'
+        activity: activity.get(r.worktreePath ?? '') ?? 'idle',
+        preview: previews.get(r.id)
       })
     );
   }
@@ -419,7 +511,7 @@ export class SandboxSessionsService {
     return { status: res.status, body };
   }
 
-  private async repoRemote(
+  async repoRemote(
     sandbox: WorkspaceSandbox,
     repo: string
   ): Promise<{ owner: string; repo: string } | null> {
@@ -435,14 +527,33 @@ export class SandboxSessionsService {
   private async issueContext(
     sandbox: WorkspaceSandbox,
     repo: string,
-    issue: { provider?: unknown; ref?: unknown } | undefined
-  ): Promise<{ title: string | null; text: string } | null> {
+    issue: { provider?: unknown; ref?: unknown } | undefined,
+    actorUserId: string
+  ): Promise<SessionIssueContext | null> {
     if (!issue || typeof issue.ref !== 'string' || !issue.ref.trim()) return null;
     const ref = issue.ref.trim().slice(0, 300);
-    if (issue.provider === 'linear') {
-      return { title: null, text: `Linear issue: ${ref}` };
+    if (issue.provider !== 'github' && issue.provider !== 'linear') {
+      throw new BadRequestException('Unknown issue provider');
     }
-    if (issue.provider !== 'github') throw new BadRequestException('Unknown issue provider');
+    const plain = {
+      title: null,
+      text: `${issue.provider === 'github' ? 'GitHub' : 'Linear'} issue: ${ref}`
+    };
+    if (this.issueResolver) {
+      const resolved = await this.issueResolver({
+        sandbox,
+        repo,
+        actorUserId,
+        provider: issue.provider,
+        ref
+      }).catch((e: any) => {
+        if (e instanceof ForbiddenException) throw e;
+        this.logger.warn(`issue lookup failed for ${ref}: ${e?.message}`);
+        return null;
+      });
+      return resolved ?? plain;
+    }
+    if (issue.provider === 'linear') return plain;
     const token = await this.ownerGithubToken(sandbox.userId);
     const parsed = parseIssueRef(ref, await this.repoRemote(sandbox, repo));
     if (!parsed || !token) return { title: null, text: `GitHub issue: ${ref}` };
@@ -473,7 +584,8 @@ export class SandboxSessionsService {
       title?: string;
       prompt?: string;
       issue?: { provider?: string; ref?: string };
-    }
+    },
+    opts: { issue?: SessionIssueContext } = {}
   ): Promise<SessionDto> {
     this.requireRunning(sandbox);
     const repo = body.repo;
@@ -488,8 +600,10 @@ export class SandboxSessionsService {
     if (body.prompt && body.prompt.length > MAX_PROMPT) {
       throw new BadRequestException('prompt is too long');
     }
-    const issue = await this.issueContext(sandbox, repo, body.issue);
-    const prompt = [body.prompt?.trim(), issue?.text].filter(Boolean).join('\n\n');
+    const issue = opts.issue ?? (await this.issueContext(sandbox, repo, body.issue, actorUserId));
+    const prompt = issue
+      ? [issue.text, body.prompt?.trim() || 'Work on this issue.'].join('\n\n')
+      : (body.prompt?.trim() ?? '');
     const title = (
       body.title?.trim() ||
       issue?.title ||
@@ -499,7 +613,7 @@ export class SandboxSessionsService {
 
     let row: SandboxConversation | null = null;
     for (let attempt = 0; attempt < 4 && !row; attempt++) {
-      const slug = slugify(title, randomBytes(3).toString('hex'));
+      const slug = slugify(issue?.slugHint || title, randomBytes(3).toString('hex'));
       if (!isValidSlug(slug)) continue;
       try {
         row = await this.prisma.sandboxConversation.create({
@@ -661,6 +775,7 @@ export class SandboxSessionsService {
     });
     const [dto] = await this.decorate(sandbox, [saved]);
     this.emit(dto);
+    if (body.archived === true && !row.archivedAt) this.previewTeardown(sandbox, saved, 'archived');
     return dto;
   }
 
@@ -692,6 +807,7 @@ export class SandboxSessionsService {
       }
     }
     await this.prisma.sandboxConversation.delete({ where: { id: row.id } });
+    this.previewTeardown(sandbox, row, 'deleted');
     try {
       this.events.emit('session-deleted', sandbox.id, row.id);
     } catch (e: any) {
@@ -884,10 +1000,14 @@ export class SandboxSessionsService {
     return remote ? { ...remote, number: row.prNumber ?? null } : null;
   }
 
-  async checks(sandbox: WorkspaceSandbox, sessionId: string): Promise<SessionChecksDto> {
+  async checks(
+    sandbox: WorkspaceSandbox,
+    sessionId: string,
+    actorToken: string | null = null
+  ): Promise<SessionChecksDto> {
     const row = await this.row(sandbox.id, sessionId);
-    const token = await this.ownerGithubToken(sandbox.userId);
-    if (!token) throw new BadRequestException('The sandbox owner has no GitHub account linked');
+    const token = actorToken || (await this.ownerGithubToken(sandbox.userId));
+    if (!token) throw new BadRequestException('No GitHub account is linked to read checks');
     const target = await this.prTarget(sandbox, row);
     if (!target) return { pr: null, checks: [] };
     const { owner, repo } = target;

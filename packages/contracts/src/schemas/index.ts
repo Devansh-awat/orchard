@@ -3,6 +3,7 @@ import { attachments as common } from './common';
 import { attachments as databases } from './databases';
 import { attachments as deployments } from './deployments';
 import { attachments as events } from './events';
+import { attachments as integrations } from './integrations';
 import { attachments as jobs } from './jobs';
 import { attachments as registryCredentials } from './registry-credentials';
 import { attachments as sandboxes } from './sandboxes';
@@ -13,6 +14,7 @@ export const attachments: Record<string, RouteAttachment> = {
   ...databases,
   ...deployments,
   ...events,
+  ...integrations,
   ...jobs,
   ...registryCredentials,
   ...sandboxes,

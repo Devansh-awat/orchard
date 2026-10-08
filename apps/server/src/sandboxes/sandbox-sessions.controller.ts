@@ -16,11 +16,11 @@ import {
 import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
-import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxAccessService } from './sandbox-access.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxSessionsService } from './sandbox-sessions.service';
+import { SandboxGitActorService } from './sandbox-git-identity';
 import { requireSandboxAccess, type SandboxAccessLevel } from './sandbox-role-gate';
 import type { FsOp } from './sandbox-session-commands';
 
@@ -40,7 +40,7 @@ export class SandboxSessionsController {
     private readonly workspace: SandboxWorkspaceService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
-    private readonly crypto: SecretCryptoService
+    private readonly gitActors: SandboxGitActorService
   ) {}
 
   private async resolveUser(req: any) {
@@ -189,8 +189,9 @@ export class SandboxSessionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('sid', ParseUUIDPipe) sid: string
   ) {
-    const { row } = await this.access(req, id, 'viewer');
-    return this.sessions.checks(row, sid);
+    const { user, row } = await this.access(req, id, 'viewer');
+    const actor = await this.gitActors.resolve(user.id).catch(() => null);
+    return this.sessions.checks(row, sid, actor?.token ?? null);
   }
 
   @Post(':id/sessions/:sid/git/merge')
@@ -201,13 +202,9 @@ export class SandboxSessionsController {
     @Param('sid', ParseUUIDPipe) sid: string,
     @Body() body: { method?: string }
   ) {
-    const { user, row } = await this.access(req, id, 'owner');
-    return this.sessions.merge(
-      row,
-      sid,
-      this.crypto.open(user.githubAccessToken) || null,
-      body?.method
-    );
+    const { user, row } = await this.access(req, id, 'collaborator');
+    const token = await this.gitActors.requireActorToken(user.id);
+    return this.sessions.merge(row, sid, token, body?.method);
   }
 
   private async fsOp(req: any, id: string, op: FsOp, body: FsBody) {

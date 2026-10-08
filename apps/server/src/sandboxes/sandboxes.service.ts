@@ -152,7 +152,7 @@ export class SandboxesService {
   }
 
   /** The user's sandbox cap, or null when they are not capped at all. */
-  private async sandboxCap(userId: string): Promise<number | null> {
+  async sandboxCap(userId: string): Promise<number | null> {
     if (await this.authz.isSuperAdmin(userId)) return null;
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

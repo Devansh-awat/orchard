@@ -631,6 +631,24 @@ export interface SessionTerminalTarget {
   index: string;
   mode: 'rw' | 'ro';
   worktreePath: string | null;
+  terminalUserId?: string | null;
+}
+
+export interface TerminalShellEnv {
+  envFile: string;
+  tmuxEnv: string;
+}
+
+export function isScriptedTerminal(target: { sessionId: string | null; index: string }): boolean {
+  return !!target.sessionId && (target.index === 'setup' || target.index === 'run');
+}
+
+export function terminalTmuxName(target: SessionTerminalTarget, engineSessionId: string): string {
+  if (!target.sessionId) return `orchard-${engineSessionId.toLowerCase()}`;
+  const base = tmuxSessionName(target.sessionId, target.index);
+  if (isScriptedTerminal(target) || !target.terminalUserId) return base;
+  if (!isUuid(target.terminalUserId)) throw new Error('invalid terminal owner');
+  return `${base}-u${target.terminalUserId.replace(/-/g, '').toLowerCase()}`;
 }
 
 const WAIT_FOR_DEV =
@@ -640,16 +658,15 @@ const WAIT_FOR_DEV =
 
 export function sandboxTerminalCommand(
   target: SessionTerminalTarget,
-  engineSessionId: string
+  engineSessionId: string,
+  shellEnv: TerminalShellEnv | null = null
 ): string[] {
   const dir =
     target.worktreePath && isWorktreePath(target.worktreePath) ? target.worktreePath : HOME_ROOT;
-  const name = target.sessionId
-    ? tmuxSessionName(target.sessionId, target.index)
-    : `orchard-${engineSessionId.toLowerCase()}`;
+  const name = terminalTmuxName(target, engineSessionId);
   const env = 'export TERM=xterm-256color COLORTERM=truecolor; ';
   const exact = shellQuote(`=${name}`);
-  const scripted = !!target.sessionId && (target.index === 'setup' || target.index === 'run');
+  const scripted = isScriptedTerminal(target);
   const prelude = `${env}cd ${shellQuote(dir)} 2>/dev/null || cd; `;
   let inner: string;
   if (target.mode === 'ro' || scripted) {
@@ -669,6 +686,19 @@ export function sandboxTerminalCommand(
       `printf '\\033[2mWaiting for this terminal to start...\\033[0m\\r\\n'; ` +
       `while ! tmux has-session -t ${exact} 2>/dev/null; do sleep 2; done; ` +
       attach;
+  } else if (shellEnv) {
+    const file = shellQuote(shellEnv.envFile);
+    const load = `[ -r ${file} ] && . ${file}; rm -f ${file}; `;
+    const pane = `${load}${shellEnv.tmuxEnv ? `${shellEnv.tmuxEnv}; ` : ''}exec bash -l`;
+    inner =
+      prelude +
+      'if command -v tmux >/dev/null 2>&1; then ' +
+      `if tmux has-session -t ${exact} 2>/dev/null; then rm -f ${file}; exec tmux -u attach-session -t ${exact}; fi; ` +
+      `nohup sh -c ${shellQuote(`sleep 30; rm -f ${file}`)} >/dev/null 2>&1 & ` +
+      `exec tmux -u new-session -A -s ${shellQuote(name)} -c ${shellQuote(dir)} ${shellQuote(pane)}; ` +
+      'fi; ' +
+      load +
+      'exec bash -l';
   } else {
     inner =
       prelude +

@@ -27,11 +27,11 @@ import { SandboxesService } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
-import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxConnectService } from './sandbox-connect.service';
 import { requireSandboxAccess } from './sandbox-role-gate';
 import { SandboxAccessService } from './sandbox-access.service';
 import { SandboxMembersService } from './sandbox-members.service';
+import { SandboxGitActorService } from './sandbox-git-identity';
 import {
   OPENCODE_MESSAGE_ID_RE,
   newOpencodeMessageId,
@@ -51,7 +51,7 @@ export class SandboxesController {
     private readonly convos: SandboxConversationsService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
-    private readonly crypto: SecretCryptoService,
+    private readonly gitActors: SandboxGitActorService,
     private readonly connect: SandboxConnectService,
     private readonly access: SandboxAccessService,
     private readonly members: SandboxMembersService
@@ -253,9 +253,6 @@ export class SandboxesController {
   ) {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
-    const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
-      email: req.user.email
-    });
     const coAuthors =
       typeof body?.session === 'string' && body.session
         ? await this.members.coAuthors(row.id, body.session, user.id).catch(() => [])
@@ -267,10 +264,7 @@ export class SandboxesController {
       { repo: body?.repo, session: body?.session },
       message && trailers.length ? `${message.trimEnd()}\n\n${trailers.join('\n')}` : message,
       body?.files,
-      {
-        name: identity.username || 'orchard',
-        email: identity.email || 'sandbox@orchard.dev'
-      },
+      user.id,
       { amend: body?.amend, signoff: body?.signoff, trackedOnly: body?.trackedOnly }
     );
   }
@@ -284,7 +278,7 @@ export class SandboxesController {
   ) {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
-    return this.workspace.gitUncommit(row, { repo: body?.repo, session: body?.session });
+    return this.workspace.gitUncommit(row, { repo: body?.repo, session: body?.session }, user.id);
   }
 
   @Post(':id/git/push')
@@ -295,12 +289,10 @@ export class SandboxesController {
     @Body() body: { repo?: string; session?: string; force?: boolean }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    return this.workspace.gitPush(
-      row,
-      { repo: body?.repo, session: body?.session },
-      { force: body?.force }
-    );
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.workspace.gitPush(row, { repo: body?.repo, session: body?.session }, user.id, {
+      force: body?.force
+    });
   }
 
   @Post(':id/git/fetch')
@@ -311,8 +303,8 @@ export class SandboxesController {
     @Body() body: { repo?: string; session?: string }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    return this.workspace.gitFetch(row, { repo: body?.repo, session: body?.session });
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.workspace.gitFetch(row, { repo: body?.repo, session: body?.session }, user.id);
   }
 
   @Post(':id/git/pull')
@@ -323,12 +315,10 @@ export class SandboxesController {
     @Body() body: { repo?: string; session?: string; rebase?: boolean }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    return this.workspace.gitPull(
-      row,
-      { repo: body?.repo, session: body?.session },
-      { rebase: body?.rebase }
-    );
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.workspace.gitPull(row, { repo: body?.repo, session: body?.session }, user.id, {
+      rebase: body?.rebase
+    });
   }
 
   @Get(':id/git/branches')
@@ -342,6 +332,15 @@ export class SandboxesController {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'viewer');
     return this.workspace.gitBranches(row, { repo, session });
+  }
+
+  @Get(':id/git/identity')
+  async gitIdentity(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const access = await this.access.requireSandboxRole(id, user.id, 'viewer');
+    const identity = await this.gitActors.describe(user.id);
+    const canWrite = access.role === 'owner' || access.role === 'collaborator';
+    return { ...identity, canCommit: canWrite, canPush: canWrite && identity.githubLinked };
   }
 
   @Post(':id/git/checkout')
@@ -384,16 +383,12 @@ export class SandboxesController {
     }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(
-      this.access,
-      id,
-      user.id,
-      body?.remote ? 'owner' : 'collaborator'
-    );
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
     return this.workspace.gitDeleteBranch(
       row,
       { repo: body?.repo, session: body?.session },
       body?.branch || '',
+      user.id,
       {
         remote: body?.remote,
         force: body?.force
@@ -409,14 +404,11 @@ export class SandboxesController {
     @Body() body: { repo?: string; session?: string; title?: string; body?: string; base?: string }
   ) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
-      email: req.user.email
-    });
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
     return this.workspace.createPullRequest(
       row,
       { repo: body?.repo, session: body?.session },
-      this.crypto.open(identity.githubAccessToken) || null,
+      user.id,
       body || {}
     );
   }
@@ -474,7 +466,10 @@ export class SandboxesController {
         throw new BadRequestException('Prompt body must be a JSON object');
       }
       const given = req.body.messageID;
-      if (given !== undefined && (typeof given !== 'string' || !OPENCODE_MESSAGE_ID_RE.test(given))) {
+      if (
+        given !== undefined &&
+        (typeof given !== 'string' || !OPENCODE_MESSAGE_ID_RE.test(given))
+      ) {
         throw new BadRequestException('messageID is not a valid opencode message id');
       }
       const messageId = typeof given === 'string' ? given : newOpencodeMessageId();

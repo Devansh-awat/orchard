@@ -11,6 +11,7 @@ import { SandboxesController } from './sandboxes.controller';
 import { SandboxSessionsController } from './sandbox-sessions.controller';
 import { SandboxSessionsService } from './sandbox-sessions.service';
 import { SandboxAccessService } from './sandbox-access.service';
+import { SandboxGitActorService } from './sandbox-git-identity';
 import { SandboxesService } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
@@ -23,6 +24,19 @@ import { SandboxMembersService } from './sandbox-members.service';
 import { SandboxLiveService } from './live/sandbox-live.service';
 import { SandboxPreviewService } from './preview/sandbox-preview.service';
 import { SandboxAttentionService } from './sandbox-attention.service';
+import { SandboxProjectEnvService } from './links/sandbox-project-env.service';
+import { SandboxProjectLinksService } from './links/sandbox-project-links.service';
+import { SandboxPreviewDeployService } from './links/sandbox-preview-deploy.service';
+import { SandboxLinksController } from './links/sandbox-links.controller';
+import { SandboxAgentService } from './sandbox-agent.service';
+import { SandboxAgentController } from './sandbox-agent.controller';
+import { SandboxForkService } from './sandbox-fork.service';
+import { SandboxForkController } from './sandbox-fork.controller';
+import { SandboxShareLinksService } from './sandbox-share-links.service';
+import {
+  SandboxShareLinksController,
+  SandboxShareViewerController
+} from './sandbox-share-links.controller';
 import { KubernetesSandboxRunner } from './runners/kubernetes.runner';
 import { VercelSandboxRunner } from './runners/vercel.runner';
 import { SandboxSecretsService } from './runners/sandbox-secrets';
@@ -34,7 +48,16 @@ const REAPER_INTERVAL_MS = 60_000;
 
 @Module({
   imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
-  controllers: [SandboxesController, SandboxSessionsController, SandboxMembersController],
+  controllers: [
+    SandboxesController,
+    SandboxSessionsController,
+    SandboxMembersController,
+    SandboxLinksController,
+    SandboxAgentController,
+    SandboxForkController,
+    SandboxShareLinksController,
+    SandboxShareViewerController
+  ],
   providers: [
     SandboxesService,
     SandboxSecretsService,
@@ -55,23 +78,33 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxConversationsService,
     SandboxSessionsService,
     SandboxAccessService,
+    SandboxGitActorService,
     SandboxReaperService,
     SandboxEnabledGuard,
     SandboxConnectService,
     SandboxLiveService,
     SandboxMembersService,
     SandboxPreviewService,
-    SandboxAttentionService
+    SandboxAttentionService,
+    SandboxProjectEnvService,
+    SandboxProjectLinksService,
+    SandboxPreviewDeployService,
+    SandboxAgentService,
+    SandboxForkService,
+    SandboxShareLinksService
   ],
   exports: [
     SandboxesService,
+    SandboxWorkspaceService,
     SandboxRunnerRegistry,
     KubernetesSandboxRunner,
     SandboxSessionsService,
     SandboxAccessService,
+    SandboxGitActorService,
     SandboxLiveService,
     SandboxMembersService,
-    SandboxPreviewService
+    SandboxPreviewService,
+    SandboxAgentService
   ]
 })
 export class SandboxesModule implements OnModuleInit, OnModuleDestroy {

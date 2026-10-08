@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as net from 'net';
 import { randomUUID } from 'crypto';
@@ -49,10 +49,22 @@ import {
   SandboxSecrets,
   SandboxSpec,
   WriteFilesOptions,
+  forkSourceOf,
   specOf
 } from './sandbox-runner';
 import { SandboxSecretsService, sandboxSpecHash } from './sandbox-secrets';
-import { authorizedKeysFile, opencodeAuthJson, opencodeConfigJson } from './sandbox-init-files';
+import {
+  GIT_IDENTITY_INIT_FILE,
+  authorizedKeysFile,
+  gitIdentityFile,
+  opencodeAuthJson,
+  opencodeConfigJson
+} from './sandbox-init-files';
+import {
+  ORCHARD_ENV_INIT_FILE,
+  ORCHARD_ENV_SYNC_SCRIPT,
+  orchardEnvBundle
+} from '../links/sandbox-env-files';
 import { applyObservation } from './sandbox-status';
 
 const MIRROR_FRESH_MS = 60_000;
@@ -66,10 +78,12 @@ const MISSING_FILE_EXIT = 44;
 export const SANDBOX_OP_CR = 'sandbox.cr.apply';
 export const SANDBOX_OP_SECRET = 'sandbox.secret.sync';
 export const SANDBOX_OP_DESTROY = 'sandbox.destroy';
+export const SANDBOX_OP_FORK_SNAPSHOT = 'sandbox.fork.snapshot';
 
 export const sandboxCrKey = (id: string) => `sandbox:${id}:cr`;
 export const sandboxSecretKey = (id: string) => `sandbox:${id}:secret`;
 export const sandboxDestroyKey = (id: string) => `sandbox:${id}:destroy`;
+export const sandboxForkKey = (id: string) => `sandbox:${id}:fork`;
 export const SANDBOX_NS_KEY = 'sandboxes:ns';
 export const SANDBOX_NETPOL_KEY = 'sandboxes:netpol';
 
@@ -77,6 +91,47 @@ export function sandboxHomeMode(): 'block' | 'filesystem' {
   const mode = process.env.SANDBOX_HOME_MODE || 'auto';
   if (mode === 'block' || mode === 'filesystem') return mode;
   return process.env.SANDBOX_RUNTIME_CLASS ? 'block' : 'filesystem';
+}
+
+export const SNAPSHOT_GROUP = 'snapshot.storage.k8s.io';
+export const SNAPSHOT_VERSION = 'v1';
+const DEFAULT_CLASS_ANNOTATION = 'snapshot.storage.kubernetes.io/is-default-class';
+const DEFAULT_STORAGE_CLASS_ANNOTATION = 'storageclass.kubernetes.io/is-default-class';
+const FORK_PROBE_TTL_MS = 5 * 60_000;
+export const FORK_UNSUPPORTED =
+  "This cluster has no VolumeSnapshotClass for the sandbox disk's storage class, so machines here cannot be forked";
+
+export interface ForkSnapshotState {
+  name: string;
+  volumeMode: 'Block' | 'Filesystem';
+  storageClassName: string | null;
+}
+
+export function forkSnapshotOf(state: unknown): ForkSnapshotState | null {
+  const record =
+    state && typeof state === 'object' && !Array.isArray(state)
+      ? ((state as Record<string, unknown>).forkSnapshot as Record<string, unknown> | undefined)
+      : undefined;
+  if (!record || typeof record !== 'object' || typeof record.name !== 'string') return null;
+  return {
+    name: record.name,
+    volumeMode: record.volumeMode === 'Block' ? 'Block' : 'Filesystem',
+    storageClassName: typeof record.storageClassName === 'string' ? record.storageClassName : null
+  };
+}
+
+export function forkSnapshotName(podName: string): string {
+  return `${podName}-fork`;
+}
+
+export function pickSnapshotClass(classes: any[], provisioner: string): string | null {
+  const matching = classes.filter(
+    (c) => c?.driver === provisioner && typeof c?.metadata?.name === 'string'
+  );
+  const preferred =
+    matching.find((c) => c.metadata?.annotations?.[DEFAULT_CLASS_ANNOTATION] === 'true') ??
+    matching[0];
+  return preferred?.metadata?.name ?? null;
 }
 
 function isPodLive(pod: any): boolean {
@@ -166,6 +221,8 @@ export class KubernetesSandboxRunner implements SandboxRunner {
 
   private instanceIdCache: string | null = null;
 
+  private readonly forkProbe = { at: 0, value: false, running: false };
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
@@ -177,6 +234,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     this.executor.registerHandler(SANDBOX_OP_CR, (item) => this.applyCr(item));
     this.executor.registerHandler(SANDBOX_OP_SECRET, (item) => this.applySecret(item));
     this.executor.registerHandler(SANDBOX_OP_DESTROY, (item) => this.applyDestroy(item));
+    this.executor.registerHandler(SANDBOX_OP_FORK_SNAPSHOT, (item) => this.applyForkSnapshot(item));
   }
 
   get capabilities(): SandboxRunnerCapabilities {
@@ -189,9 +247,174 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       execStdin: true,
       maxRunMs: null,
       diskSizeConfigurable: true,
-      fork: false,
+      fork: this.forkCapable(),
       previews: 'none'
     };
+  }
+
+  private forkCapable(): boolean {
+    const now = Date.now();
+    if (!this.forkProbe.running && now - this.forkProbe.at > FORK_PROBE_TTL_MS) {
+      this.forkProbe.running = true;
+      void this.probeFork()
+        .then(
+          (value) => {
+            this.forkProbe.value = value;
+          },
+          () => {
+            this.forkProbe.value = false;
+          }
+        )
+        .finally(() => {
+          this.forkProbe.at = Date.now();
+          this.forkProbe.running = false;
+        });
+    }
+    return this.forkProbe.value;
+  }
+
+  private async probeFork(): Promise<boolean> {
+    if (this.configError()) return false;
+    return !!(await this.snapshotClassFor(process.env.SANDBOX_STORAGE_CLASS || null));
+  }
+
+  async snapshotClassFor(storageClassName: string | null): Promise<string | null> {
+    const storage = this.kc.makeApiClient(k8s.StorageV1Api);
+    let provisioner: string | null = null;
+    if (storageClassName) {
+      try {
+        provisioner = (await storage.readStorageClass(storageClassName)).body.provisioner ?? null;
+      } catch (e: any) {
+        if (statusCode(e) !== 404) throw e;
+      }
+    } else {
+      const classes = (await storage.listStorageClass()).body.items;
+      provisioner =
+        classes.find((c) => c.metadata?.annotations?.[DEFAULT_STORAGE_CLASS_ANNOTATION] === 'true')
+          ?.provisioner ?? null;
+    }
+    if (!provisioner) return null;
+    let items: any[] = [];
+    try {
+      const res: any = await this.custom().listClusterCustomObject(
+        SNAPSHOT_GROUP,
+        SNAPSHOT_VERSION,
+        'volumesnapshotclasses'
+      );
+      items = Array.isArray(res.body?.items) ? res.body.items : [];
+    } catch (e: any) {
+      if (statusCode(e) !== 404) throw e;
+    }
+    return pickSnapshotClass(items, provisioner);
+  }
+
+  private async homeClaim(
+    sandboxId: string,
+    podName: string
+  ): Promise<k8s.V1PersistentVolumeClaim | null> {
+    const core = this.core();
+    const labelled = await core.listNamespacedPersistentVolumeClaim(
+      this.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `${SANDBOX_ID_LABEL}=${sandboxId}`
+    );
+    const claims = labelled.body.items.length
+      ? labelled.body.items
+      : (await core.listNamespacedPersistentVolumeClaim(this.namespace)).body.items.filter((p) =>
+          p.metadata?.name?.includes(podName)
+        );
+    return claims.find((c) => !c.metadata?.deletionTimestamp) ?? null;
+  }
+
+  async forkSupport(source: SandboxRef): Promise<string | null> {
+    const error = this.configError();
+    if (error) return error;
+    const claim = await this.homeClaim(source.id, source.podName);
+    if (!claim) return 'This machine has no home volume to copy yet';
+    const snapshotClass = await this.snapshotClassFor(claim.spec?.storageClassName ?? null);
+    return snapshotClass ? null : FORK_UNSUPPORTED;
+  }
+
+  async requestFork(
+    source: SandboxRef,
+    target: SandboxRef,
+    requestedById?: string | null
+  ): Promise<void> {
+    await this.enqueueInfrastructure();
+    await this.requestSecretSync(target, requestedById);
+    await this.queue.enqueue({
+      dedupeKey: sandboxForkKey(target.id),
+      opType: SANDBOX_OP_FORK_SNAPSHOT,
+      manifest: { sandboxId: target.id, sourceSandboxId: source.id },
+      sandboxId: target.id,
+      requestedById: requestedById ?? undefined
+    });
+  }
+
+  private async failFork(sandboxId: string, message: string): Promise<never> {
+    await this.prisma.sandbox.updateMany({
+      where: { id: sandboxId, desiredState: { not: 'deleted' } },
+      data: { status: 'error', statusMessage: message }
+    });
+    throw new BadRequestException(message);
+  }
+
+  private async applyForkSnapshot(item: ApplyItemInput): Promise<void> {
+    const manifest = (item.manifest ?? {}) as { sandboxId?: unknown; sourceSandboxId?: unknown };
+    if (typeof manifest.sandboxId !== 'string' || typeof manifest.sourceSandboxId !== 'string') {
+      return;
+    }
+    const row = await this.prisma.sandbox.findUnique({
+      where: { id: manifest.sandboxId },
+      select: { ...SANDBOX_REF_SELECT, desiredState: true }
+    });
+    if (!row || row.runner !== 'kubernetes' || row.desiredState === 'deleted') return;
+    const fork = forkSourceOf(row.runnerState);
+    if (!fork || fork.sandboxId !== manifest.sourceSandboxId) return;
+    if (!forkSnapshotOf(row.runnerState)) {
+      const claim = await this.homeClaim(fork.sandboxId, fork.podName);
+      if (!claim?.metadata?.name) {
+        return this.failFork(row.id, 'The machine being forked has no home volume to copy');
+      }
+      const storageClassName = claim.spec?.storageClassName ?? null;
+      const snapshotClass = await this.snapshotClassFor(storageClassName);
+      if (!snapshotClass) return this.failFork(row.id, FORK_UNSUPPORTED);
+      const name = forkSnapshotName(row.podName);
+      await this.executor.ssaApply({
+        apiVersion: `${SNAPSHOT_GROUP}/${SNAPSHOT_VERSION}`,
+        kind: 'VolumeSnapshot',
+        metadata: {
+          name,
+          namespace: this.namespace,
+          labels: this.labels(row, await this.instanceId())
+        },
+        spec: {
+          volumeSnapshotClassName: snapshotClass,
+          source: { persistentVolumeClaimName: claim.metadata.name }
+        }
+      } as k8s.KubernetesObject);
+      const current = await this.prisma.sandbox.findUnique({
+        where: { id: row.id },
+        select: { runnerState: true }
+      });
+      const state =
+        current?.runnerState && typeof current.runnerState === 'object'
+          ? (current.runnerState as Record<string, unknown>)
+          : {};
+      const snapshot: ForkSnapshotState = {
+        name,
+        volumeMode: claim.spec?.volumeMode === 'Block' ? 'Block' : 'Filesystem',
+        storageClassName
+      };
+      await this.prisma.sandbox.updateMany({
+        where: { id: row.id },
+        data: { runnerState: { ...state, forkSnapshot: { ...snapshot } } }
+      });
+    }
+    await this.enqueueCr(row.id);
   }
 
   configError(): string | null {
@@ -448,6 +671,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
 
     const instanceId = await this.instanceId();
     const existing = await this.existingCr(row.podName);
+    if (!existing && forkSourceOf(row.runnerState) && !forkSnapshotOf(row.runnerState)) return;
     const applied = await this.executor.ssaApply(
       this.buildCr(specOf(row), instanceId, existing) as k8s.KubernetesObject
     );
@@ -461,6 +685,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       where: { id: sandboxId },
       select: {
         ...SANDBOX_REF_SELECT,
+        status: true,
         desiredState: true,
         sshIdentityId: true,
         setupScript: true
@@ -496,6 +721,21 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       where: { id: row.id },
       data: { runnerState: { ...state, secretHash: hash } }
     });
+    if (row.status === 'running') await this.pushOrchardEnv(row, data[ORCHARD_ENV_INIT_FILE] ?? '');
+  }
+
+  private async pushOrchardEnv(ref: SandboxRef, bundle: string): Promise<void> {
+    try {
+      const result = await this.exec(ref, ['/bin/sh', '-c', ORCHARD_ENV_SYNC_SCRIPT], {
+        stdin: Buffer.from(bundle, 'utf8'),
+        timeoutMs: 20_000
+      });
+      if (!result.ok) {
+        this.logger.warn(`orchard env sync exited ${result.exitCode} in ${ref.id}`);
+      }
+    } catch (e: any) {
+      this.logger.warn(`orchard env sync failed in ${ref.id}: ${e?.message}`);
+    }
   }
 
   private async applyDestroy(item: ApplyItemInput): Promise<void> {
@@ -538,6 +778,8 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     data['setup.sh'] = input.setupScript || '';
     data['opencode-auth.json'] = opencodeAuthJson(input.claudeToken);
     data['opencode-config.json'] = opencodeConfigJson(input.mcpToken);
+    data[ORCHARD_ENV_INIT_FILE] = orchardEnvBundle(input.attachedEnv);
+    data[GIT_IDENTITY_INIT_FILE] = gitIdentityFile(input.gitIdentity);
     return data;
   }
 
@@ -575,11 +817,17 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     const existingClaims = existing?.spec?.volumeClaimTemplates;
     const claims = Array.isArray(existingClaims) && existingClaims.length ? existingClaims : null;
     const homeClaim = claims?.find((c: any) => c?.metadata?.name === 'home') ?? claims?.[0];
+    const forkSnapshot = claims ? null : forkSnapshotOf(spec.runnerState);
     const homeMode = homeClaim
       ? homeClaim.spec?.volumeMode === 'Block'
         ? 'block'
         : 'filesystem'
-      : sandboxHomeMode();
+      : forkSnapshot
+        ? forkSnapshot.volumeMode === 'Block'
+          ? 'block'
+          : 'filesystem'
+        : sandboxHomeMode();
+    const storageClassName = forkSnapshot?.storageClassName ?? process.env.SANDBOX_STORAGE_CLASS;
     const runtimeClass = process.env.SANDBOX_RUNTIME_CLASS || '';
     const secretName = this.secretName(spec.podName);
     const secretEnv = (name: string, key: string) => ({
@@ -647,7 +895,9 @@ export class KubernetesSandboxRunner implements SandboxRunner {
                     { key: 'bootstrap.sh', path: 'bootstrap.sh' },
                     { key: 'setup.sh', path: 'setup.sh' },
                     { key: 'opencode-auth.json', path: 'opencode-auth.json' },
-                    { key: 'opencode-config.json', path: 'opencode-config.json' }
+                    { key: 'opencode-config.json', path: 'opencode-config.json' },
+                    { key: ORCHARD_ENV_INIT_FILE, path: ORCHARD_ENV_INIT_FILE, mode: 0o600 },
+                    { key: GIT_IDENTITY_INIT_FILE, path: GIT_IDENTITY_INIT_FILE }
                   ],
                   defaultMode: 0o644,
                   optional: false
@@ -662,8 +912,15 @@ export class KubernetesSandboxRunner implements SandboxRunner {
             spec: {
               accessModes: ['ReadWriteOnce'],
               volumeMode: homeMode === 'block' ? 'Block' : 'Filesystem',
-              ...(process.env.SANDBOX_STORAGE_CLASS
-                ? { storageClassName: process.env.SANDBOX_STORAGE_CLASS }
+              ...(storageClassName ? { storageClassName } : {}),
+              ...(forkSnapshot
+                ? {
+                    dataSource: {
+                      apiGroup: SNAPSHOT_GROUP,
+                      kind: 'VolumeSnapshot',
+                      name: forkSnapshot.name
+                    }
+                  }
                 : {}),
               resources: { requests: { storage: spec.diskSize } }
             }
@@ -736,6 +993,18 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       } catch (e: any) {
         if (statusCode(e) !== 404) throw e;
       }
+    }
+    try {
+      await custom.deleteNamespacedCustomObject(
+        SNAPSHOT_GROUP,
+        SNAPSHOT_VERSION,
+        this.namespace,
+        'volumesnapshots',
+        forkSnapshotName(podName)
+      );
+    } catch (e: any) {
+      const code = statusCode(e);
+      if (code !== 404 && code !== 403) throw e;
     }
   }
 

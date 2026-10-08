@@ -17,6 +17,7 @@ import {
   VercelSandboxRunner,
   exposedPort,
   githubNetworkPolicy,
+  VERCEL_HOST_GIT_PLACEHOLDER,
   vercelPorts,
   vercelStatusChange
 } from '../src/sandboxes/runners/vercel.runner';
@@ -254,6 +255,45 @@ test('the github token rides the network policy, not the box', () => {
     policy.allow['api.github.com'][0].transform[0].headers.authorization,
     'Bearer ghp_x'
   );
+});
+
+test('on vercel the host token only replaces the host placeholder, so a guest push keeps its own token', () => {
+  const basic = (t: string) => `Basic ${Buffer.from(`x-access-token:${t}`).toString('base64')}`;
+  const policy = githubNetworkPolicy('ghp_host') as any;
+  const [rule] = policy.allow['github.com'];
+  assert.equal(policy.allow['github.com'].length, 1);
+  assert.deepEqual(rule.match.headers, [
+    {
+      key: { regex: '(?i)^authorization$' },
+      value: { exact: basic(VERCEL_HOST_GIT_PLACEHOLDER) }
+    }
+  ]);
+  assert.equal(rule.transform[0].headers.authorization, basic('ghp_host'));
+  assert.notEqual(rule.match.headers[0].value.exact, basic('ghu_guest'));
+  assert.ok(!JSON.stringify(rule.match).includes('ghp_host'));
+  const { runner } = vercelRunner(ROW);
+  const env = runner.bootstrapEnv(ROW, SECRETS);
+  assert.equal(
+    env.GIT_TOKEN,
+    VERCEL_HOST_GIT_PLACEHOLDER,
+    'the box only ever holds the placeholder'
+  );
+  assert.ok(!JSON.stringify(env).includes('ghp_vercel_secret'));
+  assert.equal(runner.bootstrapEnv(ROW, { ...SECRETS, githubToken: null }).GIT_TOKEN, '');
+});
+
+test('a guest git exec on vercel carries the token on stdin, never in the command', async () => {
+  const box = new FakeSandbox(REF.podName, 'running');
+  const { runner } = vercelRunner({ ...ROW, status: 'running' }, { existing: box });
+  await runner.exec(REF, ['su', '-l', 'dev', '-c', 'IFS= read -r ORCHARD_GIT_TOKEN; git push'], {
+    stdin: Buffer.from('ghu_guest_tok\n')
+  });
+  const command = box.session.commands.at(-1);
+  assert.ok(!JSON.stringify(command).includes('ghu_guest_tok'));
+  const staged = box.session.writes.find((w) => w.path.startsWith('/tmp/orchard-stdin-'));
+  assert.ok(staged, 'stdin is staged as a file');
+  assert.equal(staged!.mode, 0o600);
+  assert.match(command.args[1], /rm -f "\$f"/);
 });
 
 test('provisioning creates a persistent box with no tokens in create, then stages secrets and bootstraps', async () => {

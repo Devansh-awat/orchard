@@ -52,6 +52,7 @@ export interface SandboxSecrets {
   opencodePassword: string | null;
   bridgeToken: string | null;
   attachedEnv?: Record<string, string>;
+  gitIdentity?: { name: string; email: string } | null;
 }
 
 export interface RunnerObservation {
@@ -149,6 +150,31 @@ export interface SandboxRunner {
   openPty(ref: SandboxRef, opts: PtyOptions): Promise<PtyHandle>;
   httpTarget(ref: SandboxRef, port: number): Promise<HttpTarget>;
   openTcp(ref: SandboxRef, port: number): Promise<Duplex>;
+
+  forkSupport?(source: SandboxRef): Promise<string | null>;
+  requestFork?(
+    source: SandboxRef,
+    target: SandboxRef,
+    requestedById?: string | null
+  ): Promise<void>;
+}
+
+export interface SandboxForkSource {
+  sandboxId: string;
+  podName: string;
+}
+
+function stateRecord(state: unknown): Record<string, unknown> {
+  return state && typeof state === 'object' && !Array.isArray(state)
+    ? (state as Record<string, unknown>)
+    : {};
+}
+
+export function forkSourceOf(state: unknown): SandboxForkSource | null {
+  const fork = stateRecord(stateRecord(state).forkFrom);
+  return typeof fork.sandboxId === 'string' && typeof fork.podName === 'string'
+    ? { sandboxId: fork.sandboxId, podName: fork.podName }
+    : null;
 }
 
 export class SandboxNotRunningError extends BadRequestException {

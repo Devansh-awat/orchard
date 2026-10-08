@@ -1,3 +1,9 @@
+import {
+  ORCHARD_ENV_INIT_FILE,
+  ORCHARD_ENV_PROFILE,
+  ORCHARD_ENV_SYNC_FUNCTION
+} from './links/sandbox-env-files';
+
 export const SANDBOX_PHASES = [
   'starting',
   'packages',
@@ -34,7 +40,7 @@ if [ -n "\${ORCHARD_INIT_STAGE:-}" ] && [ -d "$ORCHARD_INIT_STAGE" ]; then
     [ -f "$staged" ] || continue
     name=$(basename "$staged")
     case "$name" in
-      opencode-password|bridge-token) mode=600 ;;
+      opencode-password|bridge-token|${ORCHARD_ENV_INIT_FILE}) mode=600 ;;
       *) mode=644 ;;
     esac
     install -m "$mode" "$staged" "/orchard-init/.$name.tmp" && mv -f "/orchard-init/.$name.tmp" "/orchard-init/$name"
@@ -230,6 +236,22 @@ if [ -n "\${GIT_TOKEN:-}" ]; then
   su dev -c 'git config --global credential.helper store'
 fi
 
+if [ -s /orchard-init/git-identity ] && have git; then
+  git_name=$(sed -n 1p /orchard-init/git-identity)
+  git_email=$(sed -n 2p /orchard-init/git-identity)
+  git_marker=/persist/home/.config/orchard/git-identity
+  git_current=$(git config --file /persist/home/.gitconfig user.email 2>/dev/null || true)
+  git_previous=$(sed -n 2p "$git_marker" 2>/dev/null || true)
+  if [ -n "$git_name" ] && [ -n "$git_email" ] && { [ -z "$git_current" ] || [ "$git_current" = "$git_previous" ]; }; then
+    git config --file /persist/home/.gitconfig user.name "$git_name"
+    git config --file /persist/home/.gitconfig user.email "$git_email"
+    chown dev:dev /persist/home/.gitconfig
+    mkdir -p "$(dirname "$git_marker")"
+    printf '%s\\n%s\\n' "$git_name" "$git_email" > "$git_marker"
+    chown -R dev:dev /persist/home/.config/orchard
+  fi
+fi
+
 : > /etc/profile.d/sandbox-agents.sh
 if [ -n "\${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   printf 'export CLAUDE_CODE_OAUTH_TOKEN=%q\\n' "$CLAUDE_CODE_OAUTH_TOKEN" >> /etc/profile.d/sandbox-agents.sh
@@ -257,6 +279,17 @@ if [ -s /orchard-init/setup.sh ] && [ ! -f /persist/.setup-done ]; then
       echo "[setup] exited with status $status" >> /persist/home/.setup.log
     fi
   ) &
+fi
+
+${ORCHARD_ENV_SYNC_FUNCTION}
+if [ -f /orchard-init/${ORCHARD_ENV_INIT_FILE} ]; then
+  orchard_env_sync < /orchard-init/${ORCHARD_ENV_INIT_FILE}
+fi
+cat > /etc/profile.d/orchard-env.sh <<'ORCHARDENV'
+${ORCHARD_ENV_PROFILE}ORCHARDENV
+chmod 644 /etc/profile.d/orchard-env.sh
+if [ -f /persist/home/.bashrc ] && ! grep -q 'orchard-env.sh' /persist/home/.bashrc; then
+  printf '[ -r /etc/profile.d/orchard-env.sh ] && . /etc/profile.d/orchard-env.sh\\n' >> /persist/home/.bashrc
 fi
 
 mkdir -p /persist/home/.config/opencode /persist/home/.local/share/opencode

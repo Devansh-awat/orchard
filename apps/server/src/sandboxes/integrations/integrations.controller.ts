@@ -1,0 +1,117 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards
+} from '@nestjs/common';
+import { Auth } from '../../auth/decorators';
+import { requestAuthStorage } from '../../auth/request-context';
+import { UsersService } from '../../users/users.service';
+import { AnalyticsService } from '../../analytics/analytics.service';
+import { SandboxEnabledGuard } from '../sandbox-enabled.guard';
+import { SandboxAccessService } from '../sandbox-access.service';
+import { requireSandboxAccess } from '../sandbox-role-gate';
+import { GreenhouseIssuesService } from './greenhouse-issues.service';
+import { SlackLinkService } from './slack-link.service';
+
+@Auth()
+@UseGuards(SandboxEnabledGuard)
+@Controller()
+export class IntegrationsController {
+  constructor(
+    private readonly issues: GreenhouseIssuesService,
+    private readonly slackLinks: SlackLinkService,
+    private readonly accessService: SandboxAccessService,
+    private readonly usersService: UsersService,
+    private readonly analytics: AnalyticsService
+  ) {}
+
+  private async resolveUser(req: any) {
+    const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
+      email: req.user.email
+    });
+    if (
+      this.analytics.configured &&
+      !(await this.analytics.isFeatureEnabled('greenhouse', user.id))
+    ) {
+      throw new NotFoundException('Sandbox feature is not enabled for your account');
+    }
+    return user;
+  }
+
+  @Get('users/me/integrations')
+  async linked(@Req() req: any) {
+    const user = await this.resolveUser(req);
+    return this.issues.linkedIntegrations(user.id);
+  }
+
+  @Post('integrations/slack/link')
+  async linkSlack(@Req() req: any, @Body() body: { token?: unknown }) {
+    const ctx = requestAuthStorage.getStore();
+    if (ctx?.sessionOrgId || ctx?.tokenProjectIds?.length) {
+      throw new ForbiddenException('Link Slack from a regular Orchard session');
+    }
+    const user = await this.resolveUser(req);
+    return this.slackLinks.confirm(user.id, body?.token);
+  }
+
+  @Delete('users/me/integrations/slack')
+  async unlinkSlack(@Req() req: any) {
+    const user = await this.resolveUser(req);
+    return this.slackLinks.unlinkUser(user.id);
+  }
+
+  @Get('users/me/integrations/linear')
+  async linearStatus(@Req() req: any) {
+    const user = await this.resolveUser(req);
+    return this.issues.linearStatus(user.id);
+  }
+
+  @Put('users/me/integrations/linear')
+  async connectLinear(@Req() req: any, @Body() body: { apiKey?: unknown }) {
+    const user = await this.resolveUser(req);
+    return this.issues.connectLinear(user.id, body?.apiKey);
+  }
+
+  @Delete('users/me/integrations/linear')
+  async disconnectLinear(@Req() req: any) {
+    const user = await this.resolveUser(req);
+    return this.issues.disconnectLinear(user.id);
+  }
+
+  @Get('integrations/linear/issues')
+  async linearIssues(@Req() req: any, @Query('q') q?: string) {
+    const user = await this.resolveUser(req);
+    return this.issues.linearIssues(user.id, q);
+  }
+
+  @Get('sandboxes/:id/issues')
+  async sandboxIssues(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('provider') provider?: string,
+    @Query('repo') repo?: string,
+    @Query('q') q?: string
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await requireSandboxAccess(this.accessService, id, user.id, 'collaborator');
+    if (provider === 'linear') {
+      const result = await this.issues.linearIssues(user.id, q);
+      return { repo: null, ...result };
+    }
+    if (provider !== undefined && provider !== 'github') {
+      throw new BadRequestException("provider must be 'github' or 'linear'");
+    }
+    return this.issues.githubIssuesFor(row, user.id, repo, q);
+  }
+}
