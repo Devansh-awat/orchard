@@ -2189,6 +2189,21 @@ a.dep-meta-lead-link:hover {
 	gap: 0.75rem;
 }
 
+.vol-observed {
+	margin: 0.5rem 0 0 2.25rem;
+	font-size: var(--text-caption);
+	line-height: var(--lh-caption);
+	color: var(--text-muted);
+}
+
+.vol-observed--busy {
+	color: var(--status-warning);
+}
+
+.vol-observed--bad {
+	color: var(--status-error);
+}
+
 .vol-card-number {
 	flex-shrink: 0;
 	width: 1.5rem;

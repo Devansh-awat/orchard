@@ -128,7 +128,8 @@
 		ServicePortForm,
 		ServiceFormState,
 		WebhookToken,
-		TerminalTabInfo
+		TerminalTabInfo,
+		VolumeObservation
 	} from '$lib/types/deployment';
 	import type { Binding, BindingOption } from '$lib/components/deployment/bindings';
 	import {
@@ -982,15 +983,17 @@
 		}
 	}
 	let volumes = $state<
-		Array<{
-			name: string;
-			type: 'pvc' | 'hostPath' | 'emptyDir';
-			mountPath: string;
-			pvcName?: string;
-			storageSize?: string;
-			hostPath?: string;
-			readOnly: boolean;
-		}>
+		Array<
+			{
+				name: string;
+				type: 'pvc' | 'hostPath' | 'emptyDir';
+				mountPath: string;
+				pvcName?: string;
+				storageSize?: string;
+				hostPath?: string;
+				readOnly: boolean;
+			} & VolumeObservation
+		>
 	>([]);
 	let isEditingEnv = $state(false);
 	let isEditingVolumes = $state(false);
@@ -1423,7 +1426,12 @@
 						pvcName: vol.pvcName || '',
 						storageSize: vol.storageSize || '1Gi',
 						hostPath: vol.hostPath || '',
-						readOnly: vol.readOnly || false
+						readOnly: vol.readOnly || false,
+						observedCapacity: vol.observedCapacity ?? null,
+						phase: vol.phase ?? null,
+						resizeState: vol.resizeState ?? null,
+						resizeMessage: vol.resizeMessage ?? null,
+						observedAt: vol.observedAt ?? null
 					}));
 				} else {
 					volumes = [];

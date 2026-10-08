@@ -4,7 +4,9 @@
 	import { slide, fade } from '$lib/utils/transitions';
 	import { SectionCard } from '$lib/components/ui';
 
-	interface VolumeEntry {
+	import type { VolumeObservation } from '$lib/types/deployment';
+
+	interface VolumeEntry extends VolumeObservation {
 		name: string;
 		type: 'pvc' | 'hostPath' | 'emptyDir';
 		mountPath: string;
@@ -12,6 +14,43 @@
 		storageSize?: string;
 		hostPath?: string;
 		readOnly: boolean;
+	}
+
+	type ObservedTone = 'ok' | 'busy' | 'bad';
+
+	function observed(volume: VolumeEntry): { text: string; tone: ObservedTone } | null {
+		if (!volume.observedAt && !volume.phase) return null;
+		if (volume.phase === 'Missing') {
+			return { text: 'Not found in the cluster. It is created on the next deploy.', tone: 'bad' };
+		}
+		if (volume.resizeState === 'failed') {
+			return {
+				text: `Resize to ${volume.storageSize} failed${volume.resizeMessage ? `: ${volume.resizeMessage}` : ''}`,
+				tone: 'bad'
+			};
+		}
+		if (volume.resizeState === 'pendingRestart') {
+			return {
+				text: `${volume.observedCapacity ?? 'Current size'} provisioned. Grows to ${volume.storageSize} once the app restarts.`,
+				tone: 'busy'
+			};
+		}
+		if (volume.resizeState === 'resizing') {
+			return {
+				text: `Resizing ${volume.observedCapacity ? `from ${volume.observedCapacity} ` : ''}to ${volume.storageSize}`,
+				tone: 'busy'
+			};
+		}
+		if (volume.phase === 'Pending') {
+			return { text: 'Waiting for storage to be provisioned', tone: 'busy' };
+		}
+		if (volume.phase === 'Lost') {
+			return { text: 'The underlying volume was lost', tone: 'bad' };
+		}
+		if (volume.observedCapacity) {
+			return { text: `${volume.observedCapacity} provisioned`, tone: 'ok' };
+		}
+		return null;
 	}
 
 	let {
@@ -107,6 +146,10 @@
 						>
 					</div>
 				</div>
+				{#if observed(volume)}
+					{@const seen = observed(volume)!}
+					<p class="vol-observed vol-observed--{seen.tone}">{seen.text}</p>
+				{/if}
 			</div>
 		{:else}
 			<div class="text-center py-8" transition:fade={{ duration: 150 }}>

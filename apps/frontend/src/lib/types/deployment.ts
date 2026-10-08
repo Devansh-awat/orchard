@@ -94,7 +94,17 @@ export interface ImageHistory {
 	};
 }
 
-export interface Volume {
+export type VolumeResizeState = 'resizing' | 'pendingRestart' | 'failed';
+
+export interface VolumeObservation {
+	observedCapacity?: string | null;
+	phase?: string | null;
+	resizeState?: VolumeResizeState | null;
+	resizeMessage?: string | null;
+	observedAt?: string | null;
+}
+
+export interface Volume extends VolumeObservation {
 	id: string;
 	name: string;
 	type: 'pvc' | 'hostPath' | 'emptyDir';
