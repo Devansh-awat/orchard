@@ -71,6 +71,7 @@
     "test:dockerfile-health-check": "tsx --test test/dockerfile-health-check.test.ts",
     "test:env-secret-write-only": "tsx --test test/env-secret-write-only.test.ts",
     "test:job-snapshot": "tsx --test test/job-snapshot.test.ts",
+    "test:job-step-env": "tsx --test test/job-step-env-resolve.test.ts",
     "test:email-template": "tsx --test test/email-template.test.ts",
     "test:query-stats": "tsx --test test/query-stats.test.ts",
     "test:deployment-lifecycle": "tsx --test test/deployment-lifecycle.test.ts",

@@ -22,6 +22,8 @@ import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runti
 import { decodeStepsSnapshot, encodeStepsSnapshot } from './steps-snapshot';
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { pullSecretsForImage } from '../projects/registry-credentials';
+import { ResourceBindingsService } from '../projects/resource-bindings.service';
+import { resolveEnvVars, EnvVar, ResourceValues } from '../env/env-resolver';
 
 export const JOB_MANAGED_BY = 'orchard-job';
 export const LABEL_JOB_ID = 'orchard/job-id';
@@ -83,7 +85,8 @@ export class JobsOrchestratorService {
     private readonly nodes: NodesService,
     private readonly jobsService: JobsService,
     private readonly crypto: SecretCryptoService,
-    private readonly registryCredentials: RegistryCredentialsService
+    private readonly registryCredentials: RegistryCredentialsService,
+    private readonly resourceBindings: ResourceBindingsService
   ) {}
 
   // Resolve a job's step-pod scheduling: org hostname allow/deny + assigned
@@ -129,21 +132,51 @@ export class JobsOrchestratorService {
     });
     const resolved: ResolvedStep[] = [];
     for (const step of job.steps) {
-      resolved.push(await this.resolveStep(step, job.project.id));
+      resolved.push(await this.resolveStep(step, job));
     }
     return resolved;
   }
 
-  private async resolveStep(step: any, projectId: string): Promise<ResolvedStep> {
+  private async loadSharedVars(environmentId: string | null | undefined): Promise<EnvVar[]> {
+    if (!environmentId) return [];
+    const vars = await this.prisma.environmentSharedVar.findMany({
+      where: { environmentId },
+      select: { key: true, value: true, secret: true }
+    });
+    return vars.map((v) => this.crypto.maybeDecrypt(v));
+  }
+
+  private resolveStepEnv(
+    step: { stepOrder: number; name: string },
+    raw: EnvVar[],
+    shared: EnvVar[],
+    resources: ResourceValues
+  ): EnvVar[] {
+    const { resolved, errors } = resolveEnvVars(raw, shared, resources);
+    for (const e of errors) {
+      this.logger.warn(
+        `Step ${step.stepOrder} (${step.name}): ${e.key} references shared.${e.missingRef}, which is not defined`
+      );
+    }
+    return resolved;
+  }
+
+  private async resolveStep(
+    step: any,
+    job: { environmentId?: string | null; project: { id: string } }
+  ): Promise<ResolvedStep> {
+    const projectId = job.project.id;
+    const shared = await this.loadSharedVars(job.environmentId);
     const resources = await this.quotas.resolvePodResources(projectId, {
       cpuRequestMilli: step.cpuRequestMilli,
       memoryRequestBytes: step.memoryRequestBytes != null ? Number(step.memoryRequestBytes) : null
     });
 
+    const ownEnv = (step.envVars as EnvVar[]) ?? [];
     const base = {
       stepOrder: step.stepOrder,
       name: step.name,
-      envVars: (step.envVars as { key: string; value: string }[]) ?? [],
+      envVars: ownEnv,
       cpuMilli: resources.cpuMilli,
       memoryBytes: resources.memoryBytes,
       timeoutSeconds: step.timeoutSeconds,
@@ -156,6 +189,7 @@ export class JobsOrchestratorService {
       return {
         ...base,
         type: 'script',
+        envVars: this.resolveStepEnv(step, ownEnv, shared, {}),
         image: spec.image,
         script: step.script,
         scriptRuntime: runtime,
@@ -167,6 +201,7 @@ export class JobsOrchestratorService {
       return {
         ...base,
         type: 'image',
+        envVars: this.resolveStepEnv(step, ownEnv, shared, {}),
         image: step.image,
         shell: (step.command as any)?.shell ?? null
       };
@@ -199,14 +234,20 @@ export class JobsOrchestratorService {
     for (const e of deployment.envVars) {
       merged.set(e.key, { value: this.crypto.maybeDecrypt(e).value, secret: !!e.secret });
     }
-    for (const e of base.envVars) merged.set(e.key, { value: e.value });
+    for (const e of ownEnv) merged.set(e.key, { value: e.value, secret: !!e.secret });
 
+    const bound = await this.resourceBindings.valuesFor(deployment.id);
     return {
       ...base,
       type: 'app',
       image: deployment.image,
       shell: (step.command as any)?.shell ?? null,
-      envVars: Array.from(merged, ([key, { value, secret }]) => ({ key, value, secret }))
+      envVars: this.resolveStepEnv(
+        step,
+        Array.from(merged, ([key, { value, secret }]) => ({ key, value, secret })),
+        shared,
+        bound
+      )
     };
   }
 
@@ -384,7 +425,7 @@ export class JobsOrchestratorService {
 
     const resolved: ResolvedStep[] = [];
     for (const step of job.steps) {
-      resolved.push(await this.resolveStep(step, job.project.id));
+      resolved.push(await this.resolveStep(step, job));
     }
 
     await this.syncJobScriptsConfigMap(ctx, resolved, labels);
@@ -546,7 +587,7 @@ export class JobsOrchestratorService {
 
     const resolved: ResolvedStep[] = [];
     for (const step of job.steps) {
-      resolved.push(await this.resolveStep(step, job.project.id));
+      resolved.push(await this.resolveStep(step, job));
     }
 
     const run = await this.createRunRecordSafe(job, resolved, {
@@ -737,7 +778,7 @@ export class JobsOrchestratorService {
     try {
       resolved = [];
       for (const step of job.steps) {
-        resolved.push(await this.resolveStep(step, job.project.id));
+        resolved.push(await this.resolveStep(step, job));
       }
     } catch (err: any) {
       await this.deleteK8sJob(namespace, k8sName);

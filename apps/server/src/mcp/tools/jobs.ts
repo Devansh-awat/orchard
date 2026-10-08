@@ -29,7 +29,9 @@ const stepSchema = z.object({
   envVars: z
     .array(z.object({ key: z.string(), value: z.string() }))
     .optional()
-    .describe('Environment variables (for app steps these override the deployment env)'),
+    .describe(
+      'Environment variables (for app steps these override the deployment env). A value of `${{shared.KEY}}` expands to the environment shared variable KEY when the step pod is built, same as for deployments.'
+    ),
   timeoutSeconds: z
     .number()
     .int()
