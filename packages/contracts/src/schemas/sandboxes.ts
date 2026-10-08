@@ -246,6 +246,52 @@ const credentialPresence = z.object({
   openai: z.boolean().describe('Whether an OpenAI/Codex token is stored')
 });
 
+const shareRoutes = {
+  'GET /share/sandbox/:token': {
+    summary:
+      "Open a share link: requires a signed-in member of the machine's organization; returns the shared sessions",
+    response: z.object({
+      link: z.object({
+        id: z.string().uuid(),
+        sessionId: sessionId.nullable(),
+        expiresAt: z.string().nullable(),
+        createdBy: sessionUser.nullable()
+      }),
+      sandbox: z.object({ id: z.string().uuid(), name: z.string(), status: sandboxStatus }),
+      sessions: z.array(
+        z.object({
+          id: sessionId,
+          title: z.string(),
+          repo: z.string().nullable(),
+          branch: z.string().nullable(),
+          baseBranch: z.string().nullable(),
+          status: z.enum(['active', 'archived']),
+          prUrl: z.string().nullable(),
+          createdAt: z.string()
+        })
+      )
+    }),
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/transcript': {
+    summary: 'Read-only transcript of a shared session',
+    request: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+    response: sessionTranscript,
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/changes': {
+    summary: 'Changed files in a shared session worktree (machine must be running)',
+    response: workspaceChanges,
+    scope: 'read'
+  },
+  'GET /share/sandbox/:token/sessions/:sid/diff': {
+    summary: 'Diff of a shared session worktree, whole tree or one file via ?file=',
+    request: z.object({ file: z.string().optional() }),
+    response: workspaceDiff,
+    scope: 'read'
+  }
+} satisfies Record<`${string} /${string}`, RouteAttachment>;
+
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /sandboxes': {
     summary:
@@ -333,6 +379,15 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/stop': {
     summary: 'Suspend a running sandbox (workspace and host key persist)',
     response: sandbox,
+    scope: 'deploy'
+  },
+  'POST /sandboxes/:id/apply/retry': {
+    summary:
+      "Requeue the sandbox's failed apply operations (applyError) with fresh retries; host or org admin",
+    response: z.object({
+      success: z.literal(true),
+      retried: z.number().int().describe('Failed operations put back on the queue')
+    }),
     scope: 'deploy'
   },
   'DELETE /sandboxes/:id': {
@@ -474,11 +529,17 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .describe('Worktree session; sets the working directory to its worktree'),
       title: z.string().min(1).max(300),
       body: z.string().max(20000).optional(),
-      base: z.string().max(200).optional()
+      base: z.string().max(200).optional(),
+      draft: z.boolean().optional().describe('Open the pull request as a draft')
     }),
     response: z.object({
       url: z.string(),
-      number: z.number().int().nullable().describe('Recorded on the session when one is given')
+      number: z.number().int().nullable().describe('Recorded on the session when one is given'),
+      pushed: z
+        .boolean()
+        .describe(
+          'The branch had no upstream on origin or unpushed commits, so it was pushed first as the caller'
+        )
     }),
     scope: 'exec'
   },
@@ -678,7 +739,8 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'exec'
   },
   'GET /sandboxes/:id/sessions/:sid/ports': {
-    summary: 'TCP ports the dev user is listening on, flagged when started from this worktree',
+    summary:
+      'TCP ports the dev user is listening on, flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet',
     response: z.object({
       ports: z.array(
         z.object({
@@ -689,7 +751,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
           inSession: z.boolean(),
           loopbackOnly: z
             .boolean()
-            .describe('Bound to 127.0.0.1 only, so a preview cannot reach it')
+            .describe('Bound to 127.0.0.1 only, so a preview cannot reach it'),
+          listening: z.boolean().describe('A process is listening on it right now'),
+          declared: z
+            .boolean()
+            .describe('Listed in .orchard/greenhouse.json ports, which also allows previewing it')
         })
       )
     }),
@@ -893,47 +959,22 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: shareLink,
     scope: 'deploy'
   },
-  'GET /share/sandbox/:token': {
+  ...shareRoutes,
+  'GET /share/sandbox': {
+    ...shareRoutes['GET /share/sandbox/:token'],
     summary:
-      "Open a share link: requires a signed-in member of the machine's organization; returns the shared sessions",
-    response: z.object({
-      link: z.object({
-        id: z.string().uuid(),
-        sessionId: sessionId.nullable(),
-        expiresAt: z.string().nullable(),
-        createdBy: sessionUser.nullable()
-      }),
-      sandbox: z.object({ id: z.string().uuid(), name: z.string(), status: sandboxStatus }),
-      sessions: z.array(
-        z.object({
-          id: sessionId,
-          title: z.string(),
-          repo: z.string().nullable(),
-          branch: z.string().nullable(),
-          baseBranch: z.string().nullable(),
-          status: z.enum(['active', 'archived']),
-          prUrl: z.string().nullable(),
-          createdAt: z.string()
-        })
-      )
-    }),
-    scope: 'read'
+      'Open a share link with the token in the X-Orchard-Share-Token header instead of the path, so it stays out of access logs'
   },
-  'GET /share/sandbox/:token/sessions/:sid/transcript': {
-    summary: 'Read-only transcript of a shared session',
-    request: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
-    response: sessionTranscript,
-    scope: 'read'
+  'GET /share/sandbox/sessions/:sid/transcript': {
+    ...shareRoutes['GET /share/sandbox/:token/sessions/:sid/transcript'],
+    summary: 'Read-only transcript of a shared session (token in X-Orchard-Share-Token)'
   },
-  'GET /share/sandbox/:token/sessions/:sid/changes': {
-    summary: 'Changed files in a shared session worktree (machine must be running)',
-    response: workspaceChanges,
-    scope: 'read'
+  'GET /share/sandbox/sessions/:sid/changes': {
+    ...shareRoutes['GET /share/sandbox/:token/sessions/:sid/changes'],
+    summary: 'Changed files in a shared session worktree (token in X-Orchard-Share-Token)'
   },
-  'GET /share/sandbox/:token/sessions/:sid/diff': {
-    summary: 'Diff of a shared session worktree, whole tree or one file via ?file=',
-    request: z.object({ file: z.string().optional() }),
-    response: workspaceDiff,
-    scope: 'read'
+  'GET /share/sandbox/sessions/:sid/diff': {
+    ...shareRoutes['GET /share/sandbox/:token/sessions/:sid/diff'],
+    summary: 'Diff of a shared session worktree (token in X-Orchard-Share-Token)'
   }
 };

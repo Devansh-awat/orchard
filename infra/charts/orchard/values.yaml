@@ -586,11 +586,17 @@ builderSandbox:
 # Kata VMs when runtimeClassName is set) and "vercel" (Vercel Sandbox microVMs).
 # Operator guide: apps/docs/src/content/docs/operate/greenhouse.md.
 #
-# enabled=true sets SANDBOX_ENABLED=true (locking the admin switch on) and
-# renders the namespace, quota, NetworkPolicy, RBAC and SANDBOX_* settings the
-# kubernetes runner needs. With enabled=false none of that is rendered and the
-# admin switch at Instance admin -> Configuration decides (off by default in
-# production); `runners` is rendered either way.
+# Installed and enabled are separate:
+#   - install renders the namespace, quota, NetworkPolicy, RBAC and SANDBOX_*
+#     settings the kubernetes runner needs. null follows `enabled`.
+#   - enabled=true starts the admin switch (Instance admin -> Configuration) on
+#     without locking it (SANDBOX_ENABLED_DEFAULT=true), so admins can still
+#     turn Greenhouse off and on. With enabled=false the switch starts off in
+#     production.
+#   - lockEnabled true/false pins the switch with SANDBOX_ENABLED (and the
+#     frontend's PUBLIC_SANDBOX_ENABLED); null leaves it to the admin.
+# `runners` is rendered either way. To ship the plumbing but let admins turn
+# Greenhouse on later: install=true, enabled=false.
 #
 # REQUIREMENTS for the kubernetes runner:
 #   1. agent-sandbox controller + CRDs installed in the cluster (pinned
@@ -606,6 +612,8 @@ builderSandbox:
 # Node.js, Claude Code, Codex and opencode into `image` on first boot.
 sandbox:
   enabled: false
+  install: null
+  lockEnabled: null
   namespace: orchard-sandboxes
   image: debian:bookworm
   runtimeClassName: kata
@@ -657,14 +665,30 @@ sandbox:
       timeoutMinutes: ""
     # https URL of the linux/amd64 orchard CLI tarball that Vercel machines run
     # as their ssh bridge. Empty = the release matching the server's pinned
-    # version.
+    # version, verified against that release's checksums.txt.
     bridgeBinaryUrl: ""
+    # SHA-256 of the bridgeBinaryUrl tarball. Required when bridgeBinaryUrl is
+    # set; machines refuse a download that does not match.
+    bridgeBinarySha256: ""
     # Bare domain for kubernetes preview URLs (<port>-<machine>.<domain>), e.g.
     # orchard-preview.dev. Must not be, contain or sit under the Orchard cookie
-    # domain or hostnames. Needs wildcard DNS, a wildcard certificate and a
-    # route sending every path on *.<domain> to the server service; this chart
-    # does not create that route. Empty = kubernetes previews off.
+    # domain or hostnames. Needs wildcard DNS pointing at the ingress; the
+    # route and certificate come from `previews` below. Empty = kubernetes
+    # previews off.
     previewDomain: ""
+  # Rendered only when runners.previewDomain is set.
+  previews:
+    # A Traefik IngressRoute sending every path on *.<previewDomain> to the
+    # server service, on ingress.entryPoints. Set false to bring your own.
+    route: true
+    tls:
+      # Secret Traefik terminates preview TLS with. Empty = <release>-sandbox-previews-tls.
+      secretName: ""
+      # cert-manager issuer for the *.<previewDomain> certificate. Wildcards
+      # need a DNS-01 issuer. Empty = certificates.issuer when
+      # certificates.enabled, else no Certificate is rendered and secretName
+      # must already exist.
+      issuerRef: {}
   quota:
     pods: "20"
     cpu: "40"

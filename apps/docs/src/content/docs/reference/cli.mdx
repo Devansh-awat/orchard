@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **366 commands** are available.
+override the saved context. **367 commands** are available.
 
 ## alert
 
@@ -3221,6 +3221,14 @@ orchard list <sandbox>
 ```
 
 Aliases: `ls`
+
+### `orchard sandbox retry`
+
+Retry a sandbox's failed cluster or Vercel changes
+
+```bash
+orchard retry <name>
+```
 
 ### `orchard sandbox session`
 

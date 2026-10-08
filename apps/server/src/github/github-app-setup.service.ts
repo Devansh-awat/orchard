@@ -6,6 +6,14 @@ import { GithubAppConfigService } from './github-app-config.service';
 const STATE_KEY = 'github_app_manifest_state';
 const STATE_TTL_MS = 15 * 60 * 1000;
 
+export const GITHUB_APP_PERMISSIONS = {
+  contents: 'read',
+  metadata: 'read',
+  issues: 'write'
+} as const;
+
+export const GITHUB_APP_EVENTS = ['push', 'repository', 'issue_comment'] as const;
+
 interface StateRecord {
   value: string;
   expiresAt: string;
@@ -76,11 +84,8 @@ export class GithubAppSetupService {
       redirect_url: `${base}/apiv1/setup/github-app/callback`,
       callback_urls: [this.config.callbackUrl()],
       public: false,
-      default_permissions: {
-        contents: 'read',
-        metadata: 'read'
-      },
-      default_events: ['push', 'repository']
+      default_permissions: GITHUB_APP_PERMISSIONS,
+      default_events: GITHUB_APP_EVENTS
     };
 
     const postUrl = organization

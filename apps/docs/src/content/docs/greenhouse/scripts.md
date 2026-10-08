@@ -25,7 +25,7 @@ Commit it at `.orchard/greenhouse.json` in the repository root:
 | ------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `setup` | string, or array of strings | Runs once, automatically, when a session's worktree is created.                                                                                |
 | `run`   | string, or array of strings | Runs when someone presses **Run** in the terminal dock.                                                                                        |
-| `ports` | array of numbers            | Declares the ports your app serves on. Up to 20; anything outside 1 to 65535 is ignored. Listening ports are detected on their own either way. |
+| `ports` | array of numbers            | Declares the ports your app serves on: up to 10, from 1024 to 65535, not 2222 or 4096. They show in the **Ports** tab before anything listens on them, and on Kubernetes machines they can be previewed even when they are not one of the standard preview ports. Listening ports are detected on their own either way. |
 
 All keys are optional. An array is joined with newlines, so it reads as a
 multi-line script:
@@ -81,8 +81,8 @@ restarts it, so only one run script per session runs at a time. Starting and sto
 or higher; everyone can watch the output.
 
 The run script is the natural home for a dev server. Bind it to `0.0.0.0`, not
-`localhost`, on one of the preview ports so you can open it from the **Ports**
-tab; see [Previews and ports](/greenhouse/previews/).
+`localhost`, on one of the preview ports, or a port you list under `ports`, so you
+can open it from the **Ports** tab; see [Previews and ports](/greenhouse/previews/).
 
 ## Machine setup versus session setup
 

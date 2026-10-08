@@ -1,12 +1,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { PrismaClient } from '@prisma/client';
+import { testPrismaClient } from './support/test-database';
 import { ApplyQueueService } from '../src/apply/apply-queue.service';
 import { ApplyResult } from '../src/apply/apply-executor.service';
 
 process.env.APPLY_WORKER_DISABLED = 'true';
 
-const prisma = new PrismaClient();
+const prisma = testPrismaClient();
 const KEY = 'test:apply-queue:item';
 
 function makeService(execute: (item: unknown) => Promise<ApplyResult>) {

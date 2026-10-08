@@ -27,7 +27,18 @@ When other people prompted the agent in this session, a `Co-authored-by` trailer
 is added for each of them.
 
 The agent commits too, when you ask it to. Its commits are the host's, because
-the agent runs as the host, with trailers for the people who prompted it.
+the agent runs as the host. Each one carries a `Co-authored-by` trailer for
+everyone else who prompted the agent in the current turn: from the prompt that
+woke the agent up until it went idle again, including prompts queued while it was
+working. The host is never listed, being the author, and nor is whoever made the
+commit. Trailers use each person's GitHub `noreply` address when they have linked
+GitHub.
+
+This works through a `prepare-commit-msg` hook that Greenhouse sets on the
+session's worktree only (`core.hooksPath`, scoped to that worktree). It runs the
+repository's own hooks first, Husky included, so pre-commit checks keep working,
+and it applies to `git commit` from terminals as well. Sessions created before
+this existed get the hook when they are restored from the archive.
 
 ## Push and open a pull request
 
@@ -42,8 +53,13 @@ moves along:
 
 **Push only** pushes the session branch to `origin`. **Create PR** opens a pull
 request from the session branch into its base branch (the branch it was created
-from, or the repository's default), titled after the session. Push the branch
-before creating the pull request, or ask the agent to push it.
+from, or the repository's default), titled after the session. **Create draft pull
+request** opens it as a draft.
+
+You do not need to push first. When the branch has no upstream on `origin` yet,
+or has commits that are not pushed, creating the pull request pushes it, as you
+and with your GitHub token, and then opens the pull request. Uncommitted changes
+are not included: commit them first.
 
 The pull request's number, URL and state are kept on the session, so the session
 row, the share link and the CLI all show it.

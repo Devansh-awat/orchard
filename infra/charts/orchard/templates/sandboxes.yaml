@@ -1,4 +1,4 @@
-{{- if .Values.sandbox.enabled }}
+{{- if include "orchard.sandboxInstalled" . }}
 {{- $sns := .Values.sandbox.namespace -}}
 {{- $appNs := .Values.namespace -}}
 # PSA privileged for the same reason as orchard-builders: the sandbox
@@ -52,11 +52,12 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  # Stricter than the tenant policy: no same-namespace peers, no internal
-  # carve-outs. Ingress only from the orchard server (the SSH tunnel);
-  # egress only DNS + the public internet, minus RFC1918/link-local/CGNAT
-  # so a sandboxed agent can't reach the apiserver, IMDS, or any cluster
-  # service by IP.
+  # Must stay identical to networkPolicyManifest() in the server's kubernetes
+  # runner, which re-applies this object on every leader election
+  # (test:chart compares the two). Ingress only from the orchard server: SSH,
+  # the agent server and the preview ports. Egress only DNS + the public
+  # internet, minus RFC1918/link-local/CGNAT so a sandboxed agent can't reach
+  # the apiserver, IMDS, or any cluster service by IP.
   ingress:
     - from:
         - namespaceSelector:
@@ -66,10 +67,10 @@ spec:
             matchLabels:
               app.kubernetes.io/name: server
       ports:
-        - port: 22
+        {{- range (include "orchard.sandboxIngressPorts" . | fromJsonArray) }}
+        - port: {{ . }}
           protocol: TCP
-        - port: 4096
-          protocol: TCP
+        {{- end }}
   egress:
     - to:
         - namespaceSelector:
@@ -123,6 +124,9 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
     verbs: ["get", "list", "watch", "create", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -55,9 +55,18 @@ it if it fails. While a change is queued or running the machine shows
 
 If it fails, the machine shows the error and the worker keeps retrying with
 increasing delays, up to ten attempts. Most errors are transient (the cluster was
-busy, Vercel's API was slow) and clear on their own. One that stays, or a machine
-stuck on **Applying** for more than a few minutes, needs your operator: the
-change is waiting for something on the instance's side.
+busy, Vercel's API was slow) and clear on their own.
+
+Once the attempts run out the error stays. After fixing the cause, the host or
+an organization admin can queue the failed changes again with fresh attempts:
+
+```bash
+orchard sandbox retry leafy
+```
+
+(`POST /apiv1/sandboxes/:id/apply/retry`.) An error that comes straight back, or
+a machine stuck on **Applying** for more than a few minutes, needs your operator:
+the change is waiting for something on the instance's side.
 
 ## A runner is unavailable
 

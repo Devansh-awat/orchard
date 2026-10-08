@@ -172,3 +172,71 @@ test('a handle presented for a different terminal index gets a fresh shell, not 
     server.close();
   }
 });
+
+test('the engine leaves upgrades on preview hosts to the preview proxy', async () => {
+  const server = http.createServer();
+  const resolved: string[] = [];
+  const engine = new ExecSessionEngine(server, {
+    prisma: {} as any,
+    sessions: {} as any,
+    jwtSecret: new TextEncoder().encode('exec-engine-test-secret'),
+    skipUpgrade: (req) => String(req.headers.host).endsWith('.preview.test')
+  });
+  engine.register({
+    route: /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/terminal$/,
+    authenticate: async () => {
+      resolved.push('auth');
+      return { reject: 401, message: 'Unauthorized' };
+    },
+    async resolveTarget() {
+      resolved.push('target');
+      return { reject: 404, message: 'Not Found' };
+    },
+    open: async () => {
+      throw new Error('unreachable');
+    },
+    proxyPath: () => ({ path: '/', params: {} }),
+    audit: { open: 'open', reattach: 'reattach', denied: 'denied' }
+  });
+  const previewHandled: string[] = [];
+  server.on('upgrade', (req, socket) => {
+    if (!String(req.headers.host).endsWith('.preview.test')) return;
+    previewHandled.push(String(req.url));
+    socket.end('HTTP/1.1 418 Preview\r\nConnection: close\r\n\r\n');
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+  const port = (server.address() as AddressInfo).port;
+  const upgrade = (host: string) =>
+    new Promise<number>((resolve) => {
+      const req = http.request({
+        host: '127.0.0.1',
+        port,
+        path: `/apiv1/sandboxes/${SANDBOX}/terminal`,
+        headers: {
+          host,
+          connection: 'Upgrade',
+          upgrade: 'websocket',
+          'sec-websocket-version': '13',
+          'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ=='
+        }
+      });
+      req.on('response', (res) => resolve(res.statusCode ?? 0));
+      req.on('upgrade', (res, socket) => {
+        socket.destroy();
+        resolve(res.statusCode ?? 0);
+      });
+      req.on('error', () => resolve(-1));
+      req.end();
+    });
+  try {
+    assert.equal(await upgrade('3000-3f2d7e6a.preview.test'), 418);
+    await new Promise((r) => setTimeout(r, 30));
+    assert.deepEqual(resolved, [], 'the terminal engine never touched the preview request');
+    assert.equal(previewHandled.length, 1);
+    await upgrade('orchard.test');
+    await new Promise((r) => setTimeout(r, 30));
+    assert.ok(resolved.includes('auth'), 'normal hosts still reach the engine');
+  } finally {
+    server.close();
+  }
+});

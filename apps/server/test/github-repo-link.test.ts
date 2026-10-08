@@ -1,10 +1,10 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { PrismaClient } from '@prisma/client';
+import { testPrismaClient } from './support/test-database';
 import { GitHubService } from '../src/github/github.service';
 import { SecretCryptoService } from '../src/crypto/secret-crypto.service';
 
-const prisma = new PrismaClient();
+const prisma = testPrismaClient();
 
 const SLUG = 'test-repo-link-org';
 const NS = 'test-repo-link-ns';

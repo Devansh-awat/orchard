@@ -29,6 +29,7 @@ import { SandboxProjectLinksService } from './links/sandbox-project-links.servic
 import { SandboxPreviewDeployService } from './links/sandbox-preview-deploy.service';
 import { SandboxLinksController } from './links/sandbox-links.controller';
 import { SandboxAgentService } from './sandbox-agent.service';
+import { SandboxCoauthorsService } from './sandbox-coauthors.service';
 import { SandboxAgentController } from './sandbox-agent.controller';
 import { SandboxForkService } from './sandbox-fork.service';
 import { SandboxForkController } from './sandbox-fork.controller';
@@ -90,6 +91,7 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxProjectLinksService,
     SandboxPreviewDeployService,
     SandboxAgentService,
+    SandboxCoauthorsService,
     SandboxForkService,
     SandboxShareLinksService
   ],

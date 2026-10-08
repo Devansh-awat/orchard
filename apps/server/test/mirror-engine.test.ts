@@ -1,11 +1,11 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { PrismaClient } from '@prisma/client';
+import { testPrismaClient } from './support/test-database';
 import { MirrorInformer } from '../src/mirror/mirror-informer';
 import { PodMirrorConsumer } from '../src/mirror/consumers/pod-mirror.consumer';
 import { computePodStatus } from '../src/mirror/pod-status';
 
-const prisma = new PrismaClient();
+const prisma = testPrismaClient();
 
 const SHARD = 'test-mirror-shard';
 const KIND = 'Ingress';

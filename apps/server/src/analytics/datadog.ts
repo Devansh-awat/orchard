@@ -11,6 +11,7 @@
  * DD_TRACE_ENABLED=true is set explicitly. Local dev stays silent.
  */
 import tracer from 'dd-trace';
+import { redactSpanUrls } from './url-redaction';
 
 export function initDatadog(): void {
   if (process.env.DD_TRACE_ENABLED === 'false') return;
@@ -27,6 +28,13 @@ export function initDatadog(): void {
     runtimeMetrics: true,
     // Continuous Profiler: wall/CPU/heap profiles via @datadog/pprof.
     profiling: process.env.DD_PROFILING_ENABLED !== 'false'
+  });
+  tracer.use('http', {
+    server: {
+      hooks: {
+        request: (span) => redactSpanUrls(span)
+      }
+    }
   });
 }
 

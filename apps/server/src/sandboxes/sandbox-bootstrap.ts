@@ -19,8 +19,28 @@ export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';
 
 export const SANDBOX_BRIDGE_CLI_VERSION = '0.22.0';
 
+const BRIDGE_RELEASES = 'https://github.com/LeafdTK/orchard-releases/releases/download';
+
+export function bridgeArchiveName(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
+  return `orchard_${version}_linux_amd64.tar.gz`;
+}
+
 export function defaultBridgeBinaryUrl(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
-  return `https://github.com/LeafdTK/orchard-releases/releases/download/v${version}/orchard_${version}_linux_amd64.tar.gz`;
+  return `${BRIDGE_RELEASES}/v${version}/${bridgeArchiveName(version)}`;
+}
+
+export function bridgeChecksumsUrl(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
+  return `${BRIDGE_RELEASES}/v${version}/checksums.txt`;
+}
+
+export const SHA256_RE = /^[0-9a-f]{64}$/;
+
+export function checksumFor(checksums: string, file: string): string | null {
+  for (const raw of checksums.split('\n')) {
+    const match = raw.trim().match(/^([0-9a-fA-F]{64})\s+\*?(\S+)$/);
+    if (match && match[2] === file) return match[1].toLowerCase();
+  }
+  return null;
 }
 
 export const SANDBOX_BOOTSTRAP_SCRIPT = `#!/bin/bash
@@ -315,16 +335,19 @@ bridge_bin=/usr/local/bin/orchard
 bridge_marker=/usr/local/share/orchard/bridge-source
 if [ -s /orchard-init/bridge-token ]; then
   bridge_source="\${ORCHARD_BRIDGE_URL:-}"
+  bridge_sha="\${ORCHARD_BRIDGE_SHA256:-}"
   installed_source=$(cat "$bridge_marker" 2>/dev/null || true)
-  if [ -n "$bridge_source" ] && { [ ! -x "$bridge_bin" ] || [ "$installed_source" != "$bridge_source" ]; }; then
+  if [ -n "$bridge_source" ] && [ -z "$bridge_sha" ]; then
+    log "no ORCHARD_BRIDGE_SHA256 for $bridge_source; not installing an unverified bridge"
+  elif [ -n "$bridge_source" ] && { [ ! -x "$bridge_bin" ] || [ "$installed_source" != "$bridge_source $bridge_sha" ]; }; then
     bridge_tmp=$(mktemp -d)
     if curl -fsSL --retry 3 --connect-timeout 10 -o "$bridge_tmp/orchard.tar.gz" "$bridge_source"; then
-      if [ -n "\${ORCHARD_BRIDGE_SHA256:-}" ] && ! printf '%s  %s\\n' "$ORCHARD_BRIDGE_SHA256" "$bridge_tmp/orchard.tar.gz" | sha256sum -c - >/dev/null 2>&1; then
+      if ! printf '%s  %s\\n' "$bridge_sha" "$bridge_tmp/orchard.tar.gz" | sha256sum -c - >/dev/null 2>&1; then
         log "the bridge download did not match ORCHARD_BRIDGE_SHA256"
       elif tar -xzf "$bridge_tmp/orchard.tar.gz" -C "$bridge_tmp" orchard 2>/dev/null; then
         install -m 755 "$bridge_tmp/orchard" "$bridge_bin.new" && mv -f "$bridge_bin.new" "$bridge_bin"
         mkdir -p "$(dirname "$bridge_marker")"
-        printf '%s' "$bridge_source" > "$bridge_marker"
+        printf '%s' "$bridge_source $bridge_sha" > "$bridge_marker"
         pkill -f 'orchard sandbox bridge' >/dev/null 2>&1 || true
       else
         log "the bridge archive has no orchard binary"

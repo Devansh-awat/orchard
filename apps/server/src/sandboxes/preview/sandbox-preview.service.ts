@@ -11,7 +11,6 @@ import {
 import type { Request, Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InstanceConfigService } from '../../instance-config/instance-config.service';
-import { SANDBOX_RUNNERS } from '../../instance-config/instance-config.sections';
 import { InstanceSettingsService } from '../../instance-settings/instance-settings.service';
 import { SandboxRunnerRegistry } from '../runners/sandbox-runner.registry';
 import { SANDBOX_REF_SELECT, refOf } from '../runners/sandbox-runner';
@@ -22,13 +21,13 @@ import {
   PREVIEW_EXCHANGE_PATH,
   PreviewCookiePayload,
   PreviewHost,
+  declaredPreviewPorts,
   isPreviewPortAllowed,
+  isPreviewPortCandidate,
   mintPreviewToken,
-  normalizePreviewDomain,
   parsePreviewHost,
   previewCookieHeader,
   previewCookieValues,
-  previewDomainConflict,
   previewDownstreamHeaders,
   previewOriginFor,
   previewRequestAllowed,
@@ -38,6 +37,7 @@ import {
   signPreviewCookie,
   verifyPreviewCookie
 } from './preview-auth';
+import { configuredPreviewDomain } from './preview-domain';
 
 const ACCESS_CACHE_MS = 15_000;
 const UPSTREAM_TIMEOUT_MS = 120_000;
@@ -97,21 +97,10 @@ export class SandboxPreviewService {
     if (this.domainCache && this.domainCache.generation === generation) {
       return this.domainCache.value;
     }
-    let value = normalizePreviewDomain(this.config.value(SANDBOX_RUNNERS, 'previewDomain'));
-    if (value) {
-      const conflict = previewDomainConflict(value, {
-        cookieDomain: process.env.COOKIE_DOMAIN,
-        frontendUrl: process.env.FRONTEND_URL,
-        apiUrl: process.env.API_URL,
-        platformOrigins: process.env.PLATFORM_ORIGINS
-      });
-      if (conflict) {
-        this.logger.warn(`sandbox previews disabled: ${conflict}`);
-        value = null;
-      }
-    }
-    this.domainCache = { generation, value };
-    return value;
+    const resolved = configuredPreviewDomain(this.config);
+    if (resolved.conflict) this.logger.warn(`sandbox previews disabled: ${resolved.conflict}`);
+    this.domainCache = { generation, value: resolved.domain };
+    return resolved.domain;
   }
 
   private takeMint(userId: string): boolean {
@@ -125,10 +114,12 @@ export class SandboxPreviewService {
   }
 
   async link(access: SandboxAccess, port: number): Promise<PreviewLink> {
-    if (!Number.isInteger(port) || !isPreviewPortAllowed(port)) {
+    const sandbox = access.sandbox;
+    const runner = this.registry.for(sandbox);
+    const declared = runner.id === 'vercel' ? [] : declaredPreviewPorts(sandbox.runnerState);
+    if (!Number.isInteger(port) || !isPreviewPortAllowed(port, declared)) {
       throw new BadRequestException('That port cannot be previewed');
     }
-    const sandbox = access.sandbox;
     if (sandbox.status !== 'running') throw new BadRequestException('Sandbox is not running');
     if (!this.takeMint(access.userId)) {
       throw new HttpException(
@@ -136,7 +127,6 @@ export class SandboxPreviewService {
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
-    const runner = this.registry.for(sandbox);
     if (runner.id === 'vercel') {
       const target = await runner.httpTarget(refOf(sandbox), port);
       if (target.kind !== 'url') throw new ServiceUnavailableException('Preview is unavailable');
@@ -192,7 +182,7 @@ export class SandboxPreviewService {
     return null;
   }
 
-  private async upstream(sandboxId: string, port: number): Promise<Duplex | null> {
+  private async upstream(sandboxId: string, port: number): Promise<Duplex | 'port' | null> {
     const row = await this.prisma.sandbox.findUnique({
       where: { id: sandboxId },
       select: { ...SANDBOX_REF_SELECT, status: true, desiredState: true }
@@ -200,6 +190,7 @@ export class SandboxPreviewService {
     if (!row || row.status !== 'running' || row.desiredState === 'deleted') return null;
     const runner = this.registry.for(row);
     if (runner.id === 'vercel') return null;
+    if (!isPreviewPortAllowed(port, declaredPreviewPorts(row.runnerState))) return 'port';
     return runner.openTcp(refOf(row), port);
   }
 
@@ -211,7 +202,7 @@ export class SandboxPreviewService {
       plain(res, 404, 'Not found');
       return true;
     }
-    if (!isPreviewPortAllowed(host.port)) {
+    if (!isPreviewPortCandidate(host.port)) {
       plain(res, 404, 'Not found');
       return true;
     }
@@ -229,12 +220,16 @@ export class SandboxPreviewService {
       plain(res, 403, 'Cross-site requests to previews are not allowed');
       return true;
     }
-    let socket: Duplex | null;
+    let socket: Duplex | 'port' | null;
     try {
       socket = await this.upstream(payload.sid, host.port);
     } catch (e: any) {
       this.logger.debug(`preview upstream failed: ${e?.message}`);
       socket = null;
+    }
+    if (socket === 'port') {
+      plain(res, 404, 'That port cannot be previewed');
+      return true;
     }
     if (!socket) {
       plain(res, 502, 'Nothing is answering on this port in the sandbox');
@@ -320,7 +315,7 @@ export class SandboxPreviewService {
     if (!matched) return false;
     const { host, domain } = matched;
     if (
-      !isPreviewPortAllowed(host.port) ||
+      !isPreviewPortCandidate(host.port) ||
       !(await this.settings.isSandboxesEnabled().catch(() => false))
     ) {
       rawReject(socket, 404, 'Not Found');
@@ -335,16 +330,21 @@ export class SandboxPreviewService {
       rawReject(socket, 403, 'Forbidden');
       return true;
     }
-    let upstream: Duplex | null;
+    let target: Duplex | 'port' | null;
     try {
-      upstream = await this.upstream(payload.sid, host.port);
+      target = await this.upstream(payload.sid, host.port);
     } catch {
-      upstream = null;
+      target = null;
     }
-    if (!upstream) {
+    if (target === 'port') {
+      rawReject(socket, 404, 'Not Found');
+      return true;
+    }
+    if (!target) {
       rawReject(socket, 502, 'Bad Gateway');
       return true;
     }
+    const upstream: Duplex = target;
     const headers = previewUpstreamHeaders(req.headers, host, req.socket.remoteAddress);
     headers.connection = 'Upgrade';
     headers.upgrade = String(req.headers.upgrade || 'websocket');

@@ -13,7 +13,14 @@ export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 export const SANDBOXES_ENABLED_KEY = 'sandboxes_enabled';
 export const SANDBOXES_ENABLED_ENV = 'SANDBOX_ENABLED';
 
-const sandboxesFallback = () => process.env.NODE_ENV !== 'production';
+export const SANDBOXES_DEFAULT_ENV = 'SANDBOX_ENABLED_DEFAULT';
+
+const sandboxesFallback = () => {
+  const preset = process.env[SANDBOXES_DEFAULT_ENV]?.trim().toLowerCase();
+  if (preset === 'true') return true;
+  if (preset === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
+};
 
 export interface ToggleState {
   enabled: boolean;

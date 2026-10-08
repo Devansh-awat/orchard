@@ -249,7 +249,9 @@ AI dev machines. Off by default. Full operator guide:
 
 | Key | Default | Description |
 |---|---|---|
-| `sandbox.enabled` | `false` | Sets `SANDBOX_ENABLED=true` (locks the admin switch on) and renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. Needed for the kubernetes runner. |
+| `sandbox.enabled` | `false` | Starts the admin switch on without locking it (`SANDBOX_ENABLED_DEFAULT=true`) and, unless `install` is set, installs the plumbing below. |
+| `sandbox.install` | `null` | Renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. `null` follows `enabled`. Needed for the kubernetes runner; `install: true` with `enabled: false` ships it switched off. |
+| `sandbox.lockEnabled` | `null` | `true`/`false` pins the admin switch (`SANDBOX_ENABLED`, `PUBLIC_SANDBOX_ENABLED`). `null` leaves it to the admin. Set `true` to keep the pre-split behaviour of `enabled`. |
 | `sandbox.namespace` | `orchard-sandboxes` | Namespace for kubernetes machines. |
 | `sandbox.image` | `debian:bookworm` | Base image. A bootstrap script installs sshd, git, tmux, Node.js, Claude Code, Codex and opencode on first boot. |
 | `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |
@@ -266,12 +268,18 @@ AI dev machines. Off by default. Full operator guide:
 | `sandbox.runners.vercel.enabled` | `null` | Same for Vercel (default off). |
 | `sandbox.runners.vercel.tokenSecret.{name,key}` | `""`, `token` | Secret holding the Vercel access token. |
 | `sandbox.runners.vercel.{teamId,projectId,image,vcpus,timeoutMinutes}` | `""` | Vercel team, project and machine settings. |
-| `sandbox.runners.bridgeBinaryUrl` | `""` | https URL of the linux/amd64 orchard CLI tarball used as the ssh bridge on Vercel machines. |
-| `sandbox.runners.previewDomain` | `""` | Bare domain for kubernetes previews. Must not share the Orchard cookie domain or hostnames. |
+| `sandbox.runners.bridgeBinaryUrl` | `""` | https URL of the linux/amd64 orchard CLI tarball used as the ssh bridge on Vercel machines. Empty = the pinned release, verified against its `checksums.txt`. |
+| `sandbox.runners.bridgeBinarySha256` | `""` | SHA-256 of `bridgeBinaryUrl`. Required when that is set. |
+| `sandbox.runners.previewDomain` | `""` | Bare domain for kubernetes previews. Must not share the Orchard cookie domain or hostnames. Also renders the preview IngressRoute and certificate below. |
+| `sandbox.previews.route` | `true` | With a preview domain, renders a Traefik IngressRoute for `<port>-<id8>.<previewDomain>` on `ingress.entryPoints` to the `server` service. |
+| `sandbox.previews.tls.secretName` | `""` | TLS Secret for previews. Empty = `<release>-sandbox-previews-tls`. |
+| `sandbox.previews.tls.issuerRef` | `{}` | cert-manager issuer for the `*.<previewDomain>` Certificate (DNS-01 for wildcards). Empty = `certificates.issuer` when `certificates.enabled`, else no Certificate (bring the Secret). |
 
-Prerequisites the chart does **not** install: the kubernetes-sigs/agent-sandbox controller and CRDs (`agents.x-k8s.io/v1beta1`), the kata RuntimeClass handler on the nodes, a VolumeSnapshotClass if you want forking, and for previews a wildcard DNS record, a wildcard certificate and an IngressRoute sending every path on `*.<previewDomain>` to the `server` service. Values under `sandbox.runners` left empty render no env var, so those fields stay editable at Instance admin → Configuration → Sandbox runners. Slack and Linear integrations are configured there too (`SLACK_*`, `LINEAR_WEBHOOK_SECRET` via `server.env` if you want them pinned).
+Prerequisites the chart does **not** install: the kubernetes-sigs/agent-sandbox controller and CRDs (`agents.x-k8s.io/v1beta1`), the kata RuntimeClass handler on the nodes, a VolumeSnapshotClass if you want forking, and for previews a wildcard DNS record (the route and certificate come from `sandbox.previews`). Values under `sandbox.runners` left empty render no env var, so those fields stay editable at Instance admin → Configuration → Sandbox runners. Slack and Linear integrations are configured there too (`SLACK_*`, `LINEAR_WEBHOOK_SECRET` via `server.env` if you want them pinned).
 
 Example:
+
+The `sandbox-isolation` NetworkPolicy is identical to the one the server applies on every leader election, ports included (`pnpm --filter server test:chart` compares them), so upgrades and the server never fight over it.
 
 ```yaml
 sandbox:

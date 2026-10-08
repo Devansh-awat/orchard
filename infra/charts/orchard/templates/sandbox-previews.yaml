@@ -1,0 +1,50 @@
+{{- $domain := .Values.sandbox.runners.previewDomain | default "" | trimSuffix "." | lower -}}
+{{- $previews := .Values.sandbox.previews | default dict -}}
+{{- if and $domain $previews.route }}
+{{- $tls := $previews.tls | default dict -}}
+{{- $secret := $tls.secretName | default (printf "%s-sandbox-previews-tls" .Release.Name) -}}
+{{- $issuer := $tls.issuerRef | default dict -}}
+{{- if and (not $issuer.name) .Values.certificates.enabled }}
+{{- $issuer = .Values.certificates.issuer -}}
+{{- end }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ .Release.Name }}-sandbox-previews
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "sandbox-previews") | nindent 4 }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingress.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: HostRegexp(`^[0-9]{2,5}-[0-9a-f]{8}\.{{ regexReplaceAll "\\." $domain "\\." }}$`)
+      services:
+        - name: server
+          port: {{ .Values.server.service.port }}
+  tls:
+    secretName: {{ $secret }}
+{{- if $issuer.name }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $secret }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "sandbox-previews") | nindent 4 }}
+spec:
+  secretName: {{ $secret }}
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind | default "ClusterIssuer" }}
+  commonName: {{ printf "*.%s" $domain | quote }}
+  dnsNames:
+    - {{ printf "*.%s" $domain | quote }}
+  privateKey:
+    {{- toYaml .Values.certificates.privateKey | nindent 4 }}
+  duration: {{ .Values.certificates.duration }}
+  renewBefore: {{ .Values.certificates.renewBefore }}
+{{- end }}
+{{- end }}

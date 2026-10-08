@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -15,6 +16,7 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxRunnerRegistry, SandboxRunnerDescription } from './runners/sandbox-runner.registry';
 import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
+import { ApplyQueueService } from '../apply/apply-queue.service';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -103,8 +105,33 @@ export class SandboxesService {
     private readonly audit: AuditService,
     private readonly crypto: SecretCryptoService,
     private readonly registry: SandboxRunnerRegistry,
-    private readonly access: SandboxAccessService
+    private readonly access: SandboxAccessService,
+    @Optional() private readonly applyQueue?: ApplyQueueService
   ) {}
+
+  async retryApply(
+    row: { id: string; name: string; organizationId: string | null },
+    userId: string,
+    actorEmail: string | null
+  ): Promise<{ success: true; retried: number }> {
+    if (!this.applyQueue) throw new ServiceUnavailableException('The apply queue is not available');
+    const retried = await this.applyQueue.retryForSandbox(row.id);
+    if (retried > 0) {
+      this.audit
+        .log({
+          action: 'sandbox.apply.retry',
+          actorUserId: userId,
+          actorEmail,
+          organizationId: row.organizationId ?? undefined,
+          targetType: 'sandbox',
+          targetId: row.id,
+          targetLabel: row.name,
+          metadata: { retried }
+        })
+        .catch(() => {});
+    }
+    return { success: true, retried };
+  }
 
   async dtos(rows: SandboxWithIdentity[]): Promise<SandboxDto[]> {
     if (rows.length === 0) return [];

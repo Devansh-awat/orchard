@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Prisma } from '@prisma/client';
+import { GithubAppSetupService } from '../src/github/github-app-setup.service';
 import {
   ISSUE_BODY_MAX_BYTES,
   buildIssueBrief,
@@ -1206,4 +1207,25 @@ test('integration config sections keep secrets secret', () => {
   assert.doesNotThrow(() =>
     SLACK_APP.validate?.({ botToken: 'xoxb-1', appId: 'A0123456', signingSecret: 'x' })
   );
+});
+
+test('the GitHub App manifest asks for issues write and issue_comment events', async () => {
+  const stored = new Map<string, string>();
+  const setup = new GithubAppSetupService(
+    {
+      set: async (k: string, v: string) => {
+        stored.set(k, v);
+      }
+    } as any,
+    { lockedFields: () => [], callbackUrl: () => 'https://orchard.example.com/cb' } as any
+  );
+  const { manifest } = await setup.startManifestFlow();
+  const parsed = JSON.parse(manifest);
+  assert.deepEqual(parsed.default_permissions, {
+    contents: 'read',
+    metadata: 'read',
+    issues: 'write'
+  });
+  assert.deepEqual(parsed.default_events, ['push', 'repository', 'issue_comment']);
+  assert.equal(stored.size, 1);
 });

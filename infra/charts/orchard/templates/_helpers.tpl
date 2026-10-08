@@ -128,6 +128,19 @@ secretName wins; otherwise it is only defaulted when the chart is the one
 issuing the certificate, so an install that fills the Secret in out of band
 still has to name it.
 */}}
+{{- define "orchard.sandboxInstalled" -}}
+{{- $s := .Values.sandbox -}}
+{{- if kindIs "invalid" $s.install -}}
+{{- if $s.enabled }}true{{ end -}}
+{{- else if $s.install -}}
+true
+{{- end -}}
+{{- end }}
+
+{{- define "orchard.sandboxIngressPorts" -}}
+{{- list 22 4096 3000 3001 4173 5173 8000 8080 8787 | toJson -}}
+{{- end }}
+
 {{- define "orchard.ingressTlsSecret" -}}
 {{- $tls := .Values.ingress.tls -}}
 {{- if $tls.secretName -}}
@@ -252,8 +265,13 @@ still has to name it.
             {{- end }}
             {{- end }}
             {{- with .Values.sandbox }}
-            {{- if .enabled }}
-            - { name: SANDBOX_ENABLED, value: "true" }
+            {{- if not (kindIs "invalid" .lockEnabled) }}
+            - { name: SANDBOX_ENABLED, value: {{ .lockEnabled | toString | quote }} }
+            {{- else if .enabled }}
+            - { name: SANDBOX_ENABLED_DEFAULT, value: "true" }
+            {{- end }}
+            {{- if include "orchard.sandboxInstalled" $ }}
+            - { name: ORCHARD_SERVER_NAMESPACE, value: {{ $.Values.namespace | quote }} }
             {{- with (include "orchard.mcpUrl" $) }}
             - { name: SANDBOX_MCP_URL, value: {{ . | quote }} }
             {{- end }}
@@ -312,6 +330,9 @@ still has to name it.
             {{- end }}
             {{- if .bridgeBinaryUrl }}
             - { name: SANDBOX_BRIDGE_BINARY_URL, value: {{ .bridgeBinaryUrl | quote }} }
+            {{- end }}
+            {{- if .bridgeBinarySha256 }}
+            - { name: SANDBOX_BRIDGE_BINARY_SHA256, value: {{ .bridgeBinarySha256 | quote }} }
             {{- end }}
             {{- if .previewDomain }}
             - { name: SANDBOX_PREVIEW_DOMAIN, value: {{ .previewDomain | quote }} }

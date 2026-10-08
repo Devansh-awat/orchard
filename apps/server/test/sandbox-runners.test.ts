@@ -535,3 +535,44 @@ test('the list pass reconciles desired state against the cluster without steppin
   );
   assert.deepEqual(actions, ['cr:a', 'secret:c', 'cr:c', 'destroy:d']);
 });
+
+test('kubernetes previews are proxied only while a safe preview domain is configured', () => {
+  const saved = { cookie: process.env.COOKIE_DOMAIN, frontend: process.env.FRONTEND_URL };
+  process.env.COOKIE_DOMAIN = '.orchard.example.com';
+  process.env.FRONTEND_URL = 'https://orchard.example.com';
+  try {
+    let domain: string | null = null;
+    let generation = 1;
+    const config = {
+      get generation() {
+        return generation;
+      },
+      flag: () => true,
+      value: (_section: unknown, name: string) => (name === 'previewDomain' ? domain : null)
+    };
+    const runner = new KubernetesSandboxRunner(
+      { kc: {} } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { registerHandler: () => {} } as never,
+      {} as never,
+      config as never
+    );
+    (runner as any).forkProbe.running = true;
+    const registry = new SandboxRunnerRegistry([runner], config as never);
+    assert.equal(runner.capabilities.previews, 'none');
+    domain = 'orchard-preview.dev';
+    generation = 2;
+    assert.equal(runner.capabilities.previews, 'proxy');
+    assert.equal(registry.describe().runners[0].capabilities.previews, 'proxy');
+    domain = 'preview.orchard.example.com';
+    generation = 3;
+    assert.equal(runner.capabilities.previews, 'none');
+  } finally {
+    if (saved.cookie === undefined) delete process.env.COOKIE_DOMAIN;
+    else process.env.COOKIE_DOMAIN = saved.cookie;
+    if (saved.frontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = saved.frontend;
+  }
+});

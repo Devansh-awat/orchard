@@ -23,11 +23,24 @@ database like the MCP switch.
 | `true`            | On, and the switch is locked on.                                                 |
 | `false`           | Off, and the switch is locked off.                                               |
 
-The chart sets `SANDBOX_ENABLED=true` when `sandbox.enabled` is true, which also
-renders the namespace, NetworkPolicy, RBAC and `SANDBOX_*` settings the
-Kubernetes runner needs. With `sandbox.enabled` false none of that is rendered,
-the admin switch decides, and only `sandbox.runners` is passed through, which
-suits a Vercel-only setup.
+`SANDBOX_ENABLED_DEFAULT` (`true` or `false`) changes where the switch starts
+without locking it: admins can still flip it, and their choice wins from then on.
+
+In the chart, installing Greenhouse and switching it on are separate:
+
+| Value                 | Default            | What it does                                                                                                                                         |
+| --------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sandbox.install`     | follows `enabled`  | Renders the namespace, quota, NetworkPolicy, RBAC and `SANDBOX_*` settings the Kubernetes runner needs.                                               |
+| `sandbox.enabled`     | `false`            | Starts the admin switch on (`SANDBOX_ENABLED_DEFAULT=true`) and, unless `install` is set, installs everything above. Admins can still turn it off. |
+| `sandbox.lockEnabled` | `null`             | `true` or `false` pins the switch (`SANDBOX_ENABLED`, and `PUBLIC_SANDBOX_ENABLED` for the dashboard). `null` leaves it to the admin.                |
+
+To ship the plumbing and let an admin turn Greenhouse on later, set
+`sandbox.install: true` and leave `enabled` false. With nothing installed only
+`sandbox.runners` is passed through, which suits a Vercel-only setup.
+
+Charts before this change locked the switch on whenever `sandbox.enabled` was
+true. After upgrading, the switch starts on but is editable; set
+`sandbox.lockEnabled: true` to keep the old behaviour.
 
 Off means the API, terminals, SSH, live connections and previews all answer 404,
 and the integrations refuse to start sessions. Machines that exist are left
@@ -54,6 +67,10 @@ Every machine change goes through the same pipeline as deployments:
 - **Vercel is polled.** It has no watch API, so the leader polls Vercel every
   minute and writes what it sees into the same columns.
 
+When a change runs out of attempts the machine keeps showing the error. The host
+or an org admin can queue a machine's failed changes again with
+`orchard sandbox retry <name>` (`POST /apiv1/sandboxes/:id/apply/retry`).
+
 The queue only drains on a server that is a member of the cluster: in-cluster,
 or out of cluster with `ORCHARD_CONTROL_NAMESPACE` set and a kubeconfig. A dev
 server on a laptop that points at a production database can enqueue changes but
@@ -72,7 +89,8 @@ seconds.
    chart does not install it.
 2. **A namespace for machines**, `orchard-sandboxes` by default. The chart
    creates it (Pod Security `privileged`), a ResourceQuota, a LimitRange, the
-   NetworkPolicy and the RBAC the server needs, when `sandbox.enabled` is true.
+   NetworkPolicy and the RBAC the server needs, when `sandbox.install` (or
+   `sandbox.enabled`) is true.
    The server also applies the namespace and NetworkPolicy itself through the
    apply queue whenever it becomes leader, so they stay correct.
 3. **Kata Containers** (optional, strongly recommended). With a Kata
@@ -101,7 +119,8 @@ For each machine, all labelled `orchard.my/instance=<id>` and
 | `Sandbox` (agent-sandbox) | `sbx-<id>`              | `operatingMode: Running` or `Suspended`. Stop suspends; the controller deletes the pod. |
 | `Secret`                  | `sbx-<id>-auth`         | `authorized_keys`, the bootstrap and setup scripts, agent and GitHub tokens, env files. |
 | `PersistentVolumeClaim`   | from the claim template | The home volume, mounted at `/persist`.                                                 |
-| `VolumeSnapshot`          | `sbx-<id>-fork`         | Only while forking.                                                                     |
+| `VolumeSnapshot`          | `sbx-<id>-fork`         | Only while forking; deleted once the copy's volume is bound and the copy is running.   |
+| `NetworkPolicy`           | `sbx-<id>-previews`     | Only when the machine's repositories declare extra preview ports. See below.            |
 
 The instance label means a second Orchard install pointed at the same cluster
 neither sees nor deletes these. The mirror's orphan sweep only removes resources
@@ -116,6 +135,16 @@ carrying this instance's label with no machine row behind them.
 - **Egress** to kube-dns, and to the internet except 10.0.0.0/8, 172.16.0.0/12,
   192.168.0.0/16, 169.254.0.0/16 and 100.64.0.0/10. No cluster services, no
   other machines, no cloud metadata.
+
+The chart renders this policy and the server applies the same object whenever it
+becomes leader, so a `helm upgrade` and a leader election never fight over it
+(`pnpm --filter server test:chart` fails if the two drift apart).
+
+When a repository lists extra ports in `.orchard/greenhouse.json` (up to 10, from
+1024 to 65535, never 2222 or 4096), the server applies one more policy for that
+machine, `sbx-<id>-previews`, selecting only its pod and allowing only Orchard
+server pods on those ports. NetworkPolicies add up, so this widens nothing for any
+other machine. It is deleted with the machine.
 
 Pods run without a service account token.
 
@@ -143,6 +172,14 @@ the API server's port-forward instead.
 | `vercelVcpus`          | 2                               | 1 to 8.                                                                                                                           |
 | `vercelTimeoutMinutes` | 60                              | Vercel's own stop timer. Orchard extends it by 30 minutes at a time while a machine is in use and not idle.                       |
 | `bridgeBinaryUrl`      | the release matching the server | An `https://` URL of the Linux amd64 `orchard` CLI tarball, run in each machine as the SSH bridge. Set it for air-gapped mirrors. |
+| `bridgeBinarySha256`   | from the release's checksums    | SHA-256 of that tarball. Required when `bridgeBinaryUrl` is set; the runner reports itself unavailable without it.                 |
+
+Machines refuse to install a bridge they cannot verify. With the default URL the
+server reads the expected SHA-256 from that release's `checksums.txt` on GitHub
+(once, then cached) and passes it to the bootstrap as `ORCHARD_BRIDGE_SHA256`;
+with your own URL it passes `bridgeBinarySha256`. A download that does not match,
+or a start without a checksum, logs a line in the bootstrap output and leaves the
+bridge out, so SSH to that machine fails until the checksum is available.
 
 Machines are created as **persistent** sandboxes: stopping one snapshots it and
 starting resumes from the snapshot. Each machine exposes port 4096 (the agent
@@ -197,10 +234,18 @@ own. Users open `https://<port>-<machine>.<previewDomain>/`.
    later makes it unsafe. A separate registrable domain (for example
    `orchard-preview.dev` for an Orchard on `example.com`) is the safest choice.
 2. **Wildcard DNS.** Point `*.<previewDomain>` at your ingress.
-3. **Wildcard TLS.** A certificate for `*.<previewDomain>`, typically from
-   cert-manager with a DNS-01 issuer.
-4. **Route every path to the server.** The chart does not create this route. With
-   Traefik:
+3. **Route and certificate.** With `sandbox.runners.previewDomain` set, the chart
+   renders a Traefik IngressRoute for `<port>-<machine>.<previewDomain>` on
+   `ingress.entryPoints`, sending every path to the `server` service, and a
+   cert-manager Certificate for `*.<previewDomain>`:
+
+   | Value                               | Default                              | Notes                                                                                                         |
+   | ----------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+   | `sandbox.previews.route`            | `true`                               | `false` to bring your own route.                                                                              |
+   | `sandbox.previews.tls.secretName`   | `<release>-sandbox-previews-tls`     | The Secret Traefik terminates with.                                                                           |
+   | `sandbox.previews.tls.issuerRef`    | `certificates.issuer`                | Wildcards need a DNS-01 issuer. With `certificates.enabled` false and no issuer, no Certificate is rendered and the Secret must already exist. |
+
+   Without the chart, the equivalent Traefik route is:
 
    ```yaml
    apiVersion: traefik.io/v1alpha1
@@ -220,11 +265,18 @@ own. Users open `https://<port>-<machine>.<previewDomain>/`.
        secretName: wildcard-preview-tls
    ```
 
-5. **Set the domain** in `previewDomain` (`SANDBOX_PREVIEW_DOMAIN`).
+4. **Set the domain** in `previewDomain` (`SANDBOX_PREVIEW_DOMAIN`). The Kubernetes
+   runner then reports `previews: proxy` in its capabilities (`none` without a
+   usable domain).
 
 Preview tickets and cookies are signed with keys derived from `JWT_SECRET`, and a
 ticket can be used once, tracked in Redis (or memory on a single replica). The
-NetworkPolicy already lets the server reach the preview ports.
+NetworkPolicy already lets the server reach the preview ports, and the
+per-machine policy above covers ports a repository declares.
+
+Every other WebSocket handler on the server (terminals, pod shells, SSH and the
+live connection) steps aside for requests addressed to a preview host, so an app
+running in a machine cannot reach them through its preview address.
 
 Vercel previews need none of this: they use Vercel's public URLs.
 
@@ -249,6 +301,7 @@ environment variable shown, which locks the field.
 | `vercelVcpus`          | `SANDBOX_VERCEL_VCPUS`              | 1 to 8.                                                             |
 | `vercelTimeoutMinutes` | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 1 to 1440.                                                          |
 | `bridgeBinaryUrl`      | `SANDBOX_BRIDGE_BINARY_URL`         | `https://` only.                                                    |
+| `bridgeBinarySha256`   | `SANDBOX_BRIDGE_BINARY_SHA256`      | 64 hex characters. Required with `bridgeBinaryUrl`.                 |
 | `previewDomain`        | `SANDBOX_PREVIEW_DOMAIN`            | A bare domain; validated against the cookie domain.                 |
 
 Switching a runner off stops new machines on it. Existing machines on that
@@ -273,6 +326,7 @@ runner keep working, so you can retire a runner without stranding anyone.
 | Variable                       | Default                   | What it does                                                                                       |
 | ------------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | `SANDBOX_ENABLED`              |                           | Pins the Greenhouse switch, see [Turning it on](#turning-it-on).                                   |
+| `SANDBOX_ENABLED_DEFAULT`      |                           | Where the switch starts when it is not pinned and no admin has set it. Does not lock it.           |
 | `SANDBOX_NAMESPACE`            | `orchard-sandboxes`       | Namespace for Kubernetes machines.                                                                 |
 | `SANDBOX_IMAGE`                | `debian:bookworm`         | Image for new Kubernetes machines.                                                                 |
 | `SANDBOX_RUNTIME_CLASS`        |                           | RuntimeClass, usually `kata`. Empty runs on the default runtime.                                   |
@@ -296,7 +350,9 @@ Everything here is also in the generated [configuration reference](/reference/co
 
 | Value                                                                            | Variable                                                                  |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `sandbox.enabled`                                                                | `SANDBOX_ENABLED=true`, plus the namespace, quota, NetworkPolicy and RBAC |
+| `sandbox.install`                                                                | the namespace, quota, NetworkPolicy, RBAC and `SANDBOX_*` settings         |
+| `sandbox.enabled`                                                                | `SANDBOX_ENABLED_DEFAULT=true`; also `install` unless that is set          |
+| `sandbox.lockEnabled`                                                            | `SANDBOX_ENABLED` and `PUBLIC_SANDBOX_ENABLED`                             |
 | `sandbox.namespace`                                                              | `SANDBOX_NAMESPACE`                                                       |
 | `sandbox.image`                                                                  | `SANDBOX_IMAGE`                                                           |
 | `sandbox.runtimeClassName`                                                       | `SANDBOX_RUNTIME_CLASS`                                                   |
@@ -312,7 +368,9 @@ Everything here is also in the generated [configuration reference](/reference/co
 | `sandbox.runners.vercel.tokenSecret`                                             | `SANDBOX_VERCEL_TOKEN`, from a Secret you create                          |
 | `sandbox.runners.vercel.teamId`, `projectId`, `image`, `vcpus`, `timeoutMinutes` | the matching `SANDBOX_VERCEL_*` variables                                 |
 | `sandbox.runners.bridgeBinaryUrl`                                                | `SANDBOX_BRIDGE_BINARY_URL`                                               |
-| `sandbox.runners.previewDomain`                                                  | `SANDBOX_PREVIEW_DOMAIN`                                                  |
+| `sandbox.runners.bridgeBinarySha256`                                             | `SANDBOX_BRIDGE_BINARY_SHA256`                                            |
+| `sandbox.runners.previewDomain`                                                  | `SANDBOX_PREVIEW_DOMAIN`, plus the preview route and certificate          |
+| `sandbox.previews.*`                                                             | the preview route and certificate, see [Previews](#previews)              |
 
 Anything under `sandbox.runners` left empty (or `null` for the booleans) renders
 no variable, so the field stays editable in the admin UI. The Vercel token is
@@ -341,15 +399,16 @@ kubectl -n orchard create secret generic orchard-vercel --from-literal=token=...
 ### GitHub issues
 
 `/greenhouse` comments on issues arrive through the GitHub App Orchard already
-uses for deployments, on the same webhook URL. The App needs two things the
-default registration does not ask for:
+uses for deployments, on the same webhook URL. The App needs:
 
 1. **Repository permissions → Issues: Read and write**, to read the issue and
    reply to the comment.
 2. **Subscribe to events → Issue comment**.
 
-Change both in the App's settings on GitHub. Each installation then has to accept
-the new permission before comments from its repositories arrive.
+An App created from **Instance admin → GitHub App** asks for both already. An App
+registered before that, or by hand, needs both changed in its settings on GitHub,
+and each installation then has to accept the new permission before comments from
+its repositories arrive.
 
 People must link their GitHub account in Orchard (**User settings → GitHub and
 Tailscale**) for their comments to be acted on.
@@ -439,7 +498,14 @@ membership changes, and disconnect anyone who lost it. WebSocket upgrades check
 the `Origin` against Orchard's own origins.
 
 API tokens restricted to specific projects cannot use Greenhouse, and sessions
-scoped to one organization only reach machines in it.
+scoped to one organization only reach machines in it. Both hold for REST, the
+live connection, terminals and the SSH tunnel.
+
+Reads of files and diffs, and file operations, resolve the path inside the
+machine and refuse anything outside the session worktree or the repository, or
+directly under a dot directory of the home directory, symlinks included. Read-only
+guests and share links therefore cannot reach `~/.git-credentials`,
+`~/.config/orchard` or `~/.claude` through a link planted in a repository.
 
 ### Disclosure instead of pretending
 
@@ -457,7 +523,7 @@ acknowledge, exactly what sharing gives. The text is quoted in
 | The host's GitHub token, for the agent    | Encrypted in Postgres                                           | The machine's Secret (Kubernetes); an egress header, never inside the machine (Vercel) |
 | A person's GitHub token, for their pushes | Encrypted in Postgres                                           | The environment of the one git command they run, never on disk                         |
 | Agent server password, SSH bridge token   | Not stored; derived with HMAC from `SECRETS_ENCRYPTION_KEY`     | Files in `/orchard-init`, mode 600                                                     |
-| Share link tokens                         | SHA-256 hash only                                               | Never                                                                                  |
+| Share link tokens                         | SHA-256 hash only; links carry them after `#`, the API reads them from `X-Orchard-Share-Token` | Never                                                    |
 | Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                       | Never                                                                                  |
 | Linear API keys                           | Encrypted in Postgres                                           | Never                                                                                  |
 | The agent's Orchard MCP token             | A 60-day token on a dedicated `sandbox-mcp` session of the host | The agent's MCP configuration                                                          |
@@ -473,7 +539,8 @@ And where they never are:
   `Sandbox.create`.
 - **Command lines.** File contents and tokens reach a machine on stdin, never as
   process arguments, so they do not show up in process listings.
-- **Logs, audit metadata and live events.**
+- **Logs, audit metadata and live events.** Datadog traces and error reports
+  replace the token in the older `/share/sandbox/<token>` URLs with `[redacted]`.
 
 The residual risks are deliberate and documented: guests act through the host's
 agent and can read the host's machine, Vercel snapshots contain the machine's
@@ -494,7 +561,7 @@ there is no client-supplied target.
 
 Greenhouse records `sandbox.create`, `.start`, `.stop`, `.delete`,
 `.idle_stop`, `.lifetime_stop`, `.fork`, `.keys.update`, `.credentials.update`,
-`.ssh.connect`, `.terminal.open`, `.terminal.reattach`, `.terminal.denied`,
+`.apply.retry`, `.ssh.connect`, `.terminal.open`, `.terminal.reattach`, `.terminal.denied`,
 `.member.add`, `.member.update`, `.member.remove`, `.member.leave`,
 `.share_link.create`, `.share_link.revoke`, `.share_link.use`,
 `.project.attached`, `.project.detached`, `.session.preview.deployed`,

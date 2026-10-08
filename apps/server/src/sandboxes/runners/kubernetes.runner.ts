@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as net from 'net';
 import { randomUUID } from 'crypto';
@@ -13,6 +13,8 @@ import { ApplyExecutorService, ApplyItemInput } from '../../apply/apply-executor
 import { ResizableOutput } from '../../kubernetes/exec-sessions';
 import { SANDBOX_BOOTSTRAP_SCRIPT } from '../sandbox-bootstrap';
 import { PREVIEW_PORTS } from '../preview/preview-auth';
+import { configuredPreviewDomain } from '../preview/preview-domain';
+import { InstanceConfigService } from '../../instance-config/instance-config.service';
 import {
   CRD_API_VERSION,
   CRD_GROUP,
@@ -79,12 +81,23 @@ export const SANDBOX_OP_CR = 'sandbox.cr.apply';
 export const SANDBOX_OP_SECRET = 'sandbox.secret.sync';
 export const SANDBOX_OP_DESTROY = 'sandbox.destroy';
 export const SANDBOX_OP_FORK_SNAPSHOT = 'sandbox.fork.snapshot';
+export const SANDBOX_OP_FORK_CLEANUP = 'sandbox.fork.cleanup';
 
 export const sandboxCrKey = (id: string) => `sandbox:${id}:cr`;
 export const sandboxSecretKey = (id: string) => `sandbox:${id}:secret`;
 export const sandboxDestroyKey = (id: string) => `sandbox:${id}:destroy`;
 export const sandboxForkKey = (id: string) => `sandbox:${id}:fork`;
+export const sandboxForkCleanupKey = (id: string) => `sandbox:${id}:fork-cleanup`;
+export const sandboxPreviewPolicyKey = (id: string) => `sandbox:${id}:preview-netpol`;
+export const previewPolicyName = (podName: string) => `${podName}-previews`;
 export const SANDBOX_NS_KEY = 'sandboxes:ns';
+export const SANDBOX_SSH_PORT = 22;
+export const SANDBOX_OPENCODE_PORT = 4096;
+export const SANDBOX_INGRESS_PORTS: readonly number[] = [
+  SANDBOX_SSH_PORT,
+  SANDBOX_OPENCODE_PORT,
+  ...PREVIEW_PORTS
+];
 export const SANDBOX_NETPOL_KEY = 'sandboxes:netpol';
 
 export function sandboxHomeMode(): 'block' | 'filesystem' {
@@ -229,12 +242,14 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     private readonly settings: InstanceSettingsService,
     private readonly queue: ApplyQueueService,
     private readonly executor: ApplyExecutorService,
-    private readonly secrets: SandboxSecretsService
+    private readonly secrets: SandboxSecretsService,
+    @Optional() private readonly config?: InstanceConfigService
   ) {
     this.executor.registerHandler(SANDBOX_OP_CR, (item) => this.applyCr(item));
     this.executor.registerHandler(SANDBOX_OP_SECRET, (item) => this.applySecret(item));
     this.executor.registerHandler(SANDBOX_OP_DESTROY, (item) => this.applyDestroy(item));
     this.executor.registerHandler(SANDBOX_OP_FORK_SNAPSHOT, (item) => this.applyForkSnapshot(item));
+    this.executor.registerHandler(SANDBOX_OP_FORK_CLEANUP, (item) => this.applyForkCleanup(item));
   }
 
   get capabilities(): SandboxRunnerCapabilities {
@@ -248,7 +263,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       maxRunMs: null,
       diskSizeConfigurable: true,
       fork: this.forkCapable(),
-      previews: 'none'
+      previews: this.config && configuredPreviewDomain(this.config).domain ? 'proxy' : 'none'
     };
   }
 
@@ -417,6 +432,55 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     await this.enqueueCr(row.id);
   }
 
+  async requestForkCleanup(sandboxId: string): Promise<void> {
+    if (await this.queue.hasOpenItem(sandboxForkCleanupKey(sandboxId))) return;
+    await this.queue.enqueue({
+      dedupeKey: sandboxForkCleanupKey(sandboxId),
+      opType: SANDBOX_OP_FORK_CLEANUP,
+      manifest: { sandboxId },
+      sandboxId
+    });
+  }
+
+  private async applyForkCleanup(item: ApplyItemInput): Promise<void> {
+    const { sandboxId } = this.manifestOf(item);
+    if (!sandboxId) return;
+    const row = await this.prisma.sandbox.findUnique({
+      where: { id: sandboxId },
+      select: { ...SANDBOX_REF_SELECT, status: true, desiredState: true }
+    });
+    if (!row || row.runner !== 'kubernetes' || row.desiredState === 'deleted') return;
+    const snapshot = forkSnapshotOf(row.runnerState);
+    if (!snapshot || row.status !== 'running') return;
+    const claim = await this.homeClaim(row.id, row.podName);
+    if (claim?.status?.phase !== 'Bound') return;
+    try {
+      await this.custom().deleteNamespacedCustomObject(
+        SNAPSHOT_GROUP,
+        SNAPSHOT_VERSION,
+        this.namespace,
+        'volumesnapshots',
+        snapshot.name
+      );
+    } catch (e: any) {
+      if (statusCode(e) !== 404) throw e;
+    }
+    const current = await this.prisma.sandbox.findUnique({
+      where: { id: row.id },
+      select: { runnerState: true }
+    });
+    const state =
+      current?.runnerState && typeof current.runnerState === 'object'
+        ? { ...(current.runnerState as Record<string, unknown>) }
+        : {};
+    delete state.forkSnapshot;
+    delete state.forkFrom;
+    await this.prisma.sandbox.updateMany({
+      where: { id: row.id },
+      data: { runnerState: state as object }
+    });
+  }
+
   configError(): string | null {
     return this.kubernetes.kc ? null : 'Kubernetes is not configured on this server';
   }
@@ -517,11 +581,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
                 podSelector: { matchLabels: { 'app.kubernetes.io/name': 'server' } }
               }
             ],
-            ports: [
-              { protocol: 'TCP', port: 22 as any },
-              { protocol: 'TCP', port: 4096 as any },
-              ...PREVIEW_PORTS.map((port) => ({ protocol: 'TCP', port: port as any }))
-            ]
+            ports: SANDBOX_INGRESS_PORTS.map((port) => ({ port: port as any, protocol: 'TCP' }))
           }
         ],
         egress: [
@@ -559,6 +619,52 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       }
     };
     return policy as k8s.KubernetesObject;
+  }
+
+  previewPortsPolicyManifest(
+    ref: { id: string; userId: string; podName: string },
+    ports: readonly number[],
+    instanceId: string
+  ): k8s.KubernetesObject {
+    const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
+    const policy: k8s.V1NetworkPolicy = {
+      apiVersion: 'networking.k8s.io/v1',
+      kind: 'NetworkPolicy',
+      metadata: {
+        name: previewPolicyName(ref.podName),
+        namespace: this.namespace,
+        labels: this.labels(ref, instanceId)
+      },
+      spec: {
+        podSelector: { matchLabels: { [SANDBOX_ID_LABEL]: ref.id } },
+        policyTypes: ['Ingress'],
+        ingress: [
+          {
+            from: [
+              {
+                namespaceSelector: {
+                  matchLabels: { 'kubernetes.io/metadata.name': serverNamespace }
+                },
+                podSelector: { matchLabels: { 'app.kubernetes.io/name': 'server' } }
+              }
+            ],
+            ports: ports.map((port) => ({ port: port as any, protocol: 'TCP' }))
+          }
+        ]
+      }
+    };
+    return policy as k8s.KubernetesObject;
+  }
+
+  async requestPreviewPorts(ref: SandboxRef, ports: number[]): Promise<void> {
+    const allowed = ports.filter((port) => !SANDBOX_INGRESS_PORTS.includes(port));
+    if (!allowed.length) return;
+    await this.queue.enqueue({
+      dedupeKey: sandboxPreviewPolicyKey(ref.id),
+      opType: 'ssa',
+      manifest: this.previewPortsPolicyManifest(ref, allowed, await this.instanceId()),
+      sandboxId: ref.id
+    });
   }
 
   async enqueueInfrastructure(): Promise<void> {
@@ -970,6 +1076,13 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     }
     try {
       await core.deleteNamespacedSecret(this.secretName(podName), this.namespace);
+    } catch (e: any) {
+      if (statusCode(e) !== 404) throw e;
+    }
+    try {
+      await this.kc
+        .makeApiClient(k8s.NetworkingV1Api)
+        .deleteNamespacedNetworkPolicy(previewPolicyName(podName), this.namespace);
     } catch (e: any) {
       if (statusCode(e) !== 404) throw e;
     }

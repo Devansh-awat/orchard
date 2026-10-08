@@ -135,6 +135,11 @@ branches; each starts a fresh agent chat on first use.
 | Kubernetes | A volume snapshot of the home volume, restored into the new machine's volume. Only offered when the cluster can snapshot that storage. |
 | Vercel     | A fork of the last saved snapshot. Stop the machine first to include recent changes.                                                   |
 
+On Kubernetes a copy can take a while to start, because the volume has to be
+restored first. A forked machine gets 30 minutes to come up before it is marked
+as failed, instead of the usual 10, and the snapshot is deleted once the copy is
+running on its restored volume.
+
 ## Agent credentials
 
 Your Claude Code token and OpenAI key are stored once on your account and used by

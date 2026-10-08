@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -60,6 +61,17 @@ export class SandboxShareLinksController {
   }
 }
 
+export const SHARE_TOKEN_HEADER = 'x-orchard-share-token';
+
+export function shareTokenFromHeader(req: { headers?: Record<string, unknown> }): string {
+  const value = req.headers?.[SHARE_TOKEN_HEADER];
+  const token = Array.isArray(value) ? value[0] : value;
+  if (typeof token !== 'string' || !token.trim()) {
+    throw new BadRequestException('Send the share token in the X-Orchard-Share-Token header');
+  }
+  return token.trim();
+}
+
 @Auth()
 @UseGuards(SandboxEnabledGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
@@ -74,6 +86,34 @@ export class SandboxShareViewerController {
   private async viewer(req: any) {
     const user = await resolveGreenhouseUser(this.usersService, this.analytics, req);
     return { id: user.id, email: user.email ?? null };
+  }
+
+  @Get()
+  async viewByHeader(@Req() req: any) {
+    return this.shares.view(shareTokenFromHeader(req), await this.viewer(req));
+  }
+
+  @Get('sessions/:sid/transcript')
+  async transcriptByHeader(
+    @Req() req: any,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Query('limit') limit?: string
+  ) {
+    return this.shares.transcript(shareTokenFromHeader(req), await this.viewer(req), sid, limit);
+  }
+
+  @Get('sessions/:sid/changes')
+  async changesByHeader(@Req() req: any, @Param('sid', ParseUUIDPipe) sid: string) {
+    return this.shares.changes(shareTokenFromHeader(req), await this.viewer(req), sid);
+  }
+
+  @Get('sessions/:sid/diff')
+  async diffByHeader(
+    @Req() req: any,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Query('file') file?: string
+  ) {
+    return this.shares.diff(shareTokenFromHeader(req), await this.viewer(req), sid, file);
   }
 
   @Get(':token')

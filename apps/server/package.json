@@ -53,6 +53,8 @@
     "mcp:remote": "ts-node --swc src/mcp/main.ts",
     "test:protection": "tsx --test test/protection-proxy.test.ts test/protection-auth.test.ts test/protection-redirect.test.ts test/protection-password-throttle.test.ts",
     "test:mirror": "tsx --test test/mirror-engine.test.ts",
+    "test:db-guard": "tsx --test test/test-database-guard.test.ts",
+    "test:apply-queue": "tsx --test test/apply-queue.test.ts",
     "test:repo-link": "tsx --test test/github-repo-link.test.ts",
     "test:certificates": "tsx --test test/certificate-status.test.ts",
     "test:setup-state": "tsx --test test/setup-state.test.ts",

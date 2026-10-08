@@ -1,6 +1,9 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
 export const PREVIEW_PORTS: readonly number[] = [3000, 3001, 4173, 5173, 8000, 8080, 8787];
+export const RESERVED_SANDBOX_PORTS: readonly number[] = [22, 2222, 4096];
+export const MIN_DECLARED_PREVIEW_PORT = 1024;
+export const MAX_DECLARED_PREVIEW_PORTS = 10;
 export const PREVIEW_COOKIE = 'orchard_preview';
 export const PREVIEW_EXCHANGE_PATH = '/__orchard_preview';
 export const PREVIEW_TOKEN_TTL_MS = 60_000;
@@ -135,8 +138,52 @@ export function sandboxMatchesId8(sandboxId: string, id8: string): boolean {
   return sandboxId.replace(/-/g, '').slice(0, 8).toLowerCase() === id8;
 }
 
+export function isDeclarablePreviewPort(port: unknown): port is number {
+  return (
+    typeof port === 'number' &&
+    Number.isInteger(port) &&
+    port >= MIN_DECLARED_PREVIEW_PORT &&
+    port <= 65535 &&
+    !RESERVED_SANDBOX_PORTS.includes(port)
+  );
+}
+
 export function isPreviewPortAllowed(port: number, extra: readonly number[] = []): boolean {
-  return PREVIEW_PORTS.includes(port) || extra.includes(port);
+  if (PREVIEW_PORTS.includes(port)) return true;
+  return isDeclarablePreviewPort(port) && extra.includes(port);
+}
+
+export function isPreviewPortCandidate(port: number): boolean {
+  return PREVIEW_PORTS.includes(port) || isDeclarablePreviewPort(port);
+}
+
+export function declaredPreviewPorts(runnerState: unknown): number[] {
+  const value =
+    runnerState && typeof runnerState === 'object' && !Array.isArray(runnerState)
+      ? (runnerState as Record<string, unknown>).declaredPorts
+      : undefined;
+  if (!Array.isArray(value)) return [];
+  const out: number[] = [];
+  for (const port of value) {
+    if (isDeclarablePreviewPort(port) && !out.includes(port)) out.push(port);
+    if (out.length >= MAX_DECLARED_PREVIEW_PORTS) break;
+  }
+  return out;
+}
+
+export function mergeDeclaredPorts(
+  existing: readonly number[],
+  incoming: readonly number[]
+): number[] {
+  const out: number[] = [];
+  for (const port of [...incoming, ...existing]) {
+    if (!isDeclarablePreviewPort(port) || PREVIEW_PORTS.includes(port) || out.includes(port)) {
+      continue;
+    }
+    out.push(port);
+    if (out.length >= MAX_DECLARED_PREVIEW_PORTS) break;
+  }
+  return out;
 }
 
 export async function mintPreviewToken(

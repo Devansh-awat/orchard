@@ -2,6 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { loadAll } from 'js-yaml';
+import {
+  KubernetesSandboxRunner,
+  SANDBOX_INGRESS_PORTS
+} from '../src/sandboxes/runners/kubernetes.runner';
+import { PREVIEW_PORTS } from '../src/sandboxes/preview/preview-auth';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 
@@ -117,6 +123,7 @@ test(
       'sandbox.runners.vercel.vcpus=4',
       'sandbox.runners.vercel.timeoutMinutes=90',
       'sandbox.runners.bridgeBinaryUrl=https://example.com/orchard.tar.gz',
+      `sandbox.runners.bridgeBinarySha256=${'ab'.repeat(32)}`,
       'sandbox.runners.previewDomain=preview.example.com'
     ]);
     assert.match(out, /SANDBOX_RUNNER_KUBERNETES_ENABLED, value: "false"/);
@@ -131,7 +138,198 @@ test(
     assert.match(out, /SANDBOX_VERCEL_VCPUS, value: "4"/);
     assert.match(out, /SANDBOX_VERCEL_TIMEOUT_MINUTES, value: "90"/);
     assert.match(out, /SANDBOX_BRIDGE_BINARY_URL, value: "https:\/\/example.com\/orchard.tar.gz"/);
+    assert.match(out, new RegExp(`SANDBOX_BRIDGE_BINARY_SHA256, value: "${'ab'.repeat(32)}"`));
     assert.match(out, /SANDBOX_PREVIEW_DOMAIN, value: "preview.example.com"/);
     assert.doesNotMatch(out, /SANDBOX_VERCEL_TOKEN, value:/);
   }
 );
+
+function parsed(yaml: string): any[] {
+  return loadAll(yaml).filter((d): d is any => !!d && typeof d === 'object');
+}
+
+test(
+  'the chart sandbox NetworkPolicy matches the one the server applies',
+  { skip: !helmAvailable() },
+  () => {
+    const out = parsed(render(['sandbox.enabled=true']));
+    const chartPolicy = out.find(
+      (d) => d.kind === 'NetworkPolicy' && d.metadata?.name === 'sandbox-isolation'
+    );
+    assert.ok(chartPolicy, 'chart renders sandbox-isolation');
+    const saved = {
+      ns: process.env.SANDBOX_NAMESPACE,
+      server: process.env.ORCHARD_SERVER_NAMESPACE
+    };
+    delete process.env.SANDBOX_NAMESPACE;
+    delete process.env.ORCHARD_SERVER_NAMESPACE;
+    try {
+      const runner = Object.create(KubernetesSandboxRunner.prototype) as KubernetesSandboxRunner;
+      const serverPolicy = JSON.parse(JSON.stringify(runner.networkPolicyManifest())) as any;
+      assert.equal(chartPolicy.metadata.namespace, serverPolicy.metadata.namespace);
+      assert.deepEqual(chartPolicy.spec, serverPolicy.spec);
+      const ports = chartPolicy.spec.ingress[0].ports.map((p: any) => p.port);
+      assert.deepEqual(ports, [...SANDBOX_INGRESS_PORTS]);
+      for (const port of PREVIEW_PORTS) assert.ok(ports.includes(port), `preview port ${port}`);
+    } finally {
+      if (saved.ns !== undefined) process.env.SANDBOX_NAMESPACE = saved.ns;
+      if (saved.server !== undefined) process.env.ORCHARD_SERVER_NAMESPACE = saved.server;
+    }
+  }
+);
+
+test(
+  'sandbox previews render no route until a preview domain is set',
+  { skip: !helmAvailable() },
+  () => {
+    const out = parsed(render(['sandbox.enabled=true']));
+    assert.ok(!out.some((d) => d.metadata?.name === 'orchard-sandbox-previews'));
+  }
+);
+
+test(
+  'a preview domain renders a wildcard route to the server and a certificate',
+  { skip: !helmAvailable() },
+  () => {
+    const out = parsed(
+      render([
+        'sandbox.runners.previewDomain=Preview.Example.com',
+        'ingress.entryPoints[0]=websecure',
+        'ingress.entryPoints[1]=web'
+      ])
+    );
+    const route = out.find(
+      (d) => d.kind === 'IngressRoute' && d.metadata?.name === 'orchard-sandbox-previews'
+    );
+    assert.ok(route, 'preview IngressRoute rendered');
+    assert.deepEqual(route.spec.entryPoints, ['websecure', 'web']);
+    assert.equal(
+      route.spec.routes[0].match,
+      'HostRegexp(`^[0-9]{2,5}-[0-9a-f]{8}\\.preview\\.example\\.com$`)'
+    );
+    assert.deepEqual(route.spec.routes[0].services, [{ name: 'server', port: 3001 }]);
+    assert.equal(route.spec.tls.secretName, 'orchard-sandbox-previews-tls');
+    const cert = out.find(
+      (d) => d.kind === 'Certificate' && d.metadata?.name === 'orchard-sandbox-previews-tls'
+    );
+    assert.ok(cert, 'preview certificate rendered');
+    assert.deepEqual(cert.spec.dnsNames, ['*.preview.example.com']);
+    assert.deepEqual(cert.spec.issuerRef, {
+      name: 'letsencrypt-dns01-wildcard',
+      kind: 'ClusterIssuer'
+    });
+    const pattern = new RegExp(
+      route.spec.routes[0].match.slice('HostRegexp(`'.length, -'`)'.length)
+    );
+    assert.match('5173-3f2d7e6a.preview.example.com', pattern);
+    assert.doesNotMatch('5173-3f2d7e6a.previewxexample.com', pattern);
+    assert.doesNotMatch('orchard.preview.example.com', pattern);
+  }
+);
+
+test('preview tls honours an explicit issuer and secret', { skip: !helmAvailable() }, () => {
+  const out = parsed(
+    render([
+      'sandbox.runners.previewDomain=preview.example.com',
+      'sandbox.previews.tls.secretName=my-preview-tls',
+      'sandbox.previews.tls.issuerRef.name=dns-issuer',
+      'sandbox.previews.tls.issuerRef.kind=Issuer'
+    ])
+  );
+  const route = out.find((d) => d.metadata?.name === 'orchard-sandbox-previews');
+  assert.equal(route?.spec.tls.secretName, 'my-preview-tls');
+  const cert = out.find((d) => d.kind === 'Certificate' && d.metadata?.name === 'my-preview-tls');
+  assert.deepEqual(cert?.spec.issuerRef, { name: 'dns-issuer', kind: 'Issuer' });
+});
+
+test(
+  'preview tls without an issuer expects a secret brought out of band',
+  { skip: !helmAvailable() },
+  () => {
+    const out = parsed(
+      render(['sandbox.runners.previewDomain=preview.example.com', 'certificates.enabled=false'])
+    );
+    assert.ok(out.some((d) => d.metadata?.name === 'orchard-sandbox-previews'));
+    assert.ok(!out.some((d) => d.kind === 'Certificate' && /preview/.test(d.metadata?.name)));
+  }
+);
+
+test('the preview route can be switched off', { skip: !helmAvailable() }, () => {
+  const out = parsed(
+    render(['sandbox.runners.previewDomain=preview.example.com', 'sandbox.previews.route=false'])
+  );
+  assert.ok(!out.some((d) => /sandbox-previews/.test(d.metadata?.name ?? '')));
+});
+
+function serverEnv(out: string): string {
+  return docs(out).find((d) => /kind: Deployment/.test(d) && /name: server\n/.test(d)) ?? '';
+}
+
+test('sandboxes are neither installed nor switched by default', { skip: !helmAvailable() }, () => {
+  const out = render([]);
+  assert.doesNotMatch(out, /SANDBOX_ENABLED/);
+  assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
+  assert.doesNotMatch(out, /SANDBOX_NAMESPACE/);
+  assert.ok(
+    !parsed(out).some((d) => d.kind === 'Namespace' && d.metadata?.name === 'orchard-sandboxes')
+  );
+});
+
+test(
+  'sandbox.enabled installs everything and starts the switch on without locking it',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['sandbox.enabled=true']);
+    const server = serverEnv(out);
+    assert.match(server, /SANDBOX_ENABLED_DEFAULT, value: "true"/);
+    assert.doesNotMatch(server, /name: SANDBOX_ENABLED,/);
+    assert.match(server, /SANDBOX_NAMESPACE, value: "orchard-sandboxes"/);
+    assert.match(server, /ORCHARD_SERVER_NAMESPACE, value: "orchard"/);
+    assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
+    const objects = parsed(out);
+    assert.ok(
+      objects.some((d) => d.kind === 'Namespace' && d.metadata?.name === 'orchard-sandboxes')
+    );
+    assert.ok(
+      objects.some((d) => d.kind === 'Role' && d.metadata?.name === 'orchard-sandbox-manager')
+    );
+  }
+);
+
+test(
+  'sandbox.install renders the runner plumbing with the switch left to admins',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render(['sandbox.install=true']);
+    const server = serverEnv(out);
+    assert.doesNotMatch(server, /SANDBOX_ENABLED/);
+    assert.match(server, /SANDBOX_NAMESPACE, value: "orchard-sandboxes"/);
+    assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
+    const objects = parsed(out);
+    assert.ok(
+      objects.some((d) => d.kind === 'NetworkPolicy' && d.metadata?.name === 'sandbox-isolation')
+    );
+    assert.ok(
+      objects.some(
+        (d) => d.kind === 'RoleBinding' && d.metadata?.name === 'orchard-sandbox-manager'
+      )
+    );
+  }
+);
+
+test('sandbox.install=false wins over sandbox.enabled', { skip: !helmAvailable() }, () => {
+  const out = render(['sandbox.enabled=true', 'sandbox.install=false']);
+  assert.match(serverEnv(out), /SANDBOX_ENABLED_DEFAULT, value: "true"/);
+  assert.doesNotMatch(out, /SANDBOX_NAMESPACE/);
+  assert.ok(!parsed(out).some((d) => d.metadata?.name === 'sandbox-isolation'));
+});
+
+test('sandbox.lockEnabled pins the switch both ways', { skip: !helmAvailable() }, () => {
+  const on = render(['sandbox.enabled=true', 'sandbox.lockEnabled=true']);
+  assert.match(serverEnv(on), /name: SANDBOX_ENABLED, value: "true"/);
+  assert.doesNotMatch(serverEnv(on), /SANDBOX_ENABLED_DEFAULT/);
+  assert.match(on, /PUBLIC_SANDBOX_ENABLED, value: "true"/);
+  const off = render(['sandbox.install=true', 'sandbox.lockEnabled=false']);
+  assert.match(serverEnv(off), /name: SANDBOX_ENABLED, value: "false"/);
+  assert.match(off, /PUBLIC_SANDBOX_ENABLED, value: "false"/);
+});

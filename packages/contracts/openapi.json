@@ -47731,6 +47731,71 @@
         ]
       }
     },
+    "/sandboxes/{id}/apply/retry": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "retried": {
+                      "description": "Failed operations put back on the queue",
+                      "type": "integer"
+                    },
+                    "success": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "retried"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Requeue the sandbox's failed apply operations (applyError) with fresh retries; host or org admin",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/boot": {
       "get": {
         "description": "Auth: authenticated (scope: exec)",
@@ -49469,6 +49534,10 @@
                     "maxLength": 20000,
                     "type": "string"
                   },
+                  "draft": {
+                    "description": "Open the pull request as a draft",
+                    "type": "boolean"
+                  },
                   "repo": {
                     "type": "string"
                   },
@@ -49504,13 +49573,18 @@
                         "null"
                       ]
                     },
+                    "pushed": {
+                      "description": "The branch had no upstream on origin or unpushed commits, so it was pushed first as the caller",
+                      "type": "boolean"
+                    },
                     "url": {
                       "type": "string"
                     }
                   },
                   "required": [
                     "url",
-                    "number"
+                    "number",
+                    "pushed"
                   ],
                   "type": "object"
                 }
@@ -52965,7 +53039,15 @@
                     "ports": {
                       "items": {
                         "properties": {
+                          "declared": {
+                            "description": "Listed in .orchard/greenhouse.json ports, which also allows previewing it",
+                            "type": "boolean"
+                          },
                           "inSession": {
+                            "type": "boolean"
+                          },
+                          "listening": {
+                            "description": "A process is listening on it right now",
                             "type": "boolean"
                           },
                           "loopbackOnly": {
@@ -52997,7 +53079,9 @@
                           "previewUrl",
                           "public",
                           "inSession",
-                          "loopbackOnly"
+                          "loopbackOnly",
+                          "listening",
+                          "declared"
                         ],
                         "type": "object"
                       },
@@ -53022,7 +53106,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "TCP ports the dev user is listening on, flagged when started from this worktree",
+        "summary": "TCP ports the dev user is listening on, flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet",
         "tags": [
           "sandboxes"
         ]
@@ -56145,6 +56229,184 @@
         ]
       }
     },
+    "/share/sandbox": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "link": {
+                      "properties": {
+                        "createdBy": {
+                          "properties": {
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "avatarUrl"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "expiresAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "format": "uuid",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sessionId",
+                        "expiresAt",
+                        "createdBy"
+                      ],
+                      "type": "object"
+                    },
+                    "sandbox": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "creating",
+                            "starting",
+                            "running",
+                            "stopping",
+                            "stopped",
+                            "deleting",
+                            "error"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "status"
+                      ],
+                      "type": "object"
+                    },
+                    "sessions": {
+                      "items": {
+                        "properties": {
+                          "baseBranch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "branch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "prUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "repo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "status": {
+                            "enum": [
+                              "active",
+                              "archived"
+                            ],
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "repo",
+                          "branch",
+                          "baseBranch",
+                          "status",
+                          "prUrl",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "link",
+                    "sandbox",
+                    "sessions"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open a share link with the token in the X-Orchard-Share-Token header instead of the path, so it stays out of access logs",
+        "tags": [
+          "share"
+        ]
+      }
+    },
     "/share/sandbox/{token}": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -56635,6 +56897,289 @@
           }
         ],
         "summary": "Read-only transcript of a shared session",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/sessions/{sid}/changes": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "branch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "files": {
+                      "items": {
+                        "properties": {
+                          "additions": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "deletions": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "status",
+                          "additions",
+                          "deletions"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "isRepo": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "isRepo",
+                    "branch",
+                    "files"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Changed files in a shared session worktree (token in X-Orchard-Share-Token)",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/sessions/{sid}/diff": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "file",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "diff": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "diff",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Diff of a shared session worktree (token in X-Orchard-Share-Token)",
+        "tags": [
+          "share"
+        ]
+      }
+    },
+    "/share/sandbox/sessions/{sid}/transcript": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "chatId": {
+                      "description": "The opencode chat the messages come from",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "messages": {
+                      "items": {
+                        "properties": {
+                          "author": {
+                            "description": "Who sent a user prompt, when it was attributed",
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "enum": [
+                              "user",
+                              "assistant"
+                            ],
+                            "type": "string"
+                          },
+                          "text": {
+                            "description": "Text parts only; tool calls and reasoning are left out",
+                            "type": "string"
+                          },
+                          "truncated": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "text",
+                          "truncated",
+                          "createdAt",
+                          "author"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sessionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "chatId",
+                    "title",
+                    "messages"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Read-only transcript of a shared session (token in X-Orchard-Share-Token)",
         "tags": [
           "share"
         ]

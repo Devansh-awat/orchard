@@ -21,7 +21,11 @@ import {
   terminalTmuxEnvScript,
   writeTerminalEnvScript
 } from '../src/sandboxes/sandbox-git-identity';
-import { SandboxWorkspaceService } from '../src/sandboxes/sandbox-workspace.service';
+import {
+  PR_STATE_SCRIPT,
+  SandboxWorkspaceService,
+  parsePrState
+} from '../src/sandboxes/sandbox-workspace.service';
 import { SandboxSessionsController } from '../src/sandboxes/sandbox-sessions.controller';
 import {
   sandboxTerminalCommand,
@@ -407,4 +411,115 @@ test('the host git identity reaches the box as an init file the bootstrap applie
     SANDBOX_BOOTSTRAP_SCRIPT,
     /git config --file \/persist\/home\/\.gitconfig user\.email/
   );
+});
+
+test('the PR state script reports whether the branch still has to be pushed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orchard-pr-'));
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@t',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@t'
+      }
+    });
+  const state = (cwd: string) =>
+    parsePrState(execFileSync('/bin/sh', ['-c', PR_STATE_SCRIPT], { cwd, encoding: 'utf8' }));
+  execFileSync('git', ['init', '-q', '--bare', join(dir, 'origin.git')]);
+  execFileSync('git', ['init', '-q', '-b', 'main', join(dir, 'work')]);
+  const work = join(dir, 'work');
+  git(work, 'remote', 'add', 'origin', join(dir, 'origin.git'));
+  writeFileSync(join(work, 'a'), '1');
+  git(work, 'add', 'a');
+  git(work, 'commit', '-qm', 'one');
+  git(work, 'push', '-q', '-u', 'origin', 'main');
+  git(work, 'checkout', '-q', '-b', 'orchard/fix', '--track', 'origin/main');
+  assert.equal(state(work).branch, 'orchard/fix');
+  assert.equal(state(work).needsPush, true, 'tracking another branch counts as not pushed');
+  git(work, 'push', '-q', '-u', 'origin', 'HEAD');
+  assert.equal(state(work).needsPush, false);
+  writeFileSync(join(work, 'b'), '2');
+  git(work, 'add', 'b');
+  git(work, 'commit', '-qm', 'two');
+  assert.equal(state(work).needsPush, true);
+  assert.deepEqual(parsePrState('git@github.com:o/r.git\nfeature\nnone\n'), {
+    remoteUrl: 'git@github.com:o/r.git',
+    branch: 'feature',
+    needsPush: true
+  });
+});
+
+test('creating a PR pushes first as the actor and forwards draft to GitHub', async () => {
+  const calls: Array<{ cmd: string[]; opts: any }> = [];
+  let ahead = 'none';
+  const registry = {
+    for: () => ({
+      exec: async (_ref: unknown, cmd: string[], opts: any = {}) => {
+        calls.push({ cmd, opts });
+        const script = cmd[cmd.length - 1];
+        if (script.includes('git remote get-url origin')) {
+          return {
+            stdout: `https://github.com/acme/app.git\norchard/fix\n${ahead}\n`,
+            stderr: '',
+            exitCode: 0,
+            ok: true
+          };
+        }
+        return { stdout: 'pushed', stderr: '', exitCode: 0, ok: true };
+      }
+    })
+  };
+  const svc = new SandboxWorkspaceService(
+    registry as never,
+    {} as never,
+    {} as never,
+    actorService()
+  );
+  const requests: any[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init: any) => {
+    requests.push({ url, init });
+    return new Response(
+      JSON.stringify({ html_url: 'https://github.com/acme/app/pull/7', number: 7 }),
+      { status: 201 }
+    );
+  }) as never;
+  try {
+    const first = await svc.createPullRequest(BOX, 'app', GUEST, {
+      title: 'Fix',
+      base: 'main',
+      draft: true
+    });
+    assert.deepEqual(first, {
+      url: 'https://github.com/acme/app/pull/7',
+      number: 7,
+      pushed: true
+    });
+    const push = calls.find((c) => c.cmd[c.cmd.length - 1].includes('push -u origin HEAD'));
+    assert.ok(push, 'branch pushed');
+    assert.equal(push.opts.stdin.toString(), `${GUEST_TOKEN}\n`);
+    assert.doesNotMatch(push.cmd.join(' '), new RegExp(GUEST_TOKEN));
+    const sent = JSON.parse(requests[0].init.body);
+    assert.equal(sent.draft, true);
+    assert.equal(sent.head, 'orchard/fix');
+    assert.equal(requests[0].init.headers.authorization, `Bearer ${GUEST_TOKEN}`);
+
+    calls.length = 0;
+    requests.length = 0;
+    ahead = '0';
+    const second = await svc.createPullRequest(BOX, 'app', GUEST, { title: 'Fix', base: 'main' });
+    assert.equal(second.pushed, false);
+    assert.ok(!calls.some((c) => c.cmd[c.cmd.length - 1].includes('push')));
+    assert.equal(JSON.parse(requests[0].init.body).draft, undefined);
+    await assert.rejects(
+      () => svc.createPullRequest(BOX, 'app', GUEST, { title: 'Fix', draft: 'yes' }),
+      /draft must be a boolean/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

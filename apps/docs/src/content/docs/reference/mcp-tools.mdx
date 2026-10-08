@@ -1188,7 +1188,7 @@ Start a new agent session on a running Greenhouse machine: creates a git worktre
 
 ### `create_sandbox_session_pr`
 
-Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Fails with github_not_linked if the caller has not linked GitHub. Commit and push the work first (the agent can do both when asked).
+Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller has not linked GitHub. Commit the work first (the agent can when asked); uncommitted changes are not included.
 
 ### `get_sandbox`
 

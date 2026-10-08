@@ -53,3 +53,18 @@ async function terminalMode(
   const granted = await access.requireSandboxRole(sandboxId, userId, 'viewer').catch(() => null);
   return granted ? { row: granted.sandbox, mode: 'ro', access: granted } : null;
 }
+
+export async function sandboxSshAccess(
+  access: SandboxAccessService,
+  sandboxId: string,
+  userId: string,
+  scope: SandboxGateScope = {}
+): Promise<SandboxAccess | null> {
+  const ctx = {
+    ...(scope.sessionOrgId ? { sessionOrgId: scope.sessionOrgId } : {}),
+    ...(scope.tokenProjectIds?.length ? { tokenProjectIds: scope.tokenProjectIds } : {})
+  };
+  return requestAuthStorage.run(ctx, () =>
+    access.requireSandboxRole(sandboxId, userId, 'owner').catch(() => null)
+  );
+}

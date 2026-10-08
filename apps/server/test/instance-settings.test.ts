@@ -150,3 +150,17 @@ test('SANDBOX_ENABLED pins the sandboxes toggle', async () => {
     await assert.rejects(() => settings.setSandboxes(true), /SANDBOX_ENABLED/);
   });
 });
+
+test('SANDBOX_ENABLED_DEFAULT starts the sandboxes toggle without locking it', async () => {
+  const { prisma, settings } = build();
+  await withEnv(
+    { SANDBOX_ENABLED: undefined, SANDBOX_ENABLED_DEFAULT: 'true', NODE_ENV: 'production' },
+    async () => {
+      assert.equal(await settings.isSandboxesEnabled(), true);
+      assert.equal((await settings.getSandboxesState()).envOverride, null);
+      await settings.setSandboxes(false);
+      assert.equal(prisma.rows.get(SANDBOXES_ENABLED_KEY), 'false');
+      assert.equal(await settings.isSandboxesEnabled(), false);
+    }
+  );
+});

@@ -438,6 +438,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
           apiVersion: 'v1',
           watchPath: `/api/v1/namespaces/${namespace}/persistentvolumeclaims`,
           labelSelector: ownSelector,
+          onEvent: (type, obj) => deps.sandboxes.onClaimEvent(type, obj),
           list: async (kc, opts) =>
             toListResult(
               await core(kc).listNamespacedPersistentVolumeClaim(

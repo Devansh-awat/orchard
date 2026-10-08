@@ -3,12 +3,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ApplyQueueService } from '../../apply/apply-queue.service';
 import {
   KubernetesSandboxRunner,
+  forkSnapshotOf,
   sandboxCrKey,
   sandboxDestroyKey
 } from '../../sandboxes/runners/kubernetes.runner';
 import {
   CRD_API_VERSION,
   CRD_KIND,
+  SANDBOX_ID_LABEL,
   SANDBOX_SHARD,
   readSandboxCr,
   sandboxStatusFromCr
@@ -34,7 +36,7 @@ export class SandboxMirrorConsumer {
     if (!podName) return;
     const row = await this.prisma.sandbox.findUnique({
       where: { podName },
-      select: { id: true, status: true, desiredState: true, runner: true }
+      select: { id: true, status: true, desiredState: true, runner: true, runnerState: true }
     });
     if (!row || row.runner !== 'kubernetes') return;
     if (type === 'delete') {
@@ -42,11 +44,36 @@ export class SandboxMirrorConsumer {
       return;
     }
     const observed = readSandboxCr(cr);
+    const status = sandboxStatusFromCr(observed);
     await applyObservation(this.prisma, row, {
       exists: true,
-      status: sandboxStatusFromCr(observed),
+      status,
       message: observed.message
     });
+    if (status === 'running' && forkSnapshotOf(row.runnerState)) {
+      await this.requestForkCleanup(row.id);
+    }
+  }
+
+  async onClaimEvent(type: MirrorEventType, claim: any): Promise<void> {
+    if (type === 'delete' || claim?.status?.phase !== 'Bound') return;
+    const sandboxId = claim?.metadata?.labels?.[SANDBOX_ID_LABEL];
+    if (typeof sandboxId !== 'string' || !sandboxId) return;
+    const row = await this.prisma.sandbox.findUnique({
+      where: { id: sandboxId },
+      select: { runner: true, status: true, runnerState: true }
+    });
+    if (!row || row.runner !== 'kubernetes' || row.status !== 'running') return;
+    if (!forkSnapshotOf(row.runnerState)) return;
+    await this.requestForkCleanup(sandboxId);
+  }
+
+  private async requestForkCleanup(sandboxId: string): Promise<void> {
+    await this.runner
+      .requestForkCleanup(sandboxId)
+      .catch((e: any) =>
+        this.logger.warn(`fork cleanup enqueue failed for ${sandboxId}: ${e?.message}`)
+      );
   }
 
   async onListComplete(seen: MirrorObjectKey[]): Promise<void> {
@@ -93,6 +120,9 @@ export class SandboxMirrorConsumer {
     for (const row of rows) {
       const cr = present.has(row.podName) ? byName.get(row.podName) : undefined;
       try {
+        if (row.status === 'running' && forkSnapshotOf(row.runnerState)) {
+          await this.requestForkCleanup(row.id);
+        }
         if (row.desiredState === 'deleted') {
           if (await this.queue.hasOpenItem(sandboxDestroyKey(row.id))) continue;
           this.logger.warn(`sandbox ${row.id} is still waiting to be destroyed; queueing again`);

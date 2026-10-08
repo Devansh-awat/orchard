@@ -22,6 +22,9 @@ import {
 import {
   FS_EXIT,
   HOME_ROOT,
+  READ_EXIT,
+  buildConfinedPathCheck,
+  buildConfinedReadScript,
   WORKTREES_ROOT,
   buildFsScript,
   isUuid,
@@ -77,6 +80,31 @@ function selectorOf(sel: WorkdirSelector | string | undefined | null): WorkdirSe
   if (!sel) return {};
   if (typeof sel === 'string') return { repo: sel };
   return sel;
+}
+
+export const PR_STATE_SCRIPT = [
+  'git remote get-url origin',
+  'b=$(git rev-parse --abbrev-ref HEAD)',
+  'printf "%s\\n" "$b"',
+  'u=$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null)',
+  'if [ "$u" = "origin/$b" ]; then git rev-list --count "$u..HEAD" 2>/dev/null || echo 1; else echo none; fi'
+].join('\n');
+
+export function parsePrState(stdout: string): {
+  remoteUrl: string | null;
+  branch: string | null;
+  needsPush: boolean;
+} {
+  const [remoteUrl = '', branch = '', ahead = ''] = stdout
+    .trim()
+    .split('\n')
+    .map((l) => l.trim());
+  const count = /^\d+$/.test(ahead) ? Number(ahead) : null;
+  return {
+    remoteUrl: remoteUrl || null,
+    branch: branch || null,
+    needsPush: count === null || count > 0
+  };
 }
 
 function prNumberFromUrl(url: string | null | undefined): number | null {
@@ -485,27 +513,36 @@ export class SandboxWorkspaceService {
     sandbox: WorkspaceSandbox,
     repo: WorkdirSelector | string,
     actorUserId: string,
-    body: { title?: string; body?: string; base?: string }
-  ): Promise<{ url: string; number: number | null }> {
+    body: { title?: string; body?: string; base?: string; draft?: unknown }
+  ): Promise<{ url: string; number: number | null; pushed: boolean }> {
     if (!body.title?.trim()) throw new BadRequestException('A PR title is required');
+    if (body.draft !== undefined && typeof body.draft !== 'boolean') {
+      throw new BadRequestException('draft must be a boolean');
+    }
     const githubToken = await this.actors().requireActorToken(actorUserId);
     if (body.base !== undefined && body.base !== '' && !isValidGitRef(body.base)) {
       throw new BadRequestException('Invalid base branch');
     }
     const resolved = await this.resolveDir(sandbox, repo);
-    const info = await this.runIn(
-      sandbox,
-      resolved.dir,
-      resolved.guardRoot,
-      'git remote get-url origin; git rev-parse --abbrev-ref HEAD'
-    );
-    const [remoteUrl, branch] = info.stdout
-      .trim()
-      .split('\n')
-      .map((l) => l.trim());
+    const info = await this.runIn(sandbox, resolved.dir, resolved.guardRoot, PR_STATE_SCRIPT);
+    const { remoteUrl, branch, needsPush } = parsePrState(info.stdout);
     const match = remoteUrl?.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
-    if (!match || !branch) {
+    if (!match || !branch || branch === 'HEAD') {
       throw new BadRequestException('Could not determine the GitHub repository or branch');
+    }
+    if (needsPush) {
+      const pushed = await this.runGit(
+        sandbox,
+        repo,
+        actorUserId,
+        (git) => `${git} push -u origin HEAD 2>&1`,
+        { network: true }
+      );
+      if (!pushed.ok) {
+        throw new BadRequestException(
+          `Could not push the branch before opening the pull request: ${pushed.stdout.trim().split('\n').slice(-3).join(' ').slice(0, 400) || 'git push failed'}`
+        );
+      }
     }
     const [, owner, name] = match;
     const headers = {
@@ -526,7 +563,8 @@ export class SandboxWorkspaceService {
         title: body.title,
         head: branch,
         base: base || 'main',
-        ...(body.body ? { body: body.body } : {})
+        ...(body.body ? { body: body.body } : {}),
+        ...(body.draft === true ? { draft: true } : {})
       })
     });
     const pr = (await prRes.json()) as any;
@@ -544,7 +582,7 @@ export class SandboxWorkspaceService {
         })
         .catch((e) => this.logger.warn(`could not record PR on session: ${e?.message}`));
     }
-    return { url: pr.html_url, number };
+    return { url: pr.html_url, number, pushed: needsPush };
   }
 
   async readFile(
@@ -560,15 +598,29 @@ export class SandboxWorkspaceService {
       return this.readFileAtHead(sandbox, repo, file);
     }
     const { dir } = await this.resolveDir(sandbox, repo);
+    let script: string;
+    try {
+      script = buildConfinedReadScript(dir, file, MAX_FILE_BYTES);
+    } catch {
+      throw new BadRequestException('Invalid file path');
+    }
     const result = await this.registry
       .for(sandbox)
-      .readFile(refOf(sandbox), `${dir}/${file}`, { maxBytes: MAX_FILE_BYTES, asUser: 'dev' })
+      .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], { timeoutMs: 20_000 })
       .catch((e) => {
         if (e instanceof SandboxNotRunningError) throw e;
         return null;
       });
-    if (!result) throw new BadRequestException('Could not read that file');
-    return { content: result.content.toString('utf8'), truncated: result.truncated };
+    if (result?.exitCode === READ_EXIT.outside) {
+      throw new BadRequestException('That path is outside the workspace');
+    }
+    if (!result || !result.ok) throw new BadRequestException('Could not read that file');
+    const bytes = Buffer.from(result.stdout.trim(), 'base64');
+    const truncated = bytes.length > MAX_FILE_BYTES;
+    return {
+      content: (truncated ? bytes.subarray(0, MAX_FILE_BYTES) : bytes).toString('utf8'),
+      truncated
+    };
   }
 
   private async readFileAtHead(
@@ -902,14 +954,25 @@ export class SandboxWorkspaceService {
       if (typeof file !== 'string' || !FILE_RE.test(file) || file.includes('..')) {
         throw new BadRequestException('Invalid file path');
       }
+      const { dir } = await this.resolveDir(sandbox, repo);
+      let guard: string;
+      try {
+        guard = buildConfinedPathCheck(dir, file);
+      } catch {
+        throw new BadRequestException('Invalid file path');
+      }
+      const path = shellQuote(file);
       script = [
-        `git diff HEAD -- '${file}'`,
-        `if git status --porcelain -- '${file}' | grep -q '^??'; then git diff --no-index -- /dev/null '${file}' || true; fi`
-      ].join('; ');
+        `( ${guard} ) || exit ${READ_EXIT.outside}`,
+        `{ git diff HEAD -- ${path}; if git status --porcelain -- ${path} | grep -q '^??'; then git diff --no-index -- /dev/null ${path} || true; fi; } | head -c ${MAX_DIFF_BYTES + 1}`
+      ].join('\n');
     } else {
-      script = 'git diff HEAD';
+      script = `git diff HEAD | head -c ${MAX_DIFF_BYTES + 1}`;
     }
-    const result = await this.run(sandbox, `{ ${script}; } | head -c ${MAX_DIFF_BYTES + 1}`, repo);
+    const result = await this.run(sandbox, script, repo);
+    if (result.exitCode === READ_EXIT.outside) {
+      throw new BadRequestException('That path is outside the workspace');
+    }
     const truncated = result.stdout.length > MAX_DIFF_BYTES;
     return {
       diff: truncated ? result.stdout.slice(0, MAX_DIFF_BYTES) : result.stdout,

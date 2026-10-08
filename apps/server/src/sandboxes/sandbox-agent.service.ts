@@ -2,11 +2,13 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
-  Injectable
+  Injectable,
+  Optional
 } from '@nestjs/common';
 import type { SandboxConversation } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SandboxWorkspaceService, type WorkspaceSandbox } from './sandbox-workspace.service';
+import { SandboxSessionsService } from './sandbox-sessions.service';
 import {
   PUBLIC_USER_SELECT,
   SandboxMembersService,
@@ -87,8 +89,11 @@ export class SandboxAgentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspace: SandboxWorkspaceService,
-    private readonly members: SandboxMembersService
-  ) {}
+    private readonly members: SandboxMembersService,
+    @Optional() sessions?: SandboxSessionsService
+  ) {
+    sessions?.setPromptRecorder((input) => this.members.recordPrompt(input));
+  }
 
   private async chatFor(sandbox: WorkspaceSandbox, session: SandboxConversation): Promise<string> {
     if (session.opencodeSessionId) {

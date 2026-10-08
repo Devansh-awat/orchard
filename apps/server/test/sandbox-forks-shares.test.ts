@@ -7,8 +7,10 @@ import { SandboxAgentController } from '../src/sandboxes/sandbox-agent.controlle
 import { SandboxForkController } from '../src/sandboxes/sandbox-fork.controller';
 import {
   SandboxShareLinksController,
-  SandboxShareViewerController
+  SandboxShareViewerController,
+  shareTokenFromHeader
 } from '../src/sandboxes/sandbox-share-links.controller';
+import { redactSensitivePath, redactSpanUrls } from '../src/analytics/url-redaction';
 import {
   SandboxAgentService,
   transcriptLimit,
@@ -27,12 +29,14 @@ import {
   newShareToken,
   shareExpiry,
   shareLinkState,
-  shareTokenMatches
+  shareTokenMatches,
+  shareUrl
 } from '../src/sandboxes/sandbox-share-links.service';
 import {
   FORK_UNSUPPORTED,
   KubernetesSandboxRunner,
   SANDBOX_OP_CR,
+  SANDBOX_OP_FORK_CLEANUP,
   SANDBOX_OP_FORK_SNAPSHOT,
   SANDBOX_OP_SECRET,
   forkSnapshotOf,
@@ -40,6 +44,8 @@ import {
 } from '../src/sandboxes/runners/kubernetes.runner';
 import { VERCEL_OP_FORK, VercelSandboxRunner } from '../src/sandboxes/runners/vercel.runner';
 import { forkSourceOf } from '../src/sandboxes/runners/sandbox-runner';
+import { SandboxMirrorConsumer } from '../src/mirror/consumers/sandbox-mirror.consumer';
+import { transitionWindowMs } from '../src/sandboxes/sandbox-reaper.service';
 
 process.env.SECRETS_ENCRYPTION_KEY ||= 'test-secrets-key';
 
@@ -483,7 +489,16 @@ test('share viewer routes all resolve the token before touching the machine', as
   const methods = Object.getOwnPropertyNames(SandboxShareViewerController.prototype).filter(
     (n) => n !== 'constructor' && n !== 'viewer'
   );
-  assert.deepEqual(methods.sort(), ['changes', 'diff', 'transcript', 'view']);
+  assert.deepEqual(methods.sort(), [
+    'changes',
+    'changesByHeader',
+    'diff',
+    'diffByHeader',
+    'transcript',
+    'transcriptByHeader',
+    'view',
+    'viewByHeader'
+  ]);
 });
 
 function forkHarness(opts: {
@@ -899,4 +914,135 @@ test('vercel fork goes through the queue with ids only and forks instead of crea
   assert.ok(forked[0].networkPolicy, 'the network policy is set for the new owner, not inherited');
   assert.ok(row.runnerState.forkedAt, 'a later re-provision creates instead of re-forking');
   assert.equal(row.status, 'running');
+});
+
+test('the fork snapshot is deleted once the restored claim is bound and the machine runs', async () => {
+  const snapshotState = {
+    forkFrom: { sandboxId: SBX, podName: `sbx-${SBX}` },
+    forkSnapshot: { name: `sbx-${FORK}-fork`, volumeMode: 'Block', storageClassName: 'ceph' },
+    secretHash: 'h'
+  };
+  const k = k8sRunner(
+    { ...FORK_ROW, status: 'running', runnerState: snapshotState },
+    { claim: { metadata: { name: `home-sbx-${FORK}` }, status: { phase: 'Pending' } } }
+  );
+  const deleted: string[] = [];
+  (k.runner as any).custom = () => ({
+    deleteNamespacedCustomObject: async (...args: any[]) => {
+      deleted.push(args[4]);
+      return {};
+    }
+  });
+  (k.runner as any).queue.hasOpenItem = async () => false;
+  await k.runner.requestForkCleanup(FORK);
+  const op = k.enqueued.find((e) => e.opType === SANDBOX_OP_FORK_CLEANUP);
+  assert.deepEqual(op.manifest, { sandboxId: FORK });
+  assert.equal(op.dedupeKey, `sandbox:${FORK}:fork-cleanup`);
+  const cleanup = k.handlers.get(SANDBOX_OP_FORK_CLEANUP)!;
+  const item = { dedupeKey: op.dedupeKey, opType: op.opType, manifest: op.manifest };
+  await cleanup(item);
+  assert.deepEqual(deleted, [], 'pending claim keeps the snapshot');
+  (k.runner as any).homeClaim = async () => ({
+    metadata: { name: `home-sbx-${FORK}` },
+    status: { phase: 'Bound' }
+  });
+  await cleanup(item);
+  assert.deepEqual(deleted, [`sbx-${FORK}-fork`]);
+  const state = k.current().runnerState;
+  assert.equal(state.forkSnapshot, undefined);
+  assert.equal(state.forkFrom, undefined);
+  assert.equal(state.secretHash, 'h');
+  await cleanup(item);
+  assert.equal(deleted.length, 1, 'nothing left to clean');
+});
+
+test('the mirror asks for fork cleanup when the restored claim binds', async () => {
+  const asked: string[] = [];
+  let row: any = {
+    runner: 'kubernetes',
+    status: 'running',
+    runnerState: { forkSnapshot: { name: 'x-fork' } }
+  };
+  const consumer = new SandboxMirrorConsumer(
+    { sandbox: { findUnique: async () => row } } as never,
+    { requestForkCleanup: async (id: string) => asked.push(id) } as never,
+    {} as never
+  );
+  const claim = (phase: string) => ({
+    metadata: { labels: { 'orchard.my/sandbox-id': FORK } },
+    status: { phase }
+  });
+  await consumer.onClaimEvent('update', claim('Pending'));
+  await consumer.onClaimEvent('delete', claim('Bound'));
+  assert.deepEqual(asked, []);
+  await consumer.onClaimEvent('update', claim('Bound'));
+  assert.deepEqual(asked, [FORK]);
+  row = { ...row, runnerState: {} };
+  await consumer.onClaimEvent('update', claim('Bound'));
+  assert.deepEqual(asked, [FORK]);
+});
+
+test('a machine being forked gets thirty minutes before the reaper calls it stuck', () => {
+  assert.equal(transitionWindowMs({ forkFrom: { sandboxId: SBX, podName: 'p' } }), 30 * 60 * 1000);
+  assert.equal(transitionWindowMs(null), 10 * 60 * 1000);
+  assert.equal(transitionWindowMs({ secretHash: 'h' }), 10 * 60 * 1000);
+});
+
+test('share viewer routes take the token from X-Orchard-Share-Token', async () => {
+  assert.equal(shareTokenFromHeader({ headers: { 'x-orchard-share-token': ' tok ' } }), 'tok');
+  assert.equal(shareTokenFromHeader({ headers: { 'x-orchard-share-token': ['a', 'b'] } }), 'a');
+  assert.throws(() => shareTokenFromHeader({ headers: {} }), /X-Orchard-Share-Token/);
+  assert.throws(
+    () => shareTokenFromHeader({ headers: { 'x-orchard-share-token': '  ' } }),
+    /X-Orchard-Share-Token/
+  );
+  const seen: any[] = [];
+  const shares = {
+    view: async (token: string) => seen.push(['view', token]),
+    transcript: async (token: string, _u: unknown, sid: string, limit?: string) =>
+      seen.push(['transcript', token, sid, limit]),
+    changes: async (token: string, _u: unknown, sid: string) => seen.push(['changes', token, sid]),
+    diff: async (token: string, _u: unknown, sid: string, file?: string) =>
+      seen.push(['diff', token, sid, file])
+  };
+  const viewer = new SandboxShareViewerController(shares as never, {} as never, {} as never);
+  (viewer as any).viewer = async () => ({ id: OWNER, email: null });
+  const req = { headers: { 'x-orchard-share-token': 'tok_1' } };
+  await viewer.viewByHeader(req);
+  await viewer.transcriptByHeader(req, SID, '5');
+  await viewer.changesByHeader(req, SID);
+  await viewer.diffByHeader(req, SID, 'a.ts');
+  await viewer.view(req, 'path_tok');
+  assert.deepEqual(seen, [
+    ['view', 'tok_1'],
+    ['transcript', 'tok_1', SID, '5'],
+    ['changes', 'tok_1', SID],
+    ['diff', 'tok_1', SID, 'a.ts'],
+    ['view', 'path_tok']
+  ]);
+  assert.match(shareUrl('abc'), /\/share\/sandbox#abc$/);
+});
+
+test('share tokens are redacted from traced and reported urls', () => {
+  assert.equal(
+    redactSensitivePath('https://o.example/apiv1/share/sandbox/AbC_-123/sessions/x/diff?file=a'),
+    'https://o.example/apiv1/share/sandbox/[redacted]/sessions/x/diff?file=a'
+  );
+  assert.equal(redactSensitivePath('/apiv1/share/sandbox/tok'), '/apiv1/share/sandbox/[redacted]');
+  assert.equal(
+    redactSensitivePath('/apiv1/share/sandbox/sessions/abc/transcript'),
+    '/apiv1/share/sandbox/sessions/abc/transcript'
+  );
+  assert.equal(redactSensitivePath('/apiv1/sandboxes/x'), '/apiv1/sandboxes/x');
+  const tags: Record<string, unknown> = {
+    'http.url': 'https://o.example/apiv1/share/sandbox/secret-token',
+    'http.endpoint': '/apiv1/share/sandbox/secret-token'
+  };
+  redactSpanUrls({
+    context: () => ({ getTag: (k: string) => tags[k] }),
+    setTag: (k: string, v: unknown) => {
+      tags[k] = v;
+    }
+  });
+  assert.ok(!JSON.stringify(tags).includes('secret-token'));
 });

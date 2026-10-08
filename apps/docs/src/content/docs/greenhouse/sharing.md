@@ -53,6 +53,14 @@ every message on the live connection, not just hidden in the interface. A
 read-only guest's edits to a shared file are dropped by the server even if their
 browser sends them.
 
+Reading files through the editor and the diff view, and file operations, are limited to
+the session's worktree and the repositories in the home directory. The check runs
+inside the machine on the real path, so a symlink in a repository that points at
+`~/.git-credentials`, `~/.config` or anywhere outside the workspace is refused,
+and so is anything directly under a dot directory of the home directory. Guests
+with a terminal can of course still read whatever the machine holds; this is what
+keeps read-only guests and share links to the code.
+
 ## Invite people
 
 In the workspace, open **Share machine** from the session menu or the machine
@@ -127,7 +135,13 @@ Commits record everyone who took part: when several people prompted the agent in
 a session, the commit carries a `Co-authored-by` trailer for each of them.
 
 The **agent** is the exception. It runs as the host, so commits and pushes it
-makes on its own are the host's, with trailers for the people who prompted it.
+makes on its own are the host's, with a trailer for each person who prompted it
+in that turn. See
+[Pull requests and checks](/greenhouse/pull-requests/#commit).
+
+Every prompt is attributed to whoever sent it, including the first one: a
+session started with a prompt, from the composer, the CLI, MCP, a GitHub or
+Linear `/greenhouse` comment or Slack, shows that prompt as its creator's.
 
 ### Terminals are per person
 
@@ -196,4 +210,7 @@ orchard sandbox share list leafy
 orchard sandbox share revoke leafy <link-id>
 ```
 
-The link opens at `https://<your orchard>/share/sandbox/<token>`.
+The link opens at `https://<your orchard>/share/sandbox#<token>`. The token sits
+after the `#`, so browsers never send it to the server and it stays out of
+access logs; the page sends it to the API in an `X-Orchard-Share-Token` header.
+Links in the older `/share/sandbox/<token>` form keep working.

@@ -87,7 +87,7 @@ markers, Vercel `expiresAt` and `bridgeUrl`).
 | `execStdin`            | yes                                                                           | yes (staged through a temp file)                         |
 | `diskSizeConfigurable` | yes                                                                           | no                                                       |
 | `fork`                 | when a VolumeSnapshotClass matches the storage class (probed every 5 minutes) | yes                                                      |
-| `previews`             | `none` (served by the server's preview proxy)                                 | `public`                                                 |
+| `previews`             | `proxy` when a usable `previewDomain` is configured (server preview proxy), else `none` | `public`                                       |
 
 ### Registry
 
@@ -125,6 +125,8 @@ replaces an older pending one. `K8sApplyItem.sandboxId` lets the API report
 | `sandbox.cr.apply`                                               | `sandbox:<id>:cr`             | `{sandboxId}`                      | `stopped`: merge-patch `operatingMode: Suspended`. `running`: SSA the Sandbox CR, keeping existing `volumeClaimTemplates`. Applies the returned CR as an observation.                                                                           |
 | `sandbox.destroy`                                                | `sandbox:<id>:destroy`        | `{sandboxId, podName}`             | Refuses unless the row is `desiredState=deleted` (or there is no row: an orphan). Deletes the CR, Secret, labelled PVCs and fork VolumeSnapshot, then the row.                                                                                  |
 | `sandbox.fork.snapshot`                                          | `sandbox:<id>:fork`           | `{sandboxId, sourceSandboxId}`     | Creates a VolumeSnapshot of the source home PVC, records `runnerState.forkSnapshot`, enqueues the CR whose claim template restores from it.                                                                                                     |
+| `sandbox.fork.cleanup`                                           | `sandbox:<id>:fork-cleanup`   | `{sandboxId}`                      | Enqueued by the mirror when the fork's PVC is `Bound` or its CR is running (and on every list pass). Only acts when the row is `running` and the home PVC is `Bound`: deletes the fork VolumeSnapshot, then drops `forkSnapshot` and `forkFrom` from `runnerState`. |
+| `ssa`                                                            | `sandbox:<id>:preview-netpol` | NetworkPolicy `sbx-<id>-previews`  | Ingress from server pods to the machine's declared preview ports (`runnerState.declaredPorts`), selected by `orchard.my/sandbox-id`. Deleted by `sandbox.destroy`.                                                                            |
 | `vercel.provision`, `vercel.start`, `vercel.stop`, `vercel.fork` | `sandbox:<id>:vercel`         | `{sandboxId}` (+`sourceSandboxId`) | One converge function: stop, or resume (`Sandbox.get({resume:true})`), create or fork on 404, update the network policy, wait up to 90 s for `running`, push init files, run bootstrap, record `expiresAt` and `bridgeUrl`, mark `running`.     |
 | `vercel.secret.sync`                                             | `sandbox:<id>:vercel.secret`  | `{sandboxId}`                      | Updates the GitHub network policy; when running, pushes init files and reruns the idempotent bootstrap.                                                                                                                                         |
 | `vercel.destroy`                                                 | `sandbox:<id>:vercel.destroy` | `{sandboxId}`                      | Deletes the sandbox with `deleteOrphanSnapshots`, then the row.                                                                                                                                                                                 |
@@ -132,7 +134,8 @@ replaces an older pending one. `K8sApplyItem.sandboxId` lets the API report
 Manifests never contain secrets. Vercel handlers are serialized per machine in
 process. Failed items retry with exponential backoff from 5 s to 10 minutes, up
 to 10 attempts. `ApplyQueueService.retryForSandbox` resets a machine's failed
-items.
+items; `POST /sandboxes/:id/apply/retry` (owner or org admin, audited as
+`sandbox.apply.retry`) and `orchard sandbox retry` call it.
 
 The queue drains only where `LeaseService.canCoordinate` is true (a kubeconfig
 plus a control namespace: in-cluster, or `ORCHARD_CONTROL_NAMESPACE`), and not at
@@ -253,7 +256,13 @@ cwd: '/', cols, rows}`, then binary stdin frames and `{type: 'resize'}`;
   (secret ones 0600), then bootstrap run detached with env `ORCHARD_INIT_STAGE`,
   `SANDBOX_HOME_MODE=none`, `SANDBOX_PERSIST_ROOT=/vercel/sandbox/orchard`,
   `SANDBOX_REPO_URL`, `CLAUDE_CODE_OAUTH_TOKEN`, `OPENAI_API_KEY`,
-  `ORCHARD_BRIDGE_URL`. Never `create({env})`.
+  `ORCHARD_BRIDGE_URL` and `ORCHARD_BRIDGE_SHA256`. Never `create({env})`.
+- **Bridge integrity:** `BridgeChecksumResolver` returns `bridgeBinarySha256`
+  when configured, or, for the default URL, the `orchard_<v>_linux_amd64.tar.gz`
+  line of that release's `checksums.txt` (fetched once, cached; failures retried
+  after 5 minutes). An overridden `bridgeBinaryUrl` without a checksum is a
+  `configError`. The bootstrap refuses to install the bridge without
+  `ORCHARD_BRIDGE_SHA256` and checks the download with `sha256sum -c`.
 - **GitHub credential brokering:** `networkPolicy: {allow: {'github.com':
 [{transform: [{headers: {authorization: 'Basic <x-access-token:TOKEN>'}}]}],
 'api.github.com': [{... 'Bearer TOKEN'}], '*': []}}`. The host's token never
@@ -333,9 +342,11 @@ A session is a `SandboxConversation` row with a `slug`.
 - **Create:** validates repo and ref names, inserts the row (retrying slug
   collisions), runs `buildWorktreeAddScript` (fetch base, `git worktree add
 --no-track -b orchard/<slug>`), creates an opencode session with
-  `directory=<worktree>`, sends the first prompt with `prompt_async`, and starts
-  the setup script if configured. Exit codes 3/4/5/6 map to not a repo, exists,
-  no base, add failed.
+  `directory=<worktree>`, installs the co-author hook, sends the first prompt
+  with `prompt_async` under a fresh `messageID` recorded as the creator's
+  `SandboxPromptAuthor` (so CLI, MCP, Slack, Linear and GitHub kickoffs are
+  attributed too), and starts the setup script if configured. Exit codes 3/4/5/6
+  map to not a repo, exists, no base, add failed.
 - **Archive:** kills the session's tmux sessions, removes the worktree, keeps the
   branch, tears down any preview. **Restore** re-adds the worktree from the branch.
   **Delete** also purges `~/.orchard/sessions/<id>`, deletes the opencode session
@@ -348,6 +359,12 @@ A session is a `SandboxConversation` row with a `slug`.
 - Workspace routes (`changes`, `diff`, `file`, `git/*`, `fs/*`) take
   `session=<id>`, which resolves the cwd to the worktree; every script runs
   behind a `realpath` guard that the directory is inside `/persist/home/.worktrees`.
+- `GET file` (`buildConfinedReadScript`), `GET diff?file=`
+  (`buildConfinedPathCheck`, `realpath -m`) and `fs/*` resolve the target with
+  `realpath` in the box and refuse (exit 5, a 400) anything outside the root, or
+  under a dot entry of `/persist/home` other than `.worktrees`, so symlinks to
+  `~/.git-credentials`, `~/.config` or `~/.claude` do not leak to viewers. The
+  file is returned base64 from `head -c`.
 
 ### Scripts and ports
 
@@ -363,10 +380,19 @@ Ports come from `/proc/net/tcp{,6}` listening sockets mapped to processes owned
 by `dev` through `/proc/<pid>/fd`, with the process `cwd` deciding `inSession`
 and the bind address deciding `loopbackOnly`. 22, 2222 and 4096 are hidden.
 
+`ports` in the config is bounded: up to 10 entries from 1024 to 65535, never 22,
+2222 or 4096. Every probe merges them into `runnerState.declaredPorts` (capped
+at 10, newest first, standard preview ports left out) and asks the runner
+(`requestPreviewPorts`) for the per-machine NetworkPolicy. `GET ports` adds
+declared ports that nothing listens on (`listening: false, declared: true`).
+
 ### Pull requests, checks, merge
 
-PR creation calls the GitHub REST API with the actor's token, from the session
-branch into `body.base`, the session's base branch, or the repository default.
+PR creation reads the remote, the branch and whether `@{u}` is `origin/<branch>`
+with no commits ahead (`PR_STATE_SCRIPT`); otherwise it runs `git push -u origin
+HEAD` as the actor first. It then calls the GitHub REST API with the actor's
+token, from the session branch into `body.base`, the session's base branch, or
+the repository default, with `draft: true` when asked, and returns `pushed`.
 Checks read the PR (by number, or by head branch) and its head commit's check runs
 and statuses with the actor's token, falling back to the host's; failing GitHub
 Actions jobs get the last 60 lines (6 KB) of their logs, at most three. Merge is
@@ -391,8 +417,21 @@ credential.helper=` (clearing any configured helper, including the host's
   helper and `ORCHARD_GIT_TOKEN` is written to `/tmp/.orchard-term-<engine id>`
   (umask 077), sourced by the shell and deleted (a 30 s cleanup covers the
   attach path). The values are also set in the tmux session environment.
-- Commits add `Co-authored-by` for other people who prompted in the session
-  (`SandboxMembersService.coAuthors`). The agent itself runs as the host.
+- Commits through the API add `Co-authored-by` for other people who prompted in
+  the session (`SandboxMembersService.coAuthors`). The agent itself runs as the
+  host.
+- Agent commits (and any `git commit` in the worktree) get trailers from a
+  `prepare-commit-msg` hook (`sandbox-coauthors.ts`): at session create and
+  restore the worktree gets `extensions.worktreeConfig` and a per-worktree
+  `core.hooksPath` of `~/.orchard/sessions/<id>/hooks`, a dispatcher symlinked
+  under every client hook name that first runs the repo's own hook (repo-level
+  `core.hooksPath`, then global, then `$GIT_COMMON_DIR/hooks`). It appends
+  `Co-authored-by: <line>` with `git interpret-trailers --if-exists
+  addIfDifferent` for each line of `~/.orchard/sessions/<id>/coauthors`, skipping
+  the commit's own author and names already present. `SandboxCoauthorsService`
+  rewrites that file on every recorded prompt: when opencode reports the chat
+  busy (or cannot be asked) the author is appended, otherwise the file is reset to
+  this author, so it holds the current turn. The host is never listed.
 
 ## Terminals
 
@@ -534,7 +573,12 @@ upgrade handler, matches `Host: <port>-<id8>.<previewDomain>`.
   named `orchard*`, `session_token`, OAuth state cookies, `X-Orchard-*` and
   forwarding headers are stripped upstream; `Set-Cookie` loses `Domain` and
   `orchard*` cookies downstream.
-- Ports: 3000, 3001, 4173, 5173, 8000, 8080, 8787, on both runners.
+- Ports: 3000, 3001, 4173, 5173, 8000, 8080, 8787, on both runners, plus the
+  machine's `runnerState.declaredPorts` on Kubernetes (checked per request after
+  the cookie names the machine).
+- Every other raw upgrade handler (exec-session engine for pod and sandbox
+  terminals, SSH, live) skips requests whose `Host` is a preview host; `main.ts`
+  passes `previewService.isPreviewHost` to them.
 - `previewDomainConflict()` rejects a preview domain equal to, under, or above
   `COOKIE_DOMAIN`, the hosts of `FRONTEND_URL`, `API_URL` and `PLATFORM_ORIGINS`,
   at config save and again at runtime.
@@ -575,10 +619,14 @@ key per session, user and minute.
 - **Share links** (`SandboxShareLink`): 32 random bytes base64url, stored as
   SHA-256, compared in constant time. Scope: one session or all active sessions.
   Expiry 1 to 720 h, default 168. Max 50 active per machine. Viewer routes under
+  `/apiv1/share/sandbox` (token in `X-Orchard-Share-Token`, which the page reads
+  from the URL fragment `/share/sandbox#<token>`) and the older
   `/apiv1/share/sandbox/:token` require a signed-in, non-guest member of the
   machine's org, are rate limited (60/min plus the `sandbox_share` user limit),
   serve only `view`, `transcript`, `changes` and `diff`, and audit
-  `sandbox.share_link.use` at most every 10 minutes per user and link.
+  `sandbox.share_link.use` at most every 10 minutes per user and link. Datadog's
+  `http.url`/`http.endpoint` and error reports replace a path token with
+  `[redacted]` (`analytics/url-redaction.ts`).
 
 ## Integrations
 
@@ -593,7 +641,8 @@ key per session, user and minute.
   `sandbox.session.started_from`.
 - Issue text is wrapped in `<untrusted-issue>` tags with an instruction not to
   follow it, truncated at 8 KB.
-- **GitHub:** `issue_comment` on the App webhook, `/greenhouse` prefix, not a PR,
+- **GitHub:** `issue_comment` on the App webhook (the App manifest asks for
+  `issues: write` and the `issue_comment` event), `/greenhouse` prefix, not a PR,
   not a bot, sender must equal comment author, mapped by `User.githubId`. Replies
   with an installation token.
 - **Slack:** `POST /integrations/slack/commands` and `/events`, signature
@@ -623,11 +672,15 @@ membership. `requireSandboxRole(min, {orgAdmin})` gates routes; `admin` passes
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | viewer       | get, sessions list/get, chats, scripts, ports, checks, changes, diff, file read, branches, git identity, repos, boot, conversations, members list, comments list, authors, transcript, preview token, links list, opencode reads |
 | collaborator | sessions create/update/delete, chats create, run, fs ops, file write, commit, uncommit, push, pull, fetch, checkout, branch delete, PR, merge, prompt, comments, opencode writes, issues, start (also org admin)                 |
-| owner        | update, hostkey, connect, ssh, add repo, members add/update, share links, fork, links attach/detach, preview deploy; stop and delete (also org admin)                                                                            |
+| owner        | update, hostkey, connect, ssh, add repo, members add/update, share links, fork, links attach/detach, preview deploy; stop, delete and apply retry (also org admin)                                                                |
 
 `Sandbox feature is not enabled` (404) comes from `SandboxEnabledGuard`, which
 caches `InstanceSettingsService.isSandboxesEnabled()` for 10 s
-(`sandboxes_enabled`, env `SANDBOX_ENABLED`, default on outside production).
+(`sandboxes_enabled`, env `SANDBOX_ENABLED` locks it, `SANDBOX_ENABLED_DEFAULT`
+sets the unlocked starting value, default on outside production). The SSH
+gateway authenticates with the engine's `authenticateUpgrade` and authorizes
+through `sandboxSshAccess` (owner, run inside the session's org scope and the
+token's project restriction), like terminals.
 
 ## Reaper
 
@@ -635,8 +688,9 @@ Leader only, every 60 s, when sandboxes are enabled:
 
 1. `syncPolledRunners` (Vercel).
 2. With `MIRROR_DISABLED`, observe Kubernetes rows directly.
-3. Rows `creating`/`starting` for 10 minutes become `error`, but only when the
-   runner can trust absence.
+3. Rows `creating`/`starting` for 10 minutes (30 for a fork still carrying
+   `runnerState.forkFrom`) become `error`, but only when the runner can trust
+   absence.
 4. Idle stop after `SANDBOX_IDLE_TIMEOUT_MINUTES` (default 60) of no
    `lastActiveAt` updates (terminals, SSH, start), unless a `claude`/`codex`
    process or a busy opencode session is found. Audit `sandbox.idle_stop`.

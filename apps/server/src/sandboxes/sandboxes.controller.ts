@@ -401,7 +401,15 @@ export class SandboxesController {
   async gitPr(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { repo?: string; session?: string; title?: string; body?: string; base?: string }
+    @Body()
+    body: {
+      repo?: string;
+      session?: string;
+      title?: string;
+      body?: string;
+      base?: string;
+      draft?: boolean;
+    }
   ) {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
@@ -540,6 +548,13 @@ export class SandboxesController {
       orgAdmin: true
     });
     return this.sandboxes.start(id, user.id, user.email, access.sandbox);
+  }
+
+  @Post(':id/apply/retry')
+  async retryApply(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const access = await this.access.requireSandboxRole(id, user.id, 'owner', { orgAdmin: true });
+    return this.sandboxes.retryApply(access.sandbox, user.id, user.email);
   }
 
   @Post(':id/stop')

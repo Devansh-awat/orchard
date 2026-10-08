@@ -21,7 +21,9 @@ listening on, refreshed while the tab is open. Each row shows:
 - the port and the process listening on it;
 - whether the process was started from this session's worktree;
 - whether it listens on `localhost` only, which a preview cannot reach;
-- **Public**, on Vercel machines, where ports are reachable from the internet.
+- **Public**, on Vercel machines, where ports are reachable from the internet;
+- ports declared in `.orchard/greenhouse.json`, even before anything listens on
+  them.
 
 The machine's own services (SSH on 22, the SSH bridge on 2222 and the agent server
 on 4096) are left out.
@@ -36,6 +38,13 @@ Click **Open preview** on a port. Previews work on these ports:
 
 Start your dev server on one of them, bound to `0.0.0.0`. A
 [run script](/greenhouse/scripts/) is the easiest way to keep that consistent.
+
+On Kubernetes machines a repository can add its own ports: up to 10 ports from
+1024 to 65535 listed under `ports` in
+[`.orchard/greenhouse.json`](/greenhouse/scripts/) can be previewed too (2222 and
+4096 belong to the machine and never can). The machine remembers the ports its
+sessions declared. Vercel machines expose only the seven ports above, fixed when
+the machine is created.
 
 Anyone who can see the machine can open its previews: the host, guests and
 read-only guests.

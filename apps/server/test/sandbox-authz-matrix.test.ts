@@ -8,6 +8,8 @@ import {
   sandboxRoleAllows
 } from '../src/sandboxes/sandbox-access.service';
 import { requestAuthStorage } from '../src/auth/request-context';
+import { sandboxSshAccess } from '../src/sandboxes/sandbox-role-gate';
+import { sshUpgradeSandboxId } from '../src/sandboxes/sandbox-ssh.gateway';
 import { SandboxesController } from '../src/sandboxes/sandboxes.controller';
 import { SandboxSessionsController } from '../src/sandboxes/sandbox-sessions.controller';
 import { SandboxMembersController } from '../src/sandboxes/sandbox-members.controller';
@@ -171,6 +173,10 @@ function sandboxesRoutes(
       () => c.start(req(), SANDBOX)
     ],
     'POST /sandboxes/:id/stop': [{ min: 'owner', orgAdmin: true }, () => c.stop(req(), SANDBOX)],
+    'POST /sandboxes/:id/apply/retry': [
+      { min: 'owner', orgAdmin: true },
+      () => c.retryApply(req(), SANDBOX)
+    ],
     'DELETE /sandboxes/:id': [{ min: 'owner', orgAdmin: true }, () => c.remove(req(), SANDBOX)]
   };
 }
@@ -371,6 +377,7 @@ test('sandboxes controller routes declare the contract minimum role', async () =
     'update',
     'start',
     'stop',
+    'retryApply',
     'remove'
   ]);
   for (const name of Object.getOwnPropertyNames(SandboxesController.prototype)) {
@@ -593,4 +600,63 @@ test('an org-scoped session or a project-scoped token reaches no other tenant sa
   assert.equal((await scoped({ sessionOrgId: OTHER_ORG }, 'guest')).role, null);
   assert.equal((await scoped({ sessionOrgId: ORG }, 'guest')).role, 'collaborator');
   assert.equal((await scoped({ tokenProjectIds: ['p1'] }, 'host')).role, null);
+});
+
+test('ssh honours org-scoped sessions and refuses project-scoped tokens', async () => {
+  const sandboxRow = {
+    id: SANDBOX,
+    userId: 'host',
+    organizationId: ORG,
+    status: 'running',
+    sshIdentity: null,
+    user: null
+  };
+  const prisma = {
+    sandbox: { findUnique: async () => sandboxRow },
+    sandboxMember: {
+      async findUnique({ where }: any) {
+        return where.sandboxId_userId.userId === 'guest' ? { role: 'collaborator' } : null;
+      }
+    }
+  };
+  const authz = {
+    async isSuperAdmin(userId: string) {
+      return userId === 'root';
+    },
+    async getOrgAccess(organizationId: string, userId: string) {
+      const ctx = requestAuthStorage.getStore();
+      if (ctx?.sessionOrgId && ctx.sessionOrgId !== organizationId) return null;
+      if (!['host', 'guest', 'root'].includes(userId)) return null;
+      return { organizationId, role: 'member', isAdmin: false };
+    }
+  };
+  const service = new SandboxAccessService(prisma as any, authz as any);
+  const ssh = (userId: string, scope: any = {}) =>
+    sandboxSshAccess(service, SANDBOX, userId, scope).then((a) => a?.role ?? null);
+  assert.equal(await ssh('host'), 'owner');
+  assert.equal(await ssh('root'), 'owner');
+  assert.equal(await ssh('guest'), null, 'ssh is host only');
+  assert.equal(await ssh('host', { sessionOrgId: ORG }), 'owner');
+  assert.equal(await ssh('host', { sessionOrgId: 'other-org' }), null, 'org-scoped session');
+  assert.equal(await ssh('root', { sessionOrgId: 'other-org' }), null);
+  assert.equal(await ssh('host', { tokenProjectIds: ['p1'] }), null, 'project-scoped token');
+  assert.equal(await ssh('host', { tokenProjectIds: [] }), 'owner');
+  assert.equal(requestAuthStorage.getStore(), undefined, 'scope does not leak');
+});
+
+test('upgrade handlers step aside for preview hosts', () => {
+  const req = (url: string, host: string) => ({ url, headers: { host } }) as any;
+  const skip = (r: any) => r.headers.host.endsWith('.preview.test');
+  const id = '3f2d7e6a-1b0c-4d5e-8f90-123456789abc';
+  assert.equal(sshUpgradeSandboxId(req(`/apiv1/sandboxes/${id}/ssh`, 'orchard.test'), skip), id);
+  assert.equal(
+    sshUpgradeSandboxId(req(`/apiv1/sandboxes/${id}/ssh`, `3000-3f2d7e6a.preview.test`), skip),
+    null
+  );
+  assert.equal(sshUpgradeSandboxId(req('/apiv1/other', 'orchard.test'), skip), null);
+  assert.equal(
+    sshUpgradeSandboxId(req(`/apiv1/sandboxes/${id}/ssh`, 'bad host with spaces'), skip),
+    id,
+    'a hostile Host header cannot crash the handler'
+  );
 });

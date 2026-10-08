@@ -51,6 +51,9 @@ import {
   type SessionGitStats,
   type SetupState
 } from './sandbox-session-commands';
+import { declaredPreviewPorts, mergeDeclaredPorts } from './preview/preview-auth';
+import { newOpencodeMessageId } from './sandbox-opencode-policy';
+import { buildCoauthorHookInstall, COAUTHOR_HOOK_SCRIPT } from './sandbox-coauthors';
 
 export type SessionActivity = 'idle' | 'working' | 'needs_input' | 'done';
 
@@ -262,6 +265,14 @@ export interface SessionIssueContext {
   slugHint?: string | null;
 }
 
+export type PromptRecorder = (input: {
+  sandboxId: string;
+  userId: string;
+  chatId: string;
+  messageId: string;
+  directory: string | null;
+}) => Promise<boolean>;
+
 export interface SessionPreviewHooks {
   teardown(
     sandbox: WorkspaceSandbox,
@@ -293,6 +304,12 @@ export class SandboxSessionsService {
     private readonly crypto: SecretCryptoService
   ) {
     this.events.setMaxListeners(0);
+  }
+
+  private promptRecorder: PromptRecorder | null = null;
+
+  setPromptRecorder(recorder: PromptRecorder | null): void {
+    this.promptRecorder = recorder;
   }
 
   private previewHooks: SessionPreviewHooks | null = null;
@@ -363,10 +380,11 @@ export class SandboxSessionsService {
     return row;
   }
 
-  private devExec(sandbox: WorkspaceSandbox, script: string, timeoutMs = 30_000) {
-    return this.registry
-      .for(sandbox)
-      .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], { timeoutMs });
+  private devExec(sandbox: WorkspaceSandbox, script: string, timeoutMs = 30_000, stdin?: Buffer) {
+    return this.registry.for(sandbox).exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], {
+      timeoutMs,
+      ...(stdin ? { stdin } : {})
+    });
   }
 
   async get(sandbox: WorkspaceSandbox, sessionId: string): Promise<SessionDto> {
@@ -659,20 +677,14 @@ export class SandboxSessionsService {
       },
       include: { createdBy: CREATOR_SELECT }
     });
-    if (opencodeSessionId && prompt) {
-      void this.workspace
-        .opencodeRequest(
-          sandbox,
-          'POST',
-          `/session/${encodeURIComponent(opencodeSessionId)}/prompt_async`,
-          {
-            directory: worktreePath,
-            body: { parts: [{ type: 'text', text: prompt }] },
-            timeoutMs: OPENCODE_CREATE_TIMEOUT_MS
-          }
-        )
-        .catch((e) => this.logger.warn(`initial prompt failed for ${row?.id}: ${e?.message}`));
-    }
+    const sessionId = saved.id;
+    void this.installCoauthorHook(sandbox, sessionId, worktreePath)
+      .then(() =>
+        opencodeSessionId && prompt
+          ? this.sendInitialPrompt(sandbox, actorUserId, opencodeSessionId, worktreePath, prompt)
+          : undefined
+      )
+      .catch((e) => this.logger.warn(`initial prompt failed for ${sessionId}: ${e?.message}`));
     void this.startScript(sandbox, saved, 'setup', { onlyIfConfigured: true }).catch((e) =>
       this.logger.warn(`setup script failed to launch for ${saved.id}: ${e?.message}`)
     );
@@ -685,6 +697,60 @@ export class SandboxSessionsService {
     });
     this.emit(dto);
     return dto;
+  }
+
+  async installCoauthorHook(
+    sandbox: WorkspaceSandbox,
+    sessionId: string,
+    worktreePath: string
+  ): Promise<boolean> {
+    const result = await this.devExec(
+      sandbox,
+      buildCoauthorHookInstall(sessionId, worktreePath),
+      20_000,
+      Buffer.from(COAUTHOR_HOOK_SCRIPT, 'utf8')
+    ).catch((e) => {
+      this.logger.warn(`co-author hook install failed for ${sessionId}: ${e?.message}`);
+      return null;
+    });
+    if (result && !result.ok) {
+      this.logger.warn(`co-author hook install exited ${result.exitCode} for ${sessionId}`);
+    }
+    return !!result?.ok;
+  }
+
+  async sendInitialPrompt(
+    sandbox: WorkspaceSandbox,
+    actorUserId: string,
+    chatId: string,
+    worktreePath: string,
+    text: string
+  ): Promise<string> {
+    const messageId = newOpencodeMessageId();
+    if (this.promptRecorder) {
+      const recorded = await this.promptRecorder({
+        sandboxId: sandbox.id,
+        userId: actorUserId,
+        chatId,
+        messageId,
+        directory: worktreePath
+      });
+      if (!recorded) throw new ConflictException('That message id is already in use');
+    }
+    const res = await this.workspace.opencodeRequest(
+      sandbox,
+      'POST',
+      `/session/${encodeURIComponent(chatId)}/prompt_async`,
+      {
+        directory: worktreePath,
+        body: { messageID: messageId, parts: [{ type: 'text', text }] },
+        timeoutMs: OPENCODE_CREATE_TIMEOUT_MS
+      }
+    );
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(`the agent did not accept the first prompt (${res.status})`);
+    }
+    return messageId;
   }
 
   private worktreeError(code: number | null, repo: string, stderr: string): string {
@@ -765,6 +831,7 @@ export class SandboxSessionsService {
             this.worktreeError(result.exitCode, row.repo, result.stderr)
           );
         }
+        await this.installCoauthorHook(sandbox, row.id, worktreePathFor(row.repo, row.slug));
         data.archivedAt = null;
       }
     }
@@ -889,11 +956,48 @@ export class SandboxSessionsService {
       20_000
     );
     const probe = parseScriptsProbe(result.stdout, nonce);
+    const config = parseGreenhouseConfig(probe.configText);
+    if (config.ports.length) {
+      void this.recordDeclaredPorts(sandbox, config.ports).catch((e) =>
+        this.logger.warn(`could not record declared ports for ${sandbox.id}: ${e?.message}`)
+      );
+    }
     return {
-      config: parseGreenhouseConfig(probe.configText),
+      config,
       setupStatus: probe.setupStatus,
       runPaneDead: probe.runPaneDead
     };
+  }
+
+  async recordDeclaredPorts(sandbox: WorkspaceSandbox, ports: number[]): Promise<number[]> {
+    const current = await this.prisma.sandbox.findUnique({
+      where: { id: sandbox.id },
+      select: { runnerState: true }
+    });
+    if (!current) return [];
+    const existing = declaredPreviewPorts(current.runnerState);
+    const merged = mergeDeclaredPorts(existing, ports);
+    if (merged.length === existing.length && merged.every((p) => existing.includes(p))) {
+      return existing;
+    }
+    const state =
+      current.runnerState &&
+      typeof current.runnerState === 'object' &&
+      !Array.isArray(current.runnerState)
+        ? (current.runnerState as Record<string, unknown>)
+        : {};
+    await this.prisma.sandbox.updateMany({
+      where: { id: sandbox.id },
+      data: { runnerState: { ...state, declaredPorts: merged } }
+    });
+    const runner = this.registry.for(sandbox);
+    if (runner.requestPreviewPorts) {
+      await runner.requestPreviewPorts(
+        { ...refOf(sandbox), runnerState: { ...state, declaredPorts: merged } },
+        merged
+      );
+    }
+    return merged;
   }
 
   async scripts(sandbox: WorkspaceSandbox, sessionId: string): Promise<SessionScriptsDto> {
@@ -969,25 +1073,45 @@ export class SandboxSessionsService {
       public: boolean;
       inSession: boolean;
       loopbackOnly: boolean;
+      listening: boolean;
+      declared: boolean;
     }>;
   }> {
     const row = await this.activeRow(sandbox.id, sessionId);
     this.requireRunning(sandbox);
     const runner = this.registry.for(sandbox);
-    const result = await runner.exec(refOf(sandbox), ['/bin/sh', '-c', buildPortsScript()], {
-      timeoutMs: 15_000
-    });
+    const [result, declared] = await Promise.all([
+      runner.exec(refOf(sandbox), ['/bin/sh', '-c', buildPortsScript()], { timeoutMs: 15_000 }),
+      this.probeScripts(sandbox, row).then(
+        (probe) => probe.config.ports,
+        () => [] as number[]
+      )
+    ]);
     const isPublic = runner.capabilities.previews === 'public';
-    return {
-      ports: parsePortsOutput(result.stdout, row.worktreePath).map((p) => ({
-        port: p.port,
-        process: p.process,
+    const listening = parsePortsOutput(result.stdout, row.worktreePath).map((p) => ({
+      port: p.port,
+      process: p.process,
+      previewUrl: null,
+      public: isPublic,
+      inSession: p.inSession,
+      loopbackOnly: p.loopbackOnly,
+      listening: true,
+      declared: declared.includes(p.port)
+    }));
+    const seen = new Set(listening.map((p) => p.port));
+    const waiting = declared
+      .filter((port) => !seen.has(port))
+      .map((port) => ({
+        port,
+        process: null,
         previewUrl: null,
         public: isPublic,
-        inSession: p.inSession,
-        loopbackOnly: p.loopbackOnly
-      }))
-    };
+        inSession: false,
+        loopbackOnly: false,
+        listening: false,
+        declared: true
+      }));
+    return { ports: [...listening, ...waiting].sort((a, b) => a.port - b.port) };
   }
 
   private async prTarget(

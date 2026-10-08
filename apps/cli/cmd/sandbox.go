@@ -38,6 +38,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxUpdateCmd(),
 		sandboxStartCmd(),
 		sandboxStopCmd(),
+		sandboxRetryCmd(),
 		sandboxDeleteCmd(),
 		sandboxSSHCmd(),
 		sandboxChatCmd(),
@@ -673,6 +674,41 @@ func sandboxStopCmd() *cobra.Command {
 	}
 	wait, timeout = addWaitFlags(c)
 	return c
+}
+
+func sandboxRetryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "retry <name>",
+		Short: "Retry a sandbox's failed cluster or Vercel changes",
+		Long: "Requeue every failed apply for a sandbox (the error shown as applyError on\n" +
+			"`orchard sandbox get`) so it runs again now with fresh retries. Host or org admin.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			var res struct {
+				Retried int `json:"retried"`
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPost, sandboxPath(str(sb["id"]), "apply", "retry"), nil, &res); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(map[string]any{"retried": res.Retried})
+			}
+			if res.Retried == 0 {
+				output.Successf("nothing to retry for sandbox %s", pick(sb, "name"))
+				return nil
+			}
+			output.Successf("retrying %d failed change(s) for sandbox %s", res.Retried, pick(sb, "name"))
+			return nil
+		},
+	}
 }
 
 func sandboxDeleteCmd() *cobra.Command {

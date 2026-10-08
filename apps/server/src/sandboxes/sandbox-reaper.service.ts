@@ -8,11 +8,17 @@ import {
   SANDBOX_REF_SELECT,
   SandboxRunner,
   SandboxRunnerId,
+  forkSourceOf,
   refOf
 } from './runners/sandbox-runner';
 import { applyObservation } from './runners/sandbox-status';
 
 const STUCK_TRANSITION_MS = 10 * 60 * 1000;
+export const FORK_TRANSITION_MS = 30 * 60 * 1000;
+
+export function transitionWindowMs(runnerState: unknown): number {
+  return forkSourceOf(runnerState) ? FORK_TRANSITION_MS : STUCK_TRANSITION_MS;
+}
 
 function idleTimeoutMs(): number {
   const minutes = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES);
@@ -77,7 +83,9 @@ export class SandboxReaperService {
           if (row.status !== 'running') continue;
           await runner
             .keepAlive(refOf(row))
-            .catch((e: any) => this.logger.warn(`keep-alive failed for sandbox ${row.id}: ${e?.message}`));
+            .catch((e: any) =>
+              this.logger.warn(`keep-alive failed for sandbox ${row.id}: ${e?.message}`)
+            );
         }
       } catch (e: any) {
         this.logger.warn(`${runner.id} status poll failed: ${e?.message}`);
@@ -111,7 +119,9 @@ export class SandboxReaperService {
     });
     if (rows.length === 0) return;
     const trust = new Map<SandboxRunnerId, boolean>();
+    const now = Date.now();
     for (const row of rows) {
+      if (row.updatedAt.getTime() > now - transitionWindowMs(row.runnerState)) continue;
       const runner = this.runnerFor(row);
       if (!runner) continue;
       if (!trust.has(runner.id)) {

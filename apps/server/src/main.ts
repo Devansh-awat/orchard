@@ -13,6 +13,7 @@ import { startTelemetry } from './analytics/telemetry';
 
 import { AppModule } from './app.module';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
+import { execSessionEngine } from './kubernetes/exec-session-engine';
 import { attachSandboxSshWebSocket } from './sandboxes/sandbox-ssh.gateway';
 import { attachSandboxTerminalWebSocket } from './sandboxes/sandbox-terminal.gateway';
 import { attachSandboxLiveWebSocket } from './sandboxes/live/sandbox-live.gateway';
@@ -188,8 +189,11 @@ async function bootstrap() {
       })
       .catch(() => socket.destroy());
   });
+  const isPreviewUpgrade = (req: { headers: { host?: string } }) =>
+    previewService.isPreviewHost(req.headers.host);
+  execSessionEngine(httpServer, app, { skipUpgrade: isPreviewUpgrade });
   attachTerminalWebSocket(httpServer, app);
-  attachSandboxSshWebSocket(httpServer, app);
+  attachSandboxSshWebSocket(httpServer, app, isPreviewUpgrade);
   attachSandboxTerminalWebSocket(httpServer, app);
   attachSandboxLiveWebSocket(httpServer, app);
 

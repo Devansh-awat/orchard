@@ -22,7 +22,14 @@ import {
   vercelStatusChange
 } from '../src/sandboxes/runners/vercel.runner';
 import { stagedInitFiles, opencodeConfigJson } from '../src/sandboxes/runners/sandbox-init-files';
-import { SANDBOX_BOOTSTRAP_SCRIPT } from '../src/sandboxes/sandbox-bootstrap';
+import {
+  SANDBOX_BOOTSTRAP_SCRIPT,
+  bridgeArchiveName,
+  bridgeChecksumsUrl,
+  checksumFor,
+  defaultBridgeBinaryUrl
+} from '../src/sandboxes/sandbox-bootstrap';
+import { BridgeChecksumResolver } from '../src/sandboxes/runners/bridge-checksum';
 import {
   SandboxConnectService,
   cachedHostKeys,
@@ -174,6 +181,9 @@ function vercelRunner(
       return existing as never;
     }
   };
+  runner.bridgeChecksums = new BridgeChecksumResolver(
+    async () => new Response(`${'ab'.repeat(32)}  ${bridgeArchiveName()}\n`)
+  );
   runner.bootPollMs = 1;
   return {
     runner,
@@ -341,6 +351,7 @@ test('provisioning creates a persistent box with no tokens in create, then stage
   assert.equal(boot.env.SANDBOX_HOME_MODE, 'none');
   assert.equal(boot.env.CLAUDE_CODE_OAUTH_TOKEN, 'sk-ant-vercel-secret');
   assert.ok(boot.env.ORCHARD_BRIDGE_URL.startsWith('https://'));
+  assert.equal(boot.env.ORCHARD_BRIDGE_SHA256, 'ab'.repeat(32));
 
   const settled = updates.find((u) => u.data?.status === 'running');
   assert.ok(settled, 'row marked running');
@@ -525,4 +536,64 @@ test('connect info names the ssh host and says whether a key is registered', asy
     user: 'dev',
     sshReady: true
   });
+});
+
+test('the bridge checksum comes from the pinned release and is cached', async () => {
+  const calls: string[] = [];
+  const resolver = new BridgeChecksumResolver(async (url) => {
+    calls.push(url);
+    return new Response(
+      [
+        `${'11'.repeat(32)}  orchard_0.9.0_darwin_arm64.tar.gz`,
+        `${'AB'.repeat(32)}  orchard_0.9.0_linux_amd64.tar.gz`
+      ].join('\n')
+    );
+  }, '0.9.0');
+  const url = defaultBridgeBinaryUrl('0.9.0');
+  assert.equal(await resolver.resolve(url, null), 'ab'.repeat(32));
+  assert.equal(await resolver.resolve(url, null), 'ab'.repeat(32));
+  assert.deepEqual(calls, [bridgeChecksumsUrl('0.9.0')]);
+  assert.equal(await resolver.resolve('https://mirror.example.com/orchard.tar.gz', null), null);
+  assert.equal(
+    await resolver.resolve('https://mirror.example.com/orchard.tar.gz', 'CD'.repeat(32)),
+    'cd'.repeat(32)
+  );
+  assert.equal(await resolver.resolve(url, 'not-a-sha'), null);
+  const failing = new BridgeChecksumResolver(
+    async () => new Response('', { status: 404 }),
+    '0.9.0'
+  );
+  assert.equal(await failing.resolve(url, null), null);
+  assert.equal(
+    checksumFor(`${'ef'.repeat(32)} *orchard_x.tar.gz`, 'orchard_x.tar.gz'),
+    'ef'.repeat(32)
+  );
+});
+
+test('an overridden bridge url needs a pinned checksum, which reaches the bootstrap', async () => {
+  const { runner } = vercelRunner(ROW, {
+    values: { bridgeBinaryUrl: 'https://mirror.example.com/orchard.tar.gz' }
+  });
+  assert.match(runner.configError() ?? '', /bridgeBinarySha256/);
+  const pinned = vercelRunner(ROW, {
+    values: {
+      bridgeBinaryUrl: 'https://mirror.example.com/orchard.tar.gz',
+      bridgeBinarySha256: 'CD'.repeat(32)
+    }
+  }).runner;
+  assert.equal(pinned.configError(), null);
+  const sha = await pinned.bridgeSha256();
+  const env = pinned.bootstrapEnv(ROW, SECRETS, sha);
+  assert.equal(env.ORCHARD_BRIDGE_URL, 'https://mirror.example.com/orchard.tar.gz');
+  assert.equal(env.ORCHARD_BRIDGE_SHA256, 'cd'.repeat(32));
+  assert.equal(runner.bootstrapEnv(ROW, SECRETS).ORCHARD_BRIDGE_SHA256, undefined);
+});
+
+test('the bootstrap refuses an unverified bridge and checks the archive hash', () => {
+  assert.match(
+    SANDBOX_BOOTSTRAP_SCRIPT,
+    /if \[ -n "\$bridge_source" \] && \[ -z "\$bridge_sha" \]; then\n\s+log "no ORCHARD_BRIDGE_SHA256/
+  );
+  assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /sha256sum -c -/);
+  assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /"\$bridge_source \$bridge_sha" > "\$bridge_marker"/);
 });

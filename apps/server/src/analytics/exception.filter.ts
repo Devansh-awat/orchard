@@ -12,6 +12,7 @@ import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { TelemetryService } from '../telemetry/telemetry.service';
 import { markSpanError } from './datadog';
+import { redactSensitivePath } from './url-redaction';
 import { getClientIp } from '../auth/client-ip';
 import { k8sHttpException } from '../kubernetes/k8s-error';
 
@@ -61,7 +62,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
           const distinctId = req.auth?.userId || req.user?.sub || `ip:${getClientIp(req)}`;
           this.analytics.captureException(exception, distinctId, {
             http_method: req.method,
-            http_path: req.route?.path ?? req.url,
+            http_path: req.route?.path ?? redactSensitivePath(req.url),
             http_status: status,
             user_agent: req.headers['user-agent'] ?? null
           });

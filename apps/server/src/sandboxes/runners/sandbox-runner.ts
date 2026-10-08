@@ -151,6 +151,8 @@ export interface SandboxRunner {
   httpTarget(ref: SandboxRef, port: number): Promise<HttpTarget>;
   openTcp(ref: SandboxRef, port: number): Promise<Duplex>;
 
+  requestPreviewPorts?(ref: SandboxRef, ports: number[]): Promise<void>;
+
   forkSupport?(source: SandboxRef): Promise<string | null>;
   requestFork?(
     source: SandboxRef,

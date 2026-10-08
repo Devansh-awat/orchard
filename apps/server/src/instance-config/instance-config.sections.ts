@@ -194,6 +194,7 @@ export const SANDBOX_RUNNERS = section(
     { name: 'vercelVcpus', env: 'SANDBOX_VERCEL_VCPUS' },
     { name: 'vercelTimeoutMinutes', env: 'SANDBOX_VERCEL_TIMEOUT_MINUTES' },
     { name: 'bridgeBinaryUrl', env: 'SANDBOX_BRIDGE_BINARY_URL' },
+    { name: 'bridgeBinarySha256', env: 'SANDBOX_BRIDGE_BINARY_SHA256' },
     { name: 'previewDomain', env: 'SANDBOX_PREVIEW_DOMAIN' }
   ],
   [],
@@ -207,6 +208,10 @@ export const SANDBOX_RUNNERS = section(
     const bridge = (values.bridgeBinaryUrl || '').trim();
     if (bridge && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(bridge)) {
       throw new Error('bridgeBinaryUrl must be a plain https:// address');
+    }
+    const sha = (values.bridgeBinarySha256 || '').trim();
+    if (sha && !/^[0-9a-fA-F]{64}$/.test(sha)) {
+      throw new Error('bridgeBinarySha256 must be the 64 character hex SHA-256 of the tarball');
     }
     const preview = (values.previewDomain || '').trim();
     if (preview && !HOSTNAME.test(preview)) {

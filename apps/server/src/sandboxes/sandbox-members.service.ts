@@ -72,9 +72,25 @@ function parseRole(value: unknown): SandboxMemberRole {
   return value as SandboxMemberRole;
 }
 
+export interface RecordedPrompt {
+  sandboxId: string;
+  sessionKey: string | null;
+  userId: string;
+  chatId: string;
+  messageId: string;
+}
+
+export type PromptListener = (prompt: RecordedPrompt) => Promise<unknown>;
+
 @Injectable()
 export class SandboxMembersService {
   private readonly commentLimits = new Map<string, TokenBucket>();
+
+  private promptListener: PromptListener | null = null;
+
+  setPromptListener(listener: PromptListener | null): void {
+    this.promptListener = listener;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -446,6 +462,15 @@ export class SandboxMembersService {
         chatId: input.chatId,
         messageId: input.messageId
       });
+    }
+    if (this.promptListener) {
+      await this.promptListener({
+        sandboxId: input.sandboxId,
+        sessionKey: session?.id ?? null,
+        userId: input.userId,
+        chatId: input.chatId,
+        messageId: input.messageId
+      }).catch(() => null);
     }
     return true;
   }

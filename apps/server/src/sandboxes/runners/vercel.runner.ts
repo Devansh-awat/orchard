@@ -12,6 +12,7 @@ import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { ApplyExecutorService, ApplyItemInput } from '../../apply/apply-executor.service';
 import { INSTANCE_SETTING_KEY } from '../sandbox-cr';
 import { defaultBridgeBinaryUrl } from '../sandbox-bootstrap';
+import { BridgeChecksumResolver } from './bridge-checksum';
 import {
   ExecOptions,
   ExecResult,
@@ -178,6 +179,8 @@ interface VercelSettings {
   vcpus: number;
   timeoutMs: number;
   bridgeUrl: string;
+  bridgeSha256: string | null;
+  bridgeOverridden: boolean;
 }
 
 interface LifecycleRow {
@@ -548,6 +551,8 @@ export class VercelSandboxRunner implements SandboxRunner {
 
   sdk: VercelSdk = realSdk;
 
+  bridgeChecksums = new BridgeChecksumResolver();
+
   interactiveSupported = false;
 
   bootPollMs = 2000;
@@ -623,15 +628,20 @@ export class VercelSandboxRunner implements SandboxRunner {
       image: read('vercelImage') || VERCEL_DEFAULT_IMAGE,
       vcpus: Math.floor(positive(read('vercelVcpus'), DEFAULT_VCPUS)),
       timeoutMs: positive(read('vercelTimeoutMinutes'), DEFAULT_TIMEOUT_MINUTES) * 60_000,
-      bridgeUrl: read('bridgeBinaryUrl') || defaultBridgeBinaryUrl()
+      bridgeUrl: read('bridgeBinaryUrl') || defaultBridgeBinaryUrl(),
+      bridgeSha256: read('bridgeBinarySha256')?.toLowerCase() || null,
+      bridgeOverridden: !!read('bridgeBinaryUrl')
     };
     this.settingsCache = { generation, value };
     return value;
   }
 
   configError(): string | null {
-    const { missing } = this.settings();
+    const { missing, bridgeOverridden, bridgeSha256 } = this.settings();
     if (missing.length) return `Vercel sandboxes need ${missing.join(', ')}`;
+    if (bridgeOverridden && !bridgeSha256) {
+      return 'Vercel sandboxes need bridgeBinarySha256 (SANDBOX_BRIDGE_BINARY_SHA256) when bridgeBinaryUrl is set, so machines can verify the bridge they download';
+    }
     if (!deriveSandboxSecret('opencode-password', 'probe')) {
       return 'Vercel sandboxes need SECRETS_ENCRYPTION_KEY so their public ports are password protected';
     }
@@ -957,7 +967,21 @@ export class VercelSandboxRunner implements SandboxRunner {
     }
   }
 
-  bootstrapEnv(row: { repoUrl: string | null }, secrets: SandboxSecrets): Record<string, string> {
+  async bridgeSha256(): Promise<string | null> {
+    const { bridgeUrl, bridgeSha256 } = this.settings();
+    const sha = await this.bridgeChecksums.resolve(bridgeUrl, bridgeSha256);
+    if (!sha)
+      this.logger.warn(
+        `no checksum for the sandbox bridge at ${bridgeUrl}; machines will not install it`
+      );
+    return sha;
+  }
+
+  bootstrapEnv(
+    row: { repoUrl: string | null },
+    secrets: SandboxSecrets,
+    bridgeSha256: string | null = null
+  ): Record<string, string> {
     return {
       ORCHARD_INIT_STAGE: VERCEL_INIT_STAGE,
       SANDBOX_HOME_MODE: 'none',
@@ -966,7 +990,8 @@ export class VercelSandboxRunner implements SandboxRunner {
       CLAUDE_CODE_OAUTH_TOKEN: secrets.claudeToken || '',
       OPENAI_API_KEY: secrets.openaiToken || '',
       GIT_TOKEN: secrets.githubToken ? VERCEL_HOST_GIT_PLACEHOLDER : '',
-      ORCHARD_BRIDGE_URL: this.settings().bridgeUrl
+      ORCHARD_BRIDGE_URL: this.settings().bridgeUrl,
+      ...(bridgeSha256 ? { ORCHARD_BRIDGE_SHA256: bridgeSha256 } : {})
     };
   }
 
@@ -987,7 +1012,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     await session.runCommand({
       cmd: 'bash',
       args: [`${VERCEL_INIT_STAGE}/bootstrap.sh`],
-      env: this.bootstrapEnv(row, secrets),
+      env: this.bootstrapEnv(row, secrets, await this.bridgeSha256()),
       sudo: true,
       detached: true,
       signal: AbortSignal.timeout(API_TIMEOUT_MS)

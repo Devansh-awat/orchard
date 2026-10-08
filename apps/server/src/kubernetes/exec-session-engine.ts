@@ -109,10 +109,13 @@ export interface ExecRouteHooks {
   describeFailure?(message: string): string;
 }
 
+export type UpgradeSkip = (req: http.IncomingMessage) => boolean;
+
 export interface EngineDeps {
   prisma: PrismaService;
   sessions: SessionsService;
   jwtSecret: Uint8Array;
+  skipUpgrade?: UpgradeSkip;
 }
 
 interface ConnectionContext {
@@ -293,11 +296,16 @@ export class ExecSessionEngine {
     private readonly deps: EngineDeps
   ) {}
 
+  setSkipUpgrade(skip: UpgradeSkip): void {
+    this.deps.skipUpgrade = skip;
+  }
+
   register(hooks: ExecRouteHooks): void {
     this.server.on('upgrade', (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
-      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const url = new URL(req.url || '', 'http://localhost');
       const match = url.pathname.match(hooks.route);
       if (!match) return;
+      if (this.deps.skipUpgrade?.(req)) return;
       void this.handleUpgrade(hooks, req, socket, head, url, match);
     });
   }
@@ -872,15 +880,22 @@ export class ExecSessionEngine {
 
 const engines = new WeakMap<http.Server, ExecSessionEngine>();
 
-export function execSessionEngine(server: http.Server, app: INestApplication): ExecSessionEngine {
+export function execSessionEngine(
+  server: http.Server,
+  app: INestApplication,
+  opts: { skipUpgrade?: UpgradeSkip } = {}
+): ExecSessionEngine {
   let engine = engines.get(server);
   if (!engine) {
     engine = new ExecSessionEngine(server, {
       prisma: app.get(PrismaService),
       sessions: app.get(SessionsService),
-      jwtSecret: new TextEncoder().encode(process.env.JWT_SECRET || '')
+      jwtSecret: new TextEncoder().encode(process.env.JWT_SECRET || ''),
+      skipUpgrade: opts.skipUpgrade
     });
     engines.set(server, engine);
+  } else if (opts.skipUpgrade) {
+    engine.setSkipUpgrade(opts.skipUpgrade);
   }
   return engine;
 }

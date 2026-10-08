@@ -1,4 +1,9 @@
 import { posix } from 'path';
+import {
+  MAX_DECLARED_PREVIEW_PORTS,
+  RESERVED_SANDBOX_PORTS,
+  isDeclarablePreviewPort
+} from './preview/preview-auth';
 
 export const HOME_ROOT = '/persist/home';
 export const WORKTREES_ROOT = `${HOME_ROOT}/.worktrees`;
@@ -7,7 +12,7 @@ export const SESSION_BRANCH_PREFIX = 'orchard/';
 export const GREENHOUSE_CONFIG_PATH = '.orchard/greenhouse.json';
 export const MAX_GREENHOUSE_CONFIG_BYTES = 65536;
 export const MAX_SCRIPT_LENGTH = 65536;
-export const MAX_CONFIG_PORTS = 20;
+export const MAX_CONFIG_PORTS = MAX_DECLARED_PREVIEW_PORTS;
 export const MAX_FS_PATH_LENGTH = 1024;
 
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -244,9 +249,7 @@ export function parseGreenhouseConfig(text: string | null | undefined): Greenhou
   if (Array.isArray(obj.ports)) {
     for (const value of obj.ports) {
       const port = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
-      if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
-        continue;
-      }
+      if (!isDeclarablePreviewPort(port)) continue;
       if (!ports.includes(port)) ports.push(port);
       if (ports.length >= MAX_CONFIG_PORTS) break;
     }
@@ -361,6 +364,51 @@ export function normalizeRelativePath(value: unknown): string | null {
   return normalized;
 }
 
+export const READ_EXIT = {
+  outside: 5,
+  missing: 7,
+  notFile: 8
+} as const;
+
+const HOME_GUARD = [
+  `__home=$(realpath -e -- ${shellQuote(HOME_ROOT)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
+  'home_ok() { case "$1/" in "$__home"/.worktrees/*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
+];
+
+function confinedRoot(root: string): string[] {
+  return [
+    ...HOME_GUARD,
+    `__root=$(realpath -e -- ${shellQuote(root)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
+    `case "$__root/" in "$__home"/*) ;; *) exit ${READ_EXIT.outside} ;; esac`,
+    `home_ok "$__root" || exit ${READ_EXIT.outside}`
+  ];
+}
+
+export function buildConfinedReadScript(root: string, file: string, maxBytes: number): string {
+  const rel = normalizeRelativePath(file);
+  if (!rel) throw new Error('invalid path');
+  if (!Number.isInteger(maxBytes) || maxBytes < 1) throw new Error('invalid size');
+  return [
+    ...confinedRoot(root),
+    `t=$(realpath -e -- "$__root"/${shellQuote(rel)} 2>/dev/null) || exit ${READ_EXIT.missing}`,
+    `case "$t/" in "$__root"/*) ;; *) exit ${READ_EXIT.outside} ;; esac`,
+    `home_ok "$t" || exit ${READ_EXIT.outside}`,
+    `[ -f "$t" ] || exit ${READ_EXIT.notFile}`,
+    `head -c ${maxBytes + 1} -- "$t" | base64 | tr -d '\\n'`
+  ].join('\n');
+}
+
+export function buildConfinedPathCheck(root: string, file: string): string {
+  const rel = normalizeRelativePath(file);
+  if (!rel) throw new Error('invalid path');
+  return [
+    ...confinedRoot(root),
+    `t=$(realpath -m -- "$__root"/${shellQuote(rel)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
+    `case "$t/" in "$__root"/*) ;; *) exit ${READ_EXIT.outside} ;; esac`,
+    `home_ok "$t" || exit ${READ_EXIT.outside}`
+  ].join('; ');
+}
+
 export type FsOp = 'mkdir' | 'rename' | 'delete';
 
 export const FS_EXIT = {
@@ -371,8 +419,9 @@ export const FS_EXIT = {
 } as const;
 
 const FS_PRELUDE = [
-  'inside() { case "$1/" in "$__root"/*) return 0 ;; esac; return 1; }',
-  'resolve_parent() { p=$(dirname -- "$1"); b=$(basename -- "$1"); rp=$(realpath -e -- "$p" 2>/dev/null) || return 1; inside "$rp" || return 1; printf "%s/%s" "$rp" "$b"; }',
+  ...HOME_GUARD,
+  'inside() { case "$1/" in "$__root"/*) home_ok "$1"; return $? ;; esac; return 1; }',
+  'resolve_parent() { p=$(dirname -- "$1"); b=$(basename -- "$1"); rp=$(realpath -e -- "$p" 2>/dev/null) || return 1; inside "$rp" || return 1; home_ok "$rp/$b" || return 1; printf "%s/%s" "$rp" "$b"; }',
   'resolve_new() { r=$(realpath -m -- "$1" 2>/dev/null) || return 1; inside "$r" || return 1; [ "$r" != "$__root" ] || return 1; printf "%s" "$r"; }'
 ];
 
@@ -436,7 +485,7 @@ export interface SandboxPort {
   loopbackOnly: boolean;
 }
 
-export const IGNORED_PORTS = new Set([22, 2222, 4096]);
+export const IGNORED_PORTS = new Set(RESERVED_SANDBOX_PORTS);
 
 export function buildPortsScript(): string {
   return [

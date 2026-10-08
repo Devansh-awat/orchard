@@ -27,7 +27,7 @@ tools. Full parameter lists are in the generated
 | `prompt_sandbox_session`         | Send a prompt to a session's agent, attributed to you.                                                            | guest or host     |
 | `get_sandbox_session_diff`       | Changed files with line counts and the unified diff (up to 200 KB), or one file's diff.                           | any role          |
 | `get_sandbox_session_transcript` | The latest messages of the session's chat as text, with who sent each prompt.                                     | any role          |
-| `create_sandbox_session_pr`      | Open a GitHub pull request for the session's branch.                                                              | see below         |
+| `create_sandbox_session_pr`      | Open a GitHub pull request (optionally a draft) for the session's branch, pushing it first when needed.          | see below         |
 
 Pull requests opened over MCP follow the same rule as in the browser: they use
 the GitHub account of the person the MCP connection belongs to. Push the branch
@@ -59,6 +59,7 @@ be named by name, id or a unique id prefix; sessions by id or slug.
 | `orchard sandbox create [name] --repo <url> --runner <kubernetes\|vercel>`        | Create a machine. `--setup file.sh` sets the machine setup script.          |
 | `orchard sandbox list`, `get <name>`                                              | List machines, or show one.                                                 |
 | `orchard sandbox start <name>`, `stop <name>`, `delete <name>`                    | Lifecycle.                                                                  |
+| `orchard sandbox retry <name>`                                                    | Queue the machine's failed changes again (host or org admin).               |
 | `orchard sandbox update <name> --name ... --identity ...`                         | Rename, switch SSH identity, change the setup script.                       |
 | `orchard sandbox ssh <name> [-- ssh-args]`                                        | Open a shell over the tunnel. `--start` starts it first.                    |
 | `orchard sandbox ssh-config --install`                                            | One-time setup for `ssh orchard-<name>` and editor links.                   |

@@ -12,14 +12,15 @@
  * Env vars:
  *   SERVER_URL    Default http://localhost:3001 (matches main.ts default port).
  *   JWT_SECRET    Same secret the server is using — required to mint test tokens.
- *   DATABASE_URL  Same as the server.
+ *   TEST_DATABASE_URL  The throwaway database the server under test uses. DATABASE_URL is
+ *                      only accepted when it is not localhost:5432 (see test/support/test-database.ts).
  *
  * The script uses a single fixed UUID prefix for all rows it creates and
  * cleans up everything on exit (including on assertion failure) so it can be
  * re-run safely.
  */
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { testPrismaClient } from './support/test-database';
 import { SignJWT } from 'jose';
 import { randomUUID } from 'node:crypto';
 import { test, describe, before, after } from 'node:test';
@@ -34,7 +35,7 @@ if (!JWT_SECRET) {
 }
 const SECRET_BYTES = new TextEncoder().encode(JWT_SECRET);
 
-const prisma = new PrismaClient();
+const prisma = testPrismaClient();
 
 // All fixture rows are tagged with this run ID so we can clean them up later
 // without disturbing any other rows that happen to share a column value.

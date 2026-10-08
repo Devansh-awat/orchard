@@ -168,7 +168,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'create_sandbox_session_pr',
     {
-      description: `Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Fails with github_not_linked if the caller has not linked GitHub. Commit and push the work first (the agent can do both when asked).`,
+      description: `Open a GitHub pull request for a session's branch, using the caller's own linked GitHub account (host or guest). Pushes the branch first, as the caller, when it has no upstream on origin or has unpushed commits. Fails with github_not_linked if the caller has not linked GitHub. Commit the work first (the agent can when asked); uncommitted changes are not included.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         sandboxId,
@@ -179,7 +179,8 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
           .string()
           .max(255)
           .optional()
-          .describe("Base branch (defaults to the session's base branch)")
+          .describe("Base branch (defaults to the session's base branch)"),
+        draft: z.boolean().optional().describe('Open the pull request as a draft')
       }
     },
     async ({ sandboxId: id, sessionId: sid, ...rest }) =>

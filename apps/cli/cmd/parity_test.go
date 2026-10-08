@@ -205,6 +205,7 @@ var routeCoverage = map[string]string{
 	"PATCH /sandboxes/:id":                               "sandbox update",
 	"POST /sandboxes/:id/start":                          "sandbox start",
 	"POST /sandboxes/:id/stop":                           "sandbox stop",
+	"POST /sandboxes/:id/apply/retry":                    "sandbox retry",
 	"DELETE /sandboxes/:id":                              "sandbox delete",
 	"GET /sandboxes/:id/ssh":                             "sandbox ssh / sandbox proxy",
 	"GET /sandboxes/:id/hostkey":                         "sandbox ssh / sandbox proxy (known_hosts refresh)",
@@ -402,6 +403,10 @@ var routeExclusions = map[string]string{
 	"GET /share/sandbox/:token/sessions/:sid/transcript": "share link viewer, web UI only",
 	"GET /share/sandbox/:token/sessions/:sid/changes":    "share link viewer, web UI only",
 	"GET /share/sandbox/:token/sessions/:sid/diff":       "share link viewer, web UI only",
+	"GET /share/sandbox":                                 "share link viewer (token in header), web UI only",
+	"GET /share/sandbox/sessions/:sid/transcript":        "share link viewer (token in header), web UI only",
+	"GET /share/sandbox/sessions/:sid/changes":           "share link viewer (token in header), web UI only",
+	"GET /share/sandbox/sessions/:sid/diff":              "share link viewer (token in header), web UI only",
 
 	// forge to server, signed with the connection secret; never driven by a person
 	"POST /git/webhooks/:connectionId":  "webhook receiver for git providers",
