@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  OnModuleDestroy,
   OnModuleInit
 } from '@nestjs/common';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
@@ -12,6 +13,8 @@ import { setObjectStorageOverride } from './object-storage';
 import { ConfigSection, NETWORK, SECTIONS, STORAGE, WILDCARD } from './instance-config.sections';
 
 export type ConfigValues = Record<string, string | null>;
+
+const RELOAD_INTERVAL_MS = 30_000;
 
 export interface SectionState {
   id: string;
@@ -37,12 +40,16 @@ export interface SectionState {
  * and they rebuild when it moves.
  */
 @Injectable()
-export class InstanceConfigService implements OnModuleInit {
+export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(InstanceConfigService.name);
 
   private stored = new Map<string, ConfigValues>();
 
+  private snapshot: string | null = null;
+
   private version = 0;
+
+  private reloadTimer: ReturnType<typeof setInterval> | null = null;
 
   private wildcardHandlers: (() => Promise<unknown>)[] = [];
 
@@ -53,6 +60,15 @@ export class InstanceConfigService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.reload();
+    this.reloadTimer = setInterval(() => {
+      void this.reload().catch((e) => this.logger.warn(`periodic config reload failed: ${e}`));
+    }, RELOAD_INTERVAL_MS);
+    this.reloadTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.reloadTimer) clearInterval(this.reloadTimer);
+    this.reloadTimer = null;
   }
 
   /**
@@ -97,6 +113,9 @@ export class InstanceConfigService implements OnModuleInit {
         this.logger.error(`could not read stored config for ${section.id}: ${e}`);
       }
     }
+    const snapshot = JSON.stringify([...next.entries()]);
+    if (snapshot === this.snapshot) return;
+    this.snapshot = snapshot;
     this.stored = next;
     this.version += 1;
 

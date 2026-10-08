@@ -1,19 +1,41 @@
 import * as http from 'http';
-import * as k8s from '@kubernetes/client-node';
-import { PassThrough } from 'stream';
+import * as https from 'https';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { SandboxK8sService, sandboxWorkdir } from './sandbox-k8s.service';
-import { SANDBOX_PHASE_FILE } from './sandbox-bootstrap';
+import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
+import { SandboxProbesService } from './runners/sandbox-probes.service';
+import {
+  HttpTarget,
+  SandboxNotRunningError,
+  SandboxRef,
+  SandboxRowLike,
+  refOf
+} from './runners/sandbox-runner';
 
 const OPENCODE_PORT = 4096;
 const PROXY_TIMEOUT_MS = 120000;
+const MAX_FILE_BYTES = 512000;
 
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const MAX_DIFF_BYTES = 200000;
+
+export type WorkspaceSandbox = SandboxRowLike & { status: string; repoUrl: string | null };
+
+export function sandboxWorkdir(repoUrl: string | null): string {
+  if (!repoUrl) return '/persist/home';
+  const base =
+    repoUrl
+      .replace(/\.git$/, '')
+      .split('/')
+      .pop() || '';
+  return base ? `/persist/home/${base}` : '/persist/home';
+}
+
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
 
 export interface SandboxRepo {
   name: string;
@@ -39,15 +61,15 @@ export class SandboxWorkspaceService {
   private readonly logger = new Logger(SandboxWorkspaceService.name);
 
   constructor(
-    private readonly k8s: SandboxK8sService,
-    private readonly kubernetes: KubernetesService
+    private readonly registry: SandboxRunnerRegistry,
+    private readonly probes: SandboxProbesService
   ) {}
 
-  async proxyOpencode(
-    sandbox: { id: string; podName: string; status: string },
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  private requireRunning(sandbox: { status: string }): void {
+    if (sandbox.status !== 'running') throw new SandboxNotRunningError();
+  }
+
+  async proxyOpencode(sandbox: WorkspaceSandbox, req: Request, res: Response): Promise<void> {
     if (sandbox.status !== 'running') {
       res.status(400).json({ message: 'Sandbox is not running' });
       return;
@@ -59,23 +81,31 @@ export class SandboxWorkspaceService {
     const query = queryAt === -1 ? '' : tail.slice(queryAt);
     const hasBody = !['GET', 'HEAD'].includes(req.method) && req.body !== undefined;
     const payload = hasBody ? JSON.stringify(req.body) : null;
-    if (process.env.SANDBOX_TUNNEL_MODE === 'portforward') {
+    const ref = refOf(sandbox);
+    let target: HttpTarget;
+    try {
+      target = await this.registry.for(sandbox).httpTarget(ref, OPENCODE_PORT);
+    } catch (e: any) {
+      res.status(502).json({ message: e?.message || 'opencode is not reachable in this sandbox' });
+      return;
+    }
+    if (target.kind === 'exec') {
       await this.proxyOpencodeViaExec(sandbox, req, res, suffix, query, payload);
       return;
     }
-    const podIp = await this.k8s.resolvePodIp(sandbox.id, sandbox.podName);
-    if (!podIp) {
-      res.status(502).json({ message: 'Sandbox pod has no address' });
-      return;
-    }
+    const base = new URL(target.baseUrl);
+    const client = base.protocol === 'https:' ? https : http;
+    const basePath = base.pathname.replace(/\/$/, '');
     await new Promise<void>((resolve) => {
-      const proxyReq = http.request(
+      const proxyReq = client.request(
         {
-          host: podIp,
-          port: OPENCODE_PORT,
+          protocol: base.protocol,
+          host: base.hostname,
+          port: base.port || (base.protocol === 'https:' ? 443 : 80),
           method: req.method,
-          path: `/${suffix}${query}`,
+          path: `${basePath}/${suffix}${query}`,
           headers: {
+            ...target.headers,
             accept: req.headers.accept || 'application/json',
             ...(payload
               ? {
@@ -126,25 +156,29 @@ export class SandboxWorkspaceService {
   }
 
   private async run(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     script: string,
     repo?: string
   ): Promise<{ stdout: string; ok: boolean }> {
-    if (sandbox.status !== 'running') {
-      throw new BadRequestException('Sandbox is not running');
-    }
+    this.requireRunning(sandbox);
     const dir = this.resolveWorkdir(sandbox, repo);
-    return this.k8s.execCapture(sandbox.id, [
-      'su',
-      '-l',
-      'dev',
-      '-c',
-      `cd '${dir}' 2>/dev/null || exit 3; ${script}`
-    ]);
+    return this.registry
+      .for(sandbox)
+      .exec(refOf(sandbox), [
+        'su',
+        '-l',
+        'dev',
+        '-c',
+        `cd ${shellQuote(dir)} 2>/dev/null || exit 3; ${script}`
+      ]);
+  }
+
+  private devExec(sandbox: WorkspaceSandbox, script: string) {
+    return this.registry.for(sandbox).exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script]);
   }
 
   private q(s: string): string {
-    return `'${s.replace(/'/g, `'\\''`)}'`;
+    return shellQuote(s);
   }
 
   private validateFile(file: string): string {
@@ -162,7 +196,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitCommit(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     message: string,
     files: string[] | undefined,
@@ -190,7 +224,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitUncommit(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string
   ): Promise<{ ok: boolean; output: string }> {
     const result = await this.run(
@@ -202,7 +236,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitPush(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     opts: { force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
@@ -212,7 +246,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitFetch(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string
   ): Promise<{ ok: boolean; output: string }> {
     const result = await this.run(sandbox, 'git fetch --all --prune 2>&1', repo);
@@ -220,7 +254,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitPull(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     opts: { rebase?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
@@ -230,7 +264,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitBranches(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string
   ): Promise<{
     current: string | null;
@@ -265,7 +299,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitCheckout(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     branch: string,
     opts: { create?: boolean; from?: string } = {}
@@ -280,7 +314,7 @@ export class SandboxWorkspaceService {
   }
 
   async gitDeleteBranch(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     branch: string,
     opts: { remote?: boolean; force?: boolean } = {}
@@ -294,7 +328,7 @@ export class SandboxWorkspaceService {
   }
 
   async createPullRequest(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string,
     githubToken: string | null,
     body: { title?: string; body?: string; base?: string }
@@ -348,44 +382,55 @@ export class SandboxWorkspaceService {
   }
 
   async readFile(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string | undefined,
     file: string
   ): Promise<{ content: string; truncated: boolean }> {
     this.validateFile(file);
-    const result = await this.run(sandbox, `head -c 512001 -- ${this.q(file)} | base64 -w0`, repo);
-    if (!result.ok) throw new BadRequestException('Could not read that file');
-    const content = Buffer.from(result.stdout.trim(), 'base64').toString('utf8');
-    return {
-      content: content.slice(0, 512000),
-      truncated: content.length > 512000
-    };
+    this.requireRunning(sandbox);
+    const dir = this.resolveWorkdir(sandbox, repo);
+    const result = await this.registry
+      .for(sandbox)
+      .readFile(refOf(sandbox), `${dir}/${file}`, { maxBytes: MAX_FILE_BYTES, asUser: 'dev' })
+      .catch((e) => {
+        if (e instanceof SandboxNotRunningError) throw e;
+        return null;
+      });
+    if (!result) throw new BadRequestException('Could not read that file');
+    return { content: result.content.toString('utf8'), truncated: result.truncated };
   }
 
   async writeFile(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     repo: string | undefined,
     file: string,
     content: string
   ): Promise<{ ok: boolean }> {
     this.validateFile(file);
-    if (typeof content !== 'string' || content.length > 512000) {
+    if (typeof content !== 'string' || content.length > MAX_FILE_BYTES) {
       throw new BadRequestException('File content must be a string up to 500KB');
     }
-    const b64 = Buffer.from(content, 'utf8').toString('base64');
-    const result = await this.run(
-      sandbox,
-      `mkdir -p "$(dirname ${this.q(file)})"; printf '%s' ${this.q(b64)} | base64 -d > ${this.q(file)}`,
-      repo
-    );
-    if (!result.ok) throw new BadRequestException('Could not write that file');
+    this.requireRunning(sandbox);
+    const dir = this.resolveWorkdir(sandbox, repo);
+    try {
+      await this.registry
+        .for(sandbox)
+        .writeFiles(
+          refOf(sandbox),
+          [{ path: `${dir}/${file}`, content: Buffer.from(content, 'utf8') }],
+          { asUser: 'dev' }
+        );
+    } catch (e: any) {
+      if (e instanceof SandboxNotRunningError) throw e;
+      this.logger.warn(`file write failed for ${sandbox.id}: ${e?.message}`);
+      throw new BadRequestException('Could not write that file');
+    }
     return { ok: true };
   }
 
-  async bootStatus(sandbox: {
-    id: string;
-    status: string;
-  }): Promise<{ phase: string; ready: boolean; label: string }> {
+  async bootStatus(
+    sandbox: WorkspaceSandbox
+  ): Promise<{ phase: string; ready: boolean; label: string }> {
     const labels: Record<string, string> = {
       starting: 'Starting the virtual machine',
       packages: 'Installing system packages',
@@ -401,27 +446,15 @@ export class SandboxWorkspaceService {
     }
     let phase = 'starting';
     try {
-      const result = await this.k8s.execCapture(
-        sandbox.id,
-        ['/bin/sh', '-c', `cat ${SANDBOX_PHASE_FILE} 2>/dev/null`],
-        8000
-      );
-      const value = result.stdout.trim();
-      if (value) phase = value;
+      phase = (await this.probes.bootPhase(sandbox)) || 'starting';
     } catch {
       return { phase: 'starting', ready: false, label: labels.starting };
     }
     return { phase, ready: phase === 'ready', label: labels[phase] || 'Setting up' };
   }
 
-  async listRepos(sandbox: {
-    id: string;
-    status: string;
-    repoUrl: string | null;
-  }): Promise<{ repos: SandboxRepo[] }> {
-    if (sandbox.status !== 'running') {
-      throw new BadRequestException('Sandbox is not running');
-    }
+  async listRepos(sandbox: WorkspaceSandbox): Promise<{ repos: SandboxRepo[] }> {
+    this.requireRunning(sandbox);
     const script = [
       'for d in /persist/home/*/.git; do',
       '  [ -e "$d" ] || continue',
@@ -431,7 +464,7 @@ export class SandboxWorkspaceService {
       '  echo "${r##*/}|$b|$n"',
       'done'
     ].join('\n');
-    const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
+    const result = await this.devExec(sandbox, script);
     const repos: SandboxRepo[] = [];
     for (const line of result.stdout.split('\n')) {
       const parts = line.trim().split('|');
@@ -445,13 +478,8 @@ export class SandboxWorkspaceService {
     return { repos };
   }
 
-  async addRepo(
-    sandbox: { id: string; status: string; repoUrl: string | null },
-    repoUrl: string
-  ): Promise<{ name: string }> {
-    if (sandbox.status !== 'running') {
-      throw new BadRequestException('Sandbox is not running');
-    }
+  async addRepo(sandbox: WorkspaceSandbox, repoUrl: string): Promise<{ name: string }> {
+    this.requireRunning(sandbox);
     let parsed: URL;
     try {
       parsed = new URL(repoUrl);
@@ -472,11 +500,11 @@ export class SandboxWorkspaceService {
     }
     const target = `/persist/home/${name}`;
     const script = [
-      `[ -e '${target}' ] && exit 4`,
-      `nohup git clone '${parsed.href}' '${target}' >> /persist/home/.clone.log 2>&1 &`,
+      `[ -e ${shellQuote(target)} ] && exit 4`,
+      `nohup git clone ${shellQuote(parsed.href)} ${shellQuote(target)} >> /persist/home/.clone.log 2>&1 &`,
       'exit 0'
     ].join('\n');
-    const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
+    const result = await this.devExec(sandbox, script);
     if (!result.ok) {
       throw new BadRequestException(`A directory named "${name}" already exists in the sandbox`);
     }
@@ -484,31 +512,31 @@ export class SandboxWorkspaceService {
   }
 
   private async proxyOpencodeViaExec(
-    sandbox: { id: string },
+    sandbox: WorkspaceSandbox,
     req: Request,
     res: Response,
     suffix: string,
     query: string,
     payload: string | null
   ): Promise<void> {
-    if (!this.kubernetes.kc) {
-      res.status(502).json({ message: 'Kubernetes is not configured' });
-      return;
-    }
-    const pod = await this.k8s.runningPod(sandbox.id);
-    if (!pod) {
-      res.status(502).json({ message: 'Sandbox pod is not running' });
-      return;
-    }
-    const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const isSse = String(req.headers.accept || '').includes('text/event-stream');
-    let curl = `curl -si -N -X ${req.method} ${q(`http://127.0.0.1:4096/${suffix}${query}`)} -H ${q(`accept: ${req.headers.accept || 'application/json'}`)}`;
-    if (payload) curl += ` -H 'content-type: application/json' --data-binary ${q(payload)}`;
+    let curl = `curl -si -N -X ${req.method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
+    if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     if (!isSse) curl += ' -m 110';
-    const stdout = new PassThrough();
+    const ref: SandboxRef = refOf(sandbox);
+    let stream;
+    try {
+      stream = await this.registry.for(sandbox).execStream(ref, ['su', '-l', 'dev', '-c', curl], {
+        stdin: payload ? Buffer.from(payload, 'utf8') : undefined
+      });
+    } catch (e: any) {
+      this.logger.warn(`opencode exec proxy failed for ${sandbox.id}: ${e?.message}`);
+      res.status(502).json({ message: e?.message || 'opencode is not reachable in this sandbox' });
+      return;
+    }
     let headerBuffer = '';
     let headersDone = false;
-    stdout.on('data', (chunk: Buffer) => {
+    stream.stdout.on('data', (chunk: Buffer) => {
       if (headersDone) {
         if (!res.writableEnded) res.write(chunk);
         return;
@@ -530,45 +558,16 @@ export class SandboxWorkspaceService {
       headersDone = true;
       if (rest.length && !res.writableEnded) res.write(rest);
     });
-    const exec = new k8s.Exec(this.kubernetes.kc);
-    let execWs: any = null;
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      if (!headersDone && !res.headersSent) {
-        res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
-        return;
-      }
-      res.end();
-    };
-    res.on('close', () => {
-      try {
-        execWs?.close();
-      } catch {}
-    });
-    try {
-      execWs = await exec.exec(
-        this.k8s.namespace,
-        pod.name,
-        'sandbox',
-        ['su', '-l', 'dev', '-c', curl],
-        stdout,
-        null,
-        null,
-        false,
-        () => finish()
-      );
-    } catch (e: any) {
-      this.logger.warn(`opencode exec proxy failed for ${sandbox.id}: ${e?.message}`);
-      finish();
+    res.on('close', () => stream.kill());
+    await stream.done;
+    if (!headersDone && !res.headersSent) {
+      res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
+      return;
     }
+    if (!res.writableEnded) res.end();
   }
 
-  async changes(
-    sandbox: { id: string; status: string; repoUrl: string | null },
-    repo?: string
-  ): Promise<SandboxChanges> {
+  async changes(sandbox: WorkspaceSandbox, repo?: string): Promise<SandboxChanges> {
     const script = [
       'git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 3',
       'echo "@@branch@@$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"',
@@ -614,7 +613,7 @@ export class SandboxWorkspaceService {
   }
 
   async diff(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     file: string | undefined,
     repo?: string
   ): Promise<{ diff: string; truncated: boolean }> {

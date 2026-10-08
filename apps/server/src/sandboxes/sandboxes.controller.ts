@@ -21,7 +21,7 @@ import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
-import { SandboxesService, toSandboxDto } from './sandboxes.service';
+import { SandboxesService } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
@@ -70,6 +70,7 @@ export class SandboxesController {
       sshIdentityId?: string;
       setupScript?: string | null;
       organizationId?: string;
+      runner?: string;
     }
   ) {
     const user = await this.resolveUser(req);
@@ -412,7 +413,7 @@ export class SandboxesController {
   @Get(':id')
   async get(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    return toSandboxDto(await this.sandboxes.getOwned(id, user.id));
+    return this.sandboxes.dto(await this.sandboxes.getOwned(id, user.id));
   }
 
   @Patch(':id')

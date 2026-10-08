@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { SandboxConversation } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { SandboxK8sService } from './sandbox-k8s.service';
-import { SandboxWorkspaceService } from './sandbox-workspace.service';
+import { SandboxWorkspaceService, WorkspaceSandbox } from './sandbox-workspace.service';
+import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
+import { refOf } from './runners/sandbox-runner';
 
 const MAX_HISTORY_BYTES = 2_000_000;
 
@@ -30,7 +31,7 @@ export function toConversationDto(row: SandboxConversation): ConversationDto {
 export class SandboxConversationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly k8s: SandboxK8sService,
+    private readonly registry: SandboxRunnerRegistry,
     private readonly workspace: SandboxWorkspaceService
   ) {}
 
@@ -104,7 +105,7 @@ export class SandboxConversationsService {
   }
 
   async history(
-    sandbox: { id: string; status: string; repoUrl: string | null },
+    sandbox: WorkspaceSandbox,
     conversationId: string
   ): Promise<{ events: unknown[]; truncated: boolean }> {
     const row = await this.getOwned(sandbox.id, conversationId);
@@ -114,22 +115,22 @@ export class SandboxConversationsService {
     const projectDir = workdir.replace(/[/.]/g, '-');
     const sessionId = row.claudeSessionId.replace(/[^a-zA-Z0-9_-]/g, '');
     const path = `/persist/home/.claude/projects/${projectDir}/${sessionId}.jsonl`;
-    let stdout = '';
+    let content = '';
+    let truncated = false;
     try {
-      const result = await this.k8s.execCapture(sandbox.id, [
-        'su',
-        '-l',
-        'dev',
-        '-c',
-        `tail -c ${MAX_HISTORY_BYTES + 1} '${path}' 2>/dev/null`
-      ]);
-      stdout = result.stdout;
+      const result = await this.registry.for(sandbox).readFile(refOf(sandbox), path, {
+        maxBytes: MAX_HISTORY_BYTES,
+        fromEnd: true,
+        asUser: 'dev'
+      });
+      if (!result) return { events: [], truncated: false };
+      content = result.content.toString('utf8');
+      truncated = result.truncated;
     } catch {
       return { events: [], truncated: false };
     }
-    const truncated = stdout.length > MAX_HISTORY_BYTES;
     const events: unknown[] = [];
-    for (const line of stdout.split('\n')) {
+    for (const line of content.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed || !trimmed.startsWith('{')) continue;
       try {

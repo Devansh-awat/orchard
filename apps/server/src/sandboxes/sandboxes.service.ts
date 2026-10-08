@@ -6,14 +6,14 @@ import {
   NotFoundException,
   ServiceUnavailableException
 } from '@nestjs/common';
-import { SignJWT } from 'jose';
-import { Sandbox, SandboxStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { Sandbox, SandboxDesiredState, SandboxStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
-import { SandboxK8sService, SandboxSpecInput, k8sErrorMessage } from './sandbox-k8s.service';
-import { sandboxStatusFromCr } from './sandbox-cr';
+import { SandboxRunnerRegistry, SandboxRunnerDescription } from './runners/sandbox-runner.registry';
+import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -24,6 +24,11 @@ export interface SandboxDto {
   name: string;
   status: SandboxStatus;
   statusMessage: string | null;
+  runner: SandboxRunnerId;
+  desiredState: SandboxDesiredState;
+  applying: boolean;
+  applyError: string | null;
+  diskObserved: string | null;
   repoUrl: string | null;
   sshIdentity: { id: string; name: string } | null;
   setupScript: string | null;
@@ -35,36 +40,43 @@ export interface SandboxDto {
   lastActiveAt: Date | null;
 }
 
+export interface SandboxDtoExtras {
+  applying: boolean;
+  applyError: string | null;
+  diskObserved: string | null;
+}
+
+const NO_EXTRAS: SandboxDtoExtras = { applying: false, applyError: null, diskObserved: null };
+
 type SandboxWithIdentity = Sandbox & {
   sshIdentity: { id: string; name: string } | null;
   user?: { id: string; username: string | null; email: string | null } | null;
 };
 
-function specOf(row: SandboxWithIdentity): SandboxSpecInput {
-  return {
-    id: row.id,
-    podName: row.podName,
-    userId: row.userId,
-    repoUrl: row.repoUrl,
-    image: row.image,
-    cpuLimit: row.cpuLimit,
-    memoryLimit: row.memoryLimit,
-    diskSize: row.diskSize,
-    setupScript: row.setupScript
-  };
-}
+const WITH_IDENTITY = {
+  sshIdentity: { select: { id: true, name: true } },
+  user: { select: { id: true, username: true, email: true } }
+} as const;
 
 export function defaultMaxSandboxes(): number {
   const parsed = Number(process.env.SANDBOX_MAX_PER_USER);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
 }
 
-export function toSandboxDto(row: SandboxWithIdentity): SandboxDto {
+export function toSandboxDto(
+  row: SandboxWithIdentity,
+  extras: SandboxDtoExtras = NO_EXTRAS
+): SandboxDto {
   return {
     id: row.id,
     name: row.name,
     status: row.status,
     statusMessage: row.statusMessage,
+    runner: row.runner,
+    desiredState: row.desiredState,
+    applying: extras.applying,
+    applyError: extras.applyError,
+    diskObserved: extras.diskObserved,
     repoUrl: row.repoUrl,
     sshIdentity: row.sshIdentity ? { id: row.sshIdentity.id, name: row.sshIdentity.name } : null,
     setupScript: row.setupScript,
@@ -88,8 +100,53 @@ export class SandboxesService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly crypto: SecretCryptoService,
-    private readonly k8s: SandboxK8sService
+    private readonly registry: SandboxRunnerRegistry
   ) {}
+
+  async dtos(rows: SandboxWithIdentity[]): Promise<SandboxDto[]> {
+    if (rows.length === 0) return [];
+    const ids = rows.map((r) => r.id);
+    const items = await this.prisma.k8sApplyItem.findMany({
+      where: { sandboxId: { in: ids }, status: { in: ['pending', 'applying', 'failed'] } },
+      select: { sandboxId: true, status: true, lastError: true },
+      orderBy: { updatedAt: 'desc' }
+    });
+    const extras = new Map<string, SandboxDtoExtras>(ids.map((id) => [id, { ...NO_EXTRAS }]));
+    for (const item of items) {
+      const entry = item.sandboxId ? extras.get(item.sandboxId) : undefined;
+      if (!entry) continue;
+      if (item.status === 'failed') {
+        if (entry.applyError === null) entry.applyError = item.lastError || 'apply failed';
+      } else {
+        entry.applying = true;
+      }
+    }
+    const byRunner = new Map<SandboxRunnerId, SandboxWithIdentity[]>();
+    for (const row of rows) {
+      const list = byRunner.get(row.runner) ?? [];
+      list.push(row);
+      byRunner.set(row.runner, list);
+    }
+    for (const [id, list] of byRunner) {
+      const runner = this.registry.get(id);
+      if (!runner?.observeDisks) continue;
+      const disks = await runner.observeDisks(list.map(refOf)).catch(() => new Map());
+      for (const [sandboxId, size] of disks) {
+        const entry = extras.get(sandboxId);
+        if (entry) entry.diskObserved = size;
+      }
+    }
+    return rows.map((row) => toSandboxDto(row, extras.get(row.id)));
+  }
+
+  async dto(row: SandboxWithIdentity): Promise<SandboxDto> {
+    const [dto] = await this.dtos([row]);
+    return dto;
+  }
+
+  private async reload(id: string): Promise<SandboxWithIdentity> {
+    return this.prisma.sandbox.findUniqueOrThrow({ where: { id }, include: WITH_IDENTITY });
+  }
 
   /** The user's sandbox cap, or null when they are not capped at all. */
   private async sandboxCap(userId: string): Promise<number | null> {
@@ -104,7 +161,12 @@ export class SandboxesService {
   async list(
     userId: string,
     organizationId?: string
-  ): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number | null }> {
+  ): Promise<{
+    sandboxes: SandboxDto[];
+    maxSandboxes: number | null;
+    runners: SandboxRunnerDescription[];
+    defaultRunner: SandboxRunnerId | null;
+  }> {
     let where: Record<string, unknown> = { userId };
     if (organizationId) {
       const access = await this.authz.requireOrgMember(organizationId, userId);
@@ -114,24 +176,16 @@ export class SandboxesService {
       this.prisma.sandbox.findMany({
         where,
         orderBy: { createdAt: 'asc' },
-        include: {
-          sshIdentity: { select: { id: true, name: true } },
-          user: { select: { id: true, username: true, email: true } }
-        }
+        include: WITH_IDENTITY
       }),
       this.sandboxCap(userId)
     ]);
-    return { sandboxes: rows.map(toSandboxDto), maxSandboxes };
+    const { runners, defaultRunner } = this.registry.describe();
+    return { sandboxes: await this.dtos(rows), maxSandboxes, runners, defaultRunner };
   }
 
   async getOwned(id: string, userId: string): Promise<SandboxWithIdentity> {
-    const row = await this.prisma.sandbox.findUnique({
-      where: { id },
-      include: {
-        sshIdentity: { select: { id: true, name: true } },
-        user: { select: { id: true, username: true, email: true } }
-      }
-    });
+    const row = await this.prisma.sandbox.findUnique({ where: { id }, include: WITH_IDENTITY });
     if (!row) throw new NotFoundException('Sandbox not found');
     if (row.userId === userId) return row;
     if (await this.authz.isSuperAdmin(userId)) return row;
@@ -142,47 +196,6 @@ export class SandboxesService {
       if (access?.isAdmin) return row;
     }
     throw new NotFoundException('Sandbox not found');
-  }
-
-  private async secretFor(row: SandboxWithIdentity) {
-    const identity = row.sshIdentityId
-      ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
-      : null;
-    return this.buildSecretInput(row.userId, identity ? [identity.publicKey] : [], row.setupScript);
-  }
-
-  /**
-   * Bring the cluster to "this sandbox is running", whatever it currently
-   * holds, and report whether that meant building it again.
-   *
-   * Written as create-then-resume rather than look-then-decide on purpose. The
-   * resource can go missing while the row survives — a cluster rebuild, a
-   * namespace wipe, an over-eager sweep — and a start that assumes it is there
-   * throws a raw 404 at whoever pressed the button. Asking first only moves the
-   * race: the answer can be stale by the time it is acted on. Creating and
-   * treating "already exists" as the other branch cannot be wrong either way.
-   *
-   * A rebuilt sandbox comes back empty. Its home volume went with the resource.
-   */
-  private async ensureRunning(row: SandboxWithIdentity): Promise<boolean> {
-    const spec = specOf(row);
-    const created = await this.k8s.createSandbox(spec, await this.secretFor(row));
-    if (created) {
-      this.logger.warn(`sandbox ${row.id} had no cluster resource; rebuilt it`);
-      return true;
-    }
-    // The pod mounts bootstrap.sh, agent tokens and the opencode config from
-    // its Secret, and keeps whatever pod template it was born with, so a
-    // sandbox from before a platform change never sees either. createSandbox
-    // has already rewritten the Secret; re-render the template to match. Best
-    // effort: a stale template is not a reason to refuse to start the box.
-    try {
-      await this.k8s.refreshSpec(spec);
-    } catch (e: any) {
-      this.logger.warn(`spec refresh failed for sandbox ${row.id}: ${e?.message}`);
-    }
-    await this.k8s.resume(row.podName);
-    return false;
   }
 
   // Org admins can see and stop a member's sandbox, but never reach inside it:
@@ -266,65 +279,6 @@ export class SandboxesService {
     return script;
   }
 
-  private async mintMcpToken(userId: string): Promise<string | null> {
-    if (!process.env.SANDBOX_MCP_URL || !process.env.JWT_SECRET) return null;
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, username: true, externalAuthId: true }
-    });
-    if (!user) return null;
-    let session = await this.prisma.session.findFirst({
-      where: {
-        userId,
-        deviceName: 'sandbox-mcp',
-        revokedAt: null,
-        expiresAt: { gt: new Date(Date.now() + 7 * 86400000) }
-      }
-    });
-    if (!session) {
-      session = await this.prisma.session.create({
-        data: {
-          userId,
-          authMethod: 'otp',
-          deviceName: 'sandbox-mcp',
-          expiresAt: new Date(Date.now() + 60 * 86400000)
-        }
-      });
-    }
-    return new SignJWT({
-      type: 'mcp',
-      email: user.email,
-      name: user.username,
-      externalAuthId: user.externalAuthId,
-      authMethod: 'otp',
-      sessionId: session.id
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(userId)
-      .setIssuedAt()
-      .setExpirationTime('60d')
-      .sign(new TextEncoder().encode(process.env.JWT_SECRET));
-  }
-
-  private async buildSecretInput(userId: string, keys: string[], setupScript: string | null) {
-    const [user, credential, mcpToken] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { githubAccessToken: true }
-      }),
-      this.prisma.sandboxCredential.findUnique({ where: { userId } }),
-      this.mintMcpToken(userId).catch(() => null)
-    ]);
-    return {
-      authorizedKeys: keys,
-      githubToken: this.crypto.open(user?.githubAccessToken) || null,
-      claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
-      openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
-      setupScript,
-      mcpToken
-    };
-  }
-
   async create(
     userId: string,
     actorEmail: string | null,
@@ -334,13 +288,15 @@ export class SandboxesService {
       sshIdentityId?: string;
       setupScript?: string | null;
       organizationId?: string;
+      runner?: string;
     }
   ): Promise<SandboxDto> {
     const organizationId = await this.resolveOrganization(userId, body.organizationId);
     const setupScript = this.validateSetupScript(body.setupScript);
     const identity = await this.resolveIdentity(userId, body.sshIdentityId);
+    const runner = this.registry.resolveForCreate(body.runner);
     const [count, cap] = await Promise.all([
-      this.prisma.sandbox.count({ where: { userId } }),
+      this.prisma.sandbox.count({ where: { userId, desiredState: { not: 'deleted' } } }),
       this.sandboxCap(userId)
     ]);
     if (cap !== null && count >= cap) {
@@ -370,16 +326,20 @@ export class SandboxesService {
       });
       if (existing) name = `sandbox-${Math.random().toString(36).slice(2, 6)}`;
     }
+    const id = randomUUID();
     const row = await this.prisma.sandbox
       .create({
         data: {
+          id,
           userId,
           organizationId,
           name,
+          runner: runner.id,
+          desiredState: 'running',
           status: 'creating',
           startedAt: new Date(),
-          podName: '',
-          namespace: this.k8s.namespace,
+          podName: `sbx-${id}`,
+          namespace: runner.namespace ?? null,
           image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
           repoUrl: body.repoUrl || null,
           sshIdentityId: identity.id,
@@ -387,7 +347,8 @@ export class SandboxesService {
           cpuLimit: process.env.SANDBOX_CPU_LIMIT || '2',
           memoryLimit: process.env.SANDBOX_MEMORY_LIMIT || '4Gi',
           diskSize: process.env.SANDBOX_DISK_SIZE || '10Gi'
-        }
+        },
+        include: WITH_IDENTITY
       })
       .catch((e) => {
         if (e?.code === 'P2002') {
@@ -395,12 +356,6 @@ export class SandboxesService {
         }
         throw e;
       });
-    const podName = `sbx-${row.id}`;
-    const updated = await this.prisma.sandbox.update({
-      where: { id: row.id },
-      data: { podName },
-      include: { sshIdentity: { select: { id: true, name: true } } }
-    });
 
     this.audit
       .log({
@@ -410,36 +365,25 @@ export class SandboxesService {
         targetType: 'sandbox',
         targetId: row.id,
         targetLabel: name,
-        metadata: { repoUrl: body.repoUrl || null }
+        metadata: { repoUrl: body.repoUrl || null, runner: runner.id }
       })
       .catch(() => {});
 
     try {
-      const secret = await this.buildSecretInput(userId, [identity.publicKey], setupScript);
-      await this.k8s.createSandbox(
-        {
-          id: row.id,
-          podName,
-          userId,
-          repoUrl: updated.repoUrl,
-          image: updated.image,
-          cpuLimit: updated.cpuLimit,
-          memoryLimit: updated.memoryLimit,
-          diskSize: updated.diskSize,
-          setupScript
-        },
-        secret
-      );
+      await runner.requestProvision(refOf(row), userId);
     } catch (e: any) {
-      this.logger.error(`sandbox ${row.id} create failed: ${k8sErrorMessage(e)}`);
+      this.logger.error(`sandbox ${row.id} create failed: ${e?.message}`);
       const failed = await this.prisma.sandbox.update({
         where: { id: row.id },
-        data: { status: 'error', statusMessage: `Failed to create sandbox: ${k8sErrorMessage(e)}` },
-        include: { sshIdentity: { select: { id: true, name: true } } }
+        data: {
+          status: 'error',
+          statusMessage: `Failed to create sandbox: ${e?.message || 'unknown error'}`
+        },
+        include: WITH_IDENTITY
       });
-      return toSandboxDto(failed);
+      return this.dto(failed);
     }
-    return toSandboxDto(updated);
+    return this.dto(row);
   }
 
   async update(
@@ -454,7 +398,6 @@ export class SandboxesService {
   ): Promise<SandboxDto> {
     const row = await this.getOwnedStrict(id, userId);
     const data: { name?: string; sshIdentityId?: string; setupScript?: string | null } = {};
-    let identityKey: string | null = null;
     if (body.setupScript !== undefined) {
       data.setupScript = this.validateSetupScript(body.setupScript);
     }
@@ -466,14 +409,9 @@ export class SandboxesService {
     if (body.sshIdentityId !== undefined) {
       const identity = await this.resolveIdentity(row.userId, body.sshIdentityId);
       data.sshIdentityId = identity.id;
-      identityKey = identity.publicKey;
     }
     const updated = await this.prisma.sandbox
-      .update({
-        where: { id: row.id },
-        data,
-        include: { sshIdentity: { select: { id: true, name: true, publicKey: true } } }
-      })
+      .update({ where: { id: row.id }, data, include: WITH_IDENTITY })
       .catch((e) => {
         if (e?.code === 'P2002') {
           throw new BadRequestException(`You already have a sandbox named "${data.name}"`);
@@ -481,22 +419,7 @@ export class SandboxesService {
         throw e;
       });
     if (data.sshIdentityId !== undefined || data.setupScript !== undefined) {
-      const key = identityKey ?? updated.sshIdentity?.publicKey ?? null;
-      const secret = await this.buildSecretInput(row.userId, key ? [key] : [], updated.setupScript);
-      await this.k8s.ensureAuthSecret(
-        {
-          id: updated.id,
-          podName: updated.podName,
-          userId: updated.userId,
-          repoUrl: updated.repoUrl,
-          image: updated.image,
-          cpuLimit: updated.cpuLimit,
-          memoryLimit: updated.memoryLimit,
-          diskSize: updated.diskSize,
-          setupScript: updated.setupScript
-        },
-        secret
-      );
+      await this.registry.for(updated).requestSecretSync(refOf(updated), userId);
       this.audit
         .log({
           action: 'sandbox.keys.update',
@@ -513,28 +436,34 @@ export class SandboxesService {
         })
         .catch(() => {});
     }
-    return toSandboxDto(updated);
+    return this.dto(updated);
   }
 
   async start(id: string, userId: string, actorEmail: string | null): Promise<SandboxDto> {
     const row = await this.getOwned(id, userId);
-    if (row.status === 'running' || row.status === 'starting') return toSandboxDto(row);
-    if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    const rebuilt = await this.ensureRunning(row);
-    // A start against a sandbox the cluster never actually stopped changes
-    // nothing about the resource, so no watch event is coming and nothing would
-    // move the row off "starting". Settle it here when the box is already up.
-    const settled = sandboxStatusFromCr(await this.k8s.getCrStatus(row.podName));
-    const updated = await this.prisma.sandbox.update({
+    if (row.status === 'deleting' || row.desiredState === 'deleted') {
+      throw new BadRequestException('Sandbox is being deleted');
+    }
+    if (row.desiredState === 'running' && (row.status === 'running' || row.status === 'starting')) {
+      return this.dto(row);
+    }
+    const runner = this.registry.for(row);
+    const ref = refOf(row);
+    const observed = await runner.observe(ref).catch(() => null);
+    const trusted =
+      observed && !observed.exists ? await runner.canTrustAbsence().catch(() => false) : false;
+    const rebuilt = observed ? (observed.exists ? false : trusted ? true : null) : null;
+    await this.prisma.sandbox.update({
       where: { id: row.id },
       data: {
-        status: settled === 'running' ? 'running' : 'starting',
+        desiredState: 'running',
+        status: observed?.status === 'running' ? 'running' : 'starting',
         statusMessage: null,
         lastActiveAt: new Date(),
         startedAt: new Date()
-      },
-      include: { sshIdentity: { select: { id: true, name: true } } }
+      }
     });
+    await runner.requestStart(ref, userId);
     this.audit
       .log({
         action: 'sandbox.start',
@@ -546,26 +475,28 @@ export class SandboxesService {
         metadata: { rebuilt }
       })
       .catch(() => {});
-    return toSandboxDto(updated);
+    return this.dto(await this.reload(row.id));
   }
 
   async stop(id: string, userId: string, actorEmail: string | null): Promise<SandboxDto> {
     const row = await this.getOwned(id, userId);
-    if (row.status === 'stopped' || row.status === 'stopping') return toSandboxDto(row);
-    if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
-    // Same shape as start: a resource that is already gone, or already
-    // suspended, produces no event, and the row would sit in stopping waiting
-    // for one that cannot arrive.
-    const existed = await this.k8s.suspend(row.podName);
-    const settled = sandboxStatusFromCr(await this.k8s.getCrStatus(row.podName));
-    const updated = await this.prisma.sandbox.update({
+    if (row.status === 'deleting' || row.desiredState === 'deleted') {
+      throw new BadRequestException('Sandbox is being deleted');
+    }
+    if (row.desiredState === 'stopped' && (row.status === 'stopped' || row.status === 'stopping')) {
+      return this.dto(row);
+    }
+    const runner = this.registry.for(row);
+    const ref = refOf(row);
+    const observed = await runner.observe(ref).catch(() => null);
+    const gone =
+      observed && !observed.exists ? await runner.canTrustAbsence().catch(() => false) : false;
+    const settled = gone || observed?.status === 'stopped';
+    await this.prisma.sandbox.update({
       where: { id: row.id },
-      data: {
-        status: !existed || settled === 'stopped' ? 'stopped' : 'stopping',
-        startedAt: null
-      },
-      include: { sshIdentity: { select: { id: true, name: true } } }
+      data: { desiredState: 'stopped', status: settled ? 'stopped' : 'stopping', startedAt: null }
     });
+    await runner.requestStop(ref, userId);
     this.audit
       .log({
         action: 'sandbox.stop',
@@ -576,23 +507,17 @@ export class SandboxesService {
         targetLabel: row.name
       })
       .catch(() => {});
-    return toSandboxDto(updated);
+    return this.dto(await this.reload(row.id));
   }
 
   async remove(id: string, userId: string, actorEmail: string | null): Promise<void> {
     const row = await this.getOwned(id, userId);
-    await this.prisma.sandbox.update({ where: { id: row.id }, data: { status: 'deleting' } });
-    try {
-      await this.k8s.deleteSandbox({ id: row.id, podName: row.podName });
-    } catch (e: any) {
-      this.logger.error(`sandbox ${row.id} delete failed: ${k8sErrorMessage(e)}`);
-      await this.prisma.sandbox.update({
-        where: { id: row.id },
-        data: { status: 'error', statusMessage: `Failed to delete sandbox: ${k8sErrorMessage(e)}` }
-      });
-      throw e;
-    }
-    await this.prisma.sandbox.delete({ where: { id: row.id } });
+    const runner = this.registry.for(row);
+    await this.prisma.sandbox.update({
+      where: { id: row.id },
+      data: { desiredState: 'deleted', status: 'deleting' }
+    });
+    await runner.requestDestroy(refOf(row), userId);
     this.audit
       .log({
         action: 'sandbox.delete',
@@ -637,30 +562,11 @@ export class SandboxesService {
       update: data
     });
     const rows = await this.prisma.sandbox.findMany({
-      where: { userId },
-      include: { sshIdentity: { select: { publicKey: true } } }
+      where: { userId, desiredState: { not: 'deleted' } }
     });
     for (const row of rows) {
       try {
-        const secret = await this.buildSecretInput(
-          userId,
-          row.sshIdentity ? [row.sshIdentity.publicKey] : [],
-          row.setupScript
-        );
-        await this.k8s.ensureAuthSecret(
-          {
-            id: row.id,
-            podName: row.podName,
-            userId: row.userId,
-            repoUrl: row.repoUrl,
-            image: row.image,
-            cpuLimit: row.cpuLimit,
-            memoryLimit: row.memoryLimit,
-            diskSize: row.diskSize,
-            setupScript: row.setupScript
-          },
-          secret
-        );
+        await this.registry.for(row).requestSecretSync(refOf(row), userId);
       } catch (e: any) {
         this.logger.warn(`credential refresh failed for sandbox ${row.id}: ${e?.message}`);
       }

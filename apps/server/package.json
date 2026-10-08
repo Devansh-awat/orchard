@@ -99,7 +99,8 @@
     "test:session-jwt": "tsx --test test/session-jwt.test.ts",
     "test:sse-limits": "tsx --test test/sse-stream-limiter.test.ts",
     "test:env-bounds": "tsx --test test/env-value-bounds.test.ts",
-    "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts"
+    "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts",
+    "test:sandbox-runners": "tsx --test test/sandbox-runners.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

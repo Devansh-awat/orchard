@@ -1,13 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import * as k8s from '@kubernetes/client-node';
-import { PassThrough } from 'stream';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { SandboxK8sService } from './sandbox-k8s.service';
-import { SandboxWorkspaceService } from './sandbox-workspace.service';
+import { SandboxWorkspaceService, WorkspaceSandbox } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
+import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
+import { ExecStream, refOf } from './runners/sandbox-runner';
 
 const MAX_MESSAGE_LENGTH = 32768;
 const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -19,20 +17,13 @@ export class SandboxChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: SecretCryptoService,
-    private readonly kubernetes: KubernetesService,
-    private readonly sandboxK8s: SandboxK8sService,
+    private readonly registry: SandboxRunnerRegistry,
     private readonly workspace: SandboxWorkspaceService,
     private readonly conversations: SandboxConversationsService
   ) {}
 
   async stream(
-    sandbox: {
-      id: string;
-      userId: string;
-      podName: string;
-      repoUrl: string | null;
-      status: string;
-    },
+    sandbox: WorkspaceSandbox,
     message: string,
     opts: { conversationId?: string; repo?: string },
     res: Response
@@ -43,9 +34,9 @@ export class SandboxChatService {
     if (sandbox.status !== 'running') {
       throw new BadRequestException('Sandbox is not running; start it first');
     }
-    if (!this.kubernetes.kc) {
-      throw new BadRequestException('Kubernetes is not configured');
-    }
+    const runner = this.registry.for(sandbox);
+    const configError = runner.configError();
+    if (configError) throw new BadRequestException(configError);
     const credential = await this.prisma.sandboxCredential.findUnique({
       where: { userId: sandbox.userId }
     });
@@ -57,11 +48,6 @@ export class SandboxChatService {
         'No Claude credentials configured; add a token in user settings first'
       );
     }
-    const pod = await this.sandboxK8s.runningPod(sandbox.id);
-    if (!pod) {
-      throw new BadRequestException('Sandbox pod is not running');
-    }
-
     let conversation = opts.conversationId
       ? await this.conversations.getOwned(sandbox.id, opts.conversationId)
       : await this.prisma.sandboxConversation.findFirst({
@@ -110,11 +96,21 @@ export class SandboxChatService {
       '-l',
       'dev',
       '-c',
-      `export CLAUDE_CODE_OAUTH_TOKEN=${q(claudeToken)}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume} -- ${q(message)}`
+      `export CLAUDE_CODE_OAUTH_TOKEN="$(cat)"; cd ${q(workdir)} 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume} -- ${q(message)} < /dev/null`
     ];
 
-    const stdout = new PassThrough();
-    const stderr = new PassThrough();
+    let exec: ExecStream;
+    try {
+      exec = await runner.execStream(refOf(sandbox), command, {
+        stdin: Buffer.from(claudeToken, 'utf8')
+      });
+    } catch (e: any) {
+      this.logger.warn(`chat exec failed for sandbox ${sandbox.id}: ${e?.message}`);
+      send({ type: 'error', detail: e?.message || 'failed to reach the sandbox' });
+      res.end();
+      return;
+    }
+    const { stdout, stderr } = exec;
     let stderrText = '';
     let sawSessionNotFound = false;
     let buffer = '';
@@ -153,8 +149,6 @@ export class SandboxChatService {
       if (/no conversation found/i.test(stderrText)) sawSessionNotFound = true;
     });
 
-    const exec = new k8s.Exec(this.kubernetes.kc);
-    let execWs: any = null;
     let finished = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let touchTimer: ReturnType<typeof setInterval> | undefined;
@@ -174,44 +168,25 @@ export class SandboxChatService {
     };
 
     timeout = setTimeout(() => {
-      try {
-        execWs?.close();
-      } catch {}
+      exec.kill();
       void finish('error', 'chat turn timed out');
     }, CHAT_TIMEOUT_MS);
     touchTimer = setInterval(touch, 60_000);
 
     res.on('close', () => {
-      try {
-        execWs?.close();
-      } catch {}
+      exec.kill();
       void finish('done');
     });
 
-    try {
-      execWs = await exec.exec(
-        this.sandboxK8s.namespace,
-        pod.name,
-        'sandbox',
-        command,
-        stdout,
-        stderr,
-        null,
-        false,
-        (status) => {
-          if (status.status === 'Success') {
-            void finish('done');
-          } else {
-            const detail = sawSessionNotFound
-              ? 'previous chat session was not found; it has been reset, send your message again'
-              : stderrText.trim().slice(-500) || status.message || 'claude exited with an error';
-            void finish('error', detail);
-          }
-        }
-      );
-    } catch (e: any) {
-      this.logger.warn(`chat exec failed for sandbox ${sandbox.id}: ${e?.message}`);
-      void finish('error', e?.message || 'failed to reach the sandbox');
-    }
+    void exec.done.then((result) => {
+      if (result.ok) {
+        void finish('done');
+        return;
+      }
+      const detail = sawSessionNotFound
+        ? 'previous chat session was not found; it has been reset, send your message again'
+        : stderrText.trim().slice(-500) || result.message || 'claude exited with an error';
+      void finish('error', detail);
+    });
   }
 }

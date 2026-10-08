@@ -473,6 +473,74 @@
         ]
       }
     },
+    "/admin/instance-settings/sandboxes": {
+      "get": {
+        "description": "Auth: superadmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /admin/instance-settings/sandboxes",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Auth: superadmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /admin/instance-settings/sandboxes",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/instance-settings/userspace-scheduling": {
       "get": {
         "description": "Auth: superadmin",
@@ -46284,14 +46352,168 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "defaultRunner": {
+                      "description": "The runner new sandboxes use when none is picked",
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "maxSandboxes": {
-                      "type": "integer"
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "runners": {
+                      "items": {
+                        "properties": {
+                          "available": {
+                            "description": "Whether new sandboxes can be created on this runner",
+                            "type": "boolean"
+                          },
+                          "capabilities": {
+                            "properties": {
+                              "diskSizeConfigurable": {
+                                "type": "boolean"
+                              },
+                              "execStdin": {
+                                "type": "boolean"
+                              },
+                              "fork": {
+                                "type": "boolean"
+                              },
+                              "homeMode": {
+                                "enum": [
+                                  "block",
+                                  "filesystem",
+                                  "none"
+                                ],
+                                "type": "string"
+                              },
+                              "maxRunMs": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "persistence": {
+                                "enum": [
+                                  "volume",
+                                  "snapshot"
+                                ],
+                                "type": "string"
+                              },
+                              "previews": {
+                                "enum": [
+                                  "proxy",
+                                  "public",
+                                  "none"
+                                ],
+                                "type": "string"
+                              },
+                              "pty": {
+                                "enum": [
+                                  "native",
+                                  "none"
+                                ],
+                                "type": "string"
+                              },
+                              "statusSource": {
+                                "enum": [
+                                  "watch",
+                                  "poll"
+                                ],
+                                "type": "string"
+                              },
+                              "tcpTunnel": {
+                                "enum": [
+                                  "native",
+                                  "bridge",
+                                  "none"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "statusSource",
+                              "persistence",
+                              "homeMode",
+                              "tcpTunnel",
+                              "pty",
+                              "execStdin",
+                              "maxRunMs",
+                              "diskSizeConfigurable",
+                              "fork",
+                              "previews"
+                            ],
+                            "type": "object"
+                          },
+                          "id": {
+                            "enum": [
+                              "kubernetes",
+                              "vercel"
+                            ],
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "description": "Why the runner is unavailable, when it is",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "capabilities",
+                          "available",
+                          "reason"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "sandboxes": {
                       "items": {
                         "properties": {
+                          "applyError": {
+                            "description": "The last change that failed to apply, until a later attempt succeeds",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "applying": {
+                            "description": "Whether a change is still being applied to the runner",
+                            "type": "boolean"
+                          },
                           "createdAt": {
                             "type": "string"
+                          },
+                          "desiredState": {
+                            "description": "What the sandbox was last asked to be",
+                            "enum": [
+                              "running",
+                              "stopped",
+                              "deleted"
+                            ],
+                            "type": "string"
+                          },
+                          "diskObserved": {
+                            "description": "Disk capacity the runner actually provisioned, when it reports one",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "id": {
                             "format": "uuid",
@@ -46352,6 +46574,13 @@
                               "null"
                             ]
                           },
+                          "runner": {
+                            "enum": [
+                              "kubernetes",
+                              "vercel"
+                            ],
+                            "type": "string"
+                          },
                           "setupScript": {
                             "type": [
                               "string",
@@ -46404,6 +46633,11 @@
                           "name",
                           "status",
                           "statusMessage",
+                          "runner",
+                          "desiredState",
+                          "applying",
+                          "applyError",
+                          "diskObserved",
                           "repoUrl",
                           "sshIdentity",
                           "setupScript",
@@ -46421,7 +46655,9 @@
                   },
                   "required": [
                     "sandboxes",
-                    "maxSandboxes"
+                    "maxSandboxes",
+                    "runners",
+                    "defaultRunner"
                   ],
                   "type": "object"
                 }
@@ -46467,6 +46703,14 @@
                     "format": "uri",
                     "type": "string"
                   },
+                  "runner": {
+                    "description": "Where the sandbox runs; defaults to the instance default runner",
+                    "enum": [
+                      "kubernetes",
+                      "vercel"
+                    ],
+                    "type": "string"
+                  },
                   "setupScript": {
                     "description": "Shell script run once as the dev user on first boot (logged to ~/.setup.log)",
                     "maxLength": 65536,
@@ -46492,8 +46736,35 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "id": {
                       "format": "uuid",
@@ -46554,6 +46825,13 @@
                         "null"
                       ]
                     },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
                     "setupScript": {
                       "type": [
                         "string",
@@ -46606,6 +46884,11 @@
                     "name",
                     "status",
                     "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
                     "repoUrl",
                     "sshIdentity",
                     "setupScript",
@@ -46701,8 +46984,35 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "id": {
                       "format": "uuid",
@@ -46763,6 +47073,13 @@
                         "null"
                       ]
                     },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
                     "setupScript": {
                       "type": [
                         "string",
@@ -46815,6 +47132,11 @@
                     "name",
                     "status",
                     "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
                     "repoUrl",
                     "sshIdentity",
                     "setupScript",
@@ -46891,8 +47213,35 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "id": {
                       "format": "uuid",
@@ -46953,6 +47302,13 @@
                         "null"
                       ]
                     },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
                     "setupScript": {
                       "type": [
                         "string",
@@ -47005,6 +47361,11 @@
                     "name",
                     "status",
                     "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
                     "repoUrl",
                     "sshIdentity",
                     "setupScript",
@@ -48669,8 +49030,35 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "id": {
                       "format": "uuid",
@@ -48731,6 +49119,13 @@
                         "null"
                       ]
                     },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
                     "setupScript": {
                       "type": [
                         "string",
@@ -48783,6 +49178,11 @@
                     "name",
                     "status",
                     "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
                     "repoUrl",
                     "sshIdentity",
                     "setupScript",
@@ -48843,8 +49243,35 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "applyError": {
+                      "description": "The last change that failed to apply, until a later attempt succeeds",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "applying": {
+                      "description": "Whether a change is still being applied to the runner",
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "string"
+                    },
+                    "desiredState": {
+                      "description": "What the sandbox was last asked to be",
+                      "enum": [
+                        "running",
+                        "stopped",
+                        "deleted"
+                      ],
+                      "type": "string"
+                    },
+                    "diskObserved": {
+                      "description": "Disk capacity the runner actually provisioned, when it reports one",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "id": {
                       "format": "uuid",
@@ -48905,6 +49332,13 @@
                         "null"
                       ]
                     },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
                     "setupScript": {
                       "type": [
                         "string",
@@ -48957,6 +49391,11 @@
                     "name",
                     "status",
                     "statusMessage",
+                    "runner",
+                    "desiredState",
+                    "applying",
+                    "applyError",
+                    "diskObserved",
                     "repoUrl",
                     "sshIdentity",
                     "setupScript",

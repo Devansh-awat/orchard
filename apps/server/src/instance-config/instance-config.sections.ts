@@ -160,6 +160,59 @@ export const GIT_BITBUCKET = section(
   ['key', 'secret']
 );
 
+const SANDBOX_RUNNER_NAMES = ['kubernetes', 'vercel'];
+const HOSTNAME =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+
+const positiveInt = (value: string | null, name: string, max: number) => {
+  const raw = (value || '').trim();
+  if (!raw) return;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > max) {
+    throw new Error(`${name} must be a whole number between 1 and ${max}`);
+  }
+};
+
+export const SANDBOX_RUNNERS = section(
+  'sandbox-runners',
+  'sandbox_runners',
+  [
+    {
+      name: 'kubernetesEnabled',
+      env: 'SANDBOX_RUNNER_KUBERNETES_ENABLED',
+      bool: true,
+      fallback: true
+    },
+    { name: 'vercelEnabled', env: 'SANDBOX_RUNNER_VERCEL_ENABLED', bool: true, fallback: false },
+    { name: 'defaultRunner', env: 'SANDBOX_DEFAULT_RUNNER' },
+    { name: 'vercelToken', env: 'SANDBOX_VERCEL_TOKEN', secret: true },
+    { name: 'vercelTeamId', env: 'SANDBOX_VERCEL_TEAM_ID' },
+    { name: 'vercelProjectId', env: 'SANDBOX_VERCEL_PROJECT_ID' },
+    { name: 'vercelImage', env: 'SANDBOX_VERCEL_IMAGE' },
+    { name: 'vercelVcpus', env: 'SANDBOX_VERCEL_VCPUS' },
+    { name: 'vercelTimeoutMinutes', env: 'SANDBOX_VERCEL_TIMEOUT_MINUTES' },
+    { name: 'bridgeBinaryUrl', env: 'SANDBOX_BRIDGE_BINARY_URL' },
+    { name: 'previewDomain', env: 'SANDBOX_PREVIEW_DOMAIN' }
+  ],
+  [],
+  (values) => {
+    const runner = (values.defaultRunner || '').trim();
+    if (runner && !SANDBOX_RUNNER_NAMES.includes(runner)) {
+      throw new Error(`defaultRunner must be one of ${SANDBOX_RUNNER_NAMES.join(', ')}`);
+    }
+    positiveInt(values.vercelVcpus, 'vercelVcpus', 8);
+    positiveInt(values.vercelTimeoutMinutes, 'vercelTimeoutMinutes', 1440);
+    const bridge = (values.bridgeBinaryUrl || '').trim();
+    if (bridge && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(bridge)) {
+      throw new Error('bridgeBinaryUrl must be a plain https:// address');
+    }
+    const preview = (values.previewDomain || '').trim();
+    if (preview && !HOSTNAME.test(preview)) {
+      throw new Error('previewDomain must be a bare domain name such as preview.example.com');
+    }
+  }
+);
+
 export const SECTIONS: ConfigSection[] = [
   STORAGE,
   EMAIL,
@@ -169,7 +222,8 @@ export const SECTIONS: ConfigSection[] = [
   TUNNEL,
   TURNSTILE,
   GIT_GITLAB,
-  GIT_BITBUCKET
+  GIT_BITBUCKET,
+  SANDBOX_RUNNERS
 ];
 
 export const sectionById = (id: string): ConfigSection | undefined =>

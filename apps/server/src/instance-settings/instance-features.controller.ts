@@ -12,6 +12,10 @@ export class InstanceFeaturesController {
   @Auth()
   @Get('features')
   async features() {
-    return { mcp: await this.settings.isMcpEnabled() };
+    const [mcp, sandboxes] = await Promise.all([
+      this.settings.isMcpEnabled(),
+      this.settings.isSandboxesEnabled()
+    ]);
+    return { mcp, sandboxes };
   }
 }

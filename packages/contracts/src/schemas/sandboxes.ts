@@ -11,6 +11,29 @@ const sandboxStatus = z.enum([
   'error'
 ]);
 
+const sandboxRunnerId = z.enum(['kubernetes', 'vercel']);
+
+const sandboxDesiredState = z.enum(['running', 'stopped', 'deleted']);
+
+const sandboxRunner = z.object({
+  id: sandboxRunnerId,
+  label: z.string(),
+  capabilities: z.object({
+    statusSource: z.enum(['watch', 'poll']),
+    persistence: z.enum(['volume', 'snapshot']),
+    homeMode: z.enum(['block', 'filesystem', 'none']),
+    tcpTunnel: z.enum(['native', 'bridge', 'none']),
+    pty: z.enum(['native', 'none']),
+    execStdin: z.boolean(),
+    maxRunMs: z.number().int().nullable(),
+    diskSizeConfigurable: z.boolean(),
+    fork: z.boolean(),
+    previews: z.enum(['proxy', 'public', 'none'])
+  }),
+  available: z.boolean().describe('Whether new sandboxes can be created on this runner'),
+  reason: z.string().nullable().describe('Why the runner is unavailable, when it is')
+});
+
 const sandboxName = z
   .string()
   .min(1)
@@ -22,6 +45,17 @@ const sandbox = z.object({
   name: z.string(),
   status: sandboxStatus,
   statusMessage: z.string().nullable(),
+  runner: sandboxRunnerId,
+  desiredState: sandboxDesiredState.describe('What the sandbox was last asked to be'),
+  applying: z.boolean().describe('Whether a change is still being applied to the runner'),
+  applyError: z
+    .string()
+    .nullable()
+    .describe('The last change that failed to apply, until a later attempt succeeds'),
+  diskObserved: z
+    .string()
+    .nullable()
+    .describe('Disk capacity the runner actually provisioned, when it reports one'),
   repoUrl: z.string().nullable(),
   sshIdentity: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   setupScript: z.string().nullable(),
@@ -49,7 +83,14 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /sandboxes': {
     summary:
       'List your sandboxes; with ?organizationId= org owners and admins see every sandbox in that organization',
-    response: z.object({ sandboxes: z.array(sandbox), maxSandboxes: z.number().int() }),
+    response: z.object({
+      sandboxes: z.array(sandbox),
+      maxSandboxes: z.number().int().nullable(),
+      runners: z.array(sandboxRunner),
+      defaultRunner: sandboxRunnerId
+        .nullable()
+        .describe('The runner new sandboxes use when none is picked')
+    }),
     scope: 'read'
   },
   'POST /sandboxes': {
@@ -80,7 +121,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .max(65536)
         .nullable()
         .optional()
-        .describe('Shell script run once as the dev user on first boot (logged to ~/.setup.log)')
+        .describe('Shell script run once as the dev user on first boot (logged to ~/.setup.log)'),
+      runner: sandboxRunnerId
+        .optional()
+        .describe('Where the sandbox runs; defaults to the instance default runner')
     }),
     response: sandbox,
     scope: 'deploy'

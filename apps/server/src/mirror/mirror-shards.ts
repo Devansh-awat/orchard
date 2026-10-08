@@ -68,6 +68,13 @@ interface K8sListBody {
 
 // The typed clients deserialize ListMeta.continue to `_continue`; CustomObjectsApi
 // hands back the raw JSON, where it stays `continue`.
+export function stripSecretData(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  delete obj.data;
+  delete obj.stringData;
+  return obj;
+}
+
 function toListResult(res: K8sListBody): MirrorListPage {
   const meta = res.body.metadata ?? {};
   return {
@@ -403,7 +410,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 )) as K8sListBody
             ),
           onEvent: (type, obj) => deps.sandboxes.onEvent(type, obj),
-          onListComplete: (seen) => deps.sandboxes.sweepOrphans(seen)
+          onListComplete: (seen) => deps.sandboxes.onListComplete(seen)
         },
         {
           // Held for lookups, not for derived state: exec, the SSH tunnel and
@@ -425,6 +432,45 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.limit
               )
             )
+        },
+        {
+          kind: 'PersistentVolumeClaim',
+          apiVersion: 'v1',
+          watchPath: `/api/v1/namespaces/${namespace}/persistentvolumeclaims`,
+          labelSelector: ownSelector,
+          list: async (kc, opts) =>
+            toListResult(
+              await core(kc).listNamespacedPersistentVolumeClaim(
+                namespace,
+                undefined,
+                undefined,
+                opts.continueToken,
+                undefined,
+                ownSelector,
+                opts.limit
+              )
+            )
+        },
+        {
+          kind: 'Secret',
+          apiVersion: 'v1',
+          watchPath: `/api/v1/namespaces/${namespace}/secrets`,
+          labelSelector: ownSelector,
+          sanitize: stripSecretData,
+          list: async (kc, opts) => {
+            const page = toListResult(
+              await core(kc).listNamespacedSecret(
+                namespace,
+                undefined,
+                undefined,
+                opts.continueToken,
+                undefined,
+                ownSelector,
+                opts.limit
+              )
+            );
+            return { ...page, items: page.items.map(stripSecretData) };
+          }
         }
       ]
     });

@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstanceConfigService } from '../src/instance-config/instance-config.service';
-import { STORAGE, EMAIL, NETWORK, WILDCARD } from '../src/instance-config/instance-config.sections';
+import {
+  STORAGE,
+  EMAIL,
+  NETWORK,
+  WILDCARD,
+  SANDBOX_RUNNERS
+} from '../src/instance-config/instance-config.sections';
 import { objectStorage } from '../src/instance-config/object-storage';
 
 class FakeSettings {
@@ -265,4 +271,104 @@ test('a public IP that is not an address is refused', async () => {
     await assert.rejects(() => service.save(NETWORK, { publicIp: 'not-an-ip' }));
     assert.equal(service.defaultPublicIp(), '');
   });
+});
+
+test('a reload that finds nothing new leaves the generation alone', async () => {
+  const { service } = build();
+  await service.save(EMAIL, { host: 'mail.example.com' });
+  const before = service.generation;
+  await service.reload();
+  await service.reload();
+  assert.equal(service.generation, before);
+});
+
+test('a reload picks up a value another replica saved', async () => {
+  const writer = build();
+  const reader = new InstanceConfigService(writer.settings as any, fakeCrypto as any);
+  await withEnv({ SMTP_HOST: undefined }, async () => {
+    await reader.reload();
+    assert.equal(reader.value(EMAIL, 'host'), null);
+    const before = reader.generation;
+    await writer.service.save(EMAIL, { host: 'elsewhere.example.com' });
+    await reader.reload();
+    assert.equal(reader.value(EMAIL, 'host'), 'elsewhere.example.com');
+    assert.ok(reader.generation > before);
+  });
+});
+
+test('the kubernetes runner ships on and vercel ships off', async () => {
+  const { service } = build();
+  await withEnv(
+    { SANDBOX_RUNNER_KUBERNETES_ENABLED: undefined, SANDBOX_RUNNER_VERCEL_ENABLED: undefined },
+    () => {
+      assert.equal(service.flag(SANDBOX_RUNNERS, 'kubernetesEnabled'), true);
+      assert.equal(service.flag(SANDBOX_RUNNERS, 'vercelEnabled'), false);
+    }
+  );
+});
+
+test('the vercel token is a secret and the runner toggles are locked by the environment', async () => {
+  const { service, settings } = build();
+  await withEnv(
+    {
+      SANDBOX_VERCEL_TOKEN: undefined,
+      SANDBOX_RUNNER_VERCEL_ENABLED: 'true',
+      SANDBOX_RUNNER_KUBERNETES_ENABLED: undefined
+    },
+    async () => {
+      await service.save(SANDBOX_RUNNERS, { vercelToken: 'vcl_secret', vercelEnabled: 'true' });
+      const raw = JSON.parse(settings.rows.get(SANDBOX_RUNNERS.key)!);
+      assert.equal(raw.vercelToken, 'enc:vcl_secret');
+      const state = service.state(SANDBOX_RUNNERS);
+      assert.equal(state.values.vercelToken, '');
+      assert.ok(state.lockedFields.includes('vercelEnabled'));
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { vercelEnabled: 'false' }),
+        /SANDBOX_RUNNER_VERCEL_ENABLED/
+      );
+    }
+  );
+});
+
+test('sandbox runner settings refuse values the runners could not use', async () => {
+  const { service } = build();
+  await withEnv(
+    {
+      SANDBOX_DEFAULT_RUNNER: undefined,
+      SANDBOX_VERCEL_VCPUS: undefined,
+      SANDBOX_VERCEL_TIMEOUT_MINUTES: undefined,
+      SANDBOX_BRIDGE_BINARY_URL: undefined,
+      SANDBOX_PREVIEW_DOMAIN: undefined
+    },
+    async () => {
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { defaultRunner: 'docker' }),
+        /defaultRunner/
+      );
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { vercelVcpus: '0' }),
+        /vercelVcpus/
+      );
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { vercelTimeoutMinutes: 'soon' }),
+        /vercelTimeoutMinutes/
+      );
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { bridgeBinaryUrl: 'http://insecure.example.com/b' }),
+        /bridgeBinaryUrl/
+      );
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { previewDomain: 'https://preview.example.com' }),
+        /previewDomain/
+      );
+      await service.save(SANDBOX_RUNNERS, {
+        defaultRunner: 'vercel',
+        vercelVcpus: '4',
+        vercelTimeoutMinutes: '45',
+        bridgeBinaryUrl: 'https://assets.example.com/bridge',
+        previewDomain: 'preview.example.com'
+      });
+      assert.equal(service.value(SANDBOX_RUNNERS, 'defaultRunner'), 'vercel');
+    }
+  );
 });

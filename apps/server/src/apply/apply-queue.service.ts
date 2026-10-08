@@ -20,6 +20,7 @@ interface ClaimedItem {
   generation: number;
   attempts: number;
   deploymentId: string | null;
+  sandboxId: string | null;
 }
 
 export interface EnqueueInput {
@@ -27,6 +28,7 @@ export interface EnqueueInput {
   opType: string;
   manifest?: unknown;
   deploymentId?: string;
+  sandboxId?: string;
   requestedById?: string;
 }
 
@@ -88,6 +90,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         opType: input.opType,
         manifest: manifest ?? undefined,
         deploymentId: input.deploymentId ?? null,
+        sandboxId: input.sandboxId ?? null,
         requestedById: input.requestedById ?? null
       },
       update: {
@@ -97,6 +100,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         attempts: 0,
         notBefore: new Date(),
         lastError: null,
+        sandboxId: input.sandboxId ?? null,
         requestedById: input.requestedById ?? null
       }
     });
@@ -132,6 +136,29 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
       this.kick();
     }
     return result.count;
+  }
+
+  async retryForSandbox(sandboxId: string): Promise<number> {
+    const result = await this.prisma.k8sApplyItem.updateMany({
+      where: { sandboxId, status: 'failed' },
+      data: {
+        status: 'pending',
+        attempts: 0,
+        notBefore: new Date(),
+        lastError: null,
+        generation: { increment: 1 }
+      }
+    });
+    if (result.count > 0) this.kick();
+    return result.count;
+  }
+
+  async hasOpenItem(dedupeKey: string): Promise<boolean> {
+    const row = await this.prisma.k8sApplyItem.findUnique({
+      where: { dedupeKey },
+      select: { status: true }
+    });
+    return row?.status === 'pending' || row?.status === 'applying';
   }
 
   kick(): void {
@@ -170,7 +197,8 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         LIMIT ${CLAIM_BATCH}
       )
       RETURNING "id", "dedupe_key" AS "dedupeKey", "op_type" AS "opType", "manifest",
-                "generation", "attempts", "deployment_id" AS "deploymentId"
+                "generation", "attempts", "deployment_id" AS "deploymentId",
+                "sandbox_id" AS "sandboxId"
     `;
   }
 

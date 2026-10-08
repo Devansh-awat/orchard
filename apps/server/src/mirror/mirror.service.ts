@@ -7,8 +7,9 @@ import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
 import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './mirror-health';
-import { SandboxK8sService } from '../sandboxes/sandbox-k8s.service';
-import { sandboxFeatureEnabled } from '../sandboxes/sandbox-enabled.guard';
+import { KubernetesSandboxRunner } from '../sandboxes/runners/kubernetes.runner';
+import { SandboxRunnerRegistry } from '../sandboxes/runners/sandbox-runner.registry';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { MirrorInformer, MirrorRefs } from './mirror-informer';
 import { MirrorShardDef, buildMirrorShards } from './mirror-shards';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
@@ -93,7 +94,9 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly storageConsumer: StorageMirrorConsumer,
     private readonly serviceConsumer: ServiceMirrorConsumer,
     private readonly namespaceConsumer: NamespaceMirrorConsumer,
-    private readonly sandboxK8s: SandboxK8sService
+    private readonly sandboxRunner: KubernetesSandboxRunner,
+    private readonly sandboxRegistry: SandboxRunnerRegistry,
+    private readonly settings: InstanceSettingsService
   ) {}
 
   async onModuleInit() {
@@ -526,11 +529,15 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async resolveSandboxScope(): Promise<{ namespace: string; instanceId: string } | null> {
-    if (!sandboxFeatureEnabled()) return null;
     try {
+      if (!(await this.settings.isSandboxesEnabled())) return null;
+      if (!this.sandboxRegistry.enabled('kubernetes')) {
+        const existing = await this.prisma.sandbox.count({ where: { runner: 'kubernetes' } });
+        if (existing === 0) return null;
+      }
       return {
-        namespace: this.sandboxK8s.namespace,
-        instanceId: await this.sandboxK8s.instanceId()
+        namespace: this.sandboxRunner.namespace,
+        instanceId: await this.sandboxRunner.instanceId()
       };
     } catch (e: any) {
       this.logger.warn(`sandbox mirror shard disabled: ${e?.message}`);

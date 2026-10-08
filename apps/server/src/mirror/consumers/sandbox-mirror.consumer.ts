@@ -1,8 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SandboxK8sService } from '../../sandboxes/sandbox-k8s.service';
-import { readSandboxCr, sandboxStatusFromCr } from '../../sandboxes/sandbox-cr';
+import { ApplyQueueService } from '../../apply/apply-queue.service';
+import {
+  KubernetesSandboxRunner,
+  sandboxCrKey,
+  sandboxDestroyKey
+} from '../../sandboxes/runners/kubernetes.runner';
+import {
+  CRD_API_VERSION,
+  CRD_KIND,
+  SANDBOX_SHARD,
+  readSandboxCr,
+  sandboxStatusFromCr
+} from '../../sandboxes/sandbox-cr';
+import { applyObservation } from '../../sandboxes/runners/sandbox-status';
+import { SANDBOX_REF_SELECT, refOf } from '../../sandboxes/runners/sandbox-runner';
 import { MirrorEventType, MirrorObjectKey } from '../mirror-informer';
+
+const DRIFT_STATUSES = ['creating', 'starting'] as const;
 
 @Injectable()
 export class SandboxMirrorConsumer {
@@ -10,62 +25,35 @@ export class SandboxMirrorConsumer {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly k8s: SandboxK8sService
+    private readonly runner: KubernetesSandboxRunner,
+    private readonly queue: ApplyQueueService
   ) {}
 
-  /**
-   * Derive a sandbox row from the resource the cluster holds. This is the whole
-   * of sandbox status: a resource that goes ready, gets suspended or disappears
-   * says so in a watch event, and the row follows it. Nothing polls.
-   *
-   * Throws on a failed write rather than swallowing it — the informer holds the
-   * object's derived_version back and comes round again, which is the only
-   * thing that gets a missed transition applied.
-   */
   async onEvent(type: MirrorEventType, cr: any): Promise<void> {
     const podName = cr?.metadata?.name;
     if (!podName) return;
     const row = await this.prisma.sandbox.findUnique({
       where: { podName },
-      select: { id: true, status: true }
+      select: { id: true, status: true, desiredState: true, runner: true }
     });
-    // A row mid-delete is on its way out under its own power, and one that does
-    // not exist is either an orphan (swept below) or another install's.
-    if (!row || row.status === 'deleting') return;
-
+    if (!row || row.runner !== 'kubernetes') return;
     if (type === 'delete') {
-      await this.prisma.sandbox.update({
-        where: { id: row.id },
-        data: { status: 'error', statusMessage: 'Sandbox resource disappeared from the cluster' }
-      });
+      await applyObservation(this.prisma, row, { exists: false, status: null, message: null });
       return;
     }
-
-    const status = sandboxStatusFromCr(readSandboxCr(cr));
-    if (!status || status === row.status) return;
-    // Clearing the message is how a stale error gets dropped once the resource
-    // moves again. The one thing it must not drop is the reason a stop the
-    // server just asked for was made, which lands on the row before the suspend
-    // event that confirms it gets here.
-    const settlingAnIntentionalStop = status === 'stopped' && row.status === 'stopping';
-    await this.prisma.sandbox.update({
-      where: { id: row.id },
-      data: settlingAnIntentionalStop ? { status } : { status, statusMessage: null }
+    const observed = readSandboxCr(cr);
+    await applyObservation(this.prisma, row, {
+      exists: true,
+      status: sandboxStatusFromCr(observed),
+      message: observed.message
     });
   }
 
-  /**
-   * Delete cluster resources this install owns that no sandbox row claims — a
-   * sandbox whose delete half-finished, or whose row was removed under it.
-   *
-   * Two things make this safe to run, and it is worth being explicit about them
-   * because getting it wrong once already cost two sandboxes and their disks.
-   * The shard's informer selects on this install's instance label, so another
-   * Orchard server's sandboxes are not merely filtered out here, they are never
-   * listed. And this only runs at the end of a list pass that completed, so
-   * "not in the set" means the cluster was asked and did not have it, rather
-   * than meaning nobody looked.
-   */
+  async onListComplete(seen: MirrorObjectKey[]): Promise<void> {
+    await this.sweepOrphans(seen);
+    await this.reconcileDrift(seen);
+  }
+
   async sweepOrphans(seen: MirrorObjectKey[]): Promise<void> {
     const names = seen.map((key) => key.name).filter(Boolean);
     if (names.length === 0) return;
@@ -76,11 +64,57 @@ export class SandboxMirrorConsumer {
     const claimed = new Set(known.map((r) => r.podName));
     for (const name of names) {
       if (claimed.has(name)) continue;
-      this.logger.warn(`deleting orphan sandbox resource ${name}`);
-      const id = name.match(/^sbx-(.+)$/)?.[1] ?? name;
-      await this.k8s
-        .deleteSandbox({ id, podName: name })
-        .catch((e: any) => this.logger.warn(`orphan delete failed for ${name}: ${e?.message}`));
+      this.logger.warn(`orphan sandbox resource ${name}; queueing its removal`);
+      await this.runner
+        .requestOrphanDestroy(name)
+        .catch((e: any) => this.logger.warn(`orphan enqueue failed for ${name}: ${e?.message}`));
+    }
+  }
+
+  async reconcileDrift(seen: MirrorObjectKey[]): Promise<void> {
+    const present = new Set(seen.map((key) => key.name).filter(Boolean));
+    const rows = await this.prisma.sandbox.findMany({
+      where: { runner: 'kubernetes' },
+      select: { ...SANDBOX_REF_SELECT, status: true, desiredState: true }
+    });
+    if (rows.length === 0) return;
+    const manifests = present.size
+      ? await this.prisma.k8sObject.findMany({
+          where: {
+            shard: SANDBOX_SHARD,
+            kind: CRD_KIND,
+            apiVersion: CRD_API_VERSION,
+            name: { in: rows.map((r) => r.podName).filter((n) => present.has(n)) }
+          },
+          select: { name: true, manifest: true }
+        })
+      : [];
+    const byName = new Map(manifests.map((m) => [m.name, readSandboxCr(m.manifest)]));
+    for (const row of rows) {
+      const cr = present.has(row.podName) ? byName.get(row.podName) : undefined;
+      try {
+        if (row.desiredState === 'deleted') {
+          if (await this.queue.hasOpenItem(sandboxDestroyKey(row.id))) continue;
+          this.logger.warn(`sandbox ${row.id} is still waiting to be destroyed; queueing again`);
+          await this.runner.requestDestroy(refOf(row));
+          continue;
+        }
+        const wanted = row.desiredState === 'running' ? 'Running' : 'Suspended';
+        const drifted = cr
+          ? cr.operatingMode !== wanted
+          : !present.has(row.podName) &&
+            row.desiredState === 'running' &&
+            (DRIFT_STATUSES as readonly string[]).includes(row.status);
+        if (!drifted) continue;
+        if (await this.queue.hasOpenItem(sandboxCrKey(row.id))) continue;
+        this.logger.warn(
+          `sandbox ${row.id} wants ${wanted} but the cluster has ${cr ? cr.operatingMode : 'nothing'}; queueing a reconcile`
+        );
+        if (!cr) await this.runner.requestSecretSync(refOf(row));
+        await this.runner.enqueueCr(row.id);
+      } catch (e: any) {
+        this.logger.warn(`drift reconcile failed for sandbox ${row.id}: ${e?.message}`);
+      }
     }
   }
 }

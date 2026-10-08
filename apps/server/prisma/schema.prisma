@@ -1207,12 +1207,14 @@ model K8sApplyItem {
   claimedAt     DateTime? @map("claimed_at") @db.Timestamp(6)
   lastError     String?   @map("last_error") @db.Text
   deploymentId  String?   @map("deployment_id") @db.Uuid
+  sandboxId     String?   @map("sandbox_id") @db.Uuid
   requestedById String?   @map("requested_by_id") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@index([status, notBefore], map: "idx_k8s_apply_queue_status_not_before")
   @@index([deploymentId], map: "idx_k8s_apply_queue_deployment")
+  @@index([sandboxId], map: "idx_k8s_apply_queue_sandbox")
   @@map("k8s_apply_queue")
 }
 
@@ -2425,6 +2427,17 @@ enum SandboxStatus {
   error
 }
 
+enum SandboxRunnerKind {
+  kubernetes
+  vercel
+}
+
+enum SandboxDesiredState {
+  running
+  stopped
+  deleted
+}
+
 model Sandbox {
   id             String       @id @default(uuid()) @db.Uuid
   userId         String       @map("user_id") @db.Uuid
@@ -2433,7 +2446,11 @@ model Sandbox {
   status        SandboxStatus @default(creating)
   statusMessage String?       @map("status_message") @db.Text
   podName       String        @unique @map("pod_name") @db.VarChar(253)
-  namespace     String        @db.VarChar(253)
+  namespace     String?       @db.VarChar(253)
+  runner        SandboxRunnerKind   @default(kubernetes)
+  desiredState  SandboxDesiredState @default(running) @map("desired_state")
+  externalId    String?       @map("external_id") @db.VarChar(255)
+  runnerState   Json?         @map("runner_state") @db.JsonB
   image         String        @db.VarChar(500)
   repoUrl       String?       @map("repo_url") @db.VarChar(500)
   sshIdentityId String?       @map("ssh_identity_id") @db.Uuid
@@ -2454,6 +2471,7 @@ model Sandbox {
   @@unique([userId, name])
   @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
   @@index([organizationId], map: "idx_sandboxes_organization")
+  @@index([runner, status], map: "idx_sandboxes_runner_status")
   @@map("sandboxes")
 }
 

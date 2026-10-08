@@ -10,6 +10,11 @@ const MCP_ENABLED_ENV = 'MCP_ENABLED';
 export const SSO_ENFORCED_KEY = 'sso_enforced';
 export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
 
+export const SANDBOXES_ENABLED_KEY = 'sandboxes_enabled';
+export const SANDBOXES_ENABLED_ENV = 'SANDBOX_ENABLED';
+
+const sandboxesFallback = () => process.env.NODE_ENV !== 'production';
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -125,6 +130,19 @@ export class InstanceSettingsService {
   async setMcp(value: boolean): Promise<void> {
     this.assertUnlocked(MCP_ENABLED_ENV);
     await this.setBool(MCP_ENABLED_KEY, value);
+  }
+
+  isSandboxesEnabled(): Promise<boolean> {
+    return this.resolveBool(SANDBOXES_ENABLED_KEY, SANDBOXES_ENABLED_ENV, sandboxesFallback());
+  }
+
+  getSandboxesState(): Promise<ToggleState> {
+    return this.toggleState(SANDBOXES_ENABLED_KEY, SANDBOXES_ENABLED_ENV, sandboxesFallback());
+  }
+
+  async setSandboxes(value: boolean): Promise<void> {
+    this.assertUnlocked(SANDBOXES_ENABLED_ENV);
+    await this.setBool(SANDBOXES_ENABLED_KEY, value);
   }
 
   isSsoEnforced(): Promise<boolean> {

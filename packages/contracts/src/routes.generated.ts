@@ -15,6 +15,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'PUT', path: '/admin/instance-config/:id', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/mcp', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/mcp', auth: 'superadmin' },
+  { method: 'GET', path: '/admin/instance-settings/sandboxes', auth: 'superadmin' },
+  { method: 'PATCH', path: '/admin/instance-settings/sandboxes', auth: 'superadmin' },
   { method: 'GET', path: '/admin/instance-settings/userspace-scheduling', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/instance-settings/userspace-scheduling', auth: 'superadmin' },
   { method: 'GET', path: '/admin/networking/dns', auth: 'superadmin' },

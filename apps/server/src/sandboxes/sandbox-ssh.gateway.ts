@@ -1,7 +1,6 @@
 import * as http from 'http';
-import * as net from 'net';
+import type { Duplex } from 'stream';
 import WebSocket from 'ws';
-import * as k8s from '@kubernetes/client-node';
 import { jwtVerify } from 'jose';
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,12 +8,11 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { AnalyticsService } from '../analytics/analytics.service';
-import { SandboxK8sService } from './sandbox-k8s.service';
-import { sandboxFeatureEnabled } from './sandbox-enabled.guard';
-import { ResizableOutput } from '../kubernetes/exec-sessions';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { parseClientFrame, parseHandshake } from '../kubernetes/exec-protocol';
+import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
+import { SANDBOX_REF_SELECT, SandboxRef, SandboxRunner, refOf } from './runners/sandbox-runner';
 
 const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/(ssh|terminal)$/;
 const RECHECK_INTERVAL_MS = 15_000;
@@ -63,8 +61,8 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
   const prisma = app.get(PrismaService);
   const sessions = app.get(SessionsService);
   const audit = app.get(AuditService);
-  const kubernetes = app.get(KubernetesService);
-  const sandboxK8s = app.get(SandboxK8sService);
+  const registry = app.get(SandboxRunnerRegistry);
+  const settings = app.get(InstanceSettingsService);
   const analytics = app.get(AnalyticsService);
 
   const wss = new WebSocket.Server({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
@@ -80,7 +78,9 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
       socket.destroy();
     };
 
-    if (!sandboxFeatureEnabled()) return reject(404, 'Not Found');
+    if (!(await settings.isSandboxesEnabled().catch(() => false))) {
+      return reject(404, 'Not Found');
+    }
 
     const cookies = parseCookies(req.headers.cookie || '');
     const authHeader = req.headers['authorization'];
@@ -142,10 +142,10 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
 
     const sandboxId = match[1];
     const kind = match[2];
-    const authorize = async (): Promise<{ ok: boolean; podName?: string }> => {
+    const authorize = async (): Promise<{ ok: boolean; ref?: SandboxRef }> => {
       const row = await prisma.sandbox.findUnique({
         where: { id: sandboxId },
-        select: { userId: true, status: true, podName: true }
+        select: { ...SANDBOX_REF_SELECT, status: true }
       });
       if (!row) return { ok: false };
       if (row.userId !== userId) {
@@ -156,23 +156,28 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
         if (!actor?.isSuperAdmin) return { ok: false };
       }
       if (row.status !== 'running') return { ok: false };
-      return { ok: true, podName: row.podName };
+      return { ok: true, ref: refOf(row) };
     };
 
     const authzResult = await authorize();
-    if (!authzResult.ok) return reject(404, 'Not Found');
+    if (!authzResult.ok || !authzResult.ref) return reject(404, 'Not Found');
     if (overConnectionLimit(userId)) return reject(429, 'Too Many Requests');
+    const ref = authzResult.ref;
+    let runner: SandboxRunner;
+    try {
+      runner = registry.for(ref);
+    } catch {
+      return reject(404, 'Not Found');
+    }
 
-    let podIp: string | null = null;
+    let tunnel: Duplex | null = null;
     if (kind === 'ssh') {
       try {
-        podIp = await sandboxK8s.resolvePodIp(sandboxId, authzResult.podName!);
+        tunnel = await runner.openTcp(ref, 22);
       } catch {
-        podIp = null;
+        return reject(502, 'Bad Gateway');
       }
     }
-    const tunnelMode = process.env.SANDBOX_TUNNEL_MODE === 'portforward' ? 'portforward' : 'direct';
-    if (kind === 'ssh' && tunnelMode === 'direct' && !podIp) return reject(502, 'Bad Gateway');
 
     audit
       .log({
@@ -181,7 +186,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
         actorEmail: actorEmail ?? null,
         targetType: 'sandbox',
         targetId: sandboxId,
-        metadata: { podName: authzResult.podName ?? null }
+        metadata: { podName: ref.podName, runner: ref.runner }
       })
       .catch(() => {});
 
@@ -198,20 +203,25 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     };
 
     const release = trackConnection(userId);
+    let upgraded = false;
+    socket.once('close', () => {
+      if (upgraded) return;
+      release();
+      tunnel?.destroy();
+    });
     wss.handleUpgrade(req, socket, head, (ws) => {
+      upgraded = true;
       wss.emit('connection', ws, req);
       ws.on('close', release);
       ws.on('error', release);
       if (kind === 'terminal') {
         const size = parseHandshake(url.searchParams);
-        handleShellSession(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth, {
+        handleShellSession(ws, runner, ref, prisma, recheckAuth, {
           cols: size.cols,
           rows: size.rows
         });
-      } else if (tunnelMode === 'portforward') {
-        handlePortForwardTunnel(ws, kubernetes, sandboxK8s, sandboxId, prisma, recheckAuth);
-      } else {
-        handleDirectTunnel(ws, podIp!, sandboxId, prisma, recheckAuth);
+      } else if (tunnel) {
+        handleTunnel(ws, tunnel, sandboxId, prisma, recheckAuth);
       }
     });
   });
@@ -247,108 +257,85 @@ function attachLifecycle(
   ws.on('error', stop);
 }
 
+const SHELL_COMMAND = [
+  '/bin/sh',
+  '-c',
+  'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
+    'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
+    'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev'
+];
+
 function handleShellSession(
   ws: WebSocket,
-  kubernetes: KubernetesService,
-  sandboxK8s: SandboxK8sService,
-  sandboxId: string,
+  runner: SandboxRunner,
+  ref: SandboxRef,
   prisma: PrismaService,
   recheckAuth: () => Promise<boolean>,
   size: { cols: number; rows: number }
 ) {
   void (async () => {
-    if (!kubernetes.kc) {
-      ws.close(1011, 'kubernetes unavailable');
-      return;
-    }
-    const pod = await sandboxK8s.runningPod(sandboxId);
-    if (!pod) {
-      ws.close(1011, 'sandbox pod not found');
-      return;
-    }
-    const { PassThrough } = await import('stream');
-    const stdin = new PassThrough();
-    const stdout = new ResizableOutput();
-    stdout.setSize(size.cols, size.rows);
-    const stderr = new PassThrough();
-
-    attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => stdin.end());
-
-    const forward = (chunk: Buffer) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
-    };
-    stdout.on('data', forward);
-    stderr.on('data', forward);
-
-    ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
-      const frame = parseClientFrame(data as Buffer | string, isBinary);
-      if (frame.kind === 'resize') {
-        stdout.setSize(frame.cols, frame.rows);
-        return;
-      }
-      if (frame.kind === 'stdin') {
-        writeWithBackpressure(
-          ws,
-          stdin,
-          typeof frame.data === 'string' ? frame.data : frame.data.toString()
-        );
-      }
-    });
-    ws.on('close', () => stdin.end());
-
     if (ws.readyState === WebSocket.OPEN) {
       ws.send('\x1b[2J\x1b[H\x1b[90mConnecting to the sandbox...\x1b[0m\r\n');
     }
-
+    let pty;
     try {
-      const exec = new k8s.Exec(kubernetes.kc);
-      await exec.exec(
-        sandboxK8s.namespace,
-        pod.name,
-        'sandbox',
-        [
-          '/bin/sh',
-          '-c',
-          'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
-            'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
-            'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev'
-        ],
-        stdout,
-        stderr,
-        stdin,
-        true,
-        (status) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close(1000, status.status === 'Success' ? 'exited' : 'shell closed');
-          }
-        }
-      );
+      pty = await runner.openPty(ref, { command: SHELL_COMMAND, cols: size.cols, rows: size.rows });
     } catch (e: any) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(`\r\nFailed to open a shell: ${e?.message}\r\n`);
         ws.close(1011, 'shell error');
       }
+      return;
     }
+    if (ws.readyState !== WebSocket.OPEN) {
+      pty.close();
+      return;
+    }
+
+    attachLifecycle(ws, ref.id, prisma, recheckAuth, () => pty.close());
+
+    pty.output.on('data', (chunk: Buffer) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+    });
+
+    ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
+      const frame = parseClientFrame(data as Buffer | string, isBinary);
+      if (frame.kind === 'resize') {
+        pty.resize(frame.cols, frame.rows);
+        return;
+      }
+      if (frame.kind === 'stdin') {
+        writeWithBackpressure(
+          ws,
+          pty.stdin,
+          typeof frame.data === 'string' ? frame.data : frame.data.toString()
+        );
+      }
+    });
+    ws.on('close', () => pty.close());
+
+    void pty.exited.then((result) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1000, result.ok ? 'exited' : 'shell closed');
+      }
+    });
   })();
 }
 
-function handleDirectTunnel(
+function handleTunnel(
   ws: WebSocket,
-  podIp: string,
+  tunnel: Duplex,
   sandboxId: string,
   prisma: PrismaService,
   recheckAuth: () => Promise<boolean>
 ) {
-  const socket = net.connect(22, podIp);
-  socket.setNoDelay(true);
+  attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => tunnel.destroy());
 
-  attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => socket.destroy());
-
-  socket.on('data', (chunk: Buffer) => {
+  tunnel.on('data', (chunk: Buffer) => {
     if (ws.readyState !== WebSocket.OPEN) return;
     ws.send(chunk, { binary: true });
     if (ws.bufferedAmount > WS_HIGH_WATER) {
-      socket.pause();
+      tunnel.pause();
       const drainCheck = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) {
           clearInterval(drainCheck);
@@ -356,7 +343,7 @@ function handleDirectTunnel(
         }
         if (ws.bufferedAmount < WS_LOW_WATER) {
           clearInterval(drainCheck);
-          socket.resume();
+          tunnel.resume();
         }
       }, 50);
     }
@@ -369,75 +356,21 @@ function handleDirectTunnel(
       : Array.isArray(data)
         ? Buffer.concat(data)
         : Buffer.from(data as ArrayBuffer);
-    const ok = socket.write(buf);
+    const ok = tunnel.write(buf);
     if (!ok) {
       ws.pause();
-      socket.once('drain', () => ws.resume());
+      tunnel.once('drain', () => ws.resume());
     }
   });
 
-  socket.on('close', () => {
+  tunnel.on('close', () => {
     if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'connection closed');
   });
-  socket.on('error', (err) => {
+  tunnel.on('error', (err) => {
     if (ws.readyState === WebSocket.OPEN) ws.close(1011, err.message.slice(0, 120));
   });
-  ws.on('close', () => socket.destroy());
-  ws.on('error', () => socket.destroy());
-}
-
-function handlePortForwardTunnel(
-  ws: WebSocket,
-  kubernetes: KubernetesService,
-  sandboxK8s: SandboxK8sService,
-  sandboxId: string,
-  prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>
-) {
-  void (async () => {
-    if (!kubernetes.kc) {
-      ws.close(1011, 'kubernetes unavailable');
-      return;
-    }
-    const pod = await sandboxK8s.runningPod(sandboxId);
-    if (!pod) {
-      ws.close(1011, 'sandbox pod not found');
-      return;
-    }
-    const forward = new k8s.PortForward(kubernetes.kc);
-    const duplex = new net.Socket({ allowHalfOpen: false });
-    void duplex;
-    const { PassThrough } = await import('stream');
-    const input = new PassThrough();
-    const output = new PassThrough();
-
-    attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => {
-      input.end();
-      ws.close(1000, 'connection closed');
-    });
-
-    output.on('data', (chunk: Buffer) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(chunk, { binary: true });
-    });
-    ws.on('message', (data: WebSocket.Data, isBinary: boolean) => {
-      if (!isBinary) return;
-      const buf = Buffer.isBuffer(data)
-        ? data
-        : Array.isArray(data)
-          ? Buffer.concat(data)
-          : Buffer.from(data as ArrayBuffer);
-      writeWithBackpressure(ws, input, buf);
-    });
-    ws.on('close', () => input.end());
-
-    try {
-      await forward.portForward(sandboxK8s.namespace, pod.name, [22], output, null, input);
-    } catch (err: any) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close(1011, String(err?.message || 'port forward failed').slice(0, 120));
-      }
-    }
-  })();
+  ws.on('close', () => tunnel.destroy());
+  ws.on('error', () => tunnel.destroy());
 }
 
 function parseCookies(cookieHeader: string): Record<string, string> {

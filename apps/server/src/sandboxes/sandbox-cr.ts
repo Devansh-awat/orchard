@@ -13,6 +13,7 @@ export const MANAGED_BY = 'orchard-sandbox';
 export const INSTANCE_LABEL = 'orchard.my/instance';
 export const SANDBOX_ID_LABEL = 'orchard.my/sandbox-id';
 export const INSTANCE_SETTING_KEY = 'sandbox_instance_id';
+export const SPEC_HASH_ANNOTATION = 'orchard.my/spec-hash';
 
 export const SANDBOX_SHARD = 'sandboxes';
 

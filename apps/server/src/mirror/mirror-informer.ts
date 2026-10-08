@@ -49,6 +49,7 @@ export interface MirrorResourceConfig {
   // version was applied when it was not, and nothing will ever come back for it.
   onEvent?(type: MirrorEventType, obj: any): void | Promise<void>;
   onListComplete?(seen: MirrorObjectKey[]): Promise<void>;
+  sanitize?(obj: any): any;
 }
 
 export interface MirrorInformerHooks {
@@ -707,7 +708,7 @@ export class MirrorInformer {
         delete obj.metadata.annotations['kubectl.kubernetes.io/last-applied-configuration'];
       }
     }
-    return obj;
+    return this.config.sanitize ? (this.config.sanitize(obj) ?? obj) : obj;
   }
 
   private toRow(obj: any, refs: MirrorRefs): ObjectRow {

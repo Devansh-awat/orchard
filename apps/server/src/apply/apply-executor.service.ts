@@ -7,6 +7,7 @@ export interface ApplyItemInput {
   opType: string;
   manifest: unknown;
   deploymentId: string | null;
+  sandboxId?: string | null;
 }
 
 export type ApplyHandler = (item: ApplyItemInput) => Promise<void>;
@@ -29,12 +30,13 @@ export class ApplyExecutorService {
     this.handlers.set(opType, handler);
   }
 
-  async ssaApply(manifest: k8s.KubernetesObject): Promise<void> {
+  async ssaApply(manifest: k8s.KubernetesObject): Promise<k8s.KubernetesObject> {
     this.kubernetes.ensureKubeConfig();
     const api = k8s.KubernetesObjectApi.makeApiClient(this.kubernetes.kc!);
-    await api.patch(manifest, undefined, undefined, 'orchard', true, {
+    const res = await api.patch(manifest, undefined, undefined, 'orchard', true, {
       headers: { 'content-type': k8s.PatchUtils.PATCH_FORMAT_APPLY_YAML }
     });
+    return res.body;
   }
 
   async execute(item: ApplyItemInput): Promise<ApplyResult> {
