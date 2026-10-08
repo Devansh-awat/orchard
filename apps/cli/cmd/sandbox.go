@@ -44,6 +44,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxDiffCmd(),
 		sandboxRepoCmd(),
 		sandboxConversationsCmd(),
+		sandboxSessionCmd(),
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
@@ -769,9 +770,16 @@ func sandboxSSHCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("no ssh binary on PATH; run `orchard sandbox ssh-config %s` and point your client at ProxyCommand %q", args[0], exe+" sandbox proxy "+id)
 			}
+			alias := sshHostKeyAlias("orchard-" + str(sb["name"]))
+			knownHosts, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, id, alias)
+			if kerr != nil && !hostKeysUnsupported(kerr) {
+				fmt.Fprintf(os.Stderr, "orchard: could not refresh host keys in %s: %v\n", knownHosts, kerr)
+			}
 			sshArgs := append([]string{
 				"-o", "ProxyCommand=" + exe + " sandbox proxy " + id,
 				"-o", "StrictHostKeyChecking=accept-new",
+				"-o", "HostKeyAlias=" + alias,
+				"-o", "UserKnownHostsFile=" + knownHosts,
 				user + "@orchard-sandbox-" + str(sb["name"]),
 			}, extra...)
 			run := exec.CommandContext(cmd.Context(), sshBin, sshArgs...)
@@ -883,6 +891,14 @@ func sandboxNameFromSSHHost(host string) string {
 	return strings.TrimPrefix(host, "orchard-")
 }
 
+func sshHostKeyAlias(host string) string {
+	host = strings.TrimSpace(host)
+	if i := strings.LastIndex(host, "@"); i >= 0 {
+		host = host[i+1:]
+	}
+	return strings.ToLower(host)
+}
+
 func sandboxProxyCmd() *cobra.Command {
 	var host string
 	c := &cobra.Command{
@@ -910,6 +926,11 @@ func sandboxProxyCmd() *cobra.Command {
 			sb, err := resolveSandbox(cmd.Context(), cl, target)
 			if err != nil {
 				return err
+			}
+			if host != "" {
+				if path, kerr := refreshSandboxKnownHosts(cmd.Context(), cl, str(sb["id"]), sshHostKeyAlias(host)); kerr != nil && !hostKeysUnsupported(kerr) {
+					fmt.Fprintf(os.Stderr, "orchard: could not refresh host keys in %s: %v\n", path, kerr)
+				}
 			}
 			conn, err := cl.DialSandboxSSH(cmd.Context(), str(sb["id"]))
 			if err != nil {

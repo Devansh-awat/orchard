@@ -444,6 +444,17 @@ export class NotificationsService {
     });
   }
 
+  async notifyAccount(userId: string, message: NotificationMessage, dedupeKey: string) {
+    await this.emit({
+      organizationId: null,
+      scopeType: 'user',
+      scopeId: userId,
+      actorUserId: null,
+      dedupeKey,
+      message: { ...message, targetId: message.targetId ?? userId }
+    });
+  }
+
   // Generic entry point, kept for callers that build their own message. Scope is
   // derived from the event so nobody has to remember that backups hang off a
   // database rather than a deployment.

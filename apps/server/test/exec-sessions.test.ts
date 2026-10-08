@@ -16,6 +16,11 @@ import {
   sessionsByUser,
   track,
   untrack,
+  clampTerminalSize,
+  directoryEntry,
+  entryTargetKey,
+  targetKey,
+  type DirectoryEntry,
   type ExecSession
 } from '../src/kubernetes/exec-sessions';
 
@@ -87,4 +92,90 @@ test('the PTY size stream dedupes unchanged sizes and clamps the rest', () => {
   out.setSize(NaN, 10);
   assert.deepEqual([out.columns, out.rows], [1, 1000]);
   assert.equal(events, 2);
+});
+
+test('target keys separate pods, sandboxes, sessions, terminal indexes and modes', () => {
+  const pod = {
+    kind: 'pod' as const,
+    namespace: 'ns',
+    podName: 'web-1',
+    container: 'app',
+    projectId: 'p',
+    organizationId: 'o'
+  };
+  assert.equal(targetKey(pod), 'pod:ns/web-1/app');
+  assert.equal(targetKey({ ...pod, organizationId: 'other' }), targetKey(pod));
+  const box = {
+    kind: 'sandbox' as const,
+    sandboxId: '3f2d7e6a-1b0c-4d5e-8f90-123456789abc',
+    sessionId: 'aaaaaaaa-1b0c-4d5e-8f90-123456789abc',
+    index: '0',
+    mode: 'rw' as const,
+    worktreePath: '/persist/home/.worktrees/app/fix'
+  };
+  assert.equal(
+    targetKey(box),
+    'sandbox:3f2d7e6a-1b0c-4d5e-8f90-123456789abc/aaaaaaaa-1b0c-4d5e-8f90-123456789abc/0/rw'
+  );
+  assert.notEqual(targetKey(box), targetKey({ ...box, index: '1' }));
+  assert.notEqual(targetKey(box), targetKey({ ...box, mode: 'ro' }));
+  assert.notEqual(targetKey(box), targetKey({ ...box, sessionId: null }));
+  assert.equal(targetKey({ ...box, worktreePath: null }), targetKey(box));
+});
+
+test('directory entries carry the target key, plus the legacy pod fields old replicas read', () => {
+  const pod = {
+    kind: 'pod' as const,
+    namespace: 'ns',
+    podName: 'web-1',
+    container: 'app',
+    projectId: 'p',
+    organizationId: 'o'
+  };
+  assert.deepEqual(directoryEntry('replica-a', '10.0.0.1:3001', 'u1', pod), {
+    replica: 'replica-a',
+    addr: '10.0.0.1:3001',
+    ownerUserId: 'u1',
+    targetKey: 'pod:ns/web-1/app',
+    namespace: 'ns',
+    podName: 'web-1',
+    container: 'app'
+  });
+  const box = {
+    kind: 'sandbox' as const,
+    sandboxId: 's',
+    sessionId: null,
+    index: '0',
+    mode: 'rw' as const,
+    worktreePath: null
+  };
+  assert.deepEqual(directoryEntry('replica-a', '10.0.0.1:3001', 'u1', box), {
+    replica: 'replica-a',
+    addr: '10.0.0.1:3001',
+    ownerUserId: 'u1',
+    targetKey: 'sandbox:s/-/0/rw'
+  });
+});
+
+test('entries written by an older replica still match the pod they describe', () => {
+  const legacy: DirectoryEntry = {
+    replica: 'r',
+    addr: 'a',
+    ownerUserId: 'u',
+    namespace: 'ns',
+    podName: 'web-1',
+    container: 'app'
+  };
+  assert.equal(entryTargetKey(legacy), 'pod:ns/web-1/app');
+  assert.equal(entryTargetKey({ replica: 'r', addr: 'a', ownerUserId: 'u' }), null);
+  assert.equal(
+    entryTargetKey({ replica: 'r', addr: 'a', ownerUserId: 'u', targetKey: 'sandbox:s/-/0/rw' }),
+    'sandbox:s/-/0/rw'
+  );
+});
+
+test('terminal sizes clamp exactly like the PTY size stream', () => {
+  assert.deepEqual(clampTerminalSize(120.7, 40.2), { cols: 120, rows: 40 });
+  assert.deepEqual(clampTerminalSize(0, 5000), { cols: 1, rows: 1000 });
+  assert.equal(clampTerminalSize(NaN, 10), null);
 });

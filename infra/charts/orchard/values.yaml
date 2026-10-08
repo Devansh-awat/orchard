@@ -619,6 +619,31 @@ sandbox:
   # Home PVC mode: empty → auto (Block when runtimeClassName is set,
   # Filesystem otherwise). Explicit "block" or "filesystem" to override.
   homeMode: ""
+  # Where sandboxes run. Each value left empty/null renders no env var, so the
+  # field stays editable under Admin > Instance > Sandbox runners; anything
+  # set here is env-locked there.
+  runners:
+    # "kubernetes" or "vercel"; empty lets the admin pick.
+    default: ""
+    kubernetes:
+      enabled: null
+    vercel:
+      enabled: null
+      # Secret holding the Vercel access token (never put the token in values).
+      tokenSecret:
+        name: ""
+        key: token
+      teamId: ""
+      projectId: ""
+      # Empty → vercel/sandbox/universal.
+      image: ""
+      vcpus: ""
+      timeoutMinutes: ""
+    # https URL of the linux/amd64 orchard CLI tarball that Vercel boxes run as
+    # the ssh bridge. Empty → the release matching the server's pinned version.
+    bridgeBinaryUrl: ""
+    # Bare domain for sandbox preview URLs, e.g. preview.example.com.
+    previewDomain: ""
   quota:
     pods: "20"
     cpu: "40"

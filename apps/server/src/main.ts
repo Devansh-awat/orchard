@@ -14,6 +14,9 @@ import { startTelemetry } from './analytics/telemetry';
 import { AppModule } from './app.module';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
 import { attachSandboxSshWebSocket } from './sandboxes/sandbox-ssh.gateway';
+import { attachSandboxTerminalWebSocket } from './sandboxes/sandbox-terminal.gateway';
+import { attachSandboxLiveWebSocket } from './sandboxes/live/sandbox-live.gateway';
+import { SandboxPreviewService } from './sandboxes/preview/sandbox-preview.service';
 import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
@@ -53,6 +56,15 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const protectionService = app.get(ProtectionService);
+  const previewService = app.get(SandboxPreviewService);
+  app.use(async (req, res, next) => {
+    try {
+      const handled = await previewService.handleRequest(req, res);
+      if (!handled) return next();
+    } catch {
+      if (!res.headersSent) res.status(502).end();
+    }
+  });
   app.use(async (req, res, next) => {
     try {
       const handled = await protectionService.handleProxyRequest(req, res);
@@ -168,10 +180,18 @@ async function bootstrap() {
   // Attach WebSocket terminal handler to the underlying HTTP server
   const httpServer = app.getHttpServer();
   httpServer.on('upgrade', (req, socket, head) => {
-    protectionService.handleUpgrade(req, socket, head).catch(() => socket.destroy());
+    previewService
+      .handleUpgrade(req, socket, head)
+      .then((handled) => {
+        if (handled) return;
+        return protectionService.handleUpgrade(req, socket, head).then(() => undefined);
+      })
+      .catch(() => socket.destroy());
   });
   attachTerminalWebSocket(httpServer, app);
   attachSandboxSshWebSocket(httpServer, app);
+  attachSandboxTerminalWebSocket(httpServer, app);
+  attachSandboxLiveWebSocket(httpServer, app);
 
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);

@@ -8,13 +8,23 @@ import { AnalyticsModule } from '../analytics/analytics.module';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SandboxesController } from './sandboxes.controller';
+import { SandboxSessionsController } from './sandbox-sessions.controller';
+import { SandboxSessionsService } from './sandbox-sessions.service';
+import { SandboxAccessService } from './sandbox-access.service';
 import { SandboxesService } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
 import { SandboxReaperService } from './sandbox-reaper.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
+import { SandboxConnectService } from './sandbox-connect.service';
+import { SandboxMembersController } from './sandbox-members.controller';
+import { SandboxMembersService } from './sandbox-members.service';
+import { SandboxLiveService } from './live/sandbox-live.service';
+import { SandboxPreviewService } from './preview/sandbox-preview.service';
+import { SandboxAttentionService } from './sandbox-attention.service';
 import { KubernetesSandboxRunner } from './runners/kubernetes.runner';
+import { VercelSandboxRunner } from './runners/vercel.runner';
 import { SandboxSecretsService } from './runners/sandbox-secrets';
 import { SandboxProbesService } from './runners/sandbox-probes.service';
 import { SANDBOX_RUNNER_PROVIDERS, SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
@@ -24,25 +34,45 @@ const REAPER_INTERVAL_MS = 60_000;
 
 @Module({
   imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
-  controllers: [SandboxesController],
+  controllers: [SandboxesController, SandboxSessionsController, SandboxMembersController],
   providers: [
     SandboxesService,
     SandboxSecretsService,
     KubernetesSandboxRunner,
+    VercelSandboxRunner,
     {
       provide: SANDBOX_RUNNER_PROVIDERS,
-      useFactory: (kubernetes: KubernetesSandboxRunner): SandboxRunner[] => [kubernetes],
-      inject: [KubernetesSandboxRunner]
+      useFactory: (
+        kubernetes: KubernetesSandboxRunner,
+        vercel: VercelSandboxRunner
+      ): SandboxRunner[] => [kubernetes, vercel],
+      inject: [KubernetesSandboxRunner, VercelSandboxRunner]
     },
     SandboxRunnerRegistry,
     SandboxProbesService,
     SandboxChatService,
     SandboxWorkspaceService,
     SandboxConversationsService,
+    SandboxSessionsService,
+    SandboxAccessService,
     SandboxReaperService,
-    SandboxEnabledGuard
+    SandboxEnabledGuard,
+    SandboxConnectService,
+    SandboxLiveService,
+    SandboxMembersService,
+    SandboxPreviewService,
+    SandboxAttentionService
   ],
-  exports: [SandboxesService, SandboxRunnerRegistry, KubernetesSandboxRunner]
+  exports: [
+    SandboxesService,
+    SandboxRunnerRegistry,
+    KubernetesSandboxRunner,
+    SandboxSessionsService,
+    SandboxAccessService,
+    SandboxLiveService,
+    SandboxMembersService,
+    SandboxPreviewService
+  ]
 })
 export class SandboxesModule implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SandboxesModule.name);

@@ -46528,6 +46528,16 @@
                               "null"
                             ]
                           },
+                          "myRole": {
+                            "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                            "enum": [
+                              "owner",
+                              "collaborator",
+                              "viewer",
+                              "admin"
+                            ],
+                            "type": "string"
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -46779,6 +46789,16 @@
                         "null"
                       ]
                     },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
+                    },
                     "name": {
                       "type": "string"
                     },
@@ -47027,6 +47047,16 @@
                         "null"
                       ]
                     },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
+                    },
                     "name": {
                       "type": "string"
                     },
@@ -47255,6 +47285,16 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
                     },
                     "name": {
                       "type": "string"
@@ -47601,6 +47641,46 @@
           }
         ],
         "summary": "Cloud Code: send a message to the claude agent inside the sandbox; responds with an SSE stream of claude stream-json events plus a final {type: \"done\"|\"error\"} frame",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/connect": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /sandboxes/:id/connect",
         "tags": [
           "sandboxes"
         ]
@@ -48002,6 +48082,10 @@
                     "content": {
                       "type": "string"
                     },
+                    "exists": {
+                      "description": "With ref=HEAD, false when the file is new",
+                      "type": "boolean"
+                    },
                     "truncated": {
                       "type": "boolean"
                     }
@@ -48025,7 +48109,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Read a file from the sandbox workspace (?path= and optional ?repo=)",
+        "summary": "Read a file from the sandbox workspace (?path=, optional ?repo= or ?session=, and ?ref=HEAD for the committed version)",
         "tags": [
           "sandboxes"
         ]
@@ -48055,6 +48139,11 @@
                     "type": "string"
                   },
                   "repo": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
                     "type": "string"
                   }
                 },
@@ -48101,6 +48190,249 @@
         ]
       }
     },
+    "/sandboxes/{id}/fs/delete": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "path": {
+                    "description": "Relative to the session worktree or repo",
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "to": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a file or directory (symlinks are removed, never followed)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/fs/mkdir": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "path": {
+                    "description": "Relative to the session worktree or repo",
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "to": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Create a directory (and parents) inside a session worktree or repo",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/fs/rename": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "path": {
+                    "description": "Relative to the session worktree or repo",
+                    "maxLength": 1024,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "to": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Move a file or directory to `to`, refusing to overwrite or leave the workspace",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/git/branch/delete": {
       "post": {
         "description": "Auth: authenticated (scope: exec)",
@@ -48130,10 +48462,14 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "repo",
                   "branch"
                 ],
                 "type": "object"
@@ -48295,10 +48631,14 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "repo",
                   "branch"
                 ],
                 "type": "object"
@@ -48378,6 +48718,11 @@
                   "repo": {
                     "type": "string"
                   },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
+                  },
                   "signoff": {
                     "type": "boolean"
                   },
@@ -48387,7 +48732,6 @@
                   }
                 },
                 "required": [
-                  "repo",
                   "message"
                 ],
                 "type": "object"
@@ -48453,11 +48797,13 @@
                 "properties": {
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
-                "required": [
-                  "repo"
-                ],
                 "type": "object"
               }
             }
@@ -48530,6 +48876,11 @@
                   "repo": {
                     "type": "string"
                   },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
+                  },
                   "title": {
                     "maxLength": 300,
                     "minLength": 1,
@@ -48537,7 +48888,6 @@
                   }
                 },
                 "required": [
-                  "repo",
                   "title"
                 ],
                 "type": "object"
@@ -48551,12 +48901,20 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "number": {
+                      "description": "Recorded on the session when one is given",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
                     "url": {
                       "type": "string"
                     }
                   },
                   "required": [
-                    "url"
+                    "url",
+                    "number"
                   ],
                   "type": "object"
                 }
@@ -48602,11 +48960,13 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
-                "required": [
-                  "repo"
-                ],
                 "type": "object"
               }
             }
@@ -48673,11 +49033,13 @@
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
-                "required": [
-                  "repo"
-                ],
                 "type": "object"
               }
             }
@@ -48741,11 +49103,13 @@
                 "properties": {
                   "repo": {
                     "type": "string"
+                  },
+                  "session": {
+                    "description": "Worktree session; sets the working directory to its worktree",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
-                "required": [
-                  "repo"
-                ],
                 "type": "object"
               }
             }
@@ -48789,6 +49153,537 @@
         ]
       }
     },
+    "/sandboxes/{id}/hostkey": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /sandboxes/:id/hostkey",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/members": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "members": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "invitedBy": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "role": {
+                            "enum": [
+                              "viewer",
+                              "collaborator"
+                            ],
+                            "type": "string"
+                          },
+                          "user": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "email": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl",
+                              "email"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "user",
+                          "role",
+                          "invitedBy",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "myRole": {
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
+                    },
+                    "owner": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "owner",
+                    "members",
+                    "myRole"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The host, the guests and the caller role (emails only for the host and org admins)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "maxLength": 320,
+                    "type": "string"
+                  },
+                  "role": {
+                    "enum": [
+                      "viewer",
+                      "collaborator"
+                    ],
+                    "type": "string"
+                  },
+                  "userId": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "invitedBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "role": {
+                      "enum": [
+                        "viewer",
+                        "collaborator"
+                      ],
+                      "type": "string"
+                    },
+                    "user": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl",
+                        "email"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "role",
+                    "invitedBy",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Invite someone from the same organization as a guest or read-only guest (host only)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/members/{userId}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Remove a guest (host only) or leave a sandbox shared with you; kicks live connections",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "viewer",
+                      "collaborator"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "invitedBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "role": {
+                      "enum": [
+                        "viewer",
+                        "collaborator"
+                      ],
+                      "type": "string"
+                    },
+                    "user": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl",
+                        "email"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "role",
+                    "invitedBy",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Change a guest role (host only); live connections pick it up immediately",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/opencode/{*splat}": {
       "all": {
         "description": "Auth: authenticated",
@@ -48824,6 +49719,64 @@
           }
         ],
         "summary": "ALL /sandboxes/:id/opencode/{*splat}",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/preview-token": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "public": {
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "public",
+                    "expiresAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "A one-time preview link for ?port= (Kubernetes: 60s single-use exchange for a cookie on the preview host; Vercel: the public port URL)",
         "tags": [
           "sandboxes"
         ]
@@ -48961,6 +49914,2159 @@
         ]
       }
     },
+    "/sandboxes/{id}/sessions": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "sessions": {
+                      "items": {
+                        "properties": {
+                          "activity": {
+                            "description": "Best effort from opencode /session/status while the box runs",
+                            "enum": [
+                              "idle",
+                              "working",
+                              "needs_input",
+                              "done"
+                            ],
+                            "type": "string"
+                          },
+                          "agent": {
+                            "enum": [
+                              "opencode"
+                            ],
+                            "type": "string"
+                          },
+                          "aheadBehind": {
+                            "properties": {
+                              "ahead": {
+                                "type": "integer"
+                              },
+                              "behind": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "ahead",
+                              "behind"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "archivedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "baseBranch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "baseCommit": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "branch": {
+                            "description": "orchard/<slug>",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "diffstat": {
+                            "description": "Changes against the base branch, including uncommitted work",
+                            "properties": {
+                              "additions": {
+                                "type": "integer"
+                              },
+                              "deletions": {
+                                "type": "integer"
+                              },
+                              "files": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "files",
+                              "additions",
+                              "deletions"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "opencodeSessionId": {
+                            "description": "The primary opencode chat",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "previewDeploymentId": {
+                            "format": "uuid",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "previewUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "prNumber": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "prState": {
+                            "enum": [
+                              "open",
+                              "merged",
+                              "closed"
+                            ],
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "prUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "repo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sandboxId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "slug": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "enum": [
+                              "active",
+                              "archived"
+                            ],
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "worktreePath": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sandboxId",
+                          "title",
+                          "slug",
+                          "repo",
+                          "branch",
+                          "baseBranch",
+                          "baseCommit",
+                          "worktreePath",
+                          "agent",
+                          "opencodeSessionId",
+                          "status",
+                          "activity",
+                          "diffstat",
+                          "aheadBehind",
+                          "prUrl",
+                          "prNumber",
+                          "prState",
+                          "previewDeploymentId",
+                          "previewUrl",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt",
+                          "archivedAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "sessions"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "List worktree sessions with diffstat and ahead/behind (?includeArchived=1 adds archived ones)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "baseBranch": {
+                    "description": "Defaults to origin HEAD",
+                    "maxLength": 200,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "issue": {
+                    "properties": {
+                      "provider": {
+                        "enum": [
+                          "github",
+                          "linear"
+                        ],
+                        "type": "string"
+                      },
+                      "ref": {
+                        "maxLength": 300,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "ref"
+                    ],
+                    "type": "object"
+                  },
+                  "prompt": {
+                    "description": "Sent to the agent once the chat exists",
+                    "maxLength": 32768,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 120,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "activity": {
+                      "description": "Best effort from opencode /session/status while the box runs",
+                      "enum": [
+                        "idle",
+                        "working",
+                        "needs_input",
+                        "done"
+                      ],
+                      "type": "string"
+                    },
+                    "agent": {
+                      "enum": [
+                        "opencode"
+                      ],
+                      "type": "string"
+                    },
+                    "aheadBehind": {
+                      "properties": {
+                        "ahead": {
+                          "type": "integer"
+                        },
+                        "behind": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "ahead",
+                        "behind"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseBranch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseCommit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "branch": {
+                      "description": "orchard/<slug>",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "diffstat": {
+                      "description": "Changes against the base branch, including uncommitted work",
+                      "properties": {
+                        "additions": {
+                          "type": "integer"
+                        },
+                        "deletions": {
+                          "type": "integer"
+                        },
+                        "files": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "files",
+                        "additions",
+                        "deletions"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "opencodeSessionId": {
+                      "description": "The primary opencode chat",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewDeploymentId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prNumber": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "prState": {
+                      "enum": [
+                        "open",
+                        "merged",
+                        "closed"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "repo": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active",
+                        "archived"
+                      ],
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "worktreePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sandboxId",
+                    "title",
+                    "slug",
+                    "repo",
+                    "branch",
+                    "baseBranch",
+                    "baseCommit",
+                    "worktreePath",
+                    "agent",
+                    "opencodeSessionId",
+                    "status",
+                    "activity",
+                    "diffstat",
+                    "aheadBehind",
+                    "prUrl",
+                    "prNumber",
+                    "prState",
+                    "previewDeploymentId",
+                    "previewUrl",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt",
+                    "archivedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Start a session: git worktree on orchard/<slug>, an opencode chat in it, and the repo setup script in the background",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a session and its worktree; ?deleteBranch=1 also deletes its local branch",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "activity": {
+                      "description": "Best effort from opencode /session/status while the box runs",
+                      "enum": [
+                        "idle",
+                        "working",
+                        "needs_input",
+                        "done"
+                      ],
+                      "type": "string"
+                    },
+                    "agent": {
+                      "enum": [
+                        "opencode"
+                      ],
+                      "type": "string"
+                    },
+                    "aheadBehind": {
+                      "properties": {
+                        "ahead": {
+                          "type": "integer"
+                        },
+                        "behind": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "ahead",
+                        "behind"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseBranch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseCommit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "branch": {
+                      "description": "orchard/<slug>",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "diffstat": {
+                      "description": "Changes against the base branch, including uncommitted work",
+                      "properties": {
+                        "additions": {
+                          "type": "integer"
+                        },
+                        "deletions": {
+                          "type": "integer"
+                        },
+                        "files": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "files",
+                        "additions",
+                        "deletions"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "opencodeSessionId": {
+                      "description": "The primary opencode chat",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewDeploymentId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prNumber": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "prState": {
+                      "enum": [
+                        "open",
+                        "merged",
+                        "closed"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "repo": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active",
+                        "archived"
+                      ],
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "worktreePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sandboxId",
+                    "title",
+                    "slug",
+                    "repo",
+                    "branch",
+                    "baseBranch",
+                    "baseCommit",
+                    "worktreePath",
+                    "agent",
+                    "opencodeSessionId",
+                    "status",
+                    "activity",
+                    "diffstat",
+                    "aheadBehind",
+                    "prUrl",
+                    "prNumber",
+                    "prState",
+                    "previewDeploymentId",
+                    "previewUrl",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt",
+                    "archivedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Get one session",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "title": {
+                    "maxLength": 120,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "activity": {
+                      "description": "Best effort from opencode /session/status while the box runs",
+                      "enum": [
+                        "idle",
+                        "working",
+                        "needs_input",
+                        "done"
+                      ],
+                      "type": "string"
+                    },
+                    "agent": {
+                      "enum": [
+                        "opencode"
+                      ],
+                      "type": "string"
+                    },
+                    "aheadBehind": {
+                      "properties": {
+                        "ahead": {
+                          "type": "integer"
+                        },
+                        "behind": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "ahead",
+                        "behind"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "archivedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseBranch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "baseCommit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "branch": {
+                      "description": "orchard/<slug>",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "diffstat": {
+                      "description": "Changes against the base branch, including uncommitted work",
+                      "properties": {
+                        "additions": {
+                          "type": "integer"
+                        },
+                        "deletions": {
+                          "type": "integer"
+                        },
+                        "files": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "files",
+                        "additions",
+                        "deletions"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "opencodeSessionId": {
+                      "description": "The primary opencode chat",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewDeploymentId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previewUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prNumber": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "prState": {
+                      "enum": [
+                        "open",
+                        "merged",
+                        "closed"
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "prUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "repo": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxId": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active",
+                        "archived"
+                      ],
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "worktreePath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sandboxId",
+                    "title",
+                    "slug",
+                    "repo",
+                    "branch",
+                    "baseBranch",
+                    "baseCommit",
+                    "worktreePath",
+                    "agent",
+                    "opencodeSessionId",
+                    "status",
+                    "activity",
+                    "diffstat",
+                    "aheadBehind",
+                    "prUrl",
+                    "prNumber",
+                    "prState",
+                    "previewDeploymentId",
+                    "previewUrl",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt",
+                    "archivedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Rename, archive (removes the worktree, keeps the branch) or restore a session",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/authors": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "authors": {
+                      "additionalProperties": {
+                        "properties": {
+                          "avatarUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "avatarUrl"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "authors"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Who sent each prompt, keyed by opencode message id",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/chats": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "chats": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "chats"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Opencode chats running in the session worktree (tabs)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "title": {
+                    "maxLength": 120,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Start another opencode chat in the session worktree",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/checks": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "checks": {
+                      "items": {
+                        "properties": {
+                          "conclusion": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "logExcerpt": {
+                            "description": "Tail of the log for failed checks",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "status",
+                          "conclusion",
+                          "url"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "pr": {
+                      "properties": {
+                        "baseBranch": {
+                          "type": "string"
+                        },
+                        "draft": {
+                          "type": "boolean"
+                        },
+                        "headBranch": {
+                          "type": "string"
+                        },
+                        "headSha": {
+                          "type": "string"
+                        },
+                        "mergeable": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "mergeableState": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "enum": [
+                            "open",
+                            "merged",
+                            "closed"
+                          ],
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "number",
+                        "url",
+                        "title",
+                        "state",
+                        "draft",
+                        "mergeable",
+                        "mergeableState",
+                        "headSha",
+                        "headBranch",
+                        "baseBranch"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "pr",
+                    "checks"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The session's pull request and its check runs and statuses, read with the owner's GitHub token",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/comments": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "comments": {
+                      "items": {
+                        "properties": {
+                          "author": {
+                            "properties": {
+                              "avatarUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "avatarUrl"
+                            ],
+                            "type": "object"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "chatId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "format": "uuid",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sessionId",
+                          "chatId",
+                          "author",
+                          "body",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "comments"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Team chat in a session, oldest first (?since=<iso> returns only newer ones)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "body": {
+                    "maxLength": 4000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "chatId": {
+                    "maxLength": 64,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "chatId",
+                  "body"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "author": {
+                      "properties": {
+                        "avatarUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatarUrl"
+                      ],
+                      "type": "object"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "chatId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "sessionId": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sessionId",
+                    "chatId",
+                    "author",
+                    "body",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Post a human-only message to the session thread; never sent to the agent",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/git/merge": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "squash",
+                      "rebase"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "merged": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "merged",
+                    "sha",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Merge the session's pull request on GitHub (owner only, squash or rebase, never a merge commit)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/ports": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ports": {
+                      "items": {
+                        "properties": {
+                          "inSession": {
+                            "type": "boolean"
+                          },
+                          "loopbackOnly": {
+                            "description": "Bound to 127.0.0.1 only, so a preview cannot reach it",
+                            "type": "boolean"
+                          },
+                          "port": {
+                            "type": "integer"
+                          },
+                          "previewUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "process": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "public": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "port",
+                          "process",
+                          "previewUrl",
+                          "public",
+                          "inSession",
+                          "loopbackOnly"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "ports"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "TCP ports the dev user is listening on, flagged when started from this worktree",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/run": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "start",
+                      "stop"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ports": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    },
+                    "run": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "running": {
+                      "description": "Whether the run script is alive in its tmux window",
+                      "type": "boolean"
+                    },
+                    "setup": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "setupState": {
+                      "enum": [
+                        "none",
+                        "running",
+                        "done",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "setup",
+                    "run",
+                    "ports",
+                    "setupState",
+                    "running"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Start (or restart) or stop the run script in the tmux window `run`",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/sessions/{sid}/scripts": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ports": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    },
+                    "run": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "running": {
+                      "description": "Whether the run script is alive in its tmux window",
+                      "type": "boolean"
+                    },
+                    "setup": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "setupState": {
+                      "enum": [
+                        "none",
+                        "running",
+                        "done",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "setup",
+                    "run",
+                    "ports",
+                    "setupState",
+                    "running"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Setup/run scripts and ports from .orchard/greenhouse.json, plus their state",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/ssh": {
       "get": {
         "description": "Auth: authenticated (scope: exec)",
@@ -49072,6 +52178,16 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
                     },
                     "name": {
                       "type": "string"
@@ -49285,6 +52401,16 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "myRole": {
+                      "description": "owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin",
+                      "enum": [
+                        "owner",
+                        "collaborator",
+                        "viewer",
+                        "admin"
+                      ],
+                      "type": "string"
                     },
                     "name": {
                       "type": "string"

@@ -18,7 +18,8 @@ export const NOTIFICATION_EVENTS = [
   'job.succeeded',
   'job.failed',
   'security.signed_in',
-  'security.app_authorized'
+  'security.app_authorized',
+  'sandbox.session.needs_input'
 ] as const;
 
 export type NotificationEventName = (typeof NOTIFICATION_EVENTS)[number];
@@ -37,7 +38,14 @@ export type UserDestinationType = (typeof USER_DESTINATION_TYPES)[number];
 // the one addition that earns its place: it is the only category about the
 // account rather than about something the account deployed, and an alert nobody
 // asked for is the entire point of it.
-export const NOTIFICATION_CATEGORIES = ['deploys', 'health', 'jobs', 'data', 'security'] as const;
+export const NOTIFICATION_CATEGORIES = [
+  'deploys',
+  'health',
+  'jobs',
+  'data',
+  'security',
+  'agents'
+] as const;
 
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -61,7 +69,8 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
   'job.succeeded': 'jobs',
   'job.failed': 'jobs',
   'security.signed_in': 'security',
-  'security.app_authorized': 'security'
+  'security.app_authorized': 'security',
+  'sandbox.session.needs_input': 'agents'
 };
 
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
@@ -69,7 +78,8 @@ export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   health: 'App and database health',
   jobs: 'Jobs',
   data: 'Backups and archiving',
-  security: 'Security'
+  security: 'Security',
+  agents: 'Greenhouse sessions'
 };
 
 // Scopes a rule or a personal setting can attach to. 'global' is personal-only
@@ -104,14 +114,15 @@ export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeTy
   'job.succeeded': 'job',
   'job.failed': 'job',
   'security.signed_in': 'user',
-  'security.app_authorized': 'user'
+  'security.app_authorized': 'user',
+  'sandbox.session.needs_input': 'user'
 };
 
 // A security event is about one person's account and never belongs on a shared
 // channel, so it is not offerable to a rule at any scope. Team rules address
 // org resources; this one addresses you.
 export const TEAM_ROUTABLE_EVENTS = NOTIFICATION_EVENTS.filter(
-  (e) => EVENT_CATEGORY[e] !== 'security'
+  (e) => EVENT_RESOURCE_SCOPE[e] !== 'user'
 );
 
 export function eventsForScopeType(scopeType: RuleScopeType): NotificationEventName[] {
@@ -137,7 +148,8 @@ export const CATEGORY_DEFAULT_VALUE: Record<NotificationCategory, SettingValue> 
   health: DEFAULT_SETTING_VALUE,
   jobs: DEFAULT_SETTING_VALUE,
   data: DEFAULT_SETTING_VALUE,
-  security: 'always'
+  security: 'always',
+  agents: 'always'
 };
 
 // The scope_id stored for an account-wide preference. A real id is never this
@@ -181,7 +193,8 @@ export const EVENT_TONE: Record<NotificationEventName, EventTone> = {
   // painting it green says "all good" about the one message whose whole job is
   // to make you look twice.
   'security.signed_in': 'notice',
-  'security.app_authorized': 'notice'
+  'security.app_authorized': 'notice',
+  'sandbox.session.needs_input': 'notice'
 };
 
 export const TONE_COLORS: Record<EventTone, number> = {

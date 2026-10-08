@@ -12,6 +12,7 @@ import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { ApplyExecutorService, ApplyItemInput } from '../../apply/apply-executor.service';
 import { ResizableOutput } from '../../kubernetes/exec-sessions';
 import { SANDBOX_BOOTSTRAP_SCRIPT } from '../sandbox-bootstrap';
+import { PREVIEW_PORTS } from '../preview/preview-auth';
 import {
   CRD_API_VERSION,
   CRD_GROUP,
@@ -51,6 +52,7 @@ import {
   specOf
 } from './sandbox-runner';
 import { SandboxSecretsService, sandboxSpecHash } from './sandbox-secrets';
+import { authorizedKeysFile, opencodeAuthJson, opencodeConfigJson } from './sandbox-init-files';
 import { applyObservation } from './sandbox-status';
 
 const MIRROR_FRESH_MS = 60_000;
@@ -294,7 +296,8 @@ export class KubernetesSandboxRunner implements SandboxRunner {
             ],
             ports: [
               { protocol: 'TCP', port: 22 as any },
-              { protocol: 'TCP', port: 4096 as any }
+              { protocol: 'TCP', port: 4096 as any },
+              ...PREVIEW_PORTS.map((port) => ({ protocol: 'TCP', port: port as any }))
             ]
           }
         ],
@@ -526,37 +529,15 @@ export class KubernetesSandboxRunner implements SandboxRunner {
 
   secretData(input: SandboxSecrets): Record<string, string> {
     const data: Record<string, string> = {
-      authorized_keys: `${input.authorizedKeys.join('\n')}\n`,
+      authorized_keys: authorizedKeysFile(input.authorizedKeys),
       'bootstrap.sh': SANDBOX_BOOTSTRAP_SCRIPT
     };
     if (input.githubToken) data['github-token'] = input.githubToken;
     if (input.claudeToken) data['claude-token'] = input.claudeToken;
     if (input.openaiToken) data['openai-token'] = input.openaiToken;
     data['setup.sh'] = input.setupScript || '';
-    data['opencode-auth.json'] = input.claudeToken
-      ? JSON.stringify({
-          anthropic: {
-            type: 'oauth',
-            refresh: '',
-            access: input.claudeToken,
-            expires: 99999999999999
-          }
-        })
-      : '{}';
-    const opencodeConfig: Record<string, any> = {
-      plugin: ['@cortexkit/opencode-anthropic-auth']
-    };
-    if (input.mcpToken && process.env.SANDBOX_MCP_URL) {
-      opencodeConfig.mcp = {
-        orchard: {
-          type: 'remote',
-          url: process.env.SANDBOX_MCP_URL,
-          headers: { Authorization: `Bearer ${input.mcpToken}` },
-          enabled: true
-        }
-      };
-    }
-    data['opencode-config.json'] = JSON.stringify(opencodeConfig);
+    data['opencode-auth.json'] = opencodeAuthJson(input.claudeToken);
+    data['opencode-config.json'] = opencodeConfigJson(input.mcpToken);
     return data;
   }
 

@@ -276,6 +276,8 @@ func TestSandboxProxyHostResolvesByName(t *testing.T) {
 		switch {
 		case r.URL.Path == "/apiv1/sandboxes":
 			io.WriteString(w, sandboxListJSON)
+		case r.URL.Path == "/apiv1/sandboxes/11111111-1111-1111-1111-111111111111/hostkey":
+			io.WriteString(w, `{"publicKeys":["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFRESH"]}`)
 		case strings.HasSuffix(r.URL.Path, "/ssh"):
 			tunnelPath <- r.URL.Path
 			c, err := websocket.Accept(w, r, nil)
@@ -300,12 +302,65 @@ func TestSandboxProxyHostResolvesByName(t *testing.T) {
 	defer func() { os.Stdin = oldStdin }()
 
 	root := sandboxTestRoot(t, srv.URL)
-	root.SetArgs([]string{"sandbox", "proxy", "--host", "orchard-box"})
+	p := orchardSSHPaths{Home: os.Getenv("HOME")}
+	if err := os.MkdirAll(p.Dir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := "orchard-box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISTALE\norchard-other ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOTHER\n"
+	if err := os.WriteFile(p.KnownHosts(), []byte(stale), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{"sandbox", "proxy", "--host", "dev@orchard-box"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("sandbox proxy --host: %v", err)
 	}
 	if got := <-tunnelPath; got != "/apiv1/sandboxes/11111111-1111-1111-1111-111111111111/ssh" {
 		t.Errorf("tunnel path = %q", got)
+	}
+	want := "orchard-other ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOTHER\norchard-box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFRESH\n"
+	if got := readFile(t, p.KnownHosts()); got != want {
+		t.Errorf("known_hosts = %q, want %q", got, want)
+	}
+	assertPerm(t, p.KnownHosts(), 0o600)
+}
+
+func TestSandboxProxyToleratesServersWithoutHostKeys(t *testing.T) {
+	tunnelPath := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/apiv1/sandboxes":
+			io.WriteString(w, sandboxListJSON)
+		case strings.HasSuffix(r.URL.Path, "/ssh"):
+			tunnelPath <- r.URL.Path
+			c, err := websocket.Accept(w, r, nil)
+			if err != nil {
+				return
+			}
+			c.Close(websocket.StatusNormalClosure, "")
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	rd, wr, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wr.Close()
+	oldStdin := os.Stdin
+	os.Stdin = rd
+	defer func() { os.Stdin = oldStdin }()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "proxy", "--host", "orchard-box"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("sandbox proxy --host: %v", err)
+	}
+	<-tunnelPath
+	p := orchardSSHPaths{Home: os.Getenv("HOME")}
+	if _, err := os.Stat(p.KnownHosts()); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("known_hosts should not be created without keys, stat err = %v", err)
 	}
 }
 

@@ -127,6 +127,7 @@ export interface SandboxRunner {
   readonly capabilities: SandboxRunnerCapabilities;
   readonly namespace?: string;
   configError(): string | null;
+  defaultImage?(): string;
 
   requestProvision(ref: SandboxRef, requestedById?: string | null): Promise<void>;
   requestStart(ref: SandboxRef, requestedById?: string | null): Promise<void>;

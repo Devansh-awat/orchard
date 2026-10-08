@@ -1,3 +1,5 @@
+import { previewDomainConflict } from '../sandboxes/preview/preview-auth';
+
 export interface ConfigField {
   name: string;
   env: string;
@@ -209,6 +211,15 @@ export const SANDBOX_RUNNERS = section(
     const preview = (values.previewDomain || '').trim();
     if (preview && !HOSTNAME.test(preview)) {
       throw new Error('previewDomain must be a bare domain name such as preview.example.com');
+    }
+    if (preview) {
+      const conflict = previewDomainConflict(preview, {
+        cookieDomain: process.env.COOKIE_DOMAIN,
+        frontendUrl: process.env.FRONTEND_URL,
+        apiUrl: process.env.API_URL,
+        platformOrigins: process.env.PLATFORM_ORIGINS
+      });
+      if (conflict) throw new Error(conflict);
     }
   }
 );

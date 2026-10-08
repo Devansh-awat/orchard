@@ -1,7 +1,9 @@
 import * as http from 'http';
 import * as https from 'https';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { SandboxConversation } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SandboxProbesService } from './runners/sandbox-probes.service';
 import {
@@ -11,6 +13,19 @@ import {
   SandboxRowLike,
   refOf
 } from './runners/sandbox-runner';
+import {
+  FS_EXIT,
+  HOME_ROOT,
+  WORKTREES_ROOT,
+  buildFsScript,
+  isUuid,
+  isValidGitRef,
+  isWorktreePath,
+  normalizeRelativePath,
+  realpathGuard,
+  shellQuote,
+  type FsOp
+} from './sandbox-session-commands';
 
 const OPENCODE_PORT = 4096;
 const PROXY_TIMEOUT_MS = 120000;
@@ -33,8 +48,28 @@ export function sandboxWorkdir(repoUrl: string | null): string {
   return base ? `/persist/home/${base}` : '/persist/home';
 }
 
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
+export type WorkdirSelector = { repo?: string | null; session?: string | null };
+
+export interface ResolvedWorkdir {
+  dir: string;
+  guardRoot: string | null;
+  session: SandboxConversation | null;
+}
+
+export interface OpencodeResponse {
+  status: number;
+  body: unknown;
+}
+
+function selectorOf(sel: WorkdirSelector | string | undefined | null): WorkdirSelector {
+  if (!sel) return {};
+  if (typeof sel === 'string') return { repo: sel };
+  return sel;
+}
+
+function prNumberFromUrl(url: string | null | undefined): number | null {
+  const m = typeof url === 'string' ? url.match(/\/pull\/(\d+)/) : null;
+  return m ? Number(m[1]) : null;
 }
 
 export interface SandboxRepo {
@@ -62,7 +97,8 @@ export class SandboxWorkspaceService {
 
   constructor(
     private readonly registry: SandboxRunnerRegistry,
-    private readonly probes: SandboxProbesService
+    private readonly probes: SandboxProbesService,
+    private readonly prisma: PrismaService
   ) {}
 
   private requireRunning(sandbox: { status: string }): void {
@@ -155,22 +191,61 @@ export class SandboxWorkspaceService {
     return sandboxWorkdir(sandbox.repoUrl);
   }
 
+  async sessionRow(sandboxId: string, sessionId: string): Promise<SandboxConversation> {
+    if (!isUuid(sessionId)) throw new BadRequestException('Invalid session id');
+    const row = await this.prisma.sandboxConversation.findFirst({
+      where: { id: sessionId, sandboxId }
+    });
+    if (!row || !row.slug) throw new NotFoundException('Session not found');
+    return row;
+  }
+
+  async resolveDir(
+    sandbox: { id: string; repoUrl: string | null },
+    selector: WorkdirSelector | string | undefined | null
+  ): Promise<ResolvedWorkdir> {
+    const sel = selectorOf(selector);
+    if (sel.session) {
+      const session = await this.sessionRow(sandbox.id, sel.session);
+      if (session.archivedAt) throw new BadRequestException('This session is archived');
+      if (!isWorktreePath(session.worktreePath)) {
+        throw new BadRequestException('This session has no worktree');
+      }
+      return { dir: session.worktreePath, guardRoot: WORKTREES_ROOT, session };
+    }
+    return {
+      dir: this.resolveWorkdir(sandbox, sel.repo || undefined),
+      guardRoot: null,
+      session: null
+    };
+  }
+
   private async run(
     sandbox: WorkspaceSandbox,
     script: string,
-    repo?: string
-  ): Promise<{ stdout: string; ok: boolean }> {
+    selector?: WorkdirSelector | string | null
+  ): Promise<{ stdout: string; ok: boolean; exitCode: number | null }> {
     this.requireRunning(sandbox);
-    const dir = this.resolveWorkdir(sandbox, repo);
+    const { dir, guardRoot } = await this.resolveDir(sandbox, selector);
+    return this.runIn(sandbox, dir, guardRoot, script);
+  }
+
+  async runIn(
+    sandbox: WorkspaceSandbox,
+    dir: string,
+    guardRoot: string | null,
+    script: string,
+    opts: { timeoutMs?: number } = {}
+  ): Promise<{ stdout: string; ok: boolean; exitCode: number | null }> {
+    this.requireRunning(sandbox);
+    const guard = guardRoot ? `${realpathGuard('.', guardRoot, 3)}; ` : '';
     return this.registry
       .for(sandbox)
-      .exec(refOf(sandbox), [
-        'su',
-        '-l',
-        'dev',
-        '-c',
-        `cd ${shellQuote(dir)} 2>/dev/null || exit 3; ${script}`
-      ]);
+      .exec(
+        refOf(sandbox),
+        ['su', '-l', 'dev', '-c', `cd ${shellQuote(dir)} 2>/dev/null || exit 3; ${guard}${script}`],
+        opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}
+      );
   }
 
   private devExec(sandbox: WorkspaceSandbox, script: string) {
@@ -197,7 +272,7 @@ export class SandboxWorkspaceService {
 
   async gitCommit(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     message: string,
     files: string[] | undefined,
     author: { name: string; email: string },
@@ -225,7 +300,7 @@ export class SandboxWorkspaceService {
 
   async gitUncommit(
     sandbox: WorkspaceSandbox,
-    repo: string
+    repo: WorkdirSelector | string
   ): Promise<{ ok: boolean; output: string }> {
     const result = await this.run(
       sandbox,
@@ -237,7 +312,7 @@ export class SandboxWorkspaceService {
 
   async gitPush(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     opts: { force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.force ? ' --force-with-lease' : '';
@@ -247,7 +322,7 @@ export class SandboxWorkspaceService {
 
   async gitFetch(
     sandbox: WorkspaceSandbox,
-    repo: string
+    repo: WorkdirSelector | string
   ): Promise<{ ok: boolean; output: string }> {
     const result = await this.run(sandbox, 'git fetch --all --prune 2>&1', repo);
     return { ok: result.ok, output: result.stdout.slice(-2000) || 'up to date' };
@@ -255,7 +330,7 @@ export class SandboxWorkspaceService {
 
   async gitPull(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     opts: { rebase?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
     const flags = opts.rebase ? ' --rebase' : '';
@@ -265,7 +340,7 @@ export class SandboxWorkspaceService {
 
   async gitBranches(
     sandbox: WorkspaceSandbox,
-    repo: string
+    repo: WorkdirSelector | string
   ): Promise<{
     current: string | null;
     local: Array<{ name: string; upstream: string | null; ahead: number; behind: number }>;
@@ -300,7 +375,7 @@ export class SandboxWorkspaceService {
 
   async gitCheckout(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     branch: string,
     opts: { create?: boolean; from?: string } = {}
   ): Promise<{ ok: boolean; output: string }> {
@@ -315,7 +390,7 @@ export class SandboxWorkspaceService {
 
   async gitDeleteBranch(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     branch: string,
     opts: { remote?: boolean; force?: boolean } = {}
   ): Promise<{ ok: boolean; output: string }> {
@@ -329,18 +404,23 @@ export class SandboxWorkspaceService {
 
   async createPullRequest(
     sandbox: WorkspaceSandbox,
-    repo: string,
+    repo: WorkdirSelector | string,
     githubToken: string | null,
     body: { title?: string; body?: string; base?: string }
-  ): Promise<{ url: string }> {
+  ): Promise<{ url: string; number: number | null }> {
     if (!body.title?.trim()) throw new BadRequestException('A PR title is required');
     if (!githubToken) {
       throw new BadRequestException('No GitHub account is linked to your user');
     }
-    const info = await this.run(
+    if (body.base !== undefined && body.base !== '' && !isValidGitRef(body.base)) {
+      throw new BadRequestException('Invalid base branch');
+    }
+    const resolved = await this.resolveDir(sandbox, repo);
+    const info = await this.runIn(
       sandbox,
-      'git remote get-url origin; git rev-parse --abbrev-ref HEAD',
-      repo
+      resolved.dir,
+      resolved.guardRoot,
+      'git remote get-url origin; git rev-parse --abbrev-ref HEAD'
     );
     const [remoteUrl, branch] = info.stdout
       .trim()
@@ -357,7 +437,7 @@ export class SandboxWorkspaceService {
       'content-type': 'application/json',
       'user-agent': 'orchard-greenhouse'
     };
-    let base = body.base;
+    let base = body.base || resolved.session?.baseBranch || undefined;
     if (!base) {
       const repoRes = await fetch(`https://api.github.com/repos/${owner}/${name}`, { headers });
       if (repoRes.ok) base = ((await repoRes.json()) as any).default_branch;
@@ -378,17 +458,31 @@ export class SandboxWorkspaceService {
         pr?.errors?.[0]?.message || pr?.message || 'GitHub rejected the pull request'
       );
     }
-    return { url: pr.html_url };
+    const number = typeof pr.number === 'number' ? pr.number : prNumberFromUrl(pr.html_url);
+    if (resolved.session) {
+      await this.prisma.sandboxConversation
+        .update({
+          where: { id: resolved.session.id },
+          data: { prUrl: String(pr.html_url).slice(0, 500), prNumber: number, prState: 'open' }
+        })
+        .catch((e) => this.logger.warn(`could not record PR on session: ${e?.message}`));
+    }
+    return { url: pr.html_url, number };
   }
 
   async readFile(
     sandbox: WorkspaceSandbox,
-    repo: string | undefined,
-    file: string
-  ): Promise<{ content: string; truncated: boolean }> {
+    repo: WorkdirSelector | string | undefined,
+    file: string,
+    ref?: string
+  ): Promise<{ content: string; truncated: boolean; exists?: boolean }> {
     this.validateFile(file);
     this.requireRunning(sandbox);
-    const dir = this.resolveWorkdir(sandbox, repo);
+    if (ref !== undefined && ref !== '') {
+      if (ref !== 'HEAD') throw new BadRequestException('Only ref=HEAD is supported');
+      return this.readFileAtHead(sandbox, repo, file);
+    }
+    const { dir } = await this.resolveDir(sandbox, repo);
     const result = await this.registry
       .for(sandbox)
       .readFile(refOf(sandbox), `${dir}/${file}`, { maxBytes: MAX_FILE_BYTES, asUser: 'dev' })
@@ -400,9 +494,115 @@ export class SandboxWorkspaceService {
     return { content: result.content.toString('utf8'), truncated: result.truncated };
   }
 
+  private async readFileAtHead(
+    sandbox: WorkspaceSandbox,
+    repo: WorkdirSelector | string | undefined,
+    file: string
+  ): Promise<{ content: string; truncated: boolean; exists: boolean }> {
+    const script = [
+      `git cat-file -e ${shellQuote(`HEAD:./${file}`)} 2>/dev/null || exit 4`,
+      `git show ${shellQuote(`HEAD:./${file}`)} | head -c ${MAX_FILE_BYTES + 1}`
+    ].join('\n');
+    const result = await this.run(sandbox, script, repo);
+    if (result.exitCode === 4) return { content: '', truncated: false, exists: false };
+    if (!result.ok) throw new BadRequestException('Could not read that file at HEAD');
+    const truncated = Buffer.byteLength(result.stdout, 'utf8') > MAX_FILE_BYTES;
+    return {
+      content: truncated ? result.stdout.slice(0, MAX_FILE_BYTES) : result.stdout,
+      truncated,
+      exists: true
+    };
+  }
+
+  async fsOp(
+    sandbox: WorkspaceSandbox,
+    op: FsOp,
+    body: { session?: string | null; repo?: string | null; path?: string; to?: string }
+  ): Promise<{ ok: boolean; path: string }> {
+    if (!['mkdir', 'rename', 'delete'].includes(op)) throw new BadRequestException('Unknown op');
+    const rel = normalizeRelativePath(body.path);
+    if (!rel) throw new BadRequestException('Invalid path');
+    const to = op === 'rename' ? normalizeRelativePath(body.to) : null;
+    if (op === 'rename' && !to) throw new BadRequestException('Invalid destination path');
+    this.requireRunning(sandbox);
+    const { dir, guardRoot } = await this.resolveDir(sandbox, {
+      session: body.session,
+      repo: body.repo
+    });
+    const script = buildFsScript(op, dir, guardRoot ?? HOME_ROOT, rel, to ?? undefined);
+    const result = await this.registry
+      .for(sandbox)
+      .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], { timeoutMs: 30_000 });
+    if (result.ok) return { ok: true, path: to ?? rel };
+    switch (result.exitCode) {
+      case FS_EXIT.outside:
+        throw new BadRequestException('That path is outside the workspace');
+      case FS_EXIT.exists:
+        throw new BadRequestException('Something already exists at that path');
+      case FS_EXIT.missing:
+        throw new NotFoundException('Nothing exists at that path');
+      default:
+        throw new BadRequestException('The file operation failed');
+    }
+  }
+
+  async opencodeRequest(
+    sandbox: WorkspaceSandbox,
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    path: string,
+    opts: { directory?: string | null; body?: unknown; timeoutMs?: number } = {}
+  ): Promise<OpencodeResponse> {
+    this.requireRunning(sandbox);
+    const timeoutMs = opts.timeoutMs ?? 10_000;
+    const query = opts.directory ? `?directory=${encodeURIComponent(opts.directory)}` : '';
+    const suffix = `${path.replace(/^\/+/, '')}${query}`;
+    const payload = opts.body === undefined ? null : JSON.stringify(opts.body);
+    const ref = refOf(sandbox);
+    const target = await this.registry.for(sandbox).httpTarget(ref, OPENCODE_PORT);
+    if (target.kind === 'url') {
+      const init: RequestInit = {
+        method,
+        headers: {
+          ...target.headers,
+          accept: 'application/json',
+          ...(payload ? { 'content-type': 'application/json' } : {})
+        },
+        signal: AbortSignal.timeout(timeoutMs)
+      };
+      if (payload) init.body = payload;
+      const res = await fetch(`${target.baseUrl.replace(/\/$/, '')}/${suffix}`, init);
+      const text = await res.text();
+      let parsed: unknown = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = text;
+      }
+      return { status: res.status, body: parsed };
+    }
+    const seconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+    let curl = `curl -s -m ${seconds} -o - -w '\\n@@status@@%{http_code}' -X ${method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}`)} -H 'accept: application/json'`;
+    if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
+    const result = await this.registry.for(sandbox).exec(ref, ['su', '-l', 'dev', '-c', curl], {
+      timeoutMs: timeoutMs + 5000,
+      ...(payload ? { stdin: Buffer.from(payload, 'utf8') } : {})
+    });
+    const at = result.stdout.lastIndexOf('\n@@status@@');
+    if (at < 0) return { status: 502, body: null };
+    const status = Number(result.stdout.slice(at + '\n@@status@@'.length).trim()) || 502;
+    const text = result.stdout.slice(0, at);
+    let parsed: unknown = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = text;
+    }
+    return { status, body: parsed };
+  }
+
   async writeFile(
     sandbox: WorkspaceSandbox,
-    repo: string | undefined,
+    repo: WorkdirSelector | string | undefined,
     file: string,
     content: string
   ): Promise<{ ok: boolean }> {
@@ -411,7 +611,7 @@ export class SandboxWorkspaceService {
       throw new BadRequestException('File content must be a string up to 500KB');
     }
     this.requireRunning(sandbox);
-    const dir = this.resolveWorkdir(sandbox, repo);
+    const { dir } = await this.resolveDir(sandbox, repo);
     try {
       await this.registry
         .for(sandbox)
@@ -567,7 +767,10 @@ export class SandboxWorkspaceService {
     if (!res.writableEnded) res.end();
   }
 
-  async changes(sandbox: WorkspaceSandbox, repo?: string): Promise<SandboxChanges> {
+  async changes(
+    sandbox: WorkspaceSandbox,
+    repo?: WorkdirSelector | string
+  ): Promise<SandboxChanges> {
     const script = [
       'git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 3',
       'echo "@@branch@@$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"',
@@ -615,7 +818,7 @@ export class SandboxWorkspaceService {
   async diff(
     sandbox: WorkspaceSandbox,
     file: string | undefined,
-    repo?: string
+    repo?: WorkdirSelector | string
   ): Promise<{ diff: string; truncated: boolean }> {
     let script: string;
     if (file) {

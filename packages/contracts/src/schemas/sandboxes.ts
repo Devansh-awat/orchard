@@ -71,7 +71,93 @@ const sandbox = z.object({
     .describe('Populated when listing an organization as an owner or admin'),
   createdAt: z.string(),
   updatedAt: z.string(),
-  lastActiveAt: z.string().nullable()
+  lastActiveAt: z.string().nullable(),
+  myRole: z
+    .enum(['owner', 'collaborator', 'viewer', 'admin'])
+    .optional()
+    .describe(
+      'owner is the host, collaborator a guest, viewer a read-only guest, admin an org admin'
+    )
+});
+
+const sessionId = z.string().uuid();
+
+const memberRole = z.enum(['viewer', 'collaborator']);
+
+const memberUser = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  avatarUrl: z.string().nullable(),
+  email: z.string()
+});
+
+const sessionUser = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  avatarUrl: z.string().nullable()
+});
+
+const sandboxMember = z.object({
+  user: memberUser,
+  role: memberRole,
+  invitedBy: sessionUser.nullable(),
+  createdAt: z.string()
+});
+
+const sessionComment = z.object({
+  id: z.string().uuid(),
+  sessionId,
+  chatId: z.string(),
+  author: sessionUser,
+  body: z.string(),
+  createdAt: z.string()
+});
+
+const sandboxSession = z.object({
+  id: sessionId,
+  sandboxId: z.string().uuid(),
+  title: z.string(),
+  slug: z.string(),
+  repo: z.string().nullable(),
+  branch: z.string().nullable().describe('orchard/<slug>'),
+  baseBranch: z.string().nullable(),
+  baseCommit: z.string().nullable(),
+  worktreePath: z.string().nullable(),
+  agent: z.literal('opencode'),
+  opencodeSessionId: z.string().nullable().describe('The primary opencode chat'),
+  status: z.enum(['active', 'archived']),
+  activity: z
+    .enum(['idle', 'working', 'needs_input', 'done'])
+    .describe('Best effort from opencode /session/status while the box runs'),
+  diffstat: z
+    .object({ files: z.number().int(), additions: z.number().int(), deletions: z.number().int() })
+    .nullable()
+    .describe('Changes against the base branch, including uncommitted work'),
+  aheadBehind: z.object({ ahead: z.number().int(), behind: z.number().int() }).nullable(),
+  prUrl: z.string().nullable(),
+  prNumber: z.number().int().nullable(),
+  prState: z.enum(['open', 'merged', 'closed']).nullable(),
+  previewDeploymentId: z.string().uuid().nullable(),
+  previewUrl: z.string().nullable(),
+  createdBy: sessionUser.nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  archivedAt: z.string().nullable()
+});
+
+const sessionScripts = z.object({
+  setup: z.string().nullable(),
+  run: z.string().nullable(),
+  ports: z.array(z.number().int()),
+  setupState: z.enum(['none', 'running', 'done', 'failed']),
+  running: z.boolean().describe('Whether the run script is alive in its tmux window')
+});
+
+const fsRequest = z.object({
+  session: sessionId.optional(),
+  repo: z.string().optional(),
+  path: z.string().max(1024).describe('Relative to the session worktree or repo'),
+  to: z.string().max(1024).optional()
 });
 
 const credentialPresence = z.object({
@@ -176,7 +262,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/git/commit': {
     summary: 'Stage and commit inside a sandbox repo (all changes, or listed files)',
     request: z.object({
-      repo: z.string(),
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
       message: z.string().max(2000),
       files: z.array(z.string()).optional(),
       amend: z.boolean().optional(),
@@ -188,25 +277,47 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'POST /sandboxes/:id/git/push': {
     summary: 'Push the current branch to origin (force uses --force-with-lease)',
-    request: z.object({ repo: z.string(), force: z.boolean().optional() }),
+    request: z.object({
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
+      force: z.boolean().optional()
+    }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/fetch': {
     summary: 'Fetch all remotes and prune deleted branches',
-    request: z.object({ repo: z.string() }),
+    request: z.object({
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree')
+    }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/pull': {
     summary: 'Pull the current branch, optionally with rebase',
-    request: z.object({ repo: z.string(), rebase: z.boolean().optional() }),
+    request: z.object({
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
+      rebase: z.boolean().optional()
+    }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
     scope: 'exec'
   },
   'POST /sandboxes/:id/git/uncommit': {
     summary: 'Soft reset the last commit, keeping its changes staged',
-    request: z.object({ repo: z.string() }),
+    request: z.object({
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree')
+    }),
     response: z.object({ ok: z.boolean(), output: z.string() }),
     scope: 'exec'
   },
@@ -229,7 +340,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/git/checkout': {
     summary: 'Switch branches, or create one with create:true (optionally from a base ref)',
     request: z.object({
-      repo: z.string(),
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
       branch: z.string(),
       create: z.boolean().optional(),
       from: z.string().optional()
@@ -240,7 +354,10 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/git/branch/delete': {
     summary: 'Delete a local branch, or a remote branch with remote:true',
     request: z.object({
-      repo: z.string(),
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
       branch: z.string(),
       remote: z.boolean().optional(),
       force: z.boolean().optional()
@@ -251,23 +368,37 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/git/pr': {
     summary: 'Open a GitHub pull request from the current branch of a sandbox repo',
     request: z.object({
-      repo: z.string(),
+      repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
       title: z.string().min(1).max(300),
       body: z.string().max(20000).optional(),
       base: z.string().max(200).optional()
     }),
-    response: z.object({ url: z.string() }),
+    response: z.object({
+      url: z.string(),
+      number: z.number().int().nullable().describe('Recorded on the session when one is given')
+    }),
     scope: 'exec'
   },
   'GET /sandboxes/:id/file': {
-    summary: 'Read a file from the sandbox workspace (?path= and optional ?repo=)',
-    response: z.object({ content: z.string(), truncated: z.boolean() }),
+    summary:
+      'Read a file from the sandbox workspace (?path=, optional ?repo= or ?session=, and ?ref=HEAD for the committed version)',
+    response: z.object({
+      content: z.string(),
+      truncated: z.boolean(),
+      exists: z.boolean().optional().describe('With ref=HEAD, false when the file is new')
+    }),
     scope: 'exec'
   },
   'PUT /sandboxes/:id/file': {
     summary: 'Write a file in the sandbox workspace',
     request: z.object({
       repo: z.string().optional(),
+      session: sessionId
+        .optional()
+        .describe('Worktree session; sets the working directory to its worktree'),
       path: z.string(),
       content: z.string().max(512000)
     }),
@@ -378,6 +509,202 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /sandboxes/:id/ssh': {
     summary:
       'WebSocket tunnel to the sandbox sshd (binary frames carry raw TCP bytes; used by orchard sandbox ssh/proxy)',
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions': {
+    summary:
+      'List worktree sessions with diffstat and ahead/behind (?includeArchived=1 adds archived ones)',
+    response: z.object({ sessions: z.array(sandboxSession) }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/sessions': {
+    summary:
+      'Start a session: git worktree on orchard/<slug>, an opencode chat in it, and the repo setup script in the background',
+    request: z.object({
+      repo: z.string().max(120),
+      baseBranch: z.string().max(200).nullable().optional().describe('Defaults to origin HEAD'),
+      title: z.string().max(120).optional(),
+      prompt: z.string().max(32768).optional().describe('Sent to the agent once the chat exists'),
+      issue: z
+        .object({ provider: z.enum(['github', 'linear']), ref: z.string().max(300) })
+        .optional()
+    }),
+    response: sandboxSession,
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid': {
+    summary: 'Get one session',
+    response: sandboxSession,
+    scope: 'read'
+  },
+  'PATCH /sandboxes/:id/sessions/:sid': {
+    summary: 'Rename, archive (removes the worktree, keeps the branch) or restore a session',
+    request: z.object({
+      title: z.string().max(120).optional(),
+      archived: z.boolean().optional()
+    }),
+    response: sandboxSession,
+    scope: 'exec'
+  },
+  'DELETE /sandboxes/:id/sessions/:sid': {
+    summary: 'Delete a session and its worktree; ?deleteBranch=1 also deletes its local branch',
+    response: z.object({ success: z.boolean() }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/chats': {
+    summary: 'Opencode chats running in the session worktree (tabs)',
+    response: z.object({
+      chats: z.array(
+        z.object({ id: z.string(), title: z.string(), createdAt: z.string().nullable() })
+      )
+    }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/sessions/:sid/chats': {
+    summary: 'Start another opencode chat in the session worktree',
+    request: z.object({ title: z.string().max(120).optional() }),
+    response: z.object({ id: z.string(), title: z.string() }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/scripts': {
+    summary: 'Setup/run scripts and ports from .orchard/greenhouse.json, plus their state',
+    response: sessionScripts,
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/sessions/:sid/run': {
+    summary: 'Start (or restart) or stop the run script in the tmux window `run`',
+    request: z.object({ action: z.enum(['start', 'stop']) }),
+    response: sessionScripts,
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/ports': {
+    summary: 'TCP ports the dev user is listening on, flagged when started from this worktree',
+    response: z.object({
+      ports: z.array(
+        z.object({
+          port: z.number().int(),
+          process: z.string().nullable(),
+          previewUrl: z.string().nullable(),
+          public: z.boolean(),
+          inSession: z.boolean(),
+          loopbackOnly: z
+            .boolean()
+            .describe('Bound to 127.0.0.1 only, so a preview cannot reach it')
+        })
+      )
+    }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/checks': {
+    summary:
+      "The session's pull request and its check runs and statuses, read with the owner's GitHub token",
+    response: z.object({
+      pr: z
+        .object({
+          number: z.number().int(),
+          url: z.string(),
+          title: z.string(),
+          state: z.enum(['open', 'merged', 'closed']),
+          draft: z.boolean(),
+          mergeable: z.boolean().nullable(),
+          mergeableState: z.string().nullable(),
+          headSha: z.string(),
+          headBranch: z.string(),
+          baseBranch: z.string()
+        })
+        .nullable(),
+      checks: z.array(
+        z.object({
+          name: z.string(),
+          status: z.string(),
+          conclusion: z.string().nullable(),
+          url: z.string().nullable(),
+          logExcerpt: z.string().optional().describe('Tail of the log for failed checks')
+        })
+      )
+    }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/sessions/:sid/git/merge': {
+    summary:
+      "Merge the session's pull request on GitHub (owner only, squash or rebase, never a merge commit)",
+    request: z.object({ method: z.enum(['squash', 'rebase']).optional() }),
+    response: z.object({ merged: z.boolean(), sha: z.string().nullable(), message: z.string() }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/fs/mkdir': {
+    summary: 'Create a directory (and parents) inside a session worktree or repo',
+    request: fsRequest,
+    response: z.object({ ok: z.boolean(), path: z.string() }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/fs/rename': {
+    summary: 'Move a file or directory to `to`, refusing to overwrite or leave the workspace',
+    request: fsRequest,
+    response: z.object({ ok: z.boolean(), path: z.string() }),
+    scope: 'exec'
+  },
+  'POST /sandboxes/:id/fs/delete': {
+    summary: 'Delete a file or directory (symlinks are removed, never followed)',
+    request: fsRequest,
+    response: z.object({ ok: z.boolean(), path: z.string() }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/members': {
+    summary: 'The host, the guests and the caller role (emails only for the host and org admins)',
+    response: z.object({
+      owner: memberUser.nullable(),
+      members: z.array(sandboxMember),
+      myRole: z.enum(['owner', 'collaborator', 'viewer', 'admin'])
+    }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/members': {
+    summary: 'Invite someone from the same organization as a guest or read-only guest (host only)',
+    request: z.object({
+      userId: z.string().uuid().optional(),
+      email: z.string().max(320).optional(),
+      role: memberRole
+    }),
+    response: sandboxMember,
+    scope: 'exec'
+  },
+  'PATCH /sandboxes/:id/members/:userId': {
+    summary: 'Change a guest role (host only); live connections pick it up immediately',
+    request: z.object({ role: memberRole }),
+    response: sandboxMember,
+    scope: 'exec'
+  },
+  'DELETE /sandboxes/:id/members/:userId': {
+    summary:
+      'Remove a guest (host only) or leave a sandbox shared with you; kicks live connections',
+    response: z.object({ success: z.boolean() }),
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/comments': {
+    summary: 'Team chat in a session, oldest first (?since=<iso> returns only newer ones)',
+    response: z.object({ comments: z.array(sessionComment) }),
+    scope: 'read'
+  },
+  'POST /sandboxes/:id/sessions/:sid/comments': {
+    summary: 'Post a human-only message to the session thread; never sent to the agent',
+    request: z.object({ chatId: z.string().max(64), body: z.string().min(1).max(4000) }),
+    response: sessionComment,
+    scope: 'exec'
+  },
+  'GET /sandboxes/:id/sessions/:sid/authors': {
+    summary: 'Who sent each prompt, keyed by opencode message id',
+    response: z.object({ authors: z.record(z.string(), sessionUser) }),
+    scope: 'read'
+  },
+  'GET /sandboxes/:id/preview-token': {
+    summary:
+      'A one-time preview link for ?port= (Kubernetes: 60s single-use exchange for a cookie on the preview host; Vercel: the public port URL)',
+    response: z.object({
+      url: z.string(),
+      public: z.boolean(),
+      expiresAt: z.string().nullable()
+    }),
     scope: 'exec'
   }
 };

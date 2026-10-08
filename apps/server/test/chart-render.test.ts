@@ -97,3 +97,41 @@ test('buildkit only trusts plaintext registries from values', { skip: !helmAvail
 test('the chart lints clean', { skip: !helmAvailable() }, () => {
   execFileSync('helm', ['lint', chart], { stdio: 'ignore' });
 });
+
+test('sandbox runner values render nothing until set', { skip: !helmAvailable() }, () => {
+  const out = render([]);
+  assert.doesNotMatch(out, /SANDBOX_(RUNNER|VERCEL|DEFAULT_RUNNER|BRIDGE|PREVIEW)_/);
+});
+
+test(
+  'sandbox runner values become env vars and the vercel token comes from a secret',
+  { skip: !helmAvailable() },
+  () => {
+    const out = render([
+      'sandbox.runners.default=vercel',
+      'sandbox.runners.kubernetes.enabled=false',
+      'sandbox.runners.vercel.enabled=true',
+      'sandbox.runners.vercel.tokenSecret.name=vercel-sandbox',
+      'sandbox.runners.vercel.teamId=team_1',
+      'sandbox.runners.vercel.projectId=prj_1',
+      'sandbox.runners.vercel.vcpus=4',
+      'sandbox.runners.vercel.timeoutMinutes=90',
+      'sandbox.runners.bridgeBinaryUrl=https://example.com/orchard.tar.gz',
+      'sandbox.runners.previewDomain=preview.example.com'
+    ]);
+    assert.match(out, /SANDBOX_RUNNER_KUBERNETES_ENABLED, value: "false"/);
+    assert.match(out, /SANDBOX_RUNNER_VERCEL_ENABLED, value: "true"/);
+    assert.match(out, /SANDBOX_DEFAULT_RUNNER, value: "vercel"/);
+    assert.match(
+      out,
+      /name: SANDBOX_VERCEL_TOKEN\s+valueFrom:\s+secretKeyRef:\s+name: "vercel-sandbox"\s+key: "token"/
+    );
+    assert.match(out, /SANDBOX_VERCEL_TEAM_ID, value: "team_1"/);
+    assert.match(out, /SANDBOX_VERCEL_PROJECT_ID, value: "prj_1"/);
+    assert.match(out, /SANDBOX_VERCEL_VCPUS, value: "4"/);
+    assert.match(out, /SANDBOX_VERCEL_TIMEOUT_MINUTES, value: "90"/);
+    assert.match(out, /SANDBOX_BRIDGE_BINARY_URL, value: "https:\/\/example.com\/orchard.tar.gz"/);
+    assert.match(out, /SANDBOX_PREVIEW_DOMAIN, value: "preview.example.com"/);
+    assert.doesNotMatch(out, /SANDBOX_VERCEL_TOKEN, value:/);
+  }
+);

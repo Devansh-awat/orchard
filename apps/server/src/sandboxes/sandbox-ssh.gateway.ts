@@ -10,11 +10,10 @@ import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
-import { parseClientFrame, parseHandshake } from '../kubernetes/exec-protocol';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SANDBOX_REF_SELECT, SandboxRef, SandboxRunner, refOf } from './runners/sandbox-runner';
 
-const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/(ssh|terminal)$/;
+const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/ssh$/;
 const RECHECK_INTERVAL_MS = 15_000;
 const ACTIVITY_INTERVAL_MS = 60_000;
 const WS_HIGH_WATER = 4 * 1024 * 1024;
@@ -43,18 +42,6 @@ function trackConnection(userId: string): () => void {
     if (n <= 0) connectionsByUser.delete(userId);
     else connectionsByUser.set(userId, n);
   };
-}
-
-function writeWithBackpressure(
-  ws: WebSocket,
-  sink: { write(chunk: string | Buffer): boolean; once(event: 'drain', cb: () => void): unknown },
-  chunk: string | Buffer
-): void {
-  if (sink.write(chunk)) return;
-  ws.pause();
-  sink.once('drain', () => {
-    if (ws.readyState === WebSocket.OPEN) ws.resume();
-  });
 }
 
 export function attachSandboxSshWebSocket(server: http.Server, app: INestApplication) {
@@ -141,7 +128,6 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     }
 
     const sandboxId = match[1];
-    const kind = match[2];
     const authorize = async (): Promise<{ ok: boolean; ref?: SandboxRef }> => {
       const row = await prisma.sandbox.findUnique({
         where: { id: sandboxId },
@@ -170,13 +156,11 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
       return reject(404, 'Not Found');
     }
 
-    let tunnel: Duplex | null = null;
-    if (kind === 'ssh') {
-      try {
-        tunnel = await runner.openTcp(ref, 22);
-      } catch {
-        return reject(502, 'Bad Gateway');
-      }
+    let tunnel: Duplex;
+    try {
+      tunnel = await runner.openTcp(ref, 22);
+    } catch {
+      return reject(502, 'Bad Gateway');
     }
 
     audit
@@ -207,22 +191,14 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     socket.once('close', () => {
       if (upgraded) return;
       release();
-      tunnel?.destroy();
+      tunnel.destroy();
     });
     wss.handleUpgrade(req, socket, head, (ws) => {
       upgraded = true;
       wss.emit('connection', ws, req);
       ws.on('close', release);
       ws.on('error', release);
-      if (kind === 'terminal') {
-        const size = parseHandshake(url.searchParams);
-        handleShellSession(ws, runner, ref, prisma, recheckAuth, {
-          cols: size.cols,
-          rows: size.rows
-        });
-      } else if (tunnel) {
-        handleTunnel(ws, tunnel, sandboxId, prisma, recheckAuth);
-      }
+      handleTunnel(ws, tunnel, sandboxId, prisma, recheckAuth);
     });
   });
 }
@@ -255,71 +231,6 @@ function attachLifecycle(
   };
   ws.on('close', stop);
   ws.on('error', stop);
-}
-
-const SHELL_COMMAND = [
-  '/bin/sh',
-  '-c',
-  'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
-    'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
-    'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev'
-];
-
-function handleShellSession(
-  ws: WebSocket,
-  runner: SandboxRunner,
-  ref: SandboxRef,
-  prisma: PrismaService,
-  recheckAuth: () => Promise<boolean>,
-  size: { cols: number; rows: number }
-) {
-  void (async () => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send('\x1b[2J\x1b[H\x1b[90mConnecting to the sandbox...\x1b[0m\r\n');
-    }
-    let pty;
-    try {
-      pty = await runner.openPty(ref, { command: SHELL_COMMAND, cols: size.cols, rows: size.rows });
-    } catch (e: any) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(`\r\nFailed to open a shell: ${e?.message}\r\n`);
-        ws.close(1011, 'shell error');
-      }
-      return;
-    }
-    if (ws.readyState !== WebSocket.OPEN) {
-      pty.close();
-      return;
-    }
-
-    attachLifecycle(ws, ref.id, prisma, recheckAuth, () => pty.close());
-
-    pty.output.on('data', (chunk: Buffer) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
-    });
-
-    ws.on('message', (data: WebSocket.Data, isBinary?: boolean) => {
-      const frame = parseClientFrame(data as Buffer | string, isBinary);
-      if (frame.kind === 'resize') {
-        pty.resize(frame.cols, frame.rows);
-        return;
-      }
-      if (frame.kind === 'stdin') {
-        writeWithBackpressure(
-          ws,
-          pty.stdin,
-          typeof frame.data === 'string' ? frame.data : frame.data.toString()
-        );
-      }
-    });
-    ws.on('close', () => pty.close());
-
-    void pty.exited.then((result) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close(1000, result.ok ? 'exited' : 'shell closed');
-      }
-    });
-  })();
 }
 
 function handleTunnel(

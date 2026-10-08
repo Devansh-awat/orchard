@@ -276,6 +276,47 @@ still has to name it.
             - { name: SANDBOX_HOME_MODE, value: {{ .homeMode | quote }} }
             {{- end }}
             {{- end }}
+            {{- with .runners }}
+            {{- if not (kindIs "invalid" .kubernetes.enabled) }}
+            - { name: SANDBOX_RUNNER_KUBERNETES_ENABLED, value: {{ .kubernetes.enabled | toString | quote }} }
+            {{- end }}
+            {{- if not (kindIs "invalid" .vercel.enabled) }}
+            - { name: SANDBOX_RUNNER_VERCEL_ENABLED, value: {{ .vercel.enabled | toString | quote }} }
+            {{- end }}
+            {{- if .default }}
+            - { name: SANDBOX_DEFAULT_RUNNER, value: {{ .default | quote }} }
+            {{- end }}
+            {{- with .vercel }}
+            {{- if .tokenSecret.name }}
+            - name: SANDBOX_VERCEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .tokenSecret.name | quote }}
+                  key: {{ .tokenSecret.key | default "token" | quote }}
+            {{- end }}
+            {{- if .teamId }}
+            - { name: SANDBOX_VERCEL_TEAM_ID, value: {{ .teamId | quote }} }
+            {{- end }}
+            {{- if .projectId }}
+            - { name: SANDBOX_VERCEL_PROJECT_ID, value: {{ .projectId | quote }} }
+            {{- end }}
+            {{- if .image }}
+            - { name: SANDBOX_VERCEL_IMAGE, value: {{ .image | quote }} }
+            {{- end }}
+            {{- if .vcpus }}
+            - { name: SANDBOX_VERCEL_VCPUS, value: {{ .vcpus | toString | quote }} }
+            {{- end }}
+            {{- if .timeoutMinutes }}
+            - { name: SANDBOX_VERCEL_TIMEOUT_MINUTES, value: {{ .timeoutMinutes | toString | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- if .bridgeBinaryUrl }}
+            - { name: SANDBOX_BRIDGE_BINARY_URL, value: {{ .bridgeBinaryUrl | quote }} }
+            {{- end }}
+            {{- if .previewDomain }}
+            - { name: SANDBOX_PREVIEW_DOMAIN, value: {{ .previewDomain | quote }} }
+            {{- end }}
+            {{- end }}
             {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }

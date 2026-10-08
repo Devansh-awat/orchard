@@ -4,7 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SandboxProbesService } from './runners/sandbox-probes.service';
-import { SandboxRunner, SandboxRunnerId, refOf } from './runners/sandbox-runner';
+import {
+  SANDBOX_REF_SELECT,
+  SandboxRunner,
+  SandboxRunnerId,
+  refOf
+} from './runners/sandbox-runner';
 import { applyObservation } from './runners/sandbox-status';
 
 const STUCK_TRANSITION_MS = 10 * 60 * 1000;
@@ -34,6 +39,7 @@ export class SandboxReaperService {
 
   async tick(): Promise<void> {
     try {
+      await this.syncPolledRunners();
       await this.syncWithoutMirror();
       await this.failStuckTransitions();
       await this.reapIdle();
@@ -48,6 +54,34 @@ export class SandboxReaperService {
       return this.registry.for(row);
     } catch {
       return null;
+    }
+  }
+
+  async syncPolledRunners(): Promise<void> {
+    for (const runner of this.registry.all()) {
+      if (runner.capabilities.statusSource !== 'poll' || !runner.reconcile) continue;
+      if (runner.configError()) continue;
+      try {
+        const rows = await this.prisma.sandbox.findMany({
+          where: {
+            runner: runner.id,
+            desiredState: { not: 'deleted' },
+            status: { in: ['creating', 'starting', 'running', 'stopping'] }
+          },
+          select: { ...SANDBOX_REF_SELECT, status: true }
+        });
+        if (rows.length === 0) continue;
+        await runner.reconcile(rows.map(refOf));
+        if (!runner.keepAlive) continue;
+        for (const row of rows) {
+          if (row.status !== 'running') continue;
+          await runner
+            .keepAlive(refOf(row))
+            .catch((e: any) => this.logger.warn(`keep-alive failed for sandbox ${row.id}: ${e?.message}`));
+        }
+      } catch (e: any) {
+        this.logger.warn(`${runner.id} status poll failed: ${e?.message}`);
+      }
     }
   }
 

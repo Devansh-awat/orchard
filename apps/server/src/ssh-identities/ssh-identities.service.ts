@@ -2,10 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { SshIdentity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SandboxRunnerRegistry } from '../sandboxes/runners/sandbox-runner.registry';
+import { SANDBOX_REF_SELECT, refOf } from '../sandboxes/runners/sandbox-runner';
 
 const SSH_KEY_RE = /^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+)\s+\S+/;
 const MAX_KEY_LENGTH = 4096;
@@ -24,7 +28,39 @@ export function toSshIdentityDto(row: SshIdentity): SshIdentityDto {
 
 @Injectable()
 export class SshIdentitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(SshIdentitiesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly moduleRef: ModuleRef
+  ) {}
+
+  private registry(): SandboxRunnerRegistry | null {
+    try {
+      return this.moduleRef.get(SandboxRunnerRegistry, { strict: false });
+    } catch {
+      return null;
+    }
+  }
+
+  async refreshSandboxKeys(userId: string): Promise<number> {
+    const registry = this.registry();
+    if (!registry) return 0;
+    const rows = await this.prisma.sandbox.findMany({
+      where: { userId, desiredState: { not: 'deleted' } },
+      select: SANDBOX_REF_SELECT
+    });
+    let queued = 0;
+    for (const row of rows) {
+      try {
+        await registry.for(row).requestSecretSync(refOf(row), userId);
+        queued += 1;
+      } catch (e: any) {
+        this.logger.warn(`could not queue a key refresh for sandbox ${row.id}: ${e?.message}`);
+      }
+    }
+    return queued;
+  }
 
   async list(userId: string): Promise<SshIdentityDto[]> {
     const rows = await this.prisma.sshIdentity.findMany({
@@ -61,6 +97,7 @@ export class SshIdentitiesService {
         }
         throw e;
       });
+    await this.refreshSandboxKeys(userId);
     return toSshIdentityDto(row);
   }
 
@@ -76,6 +113,7 @@ export class SshIdentitiesService {
       );
     }
     await this.prisma.sshIdentity.delete({ where: { id } });
+    await this.refreshSandboxKeys(userId);
   }
 
   async importFromGithub(userId: string): Promise<SshIdentityDto[]> {
@@ -128,6 +166,7 @@ export class SshIdentitiesService {
       created.push(toSshIdentityDto(row));
       n += 1;
     }
+    if (created.length) await this.refreshSandboxKeys(userId);
     return created;
   }
 }

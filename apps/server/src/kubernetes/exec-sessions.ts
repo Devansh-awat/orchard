@@ -2,9 +2,10 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { hostname } from 'os';
 import Redis from 'ioredis';
 import type WebSocket from 'ws';
-import { PassThrough } from 'stream';
+import { PassThrough, type Writable } from 'stream';
 import type { SessionScreen } from './exec-screen';
 import type { Proto } from './exec-protocol';
+import type { PtyHandle } from '../sandboxes/runners/sandbox-runner';
 
 export const DETACH_GRACE_MS = Number(process.env.EXEC_DETACH_GRACE_MS ?? 10 * 60 * 1000);
 export const MAX_SESSIONS_PER_USER = 8;
@@ -43,19 +44,54 @@ export class ResizableOutput extends PassThrough implements SizedOutput {
   }
 }
 
-export interface ExecSession {
-  id: string;
-  handle: string;
-  ownerUserId: string;
+export interface PodExecTarget {
+  kind: 'pod';
   namespace: string;
   podName: string;
   container: string;
   projectId: string;
   organizationId: string;
-  upstream: WebSocket | null;
-  stdin: PassThrough;
-  stdout: SizedOutput;
-  stderr: PassThrough;
+}
+
+export interface SandboxExecTarget {
+  kind: 'sandbox';
+  sandboxId: string;
+  sessionId: string | null;
+  index: string;
+  mode: 'rw' | 'ro';
+  worktreePath: string | null;
+}
+
+export type ExecTarget = PodExecTarget | SandboxExecTarget;
+
+export function targetKey(target: ExecTarget): string {
+  if (target.kind === 'pod') {
+    return `pod:${target.namespace}/${target.podName}/${target.container}`;
+  }
+  return `sandbox:${target.sandboxId}/${target.sessionId ?? '-'}/${target.index}/${target.mode}`;
+}
+
+export function clampTerminalSize(
+  cols: number,
+  rows: number
+): { cols: number; rows: number } | null {
+  if (!Number.isFinite(cols) || !Number.isFinite(rows)) return null;
+  return {
+    cols: Math.max(1, Math.min(1000, Math.floor(cols))),
+    rows: Math.max(1, Math.min(1000, Math.floor(rows)))
+  };
+}
+
+export interface ExecSession {
+  id: string;
+  handle: string;
+  ownerUserId: string;
+  target: ExecTarget;
+  targetKey: string;
+  upstream: PtyHandle | null;
+  stdin: Writable;
+  cols: number;
+  rows: number;
   screen: SessionScreen;
   proto: Proto;
   reusedId: boolean;
@@ -66,6 +102,7 @@ export interface ExecSession {
   graceTimer: NodeJS.Timeout | null;
   recheckTimer: NodeJS.Timeout | null;
   heartbeat: NodeJS.Timeout | null;
+  activityTimer: NodeJS.Timeout | null;
   recheckAuth: () => Promise<boolean>;
   paused: boolean;
   exited: boolean;
@@ -156,9 +193,33 @@ export interface DirectoryEntry {
   replica: string;
   addr: string;
   ownerUserId: string;
-  namespace: string;
-  podName: string;
-  container: string;
+  targetKey?: string;
+  namespace?: string;
+  podName?: string;
+  container?: string;
+}
+
+export function directoryEntry(
+  replica: string,
+  addr: string,
+  ownerUserId: string,
+  target: ExecTarget
+): DirectoryEntry {
+  const entry: DirectoryEntry = { replica, addr, ownerUserId, targetKey: targetKey(target) };
+  if (target.kind === 'pod') {
+    entry.namespace = target.namespace;
+    entry.podName = target.podName;
+    entry.container = target.container;
+  }
+  return entry;
+}
+
+export function entryTargetKey(entry: DirectoryEntry): string | null {
+  if (typeof entry.targetKey === 'string' && entry.targetKey) return entry.targetKey;
+  if (typeof entry.namespace === 'string' && typeof entry.podName === 'string') {
+    return `pod:${entry.namespace}/${entry.podName}/${entry.container ?? ''}`;
+  }
+  return null;
 }
 
 export class ExecSessionDirectory {

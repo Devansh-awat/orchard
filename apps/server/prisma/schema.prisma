@@ -77,7 +77,12 @@ model User {
   createdChannels            NotificationChannel[]    @relation("NotificationChannelCreator")
   sandboxes                  Sandbox[]
   sandboxCredential          SandboxCredential?
+  createdSandboxSessions     SandboxConversation[]    @relation("SandboxSessionCreator")
   sshIdentities              SshIdentity[]
+  sandboxMemberships         SandboxMember[]          @relation("SandboxMemberUser")
+  sandboxMemberInvites       SandboxMember[]          @relation("SandboxMemberInviter")
+  sandboxPromptAuthors       SandboxPromptAuthor[]
+  sandboxSessionMessages     SandboxSessionMessage[]
 
   @@map("users")
 }
@@ -2467,6 +2472,9 @@ model Sandbox {
   organization  Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sshIdentity   SshIdentity?          @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
   conversations SandboxConversation[]
+  members         SandboxMember[]
+  promptAuthors   SandboxPromptAuthor[]
+  sessionMessages SandboxSessionMessage[]
 
   @@unique([userId, name])
   @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
@@ -2476,17 +2484,35 @@ model Sandbox {
 }
 
 model SandboxConversation {
-  id              String   @id @default(uuid()) @db.Uuid
-  sandboxId       String   @map("sandbox_id") @db.Uuid
-  title           String   @db.VarChar(120)
-  repo            String?  @db.VarChar(120)
-  claudeSessionId String?  @map("claude_session_id") @db.VarChar(255)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                  String    @id @default(uuid()) @db.Uuid
+  sandboxId           String    @map("sandbox_id") @db.Uuid
+  title               String    @db.VarChar(120)
+  repo                String?   @db.VarChar(120)
+  claudeSessionId     String?   @map("claude_session_id") @db.VarChar(255)
+  slug                String?   @db.VarChar(64)
+  branch              String?   @db.VarChar(255)
+  baseBranch          String?   @map("base_branch") @db.VarChar(255)
+  baseCommit          String?   @map("base_commit") @db.VarChar(64)
+  worktreePath        String?   @map("worktree_path") @db.VarChar(500)
+  agent               String    @default("opencode") @db.VarChar(32)
+  opencodeSessionId   String?   @map("opencode_session_id") @db.VarChar(255)
+  prUrl               String?   @map("pr_url") @db.VarChar(500)
+  prNumber            Int?      @map("pr_number")
+  prState             String?   @map("pr_state") @db.VarChar(16)
+  previewDeploymentId String?   @map("preview_deployment_id") @db.Uuid
+  previewUrl          String?   @map("preview_url") @db.VarChar(500)
+  createdById         String?   @map("created_by_id") @db.Uuid
+  archivedAt          DateTime? @map("archived_at") @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  sandbox Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+  sandbox   Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("SandboxSessionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  comments  SandboxSessionMessage[]
 
+  @@unique([sandboxId, slug], map: "uq_sandbox_conversations_sandbox_slug")
   @@index([sandboxId], map: "idx_sandbox_conversations_sandbox")
+  @@index([sandboxId, archivedAt], map: "idx_sandbox_conversations_sandbox_archived")
   @@map("sandbox_conversations")
 }
 
@@ -2516,4 +2542,63 @@ model SandboxCredential {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sandbox_credentials")
+}
+
+enum SandboxMemberRole {
+  viewer
+  collaborator
+}
+
+model SandboxMember {
+  id          String            @id @default(uuid()) @db.Uuid
+  sandboxId   String            @map("sandbox_id") @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  role        SandboxMemberRole
+  invitedById String?           @map("invited_by_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  sandbox   Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+  user      User    @relation("SandboxMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("SandboxMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([sandboxId, userId], map: "uq_sandbox_members_sandbox_user")
+  @@index([userId], map: "idx_sandbox_members_user")
+  @@map("sandbox_members")
+}
+
+model SandboxPromptAuthor {
+  id                String   @id @default(uuid()) @db.Uuid
+  sandboxId         String   @map("sandbox_id") @db.Uuid
+  sessionKey        String?  @map("session_id") @db.Uuid
+  opencodeSessionId String   @map("opencode_session_id") @db.VarChar(64)
+  messageId         String   @map("message_id") @db.VarChar(64)
+  userId            String   @map("user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  sandbox Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sandboxId, messageId], map: "uq_sandbox_prompt_authors_message")
+  @@index([sandboxId, opencodeSessionId], map: "idx_sandbox_prompt_authors_chat")
+  @@index([sessionKey], map: "idx_sandbox_prompt_authors_session")
+  @@map("sandbox_prompt_authors")
+}
+
+model SandboxSessionMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  sandboxId  String   @map("sandbox_id") @db.Uuid
+  sessionKey String   @map("session_id") @db.Uuid
+  chatId     String   @map("chat_id") @db.VarChar(64)
+  userId     String   @map("user_id") @db.Uuid
+  body       String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  sandbox Sandbox             @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+  session SandboxConversation @relation(fields: [sessionKey], references: [id], onDelete: Cascade)
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionKey, createdAt], map: "idx_sandbox_session_messages_session")
+  @@index([sandboxId], map: "idx_sandbox_session_messages_sandbox")
+  @@map("sandbox_session_messages")
 }

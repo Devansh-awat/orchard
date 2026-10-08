@@ -99,8 +99,10 @@
     "test:session-jwt": "tsx --test test/session-jwt.test.ts",
     "test:sse-limits": "tsx --test test/sse-stream-limiter.test.ts",
     "test:env-bounds": "tsx --test test/env-value-bounds.test.ts",
-    "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts",
-    "test:sandbox-runners": "tsx --test test/sandbox-runners.test.ts"
+    "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts test/exec-session-engine.test.ts",
+    "test:sandbox-sessions": "tsx --test test/sandbox-sessions.test.ts",
+    "test:sandbox-multiplayer": "tsx --test test/sandbox-authz-matrix.test.ts test/sandbox-live.test.ts",
+    "test:sandbox-runners": "tsx --test test/sandbox-runners.test.ts test/sandbox-vercel.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -129,6 +131,7 @@
     "@simplewebauthn/server": "^13.3.3",
     "@types/multer": "^2.2.0",
     "@types/pg": "^8.20.0",
+    "@vercel/sandbox": "^3.6.1",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
     "bcrypt": "^6.0.0",
@@ -142,6 +145,7 @@
     "ipaddr.js": "^1.9.1",
     "jose": "^5.2.0",
     "js-yaml": "^4.3.2",
+    "lib0": "^0.2.119",
     "mjml": "^5.4.0",
     "multer": "^2.4.0",
     "nodemailer": "^10.0.12",
@@ -157,6 +161,8 @@
     "undici": "^8.11.2",
     "uuid": "^13.0.2",
     "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33",
     "zod": "^3.25.76",
     "zod4": "npm:zod@4.4.3"
   },

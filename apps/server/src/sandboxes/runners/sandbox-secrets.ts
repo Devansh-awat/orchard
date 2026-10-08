@@ -45,19 +45,22 @@ export class SandboxSecretsService {
     private readonly crypto: SecretCryptoService
   ) {}
 
+  async authorizedKeys(userId: string): Promise<string[]> {
+    const identities = await this.prisma.sshIdentity.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { publicKey: true }
+    });
+    return [...new Set(identities.map((i) => i.publicKey.trim()).filter(Boolean))];
+  }
+
   async forSandbox(row: {
     id: string;
     userId: string;
-    sshIdentityId: string | null;
     setupScript: string | null;
   }): Promise<SandboxSecrets> {
-    const identity = row.sshIdentityId
-      ? await this.prisma.sshIdentity.findUnique({
-          where: { id: row.sshIdentityId },
-          select: { publicKey: true }
-        })
-      : null;
-    const [user, credential, mcpToken] = await Promise.all([
+    const [authorizedKeys, user, credential, mcpToken] = await Promise.all([
+      this.authorizedKeys(row.userId),
       this.prisma.user.findUnique({
         where: { id: row.userId },
         select: { githubAccessToken: true }
@@ -66,7 +69,7 @@ export class SandboxSecretsService {
       this.mintMcpToken(row.userId).catch(() => null)
     ]);
     return {
-      authorizedKeys: identity ? [identity.publicKey] : [],
+      authorizedKeys,
       githubToken: this.crypto.open(user?.githubAccessToken) || null,
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,

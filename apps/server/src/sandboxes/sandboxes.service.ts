@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxRunnerRegistry, SandboxRunnerDescription } from './runners/sandbox-runner.registry';
 import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
+import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -38,6 +39,7 @@ export interface SandboxDto {
   createdAt: Date;
   updatedAt: Date;
   lastActiveAt: Date | null;
+  myRole?: SandboxRole;
 }
 
 export interface SandboxDtoExtras {
@@ -100,7 +102,8 @@ export class SandboxesService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly crypto: SecretCryptoService,
-    private readonly registry: SandboxRunnerRegistry
+    private readonly registry: SandboxRunnerRegistry,
+    private readonly access: SandboxAccessService
   ) {}
 
   async dtos(rows: SandboxWithIdentity[]): Promise<SandboxDto[]> {
@@ -167,21 +170,44 @@ export class SandboxesService {
     runners: SandboxRunnerDescription[];
     defaultRunner: SandboxRunnerId | null;
   }> {
-    let where: Record<string, unknown> = { userId };
+    let orgAdmin = false;
     if (organizationId) {
       const access = await this.authz.requireOrgMember(organizationId, userId);
-      where = access.isAdmin ? { organizationId } : { organizationId, userId };
+      orgAdmin = access.isAdmin;
     }
+    const shared = await this.access.sharedSandboxIds(userId);
+    const sharedIds = [...shared.keys()];
+    const own: Record<string, unknown> = organizationId
+      ? orgAdmin
+        ? { organizationId }
+        : { organizationId, userId }
+      : { userId };
+    const sharedWhere: Record<string, unknown> = organizationId
+      ? { id: { in: sharedIds }, organizationId }
+      : { id: { in: sharedIds } };
     const [rows, maxSandboxes] = await Promise.all([
       this.prisma.sandbox.findMany({
-        where,
+        where: sharedIds.length ? { OR: [own, sharedWhere] } : own,
         orderBy: { createdAt: 'asc' },
         include: WITH_IDENTITY
       }),
       this.sandboxCap(userId)
     ]);
+    const roleOf = (row: SandboxWithIdentity): SandboxRole => {
+      if (row.userId === userId) return 'owner';
+      const member = shared.get(row.id);
+      if (member === 'collaborator') return member;
+      if (orgAdmin) return 'admin';
+      return member ?? 'viewer';
+    };
+    const dtos = await this.dtos(rows);
     const { runners, defaultRunner } = this.registry.describe();
-    return { sandboxes: await this.dtos(rows), maxSandboxes, runners, defaultRunner };
+    return {
+      sandboxes: dtos.map((dto, i) => ({ ...dto, myRole: roleOf(rows[i]) })),
+      maxSandboxes,
+      runners,
+      defaultRunner
+    };
   }
 
   async getOwned(id: string, userId: string): Promise<SandboxWithIdentity> {
@@ -340,7 +366,7 @@ export class SandboxesService {
           startedAt: new Date(),
           podName: `sbx-${id}`,
           namespace: runner.namespace ?? null,
-          image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
+          image: runner.defaultImage?.() ?? (process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE),
           repoUrl: body.repoUrl || null,
           sshIdentityId: identity.id,
           setupScript,
@@ -439,8 +465,13 @@ export class SandboxesService {
     return this.dto(updated);
   }
 
-  async start(id: string, userId: string, actorEmail: string | null): Promise<SandboxDto> {
-    const row = await this.getOwned(id, userId);
+  async start(
+    id: string,
+    userId: string,
+    actorEmail: string | null,
+    authorized?: SandboxWithIdentity
+  ): Promise<SandboxDto> {
+    const row = authorized ?? (await this.getOwned(id, userId));
     if (row.status === 'deleting' || row.desiredState === 'deleted') {
       throw new BadRequestException('Sandbox is being deleted');
     }
@@ -478,8 +509,13 @@ export class SandboxesService {
     return this.dto(await this.reload(row.id));
   }
 
-  async stop(id: string, userId: string, actorEmail: string | null): Promise<SandboxDto> {
-    const row = await this.getOwned(id, userId);
+  async stop(
+    id: string,
+    userId: string,
+    actorEmail: string | null,
+    authorized?: SandboxWithIdentity
+  ): Promise<SandboxDto> {
+    const row = authorized ?? (await this.getOwned(id, userId));
     if (row.status === 'deleting' || row.desiredState === 'deleted') {
       throw new BadRequestException('Sandbox is being deleted');
     }
@@ -510,8 +546,13 @@ export class SandboxesService {
     return this.dto(await this.reload(row.id));
   }
 
-  async remove(id: string, userId: string, actorEmail: string | null): Promise<void> {
-    const row = await this.getOwned(id, userId);
+  async remove(
+    id: string,
+    userId: string,
+    actorEmail: string | null,
+    authorized?: SandboxWithIdentity
+  ): Promise<void> {
+    const row = authorized ?? (await this.getOwned(id, userId));
     const runner = this.registry.for(row);
     await this.prisma.sandbox.update({
       where: { id: row.id },
