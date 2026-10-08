@@ -3,7 +3,7 @@
 	import { Bot } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
-	import { Badge, Button, Input } from '$lib/components/ui';
+	import { Button, Input, StatusBadge, statusMeta } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
 
@@ -55,9 +55,9 @@
 			<div class="cred-head">
 				<span class="cred-name">Claude Code</span>
 				{#if credentials?.claude}
-					<Badge tone="success">Configured</Badge>
+					<StatusBadge meta={statusMeta('success', 'Configured')} variant="plain" />
 				{:else}
-					<Badge tone="neutral">Not set</Badge>
+					<StatusBadge meta={statusMeta('neutral', 'Not set')} variant="plain" />
 				{/if}
 			</div>
 			<p class="cred-hint">
@@ -96,9 +96,9 @@
 			<div class="cred-head">
 				<span class="cred-name">OpenAI / Codex</span>
 				{#if credentials?.openai}
-					<Badge tone="success">Configured</Badge>
+					<StatusBadge meta={statusMeta('success', 'Configured')} variant="plain" />
 				{:else}
-					<Badge tone="neutral">Not set</Badge>
+					<StatusBadge meta={statusMeta('neutral', 'Not set')} variant="plain" />
 				{/if}
 			</div>
 			<p class="cred-hint">An OpenAI API key, exported for codex inside the sandbox.</p>

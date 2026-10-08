@@ -41,6 +41,21 @@ export function linkedIntegrations() {
 	return call<{ integrations: LinkedIntegration[] }>('/apiv1/users/me/integrations');
 }
 
+export interface SlackLinkPreview {
+	teamId: string;
+	slackUserId: string;
+	slackUserName: string | null;
+	teamDomain: string | null;
+	expiresAt: string;
+}
+
+export function previewSlackLink(token: string) {
+	return call<SlackLinkPreview>('/apiv1/integrations/slack/link/preview', {
+		method: 'POST',
+		body: JSON.stringify({ token })
+	});
+}
+
 export function linkSlack(token: string) {
 	return call<{ connected: true; teamId: string }>('/apiv1/integrations/slack/link', {
 		method: 'POST',

@@ -11,10 +11,10 @@
 	} from '$lib/components/greenhouse';
 	import { fixtureStore } from '../chat-harness/fixtures';
 	import { SEB } from './data';
-	import { fakeLive, installFetch } from './mock';
+	import { fakeLive, installFetch, type HarnessRole } from './mock';
 
 	const params = page.url.searchParams;
-	const role = (params.get('role') ?? 'owner') as 'owner' | 'collaborator' | 'viewer';
+	const role = (params.get('role') ?? 'owner') as HarnessRole;
 	const pty = params.get('pty') ?? 'ws://localhost:7681/pty';
 
 	const data = installFetch(role);

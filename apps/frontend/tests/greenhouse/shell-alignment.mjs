@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
 const base = process.env.HARNESS_URL ?? `http://localhost:${process.env.HARNESS_PORT ?? 3000}`;
@@ -8,6 +10,8 @@ const FONT_SIZES = [11, 12, 13, 15];
 const DISPLAY_SIZES = [24];
 const TOLERANCE = 1;
 const log = (line) => process.stdout.write(`${line}\n`);
+const shots = process.env.SHELL_SHOT_DIR ? resolve(process.env.SHELL_SHOT_DIR) : null;
+if (shots) mkdirSync(shots, { recursive: true });
 
 const harness = (query) =>
 	`${base}/dev/greenhouse-harness?pty=${encodeURIComponent(pty)}${query ? `&${query}` : ''}`;
@@ -57,6 +61,96 @@ const scenarios = [
 			await page.getByRole('button', { name: 'Watch someone’s terminal' }).click();
 			await page.getByRole('menuitem', { name: 'Alex Rivera' }).click();
 			await page.waitForTimeout(400);
+		}
+	},
+	{
+		name: 'admin-lifecycle',
+		shot: true,
+		url: harness('machine=sbx-leaf&role=admin'),
+		async prepare(page) {
+			await page.waitForSelector('.ui-empty-title', { timeout: 10_000 });
+		},
+		async check(page) {
+			return page.evaluate(() => {
+				const failures = [];
+				const forbidden = window.__ghForbidden ?? [];
+				for (const call of forbidden) failures.push(`admin view asked for ${call}`);
+				const title = document.querySelector('.ui-empty-title')?.textContent?.trim();
+				if (title !== 'Only the host and people they invite can open this machine')
+					failures.push(`admin empty state title: ${title ?? 'missing'}`);
+				const labels = [...document.querySelectorAll('.ui-empty-action button')].map((b) =>
+					(b.textContent ?? '').trim()
+				);
+				for (const want of ['Stop', 'Delete…'])
+					if (!labels.includes(want)) failures.push(`admin action missing: ${want}`);
+				if (document.querySelector('.gh .chat, .col--right'))
+					failures.push('admin can see inside the machine');
+				return failures;
+			});
+		}
+	},
+	{
+		name: 'guest-chat',
+		shot: true,
+		url: harness(`machine=sbx-leaf&session=${SESSION}&role=collaborator`),
+		async prepare(page) {
+			const notice = page.getByRole('button', { name: 'Continue' });
+			if (await notice.isVisible().catch(() => false)) await notice.click();
+			await page.waitForSelector('.gh .chat textarea', { timeout: 10_000 });
+			await page.waitForTimeout(300);
+		},
+		async check(page) {
+			return page.evaluate(() => {
+				const failures = [];
+				const pane = document.querySelector('.gh .chat');
+				const text = pane?.textContent ?? '';
+				if (/unreachable/i.test(text)) failures.push('guest chat says the agent is unreachable');
+				const box = pane?.querySelector('textarea');
+				if (!box) failures.push('guest has no composer');
+				else if (box.disabled) failures.push('guest composer is disabled');
+				return failures;
+			});
+		}
+	},
+	{
+		name: 'share-scrolled',
+		shot: true,
+		url: harness('machine=sbx-leaf'),
+		async prepare(page) {
+			await page.locator('.switch').click();
+			await page.getByRole('menuitem', { name: 'Share' }).click();
+			await page.waitForSelector('.ui-modal .disclosure', { timeout: 10_000 });
+			await page.evaluate(() => {
+				const body = document.querySelector('.ui-modal-body');
+				if (body) body.scrollTop = 160;
+			});
+			await page.waitForTimeout(300);
+		},
+		async check(page) {
+			return page.evaluate(() => {
+				const failures = [];
+				const dialog = document.querySelector('.ui-modal');
+				const header = dialog?.querySelector('.ui-modal-header');
+				const body = dialog?.querySelector('.ui-modal-body');
+				if (!dialog || !header || !body) return ['share sheet did not open'];
+				if (body.scrollTop === 0) failures.push('share sheet does not scroll at this size');
+				if (parseFloat(getComputedStyle(header).borderBottomWidth) < 1)
+					failures.push('scrolled sheet header has no hairline');
+				if (getComputedStyle(header).borderBottomColor === 'rgba(0, 0, 0, 0)')
+					failures.push('scrolled sheet hairline is transparent');
+				if (body.getBoundingClientRect().top < header.getBoundingClientRect().bottom - 0.5)
+					failures.push('sheet content starts above the header hairline');
+				const points = [...dialog.querySelectorAll('.d-points li')].map(
+					(li) => li.textContent ?? ''
+				);
+				if (!points.some((t) => t.includes('Admins of this organization')))
+					failures.push('disclosure does not mention org admins');
+				if (!points.some((t) => t.includes('Orchard tools')))
+					failures.push('disclosure does not mention the agent Orchard tools');
+				if (!points.some((t) => t.includes('Removing a guest')))
+					failures.push('disclosure does not say removal is not a reset');
+				return failures;
+			});
 		}
 	},
 	{
@@ -288,6 +382,10 @@ try {
 				displaySizes: DISPLAY_SIZES,
 				tolerance: TOLERANCE
 			});
+			if (scenario.check) failures.push(...(await scenario.check(page)));
+			if (shots && scenario.shot) {
+				await page.screenshot({ path: join(shots, `final-${scenario.name}-${theme}.png`) });
+			}
 			const label = `${theme}/${scenario.name}`;
 			const measured = Object.entries(counts)
 				.map(([k, v]) => `${k} ${v}`)

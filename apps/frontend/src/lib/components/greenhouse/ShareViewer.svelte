@@ -59,7 +59,7 @@
 			else params.delete(key);
 		}
 		const search = params.toString();
-		void goto(`${page.url.pathname}${search ? `?${search}` : ''}${location.hash}`, {
+		void goto(`${page.url.pathname}${search ? `?${search}` : ''}`, {
 			replaceState: true,
 			keepFocus: true,
 			noScroll: true

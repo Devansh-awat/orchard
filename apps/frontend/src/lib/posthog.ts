@@ -2,6 +2,7 @@ import { readable, type Readable } from 'svelte/store';
 import posthog from 'posthog-js';
 import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
+import { scrubDeep, scrubUrlSecrets } from '$lib/utils/url-secrets';
 
 let initialized = false;
 
@@ -22,7 +23,32 @@ export function initPostHog() {
 		// Flags + experiments are auto-loaded; surveys auto-render in the DOM.
 		// Early access features are opt-in via getEarlyAccessFeatures() below.
 		disable_surveys: false,
-		advanced_disable_feature_flags: false
+		advanced_disable_feature_flags: false,
+		disable_capture_url_hashes: true,
+		before_send: (event) => {
+			if (!event) return event;
+			event.properties = scrubDeep(event.properties);
+			if (event.$set) event.$set = scrubDeep(event.$set);
+			if (event.$set_once) event.$set_once = scrubDeep(event.$set_once);
+			return event;
+		},
+		session_recording: {
+			maskCapturedNetworkRequestFn: (request) => {
+				const headers = request.requestHeaders
+					? Object.fromEntries(
+							Object.entries(request.requestHeaders).filter(
+								([key]) => key.toLowerCase() !== 'x-orchard-share-token'
+							)
+						)
+					: request.requestHeaders;
+				return {
+					...request,
+					name: scrubUrlSecrets(request.name),
+					requestHeaders: headers,
+					requestBody: request.requestBody?.includes('token') ? null : request.requestBody
+				};
+			}
+		}
 	});
 	initialized = true;
 }

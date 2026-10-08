@@ -134,7 +134,7 @@
 							: 'Needed to pick GitHub issues and to push from a machine.'}
 					</span>
 				</span>
-				<StatusBadge meta={connected(!!github)} />
+				<StatusBadge meta={connected(!!github)} variant="plain" />
 				<Button variant="secondary" size="sm" href="/user/settings?tab=connections">
 					{github ? 'Manage' : 'Connect'}
 				</Button>
@@ -151,7 +151,7 @@
 								: 'Paste a personal API key to pick Linear issues when you start a session.'}
 						</span>
 					</span>
-					<StatusBadge meta={connected(linearOn)} />
+					<StatusBadge meta={connected(linearOn)} variant="plain" />
 					{#if linearOn}
 						<Button variant="secondary" size="sm" loading={busy === 'linear'} onclick={dropLinear}>
 							Disconnect
@@ -215,7 +215,7 @@
 						{/if}
 					</span>
 				</span>
-				<StatusBadge meta={connected(!!slack)} />
+				<StatusBadge meta={connected(!!slack)} variant="plain" />
 				{#if slack}
 					<Button variant="secondary" size="sm" loading={busy === 'slack'} onclick={dropSlack}>
 						Unlink

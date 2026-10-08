@@ -419,7 +419,13 @@
 }
 
 .gh .ui-modal-header {
-	padding: 1.5rem 1.5rem 0;
+	padding: 1.5rem 1.5rem 1rem;
+	border-bottom: 1px solid transparent;
+	transition: border-color var(--dur-fast) ease;
+}
+
+.gh .ui-modal[data-scrolled] .ui-modal-header {
+	border-bottom-color: var(--gh-line);
 }
 
 .gh .ui-modal-title {
@@ -433,14 +439,28 @@
 }
 
 .gh .ui-modal-body {
-	padding: 1rem 1.5rem 1.5rem;
+	padding: 0 1.5rem 0.5rem;
 	font-size: var(--gh-ui);
 	line-height: var(--gh-lh-ui);
 }
 
 .gh .ui-modal-footer {
 	gap: 0.5rem;
-	padding: 0 1.5rem 1.5rem;
+	padding: 1rem 1.5rem 1.5rem;
+	border-top: 1px solid transparent;
+	transition: border-color var(--dur-fast) ease;
+}
+
+.gh .ui-modal[data-more] .ui-modal-footer {
+	border-top-color: var(--gh-line);
+}
+
+.gh .ui-modal-body:last-child {
+	padding-bottom: 1.5rem;
+}
+
+.gh .ui-modal-body:first-child {
+	padding-top: 1.5rem;
 }
 
 .gh .ui-modal .ui-field {

@@ -8,6 +8,7 @@
 	import type { SandboxListResponse } from '$lib/types/sandbox';
 	import * as api from './api';
 	import AddRepoSheet from './AddRepoSheet.svelte';
+	import AdminMachine from './AdminMachine.svelte';
 	import { GreenhouseApp, setGreenhouseApp, type GreenhouseNav } from './app.svelte';
 	import CenterBar from './CenterBar.svelte';
 	import CenterPane from './CenterPane.svelte';
@@ -97,7 +98,7 @@
 		const current = ws;
 		const session = current?.session ?? null;
 		if (!current) return;
-		const sid = session && !isLegacy(session) ? session.id : null;
+		const sid = session && !isLegacy(session) && !current.lifecycleOnly ? session.id : null;
 		untrack(() => current.live.join(sid));
 	});
 
@@ -175,17 +176,20 @@
 			event.preventDefault();
 			newSession(ws.session?.repo ?? null);
 		} else if (event.code === 'Backquote' && !event.altKey) {
+			if (ws?.lifecycleOnly) return;
 			event.preventDefault();
 			if (!layout.rightOpen) layout.toggle('right');
 			right?.terminal();
 		} else if (event.code === 'KeyG' && event.shiftKey) {
+			if (ws?.lifecycleOnly) return;
 			event.preventDefault();
 			if (!layout.rightOpen) layout.toggle('right');
 			right?.showTab('changes');
 		}
 	}
 
-	const showRight = $derived(!app.home && layout.rightOpen && !mobile);
+	const lifecycleOnly = $derived(ws?.lifecycleOnly ?? false);
+	const showRight = $derived(!app.home && layout.rightOpen && !mobile && !lifecycleOnly);
 	const showLeft = $derived(layout.leftOpen && !mobile);
 	const columns = $derived(
 		[showLeft ? `${layout.left}px` : null, 'minmax(0, 1fr)', showRight ? `${layout.right}px` : null]
@@ -217,8 +221,11 @@
 	{:else if mobile}
 		<div class="mobile">
 			<div class="mobile-body">
-				{#if app.mobilePane === 'sessions' || (!ws?.session && !app.home)}
+				{#if app.mobilePane === 'sessions' || (!ws?.session && !app.home && !lifecycleOnly)}
 					<Sidebar onnewsession={newSession} compact />
+				{:else if ws && lifecycleOnly}
+					<CenterBar onrename={openRename} compact />
+					<AdminMachine {ws} />
 				{:else if app.home}
 					<CenterBar onrename={openRename} compact />
 					<Home bind:this={home} initialRepo={homeRepo} />
@@ -250,7 +257,7 @@
 					type="button"
 					role="tab"
 					aria-selected={app.mobilePane === 'changes'}
-					disabled={app.home}
+					disabled={app.home || lifecycleOnly}
 					onclick={() => (app.mobilePane = 'changes')}
 				>
 					<GitCompare size={20} strokeWidth={1.75} /> Changes
@@ -289,7 +296,9 @@
 
 		<main class="col col--center">
 			<CenterBar onrename={openRename} />
-			{#if app.home || !ws}
+			{#if ws && lifecycleOnly}
+				<AdminMachine {ws} />
+			{:else if app.home || !ws}
 				<Home bind:this={home} initialRepo={homeRepo} />
 			{:else if ws.session}
 				<CenterPane {ws} />

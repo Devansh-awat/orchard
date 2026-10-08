@@ -438,6 +438,7 @@ type ProjectRow = {
 	id: string;
 	name: string;
 	slug: string;
+	canEdit?: boolean;
 	members?: { user?: { id?: string } | null; role?: { name?: string } | null }[];
 	deployments?: { id: string; name: string; displayName?: string | null }[];
 };
@@ -453,13 +454,14 @@ export async function listEditableProjects(
 	return {
 		ok: true,
 		data: rows
-			.filter(
-				(p) =>
-					broad ||
-					(p.members ?? []).some(
-						(m) =>
-							m.user?.id === who.userId && (m.role?.name === 'admin' || m.role?.name === 'member')
-					)
+			.filter((p) =>
+				typeof p.canEdit === 'boolean'
+					? p.canEdit
+					: broad ||
+						(p.members ?? []).some(
+							(m) =>
+								m.user?.id === who.userId && (m.role?.name === 'admin' || m.role?.name === 'member')
+						)
 			)
 			.map((p) => ({
 				id: p.id,

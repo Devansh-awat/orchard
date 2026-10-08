@@ -5,7 +5,13 @@
 	import { toasts } from '$lib/stores';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
-	import { HOST_DISCLOSURE, shareAcknowledged, acknowledgeShare } from './disclosure';
+	import {
+		HOST_DISCLOSURE,
+		HOST_DISCLOSURE_POINTS,
+		shareAcknowledged,
+		acknowledgeShare
+	} from './disclosure';
+	import { sheetScrollEdges } from './sheet';
 	import ShareLinks from './ShareLinks.svelte';
 	import { hostOnly } from './workspace.svelte';
 
@@ -112,10 +118,15 @@
 </script>
 
 <Modal bind:open title="Share {app.machine?.name ?? 'machine'}" size="md">
-	<div class="share">
+	<div class="share" {@attach sheetScrollEdges}>
 		<section class="disclosure" aria-labelledby="gh-share-disclosure">
 			<p class="d-title" id="gh-share-disclosure">What guests get on this machine</p>
 			<p class="d-text">{HOST_DISCLOSURE}</p>
+			<ul class="d-points">
+				{#each HOST_DISCLOSURE_POINTS as point (point)}
+					<li>{point}</li>
+				{/each}
+			</ul>
 			<p class="d-note">
 				Everyone commits and pushes as themselves, with their own GitHub account. SSH, machine
 				settings, people and preview deploys stay with you.
@@ -257,8 +268,18 @@
 
 	.d-title,
 	.d-text,
-	.d-note {
+	.d-note,
+	.d-points {
 		margin: 0;
+	}
+
+	.d-points {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding-left: 1rem;
+		list-style: disc;
+		color: var(--text-default);
 	}
 
 	.d-title {

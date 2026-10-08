@@ -2,13 +2,14 @@
 	import { onMount } from 'svelte';
 	import ShareViewer from '$lib/components/greenhouse/ShareViewer.svelte';
 	import { user } from '$lib/stores';
+	import { captureUrlSecrets, urlSecret } from '$lib/utils/url-secrets';
 
 	let token = $state<string | null>(null);
 	let ready = $state(false);
 
 	function read() {
-		const value = decodeURIComponent(location.hash.replace(/^#/, '')).trim();
-		token = value || null;
+		captureUrlSecrets();
+		token = urlSecret('share');
 	}
 
 	onMount(() => {

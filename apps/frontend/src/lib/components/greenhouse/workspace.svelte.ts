@@ -149,6 +149,7 @@ export class MachineWorkspace {
 	readonly canEdit = $derived(this.role === 'owner' || this.role === 'collaborator');
 	readonly canLifecycle = $derived(this.role === 'owner' || this.role === 'admin');
 	readonly canStart = $derived(this.canEdit || this.role === 'admin');
+	readonly lifecycleOnly = $derived(this.role === 'admin');
 
 	githubUnlinked = $state(false);
 	identity = $state.raw<GhGitIdentity | null>(null);
@@ -332,6 +333,12 @@ export class MachineWorkspace {
 	}
 
 	async refreshAll() {
+		if (untrack(() => this.lifecycleOnly)) {
+			this.reposLoaded = true;
+			this.connectLoaded = true;
+			this.mode = 'server';
+			return;
+		}
 		await Promise.all([
 			this.refreshRepos(),
 			this.refreshMembers(),
@@ -353,6 +360,7 @@ export class MachineWorkspace {
 	}
 
 	async refreshSessions() {
+		if (untrack(() => this.lifecycleOnly)) return;
 		const res = await api.listSessions(this.sandboxId, true);
 		if (this.#disposed) return;
 		if (res.ok) {

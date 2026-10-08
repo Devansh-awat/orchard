@@ -13,7 +13,9 @@ export function json(body: unknown, status = 200): Response {
 	});
 }
 
-export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
+export type HarnessRole = 'owner' | 'collaborator' | 'viewer' | 'admin';
+
+export function installFetch(role: HarnessRole) {
 	const result = { list: data.list() };
 	const list = result.list;
 	const q = new URLSearchParams(location.search);
@@ -296,6 +298,9 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 			})
 		]
 	];
+	const forbidden: string[] = [];
+	Object.assign(window, { __ghForbidden: forbidden });
+	const lifecycle = /^\/apiv1\/sandboxes\/sbx-leaf(\/(start|stop|apply\/retry))?$/;
 	const real = window.fetch.bind(window);
 	window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
 		const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -304,6 +309,10 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 		if (at === -1) return real(input, init);
 		const path = url.pathname.slice(at);
 		const method = (init.method ?? 'GET').toUpperCase();
+		if (role === 'admin' && path.startsWith('/apiv1/sandboxes/sbx-leaf') && !lifecycle.test(path)) {
+			forbidden.push(`${method} ${path}`);
+			return json({ message: 'Only the host and people they invite can open this machine' }, 403);
+		}
 		for (const [re, m, handler] of routes) {
 			if (m === method && re.test(path)) {
 				const out = handler(url, init);
@@ -316,7 +325,7 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 	return result.list;
 }
 
-export function fakeLive(role: 'owner' | 'collaborator' | 'viewer'): LiveTransport {
+export function fakeLive(role: HarnessRole): LiveTransport {
 	return {
 		connect(_url, handlers) {
 			const host = role === 'owner' ? data.SEB : data.ALEX;
@@ -388,6 +397,26 @@ export function integrationRoutes(): Route[] {
 			/^\/apiv1\/users\/me\/integrations\/linear$/,
 			'PUT',
 			() => ({ connected: true, workspaceName: 'Hack Club' })
+		],
+		[
+			/^\/apiv1\/integrations\/slack\/link\/preview$/,
+			'POST',
+			() =>
+				q.get('slack') === 'expired'
+					? json(
+							{
+								message:
+									'This link has expired or was already used. Run /greenhouse link in Slack for a new one.'
+							},
+							400
+						)
+					: {
+							teamId: 'T0123ABCD',
+							slackUserId: 'U04SEB',
+							slackUserName: 'seb',
+							teamDomain: 'hackclub',
+							expiresAt: new Date(Date.now() + 9 * 60_000).toISOString()
+						}
 		],
 		[
 			/^\/apiv1\/integrations\/slack\/link$/,

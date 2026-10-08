@@ -8,6 +8,7 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { takeReturnTo } from '$lib/utils/url-secrets';
 	import { get } from 'svelte/store';
 	import {
 		user,
@@ -262,6 +263,13 @@
 			// New user — redirect to setup
 			if (currentUser?.setupCompleted === false) {
 				goto('/setup', { replaceState: true });
+				return;
+			}
+
+			const back = takeReturnTo();
+			if (back) {
+				toasts.add({ title: message, color: 'success' });
+				goto(back, { replaceState: true });
 				return;
 			}
 

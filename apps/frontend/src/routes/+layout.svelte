@@ -25,6 +25,7 @@
 	import { queryClient } from '$lib/query';
 	import { env } from '$env/dynamic/public';
 	import { initPostHog, identifyUser } from '$lib/posthog';
+	import { captureUrlSecrets, rememberReturnTo, secretRoute } from '$lib/utils/url-secrets';
 
 	let { children } = $props();
 
@@ -109,6 +110,7 @@
 			goto(`/${$page.params.orgSlug}/login`, { replaceState: true });
 			return;
 		}
+		if (secretRoute(path)) rememberReturnTo(path);
 		goto('/', { replaceState: true });
 	});
 
@@ -126,6 +128,8 @@
 		try {
 			// Initialize theme as early as possible to prevent flash
 			themeStore.init();
+
+			captureUrlSecrets();
 
 			// Initialize PostHog analytics (no-op if PUBLIC_POSTHOG_KEY is unset)
 			initPostHog();

@@ -117,20 +117,22 @@
 				<Square size={14} /> Stop machine
 			</MenuItem>
 		{/if}
-		<MenuItem
-			onclick={() => (app.sheet = 'settings')}
-			disabled={!ws.isOwner}
-			title={ws.isOwner ? undefined : hostOnly('change machine settings')}
-		>
-			<Settings2 size={14} /> Machine settings
-		</MenuItem>
-		<MenuItem onclick={() => (app.sheet = 'share')}>
-			<Users size={14} />
-			{ws.isOwner ? 'Share' : 'People'}
-		</MenuItem>
-		<MenuItem onclick={() => (app.sheet = 'fork')} disabled={!!forkBlocked} title={forkBlocked}>
-			<GitFork size={14} /> Fork machine…
-		</MenuItem>
+		{#if !ws.lifecycleOnly}
+			<MenuItem
+				onclick={() => (app.sheet = 'settings')}
+				disabled={!ws.isOwner}
+				title={ws.isOwner ? undefined : hostOnly('change machine settings')}
+			>
+				<Settings2 size={14} /> Machine settings
+			</MenuItem>
+			<MenuItem onclick={() => (app.sheet = 'share')}>
+				<Users size={14} />
+				{ws.isOwner ? 'Share' : 'People'}
+			</MenuItem>
+			<MenuItem onclick={() => (app.sheet = 'fork')} disabled={!!forkBlocked} title={forkBlocked}>
+				<GitFork size={14} /> Fork machine…
+			</MenuItem>
+		{/if}
 	{/if}
 	<MenuItem onclick={() => (app.sheet = 'new-machine')}>
 		<Plus size={14} /> New machine…

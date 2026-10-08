@@ -6,6 +6,7 @@
 	import { previewStatus, statusMeta, type StatusMeta } from '$lib/components/ui/status';
 	import { getGreenhouseApp } from './app.svelte';
 	import * as api from './api';
+	import { httpsUrl } from './format';
 	import { VIEWER_ONLY, hostOnly, isLegacy, type MachineWorkspace } from './workspace.svelte';
 	import type { GhCheck, GhChecks, GhSession } from './types';
 
@@ -158,7 +159,13 @@
 		<p class="note">Checks appear once this session has a pull request.</p>
 	{:else}
 		{#if data?.pr}
-			<a class="pr" href={data.pr.url} target="_blank" rel="noopener" title="Open on GitHub">
+			<a
+				class="pr"
+				href={httpsUrl(data.pr.url) ?? undefined}
+				target="_blank"
+				rel="noopener"
+				title="Open on GitHub"
+			>
 				<span class="ico" data-align="right-edge"
 					><GitPullRequest size={16} strokeWidth={1.75} /></span
 				>
@@ -188,6 +195,7 @@
 				</div>
 				{#each data.checks as check (check.name)}
 					{@const m = meta(check)}
+					{@const checkUrl = httpsUrl(check.url)}
 					<div class="check">
 						<button
 							type="button"
@@ -202,10 +210,10 @@
 							<span class="check-state" class:check-state--failed={isFailure(check)}>{m.label}</span
 							>
 						</button>
-						{#if check.url}
+						{#if checkUrl}
 							<a
 								class="gh-ibtn"
-								href={check.url}
+								href={checkUrl}
 								target="_blank"
 								rel="noopener"
 								aria-label="Open {check.name}"

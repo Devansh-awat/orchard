@@ -127,7 +127,9 @@
 			</button>
 		</div>
 
-		{#if ws}
+		{#if ws?.lifecycleOnly}
+			<p class="hint">Only the host and people they invite can see what is on this machine.</p>
+		{:else if ws}
 			{#each ws.groups as group (group.name)}
 				{@const closed = collapsed[group.name] ?? false}
 				<div class="group" role="group" aria-label={group.name}>
