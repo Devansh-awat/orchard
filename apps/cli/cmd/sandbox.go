@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hackclub/orchard/cli/internal/api"
+	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
 	"github.com/hackclub/orchard/cli/internal/sshproxy"
 	"github.com/spf13/cobra"
@@ -46,6 +47,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
+		sandboxBridgeCmd(),
 	)
 	return c
 }
@@ -167,6 +169,7 @@ func sandboxCreateCmd() *cobra.Command {
 	var repo string
 	var identity string
 	var setupFile string
+	var runner string
 	var wait *bool
 	var timeout *time.Duration
 	c := &cobra.Command{
@@ -181,6 +184,13 @@ func sandboxCreateCmd() *cobra.Command {
 			body := map[string]any{}
 			if len(args) == 1 {
 				body["name"] = args[0]
+			}
+			if runner != "" {
+				r := strings.ToLower(strings.TrimSpace(runner))
+				if r != "kubernetes" && r != "vercel" {
+					return &exitcode.UsageError{Err: fmt.Errorf("--runner must be kubernetes or vercel, got %q", runner)}
+				}
+				body["runner"] = r
 			}
 			if repo != "" {
 				body["repoUrl"] = repo
@@ -218,6 +228,7 @@ func sandboxCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&repo, "repo", "", "git repository URL to clone into the sandbox")
 	c.Flags().StringVar(&identity, "identity", "", "ssh identity name or id (default: your only identity)")
 	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
+	c.Flags().StringVar(&runner, "runner", "", "where the sandbox runs: kubernetes|vercel (default: the instance default)")
 	wait, timeout = addWaitFlags(c)
 	return c
 }
@@ -241,18 +252,30 @@ func sandboxListCmd() *cobra.Command {
 				return output.JSON(raw)
 			}
 			items := asList(raw["sandboxes"])
+			showRunner := false
+			for _, s := range items {
+				if str(s["runner"]) != "" {
+					showRunner = true
+				}
+			}
 			rows := [][]string{}
 			for _, s := range items {
-				rows = append(rows, []string{
-					pick(s, "name"),
-					output.Status(pick(s, "status")),
+				row := []string{pick(s, "name"), output.Status(pick(s, "status"))}
+				if showRunner {
+					row = append(row, orDashStr(pick(s, "runner")))
+				}
+				rows = append(rows, append(row,
 					pick(s, "repoUrl"),
 					sandboxIdentityName(s),
 					pick(s, "createdAt"),
 					pick(s, "lastActiveAt"),
-				})
+				))
 			}
-			output.Table([]string{"name", "status", "repo", "identity", "created", "last active"}, rows)
+			headers := []string{"name", "status"}
+			if showRunner {
+				headers = append(headers, "runner")
+			}
+			output.Table(append(headers, "repo", "identity", "created", "last active"), rows)
 			if max := pick(raw, "maxSandboxes"); max != "" {
 				fmt.Println(output.Dim(fmt.Sprintf("%d of %s sandboxes used", len(items), max)))
 			}
@@ -293,6 +316,7 @@ func sandboxGetCmd() *cobra.Command {
 			}
 			for _, opt := range [][2]string{
 				{"status message", pick(raw, "statusMessage")},
+				{"runner", pick(raw, "runner")},
 				{"repo", pick(raw, "repoUrl")},
 				{"image", pick(raw, "image")},
 				{"ssh identity", identity},
@@ -851,18 +875,39 @@ func sandboxChatCmd() *cobra.Command {
 	return c
 }
 
+func sandboxNameFromSSHHost(host string) string {
+	host = strings.TrimSpace(host)
+	if i := strings.LastIndex(host, "@"); i >= 0 {
+		host = host[i+1:]
+	}
+	return strings.TrimPrefix(host, "orchard-")
+}
+
 func sandboxProxyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:    "proxy <name>",
+	var host string
+	c := &cobra.Command{
+		Use:    "proxy [name]",
 		Hidden: true,
 		Short:  "Pump raw SSH bytes between stdio and the sandbox tunnel (ProxyCommand)",
-		Args:   cobra.ExactArgs(1),
+		Args:   cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var target string
+			switch {
+			case host != "" && len(args) == 1:
+				return &exitcode.UsageError{Err: errors.New("pass either a sandbox name or --host, not both")}
+			case host != "":
+				target = sandboxNameFromSSHHost(host)
+			case len(args) == 1:
+				target = args[0]
+			}
+			if target == "" {
+				return &exitcode.UsageError{Err: errors.New("usage: orchard sandbox proxy <name> | --host orchard-<name>")}
+			}
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			sb, err := resolveSandbox(cmd.Context(), cl, target)
 			if err != nil {
 				return err
 			}
@@ -873,17 +918,61 @@ func sandboxProxyCmd() *cobra.Command {
 			return sshproxy.Pipe(cmd.Context(), conn, os.Stdin, os.Stdout)
 		},
 	}
+	c.Flags().StringVar(&host, "host", "", "ssh host alias (orchard-<name>, as passed by ssh's %n)")
+	return c
+}
+
+func sandboxBridgeCmd() *cobra.Command {
+	var listen, target, tokenFile string
+	c := &cobra.Command{
+		Use:    "bridge",
+		Hidden: true,
+		Short:  "Serve a token-gated websocket that tunnels to a local tcp port (runs inside a sandbox)",
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if tokenFile == "" {
+				return &exitcode.UsageError{Err: errors.New("--token-file is required")}
+			}
+			if _, err := os.Stat(tokenFile); err != nil {
+				fmt.Fprintf(os.Stderr, "bridge: token file not readable yet (%v); rejecting tunnels until it is\n", err)
+			}
+			b := &sshproxy.Bridge{
+				Target:    target,
+				TokenFile: tokenFile,
+				Logf: func(format string, a ...any) {
+					fmt.Fprintf(os.Stderr, format+"\n", a...)
+				},
+			}
+			fmt.Fprintf(os.Stderr, "bridge: listening on %s, tunnelling to %s\n", listen, target)
+			return b.ListenAndServe(cmd.Context(), listen)
+		},
+	}
+	c.Flags().StringVar(&listen, "listen", "0.0.0.0:2222", "address to accept websocket tunnels on")
+	c.Flags().StringVar(&target, "target", "127.0.0.1:22", "tcp address each tunnel connects to")
+	c.Flags().StringVar(&tokenFile, "token-file", "", "file holding the bearer token (re-read on every connection)")
+	return c
 }
 
 func sandboxSSHConfigCmd() *cobra.Command {
-	return &cobra.Command{
+	var install bool
+	c := &cobra.Command{
 		Use:   "ssh-config [name]",
-		Short: "Print ssh config Host blocks (for ~/.ssh/config and vscode remote-ssh)",
+		Short: "Print ssh config Host blocks, or --install a wildcard orchard-* entry into ~/.ssh/config",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if install && len(args) > 0 {
+				return &exitcode.UsageError{Err: errors.New("--install covers every sandbox; drop the name")}
+			}
 			cl, _, err := client()
 			if err != nil {
 				return err
+			}
+			if install {
+				res, err := installOrchardSSH(cmd.Context(), cl)
+				if err != nil {
+					return err
+				}
+				return printSSHInstallResult(res)
 			}
 			exe, err := os.Executable()
 			if err != nil {
@@ -920,6 +1009,8 @@ func sandboxSSHConfigCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&install, "install", false, "generate an orchard ssh key, register it, and wire `ssh orchard-<name>` into ~/.ssh/config")
+	return c
 }
 
 func sandboxCredentialsCmd() *cobra.Command {

@@ -416,3 +416,112 @@ func TestSandboxCredentialsStatus(t *testing.T) {
 		t.Errorf("status output should show presence words, never raw values:\n%s", out)
 	}
 }
+
+func TestSandboxCreateRunner(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody = sandboxDecodeBody(t, r)
+		io.WriteString(w, `{"id":"sb-1","name":"box","status":"creating","runner":"vercel"}`)
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "create", "box", "--runner", "Vercel"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("sandbox create: %v", err)
+	}
+	if gotBody["runner"] != "vercel" {
+		t.Errorf("runner = %v, want vercel", gotBody["runner"])
+	}
+}
+
+func TestSandboxCreateRunnerOmittedByDefault(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody = sandboxDecodeBody(t, r)
+		io.WriteString(w, `{"id":"sb-1","name":"box","status":"creating"}`)
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "create", "box"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("sandbox create: %v", err)
+	}
+	if _, present := gotBody["runner"]; present {
+		t.Errorf("body = %v, want runner omitted so the server uses its default", gotBody)
+	}
+}
+
+func TestSandboxCreateRejectsUnknownRunner(t *testing.T) {
+	root := sandboxTestRoot(t, "http://127.0.0.1:1")
+	root.SetArgs([]string{"sandbox", "create", "box", "--runner", "docker"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "kubernetes or vercel") {
+		t.Fatalf("want a runner usage error, got %v", err)
+	}
+}
+
+func TestSandboxListShowsRunnerWhenPresent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"sandboxes":[{"id":"s1","name":"box","status":"running","runner":"vercel"},{"id":"s2","name":"old","status":"stopped"}],"runners":[{"id":"kubernetes","enabled":true},{"id":"vercel","enabled":true}],"defaultRunner":"kubernetes","maxSandboxes":3}`)
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "list", "-o", "table"})
+	out := sandboxCaptureStdout(t, func() {
+		if err := root.Execute(); err != nil {
+			t.Errorf("sandbox list: %v", err)
+		}
+	})
+	for _, want := range []string{"RUNNER", "vercel", "2 of 3 sandboxes used"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestSandboxListOldShapeHasNoRunnerColumn(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, sandboxListJSON)
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "list", "-o", "table"})
+	out := sandboxCaptureStdout(t, func() {
+		if err := root.Execute(); err != nil {
+			t.Errorf("sandbox list: %v", err)
+		}
+	})
+	if strings.Contains(out, "RUNNER") {
+		t.Errorf("old response shape should not grow a runner column:\n%s", out)
+	}
+}
+
+func TestSandboxGetShowsRunner(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/apiv1/sandboxes":
+			io.WriteString(w, `{"sandboxes":[{"id":"s1","name":"box","status":"running","runner":"vercel"}],"defaultRunner":"kubernetes"}`)
+		case "/apiv1/sandboxes/s1":
+			io.WriteString(w, `{"id":"s1","name":"box","status":"running","runner":"vercel"}`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "get", "box", "-o", "table"})
+	out := sandboxCaptureStdout(t, func() {
+		if err := root.Execute(); err != nil {
+			t.Errorf("sandbox get: %v", err)
+		}
+	})
+	if !strings.Contains(out, "runner") || !strings.Contains(out, "vercel") {
+		t.Errorf("get output missing runner:\n%s", out)
+	}
+}
