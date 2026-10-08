@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 
@@ -51,8 +51,15 @@ export class ApplyExecutorService {
       return { ok: true };
     } catch (error) {
       const status = error as { response?: { statusCode?: number }; statusCode?: number };
-      const code = status.response?.statusCode ?? status.statusCode;
+      const code =
+        error instanceof HttpException
+          ? error.getStatus()
+          : (status.response?.statusCode ?? status.statusCode);
+      const httpBody = error instanceof HttpException ? error.getResponse() : null;
       const message =
+        (typeof httpBody === 'object' && httpBody && 'message' in httpBody
+          ? String((httpBody as { message?: unknown }).message)
+          : null) ??
         (error as { response?: { body?: { message?: string } } }).response?.body?.message ??
         (error as Error)?.message ??
         String(error);

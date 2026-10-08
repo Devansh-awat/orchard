@@ -9,6 +9,9 @@ import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
+import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
+import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
+import { NamespaceMirrorConsumer } from './consumers/namespace-mirror.consumer';
 
 @Module({
   imports: [KubernetesModule, JobsModule, SandboxesModule],
@@ -18,7 +21,10 @@ import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
     CnpgMirrorConsumer,
     WorkloadMirrorConsumer,
     SandboxMirrorConsumer,
-    IngressMirrorConsumer
+    IngressMirrorConsumer,
+    StorageMirrorConsumer,
+    ServiceMirrorConsumer,
+    NamespaceMirrorConsumer
   ],
   controllers: [MirrorHealthController]
 })

@@ -41,6 +41,40 @@ function isAcmeRateLimit(text: string | null | undefined): boolean {
   return /too many certificates( already)? issued|rate ?limit/i.test(text);
 }
 
+export function certificateStatusFrom(cert: any | null | undefined): CertificateStatus {
+  if (!cert) return { state: 'unknown' };
+  const conditions: any[] = cert.status?.conditions || [];
+  const ready = conditions.find((c) => c.type === 'Ready');
+  const issuing = conditions.find((c) => c.type === 'Issuing');
+
+  if (ready?.status === 'True') {
+    return { state: 'ready', notAfter: cert.status?.notAfter ?? null };
+  }
+
+  const reason = ready?.reason || issuing?.reason || null;
+  const message = ready?.message || issuing?.message || null;
+
+  if (isAcmeRateLimit(message) || isAcmeRateLimit(reason)) {
+    return { state: 'rateLimited', reason, message };
+  }
+  if (ready?.status === 'False' && reason === 'Failed') {
+    return { state: 'failed', reason, message };
+  }
+  return { state: 'issuing', reason, message };
+}
+
+export function certificateForSecret(
+  certificates: { manifest: unknown }[],
+  secretName: string | null | undefined
+): any | null {
+  const clean = String(secretName || '').trim();
+  if (!clean) return null;
+  return (
+    certificates.map((c) => c.manifest as any).find((cert) => cert?.spec?.secretName === clean) ??
+    null
+  );
+}
+
 /**
  * All Kubernetes network/edge resources: Services, Ingress (Cilium),
  * basic-auth (CiliumEnvoyConfig), public exposure (Cilium LB IPAM
@@ -591,26 +625,7 @@ export class K8sNetworkService implements OnModuleInit {
       const cert = (list.body?.items || []).find(
         (item: any) => item?.spec?.secretName === cleanSecret
       );
-      if (!cert) return { state: 'unknown' };
-
-      const conditions: any[] = cert.status?.conditions || [];
-      const ready = conditions.find((c) => c.type === 'Ready');
-      const issuing = conditions.find((c) => c.type === 'Issuing');
-
-      if (ready?.status === 'True') {
-        return { state: 'ready', notAfter: cert.status?.notAfter ?? null };
-      }
-
-      const reason = ready?.reason || issuing?.reason || null;
-      const message = ready?.message || issuing?.message || null;
-
-      if (isAcmeRateLimit(message) || isAcmeRateLimit(reason)) {
-        return { state: 'rateLimited', reason, message };
-      }
-      if (ready?.status === 'False' && reason === 'Failed') {
-        return { state: 'failed', reason, message };
-      }
-      return { state: 'issuing', reason, message };
+      return certificateStatusFrom(cert);
     } catch (error: any) {
       const code = error?.response?.statusCode;
       // 404 = no cert-manager CRDs, 403 = no rbac for them. Both mean "we

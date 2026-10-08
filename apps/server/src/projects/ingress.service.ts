@@ -1802,10 +1802,9 @@ export class IngressService implements OnModuleInit {
       ingress.project.organizationId
     );
 
-    // Read the actual K8s ingress to get all routes
     let k8sRoutes: { path: string; serviceName: string; servicePort: number }[] = [];
     try {
-      const k8sIngress = await this.k8sNetwork.readIngress(ingress.namespace, ingress.name);
+      const k8sIngress = await this.mirroredIngress(ingress.namespace, ingress.name);
       const rules = k8sIngress?.spec?.rules ?? [];
       if (rules.length > 0 && rules[0].http?.paths) {
         k8sRoutes = rules[0].http.paths.map((p: any) => ({
@@ -1887,10 +1886,9 @@ export class IngressService implements OnModuleInit {
       throw e;
     }
 
-    // Read the actual K8s ingress to get all routes
     let k8sRoutes: { path: string; serviceName: string; servicePort: number }[] = [];
     try {
-      const k8sIngress = await this.k8sNetwork.readIngress(ingress.namespace, ingress.name);
+      const k8sIngress = await this.mirroredIngress(ingress.namespace, ingress.name);
       const rules = k8sIngress?.spec?.rules ?? [];
       if (rules.length > 0 && rules[0].http?.paths) {
         k8sRoutes = rules[0].http.paths.map((p: any) => ({
@@ -2192,6 +2190,14 @@ export class IngressService implements OnModuleInit {
     });
 
     return this.projects.getProject(projectId, clerkId, userData);
+  }
+
+  private async mirroredIngress(namespace: string, name: string): Promise<any | null> {
+    const row = await this.prisma.k8sObject.findFirst({
+      where: { kind: 'Ingress', namespace, name },
+      select: { manifest: true }
+    });
+    return row?.manifest ?? null;
   }
 
   async deleteDeploymentIngress(

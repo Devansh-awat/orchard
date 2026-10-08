@@ -22,6 +22,9 @@ import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
+import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
+import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
+import { NamespaceMirrorConsumer } from './consumers/namespace-mirror.consumer';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const INGRESS_SELECTOR = 'leaf.dev/managed=true';
@@ -41,6 +44,13 @@ export interface MirrorShardDeps {
   workloads: WorkloadMirrorConsumer;
   sandboxes: SandboxMirrorConsumer;
   ingresses: IngressMirrorConsumer;
+  storage: StorageMirrorConsumer;
+  services: ServiceMirrorConsumer;
+  namespaces: NamespaceMirrorConsumer;
+  // Whether cert-manager's CRDs are installed. Watching a kind the apiserver
+  // does not serve fails the informer forever, so the resource is only built
+  // when the definition exists.
+  certManager: boolean;
   // Null when this install runs no sandboxes, or could not work out which
   // sandboxes are its own. The shard is then not built at all: there is no
   // useful half-scoped version of a watch whose whole job is to see exactly
@@ -276,7 +286,60 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.limit
               )
             ),
-          mapRefs: byNamespace
+          mapRefs: async (obj) => (await deps.services.mapRefs(obj)) ?? byNamespace(obj),
+          onEvent: (type, obj) => deps.services.onEvent(type, obj),
+          onListComplete: (seen) => deps.services.pruneStaleRows(seen)
+        },
+        ...(deps.certManager
+          ? [
+              {
+                kind: 'Certificate',
+                apiVersion: 'cert-manager.io/v1',
+                watchPath: '/apis/cert-manager.io/v1/certificates',
+                list: async (kc: k8s.KubeConfig, opts: MirrorListOptions) =>
+                  toListResult(
+                    (await kc
+                      .makeApiClient(k8s.CustomObjectsApi)
+                      .listClusterCustomObject(
+                        'cert-manager.io',
+                        'v1',
+                        'certificates',
+                        undefined,
+                        undefined,
+                        opts.continueToken,
+                        undefined,
+                        undefined,
+                        opts.limit
+                      )) as K8sListBody
+                  ),
+                mapRefs: byNamespace
+              } satisfies MirrorResourceConfig
+            ]
+          : [])
+      ]
+    },
+    {
+      name: 'tenancy',
+      lease: 'orchard-mirror-tenancy',
+      resources: [
+        {
+          kind: 'Namespace',
+          apiVersion: 'v1',
+          watchPath: '/api/v1/namespaces',
+          list: async (kc, opts) =>
+            toListResult(
+              await core(kc).listNamespace(
+                undefined,
+                undefined,
+                opts.continueToken,
+                undefined,
+                undefined,
+                opts.limit
+              )
+            ),
+          mapRefs: (obj) => deps.namespaceRefs(obj.metadata?.name ?? ''),
+          onEvent: (type, obj) => deps.namespaces.onEvent(type, obj),
+          onListComplete: (seen) => deps.namespaces.pruneMissing(seen)
         }
       ]
     },
@@ -299,7 +362,8 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
                 opts.limit
               )
             ),
-          mapRefs: byNamespace
+          mapRefs: async (obj) => (await deps.storage.mapRefs(obj)) ?? byNamespace(obj),
+          onEvent: (type, obj) => deps.storage.onEvent(type, obj)
         }
       ]
     }

@@ -1369,10 +1369,17 @@ model DeploymentVolume {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  observedCapacity String?   @map("observed_capacity") @db.VarChar(20)
+  phase            String?   @db.VarChar(20)
+  resizeState      String?   @map("resize_state") @db.VarChar(20)
+  resizeMessage    String?   @map("resize_message") @db.VarChar(500)
+  observedAt       DateTime? @map("observed_at") @db.Timestamp(6)
+
   deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
 
   @@unique([deploymentId, name])
   @@index([deploymentId], map: "idx_deployment_volumes_deployment")
+  @@index([pvcName], map: "idx_deployment_volumes_pvc_name")
   @@map("deployment_volumes")
 }
 

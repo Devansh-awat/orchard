@@ -9,7 +9,10 @@ import {
 import { resolvePullPolicy } from '../../kubernetes/trusted-images';
 import { disruptionBudgetActive, readMinAvailable } from '../../kubernetes/disruption-budget';
 import { ApplyQueueService } from '../../apply/apply-queue.service';
+import { AuditService } from '../../audit/audit.service';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
+
+export const K8S_DELETED_REASON = 'resource deleted in k8s';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
@@ -40,7 +43,8 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
-    private readonly applyQueue: ApplyQueueService
+    private readonly applyQueue: ApplyQueueService,
+    private readonly audit: AuditService
   ) {}
 
   onModuleDestroy() {
@@ -126,8 +130,25 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     // catching here would report the replica counts as written when they were
     // not, and the row would sit wrong until the deployment happened to change.
     if (type === 'delete') {
-      await this.prisma.k8sWorkload.deleteMany({ where: { deploymentId: ctx.deploymentId } });
+      const removed = await this.prisma.k8sWorkload.deleteMany({
+        where: { deploymentId: ctx.deploymentId }
+      });
       this.scheduleEmit(ctx, { workload: null, deleted: true });
+      if (removed.count > 0) {
+        this.logger.warn(
+          `deployment ${dep.metadata?.namespace}/${dep.metadata?.name} (${ctx.deploymentId}) was deleted in the cluster; the Orchard record stays and the next deploy recreates it`
+        );
+        void this.audit.log({
+          action: 'deployment.workload.deleted',
+          organizationId: ctx.orgId,
+          projectId: ctx.projectId,
+          deploymentId: ctx.deploymentId,
+          targetType: 'deployment',
+          targetId: ctx.deploymentId,
+          targetLabel: dep.metadata?.name ?? undefined,
+          metadata: { reason: K8S_DELETED_REASON, namespace: dep.metadata?.namespace ?? null }
+        });
+      }
       return;
     }
 
@@ -213,9 +234,18 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     const adopted: string[] = [];
 
     const specReplicas = dep.spec?.replicas;
-    if (!row.stopped && specReplicas != null && specReplicas !== row.replicas) {
-      changes.replicas = specReplicas;
-      adopted.push(`replicas=${specReplicas}`);
+    if (specReplicas === 0 && !row.stopped) {
+      changes.stopped = true;
+      adopted.push('stopped=true');
+    } else if (specReplicas != null && specReplicas > 0) {
+      if (row.stopped) {
+        changes.stopped = false;
+        adopted.push('stopped=false');
+      }
+      if (specReplicas !== row.replicas) {
+        changes.replicas = specReplicas;
+        adopted.push(`replicas=${specReplicas}`);
+      }
     }
 
     const container = dep.spec?.template?.spec?.containers?.[0];
@@ -278,7 +308,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     // replica count, so a `kubectl scale` past it has to be answered. Without
     // this, scaling 3 -> 2 under a minAvailable of 2 leaves a budget behind
     // that allows no disruptions and blocks every drain on those pods.
-    if (changes.replicas != null) {
+    if (changes.replicas != null || changes.stopped != null) {
       await this.queueBudgetReconcile(deploymentId);
     }
   }

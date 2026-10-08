@@ -1,0 +1,148 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { NamespaceMirrorConsumer } from '../src/mirror/consumers/namespace-mirror.consumer';
+
+const OLD = new Date(Date.now() - 60 * 60 * 1000);
+const YOUNG = new Date();
+
+function build(opts: {
+  projects?: { id: string; name: string; namespace: string; createdAt: Date }[];
+  environments?: { id: string; name: string; namespace: string; createdAt: Date }[];
+  live: Record<string, 'present' | 'absent' | 'unknown'>;
+}) {
+  const removed: { kind: string; id: string; cause: any }[] = [];
+  const prisma = {
+    project: {
+      findFirst: async ({ where }: any) =>
+        opts.projects?.find((p) => p.namespace === where.namespace) ?? null,
+      findMany: async () => (opts.projects ?? []).map((p) => ({ namespace: p.namespace }))
+    },
+    environment: {
+      findUnique: async ({ where }: any) =>
+        opts.environments?.find((e) => e.namespace === where.namespace) ?? null,
+      findMany: async () => (opts.environments ?? []).map((e) => ({ namespace: e.namespace }))
+    }
+  };
+  const moduleRef = {
+    get: (token: any) => ({
+      deleteProjectFromCluster: async (id: string, cause: any) => {
+        removed.push({ kind: 'project', id, cause });
+      },
+      deleteEnvironmentFromCluster: async (id: string, cause: any) => {
+        removed.push({ kind: 'environment', id, cause });
+      },
+      token
+    })
+  };
+  const consumer = new NamespaceMirrorConsumer(prisma as any, {} as any, moduleRef as any);
+  (consumer as any).confirmAfterMs = 0;
+  (consumer as any).liveState = async (ns: string) => opts.live[ns] ?? 'absent';
+  return { consumer, removed };
+}
+
+const gone = (name: string) => ({ metadata: { name } }) as any;
+
+test('one delete signal is never enough: the first sighting only starts the clock', async () => {
+  const { consumer, removed } = build({
+    projects: [{ id: 'p1', name: 'acme', namespace: 'acme-prod', createdAt: OLD }],
+    live: { 'acme-prod': 'absent' }
+  });
+  await consumer.onEvent('delete', gone('acme-prod'));
+  assert.deepEqual(removed, []);
+  await consumer.onEvent('delete', gone('acme-prod'));
+  assert.equal(removed.length, 1);
+  assert.equal(removed[0].kind, 'project');
+  assert.equal(removed[0].cause.reason, 'resource deleted in k8s');
+  consumer.onModuleDestroy();
+});
+
+test('the apiserver still having the namespace cancels the removal', async () => {
+  const { consumer, removed } = build({
+    environments: [{ id: 'e1', name: 'staging', namespace: 'acme-staging', createdAt: OLD }],
+    live: { 'acme-staging': 'present' }
+  });
+  await consumer.onEvent('delete', gone('acme-staging'));
+  await consumer.onEvent('delete', gone('acme-staging'));
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});
+
+test('an apiserver that cannot answer never counts as a deletion', async () => {
+  const { consumer, removed } = build({
+    environments: [{ id: 'e1', name: 'staging', namespace: 'acme-staging', createdAt: OLD }],
+    live: { 'acme-staging': 'unknown' }
+  });
+  await consumer.onEvent('delete', gone('acme-staging'));
+  await consumer.onEvent('delete', gone('acme-staging'));
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});
+
+test('a namespace seen again between sightings resets the clock', async () => {
+  const { consumer, removed } = build({
+    environments: [{ id: 'e1', name: 'staging', namespace: 'acme-staging', createdAt: OLD }],
+    live: { 'acme-staging': 'absent' }
+  });
+  await consumer.onEvent('delete', gone('acme-staging'));
+  await consumer.onEvent('update', gone('acme-staging'));
+  await consumer.onEvent('delete', gone('acme-staging'));
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});
+
+test('rows younger than the settle window are left alone', async () => {
+  const { consumer, removed } = build({
+    environments: [{ id: 'e1', name: 'fresh', namespace: 'acme-fresh', createdAt: YOUNG }],
+    live: { 'acme-fresh': 'absent' }
+  });
+  await consumer.onEvent('delete', gone('acme-fresh'));
+  await consumer.onEvent('delete', gone('acme-fresh'));
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});
+
+test('many namespaces vanishing at once trips the breaker instead of deleting', async () => {
+  const envs = ['a', 'b', 'c', 'd'].map((n) => ({
+    id: `e-${n}`,
+    name: n,
+    namespace: `ns-${n}`,
+    createdAt: OLD
+  }));
+  const { consumer, removed } = build({ environments: envs, live: {} });
+  const seen = [{ namespace: '', name: 'kube-system', refs: {} }];
+  await consumer.pruneMissing(seen);
+  await consumer.pruneMissing(seen);
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});
+
+test('a single namespace missing from a complete list is removed after confirmation', async () => {
+  const { consumer, removed } = build({
+    environments: [
+      { id: 'e1', name: 'staging', namespace: 'acme-staging', createdAt: OLD },
+      { id: 'e2', name: 'qa', namespace: 'acme-qa', createdAt: OLD }
+    ],
+    live: { 'acme-staging': 'absent', 'acme-qa': 'present' }
+  });
+  const seen = [{ namespace: '', name: 'acme-qa', refs: { projectId: 'p1' } }];
+  await consumer.pruneMissing(seen);
+  assert.deepEqual(removed, []);
+  await consumer.pruneMissing(seen);
+  assert.equal(removed.length, 1);
+  assert.equal(removed[0].id, 'e1');
+  assert.equal(removed[0].cause.source, 'mirror.list');
+  consumer.onModuleDestroy();
+});
+
+test('an incomplete or unresolved list never prunes', async () => {
+  const { consumer, removed } = build({
+    environments: [{ id: 'e1', name: 'staging', namespace: 'acme-staging', createdAt: OLD }],
+    live: { 'acme-staging': 'absent' }
+  });
+  await consumer.pruneMissing([]);
+  await consumer.pruneMissing([]);
+  await consumer.pruneMissing([{ namespace: '', name: 'x', refs: null }]);
+  await consumer.pruneMissing([{ namespace: '', name: 'x', refs: null }]);
+  assert.deepEqual(removed, []);
+  consumer.onModuleDestroy();
+});

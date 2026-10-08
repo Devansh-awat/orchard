@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
@@ -16,6 +17,9 @@ import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
 import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
+import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
+import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
+import { NamespaceMirrorConsumer } from './consumers/namespace-mirror.consumer';
 
 const PRESENCE_PREFIX = 'replica:';
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -86,6 +90,9 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly workloadConsumer: WorkloadMirrorConsumer,
     private readonly sandboxConsumer: SandboxMirrorConsumer,
     private readonly ingressConsumer: IngressMirrorConsumer,
+    private readonly storageConsumer: StorageMirrorConsumer,
+    private readonly serviceConsumer: ServiceMirrorConsumer,
+    private readonly namespaceConsumer: NamespaceMirrorConsumer,
     private readonly sandboxK8s: SandboxK8sService
   ) {}
 
@@ -117,6 +124,10 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       workloads: this.workloadConsumer,
       sandboxes: this.sandboxConsumer,
       ingresses: this.ingressConsumer,
+      storage: this.storageConsumer,
+      services: this.serviceConsumer,
+      namespaces: this.namespaceConsumer,
+      certManager: await this.certManagerInstalled(),
       sandboxScope: await this.resolveSandboxScope(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
@@ -497,6 +508,23 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
   // guessed at: a shard that watched the wrong set would be worse than no shard
   // at all, and everything that reads the sandbox mirror already refuses to act
   // on a shard that is not reporting.
+  private async certManagerInstalled(): Promise<boolean> {
+    try {
+      await this.kubernetes
+        .kc!.makeApiClient(k8s.ApiextensionsV1Api)
+        .readCustomResourceDefinition('certificates.cert-manager.io');
+      return true;
+    } catch (e: any) {
+      const code = e?.response?.statusCode ?? e?.statusCode;
+      if (code !== 404) {
+        this.logger.warn(
+          `could not check for cert-manager, certificates stay unmirrored: ${e?.message}`
+        );
+      }
+      return false;
+    }
+  }
+
   private async resolveSandboxScope(): Promise<{ namespace: string; instanceId: string } | null> {
     if (!sandboxFeatureEnabled()) return null;
     try {

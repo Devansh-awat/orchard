@@ -8,13 +8,19 @@ import {
   Logger,
   Optional,
   OnModuleInit,
-  OnModuleDestroy
+  OnModuleDestroy,
+  HttpException
 } from '@nestjs/common';
 import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { storageShrinks } from '../kubernetes/pvc-status';
 import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
-import { K8sNetworkService } from '../kubernetes/k8s-network.service';
+import {
+  K8sNetworkService,
+  certificateForSecret,
+  certificateStatusFrom
+} from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
 import { resolvePullPolicy } from '../kubernetes/trusted-images';
 import { startArgsFor, resolveStartArgs } from '../kubernetes/start-command';
@@ -237,6 +243,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     this.applyExecutor.registerHandler('deployment.disruptionBudget', async (item) => {
       await this.applyDisruptionBudgetToCluster(item.deploymentId!);
     });
+    this.applyExecutor.registerHandler('deployment.volumes', async (item) => {
+      await this.applyVolumesToCluster(item.deploymentId!);
+    });
     this.applyExecutor.registerHandler('ingress.sync', async (item) => {
       const target = item.manifest as { namespace?: string; name?: string } | null;
       if (!target?.namespace || !target?.name) return;
@@ -287,6 +296,39 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     await this.authz.requireProjectEdit(deployment.projectId, user.id, 'retry apply');
     const retried = await this.applyQueue.retryForDeployment(deploymentId);
     return { success: true, retried };
+  }
+
+  private async applyVolumesToCluster(deploymentId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true, deployStrategy: true, volumes: true }
+    });
+    if (!deployment) return;
+    const exists = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
+    if (!exists) return;
+    const volumes = deployment.volumes.map((vol) => ({
+      name: vol.name,
+      type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+      mountPath: vol.mountPath,
+      pvcName: vol.pvcName,
+      storageSize: vol.storageSize,
+      hostPath: vol.hostPath,
+      readOnly: vol.readOnly
+    }));
+    const hasPvc = volumes.some((v) => v.type === 'pvc');
+    await this.k8sWorkload.updateDeploymentVolumes({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      volumes,
+      deployStrategy: hasPvc
+        ? 'recreate'
+        : deployment.deployStrategy === 'recreate'
+          ? 'recreate'
+          : 'rollingUpdate'
+    });
   }
 
   private async applyScaleToCluster(deploymentId: string): Promise<void> {
@@ -1516,15 +1558,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // next to the domain that caused it. Best-effort and per-host: a cluster
       // without cert-manager reports `unknown` and renders nothing.
       const enrichedIngresses = [...directEnriched, ...projectExtras];
-      await Promise.all(
-        enrichedIngresses.map(async (ing: any) => {
-          if (!ing?.tlsSecretName) return;
-          ing.certificateStatus = await this.k8sNetwork.getCertificateStatus(
-            ing.namespace,
-            ing.tlsSecretName
-          );
-        })
-      );
+      const certificates = enrichedIngresses.some((ing: any) => ing?.tlsSecretName)
+        ? await this.prisma.k8sObject.findMany({
+            where: { kind: 'Certificate', namespace },
+            select: { manifest: true }
+          })
+        : [];
+      for (const ing of enrichedIngresses as any[]) {
+        if (!ing?.tlsSecretName) continue;
+        ing.certificateStatus = certificateStatusFrom(
+          certificateForSecret(certificates, ing.tlsSecretName)
+        );
+      }
 
       deploymentWithInternalUrls.ingresses = enrichedIngresses;
     }
@@ -1748,6 +1793,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'delete deployments');
+
+    if (deployment.buildStatus === 'building') {
+      await this.dockerService
+        .cancelBuildJobsByDeploymentId(deploymentId)
+        .catch((err) =>
+          console.error(`[Projects] Failed to cancel builds for ${deploymentId}:`, err)
+        );
+    }
 
     // Fetch all related resources before deleting
     const [ingresses, services, volumes, imageHistoryEntries] = await Promise.all([
@@ -3332,6 +3385,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    const existingVolumes = await this.prisma.deploymentVolume.findMany({
+      where: { deploymentId: deployment.id, type: 'pvc' }
+    });
+    const existingByClaim = new Map(existingVolumes.map((v) => [v.pvcName ?? v.name, v] as const));
+    for (const vol of volumesList) {
+      if (vol.type !== 'pvc' || !vol.storageSize) continue;
+      const previous = existingByClaim.get(vol.pvcName!);
+      if (!previous) continue;
+      const floor = [previous.observedCapacity, previous.storageSize].find((size) =>
+        storageShrinks(size, vol.storageSize!)
+      );
+      if (floor) {
+        throw new BadRequestException(
+          `Storage can only be expanded, never shrunk: "${vol.pvcName}" is ${floor}, requested ${vol.storageSize}`
+        );
+      }
+    }
+
     // Compute the effective strategy: PVC forces Recreate, otherwise keep
     // whatever the deployment was previously set to. The persisted
     // `deployStrategy` is also auto-reverted to rollingUpdate when the last
@@ -3359,16 +3430,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       if (volumesList.length > 0) {
         await tx.deploymentVolume.createMany({
-          data: volumesList.map((vol) => ({
-            deploymentId: deployment.id,
-            name: vol.name,
-            type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
-            mountPath: vol.mountPath,
-            pvcName: vol.pvcName,
-            storageSize: vol.storageSize,
-            hostPath: vol.hostPath,
-            readOnly: vol.readOnly
-          }))
+          data: volumesList.map((vol) => {
+            const previous = vol.type === 'pvc' ? existingByClaim.get(vol.pvcName!) : undefined;
+            return {
+              deploymentId: deployment.id,
+              name: vol.name,
+              type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+              mountPath: vol.mountPath,
+              pvcName: vol.pvcName,
+              storageSize: vol.storageSize,
+              hostPath: vol.hostPath,
+              readOnly: vol.readOnly,
+              observedCapacity: previous?.observedCapacity ?? null,
+              phase: previous?.phase ?? null,
+              resizeState: previous?.resizeState ?? null,
+              resizeMessage: previous?.resizeMessage ?? null,
+              observedAt: previous?.observedAt ?? null
+            };
+          })
         });
       }
 
@@ -3402,18 +3481,48 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     // this throws, the caller hears about it and the next rebuild reconciles
     // the cluster to what was stored, which is the right way round: losing the
     // patch is recoverable, losing the record is not.
-    const k8sExistsVol = await this.k8sWorkload
-      .getKubernetesDeployment(deployment.name, deployment.namespace)
-      .then((d) => d !== null)
-      .catch(() => false);
-
-    if (k8sExistsVol) {
-      await this.k8sWorkload.updateDeploymentVolumes({
-        namespace: deployment.namespace,
-        deploymentName: deployment.name,
-        volumes: volumesList,
-        deployStrategy: effectiveStrategy
+    if (this.applyPipelineEnabled()) {
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.volumes:${deploymentId}`,
+        opType: 'deployment.volumes',
+        deploymentId,
+        requestedById: user.id
       });
+    } else {
+      const k8sExistsVol = await this.k8sWorkload
+        .getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then((d) => d !== null)
+        .catch(() => false);
+
+      if (k8sExistsVol) {
+        try {
+          await this.k8sWorkload.updateDeploymentVolumes({
+            namespace: deployment.namespace,
+            deploymentName: deployment.name,
+            volumes: volumesList,
+            deployStrategy: effectiveStrategy
+          });
+          await this.prisma.deployment.updateMany({
+            where: { id: deploymentId, applyStatus: 'error' },
+            data: { applyStatus: 'synced', applyError: null }
+          });
+        } catch (error) {
+          const body = error instanceof HttpException ? error.getResponse() : null;
+          const message =
+            (typeof body === 'object' && body && 'message' in body
+              ? String((body as { message?: unknown }).message)
+              : null) ??
+            (error as Error)?.message ??
+            'Storage update failed';
+          await this.prisma.deployment
+            .update({
+              where: { id: deploymentId },
+              data: { applyStatus: 'error', applyError: `Storage: ${message}` }
+            })
+            .catch(() => {});
+          throw error;
+        }
+      }
     }
 
     void this.audit.log({
@@ -5384,12 +5493,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         pods = prefetched.pods ?? [];
         warnings = prefetched.warnings ?? [];
       } else {
-        const livePods = await this.k8sWorkload.getDeploymentPods(
-          deployment.name,
-          deployment.namespace
-        );
-        pods = this.formatLivePods(livePods?.pods) ?? [];
-        warnings = livePods?.warnings || [];
+        pods = deployment.id ? await this.fetchMirroredPods([deployment.id]) : [];
+        warnings = [];
       }
 
       const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];

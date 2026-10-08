@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { MirrorEventType, MirrorObjectKey } from '../mirror-informer';
+import { K8S_DELETED_REASON } from './workload-mirror.consumer';
 
 const PRUNE_GRACE_MS = 2 * 60 * 1000;
 
@@ -86,7 +87,7 @@ export class IngressMirrorConsumer {
         targetType: 'ingress',
         targetId: row.id,
         targetLabel: row.host + row.path,
-        metadata: { reason: 'resource eliminated in k8s', source: `mirror.${source}` }
+        metadata: { reason: K8S_DELETED_REASON, source: `mirror.${source}` }
       });
     }
   }

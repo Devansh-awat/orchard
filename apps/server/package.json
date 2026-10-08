@@ -59,6 +59,8 @@
     "test:instance-config": "tsx --test test/instance-config.test.ts",
     "test:instance-settings": "tsx --test test/instance-settings.test.ts",
     "test:sso-enforcement": "tsx --test test/sso-enforcement.test.ts",
+    "test:pvc-status": "tsx --test test/pvc-status.test.ts",
+    "test:namespace-mirror": "tsx --test test/namespace-mirror.test.ts",
     "test:instance-network": "tsx --test test/instance-network.test.ts",
     "test:deployment-drift": "tsx --test test/deployment-drift.test.ts",
     "test:build-queue-visibility": "tsx --test test/build-queue-visibility.test.ts",
