@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronsDownUp, Eye, FilePlus, Search, X } from 'lucide-svelte';
+	import { ChevronsDownUp, FilePlus, Search, X } from 'lucide-svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import ChangesPane from './ChangesPane.svelte';
 	import ChecksPane from './ChecksPane.svelte';
@@ -63,7 +63,7 @@
 </script>
 
 <aside class="right" aria-label="Session panel">
-	<div class="bar">
+	<div class="bar" data-align="topbar">
 		<span class="grow"></span>
 		<PrButton {ws} />
 	</div>
@@ -75,45 +75,44 @@
 				? `flex: 0 0 ${(1 - app.layout.dock) * 100}%`
 				: 'flex: 1 1 auto'}
 		>
-			<div class="tabs" role="tablist" aria-label="Session panel">
+			<div class="gh-tabs" role="tablist" aria-label="Session panel" data-align="tabstrip">
 				<button
 					type="button"
 					role="tab"
-					class="tab"
+					class="gh-tab"
 					aria-selected={tab === 'files'}
 					onclick={() => pick('files')}
 				>
-					All files
+					<span class="gh-tl" data-label="All files" data-align="right-edge">All files</span>
 				</button>
 				<button
 					type="button"
 					role="tab"
-					class="tab"
+					class="gh-tab"
 					aria-selected={tab === 'changes'}
 					onclick={() => pick('changes')}
 				>
-					Changes
+					<span class="gh-tl" data-label="Changes" data-align="tab-label">Changes</span>
 					{#if changeCount > 0}<span class="gh-num count">{changeCount}</span>{/if}
 				</button>
 				<button
 					type="button"
 					role="tab"
-					class="tab"
+					class="gh-tab"
 					aria-selected={tab === 'checks'}
 					onclick={() => pick('checks')}
 				>
-					Checks
+					<span class="gh-tl" data-label="Checks" data-align="tab-label">Checks</span>
 				</button>
 				<button
 					type="button"
 					role="tab"
-					class="tab"
+					class="gh-tab"
 					aria-selected={tab === 'review'}
-					aria-label="Review"
-					title="Review comments"
+					title="Diff comments to send to the agent"
 					onclick={() => pick('review')}
 				>
-					<Eye size={14} strokeWidth={1.75} />
+					<span class="gh-tl" data-label="Review" data-align="tab-label">Review</span>
 					{#if reviewCount > 0}<span class="gh-num count">{reviewCount}</span>{/if}
 				</button>
 				<span class="grow"></span>
@@ -122,10 +121,10 @@
 						type="button"
 						class="gh-ibtn"
 						aria-label="Collapse all"
-						title="Collapse all"
+						title="Collapse all folders"
 						onclick={() => tree?.collapseAll()}
 					>
-						<ChevronsDownUp size={14} strokeWidth={1.75} />
+						<ChevronsDownUp size={16} strokeWidth={1.75} />
 					</button>
 				{/if}
 				<button
@@ -136,7 +135,7 @@
 					aria-pressed={searching}
 					onclick={search}
 				>
-					<Search size={14} strokeWidth={1.75} />
+					<Search size={16} strokeWidth={1.75} />
 				</button>
 				<button
 					type="button"
@@ -146,13 +145,13 @@
 					disabled={!ws.canEdit || !session}
 					onclick={newFile}
 				>
-					<FilePlus size={14} strokeWidth={1.75} />
+					<FilePlus size={16} strokeWidth={1.75} />
 				</button>
 			</div>
 
 			{#if searching && tab === 'files'}
 				<div class="search">
-					<Search size={13} strokeWidth={1.75} />
+					<Search size={16} strokeWidth={1.75} />
 					<input
 						class="search-field"
 						bind:value={filter}
@@ -161,8 +160,14 @@
 						onkeydown={(e) => e.key === 'Escape' && search()}
 						{@attach (node: HTMLInputElement) => node.focus()}
 					/>
-					<button type="button" class="gh-ibtn" aria-label="Close search" onclick={search}>
-						<X size={13} strokeWidth={1.75} />
+					<button
+						type="button"
+						class="gh-ibtn"
+						aria-label="Close search"
+						title="Close search (Esc)"
+						onclick={search}
+					>
+						<X size={16} strokeWidth={1.75} />
 					</button>
 				</div>
 			{/if}
@@ -233,10 +238,10 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
 		height: var(--gh-bar);
-		padding: 0 0.75rem;
+		padding: 0 var(--gh-edge);
 		border-bottom: 1px solid var(--gh-line);
 	}
 
@@ -257,60 +262,17 @@
 		min-height: 0;
 	}
 
-	.tabs {
-		display: flex;
-		align-items: center;
-		gap: 0.125rem;
-		flex: none;
-		height: var(--gh-tab);
-		padding: 0 0.5rem 0 0.375rem;
-		border-bottom: 1px solid var(--gh-line);
-	}
-
-	.tab {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		height: var(--gh-tab);
-		padding: 0 0.5rem;
-		color: var(--gh-muted);
-		white-space: nowrap;
-		transition: color var(--dur-fast) ease;
-	}
-
-	.tab:hover {
-		color: var(--gh-text);
-	}
-
-	.tab[aria-selected='true'] {
-		color: var(--gh-text);
-		font-weight: 500;
-	}
-
-	.tab[aria-selected='true']::after {
-		content: '';
-		position: absolute;
-		left: 0.5rem;
-		right: 0.5rem;
-		bottom: -1px;
-		height: 2px;
-		border-radius: 1px;
-		background: var(--gh-text);
-	}
-
 	.count {
 		color: var(--gh-faint);
-		font-weight: 400;
 	}
 
 	.search {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
-		height: 2rem;
-		padding: 0 0.375rem 0 0.75rem;
+		height: var(--gh-row);
+		padding: 0 calc(var(--gh-edge) - var(--gh-ibtn-inset)) 0 var(--gh-edge);
 		border-bottom: 1px solid var(--gh-line-soft);
 		color: var(--gh-faint);
 	}
@@ -322,6 +284,7 @@
 		background: transparent;
 		color: var(--gh-text);
 		font-size: var(--gh-ui);
+		line-height: var(--gh-lh-ui);
 		outline: none;
 	}
 
@@ -338,8 +301,9 @@
 
 	.note {
 		margin: 0;
-		padding: 1rem 0.875rem;
+		padding: var(--gh-edge);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 

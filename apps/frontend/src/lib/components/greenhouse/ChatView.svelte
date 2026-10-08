@@ -164,9 +164,9 @@
 		align-items: stretch;
 		justify-content: flex-end;
 		width: 100%;
-		max-width: 52.5rem;
+		max-width: calc(42.5rem + 4rem);
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2rem;
 	}
 
 	.gate-title {
@@ -183,15 +183,16 @@
 
 	.viewer {
 		flex: none;
-		padding: 0 1rem 1rem;
+		width: 100%;
+		max-width: calc(42.5rem + 4rem);
+		margin: 0 auto;
+		padding: 0 2rem 1rem;
 	}
 
 	.viewer-box {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		max-width: 52.5rem;
-		margin: 0 auto;
 		padding: 0.875rem 1rem;
 		border-radius: var(--radius-lg);
 		border: 1px dashed var(--gh-composer-edge);

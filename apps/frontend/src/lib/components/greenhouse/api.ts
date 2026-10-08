@@ -5,6 +5,7 @@ import type {
 	GhChecks,
 	GhConnect,
 	GhFileNode,
+	GhGitIdentity,
 	GhMembers,
 	GhPort,
 	GhRepo,
@@ -17,11 +18,20 @@ export const GH_HOME = '/persist/home';
 
 export class GhApiError extends Error {
 	readonly status: number;
-	constructor(message: string, status: number) {
+	readonly code: string | null;
+	constructor(message: string, status: number, code: string | null = null) {
 		super(message);
 		this.name = 'GhApiError';
 		this.status = status;
+		this.code = code;
 	}
+}
+
+export const GITHUB_NOT_LINKED = 'github_not_linked';
+export const LINK_GITHUB_HREF = '/user/settings?tab=connections';
+
+export function isGithubUnlinked(error: unknown): boolean {
+	return error instanceof GhApiError && error.code === GITHUB_NOT_LINKED;
 }
 
 export type Maybe<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
@@ -30,10 +40,20 @@ function base(sandboxId: string): string {
 	return `/apiv1/sandboxes/${encodeURIComponent(sandboxId)}`;
 }
 
-async function readMessage(res: Response, fallback: string): Promise<string> {
-	const body = (await res.json().catch(() => null)) as { message?: string | string[] } | null;
+async function readError(
+	res: Response,
+	fallback: string
+): Promise<{ message: string; code: string | null }> {
+	const body = (await res.json().catch(() => null)) as {
+		message?: string | string[];
+		code?: string;
+	} | null;
 	const message = Array.isArray(body?.message) ? body?.message.join(', ') : body?.message;
-	return message || fallback;
+	return { message: message || fallback, code: typeof body?.code === 'string' ? body.code : null };
+}
+
+async function readMessage(res: Response, fallback: string): Promise<string> {
+	return (await readError(res, fallback)).message;
 }
 
 async function get<T>(path: string): Promise<Maybe<T>> {
@@ -58,7 +78,10 @@ async function send<T>(
 		headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
 		body: body === undefined ? undefined : JSON.stringify(body)
 	});
-	if (!res.ok) throw new GhApiError(await readMessage(res, 'Request failed'), res.status);
+	if (!res.ok) {
+		const error = await readError(res, 'Request failed');
+		throw new GhApiError(error.message, res.status, error.code);
+	}
 	if (res.status === 204) return undefined as T;
 	const text = await res.text();
 	return (text ? JSON.parse(text) : undefined) as T;
@@ -240,6 +263,10 @@ export function listChecks(sandboxId: string, sid: string) {
 
 export function runScript(sandboxId: string, sid: string, action: 'start' | 'stop') {
 	return send<{ ok: boolean }>(`${base(sandboxId)}/sessions/${sid}/run`, 'POST', { action });
+}
+
+export function gitIdentity(sandboxId: string) {
+	return get<GhGitIdentity>(`${base(sandboxId)}/git/identity`);
 }
 
 export function connectInfo(sandboxId: string) {

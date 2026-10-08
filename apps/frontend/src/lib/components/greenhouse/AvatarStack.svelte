@@ -23,7 +23,14 @@
 </script>
 
 {#if users.length > 0}
-	<div class="stack" style="--av: {size}px" role="group" aria-label="People here">
+	<div
+		class="stack"
+		class:stack--buttons={!!onpick}
+		style="--av: {size}px"
+		role="group"
+		aria-label="People here"
+		data-align="stack"
+	>
 		{#each shown as user (user.id)}
 			{#if onpick}
 				<button
@@ -32,26 +39,34 @@
 					class:face--following={following === user.id}
 					style="--ring: var({user.color?.startsWith('--') ? user.color : '--accent'})"
 					title={following === user.id ? `Following ${user.name}` : `Follow ${user.name}`}
+					aria-label={following === user.id ? `Stop following ${user.name}` : `Follow ${user.name}`}
 					aria-pressed={following === user.id}
 					onclick={() => onpick?.(user)}
 				>
-					<Avatar user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }} {size} />
+					<span class="disc"
+						><Avatar
+							user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }}
+							{size}
+						/></span
+					>
 				</button>
-				{#if hostBadge && user.role === 'owner'}<span class="host" title="{user.name} is the host"
-						>Host</span
-					>{/if}
 			{:else}
 				<span
 					class="face"
 					style="--ring: var({user.color?.startsWith('--') ? user.color : '--accent'})"
 					title={user.name}
 				>
-					<Avatar user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }} {size} />
+					<span class="disc"
+						><Avatar
+							user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }}
+							{size}
+						/></span
+					>
 				</span>
-				{#if hostBadge && user.role === 'owner'}<span class="host" title="{user.name} is the host"
-						>Host</span
-					>{/if}
 			{/if}
+			{#if hostBadge && user.role === 'owner'}<span class="host" title="{user.name} is the host"
+					>Host</span
+				>{/if}
 		{/each}
 		{#if extra > 0}
 			<span
@@ -67,13 +82,33 @@
 
 <style>
 	.stack {
+		--hit: var(--av);
 		display: inline-flex;
 		align-items: center;
 		flex: none;
 	}
 
+	.stack--buttons {
+		--hit: max(var(--av), var(--gh-icon, 1.75rem));
+	}
+
 	.face {
 		position: relative;
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--hit);
+		height: var(--hit);
+		border-radius: var(--radius-pill);
+	}
+
+	.face + .face,
+	.face + .more,
+	.host + .face {
+		margin-left: calc(var(--av) * 0.72 - var(--hit));
+	}
+
+	.disc {
 		display: inline-grid;
 		place-items: center;
 		width: var(--av);
@@ -83,34 +118,39 @@
 		overflow: hidden;
 	}
 
-	.face + .face,
-	.face + .more {
-		margin-left: calc(var(--av) * -0.28);
-	}
-
 	button.face {
 		cursor: pointer;
 	}
 
 	button.face:hover,
 	.face--following {
+		z-index: 1;
+	}
+
+	button.face:hover .disc,
+	.face--following .disc {
 		box-shadow:
 			0 0 0 1.5px var(--gh-editor, var(--bg-app)),
 			0 0 0 3px var(--ring);
-		z-index: 1;
+	}
+
+	button.face:focus-visible {
+		outline: none;
+	}
+
+	button.face:focus-visible .disc {
+		box-shadow:
+			0 0 0 1.5px var(--gh-editor, var(--bg-app)),
+			0 0 0 3px var(--focus-ring-color);
 	}
 
 	.host {
 		position: relative;
 		z-index: 2;
-		margin: 0 0.375rem 0 0.25rem;
-		padding: 0 0.3125rem;
-		border-radius: var(--radius-pill);
-		background: color-mix(in oklab, var(--accent) 14%, transparent);
-		color: var(--accent);
-		font-size: var(--text-micro);
-		font-weight: 600;
-		line-height: 1.5;
+		margin: 0 0.5rem 0 0.25rem;
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-muted);
 	}
 
 	.more {
@@ -123,7 +163,7 @@
 		background: var(--gh-selected);
 		color: var(--gh-muted);
 		font-size: var(--text-micro);
-		font-weight: 600;
+		line-height: 1rem;
 		box-shadow: 0 0 0 1.5px var(--gh-editor, var(--bg-app));
 	}
 </style>

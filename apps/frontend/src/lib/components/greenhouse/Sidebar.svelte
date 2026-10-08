@@ -17,7 +17,10 @@
 	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
 
-	let { onnewsession }: { onnewsession: (repo?: string | null) => void } = $props();
+	let {
+		onnewsession,
+		compact = false
+	}: { onnewsession: (repo?: string | null) => void; compact?: boolean } = $props();
 
 	const app = getGreenhouseApp();
 	const ws = $derived(app.ws);
@@ -39,16 +42,19 @@
 </script>
 
 <nav class="side" aria-label="Greenhouse">
-	<div class="bar">
-		<button
-			type="button"
-			class="gh-ibtn"
-			aria-label="Hide sidebar"
-			title="Hide sidebar ({mod}B)"
-			onclick={() => app.layout.toggle('left')}
-		>
-			<PanelLeft size={16} strokeWidth={1.75} />
-		</button>
+	<div class="bar" data-align="topbar">
+		{#if !compact}
+			<button
+				type="button"
+				class="gh-ibtn"
+				data-align="sidebar-icon"
+				aria-label="Hide sidebar"
+				title="Hide sidebar ({mod}B)"
+				onclick={() => app.layout.toggle('left')}
+			>
+				<PanelLeft size={16} strokeWidth={1.75} />
+			</button>
+		{/if}
 		<span class="grow"></span>
 		<button
 			type="button"
@@ -73,32 +79,40 @@
 	</div>
 
 	<div class="top">
-		<div class="machine"><MachineMenu /></div>
-		<button type="button" class="nav gh-row" class:nav--on={app.home} onclick={() => app.goHome()}>
-			<House size={16} strokeWidth={1.75} />
-			<span>Home</span>
-		</button>
-		<button
-			type="button"
-			class="nav gh-row"
-			onclick={() => onnewsession(null)}
-			disabled={ws ? !ws.canEdit : false}
-			title={ws && !ws.canEdit ? VIEWER_ONLY : undefined}
-		>
-			<Plus size={16} strokeWidth={1.75} />
-			<span>New session</span>
-			<span class="gh-kbd">{mod}N</span>
-		</button>
-		<button type="button" class="nav gh-row" onclick={search}>
-			<Search size={16} strokeWidth={1.75} />
-			<span>Search</span>
-			<span class="gh-kbd">{mod}K</span>
-		</button>
+		<MachineMenu />
+		<div class="rows">
+			<button
+				type="button"
+				class="nav gh-row"
+				class:nav--on={app.home}
+				aria-current={app.home ? 'page' : undefined}
+				onclick={() => app.goHome()}
+			>
+				<span class="ico" data-align="sidebar-icon"><House size={16} strokeWidth={1.75} /></span>
+				<span class="label" data-align="sidebar-label">Home</span>
+			</button>
+			<button
+				type="button"
+				class="nav gh-row"
+				onclick={() => onnewsession(null)}
+				disabled={ws ? !ws.canEdit : false}
+				title={ws && !ws.canEdit ? VIEWER_ONLY : `New session (${mod}N)`}
+			>
+				<span class="ico" data-align="sidebar-icon"><Plus size={16} strokeWidth={1.75} /></span>
+				<span class="label" data-align="sidebar-label">New session</span>
+				<span class="gh-kbd" data-align="sidebar-end">{mod}N</span>
+			</button>
+			<button type="button" class="nav gh-row" title="Search ({mod}K)" onclick={search}>
+				<span class="ico" data-align="sidebar-icon"><Search size={16} strokeWidth={1.75} /></span>
+				<span class="label" data-align="sidebar-label">Search</span>
+				<span class="gh-kbd" data-align="sidebar-end">{mod}K</span>
+			</button>
+		</div>
 	</div>
 
 	<div class="list gh-scroll" role="tree" aria-label="Repositories">
 		<div class="section">
-			<span>Repositories</span>
+			<span class="section-title">Repositories</span>
 			<button
 				type="button"
 				class="gh-ibtn add"
@@ -107,7 +121,7 @@
 				disabled={!ws?.canEdit || !ws?.running}
 				onclick={() => (app.sheet = 'add-repo')}
 			>
-				<Plus size={14} strokeWidth={1.75} />
+				<Plus size={16} strokeWidth={1.75} />
 			</button>
 		</div>
 
@@ -122,12 +136,14 @@
 							aria-expanded={!closed}
 							onclick={() => (collapsed[group.name] = !closed)}
 						>
-							<span class="avatar" style="--hue: var({repoHue(group.name)})">
-								{repoInitial(group.name)}
+							<span class="ico" data-align="sidebar-icon">
+								<span class="avatar" style="--hue: var({repoHue(group.name)})">
+									{repoInitial(group.name)}
+								</span>
 							</span>
-							<span class="repo-name">{group.name}</span>
+							<span class="label repo-name" data-align="sidebar-label">{group.name}</span>
 							<span class="chev" {@attach springRotate(() => !closed, { rest: 0, on: 90 })}>
-								<ChevronRight size={14} strokeWidth={1.75} />
+								<ChevronRight size={16} strokeWidth={1.75} />
 							</span>
 						</button>
 						<button
@@ -138,7 +154,7 @@
 							disabled={!ws.canEdit}
 							onclick={() => onnewsession(group.name)}
 						>
-							<Plus size={14} strokeWidth={1.75} />
+							<Plus size={16} strokeWidth={1.75} />
 						</button>
 					</div>
 					<div class="sessions" {@attach springCollapse(() => closed)}>
@@ -171,11 +187,16 @@
 						aria-expanded={archivedOpen}
 						onclick={() => (archivedOpen = !archivedOpen)}
 					>
-						<span class="chev" {@attach springRotate(() => archivedOpen, { rest: 0, on: 90 })}>
-							<ChevronRight size={14} strokeWidth={1.75} />
+						<span class="ico" data-align="sidebar-icon">
+							<span
+								class="chev-lead"
+								{@attach springRotate(() => archivedOpen, { rest: 0, on: 90 })}
+							>
+								<ChevronRight size={16} strokeWidth={1.75} />
+							</span>
 						</span>
-						<span class="repo-name">Archived</span>
-						<span class="gh-num count">{ws.archived.length}</span>
+						<span class="label repo-name" data-align="sidebar-label">Archived</span>
+						<span class="gh-num count" data-align="sidebar-end">{ws.archived.length}</span>
 					</button>
 					<div class="sessions" {@attach springCollapse(() => !archivedOpen)}>
 						{#each ws.archived as session (session.id)}
@@ -188,8 +209,8 @@
 	</div>
 
 	<div class="foot">
-		<span class="runner" title={idleTitle}>{runnerLabel(machine?.runner)}</span>
 		<span class="grow"></span>
+		<span class="runner" title={idleTitle}>{runnerLabel(machine?.runner)}</span>
 		<a
 			class="gh-ibtn"
 			href="https://orchard.my/docs/greenhouse"
@@ -215,6 +236,7 @@
 
 <style>
 	.side {
+		--row-pad: calc(var(--gh-side-edge) - 0.5rem);
 		display: flex;
 		flex-direction: column;
 		height: 100%;
@@ -222,13 +244,22 @@
 		background: var(--gh-sidebar);
 	}
 
-	.bar {
+	.bar,
+	.foot {
 		display: flex;
 		align-items: center;
-		gap: 0.125rem;
+		gap: 0.5rem;
 		flex: none;
 		height: var(--gh-bar);
-		padding: 0 0.5rem;
+		padding: 0 calc(var(--gh-side-edge) - var(--gh-ibtn-inset));
+	}
+
+	.bar {
+		border-bottom: 1px solid var(--gh-line);
+	}
+
+	.foot {
+		border-top: 1px solid var(--gh-line);
 	}
 
 	.grow {
@@ -238,25 +269,24 @@
 	.top {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
+		gap: 0.5rem;
 		flex: none;
-		padding: 0.25rem 0.5rem 0.5rem;
+		padding: 0.75rem 0.5rem;
 		border-bottom: 1px solid var(--gh-line);
 	}
 
-	.machine {
+	.rows {
 		display: flex;
-		min-width: 0;
-		margin-bottom: 0.25rem;
+		flex-direction: column;
 	}
 
 	.nav {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.5rem;
 		height: var(--gh-row);
-		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		padding: 0 var(--row-pad);
+		border-radius: var(--gh-r-row);
 		color: var(--gh-muted);
 		text-align: left;
 		transition:
@@ -264,8 +294,20 @@
 			color var(--dur-fast) ease;
 	}
 
-	.nav span:first-of-type {
+	.ico {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
+	}
+
+	.label {
 		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	.nav:hover:not(:disabled) {
@@ -276,7 +318,7 @@
 	.nav--on {
 		background: var(--gh-selected);
 		color: var(--gh-text);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.nav:disabled {
@@ -285,18 +327,27 @@
 	}
 
 	.list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		flex: 1;
 		min-height: 0;
-		padding: 0.5rem;
+		padding: 0.5rem 0.5rem 0.75rem;
 	}
 
 	.section {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex: none;
 		height: var(--gh-row);
-		padding: 0 0.25rem 0 0.5rem;
+		margin-bottom: -0.5rem;
+		padding: 0 calc(var(--row-pad) - var(--gh-ibtn-inset)) 0 var(--row-pad);
+	}
+
+	.section-title {
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
@@ -312,7 +363,7 @@
 	.group {
 		display: flex;
 		flex-direction: column;
-		margin-bottom: 0.25rem;
+		flex: none;
 	}
 
 	.repo {
@@ -328,10 +379,10 @@
 		flex: 1;
 		min-width: 0;
 		height: var(--gh-row);
-		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		padding: 0 var(--row-pad);
+		border-radius: var(--gh-r-row);
 		color: var(--gh-text);
-		font-weight: 500;
+		font-weight: 600;
 		text-align: left;
 		transition: background-color var(--dur-fast) ease;
 	}
@@ -348,26 +399,18 @@
 	.avatar {
 		display: inline-grid;
 		place-items: center;
-		flex: none;
-		width: 1.125rem;
-		height: 1.125rem;
-		border-radius: 0.3125rem;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
+		border-radius: 0.25rem;
 		background: color-mix(in oklab, var(--hue) 22%, var(--gh-editor));
 		color: color-mix(in oklab, var(--hue) 80%, var(--text-default));
 		font-size: var(--text-micro);
-		font-weight: 700;
-		line-height: 1;
+		font-weight: 600;
+		line-height: var(--gh-lh-caption);
 	}
 
-	.repo-name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-	}
-
-	.chev {
+	.chev,
+	.chev-lead {
 		display: inline-grid;
 		flex: none;
 		color: var(--gh-faint);
@@ -378,13 +421,14 @@
 		transition: opacity var(--dur-fast) ease;
 	}
 
-	.repo:hover .chev {
+	.repo:hover .chev,
+	.repo-main:focus-visible .chev {
 		opacity: 1;
 	}
 
 	.repo-add {
 		position: absolute;
-		right: 1.75rem;
+		right: calc(var(--row-pad) + var(--gh-glyph) + 0.5rem - var(--gh-ibtn-inset));
 		opacity: 0;
 	}
 
@@ -396,7 +440,6 @@
 	.sessions {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
 		overflow: hidden;
 	}
 
@@ -407,35 +450,20 @@
 	.empty,
 	.hint {
 		margin: 0;
-		padding: 0.375rem 0.75rem 0.5rem 2.125rem;
+		padding: 0.5rem var(--row-pad) 0.5rem calc(var(--row-pad) + var(--gh-glyph) + 0.5rem);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.hint {
-		padding-left: 0.5rem;
-	}
-
-	.foot {
-		display: flex;
-		align-items: center;
-		gap: 0.125rem;
-		flex: none;
-		height: var(--gh-bar);
-		padding: 0 0.5rem;
-		border-top: 1px solid var(--gh-line);
+		padding-left: var(--row-pad);
 	}
 
 	.runner {
-		display: inline-flex;
-		align-items: center;
-		height: 1.25rem;
-		padding: 0 0.4375rem;
-		border-radius: var(--radius-xs);
-		border: 1px dashed var(--gh-line);
-		color: var(--gh-muted);
 		font-size: var(--gh-caption);
-		letter-spacing: 0.02em;
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
 		cursor: default;
 	}
 </style>

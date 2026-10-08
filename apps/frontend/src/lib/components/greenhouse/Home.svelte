@@ -146,7 +146,7 @@
 
 <div class="home gh-scroll">
 	<div class="inner">
-		<h1 class="title">What should we build?</h1>
+		<h1 class="title" data-type="display">What should we build?</h1>
 
 		<div class="composer" class:composer--off={!ws?.canEdit}>
 			<textarea
@@ -164,12 +164,10 @@
 				<Menu bind:open={machineOpen} placement="bottom-start">
 					{#snippet trigger(props, isOpen)}
 						<button {...props} type="button" class="chip" aria-expanded={isOpen}>
-							{#if machine}<StatusDot meta={meta(machine)} size={7} />{:else}<Monitor
-									size={13}
-									strokeWidth={1.75}
-								/>{/if}
+							{#if machine}<span class="dot"><StatusDot meta={meta(machine)} size={8} /></span
+								>{:else}<Monitor size={14} strokeWidth={1.75} />{/if}
 							<span>{machine?.name ?? 'Machine'}</span>
-							<ChevronDown size={12} strokeWidth={1.75} />
+							<ChevronDown size={14} strokeWidth={1.75} />
 						</button>
 					{/snippet}
 					{#each app.machines as m (m.id)}
@@ -200,14 +198,12 @@
 									>{repoInitial(chosen.name)}</span
 								>
 								<span>{chosen.name}</span>
-								<span class="sep">·</span>
-								<GitBranch size={12} strokeWidth={1.75} />
 								<span class="gh-mono branch">{chosen.branch}</span>
 							{:else}
-								<GitBranch size={13} strokeWidth={1.75} />
+								<GitBranch size={14} strokeWidth={1.75} />
 								<span>{ws?.running ? 'Add a repository' : 'Repository'}</span>
 							{/if}
-							<ChevronDown size={12} strokeWidth={1.75} />
+							<ChevronDown size={14} strokeWidth={1.75} />
 						</button>
 					{/snippet}
 					{#each repos as r (r.name)}
@@ -235,7 +231,7 @@
 							class:chip--set={!!issueRef.trim()}
 							aria-expanded={isOpen}
 						>
-							<CircleDot size={13} strokeWidth={1.75} />
+							<CircleDot size={14} strokeWidth={1.75} />
 							<span>{issueRef.trim() || 'Issue'}</span>
 						</button>
 					{/snippet}
@@ -259,7 +255,7 @@
 						{#snippet trigger(props, isOpen)}
 							<button {...props} type="button" class="chip chip--quiet" aria-expanded={isOpen}>
 								<span>{model?.name ?? 'Model'}</span>
-								<ChevronDown size={12} strokeWidth={1.75} />
+								<ChevronDown size={14} strokeWidth={1.75} />
 							</button>
 						{/snippet}
 						{#each models.slice(0, 12) as m (`${m.providerID}/${m.modelID}`)}
@@ -286,7 +282,7 @@
 					title="Plan first: the agent proposes a plan before it edits anything"
 					onclick={() => ws && (ws.store.plan = !ws.store.plan)}
 				>
-					<ClipboardList size={13} strokeWidth={1.75} /> Plan
+					<ClipboardList size={14} strokeWidth={1.75} /> Plan
 				</button>
 				<button
 					type="button"
@@ -296,7 +292,7 @@
 					disabled={!canLaunch}
 					onclick={launch}
 				>
-					<ArrowUp size={16} strokeWidth={2} />
+					<ArrowUp size={16} strokeWidth={1.75} />
 				</button>
 			</div>
 		</div>
@@ -310,10 +306,12 @@
 				<h2 class="list-head">Recent sessions</h2>
 				{#each recent as s (s.id)}
 					<button type="button" class="item" onclick={() => app.openSession(s.id)}>
-						<SessionGlyph
-							activity={ws?.activity(s) ?? s.activity}
-							merged={s.prState === 'merged'}
-						/>
+						<span class="ico"
+							><SessionGlyph
+								activity={ws?.activity(s) ?? s.activity}
+								merged={s.prState === 'merged'}
+							/></span
+						>
 						<span class="item-title">{s.title}</span>
 						<span class="item-meta gh-mono">{s.repo} · {s.branch}</span>
 						{#if s.diffstat && (s.diffstat.additions || s.diffstat.deletions)}
@@ -336,7 +334,7 @@
 					class="gh-btn gh-btn--ghost"
 					onclick={() => (app.sheet = 'new-machine')}
 				>
-					<Plus size={13} /> New machine
+					<Plus size={14} strokeWidth={1.75} /> New machine
 				</button>
 			</div>
 			{#each app.machines as m (m.id)}
@@ -344,7 +342,7 @@
 				{@const isStopped = m.status === 'stopped' || m.status === 'error'}
 				<div class="item item--machine" class:item--on={m.id === machine?.id}>
 					<button type="button" class="item-main" onclick={() => app.openMachine(m.id)}>
-						<StatusDot meta={mm} size={8} />
+						<span class="ico"><StatusDot meta={mm} size={8} /></span>
 						<span class="item-title">{m.name}</span>
 						<span class="item-meta"
 							>{runnerLabel(m.runner)} · {mm.label}{m.owner && m.myRole && m.myRole !== 'owner'
@@ -360,24 +358,26 @@
 								type="button"
 								class="gh-ibtn"
 								aria-label="Start {m.name}"
-								title="Start"
+								title="Start {m.name}"
 								disabled={!!ws.busy}
 								onclick={() => ws?.lifecycle('start')}
 							>
-								<Play size={14} strokeWidth={1.75} />
+								<Play size={16} strokeWidth={1.75} />
 							</button>
 						{:else}
 							<button
 								type="button"
 								class="gh-ibtn"
 								aria-label="Stop {m.name}"
-								title="Stop"
+								title="Stop {m.name}"
 								disabled={!!ws.busy || m.status !== 'running'}
 								onclick={() => ws?.lifecycle('stop')}
 							>
-								<Square size={13} strokeWidth={1.75} />
+								<Square size={16} strokeWidth={1.75} />
 							</button>
 						{/if}
+					{:else}
+						<span class="slot" aria-hidden="true"></span>
 					{/if}
 				</div>
 			{:else}
@@ -400,13 +400,14 @@
 		width: 100%;
 		max-width: 46rem;
 		margin: 0 auto;
-		padding: clamp(3rem, 14vh, 9rem) 1.5rem 4rem;
+		padding: clamp(3rem, 14vh, 8rem) 1.5rem 3rem;
 	}
 
 	.title {
-		margin: 0 0 1.25rem;
+		margin: 0 0 1.5rem;
 		text-align: center;
-		font-size: 1.625rem;
+		font-size: 1.5rem;
+		line-height: 2rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		color: var(--gh-text);
@@ -415,7 +416,7 @@
 	.composer {
 		display: flex;
 		flex-direction: column;
-		border-radius: var(--radius-xl);
+		border-radius: var(--gh-r-sheet);
 		border: 1px solid var(--gh-composer-edge);
 		background: var(--gh-composer);
 		box-shadow: var(--gh-composer-shadow);
@@ -433,11 +434,11 @@
 	.prompt {
 		width: 100%;
 		min-height: 5.5rem;
-		padding: 1rem 1.125rem 0.5rem;
+		padding: 1rem 1rem 0.5rem;
 		background: transparent;
 		color: var(--gh-text);
-		font-size: var(--text-body);
-		line-height: 1.5;
+		font-size: var(--gh-reading);
+		line-height: var(--gh-lh-reading);
 		resize: none;
 		outline: none;
 	}
@@ -450,18 +451,18 @@
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 0.375rem;
-		padding: 0.5rem 0.625rem 0.625rem;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem 0.75rem;
 	}
 
 	.chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.25rem;
 		max-width: 16rem;
-		height: 1.75rem;
-		padding: 0 0.625rem;
-		border-radius: var(--radius-pill);
+		height: var(--gh-icon);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--gh-line);
 		color: var(--gh-muted);
 		white-space: nowrap;
@@ -495,25 +496,30 @@
 		background: var(--gh-selected);
 	}
 
-	.sep {
-		color: var(--gh-faint);
+	.dot {
+		display: inline-grid;
+		place-items: center;
+		width: 0.875rem;
 	}
 
 	.branch {
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
 	}
 
 	.ravatar {
 		display: inline-grid;
 		place-items: center;
 		flex: none;
-		width: 1rem;
-		height: 1rem;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 		border-radius: 0.25rem;
 		background: color-mix(in oklab, var(--hue) 22%, var(--gh-editor));
 		color: color-mix(in oklab, var(--hue) 80%, var(--text-default));
 		font-size: var(--text-micro);
-		font-weight: 700;
+		line-height: var(--gh-lh-caption);
+		font-weight: 600;
 	}
 
 	.grow {
@@ -523,9 +529,9 @@
 	.send {
 		display: inline-grid;
 		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
+		width: var(--gh-icon);
+		height: var(--gh-icon);
+		border-radius: var(--gh-r-control);
 		background: var(--accent);
 		color: var(--text-on-accent);
 		transition:
@@ -542,6 +548,7 @@
 		margin: 0.75rem 0 0;
 		text-align: center;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
@@ -554,33 +561,39 @@
 
 	.issue-head {
 		margin: 0;
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.issue-note {
 		margin: 0;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.list {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
-		margin-top: 2.5rem;
+		margin-top: 3rem;
+	}
+
+	.list + .list {
+		margin-top: 2rem;
 	}
 
 	.list-bar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		margin-bottom: 0.25rem;
 	}
 
 	.list-head {
-		margin: 0 0 0.375rem;
-		padding: 0 0.625rem;
+		margin: 0 0 0.25rem;
+		padding: 0 0.75rem;
 		font-size: var(--gh-caption);
-		font-weight: 500;
+		line-height: var(--gh-lh-caption);
+		font-weight: 400;
 		color: var(--gh-faint);
 	}
 
@@ -591,32 +604,44 @@
 	.item {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		height: 2.25rem;
-		padding: 0 0.625rem;
-		border-radius: var(--radius-sm);
+		gap: 0.5rem;
+		height: var(--gh-row);
+		padding: 0 0.75rem;
+		border-radius: var(--gh-r-row);
 		text-align: left;
 		color: var(--gh-text);
 		transition: background-color var(--dur-fast) ease;
 	}
 
-	.item:hover,
-	.item--on {
+	.item:hover {
 		background: var(--gh-hover);
 	}
 
+	.item--on,
+	.item--on:hover {
+		background: var(--gh-selected);
+	}
+
 	.item--machine {
-		padding-right: 0.25rem;
+		padding-right: calc(0.75rem - var(--gh-ibtn-inset));
 	}
 
 	.item-main {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.5rem;
 		flex: 1;
 		min-width: 0;
 		height: 100%;
 		text-align: left;
+	}
+
+	.ico {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 	}
 
 	.item-title {
@@ -625,7 +650,6 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		font-weight: 500;
 	}
 
 	.item-meta {
@@ -635,23 +659,33 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.item-stat {
 		display: inline-flex;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.item-time {
 		flex: none;
+		min-width: 3.5rem;
+		text-align: right;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		font-variant-numeric: tabular-nums;
 		color: var(--gh-faint);
+	}
+
+	.slot {
+		flex: none;
+		width: var(--gh-icon);
 	}
 
 	.empty {
 		margin: 0;
-		padding: 0.5rem 0.625rem;
+		padding: 0.5rem 0.75rem;
 		color: var(--gh-faint);
 	}
 </style>

@@ -3,8 +3,11 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { ChevronDown, Eye, Globe, Play, Plus, Radio, Square, X } from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+	import Menu from '$lib/components/ui/Menu.svelte';
+	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
+	import { springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import * as api from './api';
@@ -26,6 +29,8 @@
 	};
 
 	const terminals = new SvelteMap<string, string[]>();
+	const watching = new SvelteMap<string, string[]>();
+	let watchOpen = $state(false);
 	const active = new SvelteMap<string, DockTab>();
 	let scripts = $state.raw<Scripts | null>(null);
 	let ports = $state.raw<GhPort[] | null>(null);
@@ -37,6 +42,13 @@
 	const tab = $derived<DockTab>(active.get(key) ?? (scripted ? 'setup' : 'term:1'));
 	const mode = $derived<'rw' | 'ro'>(ws.canEdit ? 'rw' : 'ro');
 	const others = $derived(ws.live.others);
+	const watched = $derived(
+		(watching.get(key) ?? [])
+			.map((id) => others.find((u) => u.id === id) ?? null)
+			.filter((u): u is NonNullable<typeof u> => !!u)
+	);
+	const unwatched = $derived(others.filter((u) => !(watching.get(key) ?? []).includes(u.id)));
+	const publicMeta = statusMeta('warning', 'Public');
 	const runMeta = $derived(
 		scripts?.running ? statusMeta('success', 'Running', true) : statusMeta('neutral', 'Stopped')
 	);
@@ -53,8 +65,28 @@
 		}
 	});
 
-	function endpoint(n: string, m: 'rw' | 'ro' = mode) {
-		return ws.env.terminalEndpoint(ws.sandboxId, session?.id ?? '', n, m);
+	function endpoint(n: string, m: 'rw' | 'ro' = mode, user: string | null = null) {
+		return ws.env.terminalEndpoint(ws.sandboxId, session?.id ?? '', n, m, user);
+	}
+
+	function firstName(name: string) {
+		return name.split(' ')[0] || name;
+	}
+
+	function watch(userId: string) {
+		watchOpen = false;
+		const current = watching.get(key) ?? [];
+		if (!current.includes(userId)) watching.set(key, [...current, userId]);
+		select(`watch:${userId}`);
+	}
+
+	function unwatch(userId: string) {
+		const current = watching.get(key) ?? [];
+		watching.set(
+			key,
+			current.filter((id) => id !== userId)
+		);
+		if (tab === `watch:${userId}`) active.set(key, `term:${list[0] ?? '1'}`);
 	}
 
 	async function loadScripts() {
@@ -144,115 +176,180 @@
 	}
 </script>
 
-<section class="dock" aria-label="Terminal dock">
-	<div class="tabs" role="tablist" aria-label="Dock">
-		<button
-			type="button"
-			class="gh-ibtn dock-toggle"
-			aria-label={app.layout.dockOpen ? 'Collapse dock' : 'Expand dock'}
-			title="{app.layout.dockOpen ? 'Collapse' : 'Expand'} ({mod}J)"
-			aria-expanded={app.layout.dockOpen}
-			onclick={() => app.layout.toggle('dock')}
-		>
-			<span class="chev" class:chev--closed={!app.layout.dockOpen}
-				><ChevronDown size={14} strokeWidth={1.75} /></span
-			>
-		</button>
-		{#if scripted}
-			<button
-				type="button"
-				role="tab"
-				class="tab"
-				aria-selected={tab === 'setup'}
-				onclick={() => select('setup')}
-			>
-				Setup
-				{#if setupMeta}<StatusDot meta={setupMeta} size={6} />{/if}
-			</button>
-			<button
-				type="button"
-				role="tab"
-				class="tab"
-				aria-selected={tab === 'run'}
-				onclick={() => select('run')}
-			>
-				Run
-				{#if scripts?.running}<StatusDot meta={runMeta} size={6} />{/if}
-			</button>
-		{/if}
-		{#each list as n (n)}
-			<div class="tab-wrap" class:tab-wrap--on={tab === `term:${n}`}>
+<section class="dock" aria-label="Terminal dock" data-align="dock">
+	<div class="gh-tabs tabs" data-align="tabstrip">
+		<div class="scroll" role="tablist" aria-label="Dock">
+			{#if scripted}
 				<button
 					type="button"
 					role="tab"
-					class="tab"
-					aria-selected={tab === `term:${n}`}
-					onclick={() => select(`term:${n}`)}
+					class="gh-tab"
+					aria-selected={tab === 'setup'}
+					onclick={() => select('setup')}
 				>
-					Terminal{list.length > 1 ? ` ${n}` : ''}
+					<span class="gh-tl" data-label="Setup" data-align="right-edge">Setup</span>
+					{#if setupMeta}<span class="state" title="Setup {setupMeta.label.toLowerCase()}"
+							><StatusDot meta={setupMeta} size={6} /></span
+						>{/if}
 				</button>
-				{#if list.length > 1}
+				<button
+					type="button"
+					role="tab"
+					class="gh-tab"
+					aria-selected={tab === 'run'}
+					onclick={() => select('run')}
+				>
+					<span class="gh-tl" data-label="Run">Run</span>
+					{#if scripts?.running}<span class="state" title="Run script running"
+							><StatusDot meta={runMeta} size={6} /></span
+						>{/if}
+				</button>
+			{/if}
+			{#each list as n, i (n)}
+				{@const label = `Terminal${list.length > 1 ? ` ${n}` : ''}`}
+				<div class="tab-wrap" class:tab-wrap--on={tab === `term:${n}`}>
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						class:gh-tab--closable={list.length > 1}
+						aria-selected={tab === `term:${n}`}
+						onclick={() => select(`term:${n}`)}
+					>
+						<span
+							class="gh-tl"
+							data-label={label}
+							data-align={!scripted && i === 0 ? 'right-edge' : undefined}>{label}</span
+						>
+					</button>
+					{#if list.length > 1}
+						<button
+							type="button"
+							class="tab-x"
+							data-inline-close
+							aria-label="Close terminal {n}"
+							title="Close terminal {n}"
+							onclick={() => closeTerminal(n)}
+						>
+							<X size={12} strokeWidth={2} />
+						</button>
+					{/if}
+				</div>
+			{/each}
+			{#each watched as user (user.id)}
+				{@const label = `${firstName(user.name)}’s terminal`}
+				<div class="tab-wrap" class:tab-wrap--on={tab === `watch:${user.id}`}>
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab gh-tab--closable"
+						aria-selected={tab === `watch:${user.id}`}
+						title="Watching {user.name}’s terminal, read only"
+						onclick={() => select(`watch:${user.id}`)}
+					>
+						<Eye size={14} strokeWidth={1.75} />
+						<span class="gh-tl" data-label={label}>{label}</span>
+					</button>
 					<button
 						type="button"
 						class="tab-x"
-						aria-label="Close terminal {n}"
-						onclick={() => closeTerminal(n)}
+						data-inline-close
+						aria-label="Stop watching {user.name}"
+						title="Stop watching {user.name}"
+						onclick={() => unwatch(user.id)}
 					>
 						<X size={12} strokeWidth={2} />
 					</button>
-				{/if}
-			</div>
-		{/each}
-		<button
-			type="button"
-			class="gh-ibtn"
-			aria-label="New terminal"
-			title="New terminal"
-			disabled={!ws.running}
-			onclick={addTerminal}
-		>
-			<Plus size={14} strokeWidth={1.75} />
-		</button>
-		{#if scripted}
+				</div>
+			{/each}
 			<button
 				type="button"
-				role="tab"
-				class="tab"
-				aria-selected={tab === 'ports'}
-				onclick={() => select('ports')}
+				class="gh-ibtn add"
+				aria-label="New terminal"
+				title="New terminal"
+				disabled={!ws.running || !ws.canEdit}
+				onclick={addTerminal}
 			>
-				Ports
-				{#if ports && ports.length > 0}<span class="gh-num count">{ports.length}</span>{/if}
+				<Plus size={16} strokeWidth={1.75} />
 			</button>
-		{/if}
+			{#if unwatched.length > 0 && ws.running}
+				<Menu bind:open={watchOpen} placement="bottom-start">
+					{#snippet trigger(props, isOpen)}
+						<button
+							{...props}
+							type="button"
+							class="gh-ibtn"
+							aria-label="Watch someone’s terminal"
+							title="Watch someone’s terminal, read only"
+							aria-expanded={isOpen}
+						>
+							<Eye size={16} strokeWidth={1.75} />
+						</button>
+					{/snippet}
+					<div class="gh-menu-head">Watch a terminal, read only</div>
+					{#each unwatched as user (user.id)}
+						<MenuItem onclick={() => watch(user.id)}>
+							<Eye size={14} />
+							{user.name}
+						</MenuItem>
+					{/each}
+				</Menu>
+			{/if}
+			{#if scripted}
+				<button
+					type="button"
+					role="tab"
+					class="gh-tab"
+					aria-selected={tab === 'ports'}
+					onclick={() => select('ports')}
+				>
+					<span class="gh-tl" data-label="Ports">Ports</span>
+					{#if ports && ports.length > 0}<span class="gh-num count">{ports.length}</span>{/if}
+				</button>
+			{/if}
+		</div>
 		<span class="grow"></span>
 		{#if scripted}
 			{#if scripts?.running}
 				<button
 					type="button"
-					class="gh-btn run"
+					class="gh-ibtn run"
+					aria-label="Stop the run script"
+					title="Stop the run script"
 					disabled={!ws.canEdit || runBusy}
 					onclick={() => run('stop')}
-					title="Stop the run script"
 				>
-					<Square size={12} strokeWidth={2} /> Stop
+					<Square size={16} strokeWidth={1.75} />
 				</button>
 			{:else}
 				<button
 					type="button"
-					class="gh-btn run"
+					class="gh-ibtn run"
+					aria-label="Start the run script"
 					disabled={!ws.canEdit || runBusy || !ws.running || (scripts !== null && !scripts.run)}
 					title={!ws.canEdit
 						? VIEWER_ONLY
 						: scripts && !scripts.run
 							? 'Add a "run" script to .orchard/greenhouse.json'
-							: (scripts?.run ?? 'Run')}
+							: `Start the run script${scripts?.run ? `: ${scripts.run}` : ''}`}
 					onclick={() => run('start')}
 				>
-					<Play size={12} strokeWidth={2} /> Run
+					<Play size={16} strokeWidth={1.75} />
 				</button>
 			{/if}
 		{/if}
+		<button
+			type="button"
+			class="gh-ibtn toggle"
+			aria-label={app.layout.dockOpen ? 'Collapse dock' : 'Expand dock'}
+			title="{app.layout.dockOpen ? 'Collapse' : 'Expand'} dock ({mod}J)"
+			aria-expanded={app.layout.dockOpen}
+			onclick={() => app.layout.toggle('dock')}
+		>
+			<span class="chev" {@attach springRotate(() => !app.layout.dockOpen, { rest: 0, on: 180 })}
+				><ChevronDown size={16} strokeWidth={1.75} /></span
+			>
+		</button>
 	</div>
 
 	{#if app.layout.dockOpen}
@@ -298,14 +395,16 @@
 							</p>
 						{:else}
 							{#each ports as port (port.port)}
-								<div class="port">
-									<Radio size={14} strokeWidth={1.75} />
+								<div class="port" data-align="right-edge">
+									<Radio size={16} strokeWidth={1.75} />
 									<span class="gh-mono port-num">:{port.port}</span>
 									<span class="port-proc">{port.process ?? 'unknown process'}</span>
-									{#if port.public}<span class="port-public">Public</span>{/if}
+									{#if port.public}<span class="port-public"
+											><StatusDot meta={publicMeta} size={6} /> Public</span
+										>{/if}
 									<span class="grow"></span>
 									<button type="button" class="gh-btn" onclick={() => ws.openPreview(port.port)}>
-										<Globe size={13} strokeWidth={1.75} /> Preview
+										<Globe size={14} strokeWidth={1.75} /> Preview
 									</button>
 								</div>
 							{/each}
@@ -316,14 +415,25 @@
 					<div class="pane" class:pane--on={tab === `term:${n}`}>
 						<PodTerminal endpoint={endpoint(n)} visible={tab === `term:${n}`} />
 						{#if mode === 'ro'}
-							<span class="ro"><Eye size={12} /> Read only</span>
+							<span class="ro"><Eye size={14} strokeWidth={1.75} /> Read only</span>
 						{:else if others.length > 0 && tab === `term:${n}`}
 							<span class="ro">
-								{others[0].name.split(' ')[0]}{others.length > 1
+								{firstName(others[0].name)}{others.length > 1
 									? ` and ${others.length - 1} more`
-									: ''} can see this terminal
+									: ''} can watch this terminal
 							</span>
 						{/if}
+					</div>
+				{/each}
+				{#each watched as user (`${key}:watch:${user.id}`)}
+					<div class="pane" class:pane--on={tab === `watch:${user.id}`}>
+						<PodTerminal
+							endpoint={endpoint('1', 'ro', user.id)}
+							visible={tab === `watch:${user.id}`}
+						/>
+						<span class="ro"
+							><Eye size={14} strokeWidth={1.75} /> Watching {firstName(user.name)}, read only</span
+						>
 					</div>
 				{/each}
 			{/if}
@@ -340,25 +450,43 @@
 		background: var(--gh-panel);
 	}
 
-	.tabs {
+	.scroll {
 		display: flex;
-		align-items: center;
-		gap: 0.125rem;
-		flex: none;
-		height: var(--gh-tab);
-		padding: 0 0.5rem 0 0.375rem;
-		border-bottom: 1px solid var(--gh-line);
+		align-items: stretch;
+		min-width: 0;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
 
-	.dock-toggle .chev {
-		display: inline-grid;
-		transition: transform var(--dur-fast) ease;
+	.scroll > .gh-ibtn,
+	.tabs > .gh-ibtn {
+		align-self: center;
 	}
 
-	.chev--closed {
-		transform: rotate(-90deg);
+	.tabs > .gh-ibtn:last-child {
+		margin-left: 0.5rem;
+	}
+
+	.add {
+		margin: 0 0.25rem;
+	}
+
+	.add + .gh-ibtn {
+		margin-left: 0.25rem;
+	}
+
+	.chev {
+		display: inline-grid;
+	}
+
+	.toggle[aria-expanded='true']:not(:hover) {
+		background: transparent;
+		color: var(--gh-muted);
+	}
+
+	.state {
+		display: inline-grid;
+		place-items: center;
 	}
 
 	.tab-wrap {
@@ -367,46 +495,22 @@
 		align-items: center;
 	}
 
-	.tab {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		height: var(--gh-tab);
-		padding: 0 0.5rem;
-		color: var(--gh-muted);
-		white-space: nowrap;
-		transition: color var(--dur-fast) ease;
+	.gh-tab--closable {
+		padding-right: 1.75rem;
 	}
 
-	.tab:hover {
-		color: var(--gh-text);
-	}
-
-	.tab[aria-selected='true'] {
-		color: var(--gh-text);
-		font-weight: 500;
-	}
-
-	.tab[aria-selected='true']::after {
-		content: '';
-		position: absolute;
-		left: 0.5rem;
-		right: 0.5rem;
-		bottom: -1px;
-		height: 2px;
-		border-radius: 1px;
-		background: var(--gh-text);
+	.gh-tab--closable[aria-selected='true']::after {
+		right: 1.75rem;
 	}
 
 	.tab-x {
+		position: absolute;
+		right: 0.125rem;
 		display: inline-grid;
 		place-items: center;
-		width: 1rem;
-		height: 1rem;
-		margin-left: -0.25rem;
-		margin-right: 0.25rem;
-		border-radius: var(--radius-xs);
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: var(--gh-r-control);
 		color: var(--gh-faint);
 		opacity: 0;
 	}
@@ -427,13 +531,12 @@
 	}
 
 	.run {
-		height: 1.5rem;
-		padding: 0 0.5rem;
-		gap: 0.3125rem;
+		flex: none;
+		margin-left: 0.5rem;
 	}
 
 	.grow {
-		flex: 1;
+		flex: 1 0 0.5rem;
 	}
 
 	.body {
@@ -446,7 +549,6 @@
 		position: absolute;
 		inset: 0;
 		display: none;
-		padding: 0.375rem 0 0 0.5rem;
 	}
 
 	.pane--on {
@@ -455,14 +557,19 @@
 	}
 
 	.pane--ports {
-		padding: 0.25rem 0.5rem;
+		padding: 0 var(--gh-edge);
 	}
 
 	.note {
 		margin: 0;
-		padding: 0.75rem 0.5rem;
+		padding: var(--gh-edge);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
+	}
+
+	.pane--ports .note {
+		padding-inline: 0;
 	}
 
 	.note code {
@@ -473,16 +580,16 @@
 	.ro {
 		position: absolute;
 		top: 0.5rem;
-		right: 0.75rem;
+		right: var(--gh-edge);
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		height: 1.25rem;
-		padding: 0 0.5rem;
-		border-radius: var(--radius-pill);
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--gh-r-control);
 		background: var(--gh-sidebar);
 		border: 1px solid var(--gh-line);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-muted);
 		pointer-events: none;
 	}
@@ -491,8 +598,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		height: 2.25rem;
-		padding: 0 0.25rem 0 0.5rem;
+		height: 2.5rem;
 		border-bottom: 1px solid var(--gh-line-soft);
 		color: var(--gh-muted);
 	}
@@ -501,12 +607,16 @@
 		color: var(--gh-text);
 	}
 
-	.port-proc {
+	.port-proc,
+	.port-public {
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 
 	.port-public {
-		font-size: var(--gh-caption);
-		color: var(--status-warning);
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--gh-muted);
 	}
 </style>

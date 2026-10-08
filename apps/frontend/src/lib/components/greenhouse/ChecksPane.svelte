@@ -15,6 +15,14 @@
 	let expanded = $state<string | null>(null);
 
 	const failing = $derived((data?.checks ?? []).filter((c) => isFailure(c)));
+	const prMeta = $derived.by((): StatusMeta | null => {
+		const pr = data?.pr;
+		if (!pr) return null;
+		if (pr.draft) return statusMeta('neutral', 'Draft');
+		if (pr.state === 'merged') return statusMeta('info', 'Merged');
+		if (pr.state === 'closed') return statusMeta('neutral', 'Closed');
+		return statusMeta('success', 'Open');
+	});
 
 	function isFailure(check: GhCheck) {
 		return ['failure', 'timed_out', 'cancelled', 'action_required'].includes(
@@ -82,72 +90,79 @@
 		<p class="note">Checks appear once this session has a pull request.</p>
 	{:else}
 		{#if data?.pr}
-			<a class="pr" href={data.pr.url} target="_blank" rel="noopener">
-				<GitPullRequest size={15} strokeWidth={1.75} />
-				<span class="pr-title">{data.pr.title ?? `Pull request ${data.pr.number}`}</span>
-				<span class="pr-state pr-state--{data.pr.state}"
-					>{data.pr.draft ? 'Draft' : data.pr.state}</span
+			<a class="pr" href={data.pr.url} target="_blank" rel="noopener" title="Open on GitHub">
+				<span class="ico" data-align="right-edge"
+					><GitPullRequest size={16} strokeWidth={1.75} /></span
 				>
-				<ExternalLink size={13} strokeWidth={1.75} />
+				<span class="pr-title">{data.pr.title ?? `Pull request ${data.pr.number}`}</span>
+				{#if prMeta}
+					<span class="state"><StatusDot meta={prMeta} size={6} /> {prMeta.label}</span>
+				{/if}
+				<span class="ico ext"><ExternalLink size={14} strokeWidth={1.75} /></span>
 			</a>
 		{:else}
 			<p class="note">No pull request yet. Create one from the button above to run CI.</p>
 		{/if}
 
 		{#if data && data.checks.length > 0}
-			<div class="head">
-				<span>Checks</span>
-				<span class="grow"></span>
-				<button
-					type="button"
-					class="gh-ibtn"
-					aria-label="Refresh checks"
-					title="Refresh"
-					onclick={load}
-				>
-					<RefreshCw size={14} strokeWidth={1.75} />
-				</button>
-			</div>
-			{#each data.checks as check (check.name)}
-				{@const m = meta(check)}
-				<div class="check">
+			<section class="group" aria-label="Checks">
+				<div class="head">
+					<span class="head-title">Checks</span>
 					<button
 						type="button"
-						class="check-row"
-						aria-expanded={expanded === check.name}
-						disabled={!check.logExcerpt}
-						onclick={() => (expanded = expanded === check.name ? null : check.name)}
+						class="gh-ibtn"
+						aria-label="Refresh checks"
+						title="Refresh checks"
+						onclick={load}
 					>
-						<StatusDot meta={m} size={8} />
-						<span class="check-name">{check.name}</span>
-						<span class="check-state">{m.label}</span>
+						<RefreshCw size={16} strokeWidth={1.75} />
 					</button>
-					{#if check.url}
-						<a
-							class="gh-ibtn"
-							href={check.url}
-							target="_blank"
-							rel="noopener"
-							aria-label="Open {check.name}"
-						>
-							<ExternalLink size={13} strokeWidth={1.75} />
-						</a>
-					{/if}
 				</div>
-				{#if expanded === check.name && check.logExcerpt}
-					<pre class="log gh-mono gh-scroll">{check.logExcerpt}</pre>
-				{/if}
-			{/each}
+				{#each data.checks as check (check.name)}
+					{@const m = meta(check)}
+					<div class="check">
+						<button
+							type="button"
+							class="check-row"
+							aria-expanded={expanded === check.name}
+							disabled={!check.logExcerpt}
+							title={check.logExcerpt ? 'Show the log excerpt' : undefined}
+							onclick={() => (expanded = expanded === check.name ? null : check.name)}
+						>
+							<span class="ico" data-align="right-edge"><StatusDot meta={m} size={8} /></span>
+							<span class="check-name">{check.name}</span>
+							<span class="check-state" class:check-state--failed={isFailure(check)}>{m.label}</span
+							>
+						</button>
+						{#if check.url}
+							<a
+								class="gh-ibtn"
+								href={check.url}
+								target="_blank"
+								rel="noopener"
+								aria-label="Open {check.name}"
+								title="Open {check.name} on GitHub"
+							>
+								<ExternalLink size={14} strokeWidth={1.75} />
+							</a>
+						{/if}
+					</div>
+					{#if expanded === check.name && check.logExcerpt}
+						<pre class="log gh-mono gh-scroll">{check.logExcerpt}</pre>
+					{/if}
+				{/each}
+			</section>
 			{#if failing.length > 0}
 				<div class="fix">
 					<button
 						type="button"
-						class="gh-btn gh-btn--primary"
+						class="gh-btn"
+						class:gh-btn--primary={!ws.prIsPrimary}
 						disabled={!ws.canEdit}
 						title={ws.canEdit ? undefined : VIEWER_ONLY}
 						onclick={fix}
 					>
-						<Wand2 size={14} /> Fix with agent
+						<Wand2 size={14} strokeWidth={1.75} /> Fix with agent
 					</button>
 					<span class="fix-note">Sends the failing logs to the agent.</span>
 				</div>
@@ -158,17 +173,30 @@
 
 <style>
 	.checks {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		flex: 1;
 		min-height: 0;
-		padding: 0.5rem 0.5rem 1rem;
+		padding: 0.5rem calc(var(--gh-edge) - 0.5rem) 1rem;
+	}
+
+	.ico {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 	}
 
 	.pr {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem;
-		border-radius: var(--radius-sm);
+		flex: none;
+		height: var(--gh-row);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-row);
 		color: var(--gh-text);
 		transition: background-color var(--dur-fast) ease;
 	}
@@ -183,35 +211,40 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		font-weight: 500;
+		font-weight: 600;
 	}
 
-	.pr-state {
+	.state {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex: none;
 		font-size: var(--gh-caption);
-		text-transform: capitalize;
-		color: var(--status-success);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-muted);
 	}
 
-	.pr-state--merged {
-		color: var(--hue-violet);
-	}
-
-	.pr-state--closed {
+	.ext {
 		color: var(--gh-faint);
+	}
+
+	.group {
+		display: flex;
+		flex-direction: column;
 	}
 
 	.head {
 		display: flex;
 		align-items: center;
-		height: 1.75rem;
-		margin-top: 0.5rem;
-		padding: 0 0.25rem 0 0.5rem;
-		font-size: var(--gh-caption);
-		color: var(--gh-faint);
+		justify-content: space-between;
+		height: var(--gh-list-row);
+		padding: 0 calc(0.5rem - var(--gh-ibtn-inset)) 0 0.5rem;
 	}
 
-	.grow {
-		flex: 1;
+	.head-title {
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
 	}
 
 	.check {
@@ -222,12 +255,12 @@
 	.check-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.5rem;
 		flex: 1;
 		min-width: 0;
-		height: 1.875rem;
+		height: var(--gh-list-row);
 		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		border-radius: var(--gh-r-row);
 		text-align: left;
 		color: var(--gh-text);
 	}
@@ -250,16 +283,23 @@
 
 	.check-state {
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
+	}
+
+	.check-state--failed {
+		color: var(--gh-text);
+		font-weight: 600;
 	}
 
 	.log {
 		max-height: 14rem;
 		margin: 0.25rem 0.5rem 0.5rem;
-		padding: 0.5rem 0.625rem;
-		border-radius: var(--radius-xs);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--gh-r-row);
 		background: var(--gh-sidebar);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		white-space: pre-wrap;
 		color: var(--gh-muted);
 	}
@@ -267,14 +307,15 @@
 	.fix {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.75rem 0.5rem 0;
+		gap: 0.75rem;
+		padding: 0.5rem 0.5rem 0;
 	}
 
 	.fix-note,
 	.note {
 		margin: 0;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
@@ -285,7 +326,7 @@
 	.skeletons {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.75rem 0.5rem;
 	}
 </style>

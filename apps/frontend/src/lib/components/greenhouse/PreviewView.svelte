@@ -40,10 +40,10 @@
 			title="Reload"
 			onclick={reload}
 		>
-			<RotateCw size={14} strokeWidth={1.75} />
+			<RotateCw size={16} strokeWidth={1.75} />
 		</button>
 		<div class="url">
-			<Globe size={13} strokeWidth={1.75} />
+			<Globe size={14} strokeWidth={1.75} />
 			<span class="gh-mono">{display}</span>
 			<span class="port gh-num">:{tab.port}</span>
 		</div>
@@ -55,7 +55,7 @@
 			disabled={!tab.url}
 			onclick={external}
 		>
-			<ExternalLink size={14} strokeWidth={1.75} />
+			<ExternalLink size={16} strokeWidth={1.75} />
 		</button>
 	</div>
 	<div class="stage">
@@ -90,25 +90,26 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		flex: none;
-		height: 2.25rem;
-		padding: 0 0.375rem;
+		height: var(--gh-tab);
+		padding: 0 calc(var(--gh-edge) - var(--gh-ibtn-inset));
 		border-bottom: 1px solid var(--gh-line);
 	}
 
 	.url {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: 1;
 		min-width: 0;
-		height: 1.5rem;
-		padding: 0 0.625rem;
-		border-radius: var(--radius-pill);
+		height: var(--gh-icon);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-control);
 		background: var(--gh-hover);
 		color: var(--gh-muted);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 
 	.url span:first-of-type {

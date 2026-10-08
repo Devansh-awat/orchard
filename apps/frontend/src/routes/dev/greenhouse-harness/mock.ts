@@ -59,7 +59,32 @@ export function installFetch(role: 'owner' | 'collaborator' | 'viewer') {
 			}
 		],
 		[/\/repos$/, 'GET', (u) => ({ repos: u.pathname.includes('sbx-leaf') ? data.repos : [] })],
-		[/^\/apiv1\/sandboxes\/[^/]+\/members$/, 'GET', () => ({ ...data.members, myRole: role })],
+		[
+			/^\/apiv1\/sandboxes\/[^/]+\/members$/,
+			'GET',
+			() => ({
+				...data.members,
+				...(role === 'owner'
+					? {}
+					: { owner: { id: data.ALEX.id, name: data.ALEX.name, email: 'alex@example.com' } }),
+				myRole: role
+			})
+		],
+		[
+			/\/git\/identity$/,
+			'GET',
+			() => {
+				const linked = new URLSearchParams(location.search).get('github') !== 'none';
+				return {
+					name: data.SEB.name,
+					email: 'seb@example.com',
+					githubLogin: linked ? 'seb' : null,
+					githubLinked: linked,
+					canCommit: role !== 'viewer',
+					canPush: linked && role !== 'viewer'
+				};
+			}
+		],
 		[/\/connect$/, 'GET', () => ({ sshHost: 'orchard-leaf-box', user: 'dev', sshReady: true })],
 		[/\/changes$/, 'GET', () => data.changes],
 		[/\/opencode\/file$/, 'GET', (u) => data.dir(u.searchParams.get('path') ?? '')],

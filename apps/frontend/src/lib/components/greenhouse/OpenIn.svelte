@@ -98,7 +98,7 @@
 			onclick={() => launch(primary.id)}
 		>
 			<primary.icon size={14} strokeWidth={1.75} />
-			<span class="label">{primary.label}</span>
+			<span class="label" data-align="title">{primary.label}</span>
 		</button>
 		<Menu bind:open={menuOpen} placement="bottom-end">
 			{#snippet trigger(menuProps, isOpen)}
@@ -106,6 +106,7 @@
 					{...menuProps}
 					type="button"
 					aria-label="Choose an editor"
+					title="Choose an editor"
 					aria-expanded={isOpen}
 					disabled={!owner || !machine}
 				>
@@ -134,8 +135,17 @@
 			</p>
 			<div class="setup-cmd">
 				<code class="gh-mono">{SETUP}</code>
-				<button type="button" class="gh-ibtn" aria-label="Copy command" onclick={copySetup}>
-					{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}
+				<button
+					type="button"
+					class="gh-ibtn"
+					aria-label="Copy command"
+					title="Copy command"
+					onclick={copySetup}
+				>
+					{#if copied}<Check size={16} strokeWidth={1.75} />{:else}<Copy
+							size={16}
+							strokeWidth={1.75}
+						/>{/if}
 				</button>
 			</div>
 		</div>
@@ -181,15 +191,15 @@
 		margin: 0;
 		color: var(--gh-muted);
 		font-size: var(--gh-caption);
-		line-height: var(--lh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 
 	.setup-cmd {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.25rem 0.25rem 0.25rem 0.625rem;
-		border-radius: var(--radius-xs);
+		padding: 0 0 0 0.5rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--gh-line);
 		background: var(--gh-field);
 	}
@@ -200,5 +210,6 @@
 		overflow-x: auto;
 		white-space: nowrap;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 </style>

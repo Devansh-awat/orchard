@@ -30,7 +30,7 @@
 <div class="review gh-scroll">
 	{#if byFile.length === 0}
 		<div class="empty">
-			<MessageSquareText size={18} strokeWidth={1.5} />
+			<MessageSquareText size={20} strokeWidth={1.75} />
 			<p>
 				Open a changed file and click a line number to leave a comment. Collect a few, then send
 				them to the agent as one review.
@@ -38,7 +38,13 @@
 		</div>
 	{:else}
 		{#each byFile as [path, list] (path)}
-			<button type="button" class="file gh-mono" onclick={() => ws.openDiff(path)}>
+			<button
+				type="button"
+				class="file gh-mono"
+				data-align="right-edge"
+				title="Open the diff"
+				onclick={() => ws.openDiff(path)}
+			>
 				{ws.resolve(path).rel}
 			</button>
 			{#each list as c (c.id)}
@@ -49,9 +55,10 @@
 						type="button"
 						class="gh-ibtn"
 						aria-label="Remove comment"
+						title="Remove comment"
 						onclick={() => ws.comments.remove(c.id)}
 					>
-						<Trash2 size={13} strokeWidth={1.75} />
+						<Trash2 size={16} strokeWidth={1.75} />
 					</button>
 				</div>
 			{/each}
@@ -64,12 +71,13 @@
 		<span class="grow"></span>
 		<button
 			type="button"
-			class="gh-btn gh-btn--primary"
+			class="gh-btn"
+			class:gh-btn--primary={!ws.prIsPrimary}
 			disabled={!ws.canEdit}
 			title={ws.canEdit ? undefined : VIEWER_ONLY}
 			onclick={send}
 		>
-			<Send size={13} /> Send review to agent
+			<Send size={14} strokeWidth={1.75} /> Send review to agent
 		</button>
 	</div>
 {/if}
@@ -78,7 +86,7 @@
 	.review {
 		flex: 1;
 		min-height: 0;
-		padding: 0.5rem 0.5rem 1rem;
+		padding: 0.5rem calc(var(--gh-edge) - 0.5rem) 1rem;
 	}
 
 	.empty {
@@ -95,6 +103,7 @@
 		margin: 0;
 		max-width: 22rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 
 	.file {
@@ -102,10 +111,15 @@
 		width: 100%;
 		margin-top: 0.5rem;
 		padding: 0.25rem 0.5rem;
-		border-radius: var(--radius-xs);
+		border-radius: var(--gh-r-row);
 		text-align: left;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-muted);
+	}
+
+	.file:first-child {
+		margin-top: 0;
 	}
 
 	.file:hover {
@@ -117,13 +131,13 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 0.5rem;
-		padding: 0.375rem 0.25rem 0.375rem 0.5rem;
+		padding: 0.25rem calc(0.5rem - var(--gh-ibtn-inset)) 0.25rem 0.5rem;
 	}
 
 	.line {
 		flex: none;
 		width: 2.5rem;
-		padding-top: 0.125rem;
+		padding-top: 0.25rem;
 		color: var(--gh-faint);
 	}
 
@@ -131,6 +145,7 @@
 		flex: 1;
 		min-width: 0;
 		margin: 0;
+		padding-top: 0.25rem;
 		white-space: pre-wrap;
 		color: var(--gh-text);
 	}
@@ -140,12 +155,13 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex: none;
-		padding: 0.5rem 0.75rem;
+		padding: 0.5rem var(--gh-edge);
 		border-top: 1px solid var(--gh-line-soft);
 	}
 
 	.count {
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 

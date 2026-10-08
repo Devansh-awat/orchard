@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Link, ShieldAlert, X } from 'lucide-svelte';
-	import { Button, Modal, Select } from '$lib/components/ui';
+	import { Link, X } from 'lucide-svelte';
+	import { Button, Input, Modal, Select } from '$lib/components/ui';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import { toasts } from '$lib/stores';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
+	import { HOST_DISCLOSURE, shareAcknowledged, acknowledgeShare } from './disclosure';
 	import { hostOnly } from './workspace.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -19,6 +20,27 @@
 	let readOnly = $state(false);
 	const role = $derived<'viewer' | 'collaborator'>(readOnly ? 'viewer' : 'collaborator');
 	let busy = $state(false);
+	let understood = $state(false);
+	let acknowledged = $state(false);
+
+	const canInvite = $derived(acknowledged || understood);
+
+	let ackFor: string | null = null;
+	$effect(() => {
+		const id = app.machine?.id ?? null;
+		if (!open || id === ackFor) return;
+		ackFor = id;
+		acknowledged = id ? shareAcknowledged(id) : false;
+		understood = false;
+	});
+
+	function confirmDisclosure() {
+		const id = app.machine?.id;
+		if (!acknowledged && understood && id) {
+			acknowledgeShare(id);
+			acknowledged = true;
+		}
+	}
 
 	const taken = $derived(
 		new Set([members?.owner?.id, ...(members?.members ?? []).map((m) => m.user.id)].filter(Boolean))
@@ -61,14 +83,16 @@
 	}
 
 	function invite(userId: string) {
-		if (!ws) return;
+		if (!ws || !canInvite) return;
+		confirmDisclosure();
 		query = '';
 		return act('Could not invite', () => api.addMember(ws.sandboxId, { userId, role }));
 	}
 
 	function inviteEmail() {
 		const email = query.trim();
-		if (!ws || !email.includes('@')) return;
+		if (!ws || !canInvite || !email.includes('@')) return;
+		confirmDisclosure();
 		query = '';
 		return act('Could not invite', () => api.addMember(ws.sandboxId, { email, role }));
 	}
@@ -88,28 +112,36 @@
 
 <Modal bind:open title="Share {app.machine?.name ?? 'machine'}" size="md">
 	<div class="share">
+		<section class="disclosure" aria-labelledby="gh-share-disclosure">
+			<p class="d-title" id="gh-share-disclosure">What guests get on this machine</p>
+			<p class="d-text">{HOST_DISCLOSURE}</p>
+			<p class="d-note">
+				Everyone commits and pushes as themselves, with their own GitHub account. SSH, machine
+				settings, people and preview deploys stay with you.
+			</p>
+			{#if manage && !acknowledged}
+				<label class="ack">
+					<input type="checkbox" bind:checked={understood} />
+					I understand
+				</label>
+			{/if}
+		</section>
+
 		{#if manage}
-			<div class="warn">
-				<span class="warn-icon"><ShieldAlert size={16} strokeWidth={1.75} /></span>
-				<p>
-					Guests prompt your agent and commit with your credentials. Pushing, pull requests, SSH and
-					machine settings stay with you, the host.
-				</p>
-			</div>
 			<div class="invite">
-				<input
-					class="gh-field"
+				<Input
 					bind:value={query}
 					placeholder="Name or email of someone in your organization"
 					aria-label="Invite people"
-					onkeydown={(e) => e.key === 'Enter' && inviteEmail()}
+					disabled={!canInvite}
+					onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && inviteEmail()}
 				/>
 				<label class="ro">
-					<input type="checkbox" bind:checked={readOnly} />
+					<input type="checkbox" bind:checked={readOnly} disabled={!canInvite} />
 					Read-only guest
 				</label>
 			</div>
-			{#if query.trim() && matches.length > 0}
+			{#if canInvite && query.trim() && matches.length > 0}
 				<div class="matches">
 					{#each matches as c (c.id)}
 						<button
@@ -143,7 +175,7 @@
 						<span class="name">{members.owner.name}</span>
 						{#if members.owner.email}<span class="email">{members.owner.email}</span>{/if}
 					</span>
-					<span class="host">Host</span>
+					<span class="tag">Host</span>
 				</div>
 			{/if}
 			{#each members?.members ?? [] as m (m.user.id)}
@@ -176,11 +208,12 @@
 							type="button"
 							class="gh-ibtn"
 							aria-label="Remove {m.user.name}"
+							title="Remove {m.user.name}"
 							disabled={busy}
 							onclick={() =>
 								ws && act('Could not remove', () => api.removeMember(ws.sandboxId, m.user.id))}
 						>
-							<X size={14} strokeWidth={1.75} />
+							<X size={16} strokeWidth={1.75} />
 						</button>
 					{:else}
 						<span class="tag">{m.role === 'collaborator' ? 'Guest' : 'Read-only guest'}</span>
@@ -204,41 +237,60 @@
 	.share {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
-		font-size: var(--text-footnote);
+		gap: 1rem;
 	}
 
-	.warn {
+	.disclosure {
 		display: flex;
-		align-items: flex-start;
-		gap: 0.625rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid color-mix(in oklab, var(--status-warning) 30%, var(--border-default));
-		background: color-mix(in oklab, var(--status-warning) 8%, transparent);
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		border-radius: var(--gh-r-row);
+		border: 1px solid var(--gh-line);
+		background: var(--gh-field);
+	}
+
+	.d-title,
+	.d-text,
+	.d-note {
+		margin: 0;
+	}
+
+	.d-title {
+		font-weight: 600;
 		color: var(--text-default);
 	}
 
-	.warn-icon {
-		display: inline-grid;
-		flex: none;
-		margin-top: 0.0625rem;
-		color: var(--status-warning);
+	.d-text {
+		color: var(--text-default);
 	}
 
-	.warn p {
-		margin: 0;
+	.d-note {
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--text-muted);
+	}
+
+	.ack {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		align-self: flex-start;
+		min-height: var(--gh-icon);
+		font-weight: 600;
+		cursor: pointer;
 	}
 
 	.invite {
 		display: flex;
-		gap: 0.5rem;
+		align-items: center;
+		gap: 0.75rem;
 	}
 
 	.ro {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
 		white-space: nowrap;
 		color: var(--text-muted);
@@ -249,38 +301,27 @@
 		width: 11rem;
 	}
 
-	.host {
-		flex: none;
-		padding: 0.0625rem 0.4375rem;
-		border-radius: var(--radius-pill);
-		background: color-mix(in oklab, var(--accent) 14%, transparent);
-		color: var(--accent);
-		font-size: var(--text-caption);
-		font-weight: 600;
-	}
-
 	.matches {
 		display: flex;
 		flex-direction: column;
-		margin-top: -0.375rem;
+		margin-top: -0.5rem;
 		padding: 0.25rem;
-		border-radius: var(--radius-sm);
+		border-radius: var(--gh-r-row);
 		border: 1px solid var(--border-default);
 	}
 
 	.people {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
 	}
 
 	.person {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		min-height: 2.75rem;
-		padding: 0.25rem 0.375rem;
-		border-radius: var(--radius-sm);
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--gh-r-row);
 		text-align: left;
 	}
 
@@ -296,7 +337,6 @@
 	}
 
 	.name {
-		font-weight: 500;
 		color: var(--text-default);
 	}
 
@@ -304,19 +344,17 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		font-size: var(--text-caption);
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--text-faint);
 	}
 
 	.tag,
 	.add {
 		flex: none;
-		font-size: var(--text-caption);
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--text-muted);
-	}
-
-	.add {
-		color: var(--text-link);
 	}
 
 	.muted {

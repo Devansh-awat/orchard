@@ -50,10 +50,20 @@ export interface GhMember {
 	createdAt: string;
 }
 
+export interface GhGitIdentity {
+	name?: string | null;
+	email?: string | null;
+	githubLogin?: string | null;
+	githubLinked?: boolean;
+	canCommit?: boolean;
+	canPush?: boolean;
+}
+
 export interface GhMembers {
 	owner: { id: string; name: string; email: string | null; avatarUrl?: string | null } | null;
 	members: GhMember[];
 	myRole: 'owner' | 'collaborator' | 'viewer' | 'admin';
+	me?: GhGitIdentity | null;
 }
 
 export interface GhPort {
@@ -120,6 +130,7 @@ export interface GhChanges {
 	files: GhChangedFile[];
 	ahead?: number;
 	behind?: number;
+	identity?: GhGitIdentity | null;
 }
 
 export type CenterTab =
@@ -130,7 +141,7 @@ export type CenterTab =
 
 export type RightTab = 'files' | 'changes' | 'checks' | 'review';
 
-export type DockTab = 'setup' | 'run' | 'ports' | `term:${string}`;
+export type DockTab = 'setup' | 'run' | 'ports' | `term:${string}` | `watch:${string}`;
 
 export interface RosterUser {
 	id: string;

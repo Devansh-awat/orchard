@@ -54,7 +54,7 @@
 	}
 </script>
 
-<div class="pane">
+<div class="pane" data-align="center">
 	<TabStrip
 		tabs={strip}
 		active={active?.id ?? null}
@@ -72,7 +72,7 @@
 				disabled={!ws.canEdit || !ws.running}
 				onclick={() => ws.newChat()}
 			>
-				<Plus size={15} strokeWidth={1.75} />
+				<Plus size={16} strokeWidth={1.75} />
 			</button>
 			<span class="grow"></span>
 			<PopoverPanel bind:open={historyOpen} placement="bottom-end">
@@ -82,10 +82,10 @@
 						type="button"
 						class="gh-ibtn"
 						aria-label="Checkpoints"
-						title="Checkpoints"
+						title="Checkpoints, roll back to an earlier prompt"
 						aria-expanded={isOpen}
 					>
-						<History size={15} strokeWidth={1.75} />
+						<History size={16} strokeWidth={1.75} />
 					</button>
 				{/snippet}
 				<div class="checkpoints">
@@ -98,7 +98,7 @@
 							onclick={() => revert(entry.messageID)}
 							title="Undo everything after this prompt"
 						>
-							<Undo2 size={13} strokeWidth={1.75} />
+							<Undo2 size={14} strokeWidth={1.75} />
 							<span class="cp-text">{entry.text || 'Attachment'}</span>
 							<span class="cp-time">
 								{new Date(entry.time).toLocaleTimeString(undefined, {
@@ -116,7 +116,9 @@
 	</TabStrip>
 
 	<div class="body">
-		<ChatView {ws} visible={active?.kind === 'chat' || !active} />
+		<div class="slot" data-align-skip>
+			<ChatView {ws} visible={active?.kind === 'chat' || !active} />
+		</div>
 		{#if isEditor(active)}
 			{#key active.id}
 				<EditorView {ws} tab={active} />
@@ -145,10 +147,12 @@
 		min-height: 0;
 	}
 
+	.slot {
+		display: contents;
+	}
+
 	.add {
-		width: 1.5rem;
-		height: 1.5rem;
-		margin-left: -0.25rem;
+		margin-left: calc(0.25rem - var(--gh-ibtn-inset));
 	}
 
 	.grow {
@@ -158,14 +162,14 @@
 	.checkpoints {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
 		width: 20rem;
 	}
 
 	.cp-head {
-		margin: 0 0 0.25rem;
-		padding: 0 0.375rem;
+		margin: 0;
+		padding: 0.25rem 0.5rem 0.5rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
@@ -173,9 +177,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		height: 1.875rem;
-		padding: 0 0.375rem;
-		border-radius: var(--radius-xs);
+		height: var(--gh-list-row);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-control);
 		color: var(--gh-muted);
 		text-align: left;
 	}
@@ -197,13 +201,15 @@
 	.cp-time {
 		flex: none;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.cp-empty {
 		margin: 0;
-		padding: 0.25rem 0.375rem 0.375rem;
+		padding: 0.25rem 0.5rem 0.5rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 </style>

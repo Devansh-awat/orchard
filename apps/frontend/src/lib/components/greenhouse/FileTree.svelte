@@ -16,6 +16,7 @@
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { toasts } from '$lib/stores';
+	import { springRotate } from '$lib/utils/motion.svelte';
 	import * as api from './api';
 	import ContextMenu from './ContextMenu.svelte';
 	import { VIEWER_ONLY, scopeOf, type MachineWorkspace } from './workspace.svelte';
@@ -45,6 +46,12 @@
 	let mx = $state(0);
 	let my = $state(0);
 	let target = $state<GhFileNode | null>(null);
+
+	const activePath = $derived.by(() => {
+		const tab = ws.activeTab;
+		if (!tab || (tab.kind !== 'file' && tab.kind !== 'diff')) return null;
+		return ws.resolve(tab.path).rel;
+	});
 
 	const decorations = $derived.by(() => {
 		const map = new Map<string, string>();
@@ -235,10 +242,12 @@
 {#snippet draftRow(depth: number, kind: 'file' | 'directory')}
 	<div class="row" style="--depth: {depth}">
 		<span class="twisty"></span>
-		{#if kind === 'directory'}<Folder size={14} strokeWidth={1.75} />{:else}<FileText
-				size={14}
-				strokeWidth={1.75}
-			/>{/if}
+		<span class="ico"
+			>{#if kind === 'directory'}<Folder size={16} strokeWidth={1.75} />{:else}<FileText
+					size={16}
+					strokeWidth={1.75}
+				/>{/if}</span
+		>
 		<input
 			class="name-field gh-mono"
 			bind:value={draftName}
@@ -260,6 +269,7 @@
 		{#if renaming === node.path}
 			<div class="row" style="--depth: {depth}">
 				<span class="twisty"></span>
+				<span class="ico"><FileText size={16} strokeWidth={1.75} /></span>
 				<input
 					class="name-field gh-mono"
 					bind:value={draftName}
@@ -274,26 +284,34 @@
 				class="row"
 				class:row--ignored={node.ignored}
 				class:row--changed={!!deco}
+				class:row--selected={activePath === node.path}
 				style="--depth: {depth}"
 				role="treeitem"
+				data-align="tree-row"
 				aria-expanded={node.type === 'directory' ? isOpen : undefined}
-				aria-selected={false}
+				aria-selected={activePath === node.path}
 				title={node.path}
 				onclick={() => toggle(node)}
 				ondblclick={() => node.type === 'file' && ws.openFile(node.path)}
 				oncontextmenu={(e) => context(e, node)}
 			>
-				<span class="twisty" class:twisty--open={isOpen}>
-					{#if node.type === 'directory'}<ChevronRight size={13} strokeWidth={1.75} />{/if}
+				<span class="twisty" data-align={depth === 0 ? 'right-edge' : undefined}>
+					{#if node.type === 'directory'}<span
+							class="twisty-glyph"
+							{@attach springRotate(() => isOpen, { rest: 0, on: 90 })}
+							><ChevronRight size={14} strokeWidth={1.75} /></span
+						>{/if}
 				</span>
-				{#if node.type === 'directory'}
-					{#if isOpen}<FolderOpen size={14} strokeWidth={1.75} />{:else}<Folder
-							size={14}
-							strokeWidth={1.75}
-						/>{/if}
-				{:else}
-					<FileText size={14} strokeWidth={1.75} />
-				{/if}
+				<span class="ico">
+					{#if node.type === 'directory'}
+						{#if isOpen}<FolderOpen size={16} strokeWidth={1.75} />{:else}<Folder
+								size={16}
+								strokeWidth={1.75}
+							/>{/if}
+					{:else}
+						<FileText size={16} strokeWidth={1.75} />
+					{/if}
+				</span>
 				<span class="name">{node.name}</span>
 				{#if deco}<span class="deco deco--{deco === '•' ? 'dot' : deco}">{deco}</span>{/if}
 			</button>
@@ -321,8 +339,14 @@
 		<p class="note">Start the machine to browse files.</p>
 	{:else if matches}
 		{#each matches as path (path)}
-			<button type="button" class="row" style="--depth: 0" onclick={() => ws.openFile(path)}>
-				<FileText size={14} strokeWidth={1.75} />
+			<button
+				type="button"
+				class="row"
+				style="--depth: 0"
+				data-align="tree-row"
+				onclick={() => ws.openFile(path)}
+			>
+				<span class="ico" data-align="right-edge"><FileText size={16} strokeWidth={1.75} /></span>
 				<span class="name gh-mono">{path}</span>
 			</button>
 		{:else}
@@ -390,18 +414,18 @@
 	.tree {
 		flex: 1;
 		min-height: 0;
-		padding: 0.25rem 0.375rem 1rem;
+		padding: 0.25rem calc(var(--gh-edge) - 0.5rem) 1rem;
 		outline: none;
 	}
 
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.25rem;
 		width: 100%;
-		height: 1.625rem;
-		padding: 0 0.5rem 0 calc(0.25rem + var(--depth) * 0.875rem);
-		border-radius: var(--radius-xs);
+		height: var(--gh-list-row);
+		padding: 0 0.5rem 0 calc(0.5rem + var(--depth) * 1rem);
+		border-radius: var(--gh-r-row);
 		color: var(--gh-muted);
 		text-align: left;
 		white-space: nowrap;
@@ -417,30 +441,38 @@
 		color: var(--gh-text);
 	}
 
+	.row--selected,
+	button.row--selected:hover {
+		background: var(--gh-selected);
+		color: var(--gh-text);
+		font-weight: 600;
+	}
+
 	.row--ignored {
 		opacity: 0.55;
 	}
 
-	.row--skeleton {
-		height: 1.5rem;
-	}
-
-	.twisty {
+	.twisty,
+	.ico {
 		display: inline-grid;
 		place-items: center;
 		flex: none;
-		width: 0.875rem;
-		color: var(--gh-faint);
-		transition: transform var(--dur-fast) ease;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 	}
 
-	.twisty--open {
-		transform: rotate(90deg);
+	.twisty {
+		color: var(--gh-faint);
+	}
+
+	.twisty-glyph {
+		display: inline-grid;
 	}
 
 	.name {
 		flex: 1;
 		min-width: 0;
+		margin-left: 0.25rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
@@ -451,6 +483,7 @@
 		text-align: center;
 		font-family: var(--gh-mono);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		font-weight: 600;
 		color: var(--gh-mod);
 	}
@@ -472,27 +505,30 @@
 	.name-field {
 		flex: 1;
 		min-width: 0;
-		height: 1.375rem;
-		padding: 0 0.375rem;
-		border-radius: var(--radius-xs);
+		height: 1.5rem;
+		margin-left: 0.25rem;
+		padding: 0 0.25rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--focus-ring-color);
 		background: var(--gh-field);
 		color: var(--gh-text);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		outline: none;
 	}
 
 	.note {
 		margin: 0;
-		padding: 0.75rem;
+		padding: 0.5rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.skeletons {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
-		padding: 0.75rem;
+		gap: 0.75rem;
+		padding: 0.75rem 0.5rem;
 	}
 </style>

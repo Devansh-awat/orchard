@@ -13,6 +13,7 @@
 	import CenterPane from './CenterPane.svelte';
 	import { setGreenhouseEnv, type GreenhouseEnv } from './env';
 	import Home from './Home.svelte';
+	import JoinNotice from './JoinNotice.svelte';
 	import { LEFT, RIGHT } from './layout.svelte';
 	import NewMachineSheet from './NewMachineSheet.svelte';
 	import ResizeHandle from './ResizeHandle.svelte';
@@ -215,14 +216,14 @@
 		<div class="mobile">
 			<div class="mobile-body">
 				{#if app.mobilePane === 'sessions' || (!ws?.session && !app.home)}
-					<Sidebar onnewsession={newSession} />
+					<Sidebar onnewsession={newSession} compact />
 				{:else if app.home}
-					<CenterBar onrename={openRename} />
+					<CenterBar onrename={openRename} compact />
 					<Home bind:this={home} initialRepo={homeRepo} />
 				{:else if ws && app.mobilePane === 'changes'}
 					<RightPanel {ws} showDock={false} />
 				{:else if ws}
-					<CenterBar onrename={openRename} />
+					<CenterBar onrename={openRename} compact />
 					<CenterPane {ws} />
 				{/if}
 			</div>
@@ -233,7 +234,7 @@
 					aria-selected={app.mobilePane === 'sessions'}
 					onclick={() => (app.mobilePane = 'sessions')}
 				>
-					<PanelsTopLeft size={16} strokeWidth={1.75} /> Sessions
+					<PanelsTopLeft size={20} strokeWidth={1.75} /> Sessions
 				</button>
 				<button
 					type="button"
@@ -241,7 +242,7 @@
 					aria-selected={app.mobilePane === 'chat'}
 					onclick={() => (app.mobilePane = 'chat')}
 				>
-					<MessageSquare size={16} strokeWidth={1.75} /> Chat
+					<MessageSquare size={20} strokeWidth={1.75} /> Chat
 				</button>
 				<button
 					type="button"
@@ -250,7 +251,7 @@
 					disabled={app.home}
 					onclick={() => (app.mobilePane = 'changes')}
 				>
-					<GitCompare size={16} strokeWidth={1.75} /> Changes
+					<GitCompare size={20} strokeWidth={1.75} /> Changes
 				</button>
 			</div>
 		</div>
@@ -344,6 +345,7 @@
 	<AddRepoSheet
 		bind:open={() => app.sheet === 'add-repo', (v) => (app.sheet = v ? 'add-repo' : null)}
 	/>
+	<JoinNotice />
 	<Modal bind:open={renameOpen} title="Rename session" size="sm">
 		<Input
 			bind:value={renameValue}
@@ -407,7 +409,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		padding: 3rem;
+		padding: 3rem var(--gh-edge);
 	}
 
 	.blank {
@@ -424,7 +426,8 @@
 
 	.blank-title {
 		margin: 0;
-		font-size: var(--text-callout);
+		font-size: var(--gh-reading);
+		line-height: var(--gh-lh-reading);
 		font-weight: 600;
 	}
 
@@ -454,7 +457,8 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		flex: none;
-		height: 3.25rem;
+		height: calc(3rem + env(safe-area-inset-bottom));
+		padding-bottom: env(safe-area-inset-bottom);
 		border-top: 1px solid var(--gh-line);
 		background: var(--gh-sidebar);
 	}
@@ -464,14 +468,15 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 0.125rem;
+		gap: 0.25rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-muted);
 	}
 
 	.switcher button[aria-selected='true'] {
 		color: var(--gh-text);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.switcher button:disabled {

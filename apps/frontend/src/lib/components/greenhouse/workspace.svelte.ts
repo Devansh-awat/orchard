@@ -22,6 +22,7 @@ import type {
 	GhChanges,
 	GhChat,
 	GhConnect,
+	GhGitIdentity,
 	GhMembers,
 	GhRepo,
 	GhSession,
@@ -43,8 +44,8 @@ export interface WorkspaceHost {
 	openTab(tab: string | null): void;
 }
 
-export const OWNER_ONLY = 'Only the host can do this, because it uses their GitHub token';
 export const VIEWER_ONLY = 'You joined as a read-only guest';
+export const LINK_GITHUB = 'Link GitHub to push';
 
 export function hostOnly(action: string): string {
 	return `Only the host can ${action}`;
@@ -148,6 +149,28 @@ export class MachineWorkspace {
 	readonly canEdit = $derived(this.role === 'owner' || this.role === 'collaborator');
 	readonly canLifecycle = $derived(this.role === 'owner' || this.role === 'admin');
 	readonly canStart = $derived(this.canEdit || this.role === 'admin');
+
+	githubUnlinked = $state(false);
+	identity = $state.raw<GhGitIdentity | null>(null);
+
+	readonly gitIdentity = $derived.by(() => {
+		if (this.identity) return this.identity;
+		const session = this.session;
+		const fromChanges = session ? this.changes.get(session.id)?.identity : null;
+		return fromChanges ?? this.members?.me ?? null;
+	});
+	readonly githubLinked = $derived.by((): boolean | null => {
+		if (this.githubUnlinked) return false;
+		const identity = this.gitIdentity;
+		if (!identity) return null;
+		if (typeof identity.githubLinked === 'boolean') return identity.githubLinked;
+		return identity.githubLogin ? true : null;
+	});
+	readonly pushAs = $derived(this.githubLinked ? (this.gitIdentity?.githubLogin ?? null) : null);
+	readonly canPush = $derived(
+		this.canEdit && this.githubLinked !== false && this.gitIdentity?.canPush !== false
+	);
+	readonly prIsPrimary = $derived(!!this.session && !this.session.prNumber);
 
 	readonly groups = $derived.by(() => {
 		const names = new Set<string>();
@@ -309,7 +332,12 @@ export class MachineWorkspace {
 	}
 
 	async refreshAll() {
-		await Promise.all([this.refreshRepos(), this.refreshMembers(), this.refreshConnect()]);
+		await Promise.all([
+			this.refreshRepos(),
+			this.refreshMembers(),
+			this.refreshConnect(),
+			this.refreshIdentity()
+		]);
 		await this.refreshSessions();
 	}
 
@@ -342,6 +370,13 @@ export class MachineWorkspace {
 		const res = await api.listMembers(this.sandboxId);
 		if (this.#disposed) return;
 		if (res.ok) this.members = res.data;
+	}
+
+	async refreshIdentity() {
+		const res = await api.gitIdentity(this.sandboxId);
+		if (this.#disposed) return;
+		this.identity = res.ok ? res.data : null;
+		if (res.ok && res.data.githubLinked) this.githubUnlinked = false;
 	}
 
 	async refreshConnect() {

@@ -59,19 +59,21 @@
 			/>
 		{/if}
 	</div>
-	<div class="status">
-		<span class="path gh-mono" title={tab.path}>{rel}</span>
+	<div class="status" data-align="statusbar">
+		<span class="path gh-mono" data-align="status-item" title={tab.path}>{rel}</span>
 		<span class="grow"></span>
 		{#if tab.kind === 'file'}
-			{#if doc?.saving}<span>Saving…</span>{:else if doc?.dirty}<span>Unsaved</span>{/if}
-			{#if doc?.error}<span class="err">{doc.error}</span>{/if}
-			{#if !ws.canEdit}<span>Read only</span>{/if}
-			<span class="gh-num">Ln {line}, Col {col}</span>
-			<span>{languageLabel(doc?.language ?? 'plaintext')}</span>
+			{#if doc?.saving}<span data-align="status-item">Saving…</span>{:else if doc?.dirty}<span
+					data-align="status-item">Unsaved</span
+				>{/if}
+			{#if doc?.error}<span class="err" data-align="status-item">{doc.error}</span>{/if}
+			{#if !ws.canEdit}<span data-align="status-item">Read only</span>{/if}
+			<span class="gh-num" data-align="status-item">Ln {line}, Col {col}</span>
+			<span data-align="status-item">{languageLabel(doc?.language ?? 'plaintext')}</span>
 		{:else}
-			<span>Changes against HEAD</span>
+			<span data-align="status-item">Changes against HEAD</span>
 			{#if ws.comments.forPath(tab.path).length > 0}
-				<span>{ws.comments.forPath(tab.path).length} comments</span>
+				<span data-align="status-item">{ws.comments.forPath(tab.path).length} comments</span>
 			{/if}
 		{/if}
 	</div>
@@ -94,14 +96,15 @@
 
 	.status {
 		display: flex;
-		align-items: center;
-		gap: 0.875rem;
+		align-items: baseline;
+		gap: 1rem;
 		flex: none;
 		height: 1.5rem;
-		padding: 0 0.75rem;
+		padding: 0.25rem var(--gh-edge) 0;
 		border-top: 1px solid var(--gh-line);
 		color: var(--gh-faint);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		white-space: nowrap;
 	}
 
@@ -110,6 +113,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 	}
 
 	.grow {
@@ -117,6 +121,7 @@
 	}
 
 	.err {
-		color: var(--status-error);
+		color: var(--gh-text);
+		font-weight: 600;
 	}
 </style>

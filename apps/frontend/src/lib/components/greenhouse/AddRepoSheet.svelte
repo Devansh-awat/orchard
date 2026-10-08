@@ -107,7 +107,7 @@
 	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 1rem;
 	}
 
 	.list {
@@ -120,8 +120,8 @@
 		align-items: center;
 		justify-content: space-between;
 		height: 2rem;
-		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		padding: 0 0.75rem;
+		border-radius: var(--gh-r-row);
 		font-size: var(--text-footnote);
 		text-align: left;
 	}
@@ -132,6 +132,7 @@
 
 	.priv {
 		font-size: var(--text-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--text-faint);
 	}
 </style>

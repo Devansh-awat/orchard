@@ -139,17 +139,19 @@
 	.facts {
 		margin: 0;
 		font-size: var(--text-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--text-muted);
 	}
 
 	.script {
 		width: 100%;
-		padding: 0.5rem 0.625rem;
-		border-radius: var(--radius-sm);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--border-default);
 		background: var(--bg-app);
 		color: var(--text-default);
 		font-size: var(--text-caption);
+		line-height: var(--gh-lh-caption);
 		resize: vertical;
 		outline: none;
 	}
@@ -162,15 +164,16 @@
 	.error {
 		margin: 0;
 		font-size: var(--text-footnote);
+		line-height: var(--gh-lh-ui);
 		color: var(--status-error);
 	}
 
 	.danger {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
-		padding: 0.75rem;
-		border-radius: var(--radius-sm);
+		gap: 0.5rem;
+		padding: 0.75rem 1rem 1rem;
+		border-radius: var(--gh-r-row);
 		border: 1px solid color-mix(in oklab, var(--status-error) 30%, var(--border-default));
 		background: color-mix(in oklab, var(--status-error) 5%, transparent);
 	}
@@ -184,6 +187,7 @@
 	.danger-text {
 		margin: 0;
 		font-size: var(--text-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--text-muted);
 	}
 

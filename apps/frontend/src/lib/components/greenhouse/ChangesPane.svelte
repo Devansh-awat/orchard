@@ -3,9 +3,11 @@
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import { goto } from '$app/navigation';
 	import { toasts } from '$lib/stores';
 	import * as api from './api';
-	import { OWNER_ONLY, VIEWER_ONLY, scopeOf, type MachineWorkspace } from './workspace.svelte';
+	import { LINK_GITHUB, VIEWER_ONLY, scopeOf, type MachineWorkspace } from './workspace.svelte';
+	import { modKey } from './format';
 	import type { GhChangedFile, GhSession } from './types';
 
 	let { ws, session }: { ws: MachineWorkspace; session: GhSession } = $props();
@@ -16,6 +18,23 @@
 	const unstaged = $derived(files.filter((f) => !f.staged));
 	const ahead = $derived(data?.ahead ?? session.aheadBehind?.ahead ?? 0);
 	const behind = $derived(data?.behind ?? session.aheadBehind?.behind ?? 0);
+	const commitPrimary = $derived(!ws.prIsPrimary);
+	const activeDiff = $derived.by(() => {
+		const tab = ws.activeTab;
+		return tab?.kind === 'diff' ? ws.resolve(tab.path).rel : null;
+	});
+	const pushBlocked = $derived(
+		!ws.canEdit ? VIEWER_ONLY : ws.githubLinked === false ? LINK_GITHUB : undefined
+	);
+
+	const mod = modKey();
+	const STATUS: Record<string, string> = {
+		M: 'Modified',
+		A: 'Added',
+		U: 'Untracked',
+		D: 'Deleted',
+		R: 'Renamed'
+	};
 
 	let message = $state('');
 	let busy = $state<string | null>(null);
@@ -40,6 +59,16 @@
 			await ws.refreshChanges(session.id);
 			void ws.refreshSessions();
 		} catch (e) {
+			if (api.isGithubUnlinked(e)) {
+				ws.githubUnlinked = true;
+				toasts.add({
+					title: LINK_GITHUB,
+					description: 'Pushes and pulls run with your own GitHub account.',
+					color: 'info',
+					action: { label: 'Link GitHub', onClick: () => goto(api.LINK_GITHUB_HREF) }
+				});
+				return;
+			}
 			toasts.add({
 				title: `${label} failed`,
 				description: e instanceof Error ? e.message : undefined,
@@ -71,14 +100,22 @@
 {#snippet fileRow(file: GhChangedFile)}
 	{@const parts = split(file.path)}
 	{@const l = letter(file)}
-	<button type="button" class="file" title={file.path} onclick={() => ws.openDiff(file.path)}>
-		<span class="name">{parts.name}</span>
+	<button
+		type="button"
+		class="file"
+		class:file--selected={activeDiff === file.path}
+		aria-current={activeDiff === file.path ? 'true' : undefined}
+		data-align="change-row"
+		title={file.path}
+		onclick={() => ws.openDiff(file.path)}
+	>
+		<span class="name" data-align="right-edge">{parts.name}</span>
 		<span class="dir">{parts.dir}</span>
-		<span class="stat gh-num">
+		<span class="stat gh-num" data-align="change-stat">
 			{#if file.additions}<span class="gh-add">+{file.additions}</span>{/if}
 			{#if file.deletions}<span class="gh-del">−{file.deletions}</span>{/if}
 		</span>
-		<span class="letter letter--{l}">{l}</span>
+		<span class="letter letter--{l}" title={STATUS[l] ?? 'Modified'}>{l}</span>
 	</button>
 {/snippet}
 
@@ -86,16 +123,27 @@
 	<div class="commit">
 		<textarea
 			class="msg"
+			data-align="right-edge"
 			rows="2"
 			bind:value={message}
 			placeholder={ws.canEdit ? 'Commit message' : VIEWER_ONLY}
 			disabled={!ws.canEdit || !ws.running}
 			onkeydown={commitKey}></textarea>
 		<div class="actions">
-			<div class="gh-split gh-split--primary" role="group" aria-label="Commit">
+			<div
+				class="gh-split"
+				class:gh-split--primary={commitPrimary}
+				role="group"
+				aria-label="Commit"
+			>
 				<button
 					type="button"
-					disabled={!ws.canEdit || !message.trim() || files.length === 0 || !!busy}
+					disabled={!ws.canEdit ||
+						ws.gitIdentity?.canCommit === false ||
+						!message.trim() ||
+						files.length === 0 ||
+						!!busy}
+					title="Commit ({mod}Enter)"
 					onclick={() => commit()}
 				>
 					<GitCommitHorizontal size={14} strokeWidth={1.75} />
@@ -107,6 +155,7 @@
 							{...props}
 							type="button"
 							aria-label="More commit actions"
+							title="More commit actions"
 							aria-expanded={isOpen}
 							disabled={!ws.canEdit}
 						>
@@ -116,38 +165,46 @@
 					<MenuItem onclick={() => commit(true)}>Amend last commit</MenuItem>
 					<MenuItem
 						onclick={() => run('Fetch', () => api.gitFetch(ws.sandboxId, scopeOf(session)))}
+						disabled={!ws.canPush}
+						title={pushBlocked}
 					>
 						Fetch
 					</MenuItem>
 				</Menu>
 			</div>
-			<span class="grow"></span>
+			<span class="who">
+				{#if ws.canEdit && ws.githubLinked === false}
+					<a class="link" href={api.LINK_GITHUB_HREF}>{LINK_GITHUB}</a>
+				{:else if ws.canPush && ws.pushAs}
+					You’ll push as @{ws.pushAs}
+				{/if}
+			</span>
 			<button
 				type="button"
 				class="gh-btn gh-btn--ghost sync"
-				disabled={!ws.isOwner || behind === 0 || !!busy}
-				title={ws.isOwner ? 'Pull with rebase' : OWNER_ONLY}
+				disabled={!ws.canPush || behind === 0 || !!busy}
+				title={pushBlocked ?? `Pull ${behind} with rebase`}
 				onclick={() => run('Pull', () => api.gitPull(ws.sandboxId, scopeOf(session)))}
 			>
-				<ArrowDown size={13} strokeWidth={1.75} /><span class="gh-num">{behind}</span>
+				<ArrowDown size={14} strokeWidth={1.75} /><span class="gh-num">{behind}</span>
 			</button>
 			<button
 				type="button"
 				class="gh-btn gh-btn--ghost sync"
-				disabled={!ws.isOwner || ahead === 0 || !!busy}
-				title={ws.isOwner ? 'Push' : OWNER_ONLY}
+				disabled={!ws.canPush || ahead === 0 || !!busy}
+				title={pushBlocked ?? `Push ${ahead}`}
 				onclick={() => run('Push', () => api.gitPush(ws.sandboxId, scopeOf(session)))}
 			>
-				<ArrowUp size={13} strokeWidth={1.75} /><span class="gh-num">{ahead}</span>
+				<ArrowUp size={14} strokeWidth={1.75} /><span class="gh-num">{ahead}</span>
 			</button>
 			<button
 				type="button"
 				class="gh-ibtn"
 				aria-label="Refresh changes"
-				title="Refresh"
+				title="Refresh changes"
 				onclick={() => ws.refreshChanges(session.id)}
 			>
-				<RefreshCw size={14} strokeWidth={1.75} />
+				<RefreshCw size={16} strokeWidth={1.75} />
 			</button>
 		</div>
 	</div>
@@ -189,19 +246,20 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		flex: none;
-		padding: 0.625rem 0.75rem;
+		padding: var(--gh-edge);
 		border-bottom: 1px solid var(--gh-line-soft);
 	}
 
 	.msg {
 		width: 100%;
-		min-height: 3.25rem;
-		padding: 0.5rem 0.625rem;
-		border-radius: var(--radius-sm);
+		min-height: 3.5rem;
+		padding: 0.5rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--gh-line);
 		background: var(--gh-field);
 		color: var(--gh-text);
 		font: inherit;
+		line-height: var(--gh-lh-ui);
 		resize: vertical;
 		outline: none;
 	}
@@ -218,29 +276,52 @@
 	.actions {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.5rem;
 	}
 
-	.grow {
+	.who {
 		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+	}
+
+	.link {
+		color: var(--gh-text);
+		text-decoration: underline;
+		text-decoration-color: var(--gh-line);
+		text-underline-offset: 2px;
+	}
+
+	.link:hover {
+		text-decoration-color: currentColor;
 	}
 
 	.sync {
 		gap: 0.25rem;
-		padding: 0 0.375rem;
+		padding: 0 0.5rem;
 	}
 
 	.list {
 		flex: 1;
 		min-height: 0;
-		padding: 0.25rem 0.375rem 1rem;
+		padding: 0.25rem calc(var(--gh-edge) - 0.5rem) 1rem;
 	}
 
 	.group {
-		margin: 0.5rem 0 0.125rem;
-		padding: 0 0.5rem;
+		margin: 0.5rem 0 0;
+		padding: 0.25rem 0.5rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
+	}
+
+	.group:first-child {
+		margin-top: 0;
 	}
 
 	.file {
@@ -248,9 +329,9 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		height: 1.75rem;
+		height: var(--gh-list-row);
 		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		border-radius: var(--gh-r-row);
 		text-align: left;
 		white-space: nowrap;
 		transition: background-color var(--dur-fast) ease;
@@ -258,6 +339,15 @@
 
 	.file:hover {
 		background: var(--gh-hover);
+	}
+
+	.file--selected,
+	.file--selected:hover {
+		background: var(--gh-selected);
+	}
+
+	.file--selected .name {
+		font-weight: 600;
 	}
 
 	.name {
@@ -276,12 +366,13 @@
 		direction: rtl;
 		text-align: left;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.stat {
 		display: inline-flex;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
 	}
 
@@ -291,6 +382,7 @@
 		text-align: center;
 		font-family: var(--gh-mono);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		font-weight: 600;
 		color: var(--gh-mod);
 	}
@@ -306,15 +398,16 @@
 
 	.note {
 		margin: 0;
-		padding: 0.75rem 0.5rem;
+		padding: 0.5rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
 	.skeletons {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.75rem 0.5rem;
 	}
 </style>

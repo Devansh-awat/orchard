@@ -93,7 +93,9 @@
 >
 	{#if renaming}
 		<div class="main">
-			<SessionGlyph {activity} {draft} merged={session.prState === 'merged'} />
+			<span class="ico" data-align="sidebar-icon"
+				><SessionGlyph {activity} {draft} merged={session.prState === 'merged'} /></span
+			>
 			<input
 				class="rename"
 				bind:value={title}
@@ -110,21 +112,23 @@
 			onclick={open}
 			title={`${session.title}\n${session.branch}`}
 		>
-			<SessionGlyph {activity} {draft} merged={session.prState === 'merged'} />
-			<span class="title">{session.title}</span>
+			<span class="ico" data-align="sidebar-icon"
+				><SessionGlyph {activity} {draft} merged={session.prState === 'merged'} /></span
+			>
+			<span class="title" data-align="sidebar-label">{session.title}</span>
 			<span class="end">
 				{#if people.length > 0}
 					<AvatarStack users={people} max={2} size={16} hostBadge={false} />
 				{/if}
 				{#if session.diffstat && (session.diffstat.additions || session.diffstat.deletions)}
-					<span class="stat gh-num">
+					<span class="stat gh-num" data-align="sidebar-end">
 						{#if session.diffstat.additions}<span class="gh-add">+{session.diffstat.additions}</span
 							>{/if}
 						{#if session.diffstat.deletions}<span class="gh-del">−{session.diffstat.deletions}</span
 							>{/if}
 					</span>
 				{:else if session.prNumber}
-					<span class="stat gh-num pr">#{session.prNumber}</span>
+					<span class="stat gh-num pr" data-align="sidebar-end">#{session.prNumber}</span>
 				{/if}
 			</span>
 		</button>
@@ -182,8 +186,8 @@
 		gap: 0.5rem;
 		width: 100%;
 		height: var(--gh-session-row);
-		padding: 0 0.5rem 0 0.75rem;
-		border-radius: var(--radius-xs);
+		padding: 0 var(--row-pad, 0.5rem);
+		border-radius: var(--gh-r-row);
 		color: var(--gh-muted);
 		text-align: left;
 		transition:
@@ -199,7 +203,15 @@
 	.row--selected .main {
 		background: var(--gh-selected);
 		color: var(--gh-text);
-		font-weight: 500;
+		font-weight: 600;
+	}
+
+	.ico {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 	}
 
 	.row--archived .title {
@@ -217,14 +229,13 @@
 	.end {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
 	}
 
 	.stat {
 		display: inline-flex;
 		gap: 0.25rem;
-		font-weight: 400;
 	}
 
 	.pr {
@@ -235,8 +246,9 @@
 		flex: 1;
 		min-width: 0;
 		height: 1.5rem;
-		padding: 0 0.375rem;
-		border-radius: var(--radius-xs);
+		margin-left: -0.25rem;
+		padding: 0 0.25rem;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--focus-ring-color);
 		background: var(--gh-editor);
 		color: var(--gh-text);

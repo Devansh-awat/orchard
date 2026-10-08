@@ -47,9 +47,11 @@
 			aria-expanded={isOpen}
 			title={machine ? `${machine.name} · ${runnerLabel(machine.runner)} · ${meta?.label}` : ''}
 		>
-			{#if meta}<StatusDot {meta} size={8} />{/if}
-			<span class="name">{machine?.name ?? 'No machine'}</span>
-			<span class="chev"><ChevronDown size={14} strokeWidth={1.75} /></span>
+			<span class="ico" data-align="sidebar-icon">
+				{#if meta}<StatusDot {meta} size={8} />{/if}
+			</span>
+			<span class="name" data-align="sidebar-label">{machine?.name ?? 'No machine'}</span>
+			<span class="chev"><ChevronDown size={16} strokeWidth={1.75} /></span>
 		</button>
 	{/snippet}
 	{#if app.machines.length > 0}
@@ -107,14 +109,23 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		width: 100%;
 		min-width: 0;
-		max-width: 100%;
-		height: 1.75rem;
-		padding: 0 0.5rem;
-		border-radius: var(--radius-xs);
+		height: var(--gh-row);
+		padding: 0 var(--row-pad, 0.5rem);
+		border-radius: var(--gh-r-row);
 		color: var(--gh-text);
-		font-weight: 500;
+		font-weight: 600;
+		text-align: left;
 		transition: background-color var(--dur-fast) ease;
+	}
+
+	.ico {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
 	}
 
 	.switch:hover,
@@ -146,6 +157,7 @@
 		margin-left: auto;
 		padding-left: 0.75rem;
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 		white-space: nowrap;
 	}

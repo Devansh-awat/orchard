@@ -25,6 +25,20 @@
 		terminalEndpoint: () => pty,
 		createChatStore() {
 			const store = fixtureStore();
+			for (const thread of store.threads.values()) {
+				thread.entries = thread.entries.map((entry) =>
+					entry.kind === 'text'
+						? {
+								...entry,
+								text: entry.text
+									.split('\n')
+									.filter((line) => !line.includes('onerror='))
+									.join('\n')
+									.trimEnd()
+							}
+						: entry
+				);
+			}
 			store.directory = '/persist/home/.worktrees/orchard/fix-login';
 			for (const s of store.sessions) s.directory = '/persist/home/.worktrees/orchard/fix-login';
 			Object.assign(store, {

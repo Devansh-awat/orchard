@@ -5,19 +5,32 @@
 		GitMerge,
 		GitPullRequest,
 		GitPullRequestDraft,
+		Link2,
 		Rocket,
 		Upload
 	} from 'lucide-svelte';
+	import { goto } from '$app/navigation';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import * as api from './api';
-	import { OWNER_ONLY, isLegacy, scopeOf, type MachineWorkspace } from './workspace.svelte';
+	import {
+		LINK_GITHUB,
+		VIEWER_ONLY,
+		hostOnly,
+		isLegacy,
+		scopeOf,
+		type MachineWorkspace
+	} from './workspace.svelte';
 
 	let { ws }: { ws: MachineWorkspace } = $props();
 
 	const session = $derived(ws.session);
 	const owner = $derived(ws.isOwner);
+	const canPush = $derived(ws.canPush);
+	const pushBlocked = $derived(
+		!ws.canEdit ? VIEWER_ONLY : ws.githubLinked === false ? LINK_GITHUB : undefined
+	);
 	const pr = $derived(session?.prNumber ? session : null);
 	const merged = $derived(session?.prState === 'merged');
 	const open = $derived(!!pr && session?.prState !== 'merged' && session?.prState !== 'closed');
@@ -31,6 +44,16 @@
 		try {
 			await fn();
 		} catch (e) {
+			if (api.isGithubUnlinked(e)) {
+				ws.githubUnlinked = true;
+				toasts.add({
+					title: LINK_GITHUB,
+					description: 'Pushes and pull requests run with your own GitHub account.',
+					color: 'info',
+					action: { label: 'Link GitHub', onClick: () => goto(api.LINK_GITHUB_HREF) }
+				});
+				return;
+			}
 			toasts.add({
 				title: `${label} failed`,
 				description: e instanceof Error ? e.message : undefined,
@@ -105,66 +128,76 @@
 	}
 </script>
 
-<div class="gh-split" class:gh-split--primary={!pr} role="group" aria-label="Pull request">
-	<button
-		type="button"
-		disabled={!session || (!pr && !owner) || !!busy}
-		title={!pr && !owner ? OWNER_ONLY : undefined}
-		onclick={primary}
+{#if ws.canEdit && ws.githubLinked === false && !pr}
+	<a
+		class="gh-btn gh-btn--primary"
+		href={api.LINK_GITHUB_HREF}
+		title="Pushes and pull requests run with your own GitHub account"
 	>
-		{#if merged}
-			<GitMerge size={14} strokeWidth={1.75} /> Merged #{pr?.prNumber}
-		{:else if pr}
-			<GitPullRequest size={14} strokeWidth={1.75} /> View PR #{pr.prNumber}
-			<ExternalLink size={12} strokeWidth={1.75} />
-		{:else}
-			<GitPullRequest size={14} strokeWidth={1.75} />
-			{busy === 'Create PR' ? 'Creating…' : 'Create PR'}
-		{/if}
-	</button>
-	<Menu bind:open={menuOpen} placement="bottom-end">
-		{#snippet trigger(props, isOpen)}
-			<button
-				{...props}
-				type="button"
-				aria-label="More pull request actions"
-				aria-expanded={isOpen}
-				disabled={!session}
-			>
-				<ChevronDown size={14} strokeWidth={1.75} />
-			</button>
-		{/snippet}
-		{#if !pr}
+		<Link2 size={14} strokeWidth={1.75} />
+		{LINK_GITHUB}
+	</a>
+{:else}
+	<div class="gh-split" class:gh-split--primary={!pr} role="group" aria-label="Pull request">
+		<button
+			type="button"
+			disabled={!session || (!pr && !canPush) || !!busy}
+			title={!pr ? pushBlocked : undefined}
+			onclick={primary}
+		>
+			{#if merged}
+				<GitMerge size={14} strokeWidth={1.75} />
+				<span data-align="title">Merged #{pr?.prNumber}</span>
+			{:else if pr}
+				<GitPullRequest size={14} strokeWidth={1.75} />
+				<span data-align="title">View PR #{pr.prNumber}</span>
+				<ExternalLink size={12} strokeWidth={1.75} />
+			{:else}
+				<GitPullRequest size={14} strokeWidth={1.75} />
+				<span data-align="title">{busy === 'Create PR' ? 'Creating…' : 'Create PR'}</span>
+			{/if}
+		</button>
+		<Menu bind:open={menuOpen} placement="bottom-end">
+			{#snippet trigger(props, isOpen)}
+				<button
+					{...props}
+					type="button"
+					aria-label="More pull request actions"
+					title="More pull request actions"
+					aria-expanded={isOpen}
+					disabled={!session}
+				>
+					<ChevronDown size={14} strokeWidth={1.75} />
+				</button>
+			{/snippet}
+			{#if !pr}
+				<MenuItem onclick={() => createPr(false)} disabled={!canPush} title={pushBlocked}>
+					<GitPullRequest size={14} /> Create pull request
+				</MenuItem>
+				<MenuItem onclick={() => createPr(true)} disabled={!canPush} title={pushBlocked}>
+					<GitPullRequestDraft size={14} /> Create draft pull request
+				</MenuItem>
+			{/if}
+			<MenuItem onclick={push} disabled={!canPush} title={pushBlocked}>
+				<Upload size={14} /> Push only
+			</MenuItem>
+			{#if open}
+				<MenuItem
+					onclick={merge}
+					disabled={!canPush || isLegacy(session)}
+					title={pushBlocked ?? 'Squash and merge on GitHub'}
+				>
+					<GitMerge size={14} /> Squash and merge
+				</MenuItem>
+			{/if}
+			<div class="gh-menu-sep"></div>
 			<MenuItem
-				onclick={() => createPr(false)}
+				onclick={preview}
 				disabled={!owner}
-				title={owner ? undefined : OWNER_ONLY}
+				title={owner ? undefined : hostOnly('deploy previews')}
 			>
-				<GitPullRequest size={14} /> Create pull request
+				<Rocket size={14} /> Deploy preview
 			</MenuItem>
-			<MenuItem
-				onclick={() => createPr(true)}
-				disabled={!owner}
-				title={owner ? undefined : OWNER_ONLY}
-			>
-				<GitPullRequestDraft size={14} /> Create draft pull request
-			</MenuItem>
-		{/if}
-		<MenuItem onclick={push} disabled={!owner} title={owner ? undefined : OWNER_ONLY}>
-			<Upload size={14} /> Push only
-		</MenuItem>
-		{#if open}
-			<MenuItem
-				onclick={merge}
-				disabled={!owner || isLegacy(session)}
-				title={owner ? 'Squash and merge on GitHub' : OWNER_ONLY}
-			>
-				<GitMerge size={14} /> Squash and merge
-			</MenuItem>
-		{/if}
-		<div class="gh-menu-sep"></div>
-		<MenuItem onclick={preview} disabled={!owner} title={owner ? undefined : OWNER_ONLY}>
-			<Rocket size={14} /> Deploy preview
-		</MenuItem>
-	</Menu>
-</div>
+		</Menu>
+	</div>
+{/if}

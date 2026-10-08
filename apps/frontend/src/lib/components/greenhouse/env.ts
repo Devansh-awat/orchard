@@ -3,15 +3,22 @@ import { ChatSessionStore, type SessionStoreOptions } from '$lib/components/sand
 import { LiveClient, type LiveTransport } from './live.svelte';
 
 export interface GreenhouseEnv {
-	terminalEndpoint(sandboxId: string, sid: string, n: string, mode?: 'rw' | 'ro'): string;
+	terminalEndpoint(
+		sandboxId: string,
+		sid: string,
+		n: string,
+		mode?: 'rw' | 'ro',
+		user?: string | null
+	): string;
 	createChatStore(sandboxId: string, options: SessionStoreOptions): ChatSessionStore;
 	createLive(sandboxId: string): LiveClient;
 	harness?: boolean;
 }
 
 export const realEnv: GreenhouseEnv = {
-	terminalEndpoint(sandboxId, sid, n, mode = 'rw') {
+	terminalEndpoint(sandboxId, sid, n, mode = 'rw', user = null) {
 		const params = new URLSearchParams({ sid, n, mode });
+		if (user && mode === 'ro') params.set('user', user);
 		return `/apiv1/sandboxes/${encodeURIComponent(sandboxId)}/terminal?${params.toString()}`;
 	},
 	createChatStore(sandboxId, options) {

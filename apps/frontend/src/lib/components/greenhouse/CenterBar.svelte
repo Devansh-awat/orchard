@@ -21,7 +21,7 @@
 	import { modKey, repoHue, repoInitial } from './format';
 	import { VIEWER_ONLY, hostOnly, isLegacy } from './workspace.svelte';
 
-	let { onrename }: { onrename: () => void } = $props();
+	let { onrename, compact = false }: { onrename: () => void; compact?: boolean } = $props();
 
 	const app = getGreenhouseApp();
 	const ws = $derived(app.ws);
@@ -75,8 +75,8 @@
 	}
 </script>
 
-<div class="bar">
-	{#if !app.layout.leftOpen}
+<div class="bar" data-align="topbar">
+	{#if !app.layout.leftOpen && !compact}
 		<button
 			type="button"
 			class="gh-ibtn"
@@ -89,19 +89,20 @@
 	{/if}
 	{#if session && ws}
 		<div class="crumbs">
-			<span class="avatar" style="--hue: var({repoHue(session.repo)})"
+			<span class="avatar" data-align="center-edge" style="--hue: var({repoHue(session.repo)})"
 				>{repoInitial(session.repo)}</span
 			>
-			<span class="repo">{session.repo}</span>
-			<span class="sep"><ChevronRight size={14} strokeWidth={1.75} /></span>
+			<span class="repo" data-align="title">{session.repo}</span>
+			<span class="sep"><ChevronRight size={16} strokeWidth={1.75} /></span>
 			<Menu bind:open={branchOpen} placement="bottom-start">
 				{#snippet trigger(props, isOpen)}
 					<button
 						{...props}
 						type="button"
 						class="branch gh-mono"
+						data-align="title"
 						aria-expanded={isOpen}
-						title={session.branch}
+						title="{session.branch}, branch actions"
 					>
 						{session.branch}
 					</button>
@@ -123,6 +124,7 @@
 						type="button"
 						class="gh-ibtn"
 						aria-label="Session actions"
+						title="Session actions"
 						aria-expanded={isOpen}
 					>
 						<Ellipsis size={16} strokeWidth={1.75} />
@@ -165,7 +167,9 @@
 		</div>
 	{:else}
 		<div class="crumbs">
-			<span class="repo">{app.machine?.name ?? 'Greenhouse'}</span>
+			<span class="repo" data-align="title"
+				>{app.home || !ws ? 'Home' : (app.machine?.name ?? 'Greenhouse')}</span
+			>
 		</div>
 	{/if}
 	<span class="grow"></span>
@@ -173,18 +177,18 @@
 		<AvatarStack
 			users={ws.live.others}
 			following={ws.live.following}
+			size={20}
 			onpick={(u) => follow(u.id)}
 		/>
 	{/if}
-	{#if session}
+	{#if session && !compact}
 		<OpenIn />
 	{/if}
-	{#if !app.home}
+	{#if !app.home && !compact}
 		<button
 			type="button"
 			class="gh-ibtn"
 			aria-label={app.layout.rightOpen ? 'Hide panel' : 'Show panel'}
-			aria-pressed={app.layout.rightOpen}
 			title="{app.layout.rightOpen ? 'Hide' : 'Show'} panel ({mod}⌥B)"
 			onclick={() => app.layout.toggle('right')}
 		>
@@ -197,18 +201,26 @@
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex: none;
 		height: var(--gh-bar);
-		padding: 0 0.5rem 0 0.75rem;
+		padding: 0 var(--gh-edge);
 		border-bottom: 1px solid var(--gh-line);
 		min-width: 0;
+	}
+
+	.bar > :global(.gh-ibtn:first-child) {
+		margin-left: calc(-1 * var(--gh-ibtn-inset));
+	}
+
+	.bar > :global(.gh-ibtn:last-child) {
+		margin-right: calc(-1 * var(--gh-ibtn-inset));
 	}
 
 	.crumbs {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		min-width: 0;
 	}
 
@@ -216,37 +228,40 @@
 		display: inline-grid;
 		place-items: center;
 		flex: none;
-		width: 1.125rem;
-		height: 1.125rem;
-		border-radius: 0.3125rem;
+		width: var(--gh-glyph);
+		height: var(--gh-glyph);
+		border-radius: 0.25rem;
 		background: color-mix(in oklab, var(--hue) 22%, var(--gh-editor));
 		color: color-mix(in oklab, var(--hue) 80%, var(--text-default));
 		font-size: var(--text-micro);
-		font-weight: 700;
+		line-height: var(--gh-lh-caption);
+		font-weight: 600;
 	}
 
 	.repo {
 		flex: none;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--gh-text);
 	}
 
 	.sep {
 		display: inline-grid;
+		margin: 0 -0.25rem;
 		color: var(--gh-faint);
 	}
 
 	.branch {
 		min-width: 0;
 		max-width: 28rem;
-		height: 1.5rem;
-		padding: 0 0.375rem;
-		border-radius: var(--radius-xs);
+		height: var(--gh-icon);
+		padding: 0 0.5rem;
+		border-radius: var(--gh-r-control);
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		color: var(--gh-muted);
 		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-ui);
 		transition:
 			background-color var(--dur-fast) ease,
 			color var(--dur-fast) ease;
