@@ -14,7 +14,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxRunnerRegistry, SandboxRunnerDescription } from './runners/sandbox-runner.registry';
-import { parseRepoUrl } from './sandbox-repo-url';
+import { parseRepoUrl, withoutRepoCredentials } from './sandbox-repo-url';
 import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
@@ -97,7 +97,13 @@ export function toSandboxDto(
 }
 
 export function withRole(dto: SandboxDto, role: SandboxRole): SandboxDto {
-  return { ...dto, myRole: role, setupScript: role === 'owner' ? dto.setupScript : null };
+  if (role === 'owner') return { ...dto, myRole: role };
+  return {
+    ...dto,
+    myRole: role,
+    setupScript: null,
+    repoUrl: withoutRepoCredentials(dto.repoUrl)
+  };
 }
 
 @Injectable()

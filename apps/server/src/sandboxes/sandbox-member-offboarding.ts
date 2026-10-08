@@ -3,6 +3,12 @@ import { refOf, type SandboxRowLike } from './runners/sandbox-runner';
 import { isUuid } from './sandbox-session-commands';
 
 export interface McpRotationPrisma {
+  sandbox: {
+    updateMany(args: {
+      where: { id: string };
+      data: { secretEpoch: { increment: number } };
+    }): Promise<{ count: number }>;
+  };
   session: {
     updateMany(args: {
       where: { userId: string; deviceName: { in: string[] }; revokedAt: null };
@@ -50,12 +56,16 @@ export async function endGuestShells(
     });
 }
 
-export async function rotateHostMcpAccess(
+export async function rotateMachineSecrets(
   prisma: McpRotationPrisma,
   registry: McpRotationRegistry | null,
   sandbox: SandboxRowLike & { organizationId: string | null },
   requestedById: string
 ): Promise<number> {
+  await prisma.sandbox.updateMany({
+    where: { id: sandbox.id },
+    data: { secretEpoch: { increment: 1 } }
+  });
   await prisma.session.updateMany({
     where: {
       userId: sandbox.userId,

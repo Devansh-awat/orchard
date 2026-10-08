@@ -17,7 +17,7 @@ export const SANDBOX_PHASES = [
 
 export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';
 
-export const SANDBOX_BRIDGE_CLI_VERSION = '0.22.0';
+export const SANDBOX_BRIDGE_CLI_VERSION = '0.23.0';
 
 const BRIDGE_RELEASES = 'https://github.com/LeafdTK/orchard-releases/releases/download';
 
@@ -50,6 +50,42 @@ export function checksumFor(checksums: string, file: string): string | null {
   }
   return null;
 }
+
+export const OPENCODE_PASSWORD_SYNC_FUNCTION = `opencode_password_sync() {
+  oc_env=/persist/home/.config/opencode/server.env
+  oc_pw=$(cat)
+  if [ -z "$oc_pw" ]; then
+    rm -f "$oc_env"
+    return 0
+  fi
+  oc_line=$(printf 'export OPENCODE_SERVER_PASSWORD=%q' "$oc_pw")
+  if [ -f "$oc_env" ] && [ "$(cat "$oc_env")" = "$oc_line" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$oc_env")"
+  (umask 077 && printf '%s\\n' "$oc_line" > "$oc_env.tmp") && mv -f "$oc_env.tmp" "$oc_env"
+  chown dev:dev "$oc_env" 2>/dev/null || true
+  chmod 600 "$oc_env"
+  if pgrep -f '[o]pencode serve' >/dev/null 2>&1; then
+    pkill -f '[o]pencode serve' >/dev/null 2>&1 || true
+    for oc_wait in 1 2 3 4 5 6 7 8 9 10; do
+      pgrep -f '[o]pencode serve' >/dev/null 2>&1 || break
+      sleep 0.5
+    done
+    pkill -9 -f '[o]pencode serve' >/dev/null 2>&1 || true
+  fi
+}
+
+opencode_start() {
+  if command -v opencode >/dev/null 2>&1 && ! pgrep -f '[o]pencode serve' >/dev/null 2>&1; then
+    su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; nohup opencode "serve" --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
+  fi
+}`;
+
+export const OPENCODE_PASSWORD_ROTATE_SCRIPT = `${OPENCODE_PASSWORD_SYNC_FUNCTION}
+opencode_password_sync
+opencode_start
+`;
 
 export const SANDBOX_BOOTSTRAP_SCRIPT = `#!/bin/bash
 set -uo pipefail
@@ -327,15 +363,13 @@ chown dev:dev /persist/home/.config /persist/home/.local /persist/home/.local/sh
 chown -R dev:dev /persist/home/.config/opencode /persist/home/.local/share/opencode
 
 phase services
-opencode_env=/persist/home/.config/opencode/server.env
-if [ -s /orchard-init/opencode-password ]; then
-  (umask 077 && printf 'export OPENCODE_SERVER_PASSWORD=%q\\n' "$(cat /orchard-init/opencode-password)" > "$opencode_env")
-  chown dev:dev "$opencode_env"
-  chmod 600 "$opencode_env"
+${OPENCODE_PASSWORD_SYNC_FUNCTION}
+if [ -f /orchard-init/opencode-password ]; then
+  opencode_password_sync < /orchard-init/opencode-password
 else
-  rm -f "$opencode_env"
+  opencode_password_sync < /dev/null
 fi
-if have opencode && ! pgrep -f 'opencode serve' >/dev/null 2>&1; then
+if have opencode && ! pgrep -f '[o]pencode serve' >/dev/null 2>&1; then
   su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; nohup opencode serve --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
 fi
 

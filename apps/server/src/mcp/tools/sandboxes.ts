@@ -13,7 +13,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'list_sandboxes',
     {
-      description: `List the Greenhouse machines (sandboxes) you own or that were shared with you, with their status, runner and your role on each (owner = host, collaborator = guest, viewer = read-only guest, admin = org admin). Pass organizationId to also see every machine in an org you administer. The result also says how many machines you may own and which runners are available.`,
+      description: `List the Greenhouse machines (sandboxes) you own or that were shared with you, with their status, runner and your role on each (owner = host, collaborator = guest, viewer = read-only guest, admin = org admin with lifecycle only). Pass organizationId to also see every machine in an org you administer; on machines where your role is admin you can start, stop and delete them, but sessions, files, transcripts, terminals and previews stay closed to you unless the host invites you. The result also says how many machines you may own and which runners are available.`,
       annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: {
         organizationId: z.string().uuid().optional().describe('Limit to one organization')
@@ -28,7 +28,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'get_sandbox',
     {
-      description: `Get one Greenhouse machine: status, desired state, whether a change is still applying, runner, image, owner and your role on it.`,
+      description: `Get one Greenhouse machine: status, desired state, whether a change is still applying, runner, image, owner and your role on it. Org admins can read this for any machine in their org; everything inside the machine needs an invite.`,
       annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: { sandboxId }
     },
@@ -38,7 +38,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'start_sandbox',
     {
-      description: `Start a stopped Greenhouse machine. Guests and the host can start it. Returns immediately with status "starting"; poll get_sandbox until it is "running" before creating sessions or prompting.`,
+      description: `Start a stopped Greenhouse machine. Guests, the host and org admins can start it. Returns immediately with status "starting"; poll get_sandbox until it is "running" before creating sessions or prompting.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: { sandboxId }
     },
@@ -48,7 +48,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'stop_sandbox',
     {
-      description: `Stop a Greenhouse machine. Its disk is kept and sessions resume on the next start, but running agents, terminals and dev servers are killed. Host (or org admin) only.`,
+      description: `Stop a Greenhouse machine. Its disk is kept and sessions resume on the next start, but running agents, terminals and dev servers are killed. Host or org admin only.`,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       inputSchema: { sandboxId }
     },

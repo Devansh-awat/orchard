@@ -185,15 +185,36 @@ or a start without a checksum, logs a line in the bootstrap output and leaves th
 bridge out, so SSH to that machine fails until the checksum is available.
 
 Machines are created as **persistent** sandboxes: stopping one snapshots it and
-starting resumes from the snapshot. Each machine exposes port 4096 (the agent
-server), 2222 (the SSH bridge) and the seven preview ports.
+starting resumes from the snapshot. The snapshot is the whole root filesystem
+(`/etc`, `/usr/local`, `/root`, `/tmp` and the home directory under
+`/vercel/sandbox/orchard`), not only `/vercel/sandbox`; running processes are not
+kept, so every start reruns the bootstrap, which restarts sshd, the agent server and
+the bridge. Each machine exposes port 4096 (the agent server), 2222 (the SSH
+bridge) and the seven preview ports.
+
+Measured against the live API with the universal image and 2 vCPUs: creating a
+machine takes about 3 seconds and the first boot about 12 to 18 more, because the
+image already ships Node.js, Claude Code, Codex and opencode. Stopping takes about
+7 seconds, resuming about 4 seconds plus a 2 to 3 second boot, and a fork about 4
+seconds.
+
+To check a Vercel setup end to end, run `pnpm --filter server live:sandbox-vercel`
+with the three `SANDBOX_VERCEL_*` variables set. It drives the runner against the
+real API (create, credential brokering, exec, the protected ports, a terminal, SSH
+through the bridge, stop and resume, fork, delete) and deletes every machine it
+made. `--cleanup` removes any `orchard-live-*` sandboxes left in the project.
 
 ### How credentials reach a Vercel machine
 
 - **GitHub.** The host's GitHub token is never placed inside the machine. It is
   set as a Vercel network policy that adds the `Authorization` header at Vercel's
-  egress proxy for `github.com` and `api.github.com`. Updating the token updates
-  the policy.
+  egress proxy. On `github.com` the proxy only swaps in the token when a request
+  carries the machine's placeholder credential (the one git's credential helper
+  holds), so a guest who pushes with their own token keeps their own identity, and
+  requests with no credential pass through untouched. On `api.github.com` the token
+  is added to every request, so `gh` and `curl` in any terminal on the machine act
+  as the host. Updating the token updates the policy, also while the machine is
+  stopped, without waking it.
 - **Claude and OpenAI.** Passed as environment variables to the bootstrap command
   on each start. They are never given to `Sandbox.create`, so they do not appear in
   Vercel's sandbox configuration.
@@ -213,9 +234,17 @@ Every exposed port has a public Vercel URL.
   **Public**.
 
 The password and token are `HMAC-SHA256(SECRETS_ENCRYPTION_KEY,
-"orchard-sandbox:<purpose>:<machine id>")`. They are derived on demand and never
-stored. Rotating `SECRETS_ENCRYPTION_KEY` changes them; restart Vercel machines
-afterwards so they pick up the new values.
+"orchard-sandbox:<purpose>:<machine id>[:<epoch>]")`. They are derived on demand
+and never stored. Each machine has a secret epoch (`sandboxes.secret_epoch`,
+starting at 0, which leaves the epoch out of the input) that goes up by one when a
+guest is removed or made read-only. Orchard then resyncs the machine: the new
+password and token are written into it and the agent server restarts with the new
+password, so a removed guest who copied the old ones can no longer use the public
+ports. The bridge reads its token file on every connection. Orchard always signs
+its own requests with the current epoch; while the agent server is still
+restarting, the API answers `503` with `code: "agent_restarting"`. Rotating
+`SECRETS_ENCRYPTION_KEY` also changes them; restart Vercel machines afterwards so
+they pick up the new values.
 
 ### Snapshots contain secrets
 
@@ -491,9 +520,13 @@ integrations.
 ### Roles
 
 The host owns a machine; guests and read-only guests are invited by the host from
-the same organization; org admins of the machine's organization can see inside
-it (sessions, transcripts, files, diffs, read-only terminals and previews) and
-start, stop or delete it; superadmins have host access. A host who leaves the
+the same organization; org admins of the machine's organization get its lifecycle
+only: they see it in lists (name, status, runner, owner, timestamps, never the
+setup script) and can start, stop, delete it and retry failed changes, but not
+read its sessions, transcripts, comments, files, diffs, ports, previews, members,
+terminals, the live connection or the agent server. An org admin who is also
+invited gets the invited role on top of the lifecycle. Superadmins have host
+access as a break-glass. A host who leaves the
 organization loses the machine with it; org admins keep its lifecycle. The full
 matrix is in [Sharing](/greenhouse/sharing/#what-each-role-can-do).
 
@@ -540,7 +573,7 @@ acknowledge, exactly what sharing gives. The text is quoted in
 | Claude and OpenAI tokens                  | Encrypted in Postgres (AES-256-GCM)                                                                                                                              | The machine's Secret (Kubernetes) or bootstrap environment (Vercel)                                                                                     |
 | The host's GitHub token, for the agent    | Encrypted in Postgres                                                                                                                                            | The machine's Secret (Kubernetes); an egress header, never inside the machine (Vercel)                                                                  |
 | A person's GitHub token, for their pushes | Encrypted in Postgres                                                                                                                                            | The environment of the one git command they run, or of their own terminal while it is open; the credential helper only hands it to `https://github.com` |
-| Agent server password, SSH bridge token   | Not stored; derived with HMAC from `SECRETS_ENCRYPTION_KEY`                                                                                                      | Files in `/orchard-init`, mode 600; the agent server requires the password on both runners                                                              |
+| Agent server password, SSH bridge token   | Not stored; derived with HMAC from `SECRETS_ENCRYPTION_KEY` and the machine's secret epoch                                                                       | Files in `/orchard-init`, mode 600; the agent server requires the password on both runners                                                              |
 | Share link tokens                         | SHA-256 hash only; links carry them after `#`, the API reads them from `X-Orchard-Share-Token`                                                                   | Never                                                                                                                                                   |
 | Slack link tokens                         | SHA-256 hash only, single use, 10 minutes                                                                                                                        | Never                                                                                                                                                   |
 | Linear API keys                           | Encrypted in Postgres                                                                                                                                            | Never                                                                                                                                                   |
@@ -572,9 +605,12 @@ And where they never are:
   preview environment.
 
 When a guest is removed or made read-only, their terminals in the machine are
-ended and the machine's MCP session is revoked. The machine's Secret is resynced
-with a new token, which the agent picks up when the machine next starts; until
-then its Orchard tools are unavailable.
+ended, the machine's MCP session is revoked and its secret epoch goes up. The
+machine's Secret is resynced with a new MCP token, which the agent picks up when
+the machine next starts (until then its Orchard tools are unavailable), and with a
+new agent server password and bridge token, which take effect right away: the
+agent server is restarted with the new password, interrupting any agent run in
+progress.
 
 The residual risks are deliberate and documented:
 

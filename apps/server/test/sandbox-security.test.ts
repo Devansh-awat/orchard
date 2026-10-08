@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
+import { createServer } from 'node:http';
 import { decodeJwt, SignJWT } from 'jose';
 import { HOME_GUARD, buildFsScript } from '../src/sandboxes/sandbox-session-commands';
 import {
@@ -20,11 +22,15 @@ import { renderEnvFile } from '../src/sandboxes/links/sandbox-env-files';
 import {
   endGuestShells,
   guestShellKillScript,
-  rotateHostMcpAccess
+  rotateMachineSecrets
 } from '../src/sandboxes/sandbox-member-offboarding';
 import { requestAuthStorage } from '../src/auth/request-context';
 import { IntegrationsController } from '../src/sandboxes/integrations/integrations.controller';
-import { gitOutput } from '../src/sandboxes/sandbox-workspace.service';
+import {
+  OPENCODE_ROTATING,
+  SandboxWorkspaceService,
+  gitOutput
+} from '../src/sandboxes/sandbox-workspace.service';
 import { HttpException } from '@nestjs/common';
 import { SandboxMembersService } from '../src/sandboxes/sandbox-members.service';
 import { SandboxSessionsController } from '../src/sandboxes/sandbox-sessions.controller';
@@ -132,6 +138,90 @@ test('proxied opencode responses can never render as a page on the Orchard origi
   assert.match(OPENCODE_RESPONSE_HEADERS['content-security-policy'], /default-src 'none'/);
 });
 
+function proxyHarness(baseUrl: string) {
+  const service = Object.create(SandboxWorkspaceService.prototype);
+  service.logger = { warn: () => {} };
+  service.registry = {
+    for: () => ({
+      httpTarget: async () => ({ kind: 'url', baseUrl, headers: { authorization: 'Basic new' } })
+    })
+  };
+  const chunks: Buffer[] = [];
+  const res: any = new Writable({
+    write(chunk: Buffer, _enc: string, cb: () => void) {
+      chunks.push(Buffer.from(chunk));
+      cb();
+    }
+  });
+  res.statusCode = 200;
+  res.headersSent = false;
+  res.headers = {} as Record<string, string>;
+  res.status = (code: number) => {
+    res.statusCode = code;
+    return res;
+  };
+  res.setHeader = (k: string, v: string) => (res.headers[k] = v);
+  res.flushHeaders = () => (res.headersSent = true);
+  res.json = (body: unknown) => {
+    res.headersSent = true;
+    res.end(JSON.stringify(body));
+  };
+  const sandbox = {
+    id: SANDBOX,
+    userId: HOST,
+    runner: 'vercel',
+    podName: 'p',
+    namespace: null,
+    externalId: null,
+    runnerState: null,
+    status: 'running'
+  };
+  const req: any = {
+    method: 'GET',
+    originalUrl: `/apiv1/sandboxes/${SANDBOX}/opencode/event`,
+    headers: {}
+  };
+  return { service, res, req, sandbox, body: () => Buffer.concat(chunks).toString('utf8') };
+}
+
+test('an opencode restarting with a rotated password answers 503, and a dropped stream ends cleanly', async () => {
+  const upstream = createServer((req, res) => {
+    if (req.headers.authorization !== 'Basic new') {
+      res.writeHead(401, { 'www-authenticate': 'Basic realm="opencode"' });
+      res.end('Unauthorized');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.write('data: {"type":"server.connected"}\n\n');
+    setTimeout(() => res.socket?.destroy(), 20);
+  });
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const port = (upstream.address() as any).port;
+  try {
+    const stale = proxyHarness(`http://127.0.0.1:${port}`);
+    stale.service.registry = {
+      for: () => ({
+        httpTarget: async () => ({
+          kind: 'url',
+          baseUrl: `http://127.0.0.1:${port}`,
+          headers: { authorization: 'Basic old' }
+        })
+      })
+    };
+    await stale.service.proxyOpencode(stale.sandbox, stale.req, stale.res);
+    assert.equal(stale.res.statusCode, 503);
+    assert.deepEqual(JSON.parse(stale.body()), OPENCODE_ROTATING);
+    assert.equal(stale.res.headers['www-authenticate'], undefined);
+    const live = proxyHarness(`http://127.0.0.1:${port}`);
+    await live.service.proxyOpencode(live.sandbox, live.req, live.res);
+    assert.equal(live.res.statusCode, 200);
+    assert.match(live.body(), /server\.connected/);
+    assert.equal(live.res.writableEnded, true, 'the browser stream is closed so it reconnects');
+  } finally {
+    upstream.close();
+  }
+});
+
 test('terminal, pod exec and ssh upgrades refuse a session cookie from a foreign origin', async () => {
   const prev = process.env.FRONTEND_URL;
   process.env.FRONTEND_URL = 'https://app.orchard.test';
@@ -237,10 +327,20 @@ test('project variables that would hijack git, the shell, the agent or TLS never
   }
 });
 
-test('losing a guest revokes the MCP session of that machine and resyncs it', async () => {
+test('losing a guest revokes the MCP session, bumps the secret epoch and resyncs the machine', async () => {
   const revoked: any[] = [];
   const synced: string[] = [];
+  const steps: string[] = [];
+  let epoch = 2;
   const prisma = {
+    sandbox: {
+      updateMany: async (args: any) => {
+        assert.deepEqual(args, { where: { id: SANDBOX }, data: { secretEpoch: { increment: 1 } } });
+        epoch += args.data.secretEpoch.increment;
+        steps.push('epoch');
+        return { count: 1 };
+      }
+    },
     session: {
       updateMany: async (args: any) => {
         revoked.push(args.where);
@@ -251,12 +351,13 @@ test('losing a guest revokes the MCP session of that machine and resyncs it', as
   const registry = {
     for: () => ({
       requestSecretSync: async (ref: any) => {
+        steps.push(`sync@${epoch}`);
         synced.push(ref.id);
       }
     })
   };
   const box = { id: SANDBOX, userId: HOST, organizationId: ORG } as any;
-  assert.equal(await rotateHostMcpAccess(prisma as any, registry as any, box, HOST), 1);
+  assert.equal(await rotateMachineSecrets(prisma as any, registry as any, box, HOST), 1);
   assert.deepEqual(revoked, [
     {
       userId: HOST,
@@ -265,6 +366,7 @@ test('losing a guest revokes the MCP session of that machine and resyncs it', as
     }
   ]);
   assert.deepEqual(synced, [SANDBOX]);
+  assert.deepEqual(steps, ['epoch', 'sync@3'], 'the sync is queued after the epoch moved');
 });
 
 test('integration account links refuse scoped tokens and org-confined sessions', async () => {
@@ -342,13 +444,19 @@ test('replica proxy hops carry the original confinement and can never pass as a 
 });
 
 test('only the host sees the setup script, and repo URLs cannot carry credentials', () => {
-  const dto = { id: 'x', setupScript: 'export TOKEN=sk-live' } as any;
+  const dto = {
+    id: 'x',
+    setupScript: 'export TOKEN=sk-live',
+    repoUrl: 'https://x:ghp_legacy@github.com/acme/api'
+  } as any;
   assert.equal(withRole(dto, 'owner').setupScript, 'export TOKEN=sk-live');
   for (const role of ['collaborator', 'viewer', 'admin'] as const) {
     const scrubbed = withRole(dto, role);
     assert.equal(scrubbed.setupScript, null);
+    assert.equal(scrubbed.repoUrl, 'https://github.com/acme/api');
     assert.equal(scrubbed.myRole, role);
   }
+  assert.equal(withRole({ ...dto, repoUrl: null }, 'admin').repoUrl, null);
   assert.throws(() => parseRepoUrl('https://x:ghp_secret@github.com/acme/api'), /credentials/);
   assert.throws(() => parseRepoUrl('https://ghp_secret@github.com/acme/api'), /credentials/);
   assert.throws(() => parseRepoUrl('http://github.com/acme/api'), /https/);

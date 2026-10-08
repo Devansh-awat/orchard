@@ -18,7 +18,7 @@ import { SandboxLiveService } from './live/sandbox-live.service';
 import { LIVE_MAX_COMMENT_CHARS, TokenBucket, isChatId, sanitizeText } from './live/live-protocol';
 import { OPENCODE_MESSAGE_ID_RE } from './sandbox-opencode-policy';
 import { isUuid } from './sandbox-session-commands';
-import { endGuestShells, rotateHostMcpAccess } from './sandbox-member-offboarding';
+import { endGuestShells, rotateMachineSecrets } from './sandbox-member-offboarding';
 
 export const PUBLIC_USER_SELECT = {
   id: true,
@@ -325,8 +325,8 @@ export class SandboxMembersService {
     await endGuestShells(registry, sandbox, userId).catch((e: any) =>
       this.logger.warn(`could not end the guest shells of ${userId}: ${e?.message}`)
     );
-    await rotateHostMcpAccess(this.prisma as any, registry, sandbox, actorId).catch((e: any) =>
-      this.logger.warn(`could not rotate the host MCP token: ${e?.message}`)
+    await rotateMachineSecrets(this.prisma as any, registry, sandbox, actorId).catch((e: any) =>
+      this.logger.warn(`could not rotate the machine secrets: ${e?.message}`)
     );
   }
 

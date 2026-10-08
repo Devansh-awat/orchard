@@ -78,6 +78,7 @@ export type ClientFrame =
 export type ParseResult = { ok: true; frame: ClientFrame } | { ok: false; error: string };
 
 export function liveRoleAllows(role: SandboxRole, min: LiveMinRole): boolean {
+  if (role === 'admin') return false;
   if (min === 'viewer') return true;
   return role === 'owner' || role === 'collaborator';
 }

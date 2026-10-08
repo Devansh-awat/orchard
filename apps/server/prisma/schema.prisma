@@ -2461,6 +2461,7 @@ model Sandbox {
   desiredState  SandboxDesiredState @default(running) @map("desired_state")
   externalId    String?       @map("external_id") @db.VarChar(255)
   runnerState   Json?         @map("runner_state") @db.JsonB
+  secretEpoch   Int           @default(0) @map("secret_epoch")
   image         String        @db.VarChar(500)
   repoUrl       String?       @map("repo_url") @db.VarChar(500)
   sshIdentityId String?       @map("ssh_identity_id") @db.Uuid

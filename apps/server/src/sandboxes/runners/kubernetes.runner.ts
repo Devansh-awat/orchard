@@ -11,7 +11,7 @@ import { InstanceSettingsService } from '../../instance-settings/instance-settin
 import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { ApplyExecutorService, ApplyItemInput } from '../../apply/apply-executor.service';
 import { ResizableOutput } from '../../kubernetes/exec-sessions';
-import { SANDBOX_BOOTSTRAP_SCRIPT } from '../sandbox-bootstrap';
+import { OPENCODE_PASSWORD_ROTATE_SCRIPT, SANDBOX_BOOTSTRAP_SCRIPT } from '../sandbox-bootstrap';
 import { PREVIEW_PORTS } from '../preview/preview-auth';
 import { configuredPreviewDomain } from '../preview/preview-domain';
 import { InstanceConfigService } from '../../instance-config/instance-config.service';
@@ -54,7 +54,7 @@ import {
   forkSourceOf,
   specOf
 } from './sandbox-runner';
-import { SandboxSecretsService, deriveSandboxSecret, sandboxSpecHash } from './sandbox-secrets';
+import { SandboxSecretsService, sandboxSpecHash } from './sandbox-secrets';
 import {
   GIT_IDENTITY_INIT_FILE,
   authorizedKeysFile,
@@ -828,7 +828,24 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       where: { id: row.id },
       data: { runnerState: { ...state, secretHash: hash } }
     });
-    if (row.status === 'running') await this.pushOrchardEnv(row, data[ORCHARD_ENV_INIT_FILE] ?? '');
+    if (row.status === 'running') {
+      await this.pushOrchardEnv(row, data[ORCHARD_ENV_INIT_FILE] ?? '');
+      await this.pushOpencodePassword(row, data['opencode-password'] ?? '');
+    }
+  }
+
+  private async pushOpencodePassword(ref: SandboxRef, password: string): Promise<void> {
+    try {
+      const result = await this.exec(ref, ['/bin/bash', '-c', OPENCODE_PASSWORD_ROTATE_SCRIPT], {
+        stdin: Buffer.from(password, 'utf8'),
+        timeoutMs: 30_000
+      });
+      if (!result.ok) {
+        this.logger.warn(`opencode password sync exited ${result.exitCode} in ${ref.id}`);
+      }
+    } catch (e: any) {
+      this.logger.warn(`opencode password sync failed in ${ref.id}: ${e?.message}`);
+    }
   }
 
   private async pushOrchardEnv(ref: SandboxRef, bundle: string): Promise<void> {
@@ -1525,7 +1542,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     if (!ip) throw new SandboxNotRunningError('Sandbox pod has no address');
     const headers: Record<string, string> = {};
     if (port === SANDBOX_OPENCODE_PORT) {
-      const password = deriveSandboxSecret('opencode-password', ref.id);
+      const password = await this.secrets.boxSecret('opencode-password', ref.id);
       if (password) headers.authorization = opencodeBasicAuth(password);
     }
     return { kind: 'url', baseUrl: `http://${ip}:${port}`, headers };

@@ -50,6 +50,7 @@ export function sandboxRoleAllows(
   const { role, orgAdmin } = resolution;
   if (!role) return false;
   if (opts.orgAdmin && orgAdmin) return true;
+  if (role === 'admin') return false;
   if (min === 'viewer') return true;
   if (min === 'collaborator') return role === 'owner' || role === 'collaborator';
   return role === 'owner';
@@ -58,7 +59,6 @@ export function sandboxRoleAllows(
 export function rankSandboxRole(role: SandboxRole | null): number {
   if (role === 'owner') return 3;
   if (role === 'collaborator') return 2;
-  if (role === 'admin') return 1;
   if (role === 'viewer') return 1;
   return 0;
 }
@@ -102,10 +102,9 @@ export class SandboxAccessService {
     if (!org) return { role: null, orgAdmin: false, superadmin: false };
     if (owner) return { role: 'owner', orgAdmin: false, superadmin: false };
     const orgAdmin = org.isAdmin;
-    if (member?.role === 'collaborator')
-      return { role: 'collaborator', orgAdmin, superadmin: false };
+    if (member?.role === 'collaborator' || member?.role === 'viewer')
+      return { role: member.role, orgAdmin, superadmin: false };
     if (orgAdmin) return { role: 'admin', orgAdmin, superadmin: false };
-    if (member?.role === 'viewer') return { role: 'viewer', orgAdmin, superadmin: false };
     return { role: null, orgAdmin: false, superadmin: false };
   }
 
@@ -124,6 +123,11 @@ export class SandboxAccessService {
       orgAdmin: resolution.orgAdmin,
       superadmin: resolution.superadmin
     };
+  }
+
+  async resolveInside(sandboxId: string, userId: string): Promise<SandboxAccess | null> {
+    const access = await this.resolve(sandboxId, userId);
+    return access && sandboxRoleAllows(access, 'viewer') ? access : null;
   }
 
   async requireSandboxRole(

@@ -48,9 +48,14 @@ does not share a kernel with anything else.
 The machine is a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) on the
 operator's Vercel account.
 
-- **Disk.** Persistent snapshots. Stopping the machine snapshots it and starting
-  it resumes from that snapshot, so files, repositories and installed packages
-  come back. The disk size is set by Vercel, not by Orchard.
+- **Disk.** Persistent snapshots. Stopping the machine snapshots its whole
+  filesystem, not only the home directory: files, repositories, packages installed
+  with `apt` or `npm -g`, and anything under `/etc`, `/usr/local`, `/root` and
+  `/tmp` come back when it starts. Running processes do not; Orchard restarts its
+  own services on start, and your dev servers need starting again. The disk size is
+  set by Vercel, not by Orchard (64 GB at the time of writing).
+- **Start time.** A new machine is ready in about 15 to 20 seconds. A stopped
+  machine resumes in about 7 seconds, and stopping takes about 7 seconds.
 - **Time limit.** Vercel stops a sandbox after a timeout (60 minutes unless your
   operator changed it). Orchard extends it in 30 minute steps while the machine is
   in use. If Vercel stops it anyway, the machine shows **Stopped** with the message
@@ -61,15 +66,19 @@ operator's Vercel account.
   proxy on requests to `github.com` and `api.github.com`, so it is never stored
   inside the machine.
 - **Previews.** Public. Anyone with the URL can open them.
-- **Forking.** Always available. It copies the last saved snapshot.
+- **Forking.** Always available. It copies the last saved snapshot, including
+  everything outside the home directory, and is ready in a few seconds. The fork
+  gets its own agent password and SSH bridge token.
 
 ## Image and tools
 
 A new machine starts from a plain Linux image (`debian:bookworm` on Kubernetes,
 Vercel's universal image on Vercel, unless your operator picked another). On first
 boot Orchard installs what it needs and leaves the rest alone: `sshd`, `git`,
-`curl`, `tmux`, `ripgrep`, Node.js 22, Claude Code, Codex and opencode. The
-`dev` user has passwordless `sudo`, so install anything else you need.
+`curl`, `tmux`, `ripgrep`, Node.js 22, Claude Code, Codex and opencode. Vercel's
+universal image (Ubuntu with Node.js 24) already has all of them, so nothing is
+installed there. The `dev` user has passwordless `sudo`, so install anything else
+you need.
 
 ## Repositories
 

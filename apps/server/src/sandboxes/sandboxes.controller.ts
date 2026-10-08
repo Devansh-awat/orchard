@@ -112,8 +112,8 @@ export class SandboxesController {
   @RequireScope('exec')
   async bootStatus(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    const row = await requireSandboxAccess(this.access, id, user.id, 'viewer');
-    return this.workspace.bootStatus(row);
+    const access = await this.access.requireSandboxRole(id, user.id, 'viewer', { orgAdmin: true });
+    return this.workspace.bootStatus(access.sandbox);
   }
 
   @Get(':id/changes')
@@ -521,7 +521,7 @@ export class SandboxesController {
   @Get(':id')
   async get(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    const access = await this.access.requireSandboxRole(id, user.id, 'viewer');
+    const access = await this.access.requireSandboxRole(id, user.id, 'viewer', { orgAdmin: true });
     return withRole(await this.sandboxes.dto(access.sandbox), access.role);
   }
 

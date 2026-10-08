@@ -154,7 +154,7 @@ export class SandboxPreviewService {
     const cached = this.accessCache.get(key);
     const now = Date.now();
     if (cached && cached.until > now) return cached.ok;
-    const resolved = await this.access.resolve(sandboxId, userId).catch(() => null);
+    const resolved = await this.access.resolveInside(sandboxId, userId).catch(() => null);
     const ok = !!resolved && resolved.sandbox.desiredState !== 'deleted';
     if (this.accessCache.size > 10_000) this.accessCache.clear();
     this.accessCache.set(key, { ok, until: now + ACCESS_CACHE_MS });

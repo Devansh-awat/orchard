@@ -22,6 +22,8 @@ import {
   vercelStatusChange
 } from '../src/sandboxes/runners/vercel.runner';
 import { stagedInitFiles, opencodeConfigJson } from '../src/sandboxes/runners/sandbox-init-files';
+import { SandboxSecretsService, deriveBoxSecret } from '../src/sandboxes/runners/sandbox-secrets';
+import { SANDBOX_PHASE_FILE } from '../src/sandboxes/sandbox-bootstrap';
 import {
   SANDBOX_BOOTSTRAP_SCRIPT,
   bridgeArchiveName,
@@ -167,7 +169,10 @@ function vercelRunner(
     { get: async () => 'inst-1', createIfAbsent: async () => true } as never,
     { enqueue: async (input: any) => enqueued.push(input) } as never,
     { registerHandler: (op: string, fn: any) => handlers.set(op, fn) } as never,
-    { forSandbox: async () => SECRETS } as never
+    Object.assign(Object.create(SandboxSecretsService.prototype), {
+      prisma,
+      forSandbox: async () => SECRETS
+    }) as never
   );
   runner.sdk = {
     get: async () => {
@@ -360,6 +365,12 @@ test('provisioning creates a persistent box with no tokens in create, then stage
   assert.equal(byName.get('bridge-token')?.mode, 0o600);
   assert.equal(byName.get('bootstrap.sh')?.mode, 0o644);
   assert.equal(Buffer.from(byName.get('bridge-token')!.content).toString(), 'bridge-tok');
+  const phase = session.writes.find((w) => w.path === SANDBOX_PHASE_FILE);
+  assert.equal(
+    Buffer.from(phase!.content).toString(),
+    'starting',
+    'a resumed snapshot never reports a stale ready'
+  );
   assert.equal(session.commands.length, 1);
   const boot = session.commands[0];
   assert.equal(boot.cmd, 'bash');
@@ -396,6 +407,40 @@ test('a secret sync on a running box restages the files and reruns the bootstrap
   assert.equal(box.updates.length, 1);
   assert.ok(box.session.writes.some((w) => w.path.endsWith('/authorized_keys')));
   assert.equal(box.session.commands.length, 1);
+});
+
+test('vercel httpTarget follows a bumped secret epoch and a sync restarts opencode with it', async () => {
+  const prev = process.env.SECRETS_ENCRYPTION_KEY;
+  process.env.SECRETS_ENCRYPTION_KEY = 'v'.repeat(64);
+  try {
+    const box = new FakeSandbox(REF.podName, 'running');
+    const row: Record<string, unknown> = { ...ROW, status: 'running', secretEpoch: 0 };
+    const { runner, handlers } = vercelRunner(row, { existing: box });
+    const basic = (pw: string | null) =>
+      `Basic ${Buffer.from(`opencode:${pw}`).toString('base64')}`;
+    const old: any = await runner.httpTarget(REF, VERCEL_OPENCODE_PORT);
+    assert.equal(old.headers.authorization, basic(deriveBoxSecret('opencode-password', REF.id, 0)));
+    row.secretEpoch = 1;
+    const fresh: any = await runner.httpTarget(REF, VERCEL_OPENCODE_PORT);
+    assert.equal(
+      fresh.headers.authorization,
+      basic(deriveBoxSecret('opencode-password', REF.id, 1))
+    );
+    assert.notEqual(fresh.headers.authorization, old.headers.authorization);
+    await handlers.get(VERCEL_OP_SECRET)!({ manifest: { sandboxId: REF.id } });
+    const staged = (name: string) =>
+      box.session.writes.find((w) => w.path === `${VERCEL_INIT_STAGE}/${name}`);
+    assert.equal(staged('opencode-password')?.mode, 0o600);
+    assert.equal(staged('bridge-token')?.mode, 0o600);
+    const bootstrap = Buffer.from(staged('bootstrap.sh')!.content).toString('utf8');
+    assert.match(bootstrap, /opencode_password_sync < \/orchard-init\/opencode-password/);
+    assert.match(bootstrap, /pkill -f '\[o\]pencode serve'/);
+    assert.match(bootstrap, /--token-file \/orchard-init\/bridge-token/);
+    assert.equal(box.session.commands.length, 1);
+  } finally {
+    if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+    else process.env.SECRETS_ENCRYPTION_KEY = prev;
+  }
 });
 
 test('a secret sync on a stopped box only updates the policy', async () => {

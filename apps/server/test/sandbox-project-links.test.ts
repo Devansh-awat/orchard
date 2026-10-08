@@ -557,10 +557,10 @@ test('env files are built inside the secret sync op, never carried in the queue'
   await handlers.get(SANDBOX_OP_SECRET)!({ manifest: { sandboxId: SANDBOX } });
   const bundle = secrets[0].stringData[ORCHARD_ENV_INIT_FILE];
   assert.deepEqual(parseOrchardEnvBundle(bundle), { web: "STRIPE_PUBLIC='pk_live_abc'\n" });
-  assert.equal(execs.length, 1);
-  assert.equal(execs[0].stdin, bundle);
-  assert.ok(execs[0].command.join(' ').includes('orchard_env_sync'));
-  assert.ok(!execs[0].command.join(' ').includes('pk_live'));
+  const envSync = execs.filter((e) => e.command.join(' ').includes('orchard_env_sync'));
+  assert.equal(envSync.length, 1);
+  assert.equal(envSync[0].stdin, bundle);
+  assert.ok(!envSync[0].command.join(' ').includes('pk_live'));
 
   const cr = runner.buildCr(
     {

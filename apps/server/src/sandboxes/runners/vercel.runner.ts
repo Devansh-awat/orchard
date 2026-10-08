@@ -75,7 +75,7 @@ const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const USER_RE = /^[a-z_][a-z0-9_-]*$/;
 const MISSING_FILE_EXIT = 44;
 const PROCESS_GROUP_WRAPPER =
-  'setsid -w "$@" <&0 & pid=$!; trap \'kill -TERM -- -$pid $pid 2>/dev/null\' TERM INT HUP; wait $pid; s=$?; if kill -0 $pid 2>/dev/null; then wait $pid; s=$?; fi; exit $s';
+  'exec 3<&0; setsid -w "$@" <&3 3<&- & pid=$!; trap \'kill -TERM -$pid 2>/dev/null; kill -TERM $pid 2>/dev/null\' TERM INT HUP; wait $pid; s=$?; if kill -0 $pid 2>/dev/null; then wait $pid; s=$?; fi; exit $s';
 
 export type VercelSandboxStatus =
   | 'pending'
@@ -1429,7 +1429,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     }
     const headers: Record<string, string> = {};
     if (port === VERCEL_OPENCODE_PORT) {
-      const password = deriveSandboxSecret('opencode-password', ref.id);
+      const password = await this.secrets.boxSecret('opencode-password', ref.id);
       if (!password) throw new SandboxNotRunningError('SECRETS_ENCRYPTION_KEY is not configured');
       headers.authorization = opencodeBasicAuth(password);
     }
@@ -1445,7 +1445,7 @@ export class VercelSandboxRunner implements SandboxRunner {
 
   async openTcp(ref: SandboxRef, port: number): Promise<Duplex> {
     if (port !== 22) throw new SandboxNotRunningError(`Port ${port} is not tunnelled`);
-    const token = deriveSandboxSecret('bridge-token', ref.id);
+    const token = await this.secrets.boxSecret('bridge-token', ref.id);
     if (!token) throw new SandboxNotRunningError('SECRETS_ENCRYPTION_KEY is not configured');
     const session = await this.running(ref);
     let domain: string;

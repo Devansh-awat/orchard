@@ -8,7 +8,7 @@ import {
   sandboxRoleAllows
 } from '../src/sandboxes/sandbox-access.service';
 import { requestAuthStorage } from '../src/auth/request-context';
-import { sandboxSshAccess } from '../src/sandboxes/sandbox-role-gate';
+import { sandboxSshAccess, sandboxTerminalMode } from '../src/sandboxes/sandbox-role-gate';
 import { sshUpgradeSandboxId } from '../src/sandboxes/sandbox-ssh.gateway';
 import { SandboxesController } from '../src/sandboxes/sandboxes.controller';
 import { SandboxSessionsController } from '../src/sandboxes/sandbox-sessions.controller';
@@ -26,13 +26,23 @@ const MEMBER = '33333333-3333-4333-8333-333333333333';
 const ORG = '44444444-4444-4444-8444-444444444444';
 const OTHER_ORG = '55555555-5555-4555-8555-555555555555';
 
-type Principal = 'host' | 'guest' | 'viewer' | 'orgAdmin' | 'otherOrg' | 'superadmin';
+type Principal =
+  | 'host'
+  | 'guest'
+  | 'viewer'
+  | 'orgAdmin'
+  | 'adminGuest'
+  | 'adminViewer'
+  | 'otherOrg'
+  | 'superadmin';
 
 const PRINCIPALS: Record<Principal, SandboxRoleResolution> = {
   host: { role: 'owner', orgAdmin: false, superadmin: false },
   guest: { role: 'collaborator', orgAdmin: false, superadmin: false },
   viewer: { role: 'viewer', orgAdmin: false, superadmin: false },
   orgAdmin: { role: 'admin', orgAdmin: true, superadmin: false },
+  adminGuest: { role: 'collaborator', orgAdmin: true, superadmin: false },
+  adminViewer: { role: 'viewer', orgAdmin: true, superadmin: false },
   otherOrg: { role: null, orgAdmin: false, superadmin: false },
   superadmin: { role: 'owner', orgAdmin: true, superadmin: true }
 };
@@ -90,7 +100,10 @@ function sandboxesRoutes(
       SANDBOX
     );
   return {
-    'GET /sandboxes/:id/boot': [{ min: 'viewer' }, () => c.bootStatus(req(), SANDBOX)],
+    'GET /sandboxes/:id/boot': [
+      { min: 'viewer', orgAdmin: true },
+      () => c.bootStatus(req(), SANDBOX)
+    ],
     'GET /sandboxes/:id/changes': [{ min: 'viewer' }, () => c.changes(req(), SANDBOX)],
     'GET /sandboxes/:id/diff': [{ min: 'viewer' }, () => c.diff(req(), SANDBOX)],
     'GET /sandboxes/:id/repos': [{ min: 'viewer' }, () => c.listRepos(req(), SANDBOX)],
@@ -166,7 +179,7 @@ function sandboxesRoutes(
     'GET /sandboxes/:id/ssh': [{ min: 'owner' }, () => c.ssh(req(), SANDBOX)],
     'GET /sandboxes/:id/hostkey': [{ min: 'owner' }, () => c.hostKey(req(), SANDBOX)],
     'GET /sandboxes/:id/connect': [{ min: 'owner' }, () => c.connectInfo(req(), SANDBOX)],
-    'GET /sandboxes/:id': [{ min: 'viewer' }, () => c.get(req(), SANDBOX)],
+    'GET /sandboxes/:id': [{ min: 'viewer', orgAdmin: true }, () => c.get(req(), SANDBOX)],
     'PATCH /sandboxes/:id': [{ min: 'owner' }, () => c.update(req(), SANDBOX, {})],
     'POST /sandboxes/:id/start': [
       { min: 'collaborator', orgAdmin: true },
@@ -281,11 +294,20 @@ function allows(principal: Principal, gate: Gate): boolean {
 }
 
 const EXPECTED: Record<string, Principal[]> = {
-  viewer: ['host', 'guest', 'viewer', 'orgAdmin', 'superadmin'],
-  collaborator: ['host', 'guest', 'superadmin'],
-  'collaborator+orgAdmin': ['host', 'guest', 'orgAdmin', 'superadmin'],
+  viewer: ['host', 'guest', 'viewer', 'adminGuest', 'adminViewer', 'superadmin'],
+  'viewer+orgAdmin': [
+    'host',
+    'guest',
+    'viewer',
+    'orgAdmin',
+    'adminGuest',
+    'adminViewer',
+    'superadmin'
+  ],
+  collaborator: ['host', 'guest', 'adminGuest', 'superadmin'],
+  'collaborator+orgAdmin': ['host', 'guest', 'orgAdmin', 'adminGuest', 'adminViewer', 'superadmin'],
   owner: ['host', 'superadmin'],
-  'owner+orgAdmin': ['host', 'orgAdmin', 'superadmin']
+  'owner+orgAdmin': ['host', 'orgAdmin', 'adminGuest', 'adminViewer', 'superadmin']
 };
 
 function gateKey(gate: Gate): string {
@@ -485,13 +507,79 @@ test('host-only and guest-level contract items hold for each principal', async (
   await check('PATCH /sandboxes/:id/opencode/config', 'guest', false);
 });
 
+test('an org admin who was not invited only gets lifecycle on a member machine', async () => {
+  const lifecycle = new Set([
+    'GET /sandboxes/:id',
+    'GET /sandboxes/:id/boot',
+    'POST /sandboxes/:id/start',
+    'POST /sandboxes/:id/stop',
+    'POST /sandboxes/:id/apply/retry',
+    'DELETE /sandboxes/:id'
+  ]);
+  const r = recorder();
+  const routes = {
+    ...sandboxesRoutes(
+      new SandboxesController(
+        any,
+        any,
+        any,
+        any,
+        r.users as any,
+        r.analytics as any,
+        any,
+        any,
+        r.access as any,
+        any
+      )
+    ),
+    ...sessionRoutes(
+      new SandboxSessionsController(
+        r.access as any,
+        any,
+        any,
+        r.users as any,
+        r.analytics as any,
+        any
+      )
+    ),
+    ...memberRoutes(
+      new SandboxMembersController(r.access as any, any, any, r.users as any, r.analytics as any)
+    )
+  };
+  for (const [route, [, run]] of Object.entries(routes)) {
+    const gate = await gateOf(run, r.calls);
+    assert.equal(allows('orgAdmin', gate!), lifecycle.has(route), `orgAdmin ${route}`);
+    assert.equal(allows('superadmin', gate!), true, `superadmin ${route}`);
+  }
+  for (const route of lifecycle) assert.ok(routes[route], `${route} is in the matrix`);
+});
+
+test('an org admin reaches no opencode path, whatever the method', () => {
+  const paths = [
+    'event',
+    'global/event',
+    'doc',
+    'session',
+    'session/ses_a/message',
+    'file',
+    'config'
+  ];
+  for (const method of ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE']) {
+    for (const path of paths) {
+      const min = opencodeMinRole(method, path);
+      assert.equal(allows('orgAdmin', { min }), false, `${method} ${path}`);
+      assert.equal(allows('adminViewer', { min }), allows('viewer', { min }), `${method} ${path}`);
+    }
+  }
+});
+
 test('live channel messages are enforced per role', () => {
   const writes = new Set(['draft', 'comment', 'yjs-save']);
   for (const type of LIVE_MESSAGE_TYPES) {
     const min = LIVE_MESSAGE_ROLE[type];
     assert.equal(min, writes.has(type) ? 'collaborator' : 'viewer', type);
     assert.equal(liveRoleAllows('viewer', min), !writes.has(type), `viewer ${type}`);
-    assert.equal(liveRoleAllows('admin', min), !writes.has(type), `admin ${type}`);
+    assert.equal(liveRoleAllows('admin', min), false, `admin ${type}`);
     assert.equal(liveRoleAllows('collaborator', min), true, `guest ${type}`);
     assert.equal(liveRoleAllows('owner', min), true, `host ${type}`);
   }
@@ -566,12 +654,14 @@ test('sandbox roles resolve from ownership, membership and org admin rights', as
       viewer: 'member',
       admin: 'admin',
       adminGuest: 'admin',
+      adminViewer: 'admin',
       plain: 'member'
     },
     members: {
       guest: 'collaborator',
       viewer: 'viewer',
       adminGuest: 'collaborator',
+      adminViewer: 'viewer',
       exMember: 'collaborator'
     }
   });
@@ -582,10 +672,51 @@ test('sandbox roles resolve from ownership, membership and org admin rights', as
   assert.equal(await role('viewer'), 'viewer');
   assert.equal(await role('admin'), 'admin');
   assert.equal(await role('adminGuest'), 'collaborator');
+  assert.equal(await role('adminViewer'), 'viewer', 'an invited org admin gets the invited role');
   assert.equal(await role('plain'), null, 'org members see nothing without an invite');
   assert.equal(await role('exMember'), null, 'a member who left the org loses the share');
   assert.equal(await role('stranger'), null);
   assert.equal(await role(''), null);
+});
+
+test('live, preview and terminal resolution see an uninvited org admin as nobody', async () => {
+  const row = { id: SANDBOX, userId: 'host', organizationId: ORG, status: 'running' };
+  const prisma = {
+    sandbox: { findUnique: async () => row },
+    sandboxMember: {
+      async findUnique({ where }: any) {
+        const role = ({ adminViewer: 'viewer', adminGuest: 'collaborator' } as any)[
+          where.sandboxId_userId.userId
+        ];
+        return role ? { role } : null;
+      }
+    }
+  };
+  const authz = {
+    async isSuperAdmin(userId: string) {
+      return userId === 'root';
+    },
+    async getOrgAccess(organizationId: string, userId: string) {
+      if (userId === 'stranger') return null;
+      const isAdmin = userId.startsWith('admin');
+      return { organizationId, role: isAdmin ? 'admin' : 'member', isAdmin };
+    }
+  };
+  const service = new SandboxAccessService(prisma as any, authz as any);
+  assert.equal((await service.resolve(SANDBOX, 'admin'))?.role, 'admin');
+  assert.equal(await service.resolveInside(SANDBOX, 'admin'), null);
+  assert.equal((await service.resolveInside(SANDBOX, 'adminViewer'))?.role, 'viewer');
+  assert.equal((await service.resolveInside(SANDBOX, 'root'))?.role, 'owner');
+  assert.equal(await sandboxTerminalMode(service, SANDBOX, 'admin', 'ro'), null);
+  assert.equal(await sandboxTerminalMode(service, SANDBOX, 'admin', 'rw'), null);
+  assert.equal((await sandboxTerminalMode(service, SANDBOX, 'adminViewer', 'rw'))?.mode, 'ro');
+  assert.equal((await sandboxTerminalMode(service, SANDBOX, 'adminGuest', 'rw'))?.mode, 'rw');
+  assert.equal((await sandboxTerminalMode(service, SANDBOX, 'root', 'rw'))?.mode, 'rw');
+  await assert.rejects(service.requireSandboxRole(SANDBOX, 'admin', 'viewer'));
+  assert.equal(
+    (await service.requireSandboxRole(SANDBOX, 'admin', 'owner', { orgAdmin: true })).role,
+    'admin'
+  );
 });
 
 test('an owner who left the organization loses the machine with it', async () => {

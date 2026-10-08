@@ -245,7 +245,7 @@ test('the REST routes behind the tools enforce the Host/Guest matrix for MCP cal
     string,
     [() => Promise<unknown>, { min: SandboxMinRole; orgAdmin?: boolean }]
   > = {
-    get_sandbox: [() => sandboxes.get(req, SBX), { min: 'viewer' }],
+    get_sandbox: [() => sandboxes.get(req, SBX), { min: 'viewer', orgAdmin: true }],
     start_sandbox: [() => sandboxes.start(req, SBX), { min: 'collaborator', orgAdmin: true }],
     stop_sandbox: [() => sandboxes.stop(req, SBX), { min: 'owner', orgAdmin: true }],
     list_sandbox_sessions: [() => sessions.list(req, SBX), { min: 'viewer' }],

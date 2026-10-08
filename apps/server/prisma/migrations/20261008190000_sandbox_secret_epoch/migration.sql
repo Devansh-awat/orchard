@@ -1,0 +1,1 @@
+ALTER TABLE "sandboxes" ADD COLUMN "secret_epoch" INTEGER NOT NULL DEFAULT 0;

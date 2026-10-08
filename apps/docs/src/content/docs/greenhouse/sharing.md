@@ -23,13 +23,16 @@ before you invite anyone.
 | **Read-only guest** | Someone the host invited with **Read-only guest** ticked. Watches, does not touch.                                          |
 | **Org admin**       | An admin of the machine's organization who was not invited. Can see the machine and start, stop or delete it, nothing more. |
 
+An org admin who is also invited gets the role they were invited with, plus start, stop and delete.
+
 ### What each role can do
 
 | Action                                                                  | Host | Guest | Read-only guest | Org admin |
 | ----------------------------------------------------------------------- | :--: | :---: | :-------------: | :-------: |
-| See sessions, transcripts, comments, diffs, files and who is here       | Yes  |  Yes  |       Yes       |    Yes    |
-| Watch other people's terminals and the script output                    | Yes  |  Yes  |       Yes       |    Yes    |
-| Open previews                                                           | Yes  |  Yes  |       Yes       |    Yes    |
+| See the machine in lists: name, status, runner, owner                   | Yes  |  Yes  |       Yes       |    Yes    |
+| See sessions, transcripts, comments, diffs, files and who is here       | Yes  |  Yes  |       Yes       |    No     |
+| Watch other people's terminals and the script output                    | Yes  |  Yes  |       Yes       |    No     |
+| Open previews                                                           | Yes  |  Yes  |       Yes       |    No     |
 | Prompt the agent, queue prompts, send reviews                           | Yes  |  Yes  |       No        |    No     |
 | Comment with `/chat`, show a typing draft                               | Yes  |  Yes  |       No        |    No     |
 | Edit, create, rename and delete files                                   | Yes  |  Yes  |       No        |    No     |
@@ -39,7 +42,7 @@ before you invite anyone.
 | Commit                                                                  | Yes  |  Yes  |       No        |    No     |
 | Push, pull, open pull requests and merge, with their own GitHub account | Yes  |  Yes  |       No        |    No     |
 | Start the machine                                                       | Yes  |  Yes  |       No        |    Yes    |
-| Stop or delete the machine                                              | Yes  |  No   |       No        |    Yes    |
+| Stop or delete the machine, retry changes that failed to apply          | Yes  |  No   |       No        |    Yes    |
 | SSH, editor links and host keys                                         | Yes  |  No   |       No        |    No     |
 | Invite people, change roles, remove people                              | Yes  |  No   |       No        |    No     |
 | Machine settings, agent credentials, adding repositories                | Yes  |  No   |       No        |    No     |
@@ -119,12 +122,15 @@ Taken literally, that means:
   sits in the shell's environment while the terminal is open, where the host,
   other guests and the agent can read it. Either way the command runs on a
   machine the host controls.
-- **Org admins can look in.** An admin of the machine's organization can see
-  sessions, transcripts, files and diffs, watch terminals and open previews,
-  without an invite.
-- **Removing a guest is not a reset.** Their terminals are ended and the agent's
-  Orchard token is rotated, but anything they changed or copied while they had
-  access stays changed or copied. Rebuild the machine if you no longer trust
+- **Org admins cannot look in.** An admin of the machine's organization can see
+  that the machine exists and start, stop or delete it, but not its sessions,
+  transcripts, files, diffs, terminals, previews or the people on it, unless you
+  invite them. Platform superadmins keep host access for emergencies.
+- **Removing a guest is not a reset.** Their terminals are ended, the agent's
+  Orchard token is rotated, and the agent server password and SSH bridge token
+  change. The agent server restarts with the new password a few seconds later,
+  which stops any agent run in progress on the machine. Anything else they
+  changed or copied while they had access stays changed or copied. Rebuild the machine if you no longer trust
   someone who had access.
 
 Share a machine with people you would hand your laptop to. For anyone else, use a

@@ -5,7 +5,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  Optional
+  Optional,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { SandboxConversation } from '@prisma/client';
@@ -47,6 +48,11 @@ import {
 
 const OPENCODE_PORT = 4096;
 const PROXY_TIMEOUT_MS = 120000;
+
+export const OPENCODE_ROTATING = {
+  code: 'agent_restarting',
+  message: 'The agent is restarting with new credentials. Try again in a few seconds.'
+};
 const MAX_FILE_BYTES = 512000;
 
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
@@ -206,6 +212,14 @@ export class SandboxWorkspaceService {
           timeout: PROXY_TIMEOUT_MS
         },
         (proxyRes) => {
+          if (proxyRes.statusCode === 401) {
+            proxyRes.resume();
+            if (!res.headersSent) {
+              res.status(503).json(OPENCODE_ROTATING);
+            } else res.end();
+            resolve();
+            return;
+          }
           res.status(proxyRes.statusCode || 502);
           res.setHeader('content-type', opencodeContentType(proxyRes.headers['content-type']));
           for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
@@ -216,6 +230,10 @@ export class SandboxWorkspaceService {
           res.flushHeaders?.();
           proxyRes.pipe(res);
           proxyRes.on('end', resolve);
+          proxyRes.on('close', () => {
+            if (!res.writableEnded) res.end();
+            resolve();
+          });
           proxyRes.on('error', () => {
             res.end();
             resolve();
@@ -709,6 +727,10 @@ export class SandboxWorkspaceService {
       };
       if (payload) init.body = payload;
       const res = await fetch(`${target.baseUrl.replace(/\/$/, '')}/${suffix}`, init);
+      if (res.status === 401) {
+        await res.body?.cancel().catch(() => {});
+        throw new ServiceUnavailableException(OPENCODE_ROTATING);
+      }
       const text = await res.text();
       let parsed: unknown = null;
       try {

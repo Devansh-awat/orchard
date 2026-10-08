@@ -77,17 +77,17 @@ markers, Vercel `expiresAt` and `bridgeUrl`).
 
 ### Capabilities
 
-|                        | kubernetes                                                                    | vercel                                                   |
-| ---------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `statusSource`         | `watch` (mirror)                                                              | `poll`                                                   |
-| `persistence`          | `volume`                                                                      | `snapshot`                                               |
-| `homeMode`             | `block` or `filesystem`                                                       | `none` (`/persist` links into `/vercel/sandbox/orchard`) |
-| `tcpTunnel`            | `native` (pod IP or port-forward)                                             | `bridge` (websocket on 2222)                             |
-| `pty`                  | `native` (k8s exec, tty)                                                      | `native` when the SDK has `openInteractive`, else `none` |
-| `execStdin`            | yes                                                                           | yes (staged through a temp file)                         |
-| `diskSizeConfigurable` | yes                                                                           | no                                                       |
-| `fork`                 | when a VolumeSnapshotClass matches the storage class (probed every 5 minutes) | yes                                                      |
-| `previews`             | `proxy` when a usable `previewDomain` is configured (server preview proxy), else `none` | `public`                                       |
+|                        | kubernetes                                                                              | vercel                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `statusSource`         | `watch` (mirror)                                                                        | `poll`                                                   |
+| `persistence`          | `volume`                                                                                | `snapshot`                                               |
+| `homeMode`             | `block` or `filesystem`                                                                 | `none` (`/persist` links into `/vercel/sandbox/orchard`) |
+| `tcpTunnel`            | `native` (pod IP or port-forward)                                                       | `bridge` (websocket on 2222)                             |
+| `pty`                  | `native` (k8s exec, tty)                                                                | `native` when the SDK has `openInteractive`, else `none` |
+| `execStdin`            | yes                                                                                     | yes (staged through a temp file)                         |
+| `diskSizeConfigurable` | yes                                                                                     | no                                                       |
+| `fork`                 | when a VolumeSnapshotClass matches the storage class (probed every 5 minutes)           | yes                                                      |
+| `previews`             | `proxy` when a usable `previewDomain` is configured (server preview proxy), else `none` | `public`                                                 |
 
 ### Registry
 
@@ -117,19 +117,19 @@ The queue is `k8s_apply_queue` (`K8sApplyItem`), drained by
 replaces an older pending one. `K8sApplyItem.sandboxId` lets the API report
 `applying` and `applyError` per machine (`SandboxesService.dtos`).
 
-| opType                                                           | Dedupe key                    | Manifest                           | Handler                                                                                                                                                                                                                                         |
-| ---------------------------------------------------------------- | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ssa`                                                            | `sandboxes:ns`                | Namespace                          | Server-side apply. Enqueued on leader acquire and with every provision.                                                                                                                                                                         |
-| `ssa`                                                            | `sandboxes:netpol`            | NetworkPolicy `sandbox-isolation`  | Server-side apply, same triggers.                                                                                                                                                                                                               |
-| `sandbox.secret.sync`                                            | `sandbox:<id>:secret`         | `{sandboxId}`                      | Builds the Secret from encrypted credentials at apply time, creates or replaces `sbx-<id>-auth` with an `orchard.my/spec-hash` annotation, stores `runnerState.secretHash`, and when running pushes the attached-project env bundle in by exec. |
-| `sandbox.cr.apply`                                               | `sandbox:<id>:cr`             | `{sandboxId}`                      | `stopped`: merge-patch `operatingMode: Suspended`. `running`: SSA the Sandbox CR, keeping existing `volumeClaimTemplates`. Applies the returned CR as an observation.                                                                           |
-| `sandbox.destroy`                                                | `sandbox:<id>:destroy`        | `{sandboxId, podName}`             | Refuses unless the row is `desiredState=deleted` (or there is no row: an orphan). Deletes the CR, Secret, labelled PVCs and fork VolumeSnapshot, then the row.                                                                                  |
-| `sandbox.fork.snapshot`                                          | `sandbox:<id>:fork`           | `{sandboxId, sourceSandboxId}`     | Creates a VolumeSnapshot of the source home PVC, records `runnerState.forkSnapshot`, enqueues the CR whose claim template restores from it.                                                                                                     |
+| opType                                                           | Dedupe key                    | Manifest                           | Handler                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ssa`                                                            | `sandboxes:ns`                | Namespace                          | Server-side apply. Enqueued on leader acquire and with every provision.                                                                                                                                                                                             |
+| `ssa`                                                            | `sandboxes:netpol`            | NetworkPolicy `sandbox-isolation`  | Server-side apply, same triggers.                                                                                                                                                                                                                                   |
+| `sandbox.secret.sync`                                            | `sandbox:<id>:secret`         | `{sandboxId}`                      | Builds the Secret from encrypted credentials at apply time, creates or replaces `sbx-<id>-auth` with an `orchard.my/spec-hash` annotation, stores `runnerState.secretHash`, and when running pushes the attached-project env bundle in by exec.                     |
+| `sandbox.cr.apply`                                               | `sandbox:<id>:cr`             | `{sandboxId}`                      | `stopped`: merge-patch `operatingMode: Suspended`. `running`: SSA the Sandbox CR, keeping existing `volumeClaimTemplates`. Applies the returned CR as an observation.                                                                                               |
+| `sandbox.destroy`                                                | `sandbox:<id>:destroy`        | `{sandboxId, podName}`             | Refuses unless the row is `desiredState=deleted` (or there is no row: an orphan). Deletes the CR, Secret, labelled PVCs and fork VolumeSnapshot, then the row.                                                                                                      |
+| `sandbox.fork.snapshot`                                          | `sandbox:<id>:fork`           | `{sandboxId, sourceSandboxId}`     | Creates a VolumeSnapshot of the source home PVC, records `runnerState.forkSnapshot`, enqueues the CR whose claim template restores from it.                                                                                                                         |
 | `sandbox.fork.cleanup`                                           | `sandbox:<id>:fork-cleanup`   | `{sandboxId}`                      | Enqueued by the mirror when the fork's PVC is `Bound` or its CR is running (and on every list pass). Only acts when the row is `running` and the home PVC is `Bound`: deletes the fork VolumeSnapshot, then drops `forkSnapshot` and `forkFrom` from `runnerState`. |
-| `ssa`                                                            | `sandbox:<id>:preview-netpol` | NetworkPolicy `sbx-<id>-previews`  | Ingress from server pods to the machine's declared preview ports (`runnerState.declaredPorts`), selected by `orchard.my/sandbox-id`. Deleted by `sandbox.destroy`.                                                                            |
-| `vercel.provision`, `vercel.start`, `vercel.stop`, `vercel.fork` | `sandbox:<id>:vercel`         | `{sandboxId}` (+`sourceSandboxId`) | One converge function: stop, or resume (`Sandbox.get({resume:true})`), create or fork on 404, update the network policy, wait up to 90 s for `running`, push init files, run bootstrap, record `expiresAt` and `bridgeUrl`, mark `running`.     |
-| `vercel.secret.sync`                                             | `sandbox:<id>:vercel.secret`  | `{sandboxId}`                      | Updates the GitHub network policy; when running, pushes init files and reruns the idempotent bootstrap.                                                                                                                                         |
-| `vercel.destroy`                                                 | `sandbox:<id>:vercel.destroy` | `{sandboxId}`                      | Deletes the sandbox with `deleteOrphanSnapshots`, then the row.                                                                                                                                                                                 |
+| `ssa`                                                            | `sandbox:<id>:preview-netpol` | NetworkPolicy `sbx-<id>-previews`  | Ingress from server pods to the machine's declared preview ports (`runnerState.declaredPorts`), selected by `orchard.my/sandbox-id`. Deleted by `sandbox.destroy`.                                                                                                  |
+| `vercel.provision`, `vercel.start`, `vercel.stop`, `vercel.fork` | `sandbox:<id>:vercel`         | `{sandboxId}` (+`sourceSandboxId`) | One converge function: stop, or resume (`Sandbox.get({resume:true})`), create or fork on 404, update the network policy, wait up to 90 s for `running`, push init files, run bootstrap, record `expiresAt` and `bridgeUrl`, mark `running`.                         |
+| `vercel.secret.sync`                                             | `sandbox:<id>:vercel.secret`  | `{sandboxId}`                      | Updates the GitHub network policy; when running, pushes init files and reruns the idempotent bootstrap.                                                                                                                                                             |
+| `vercel.destroy`                                                 | `sandbox:<id>:vercel.destroy` | `{sandboxId}`                      | Deletes the sandbox with `deleteOrphanSnapshots`, then the row.                                                                                                                                                                                                     |
 
 Manifests never contain secrets. Vercel handlers are serialized per machine in
 process. Failed items retry with exponential backoff from 5 s to 10 minutes, up
@@ -299,7 +299,8 @@ which `GET /sandboxes/:id/boot` reads.
    setup script once (`~/.setup.log`, marker `/persist/.setup-done`).
 9. Syncs attached-project env files and installs `/etc/profile.d/orchard-env.sh`.
 10. Links opencode config and auth from `/orchard-init`, writes
-    `~/.config/opencode/server.env` with `OPENCODE_SERVER_PASSWORD`, starts
+    `~/.config/opencode/server.env` with `OPENCODE_SERVER_PASSWORD` (restarting
+    a running `opencode serve` when the password changed), starts
     `opencode serve --hostname 0.0.0.0 --port 4096`.
 11. Installs and starts the SSH bridge when a bridge token exists (Vercel).
 12. `exec sshd -D` (Kubernetes) or exits if sshd already runs.
@@ -312,10 +313,23 @@ Claude and OpenAI tokens (decrypted from `sandbox_credentials`), the setup
 script, a 60-day MCP JWT, the opencode password, the bridge token, and the
 attached-project env files.
 
-- **Derived secrets:** `deriveSandboxSecret(purpose, id) =
-base64url(HMAC-SHA256(SECRETS_ENCRYPTION_KEY, "orchard-sandbox:<purpose>:<id>"))`
-  for `opencode-password` and `bridge-token`. Never stored. Vercel refuses to run
-  without the key.
+- **Derived secrets:** `deriveSandboxSecret(purpose, id, key, epoch) =
+base64url(HMAC-SHA256(SECRETS_ENCRYPTION_KEY, "orchard-sandbox:<purpose>:<id>[:<epoch>]"))`
+  for `opencode-password` and `bridge-token` (epoch 0 omits the suffix, so
+  machines from before the epoch keep their values). Never stored. Vercel refuses
+  to run without the key.
+- **Secret epoch:** `sandboxes.secret_epoch` (migration
+  `20261008190000_sandbox_secret_epoch`). `rotateMachineSecrets` (member
+  offboarding, on removing or downgrading a guest) increments it, revokes the
+  machine's MCP session and queues a secret sync. `forSandbox` and every
+  `httpTarget`/`openTcp` read the epoch fresh through `SandboxSecretsService.boxSecret`,
+  so the server switches immediately. The sync then moves the box: Kubernetes
+  replaces the Secret and runs `OPENCODE_PASSWORD_ROTATE_SCRIPT` with the new
+  password on stdin (rewrites `server.env`, kills `opencode serve` only when the
+  password changed, starts it again); Vercel restages the init files and reruns
+  the bootstrap, whose `opencode_password_sync` does the same, and the bridge
+  reads the new token file per connection. Until opencode is back, the proxy maps
+  upstream `401` to `503 {code: 'agent_restarting'}` and ends streams cleanly.
 - **Spec hash:** `sandboxSpecHash` is a keyed HMAC of the canonical Secret data,
   truncated to 32 hex characters, written as `orchard.my/spec-hash`.
 - **MCP token:** when `SANDBOX_MCP_URL` is set, a JWT of type `mcp` bound to a
@@ -427,7 +441,7 @@ credential.helper=` (clearing any configured helper, including the host's
   under every client hook name that first runs the repo's own hook (repo-level
   `core.hooksPath`, then global, then `$GIT_COMMON_DIR/hooks`). It appends
   `Co-authored-by: <line>` with `git interpret-trailers --if-exists
-  addIfDifferent` for each line of `~/.orchard/sessions/<id>/coauthors`, skipping
+addIfDifferent` for each line of `~/.orchard/sessions/<id>/coauthors`, skipping
   the commit's own author and names already present. `SandboxCoauthorsService`
   rewrites that file on every recorded prompt: when opencode reports the chat
   busy (or cannot be asked) the author is appended, otherwise the file is reset to
@@ -664,15 +678,18 @@ key per session, user and minute.
 `SandboxAccessService.sandboxRoleOf` resolves, in order: no user or an
 org-scoped session for another org or a project-restricted token gives nothing;
 superadmin is `owner`; the creator is `owner`; otherwise the user must be an org
-member, then `collaborator` membership, then org admin (`admin`), then `viewer`
-membership. `requireSandboxRole(min, {orgAdmin})` gates routes; `admin` passes
-`viewer` checks and, with `orgAdmin: true`, lifecycle routes.
+member, then `collaborator` or `viewer` membership, then org admin (`admin`).
+`requireSandboxRole(min, {orgAdmin})` gates routes; `admin` passes nothing
+except routes with `orgAdmin: true` (get, boot, start, stop, delete, apply
+retry), and an invited org admin keeps the `orgAdmin` flag for those. The live
+gateway and preview proxy resolve through `resolveInside`, which drops `admin`;
+terminals go through `requireSandboxRole`, so admins get neither rw nor ro.
 
-| Minimum      | Routes                                                                                                                                                                                                                           |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| viewer       | get, sessions list/get, chats, scripts, ports, checks, changes, diff, file read, branches, git identity, repos, boot, conversations, members list, comments list, authors, transcript, preview token, links list, opencode reads |
-| collaborator | sessions create/update/delete, chats create, run, fs ops, file write, commit, uncommit, push, pull, fetch, checkout, branch delete, PR, merge, prompt, comments, opencode writes, issues, start (also org admin)                 |
-| owner        | update, hostkey, connect, ssh, add repo, members add/update, share links, fork, links attach/detach, preview deploy; stop, delete and apply retry (also org admin)                                                                |
+| Minimum      | Routes                                                                                                                                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| viewer       | get and boot (also org admin), sessions list/get, chats, scripts, ports, checks, changes, diff, file read, branches, git identity, repos, conversations, members list, comments list, authors, transcript, preview token, links list, opencode reads |
+| collaborator | sessions create/update/delete, chats create, run, fs ops, file write, commit, uncommit, push, pull, fetch, checkout, branch delete, PR, merge, prompt, comments, opencode writes, issues, start (also org admin)                                     |
+| owner        | update, hostkey, connect, ssh, add repo, members add/update, share links, fork, links attach/detach, preview deploy; stop, delete and apply retry (also org admin)                                                                                   |
 
 `Sandbox feature is not enabled` (404) comes from `SandboxEnabledGuard`, which
 caches `InstanceSettingsService.isSandboxesEnabled()` for 10 s

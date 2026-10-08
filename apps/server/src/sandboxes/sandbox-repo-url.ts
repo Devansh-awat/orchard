@@ -1,5 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
 
+export function withoutRepoCredentials(value: string | null): string | null {
+  if (!value) return value;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (!parsed.username && !parsed.password) return value;
+  parsed.username = '';
+  parsed.password = '';
+  return parsed.toString();
+}
+
 export function parseRepoUrl(value: string): URL {
   let parsed: URL;
   try {

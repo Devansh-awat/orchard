@@ -11,7 +11,12 @@ import {
   deriveObservedStatus,
   SANDBOX_DISAPPEARED
 } from '../src/sandboxes/runners/sandbox-status';
-import { deriveSandboxSecret, sandboxSpecHash } from '../src/sandboxes/runners/sandbox-secrets';
+import {
+  SandboxSecretsService,
+  deriveBoxSecret,
+  deriveSandboxSecret,
+  sandboxSpecHash
+} from '../src/sandboxes/runners/sandbox-secrets';
 import {
   KubernetesSandboxRunner,
   SANDBOX_OP_CR,
@@ -281,6 +286,56 @@ test('box secrets are derived per sandbox and per purpose', () => {
   assert.notEqual(sandboxSpecHash('sbx-a', { a: '1' }), sandboxSpecHash('sbx-a', { a: '2' }));
 });
 
+test('a new secret epoch changes the opencode password and bridge token, epoch 0 keeps the old ones', () => {
+  const prev = process.env.SECRETS_ENCRYPTION_KEY;
+  process.env.SECRETS_ENCRYPTION_KEY = 'e'.repeat(64);
+  try {
+    for (const purpose of ['opencode-password', 'bridge-token'] as const) {
+      const legacy = deriveSandboxSecret(purpose, 'sbx-a');
+      assert.equal(deriveBoxSecret(purpose, 'sbx-a', 0), legacy);
+      const one = deriveBoxSecret(purpose, 'sbx-a', 1);
+      const two = deriveBoxSecret(purpose, 'sbx-a', 2);
+      assert.ok(one && two);
+      assert.notEqual(one, legacy);
+      assert.notEqual(two, one);
+      assert.equal(deriveBoxSecret(purpose, 'sbx-a', 2), two);
+      assert.notEqual(deriveBoxSecret(purpose, 'sbx-b', 2), two);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+    else process.env.SECRETS_ENCRYPTION_KEY = prev;
+  }
+});
+
+test('box secrets are always derived from the epoch stored on the machine', async () => {
+  const prev = process.env.SECRETS_ENCRYPTION_KEY;
+  process.env.SECRETS_ENCRYPTION_KEY = 'e'.repeat(64);
+  try {
+    let epoch = 0;
+    const reads: any[] = [];
+    const prisma = {
+      sandbox: {
+        findUnique: async (args: any) => {
+          reads.push(args);
+          return { secretEpoch: epoch };
+        }
+      }
+    };
+    const service = new SandboxSecretsService(prisma as never, {} as never);
+    const before = await service.boxSecret('opencode-password', 'sbx-a');
+    epoch = 4;
+    const after = await service.boxSecret('opencode-password', 'sbx-a');
+    assert.equal(before, deriveBoxSecret('opencode-password', 'sbx-a', 0));
+    assert.equal(after, deriveBoxSecret('opencode-password', 'sbx-a', 4));
+    assert.notEqual(after, before);
+    assert.deepEqual(reads[0], { where: { id: 'sbx-a' }, select: { secretEpoch: true } });
+    assert.equal(reads.length, 2, 'nothing is cached between calls');
+  } finally {
+    if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+    else process.env.SECRETS_ENCRYPTION_KEY = prev;
+  }
+});
+
 const REF: SandboxRef = {
   id: '11111111-1111-4111-8111-111111111111',
   userId: '22222222-2222-4222-8222-222222222222',
@@ -338,7 +393,8 @@ function k8sRunner(row: Record<string, unknown> | null = ROW) {
         };
       }
     } as never,
-    {
+    Object.assign(Object.create(SandboxSecretsService.prototype), {
+      prisma,
       forSandbox: async () => ({
         authorizedKeys: ['ssh-ed25519 AAAA test'],
         githubToken: 'ghp_token',
@@ -349,7 +405,7 @@ function k8sRunner(row: Record<string, unknown> | null = ROW) {
         opencodePassword: 'pw',
         bridgeToken: 'bt'
       })
-    } as never
+    }) as never
   );
   (runner as any).existingCr = async () => null;
   return { runner, enqueued, applied, updates, handlers };
@@ -649,6 +705,62 @@ test('kubernetes opencode requires its derived password and every server path se
     );
     const other: any = await runner.httpTarget(REF, 3000);
     assert.equal(other.headers.authorization, undefined);
+  } finally {
+    if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+    else process.env.SECRETS_ENCRYPTION_KEY = prev;
+  }
+});
+
+test('kubernetes httpTarget follows a bumped secret epoch and a sync restarts opencode with it', async () => {
+  const prev = process.env.SECRETS_ENCRYPTION_KEY;
+  process.env.SECRETS_ENCRYPTION_KEY = 'k'.repeat(64);
+  try {
+    const row: Record<string, unknown> = { ...ROW, status: 'running', secretEpoch: 0 };
+    const { runner, handlers } = k8sRunner(row);
+    (runner as any).resolvePodIp = async () => '10.0.0.9';
+    const basic = (pw: string | null) =>
+      `Basic ${Buffer.from(`opencode:${pw}`).toString('base64')}`;
+    const old: any = await runner.httpTarget(REF, 4096);
+    assert.equal(old.headers.authorization, basic(deriveBoxSecret('opencode-password', REF.id, 0)));
+    row.secretEpoch = 1;
+    const fresh: any = await runner.httpTarget(REF, 4096);
+    assert.equal(
+      fresh.headers.authorization,
+      basic(deriveBoxSecret('opencode-password', REF.id, 1))
+    );
+    assert.notEqual(fresh.headers.authorization, old.headers.authorization);
+    const execs: Array<{ command: string[]; stdin: string }> = [];
+    (runner as any).exec = async (_ref: unknown, command: string[], opts: any) => {
+      execs.push({ command, stdin: opts?.stdin?.toString('utf8') ?? '' });
+      return { ok: true, exitCode: 0, stdout: '', stderr: '' };
+    };
+    (runner as any).secrets.forSandbox = async () => ({
+      authorizedKeys: [],
+      githubToken: null,
+      claudeToken: null,
+      openaiToken: null,
+      setupScript: null,
+      mcpToken: null,
+      opencodePassword: deriveBoxSecret('opencode-password', REF.id, 1),
+      bridgeToken: null
+    });
+    const core = {
+      readNamespacedSecret: async () => ({}),
+      replaceNamespacedSecret: async () => ({}),
+      createNamespacedSecret: async () => ({})
+    };
+    (runner as any).core = () => core;
+    (runner as any).instanceId = async () => 'inst-1';
+    await handlers.get(SANDBOX_OP_SECRET)!({ manifest: { sandboxId: REF.id } });
+    const rotate = execs.find((e) => e.command.join(' ').includes('opencode_password_sync'));
+    assert.ok(rotate, 'the secret sync rewrites the password inside the running machine');
+    assert.equal(rotate!.command[0], '/bin/bash');
+    assert.equal(rotate!.stdin, deriveBoxSecret('opencode-password', REF.id, 1));
+    assert.ok(!rotate!.command.join(' ').includes(rotate!.stdin), 'the password never rides argv');
+    assert.ok(
+      !/opencode serve/.test(rotate!.command.join(' ')),
+      'the script cannot match its own pkill pattern'
+    );
   } finally {
     if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
     else process.env.SECRETS_ENCRYPTION_KEY = prev;
