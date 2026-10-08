@@ -25,16 +25,28 @@ export class SsoInstanceController {
 
   @Get()
   async overview() {
-    const [providers, organizations] = await Promise.all([
+    const [providers, organizations, enforcement] = await Promise.all([
       this.sso.listProviders(null),
-      this.sso.getPlatformStatuses()
+      this.sso.getPlatformStatuses(),
+      this.sso.getInstanceEnforcement()
     ]);
     return {
       providers,
       organizations,
+      enforcement,
       presets: publicPresets(),
       envProvider: this.sso.envProvider()
     };
+  }
+
+  @Get('enforcement')
+  enforcement() {
+    return this.sso.getInstanceEnforcement();
+  }
+
+  @Patch('enforcement')
+  setEnforcement(@Body('enabled') enabled: boolean, @Request() req) {
+    return this.sso.setInstanceEnforced(Boolean(enabled), this.actor(req));
   }
 
   @Get('providers')

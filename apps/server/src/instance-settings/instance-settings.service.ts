@@ -7,6 +7,9 @@ const USERSPACE_NODE_SCHEDULING_ENV = 'USERSPACE_NODE_SCHEDULING';
 export const MCP_ENABLED_KEY = 'mcp_enabled';
 const MCP_ENABLED_ENV = 'MCP_ENABLED';
 
+export const SSO_ENFORCED_KEY = 'sso_enforced';
+export const SSO_ENFORCED_ENV = 'SSO_ENFORCED';
+
 export interface ToggleState {
   enabled: boolean;
   dbValue: boolean;
@@ -122,5 +125,18 @@ export class InstanceSettingsService {
   async setMcp(value: boolean): Promise<void> {
     this.assertUnlocked(MCP_ENABLED_ENV);
     await this.setBool(MCP_ENABLED_KEY, value);
+  }
+
+  isSsoEnforced(): Promise<boolean> {
+    return this.resolveBool(SSO_ENFORCED_KEY, SSO_ENFORCED_ENV);
+  }
+
+  getSsoEnforcedState(): Promise<ToggleState> {
+    return this.toggleState(SSO_ENFORCED_KEY, SSO_ENFORCED_ENV);
+  }
+
+  async setSsoEnforced(value: boolean): Promise<void> {
+    this.assertUnlocked(SSO_ENFORCED_ENV);
+    await this.setBool(SSO_ENFORCED_KEY, value);
   }
 }

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   InstanceSettingsService,
-  MCP_ENABLED_KEY
+  MCP_ENABLED_KEY,
+  SSO_ENFORCED_KEY
 } from '../src/instance-settings/instance-settings.service';
 
 class FakePrisma {
@@ -99,5 +100,19 @@ test('a toggle that ships off stays off when nothing has been stored', async () 
   const { settings } = build();
   await withEnv({ USERSPACE_NODE_SCHEDULING: undefined }, async () => {
     assert.equal(await settings.isUserspaceSchedulingEnabled(), false);
+  });
+});
+
+test('single sign-on is optional until an administrator requires it', async () => {
+  const { prisma, settings } = build();
+  await withEnv({ SSO_ENFORCED: undefined }, async () => {
+    assert.equal(await settings.isSsoEnforced(), false);
+    await settings.setSsoEnforced(true);
+    assert.equal(await settings.isSsoEnforced(), true);
+    assert.equal(prisma.rows.get(SSO_ENFORCED_KEY), 'true');
+  });
+  await withEnv({ SSO_ENFORCED: 'false' }, async () => {
+    assert.equal(await settings.isSsoEnforced(), false);
+    await assert.rejects(() => settings.setSsoEnforced(true), /SSO_ENFORCED/);
   });
 });

@@ -17,7 +17,8 @@
 		organizations,
 		toasts,
 		pendingInvitations,
-		showPendingInvitationsModal
+		showPendingInvitationsModal,
+		authConfig
 	} from '$lib/stores';
 	import type { User } from '$lib/stores';
 	import {
@@ -80,6 +81,12 @@
 	let loginEmail = $state('');
 	let loginCode = $state('');
 	let discovered = $state<DiscoveredOrg | null>(null);
+	let ssoEnforced = $state<boolean | null>(null);
+	let adminSignIn = $state(false);
+
+	let emailPanelVisible = $derived(
+		ssoEnforced === false || adminSignIn || (providersLoaded && !providers.length)
+	);
 
 	async function fetchProviders() {
 		try {
@@ -201,6 +208,14 @@
 		} else {
 			loading = false;
 			fetchProviders();
+			authConfig
+				.load()
+				.then((config) => {
+					ssoEnforced = config.ssoEnforced;
+				})
+				.catch(() => {
+					ssoEnforced = false;
+				});
 
 			// A link minted by `orchardctl login` on the host lands here with
 			// both halves in the query string; redeeming it is the panel's job.
@@ -306,21 +321,38 @@
 				{:else}
 					{#if providers.length}
 						<ProviderButtons {providers} />
-						<div class="lg-divider"><span>or</span></div>
+						{#if ssoEnforced === null || emailPanelVisible}
+							<div class="lg-divider"><span>or</span></div>
+						{:else}
+							<p class="lg-policy">Single sign-on is required on this instance.</p>
+							<button
+								type="button"
+								class="lg-org-hint lg-admin-link"
+								onclick={() => {
+									adminSignIn = true;
+								}}
+							>
+								Sign in as an administrator
+							</button>
+						{/if}
 					{:else if !providersLoaded}
 						<Skeleton height="2.25rem" />
 						<div class="lg-divider"><span>or</span></div>
 					{/if}
 
-					<EmailAuthPanel
-						bind:email={loginEmail}
-						initialCode={loginCode}
-						onAuthenticated={handlePostAuth}
-						onBlocked={(reason) => {
-							blocked = reason;
-						}}
-						onSsoRedirect={routeToOrgSso}
-					/>
+					{#if emailPanelVisible}
+						<EmailAuthPanel
+							bind:email={loginEmail}
+							initialCode={loginCode}
+							onAuthenticated={handlePostAuth}
+							onBlocked={(reason) => {
+								blocked = reason;
+							}}
+							onSsoRedirect={routeToOrgSso}
+						/>
+					{:else if ssoEnforced === null}
+						<Skeleton height="2.25rem" />
+					{/if}
 
 					{#if discovered && !discovered.enforced}
 						<a class="lg-org-hint" href={discovered.loginUrl}>

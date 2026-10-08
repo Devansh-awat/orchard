@@ -285,6 +285,24 @@ export class SessionsService {
     return res.count;
   }
 
+  async revokeSignInSessions(params: {
+    authMethods: string[];
+    userIds?: string[];
+    exceptSessionId?: string;
+  }): Promise<number> {
+    const res = await this.prisma.session.updateMany({
+      where: {
+        revokedAt: null,
+        authMethod: { in: params.authMethods },
+        ...(params.userIds ? { userId: { in: params.userIds } } : {}),
+        ...(params.exceptSessionId ? { id: { not: params.exceptSessionId } } : {}),
+        user: { isSuperAdmin: false }
+      },
+      data: { revokedAt: new Date() }
+    });
+    return res.count;
+  }
+
   async refreshGeneration(sessionId: string): Promise<number | null> {
     const session = await this.prisma.session.findFirst({
       where: { id: sessionId, revokedAt: null, expiresAt: { gt: new Date() } },

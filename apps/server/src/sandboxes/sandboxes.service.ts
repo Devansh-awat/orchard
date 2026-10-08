@@ -277,6 +277,7 @@ export class SandboxesService {
       where: {
         userId,
         deviceName: 'sandbox-mcp',
+        revokedAt: null,
         expiresAt: { gt: new Date(Date.now() + 7 * 86400000) }
       }
     });

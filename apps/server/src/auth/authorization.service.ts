@@ -1,11 +1,21 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { requestAuthStorage } from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';
 
 export type AuthMethod = 'sso' | 'instance_sso' | 'oauth' | 'otp' | 'passkey' | 'password';
+
+export const INSTANCE_SSO_BLOCKED: ReadonlySet<AuthMethod> = new Set<AuthMethod>([
+  'otp',
+  'passkey',
+  'password'
+]);
+
+export const INSTANCE_SSO_REQUIRED_MESSAGE =
+  'This Orchard instance requires single sign-on. Use one of the sign-in providers on the login page.';
 
 export interface OrgAccess {
   organizationId: string;
@@ -62,7 +72,10 @@ export class AuthorizationService {
   // (toggled rarely from /admin) and we hit this check on every authz call.
   private readonly superAdminCache = new Map<string, { value: boolean; expiresAt: number }>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly instanceSettings: InstanceSettingsService
+  ) {}
 
   async isSuperAdmin(userId: string): Promise<boolean> {
     const now = Date.now();
@@ -107,6 +120,7 @@ export class AuthorizationService {
   ): Promise<void> {
     if (authMethod === 'sso') return;
     if (user?.isSuperAdmin) return;
+    await this.assertInstanceSsoNotEnforced(authMethod);
     if (user) {
       const enforced = await this.prisma.organizationMember.findFirst({
         where: {
@@ -139,6 +153,7 @@ export class AuthorizationService {
    */
   async assertSsoNotEnforcedForEmail(email: string, authMethod: AuthMethod): Promise<void> {
     if (authMethod === 'sso') return;
+    await this.assertInstanceSsoNotEnforced(authMethod);
     const normalized = email.toLowerCase().trim();
     if (!normalized) return;
     const invitation = await this.prisma.organizationInvitation.findFirst({
@@ -156,6 +171,12 @@ export class AuthorizationService {
         'Your organization requires single sign-on. Use the SSO login link for your workspace.'
       );
     }
+  }
+
+  async assertInstanceSsoNotEnforced(authMethod: AuthMethod): Promise<void> {
+    if (!INSTANCE_SSO_BLOCKED.has(authMethod)) return;
+    if (!(await this.instanceSettings.isSsoEnforced())) return;
+    throw new ForbiddenException(INSTANCE_SSO_REQUIRED_MESSAGE);
   }
 
   // ──────────────────────────── organisation ────────────────────────────

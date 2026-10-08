@@ -42,6 +42,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'POST', path: '/admin/organizations/:id/quota/connect', auth: 'superadmin' },
   { method: 'POST', path: '/admin/organizations/:id/quota/disconnect', auth: 'superadmin' },
   { method: 'GET', path: '/admin/sso', auth: 'superadmin' },
+  { method: 'GET', path: '/admin/sso/enforcement', auth: 'superadmin' },
+  { method: 'PATCH', path: '/admin/sso/enforcement', auth: 'superadmin' },
   { method: 'GET', path: '/admin/sso/organizations', auth: 'superadmin' },
   { method: 'PATCH', path: '/admin/sso/organizations/:organizationId', auth: 'superadmin' },
   { method: 'GET', path: '/admin/sso/providers', auth: 'superadmin' },

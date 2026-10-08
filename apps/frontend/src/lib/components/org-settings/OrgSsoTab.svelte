@@ -374,7 +374,7 @@
 				checked={settings.enforced}
 				disabled={locked || !settings.enabled || savingSettings}
 				label="Require single sign-on"
-				hint="Blocks email codes, passkeys, and platform providers for everyone in this organization."
+				hint="Blocks email codes, passkeys, and platform providers for everyone in this organization. Turning it on signs out members who got in another way."
 				onchange={() => patchSettings({ enforced: !settings.enforced })}
 			/>
 		</div>

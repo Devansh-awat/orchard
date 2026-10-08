@@ -28,6 +28,7 @@ import { UsersService, sanitizeUsername } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 import { AuditService } from '../audit/audit.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { setSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
@@ -74,7 +75,8 @@ export class PasswordlessController {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly rateLimit: RateLimitService,
-    private readonly turnstile: TurnstileService
+    private readonly turnstile: TurnstileService,
+    private readonly instanceSettings: InstanceSettingsService
   ) {}
 
   private getClientIp(req: Request): string {
@@ -164,6 +166,12 @@ export class PasswordlessController {
     const ipAddress = this.getClientIp(req);
 
     await this.turnstile.verifyRequest(req, 'signin', ipAddress);
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      select: { isSuperAdmin: true }
+    });
+    if (!existing?.isSuperAdmin) await this.authz.assertInstanceSsoNotEnforced('otp');
 
     return this.otpService.requestOtp(email, ipAddress);
   }
@@ -260,8 +268,11 @@ export class PasswordlessController {
   }
 
   @Get('config')
-  authConfig(): { turnstileSiteKey: string | null } {
-    return { turnstileSiteKey: this.turnstile.siteKey() };
+  async authConfig(): Promise<{ turnstileSiteKey: string | null; ssoEnforced: boolean }> {
+    return {
+      turnstileSiteKey: this.turnstile.siteKey(),
+      ssoEnforced: await this.instanceSettings.isSsoEnforced()
+    };
   }
 
   /**

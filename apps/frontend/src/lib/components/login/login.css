@@ -188,3 +188,20 @@
 .lg-org-hint:hover {
 	color: var(--text-default);
 }
+
+.lg-policy {
+	margin: 0.75rem 0 0;
+	text-align: center;
+	font-size: var(--text-caption);
+	line-height: var(--lh-caption);
+	color: var(--text-muted);
+}
+
+.lg-admin-link {
+	background: none;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	font-family: inherit;
+	width: 100%;
+}

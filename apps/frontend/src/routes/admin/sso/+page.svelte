@@ -31,11 +31,20 @@
 		label: string;
 	}
 
+	interface Enforcement {
+		enabled: boolean;
+		dbValue: boolean;
+		envOverride: boolean | null;
+		providersAvailable: boolean;
+	}
+
 	let loading = $state(true);
 	let providers = $state<SsoProvider[]>([]);
 	let presets = $state<SsoProviderPreset[]>([]);
 	let organizations = $state<OrgSsoStatus[]>([]);
 	let envProvider = $state<EnvProvider | null>(null);
+	let enforcement = $state<Enforcement | null>(null);
+	let togglingEnforcement = $state(false);
 	let loadError = $state<string | null>(null);
 
 	let showModal = $state(false);
@@ -70,6 +79,7 @@
 			presets = data.presets ?? [];
 			organizations = data.organizations ?? [];
 			envProvider = data.envProvider ?? null;
+			enforcement = data.enforcement ?? null;
 		} catch (e) {
 			loadError = e instanceof Error ? e.message : 'Could not load SSO configuration';
 		} finally {
@@ -154,6 +164,34 @@
 			});
 		} finally {
 			togglingOrg = null;
+		}
+	}
+
+	async function toggleEnforcement() {
+		if (!enforcement || enforcement.envOverride !== null) return;
+		const next = !enforcement.dbValue;
+		togglingEnforcement = true;
+		try {
+			const res = await apiFetch('/apiv1/admin/sso/enforcement', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ enabled: next })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data?.message || 'Could not change the sign-in policy');
+			enforcement = data;
+			toasts.add({
+				title: next ? 'Single sign-on required' : 'Single sign-on optional',
+				color: 'success'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Could not change the sign-in policy',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			togglingEnforcement = false;
 		}
 	}
 
@@ -270,6 +308,44 @@
 				</ul>
 			{/if}
 		</section>
+
+		{#if enforcement}
+			<section class="asso-section">
+				<header class="asso-head">
+					<div>
+						<h2 class="asso-title">Sign-in policy</h2>
+						<p class="asso-desc">
+							Whether anyone may sign in without an identity provider. Superadmins always can, so a
+							broken provider never locks the instance.
+						</p>
+					</div>
+				</header>
+				<div class="asso-row">
+					{#if enforcement.envOverride !== null}
+						<div class="asso-row-main">
+							<span class="asso-row-name">Require single sign-on for everyone</span>
+							<span class="asso-row-meta">
+								Pinned {enforcement.envOverride ? 'on' : 'off'} by the SSO_ENFORCED environment variable.
+							</span>
+						</div>
+						<Badge tone="neutral">env override</Badge>
+					{:else}
+						<div class="asso-row-main">
+							<ToggleRow
+								checked={enforcement.dbValue}
+								disabled={togglingEnforcement ||
+									(!enforcement.dbValue && !enforcement.providersAvailable)}
+								label="Require single sign-on for everyone"
+								hint={enforcement.providersAvailable
+									? 'Email codes, passkeys and the superadmin password stop working for everyone except superadmins. Turning this on signs out every session that did not come through a provider.'
+									: 'Add and enable a working provider first, or nobody but a superadmin could sign in.'}
+								onchange={toggleEnforcement}
+							/>
+						</div>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
 		<section class="asso-section">
 			<header class="asso-head">

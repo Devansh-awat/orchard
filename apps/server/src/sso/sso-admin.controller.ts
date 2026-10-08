@@ -120,7 +120,10 @@ export class SsoAdminController {
     @Request() req
   ) {
     const actor = await this.requireOwner(organizationId, req);
-    return this.sso.updateSettings(organizationId, body, actor);
+    return this.sso.updateSettings(organizationId, body, {
+      ...actor,
+      sessionId: req.auth?.sessionId as string | undefined
+    });
   }
 
   @Get('providers')

@@ -3,9 +3,10 @@ import { apiFetch } from './api';
 
 export interface AuthConfig {
 	turnstileSiteKey: string | null;
+	ssoEnforced: boolean;
 }
 
-const config = writable<AuthConfig>({ turnstileSiteKey: null });
+const config = writable<AuthConfig>({ turnstileSiteKey: null, ssoEnforced: false });
 let inflight: Promise<AuthConfig> | null = null;
 
 export const authConfig = {

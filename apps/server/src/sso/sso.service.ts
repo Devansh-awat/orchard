@@ -9,6 +9,8 @@ import { IdentityProvider, OrganizationRole, SsoProtocol } from '@prisma/client'
 import { generateServiceProviderMetadata } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { SessionsService } from '../auth/sessions.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { findPreset, resolveIssuerUrl } from './presets';
 import { OrgDomainsService } from './org-domains.service';
@@ -69,7 +71,24 @@ function isMask(value: string | null | undefined): boolean {
   return value === SECRET_MASK || value === SAML_CERT_MASK;
 }
 
-const RESERVED_PROVIDER_SLUGS = new Set(['new', 'callback', 'start', 'metadata', 'discover']);
+const RESERVED_PROVIDER_SLUGS = new Set([
+  'new',
+  'callback',
+  'start',
+  'metadata',
+  'discover',
+  'enforcement'
+]);
+
+const ORG_ENFORCEMENT_REVOKES = ['oauth', 'otp', 'passkey', 'password'];
+const INSTANCE_ENFORCEMENT_REVOKES = ['otp', 'passkey', 'password'];
+
+export interface InstanceEnforcement {
+  enabled: boolean;
+  dbValue: boolean;
+  envOverride: boolean | null;
+  providersAvailable: boolean;
+}
 
 @Injectable()
 export class SsoService {
@@ -83,7 +102,9 @@ export class SsoService {
     private readonly prisma: PrismaService,
     private readonly crypto: SsoCryptoService,
     private readonly audit: AuditService,
-    private readonly domains: OrgDomainsService
+    private readonly domains: OrgDomainsService,
+    private readonly sessions: SessionsService,
+    private readonly instanceSettings: InstanceSettingsService
   ) {
     this.backendUrl =
       process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -661,7 +682,7 @@ export class SsoService {
   async updateSettings(
     organizationId: string,
     input: SettingsInput,
-    actor: { userId: string; email?: string }
+    actor: { userId: string; email?: string; sessionId?: string }
   ) {
     const current = await this.prisma.orgSsoSettings.findUnique({ where: { organizationId } });
 
@@ -702,6 +723,19 @@ export class SsoService {
       update: data
     });
 
+    let revokedSessions = 0;
+    if (saved.enforced && !current?.enforced) {
+      const members = await this.prisma.organizationMember.findMany({
+        where: { organizationId },
+        select: { userId: true }
+      });
+      revokedSessions = await this.sessions.revokeSignInSessions({
+        authMethods: ORG_ENFORCEMENT_REVOKES,
+        userIds: members.map((m) => m.userId),
+        exceptSessionId: actor.sessionId
+      });
+    }
+
     if (current?.enabled !== saved.enabled || current?.enforced !== saved.enforced) {
       void this.audit.log({
         action: 'org.sso.settings.updated',
@@ -710,11 +744,63 @@ export class SsoService {
         organizationId,
         targetType: 'organization',
         targetId: organizationId,
-        metadata: { enabled: saved.enabled, enforced: saved.enforced }
+        metadata: { enabled: saved.enabled, enforced: saved.enforced, revokedSessions }
       });
     }
 
     return saved;
+  }
+
+  private async anyLiveProvider(): Promise<boolean> {
+    const instance = await this.getInstanceProviders();
+    if (instance.length > 0) return true;
+    const orgLive = await this.prisma.identityProvider.count({
+      where: {
+        enabled: true,
+        organization: { ssoSettings: { is: { enabled: true, platformEnabled: true } } }
+      }
+    });
+    return orgLive > 0;
+  }
+
+  async getInstanceEnforcement(): Promise<InstanceEnforcement> {
+    const [state, providersAvailable] = await Promise.all([
+      this.instanceSettings.getSsoEnforcedState(),
+      this.anyLiveProvider()
+    ]);
+    return { ...state, providersAvailable };
+  }
+
+  async setInstanceEnforced(
+    enabled: boolean,
+    actor: { userId: string; email?: string }
+  ): Promise<InstanceEnforcement> {
+    const before = await this.instanceSettings.getSsoEnforcedState();
+    if (enabled && !(await this.anyLiveProvider())) {
+      throw new BadRequestException(
+        'Add and enable at least one identity provider before requiring single sign-on'
+      );
+    }
+
+    await this.instanceSettings.setSsoEnforced(enabled);
+
+    let revokedSessions = 0;
+    if (enabled && !before.dbValue) {
+      revokedSessions = await this.sessions.revokeSignInSessions({
+        authMethods: INSTANCE_ENFORCEMENT_REVOKES
+      });
+    }
+
+    void this.audit.log({
+      action: 'admin.sso.enforcement_toggled',
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      targetType: 'instance',
+      targetId: 'sso_enforced',
+      metadata: { enabled, revokedSessions }
+    });
+
+    return this.getInstanceEnforcement();
   }
 
   /** Superadmin switch. Turning it off also drops the org's own enable flag. */
