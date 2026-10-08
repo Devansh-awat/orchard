@@ -7,7 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { AuditService } from '../audit/audit.service';
-import { DatabasesService } from './databases.service';
+import type { DatabasesService as DatabasesServiceType } from './databases.service';
 
 export type TeardownReason = 'environment.deleted' | 'project.deleted';
 
@@ -130,7 +130,10 @@ export class NamespaceTeardownService {
         }
       }
     });
-    const databasesService = this.moduleRef.get(DatabasesService, { strict: false });
+    const { DatabasesService } = await import('./databases.service');
+    const databasesService: DatabasesServiceType = this.moduleRef.get(DatabasesService, {
+      strict: false
+    });
     for (const database of databases) {
       summary.databases += 1;
       try {
