@@ -130,7 +130,7 @@ export class NamespaceTeardownService {
         }
       }
     });
-    const { DatabasesService } = await import('./databases.service');
+    const { DatabasesService } = await import('./databases.service.js');
     const databasesService: DatabasesServiceType = this.moduleRef.get(DatabasesService, {
       strict: false
     });
