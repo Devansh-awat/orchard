@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/hackclub/orchard/compare/cli/v0.21.0...cli/v0.22.0) (2026-10-08)
+
+
+### Features
+
+* deleting a project or environment tears down everything it owned, asks you to type its name, and audits every child ([0357a83](https://github.com/hackclub/orchard/commit/0357a83175e4eb963436c605ebd5bdbdea843b47))
+
 ## [0.21.0](https://github.com/hackclub/orchard/compare/cli/v0.20.0...cli/v0.21.0) (2026-10-07)
 
 

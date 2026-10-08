@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.62.0](https://github.com/hackclub/orchard/compare/server/v2.61.0...server/v2.62.0) (2026-10-08)
+
+
+### Features
+
+* deleting a project or environment tears down everything it owned, asks you to type its name, and audits every child ([0357a83](https://github.com/hackclub/orchard/commit/0357a83175e4eb963436c605ebd5bdbdea843b47))
+* volumes, services, certificates and namespaces follow the cluster through the mirror, and every k8s-side deletion is audited ([25c68af](https://github.com/hackclub/orchard/commit/25c68af379dfc1e72a2ec3c34c1814666ebc1c81))
+
+
+### Bug Fixes
+
+* give the teardown lazy import an explicit extension so typecheck passes ([752d275](https://github.com/hackclub/orchard/commit/752d2754419b4912e558080c2743d71004bec610))
+* job step pods expand shared and resource references instead of shipping the literal ([3706812](https://github.com/hackclub/orchard/commit/3706812fd889ae9cab0e5859c17da0677452687a))
+* lazy load the databases service in namespace teardown so the server boots again ([dc08dca](https://github.com/hackclub/orchard/commit/dc08dca6c20decc040a8ce28196330bad38d9833))
+
 ## [2.61.0](https://github.com/hackclub/orchard/compare/server/v2.60.0...server/v2.61.0) (2026-10-08)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.55.0](https://github.com/hackclub/orchard/compare/frontend/v1.54.0...frontend/v1.55.0) (2026-10-08)
+
+
+### Features
+
+* deleting a project or environment tears down everything it owned, asks you to type its name, and audits every child ([0357a83](https://github.com/hackclub/orchard/commit/0357a83175e4eb963436c605ebd5bdbdea843b47))
+* the storage tab shows what the cluster actually provisioned and whether a resize is still waiting ([8c86cf5](https://github.com/hackclub/orchard/commit/8c86cf58577438fc5ee6ddb4c7661dc25eed6a77))
+
 ## [1.54.0](https://github.com/hackclub/orchard/compare/frontend/v1.53.0...frontend/v1.54.0) (2026-10-08)
 
 
