@@ -1194,7 +1194,7 @@ Open a GitHub pull request for a session's branch, using the caller's own linked
 
 **read-only · idempotent**
 
-Get one Greenhouse machine: status, desired state, whether a change is still applying, runner, image, owner and your role on it.
+Get one Greenhouse machine: status, desired state, whether a change is still applying, runner, image, owner and your role on it. Org admins can read this for any machine in their org; everything inside the machine needs an invite.
 
 ### `get_sandbox_session_diff`
 
@@ -1218,7 +1218,7 @@ List the agent sessions on a Greenhouse machine. Each session is a git worktree 
 
 **read-only · idempotent**
 
-List the Greenhouse machines (sandboxes) you own or that were shared with you, with their status, runner and your role on each (owner = host, collaborator = guest, viewer = read-only guest, admin = org admin). Pass organizationId to also see every machine in an org you administer. The result also says how many machines you may own and which runners are available.
+List the Greenhouse machines (sandboxes) you own or that were shared with you, with their status, runner and your role on each (owner = host, collaborator = guest, viewer = read-only guest, admin = org admin with lifecycle only). Pass organizationId to also see every machine in an org you administer; on machines where your role is admin you can start, stop and delete them, but sessions, files, transcripts, terminals and previews stay closed to you unless the host invites you. The result also says how many machines you may own and which runners are available.
 
 ### `prompt_sandbox_session`
 
@@ -1228,11 +1228,11 @@ Send a prompt to the agent in a session. The prompt is recorded as yours (it sho
 
 **idempotent**
 
-Start a stopped Greenhouse machine. Guests and the host can start it. Returns immediately with status "starting"; poll get_sandbox until it is "running" before creating sessions or prompting.
+Start a stopped Greenhouse machine. Guests, the host and org admins can start it. Returns immediately with status "starting"; poll get_sandbox until it is "running" before creating sessions or prompting.
 
 ### `stop_sandbox`
 
 **destructive · idempotent**
 
-Stop a Greenhouse machine. Its disk is kept and sessions resume on the next start, but running agents, terminals and dev servers are killed. Host (or org admin) only.
+Stop a Greenhouse machine. Its disk is kept and sessions resume on the next start, but running agents, terminals and dev servers are killed. Host or org admin only.
 
