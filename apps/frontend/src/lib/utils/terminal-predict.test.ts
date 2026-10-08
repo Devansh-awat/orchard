@@ -12,7 +12,7 @@ class FakeTerm implements PredictTarget {
 	mouse = false;
 	alt = false;
 	writes: string[] = [];
-	overlay: { row: number; x: number; text: string } | null = null;
+	overlay: { row: number; x: number; text: string; cursor: number } | null = null;
 	overlayShows = 0;
 	onWrite: ((s: string) => void) | null = null;
 
@@ -42,9 +42,9 @@ class FakeTerm implements PredictTarget {
 		return this.viewportY !== 0;
 	}
 
-	showOverlay(row: number, x: number, text: string) {
+	showOverlay(row: number, x: number, text: string, cursor: number) {
 		this.overlayShows += 1;
-		this.overlay = { row, x, text };
+		this.overlay = { row, x, text, cursor };
 	}
 
 	hideOverlay() {
@@ -174,27 +174,33 @@ function activate(p: PredictiveEcho, t: FakeTerm, clock: { advance(ms: number): 
 	assert.equal(t.row(), '$ ab');
 }
 
-test('shadow mode tracks but draws nothing', () => {
+test('the very first keystroke is drawn without any warmup', () => {
 	const { p, t } = mk();
 	type(p, 'a');
-	assert.equal(p.state, 'shadow');
+	assert.equal(p.state, 'active');
 	assert.equal(p.metrics.pending, 1);
 	assert.equal(t.row(), '$');
-	assert.equal(t.overlay, null);
+	assert.equal(t.shown(), '$ a');
 	assert.equal(t.x, 2);
 });
 
-test('a fast link never leaves shadow', () => {
+test('a fast link measures itself and stops drawing', () => {
 	const { p, t, clock } = mk();
-	for (const ch of 'hello') {
+	for (const ch of 'hel') {
 		type(p, ch);
 		clock.advance(5);
 		p.applyRemote(ch);
 	}
 	assert.equal(p.state, 'shadow');
+	const shows = t.overlayShows;
+	for (const ch of 'lo') {
+		type(p, ch);
+		clock.advance(5);
+		p.applyRemote(ch);
+	}
+	assert.equal(t.overlayShows, shows);
 	assert.equal(p.metrics.confirms, 5);
 	assert.equal(t.row(), '$ hello');
-	assert.equal(t.overlayShows, 0);
 });
 
 test('active shows the glyph as an overlay at the cursor without touching the buffer', () => {
@@ -203,7 +209,7 @@ test('active shows the glyph as an overlay at the cursor without touching the bu
 	type(p, 'A');
 	assert.equal(t.row(), '$ ab');
 	assert.equal(t.shown(), '$ abA');
-	assert.deepEqual(t.overlay, { row: 0, x: 4, text: 'A' });
+	assert.deepEqual(t.overlay, { row: 0, x: 4, text: 'A ', cursor: 1 });
 	assert.equal(t.x, 4);
 });
 
@@ -243,11 +249,11 @@ test('a partial echo confirms the prefix and redraws the rest', () => {
 	assert.equal(p.metrics.pending, 1);
 	assert.equal(t.row(), '$ abA');
 	assert.equal(t.shown(), '$ abAB');
-	assert.deepEqual(t.overlay, { row: 0, x: 5, text: 'B' });
+	assert.deepEqual(t.overlay, { row: 0, x: 5, text: 'B ', cursor: 1 });
 	assert.equal(t.x, 5);
 });
 
-test('a mismatched echo retracts and demotes to shadow', () => {
+test('one mismatched echo retracts but keeps predicting', () => {
 	const { p, t, clock } = mk();
 	activate(p, t, clock);
 	type(p, 'A');
@@ -255,12 +261,49 @@ test('a mismatched echo retracts and demotes to shadow', () => {
 	p.applyRemote('X');
 	assert.equal(t.row(), '$ abX');
 	assert.equal(t.overlay, null);
-	assert.equal(p.state, 'shadow');
+	assert.equal(p.state, 'active');
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(p.metrics.retracts, 1);
+	type(p, 'B');
+	assert.equal(t.shown(), '$ abXB');
 });
 
-test('an unconfirmed prediction times out, retracts and demotes', async () => {
+test('two misses in a row demote to shadow and one confirm brings it back', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'A');
+	clock.advance(80);
+	p.applyRemote('X');
+	type(p, 'B');
+	clock.advance(80);
+	p.applyRemote('Y');
+	assert.equal(p.state, 'shadow');
+	type(p, 'C');
+	assert.equal(t.overlay, null);
+	clock.advance(80);
+	p.applyRemote('C');
+	assert.equal(p.state, 'active');
+	type(p, 'D');
+	assert.equal(t.shown(), '$ abXYCD');
+});
+
+test('an echo later than the round trip but inside the timeout still confirms', async () => {
+	const { p, t, clock } = mk({ floor: 500, ceil: 2000 });
+	for (const ch of 'ab') {
+		type(p, ch);
+		clock.advance(190);
+		p.applyRemote(ch);
+	}
+	type(p, 'c');
+	await new Promise((r) => setTimeout(r, 20));
+	clock.advance(450);
+	assert.equal(t.shown(), '$ abc');
+	p.applyRemote('c');
+	assert.equal(p.metrics.retracts, 0);
+	assert.equal(t.row(), '$ abc');
+});
+
+test('an unconfirmed prediction times out and retracts without demoting', async () => {
 	const { p, t, clock } = mk({ floor: 1, ceil: 1 });
 	activate(p, t, clock);
 	type(p, 'A');
@@ -269,7 +312,7 @@ test('an unconfirmed prediction times out, retracts and demotes', async () => {
 	assert.equal(t.shown(), '$ ab');
 	assert.equal(t.overlay, null);
 	assert.equal(t.x, 4);
-	assert.equal(p.state, 'shadow');
+	assert.equal(p.state, 'active');
 	assert.equal(p.metrics.pending, 0);
 });
 
@@ -289,27 +332,93 @@ test('backspace nets out a pending insert and both confirm together', () => {
 	assert.equal(p.state, 'active');
 });
 
-test('backspace at the anchor is never predicted', () => {
+test('backspace over already echoed input is predicted', () => {
 	const { p, t, clock } = mk();
 	activate(p, t, clock);
 	type(p, '\x7f');
-	assert.equal(p.metrics.pending, 0);
+	assert.equal(p.metrics.pending, 1);
 	assert.equal(t.row(), '$ ab');
+	assert.equal(t.shown(), '$ a');
+	assert.deepEqual(t.overlay, { row: 0, x: 3, text: '  ', cursor: 0 });
+	clock.advance(80);
+	p.applyRemote('\b \b');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	assert.equal(t.row(), '$ a');
 });
 
-test('control keys flush and are never predicted', () => {
+test('backspace never predicts into the prompt', () => {
 	const { p, t, clock } = mk();
 	activate(p, t, clock);
-	type(p, 'A');
+	type(p, '\x7f');
+	type(p, '\x7f');
+	assert.equal(t.shown(), '$');
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 2);
+	assert.equal(t.shown(), '$');
+});
+
+test('backspace in the middle of a line waits for the shell', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	p.noteKeyDown(key('ArrowLeft'));
+	p.onUserData('\x1b[D');
+	clock.advance(80);
+	p.applyRemote('\b');
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+});
+
+test('enter keeps pending predictions on screen until the shell answers', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'l');
+	type(p, 's');
 	p.noteKeyDown(key('Enter'));
 	p.onUserData('\r');
+	assert.equal(t.shown(), '$ abls');
+	clock.advance(80);
+	p.applyRemote('ls\r\nfile\r\n$ ');
 	assert.equal(p.metrics.pending, 0);
-	assert.equal(t.row(), '$ ab');
+	assert.equal(p.metrics.retracts, 0);
+	assert.equal(t.overlay, null);
+	assert.equal(p.state, 'active');
+});
+
+test('typing right after enter waits for the next prompt, then predicts again', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	p.noteKeyDown(key('Enter'));
+	p.onUserData('\r');
+	type(p, 'x');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	clock.advance(80);
+	p.applyRemote('\r\n$ x');
+	type(p, 'y');
+	assert.equal(t.shown(), '$ xy');
+});
+
+test('control keys are never predicted', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
 	p.noteKeyDown(key('ArrowLeft'));
 	p.onUserData('\x1b[D');
 	p.noteKeyDown(key('c', { ctrlKey: true }));
 	p.onUserData('\x03');
 	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.row(), '$ ab');
+});
+
+test('a bare shift press between letters keeps the predictions', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'x');
+	p.noteKeyDown(key('Shift', { shiftKey: true }));
+	type(p, 'Y');
+	assert.equal(p.metrics.pending, 2);
+	assert.equal(t.shown(), '$ abxY');
 });
 
 test('pasted text without a keydown token is not predicted', () => {
@@ -334,6 +443,8 @@ test('alternate screen blocks prediction and flushes mid-burst', () => {
 	type(p, 'A');
 	assert.equal(p.metrics.pending, 0);
 	t.alt = false;
+	clock.advance(100);
+	p.applyRemote('A');
 	type(p, 'A');
 	assert.equal(p.metrics.pending, 1);
 	p.applyRemote('\x1b[?1049h');
@@ -357,7 +468,7 @@ test('one spare column is always left before the margin', () => {
 	type(p, 'A');
 	assert.equal(p.metrics.pending, 1);
 	type(p, 'B');
-	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay?.text, 'A ');
 	assert.equal(t.x, t.cols - 2);
 });
 
@@ -376,6 +487,7 @@ test('a password prompt suppresses prediction until the next newline', () => {
 	type(p, 'x');
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(t.row(), 'Password:');
+	clock.advance(100);
 	p.applyRemote('\r\n$ ');
 	type(p, 'y');
 	assert.equal(p.metrics.pending, 1);
@@ -438,4 +550,33 @@ test('the kill switch disables drawing', () => {
 	assert.equal(p.state, 'disabled');
 	assert.equal(t.row(), '$ ab');
 	assert.equal(t.overlay, null);
+});
+
+test('a sealed line confirms piece by piece as the echo trickles in', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'l');
+	type(p, 's');
+	p.noteKeyDown(key('Enter'));
+	p.onUserData('\r');
+	clock.advance(80);
+	p.applyRemote('l');
+	assert.equal(t.shown(), '$ abls');
+	p.applyRemote('s\r\n$ ');
+	assert.equal(p.metrics.retracts, 0);
+	assert.equal(t.overlay, null);
+});
+
+test('a sealed line the shell never echoes is retracted quietly', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'x');
+	type(p, 'y');
+	p.noteKeyDown(key('u', { ctrlKey: true }));
+	p.onUserData('\x15');
+	clock.advance(80);
+	p.applyRemote('\r$ ab\x1b[K');
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(p.state, 'active');
 });

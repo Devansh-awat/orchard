@@ -521,8 +521,30 @@
 		pointer-events: none;
 		color: var(--term-fg);
 		background: var(--term-bg);
-		text-decoration: underline dotted;
-		box-shadow: inset -1px 0 0 var(--term-cursor);
+	}
+
+	.pod-terminal-canvas :global(.term-predict-cursor) {
+		position: absolute;
+		top: 0;
+		width: 2px;
+		height: 100%;
+		background: var(--term-cursor);
+	}
+
+	.pod-terminal-canvas
+		:global(.term-grid[data-cursor-shape='block'] ~ .term-predict-overlay .term-predict-cursor) {
+		width: var(--term-cell-width);
+		opacity: 0.6;
+	}
+
+	.pod-terminal-canvas
+		:global(
+			.term-grid[data-cursor-shape='underline'] ~ .term-predict-overlay .term-predict-cursor
+		) {
+		top: auto;
+		bottom: 0;
+		width: var(--term-cell-width);
+		height: 2px;
 	}
 
 	.pod-terminal-status {

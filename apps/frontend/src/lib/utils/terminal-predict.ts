@@ -19,7 +19,7 @@ export interface PredictTarget {
 	mouseTracking(): boolean;
 	scrolledBack(): boolean;
 	write(data: string, done: () => void): void;
-	showOverlay(row: number, x: number, text: string): void;
+	showOverlay(row: number, x: number, text: string, cursor: number): void;
 	hideOverlay(): void;
 }
 
@@ -48,6 +48,7 @@ interface Burst {
 	anchorX: number;
 	ops: Op[];
 	sentAt: number[];
+	sealed: boolean;
 }
 
 interface Token {
@@ -57,6 +58,11 @@ interface Token {
 
 const TOKEN_MAX_AGE_MS = 8;
 const MAX_PENDING = 24;
+const MISSES_TO_SHADOW = 2;
+const FAST_LINK_SAMPLES = 3;
+const DELETE_LOOKAHEAD = 8;
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph', 'Fn']);
+const LINE_RESET_CHARS = ['\r', '\n', '\x03', '\x04', '\x0c'];
 const TAIL_BYTES = 160;
 const PASSWORD_SUPPRESS_MS = 10_000;
 const PASSWORD_RE =
@@ -68,16 +74,6 @@ function netOf(ops: Op[], m = ops.length): number {
 	let n = 0;
 	for (let i = 0; i < m; i++) n += 'del' in ops[i] ? -1 : 1;
 	return n;
-}
-
-function replay(ops: Op[], m = ops.length): string[] {
-	const out: string[] = [];
-	for (let i = 0; i < m; i++) {
-		const op = ops[i];
-		if ('del' in op) out.pop();
-		else out.push(op.ins);
-	}
-	return out;
 }
 
 function simulate(baseX: number, ops: Op[], m: number): Map<number, string> {
@@ -106,9 +102,11 @@ export class PredictiveEcho {
 	private readonly now: () => number;
 	private readonly onStateChange?: (state: PredictState) => void;
 
-	private _state: PredictState = 'shadow';
+	private _state: PredictState = 'active';
 	private streak = 0;
+	private misses = 0;
 	private rttEwma = 0;
+	private rttSamples = 0;
 	private token: Token | null = null;
 	private burst: Burst | null = null;
 	private suppressUntil = 0;
@@ -117,14 +115,18 @@ export class PredictiveEcho {
 	private inApply = false;
 	private confirms = 0;
 	private retracts = 0;
+	private inputRow = -1;
+	private inputX: number | null = null;
+	private blockedSince: number | null = null;
+	private lastRemoteAt = 0;
 
 	constructor(term: PredictTarget, opts: PredictiveEchoOptions = {}) {
 		this.term = term;
 		this.enabled = opts.enabled ?? (() => true);
 		this.minRttMs = opts.minRttMs ?? 40;
-		this.confirmsToEnable = opts.confirmsToEnable ?? 2;
-		this.timeoutFloorMs = opts.timeoutFloorMs ?? 150;
-		this.timeoutCeilMs = opts.timeoutCeilMs ?? 600;
+		this.confirmsToEnable = opts.confirmsToEnable ?? 1;
+		this.timeoutFloorMs = opts.timeoutFloorMs ?? 500;
+		this.timeoutCeilMs = opts.timeoutCeilMs ?? 2000;
 		this.now = opts.now ?? (() => Date.now());
 		this.onStateChange = opts.onStateChange;
 	}
@@ -146,20 +148,16 @@ export class PredictiveEcho {
 		if (event.type !== 'keydown') return;
 		this.token = null;
 		if (event.isComposing || event.keyCode === 229) return;
+		if (MODIFIER_KEYS.has(event.key)) return;
 		const mod =
 			(event.ctrlKey && !event.altKey) || (event.altKey && !event.ctrlKey) || event.metaKey;
-		if (!mod && event.key.length === 1) {
+		if (mod) return;
+		if (event.key.length === 1) {
 			const c = event.key.charCodeAt(0);
-			if (c >= 0x20 && c <= 0x7e) {
-				this.token = { data: event.key, at: this.now() };
-				return;
-			}
-		}
-		if (!mod && event.key === 'Backspace') {
-			this.token = { data: '\x7f', at: this.now() };
+			if (c >= 0x20 && c <= 0x7e) this.token = { data: event.key, at: this.now() };
 			return;
 		}
-		this.flush('nonprintable');
+		if (event.key === 'Backspace') this.token = { data: '\x7f', at: this.now() };
 	}
 
 	onUserData(data: string): void {
@@ -167,7 +165,7 @@ export class PredictiveEcho {
 		const t = this.token;
 		this.token = null;
 		if (!t || t.data !== data || this.now() - t.at > TOKEN_MAX_AGE_MS) {
-			this.flush(data.length === 1 ? 'ime' : 'paste');
+			this.unpredicted(data);
 			return;
 		}
 		if (data === '\x7f') this.pushDelete();
@@ -177,6 +175,7 @@ export class PredictiveEcho {
 	applyRemote(data: string): void {
 		const term = this.term;
 		if (!term) return;
+		this.lastRemoteAt = this.now();
 		const leavingLineMode = this.scanTail(data);
 		this.inApply = true;
 		try {
@@ -209,6 +208,8 @@ export class PredictiveEcho {
 			this.streak = 0;
 			this.token = null;
 			this.tail = '';
+			this.inputX = null;
+			this.blockedSince = null;
 		}
 	}
 
@@ -241,6 +242,19 @@ export class PredictiveEcho {
 		this.setState('disabled');
 	}
 
+	private fastLink(): boolean {
+		return this.rttSamples >= FAST_LINK_SAMPLES && this.rttEwma < this.minRttMs;
+	}
+
+	private blocked(): boolean {
+		if (this.blockedSince === null) return false;
+		if (this.lastRemoteAt >= this.blockedSince + this.rttEwma * 0.8) {
+			this.blockedSince = null;
+			return false;
+		}
+		return true;
+	}
+
 	private canPredict(): boolean {
 		const term = this.term;
 		if (!term) return false;
@@ -248,42 +262,67 @@ export class PredictiveEcho {
 			this.setState('disabled');
 			return false;
 		}
-		if (this._state === 'disabled') this.setState('shadow');
+		if (this._state === 'disabled') this.setState(this.fastLink() ? 'shadow' : 'active');
 		if (term.isAlternate()) return false;
 		if (term.mouseTracking()) return false;
 		if (term.scrolledBack()) return false;
 		if (this.now() < this.suppressUntil) return false;
+		if (this.blocked()) return false;
 		return true;
+	}
+
+	private unpredicted(data: string): void {
+		const burst = this.burst;
+		if (burst) {
+			if (burst.ops.length > 0) burst.sealed = true;
+			else this.endBurst();
+		}
+		this.blockedSince = this.now();
+		if (LINE_RESET_CHARS.some((c) => data.includes(c))) this.inputX = null;
+		if (this._state !== 'active') this.hideOverlay();
+	}
+
+	private predictedCell(burst: Burst | null, row: number, col: number): string {
+		if (burst) {
+			const cell = simulate(burst.baseX, burst.ops, burst.ops.length).get(col);
+			if (cell !== undefined) return cell;
+		}
+		return this.term?.cellAt(row, col) ?? ' ';
+	}
+
+	private openBurst(row: number, x: number): Burst {
+		const burst: Burst = { row, baseX: x, anchorX: x, ops: [], sentAt: [], sealed: false };
+		this.burst = burst;
+		return burst;
 	}
 
 	private pushInsert(ch: string): void {
 		const term = this.term;
 		if (!term || !this.canPredict()) {
-			this.flush('guard');
+			this.unpredicted(ch);
 			return;
 		}
 		const cur = term.cursor();
 		let burst = this.burst;
-		if (burst && burst.row !== cur.y) {
+		if (burst && (burst.sealed || burst.row !== cur.y)) {
 			this.flush('mismatch');
 			burst = null;
 		}
+		const target = burst ? burst.baseX + netOf(burst.ops) : cur.x;
+		if (
+			(burst?.ops.length ?? 0) >= MAX_PENDING ||
+			target >= term.cols - 1 ||
+			this.predictedCell(burst, cur.y, target) !== ' '
+		) {
+			this.unpredicted(ch);
+			return;
+		}
 		if (!burst) {
-			burst = { row: cur.y, baseX: cur.x, anchorX: cur.x, ops: [], sentAt: [] };
-			this.burst = burst;
-		}
-		if (burst.ops.length >= MAX_PENDING) {
-			this.flush('guard');
-			return;
-		}
-		const target = burst.baseX + netOf(burst.ops);
-		if (target >= term.cols - 1) {
-			this.flush('guard');
-			return;
-		}
-		if (term.cellAt(burst.row, target) !== ' ') {
-			this.flush('guard');
-			return;
+			burst = this.openBurst(cur.y, cur.x);
+			if (this.inputRow !== cur.y || this.inputX === null) {
+				this.inputRow = cur.y;
+				this.inputX = cur.x;
+			}
 		}
 		burst.ops.push({ ins: ch });
 		burst.sentAt.push(this.now());
@@ -292,11 +331,29 @@ export class PredictiveEcho {
 	}
 
 	private pushDelete(): void {
-		const burst = this.burst;
-		if (!burst || burst.baseX + netOf(burst.ops) <= burst.anchorX) {
-			this.flush('nonprintable');
+		const term = this.term;
+		if (!term || !this.canPredict()) {
+			this.unpredicted('\x7f');
 			return;
 		}
+		const cur = term.cursor();
+		let burst = this.burst;
+		if (burst && (burst.sealed || burst.row !== cur.y)) {
+			this.flush('mismatch');
+			burst = null;
+		}
+		const pos = burst ? burst.baseX + netOf(burst.ops) : cur.x;
+		const floor =
+			this.inputX !== null && this.inputRow === cur.y ? this.inputX : burst ? burst.anchorX : null;
+		let clear = floor !== null && pos > floor && (burst?.ops.length ?? 0) < MAX_PENDING;
+		for (let c = pos; clear && c < Math.min(term.cols, pos + DELETE_LOOKAHEAD); c++) {
+			if (this.predictedCell(burst, cur.y, c) !== ' ') clear = false;
+		}
+		if (!clear) {
+			this.unpredicted('\x7f');
+			return;
+		}
+		burst ??= this.openBurst(cur.y, cur.x);
 		burst.ops.push({ del: true });
 		burst.sentAt.push(this.now());
 		this.redraw();
@@ -307,17 +364,30 @@ export class PredictiveEcho {
 		const burst = this.burst;
 		const term = this.term;
 		if (!burst || !term) return;
-		if (this._state !== 'active') {
+		if (this._state !== 'active' || burst.ops.length === 0) {
 			this.hideOverlay();
 			return;
 		}
-		const glyphs = replay(burst.ops);
-		if (glyphs.length === 0) {
-			this.hideOverlay();
-			return;
+		const cells = simulate(burst.baseX, burst.ops, burst.ops.length);
+		const cursor = burst.baseX + netOf(burst.ops);
+		const cols = [...cells.keys(), burst.baseX, cursor];
+		const start = Math.min(...cols);
+		const end = Math.max(...cols);
+		let text = '';
+		let changed = cursor !== term.cursor().x;
+		for (let c = start; c <= end; c++) {
+			const real = term.cellAt(burst.row, c);
+			const ch = cells.get(c) ?? real;
+			if (ch === '\u0000' || real === '\u0000') {
+				this.hideOverlay();
+				return;
+			}
+			if (ch !== real) changed = true;
+			text += ch;
 		}
 		try {
-			term.showOverlay(burst.row, burst.baseX, glyphs.join(''));
+			if (changed) term.showOverlay(burst.row, start, text, cursor - start);
+			else term.hideOverlay();
 		} catch {
 			this.disable();
 		}
@@ -328,15 +398,24 @@ export class PredictiveEcho {
 		const burst = this.burst;
 		if (!term || !burst) return;
 		const cur = term.cursor();
-		if (cur.y !== burst.row) {
-			this.fail();
+		if (burst.sealed && this.cellsMatch(burst, burst.ops.length)) {
+			this.confirm(burst, burst.ops.length);
+			this.hideOverlay();
+			this.endBurst();
 			return;
 		}
-		const k = cur.x - burst.baseX;
 		let best = -1;
-		for (let m = 0; m <= burst.ops.length; m++) {
-			if (netOf(burst.ops, m) !== k) continue;
-			if (this.cellsMatch(burst, m)) best = m;
+		const k = cur.x - burst.baseX;
+		if (cur.y === burst.row) {
+			for (let m = 0; m <= burst.ops.length; m++) {
+				if (netOf(burst.ops, m) !== k) continue;
+				if (this.cellsMatch(burst, m)) best = m;
+			}
+		}
+		if (burst.sealed && best <= 0) {
+			this.hideOverlay();
+			this.endBurst();
+			return;
 		}
 		if (best < 0) {
 			this.fail();
@@ -344,31 +423,32 @@ export class PredictiveEcho {
 		}
 		if (best === 0) {
 			this.redraw();
-			this.armTimer();
 			return;
 		}
-		const now = this.now();
-		for (let i = 0; i < best; i++) {
-			this.recordRtt(now - burst.sentAt[i]);
-			this.streak += 1;
-			this.confirms += 1;
-		}
+		this.confirm(burst, best);
 		burst.baseX += k;
 		burst.ops.splice(0, best);
 		burst.sentAt.splice(0, best);
-		if (
-			this._state === 'shadow' &&
-			this.streak >= this.confirmsToEnable &&
-			this.rttEwma > this.minRttMs
-		) {
-			this.setState('active');
-		}
 		if (burst.ops.length === 0) {
 			this.hideOverlay();
 			this.endBurst();
 		} else {
 			this.redraw();
 			this.armTimer();
+		}
+	}
+
+	private confirm(burst: Burst, m: number): void {
+		const now = this.now();
+		for (let i = 0; i < m; i++) {
+			this.recordRtt(now - burst.sentAt[i]);
+			this.streak += 1;
+			this.confirms += 1;
+		}
+		if (m > 0) this.misses = 0;
+		if (this.fastLink()) this.setState('shadow');
+		else if (this._state === 'shadow' && this.streak >= this.confirmsToEnable) {
+			this.setState('active');
 		}
 	}
 
@@ -384,7 +464,8 @@ export class PredictiveEcho {
 
 	private fail(): void {
 		this.streak = 0;
-		if (this._state === 'active') this.setState('shadow');
+		this.misses += 1;
+		if (this._state === 'active' && this.misses >= MISSES_TO_SHADOW) this.setState('shadow');
 		const burst = this.burst;
 		if (burst && burst.ops.length > 0) this.retracts += 1;
 		this.hideOverlay();
@@ -398,11 +479,12 @@ export class PredictiveEcho {
 
 	private recordRtt(ms: number): void {
 		if (!Number.isFinite(ms) || ms < 0) return;
+		this.rttSamples += 1;
 		this.rttEwma = this.rttEwma === 0 ? ms : this.rttEwma * 0.75 + ms * 0.25;
 	}
 
 	private timeoutMs(): number {
-		const base = this.rttEwma > 0 ? this.rttEwma * 2 : this.timeoutCeilMs;
+		const base = this.rttEwma > 0 ? this.rttEwma * 3 + 200 : this.timeoutCeilMs;
 		return Math.max(this.timeoutFloorMs, Math.min(this.timeoutCeilMs, base));
 	}
 
@@ -414,7 +496,10 @@ export class PredictiveEcho {
 		this.timer = setTimeout(
 			() => {
 				this.timer = null;
-				this.fail();
+				if (this.burst?.sealed) {
+					this.hideOverlay();
+					this.endBurst();
+				} else this.fail();
 			},
 			Math.max(0, due)
 		);

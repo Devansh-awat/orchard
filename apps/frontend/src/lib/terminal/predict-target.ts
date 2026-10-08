@@ -6,6 +6,7 @@ export interface DisposablePredictTarget extends PredictTarget {
 }
 
 export const PREDICT_OVERLAY_CLASS = 'term-predict-overlay';
+export const PREDICT_CURSOR_CLASS = 'term-predict-cursor';
 
 function liveRow(host: HTMLElement, rows: number, row: number): HTMLElement | null {
 	const grid = host.querySelector<HTMLElement>(':scope > .term-grid');
@@ -24,7 +25,7 @@ export function wtermPredictTarget(handle: TerminalHandle): DisposablePredictTar
 		overlay = null;
 	}
 
-	function showOverlay(row: number, x: number, text: string): void {
+	function showOverlay(row: number, x: number, text: string, cursor: number): void {
 		const rowEl = liveRow(host, handle.rows, row);
 		const grid = rowEl?.parentElement;
 		if (!rowEl || !grid) {
@@ -36,12 +37,15 @@ export function wtermPredictTarget(handle: TerminalHandle): DisposablePredictTar
 			overlay = document.createElement('div');
 			overlay.className = PREDICT_OVERLAY_CLASS;
 			overlay.setAttribute('aria-hidden', 'true');
+			overlay.append(document.createTextNode(''), document.createElement('span'));
+			(overlay.lastChild as HTMLElement).className = PREDICT_CURSOR_CLASS;
 		}
 		if (overlay.parentElement !== host) host.appendChild(overlay);
-		overlay.textContent = text;
+		(overlay.firstChild as Text).data = text;
+		(overlay.lastChild as HTMLElement).style.left = `${cursor * cell}px`;
 		overlay.style.top = `${grid.offsetTop + rowEl.offsetTop}px`;
 		overlay.style.left = `${grid.offsetLeft + x * cell}px`;
-		overlay.style.width = `${Math.max(1, text.length) * cell}px`;
+		overlay.style.width = `${Math.max(text.length, cursor + 1) * cell}px`;
 	}
 
 	return {
