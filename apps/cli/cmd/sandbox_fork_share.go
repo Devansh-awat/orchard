@@ -286,8 +286,8 @@ func sandboxSessionTranscriptCmd() *cobra.Command {
 						who = pick(u, "name")
 					}
 				}
-				fmt.Println(output.Dim(fmt.Sprintf("── %s · %s", who, pick(m, "createdAt"))))
-				fmt.Println(str(m["text"]))
+				fmt.Println(output.Dim(fmt.Sprintf("── %s · %s", terminalSafe(who), pick(m, "createdAt"))))
+				fmt.Println(terminalSafe(str(m["text"])))
 				fmt.Println()
 			}
 			return nil
@@ -295,4 +295,16 @@ func sandboxSessionTranscriptCmd() *cobra.Command {
 	}
 	c.Flags().IntVar(&limit, "limit", 0, "How many of the latest messages to show (1-200, default 30)")
 	return c
+}
+
+func terminalSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
 }

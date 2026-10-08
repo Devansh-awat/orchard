@@ -667,12 +667,10 @@ test('push output and source env are parsed and copied safely', () => {
       { key: 'REGION', value: 'eu' }
     ]
   );
-  assert.deepEqual(skipped, ['DATABASE_URL']);
-  assert.deepEqual(env, [
-    { key: 'TOKEN', value: 'sekret', secret: true },
-    { key: 'NAME', value: 'web-eu', secret: false },
-    { key: 'OWN_SECRET', value: 'shh', secret: true }
-  ]);
+  assert.deepEqual(skipped, ['DATABASE_URL', 'TOKEN', 'OWN_SECRET']);
+  assert.deepEqual(env, [{ key: 'NAME', value: 'web-eu', secret: false }]);
+  assert.ok(!JSON.stringify(env).includes('sekret'), 'secret values never reach a preview build');
+  assert.ok(!JSON.stringify(env).includes('shh'));
 });
 
 function previewHarness(opts: { canEdit?: boolean; existingEnv?: any } = {}) {

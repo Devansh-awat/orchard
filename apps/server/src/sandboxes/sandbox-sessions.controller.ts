@@ -9,12 +9,14 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Optional,
   Query,
   Req,
   UseGuards
 } from '@nestjs/common';
 import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
+import { RateLimitService } from '../auth/rate-limit.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxAccessService } from './sandbox-access.service';
@@ -40,7 +42,8 @@ export class SandboxSessionsController {
     private readonly workspace: SandboxWorkspaceService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
-    private readonly gitActors: SandboxGitActorService
+    private readonly gitActors: SandboxGitActorService,
+    @Optional() private readonly rateLimit?: RateLimitService
   ) {}
 
   private async resolveUser(req: any) {
@@ -87,6 +90,7 @@ export class SandboxSessionsController {
     }
   ) {
     const { user, row } = await this.access(req, id, 'collaborator');
+    await this.rateLimit?.checkRateLimit(user.id, 'user', 'sandbox_session');
     return this.sessions.create(row, user.id, body || {});
   }
 

@@ -370,9 +370,9 @@ export const READ_EXIT = {
   notFile: 8
 } as const;
 
-const HOME_GUARD = [
+export const HOME_GUARD = [
   `__home=$(realpath -e -- ${shellQuote(HOME_ROOT)} 2>/dev/null) || exit ${READ_EXIT.outside}`,
-  'home_ok() { case "$1/" in "$__home"/.worktrees/*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
+  'home_ok() { case "$1/" in "$__home"/.worktrees/?*/?*) return 0 ;; "$__home"/.*) return 1 ;; esac; return 0; }'
 ];
 
 function confinedRoot(root: string): string[] {
@@ -462,7 +462,9 @@ export function buildFsScript(
       `s=$(resolve_parent "$target") || exit ${FS_EXIT.outside}`,
       `[ "$s" != "$__root" ] || exit ${FS_EXIT.outside}`,
       `[ -e "$s" ] || [ -L "$s" ] || exit ${FS_EXIT.missing}`,
-      `mkdir -p -- "$(dirname -- "$dest")" 2>/dev/null`,
+      `dp=$(realpath -m -- "$(dirname -- "$dest")" 2>/dev/null) || exit ${FS_EXIT.outside}`,
+      `inside "$dp" || exit ${FS_EXIT.outside}`,
+      `mkdir -p -- "$dp" 2>/dev/null`,
       `d=$(resolve_parent "$dest") || exit ${FS_EXIT.outside}`,
       `[ -e "$d" ] || [ -L "$d" ] && exit ${FS_EXIT.exists}`,
       `mv -T -- "$s" "$d" || exit ${FS_EXIT.failed}`
@@ -490,6 +492,8 @@ export const IGNORED_PORTS = new Set(RESERVED_SANDBOX_PORTS);
 export function buildPortsScript(): string {
   return [
     'u=$(id -u dev 2>/dev/null) || exit 0',
+    "echo '@@home@@'",
+    `realpath -e -- ${shellQuote(HOME_ROOT)} 2>/dev/null`,
     "echo '@@listen@@'",
     'for f in /proc/net/tcp /proc/net/tcp6; do [ -r "$f" ] && awk \'NR>1 && $4=="0A" {print $2, $10}\' "$f"; done',
     "echo '@@sock@@'",
@@ -510,12 +514,18 @@ function hexAddrIsLoopback(addr: string): boolean {
   return false;
 }
 
+function logicalHomePath(path: string, physicalHome: string | undefined): string {
+  if (!physicalHome || physicalHome === HOME_ROOT || !physicalHome.startsWith('/')) return path;
+  if (path !== physicalHome && !path.startsWith(`${physicalHome}/`)) return path;
+  return `${HOME_ROOT}${path.slice(physicalHome.length)}`;
+}
+
 export function parsePortsOutput(stdout: string, worktreePath: string | null): SandboxPort[] {
-  const sections: Record<string, string[]> = { listen: [], sock: [], proc: [] };
+  const sections: Record<string, string[]> = { home: [], listen: [], sock: [], proc: [] };
   let section: string | null = null;
   for (const raw of stdout.split('\n')) {
     const line = raw.trim();
-    const marker = line.match(/^@@(listen|sock|proc)@@$/);
+    const marker = line.match(/^@@(home|listen|sock|proc)@@$/);
     if (marker) {
       section = marker[1];
       continue;
@@ -540,7 +550,10 @@ export function parsePortsOutput(stdout: string, worktreePath: string | null): S
   for (const line of sections.proc) {
     const m = line.match(/^(\d+) (\S*) ?(.*)$/);
     if (!m) continue;
-    procs.set(Number(m[1]), { cwd: m[2] ? m[2].replace(/\?/g, ' ') : null, comm: m[3] || null });
+    procs.set(Number(m[1]), {
+      cwd: m[2] ? logicalHomePath(m[2].replace(/\?/g, ' '), sections.home[0]) : null,
+      comm: m[3] || null
+    });
   }
   const byPort = new Map<number, SandboxPort>();
   for (const [inode, sock] of listening) {

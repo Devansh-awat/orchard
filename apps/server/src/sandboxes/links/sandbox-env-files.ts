@@ -29,6 +29,40 @@ export const SHELL_RESERVED_KEYS: ReadonlySet<string> = new Set([
   'OPENCODE_SERVER_PASSWORD'
 ]);
 
+const RESERVED_KEY_PATTERNS: RegExp[] = [
+  /^GIT_/,
+  /^LD_/,
+  /^DYLD_/,
+  /^BASH/,
+  /^SSH_/,
+  /^PS\d$/,
+  /^PROMPT_COMMAND$/,
+  /^SHELLOPTS$/,
+  /^CDPATH$/,
+  /^GLOBIGNORE$/,
+  /^HISTFILE$/,
+  /^INPUTRC$/,
+  /^TMUX/,
+  /^SUDO_/,
+  /^XDG_/,
+  /^NODE_(OPTIONS|PATH|EXTRA_CA_CERTS|TLS_REJECT_UNAUTHORIZED)$/,
+  /^NPM_CONFIG_/,
+  /^PYTHON(STARTUP|PATH|HOME|USERBASE|INSPECT)$/,
+  /^PERL5?(OPT|LIB)$/,
+  /^RUBY(OPT|LIB)$/,
+  /^(PAGER|EDITOR|VISUAL|BROWSER|MANPAGER|LESSOPEN|LESSCLOSE)$/,
+  /^SSL_CERT_/,
+  /^(CURL_CA_BUNDLE|REQUESTS_CA_BUNDLE|GIT_SSL_CAINFO)$/,
+  /^(ANTHROPIC|OPENAI)_(BASE_URL|API_BASE|API_URL)$/,
+  /^(CLAUDE|CODEX|OPENCODE|ORCHARD)_/
+];
+
+export function isShellReservedKey(key: string): boolean {
+  if (SHELL_RESERVED_KEYS.has(key)) return true;
+  const upper = key.toUpperCase();
+  return RESERVED_KEY_PATTERNS.some((re) => re.test(upper));
+}
+
 export interface EnvFileDatabase {
   name: string;
   url: string | null;
@@ -68,8 +102,8 @@ export function renderEnvFile(input: EnvFileInput): string {
   const keys = [...values.keys()].sort();
   for (const key of keys) {
     if (!ENV_KEY_RE.test(key)) continue;
-    if (SHELL_RESERVED_KEYS.has(key)) {
-      lines.push(`# ${key} is skipped because it would override the shell`);
+    if (isShellReservedKey(key)) {
+      lines.push(`# ${key} is skipped because it would change how git, the shell or the agent run`);
       continue;
     }
     if (secretKeys.has(key)) {

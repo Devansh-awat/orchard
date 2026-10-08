@@ -6,6 +6,7 @@ import { SecretCryptoService } from '../../crypto/secret-crypto.service';
 import type { SandboxSecrets } from './sandbox-runner';
 import { SandboxProjectEnvService } from '../links/sandbox-project-env.service';
 import { gitIdentity } from '../sandbox-git-identity';
+import { SANDBOX_MCP_DEVICE, sandboxMcpDevice } from '../../auth/sandbox-mcp-scope';
 
 export type SandboxSecretPurpose = 'opencode-password' | 'bridge-token' | 'spec-hash';
 
@@ -37,8 +38,6 @@ export function sandboxSpecHash(sandboxId: string, data: Record<string, string>)
     : createHash('sha256').update(canonical).digest('hex');
   return digest.slice(0, 32);
 }
-
-const MCP_SESSION_DEVICE = 'sandbox-mcp';
 
 @Injectable()
 export class SandboxSecretsService {
@@ -78,7 +77,7 @@ export class SandboxSecretsService {
         }
       }),
       this.prisma.sandboxCredential.findUnique({ where: { userId: row.userId } }),
-      this.mintMcpToken(row.userId).catch(() => null),
+      this.mintMcpToken(row.userId, row.id).catch(() => null),
       this.projectEnv ? this.projectEnv.filesFor(row.id) : Promise.resolve({})
     ]);
     return {
@@ -95,17 +94,28 @@ export class SandboxSecretsService {
     };
   }
 
-  private async mintMcpToken(userId: string): Promise<string | null> {
+  async mintMcpToken(userId: string, sandboxId: string): Promise<string | null> {
     if (!process.env.SANDBOX_MCP_URL || !process.env.JWT_SECRET) return null;
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, username: true, externalAuthId: true }
+    const [user, sandbox] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, username: true, externalAuthId: true }
+      }),
+      this.prisma.sandbox.findUnique({
+        where: { id: sandboxId },
+        select: { organizationId: true }
+      })
+    ]);
+    if (!user || !sandbox) return null;
+    const deviceName = sandboxMcpDevice(sandbox.organizationId, sandboxId);
+    await this.prisma.session.updateMany({
+      where: { userId, deviceName: SANDBOX_MCP_DEVICE, revokedAt: null },
+      data: { revokedAt: new Date() }
     });
-    if (!user) return null;
     let session = await this.prisma.session.findFirst({
       where: {
         userId,
-        deviceName: MCP_SESSION_DEVICE,
+        deviceName,
         revokedAt: null,
         expiresAt: { gt: new Date(Date.now() + 7 * 86400000) }
       }
@@ -115,7 +125,7 @@ export class SandboxSecretsService {
         data: {
           userId,
           authMethod: 'otp',
-          deviceName: MCP_SESSION_DEVICE,
+          deviceName,
           expiresAt: new Date(Date.now() + 60 * 86400000)
         }
       });

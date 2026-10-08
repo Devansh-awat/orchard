@@ -110,7 +110,7 @@ func TestWriteOrchardSSHConfig(t *testing.T) {
 		"  User dev\n" +
 		"  IdentityFile ~/.orchard/ssh/id_ed25519\n" +
 		"  IdentitiesOnly yes\n" +
-		"  ProxyCommand \"/opt/orchard 100%%/bin/orchard\" sandbox proxy --host %n\n" +
+		"  ProxyCommand \"/opt/orchard 100%%/bin/orchard\" sandbox proxy --host '%n'\n" +
 		"  StrictHostKeyChecking accept-new\n" +
 		"  UserKnownHostsFile ~/.orchard/ssh/known_hosts\n" +
 		"  ServerAliveInterval 30\n"
@@ -238,7 +238,7 @@ func TestSandboxSSHConfigInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg := readFile(t, p.Config()); !strings.Contains(cfg, "  ProxyCommand \""+exe+"\" sandbox proxy --host %n\n") {
+	if cfg := readFile(t, p.Config()); !strings.Contains(cfg, "  ProxyCommand \""+exe+"\" sandbox proxy --host '%n'\n") {
 		t.Errorf("config missing ProxyCommand for %s:\n%s", exe, cfg)
 	}
 	if got := readFile(t, p.UserSSHConfig()); !strings.HasPrefix(got, orchardSSHInclude+"\n") {

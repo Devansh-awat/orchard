@@ -91,9 +91,12 @@ export function cloneEnv(
   const skipped = own.filter((v) => referencedResourceRefs([v]).length > 0).map((v) => v.key);
   const kept = own.filter((v) => !skipped.includes(v.key));
   const { resolved } = resolveEnvVars(kept, shared, {});
+  const secretKeys = resolved.filter((v) => v.secret).map((v) => v.key);
   return {
-    env: resolved.map((v) => ({ key: v.key, value: v.value, secret: Boolean(v.secret) })),
-    skipped
+    env: resolved
+      .filter((v) => !v.secret)
+      .map((v) => ({ key: v.key, value: v.value, secret: false })),
+    skipped: [...skipped, ...secretKeys]
   };
 }
 

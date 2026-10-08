@@ -274,7 +274,7 @@ test('on vercel the host token only replaces the host placeholder, so a guest pu
   assert.equal(policy.allow['github.com'].length, 1);
   assert.deepEqual(rule.match.headers, [
     {
-      key: { regex: '(?i)^authorization$' },
+      key: { exact: 'authorization' },
       value: { exact: basic(VERCEL_HOST_GIT_PLACEHOLDER) }
     }
   ]);
@@ -304,6 +304,25 @@ test('a guest git exec on vercel carries the token on stdin, never in the comman
   assert.ok(staged, 'stdin is staged as a file');
   assert.equal(staged!.mode, 0o600);
   assert.match(command.args[1], /rm -f "\$f"/);
+  const wrapper = command.args[1];
+  assert.ok(
+    wrapper.indexOf('rm -f "$f"') < wrapper.indexOf('"$@"'),
+    'the staged stdin is removed before the command runs'
+  );
+  const dir = mkdtempSync(join(tmpdir(), 'orchard-stdin-'));
+  const staged2 = join(dir, 'in');
+  writeFileSync(staged2, 'hello\n');
+  const out = execFileSync('/bin/sh', [
+    '-c',
+    wrapper,
+    'sh',
+    staged2,
+    'sh',
+    '-c',
+    'cat; if test -e "$0"; then echo still-there; fi',
+    staged2
+  ]).toString();
+  assert.equal(out, 'hello\n');
 });
 
 test('provisioning creates a persistent box with no tokens in create, then stages secrets and bootstraps', async () => {
@@ -596,4 +615,30 @@ test('the bootstrap refuses an unverified bridge and checks the archive hash', (
   );
   assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /sha256sum -c -/);
   assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /"\$bridge_source \$bridge_sha" > "\$bridge_marker"/);
+});
+
+test('the bridge is picked for the machine architecture with a checksum for each', async () => {
+  const { runner } = vercelRunner(ROW);
+  runner.bridgeChecksums = new BridgeChecksumResolver(
+    async () =>
+      new Response(
+        `${'ab'.repeat(32)}  ${bridgeArchiveName()}\n${'ef'.repeat(32)}  ${bridgeArchiveName(undefined, 'arm64')}\n`
+      )
+  );
+  const arm = await runner.bridgeArm64();
+  assert.deepEqual(arm, { url: defaultBridgeBinaryUrl(undefined, 'arm64'), sha: 'ef'.repeat(32) });
+  assert.match(arm!.url, /linux_arm64\.tar\.gz$/);
+  const env = runner.bootstrapEnv(ROW, SECRETS, await runner.bridgeSha256(), arm);
+  assert.equal(env.ORCHARD_BRIDGE_SHA256, 'ab'.repeat(32));
+  assert.equal(env.ORCHARD_BRIDGE_URL_ARM64, arm!.url);
+  assert.equal(env.ORCHARD_BRIDGE_SHA256_ARM64, 'ef'.repeat(32));
+  const custom = vercelRunner(ROW, {
+    values: {
+      bridgeBinaryUrl: 'https://mirror.example.com/orchard.tar.gz',
+      bridgeBinarySha256: 'cd'.repeat(32)
+    }
+  }).runner;
+  assert.equal(await custom.bridgeArm64(), null);
+  assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /case "\$\(uname -m\)" in/);
+  assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /ORCHARD_BRIDGE_SHA256_ARM64/);
 });

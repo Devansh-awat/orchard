@@ -442,6 +442,7 @@
   "POST /integrations/slack/commands": "public",
   "POST /integrations/slack/events": "public",
   "POST /integrations/slack/link": "authenticated",
+  "POST /integrations/slack/link/preview": "authenticated",
   "POST /invitations/:token/accept": "authenticated",
   "POST /invitations/:token/decline": "authenticated",
   "POST /invitations/accept-pending": "authenticated",

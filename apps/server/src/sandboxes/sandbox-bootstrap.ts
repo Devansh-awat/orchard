@@ -21,12 +21,20 @@ export const SANDBOX_BRIDGE_CLI_VERSION = '0.22.0';
 
 const BRIDGE_RELEASES = 'https://github.com/LeafdTK/orchard-releases/releases/download';
 
-export function bridgeArchiveName(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
-  return `orchard_${version}_linux_amd64.tar.gz`;
+export type BridgeArch = 'amd64' | 'arm64';
+
+export function bridgeArchiveName(
+  version: string = SANDBOX_BRIDGE_CLI_VERSION,
+  arch: BridgeArch = 'amd64'
+): string {
+  return `orchard_${version}_linux_${arch}.tar.gz`;
 }
 
-export function defaultBridgeBinaryUrl(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
-  return `${BRIDGE_RELEASES}/v${version}/${bridgeArchiveName(version)}`;
+export function defaultBridgeBinaryUrl(
+  version: string = SANDBOX_BRIDGE_CLI_VERSION,
+  arch: BridgeArch = 'amd64'
+): string {
+  return `${BRIDGE_RELEASES}/v${version}/${bridgeArchiveName(version, arch)}`;
 }
 
 export function bridgeChecksumsUrl(version: string = SANDBOX_BRIDGE_CLI_VERSION): string {
@@ -206,7 +214,7 @@ mkdir -p /etc/sudoers.d
 echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev
 chmod 440 /etc/sudoers.d/dev
 
-if [ ! -e /persist/home/.profile ]; then
+if [ ! -e /persist/home/.profile ] && [ ! -e /persist/home/.bash_profile ] && [ ! -e /persist/home/.bashrc ]; then
   cp -a /etc/skel/. /persist/home/ 2>/dev/null || true
 fi
 if [ "$(stat -c %U /persist/home/. 2>/dev/null)" != "dev" ]; then
@@ -334,8 +342,16 @@ fi
 bridge_bin=/usr/local/bin/orchard
 bridge_marker=/usr/local/share/orchard/bridge-source
 if [ -s /orchard-init/bridge-token ]; then
-  bridge_source="\${ORCHARD_BRIDGE_URL:-}"
-  bridge_sha="\${ORCHARD_BRIDGE_SHA256:-}"
+  case "$(uname -m)" in
+    aarch64|arm64)
+      bridge_source="\${ORCHARD_BRIDGE_URL_ARM64:-}"
+      bridge_sha="\${ORCHARD_BRIDGE_SHA256_ARM64:-}"
+      ;;
+    *)
+      bridge_source="\${ORCHARD_BRIDGE_URL:-}"
+      bridge_sha="\${ORCHARD_BRIDGE_SHA256:-}"
+      ;;
+  esac
   installed_source=$(cat "$bridge_marker" 2>/dev/null || true)
   if [ -n "$bridge_source" ] && [ -z "$bridge_sha" ]; then
     log "no ORCHARD_BRIDGE_SHA256 for $bridge_source; not installing an unverified bridge"

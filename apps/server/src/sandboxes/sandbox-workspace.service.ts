@@ -9,6 +9,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { SandboxConversation } from '@prisma/client';
+import { OPENCODE_RESPONSE_HEADERS, opencodeContentType } from './sandbox-opencode-policy';
+import { parseRepoUrl } from './sandbox-repo-url';
+import { OPENCODE_LOCAL_AUTH, OPENCODE_LOCAL_CURL_AUTH } from './runners/sandbox-init-files';
 import { PrismaService } from '../prisma/prisma.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SandboxProbesService } from './runners/sandbox-probes.service';
@@ -50,6 +53,10 @@ const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const MAX_DIFF_BYTES = 200000;
+
+export function gitOutput(stdout: string): string {
+  return stdout.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, '$1***@').slice(-2000);
+}
 
 export type WorkspaceSandbox = SandboxRowLike & { status: string; repoUrl: string | null };
 
@@ -200,10 +207,12 @@ export class SandboxWorkspaceService {
         },
         (proxyRes) => {
           res.status(proxyRes.statusCode || 502);
-          for (const header of ['content-type', 'cache-control']) {
-            const value = proxyRes.headers[header];
-            if (value) res.setHeader(header, value);
+          res.setHeader('content-type', opencodeContentType(proxyRes.headers['content-type']));
+          for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
+            res.setHeader(name, value);
           }
+          const cacheControl = proxyRes.headers['cache-control'];
+          if (cacheControl) res.setHeader('cache-control', cacheControl);
           res.flushHeaders?.();
           proxyRes.pipe(res);
           proxyRes.on('end', resolve);
@@ -369,7 +378,7 @@ export class SandboxWorkspaceService {
       actorUserId,
       (git) => `${stage}\n${git} commit ${flags} 2>&1`
     );
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async gitUncommit(
@@ -383,7 +392,7 @@ export class SandboxWorkspaceService {
       actorUserId,
       (git) => `${git} reset --soft HEAD~1 2>&1 && ${git} log -1 --oneline 2>&1`
     );
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async gitPush(
@@ -400,7 +409,7 @@ export class SandboxWorkspaceService {
       (git) => `${git} push${flags} origin HEAD 2>&1`,
       { network: true }
     );
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async gitFetch(
@@ -415,7 +424,7 @@ export class SandboxWorkspaceService {
       (git) => `${git} fetch --all --prune 2>&1`,
       { network: true }
     );
-    return { ok: result.ok, output: result.stdout.slice(-2000) || 'up to date' };
+    return { ok: result.ok, output: gitOutput(result.stdout) || 'up to date' };
   }
 
   async gitPull(
@@ -432,7 +441,7 @@ export class SandboxWorkspaceService {
       (git) => `${git} pull${flags} 2>&1`,
       { network: true }
     );
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async gitBranches(
@@ -482,7 +491,7 @@ export class SandboxWorkspaceService {
       ? `git checkout -b ${this.q(branch)}${from} 2>&1`
       : `git checkout ${this.q(branch)} 2>&1`;
     const result = await this.run(sandbox, script, repo);
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async gitDeleteBranch(
@@ -506,7 +515,7 @@ export class SandboxWorkspaceService {
           `git branch ${opts.force ? '-D' : '-d'} ${this.q(branch)} 2>&1`,
           repo
         );
-    return { ok: result.ok, output: result.stdout.slice(-2000) };
+    return { ok: result.ok, output: gitOutput(result.stdout) };
   }
 
   async createPullRequest(
@@ -710,7 +719,7 @@ export class SandboxWorkspaceService {
       return { status: res.status, body: parsed };
     }
     const seconds = Math.max(1, Math.ceil(timeoutMs / 1000));
-    let curl = `curl -s -m ${seconds} -o - -w '\\n@@status@@%{http_code}' -X ${method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}`)} -H 'accept: application/json'`;
+    let curl = `${OPENCODE_LOCAL_AUTH}; curl -s --globoff ${OPENCODE_LOCAL_CURL_AUTH} -m ${seconds} -o - -w '\\n@@status@@%{http_code}' -X ${method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}`)} -H 'accept: application/json'`;
     if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     const result = await this.registry.for(sandbox).exec(ref, ['su', '-l', 'dev', '-c', curl], {
       timeoutMs: timeoutMs + 5000,
@@ -809,15 +818,7 @@ export class SandboxWorkspaceService {
 
   async addRepo(sandbox: WorkspaceSandbox, repoUrl: string): Promise<{ name: string }> {
     this.requireRunning(sandbox);
-    let parsed: URL;
-    try {
-      parsed = new URL(repoUrl);
-    } catch {
-      throw new BadRequestException('repoUrl must be a valid URL');
-    }
-    if (parsed.protocol !== 'https:') {
-      throw new BadRequestException('repoUrl must be an https URL');
-    }
+    const parsed = parseRepoUrl(repoUrl);
     const name =
       parsed.pathname
         .replace(/\.git$/, '')
@@ -849,7 +850,7 @@ export class SandboxWorkspaceService {
     payload: string | null
   ): Promise<void> {
     const isSse = String(req.headers.accept || '').includes('text/event-stream');
-    let curl = `curl -si -N -X ${req.method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
+    let curl = `${OPENCODE_LOCAL_AUTH}; curl -si -N --globoff ${OPENCODE_LOCAL_CURL_AUTH} -X ${req.method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
     if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     if (!isSse) curl += ' -m 110';
     const ref: SandboxRef = refOf(sandbox);
@@ -878,7 +879,10 @@ export class SandboxWorkspaceService {
       const statusMatch = head.match(/^HTTP\/[\d.]+ (\d{3})/);
       const typeMatch = head.match(/^content-type:\s*(.+)$/im);
       res.status(statusMatch ? Number(statusMatch[1]) : 200);
-      res.setHeader('content-type', typeMatch ? typeMatch[1].trim() : 'application/json');
+      res.setHeader('content-type', opencodeContentType(typeMatch ? typeMatch[1] : undefined));
+      for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
+        res.setHeader(name, value);
+      }
       if (isSse) {
         res.setHeader('cache-control', 'no-cache');
         res.setHeader('x-accel-buffering', 'no');

@@ -33,7 +33,7 @@ export type LinearClassification =
 
 export function classifyLinearComment(
   body: any,
-  deliveryHeader: string | undefined
+  _deliveryHeader: string | undefined
 ): LinearClassification {
   if (body?.type !== 'Comment' || body?.action !== 'create') {
     return { kind: 'ignore', reason: 'not a new comment' };
@@ -54,7 +54,7 @@ export function classifyLinearComment(
   return {
     kind: 'command',
     command: {
-      deliveryId: deliveryHeader?.trim() || `comment:${data.id}`,
+      deliveryId: `comment:${data.id}`,
       commentId: data.id,
       parentId: typeof data.parentId === 'string' ? data.parentId : null,
       issueId,

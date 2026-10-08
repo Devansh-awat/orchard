@@ -6,7 +6,13 @@ import * as encoding from 'lib0/encoding';
 import { MemoryLiveBackend, MemoryLiveNetwork } from '../src/sandboxes/live/live-backend';
 import { KICK_CODE, LiveSocket, SandboxLiveHub } from '../src/sandboxes/live/live-hub';
 import { YRoomFiles, YRoomManager, contentHash } from '../src/sandboxes/live/yjs-rooms';
-import { parseClientFrame, parseRoom, stripControl } from '../src/sandboxes/live/live-protocol';
+import {
+  FrameQueue,
+  LIVE_LIMITS,
+  parseClientFrame,
+  parseRoom,
+  stripControl
+} from '../src/sandboxes/live/live-protocol';
 import { normalizeRelativePath } from '../src/sandboxes/sandbox-session-commands';
 import type { SandboxRole } from '../src/sandboxes/sandbox-access.service';
 import {
@@ -310,6 +316,59 @@ test('yjs updates from viewers are dropped and guest edits are saved', async () 
   await backend.close();
 });
 
+test('a guest cannot grow a shared doc outside its text or alias a room by case', async () => {
+  const network = new MemoryLiveNetwork();
+  const backend = new MemoryLiveBackend(network, 'replica-a');
+  const delivered: Array<{ connId: string; frame: Record<string, any> }> = [];
+  const files = new MemoryFiles();
+  files.files.set('a.ts', 'hello');
+  const rooms = new YRoomManager(
+    backend,
+    {
+      replicaId: 'replica-a',
+      deliverLocal: (connId, frame) => delivered.push({ connId, frame }),
+      publish: async () => {}
+    },
+    files,
+    { saveDebounceMs: 10, pollMs: 60_000, ownerHeartbeatMs: 60_000 }
+  );
+  const room = `file:${SID}:a.ts`;
+  const guest = {
+    replica: 'replica-a',
+    connId: 'g',
+    userId: 'g',
+    role: 'collaborator' as const,
+    name: 'g',
+    color: 1
+  };
+  await rooms.handleLocal(SANDBOX, room, guest, { t: 'yjs-reload' });
+  const junk = updateFrame((doc) => doc.getText('junk').insert(0, 'x'.repeat(10_000)));
+  await rooms.handleLocal(SANDBOX, room, guest, { t: 'yjs', b64: junk, gen: null });
+  assert.ok(delivered.some((d) => d.connId === 'g' && d.frame.t === 'yjs-reset'));
+  assert.equal(rooms.roomText(room), 'hello');
+  const dangling = new Y.Doc();
+  dangling.getText('content').insert(0, 'a');
+  const before = Y.encodeStateVector(dangling);
+  dangling.getText('content').insert(1, 'b');
+  const tail = Y.encodeStateAsUpdate(dangling, before);
+  const encoder = encoding.createEncoder();
+  syncProtocol.writeUpdate(encoder, tail);
+  delivered.length = 0;
+  await rooms.handleLocal(SANDBOX, room, guest, {
+    t: 'yjs',
+    b64: Buffer.from(encoding.toUint8Array(encoder)).toString('base64'),
+    gen: null
+  });
+  assert.ok(delivered.some((d) => d.connId === 'g' && d.frame.t === 'yjs-reset'));
+  assert.equal(rooms.roomText(room), 'hello');
+  const lettered = 'abcdef12-2222-4222-8222-222222222222';
+  assert.equal(parseRoom(`file:${lettered.toUpperCase()}:a.ts`, normalizeRelativePath), null);
+  assert.ok(parseRoom(`file:${lettered}:a.ts`, normalizeRelativePath));
+  assert.ok(LIVE_LIMITS.room.burst <= 20 && LIVE_LIMITS.room.rate <= 2);
+  await rooms.close();
+  await backend.close();
+});
+
 test('preview tokens are single use and bound to their host and port', async () => {
   const backend = new MemoryLiveBackend();
   const secret = 'x'.repeat(32);
@@ -425,4 +484,38 @@ test('a session needs attention only when it stops working', () => {
   assert.equal(needsAttention(undefined, 'idle'), false);
   assert.equal(needsAttention('idle', 'idle'), false);
   assert.equal(needsAttention('idle', 'working'), false);
+});
+
+test('a connection cannot pile up unprocessed frames while one is slow', async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const seen: number[] = [];
+  const queue = new FrameQueue(3);
+  assert.equal(
+    queue.push(() => gate.then(() => seen.push(1))),
+    true
+  );
+  assert.equal(
+    queue.push(async () => seen.push(2)),
+    true
+  );
+  assert.equal(
+    queue.push(async () => seen.push(3)),
+    true
+  );
+  assert.equal(
+    queue.push(async () => seen.push(4)),
+    false
+  );
+  release();
+  await queue.idle();
+  assert.deepEqual(seen, [1, 2, 3]);
+  assert.equal(
+    queue.push(async () => seen.push(5)),
+    true
+  );
+  await queue.idle();
+  assert.deepEqual(seen, [1, 2, 3, 5]);
 });

@@ -119,6 +119,28 @@ export function isUnderDomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+const SECOND_LEVEL_SUFFIXES = new Set([
+  'co',
+  'com',
+  'net',
+  'org',
+  'gov',
+  'edu',
+  'ac',
+  'or',
+  'ne',
+  'go'
+]);
+
+export function siteOf(host: string): string {
+  const labels = host.toLowerCase().replace(/\.$/, '').split('.').filter(Boolean);
+  if (labels.length <= 2 || /^[\d.]+$/.test(host)) return labels.join('.');
+  const tld = labels[labels.length - 1];
+  const second = labels[labels.length - 2];
+  const take = tld.length === 2 && SECOND_LEVEL_SUFFIXES.has(second) ? 3 : 2;
+  return labels.slice(-take).join('.');
+}
+
 export function parsePreviewHost(
   hostHeader: string | undefined,
   domain: string | null
@@ -400,6 +422,9 @@ export function previewDomainConflict(
     }
     if (isUnderDomain(host, preview)) {
       return `previewDomain must not be a parent of ${label}; previews could read or set its cookies`;
+    }
+    if (siteOf(preview) === siteOf(host)) {
+      return `previewDomain must be on a different site than ${label}; same-site previews could set cookies for Orchard and open its websockets with the session cookie`;
     }
   }
   return null;

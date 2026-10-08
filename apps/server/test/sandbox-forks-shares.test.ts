@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { ForbiddenException } from '@nestjs/common';
 import { requestAuthStorage } from '../src/auth/request-context';
 import type { SandboxMinRole, SandboxRoleOptions } from '../src/sandboxes/sandbox-access.service';
 import { SandboxAgentController } from '../src/sandboxes/sandbox-agent.controller';
@@ -508,6 +509,7 @@ function forkHarness(opts: {
   count?: number;
   enabled?: boolean;
   callerId?: string;
+  canCreate?: boolean;
 }) {
   const created: any[] = [];
   const sessionCopies: any[] = [];
@@ -587,6 +589,9 @@ function forkHarness(opts: {
   };
   const registry = { for: () => runner, enabled: () => opts.enabled ?? true };
   const sandboxes = {
+    requireCanCreateIn: async () => {
+      if (opts.canCreate === false) throw new ForbiddenException('Guests cannot create sandboxes');
+    },
     sandboxCap: async () => (opts.cap === undefined ? 3 : opts.cap),
     dto: async (row: any) => ({ id: row.id, name: row.name, status: row.status })
   };
@@ -629,7 +634,9 @@ test('a fork respects the per-user cap and is refused to anyone but the real own
   await assert.rejects(full.service.fork(full.access, null, {}), /Sandbox limit reached/);
   const admin = forkHarness({ callerId: 'superadmin' });
   await assert.rejects(admin.service.fork(admin.access, null, {}), /Only the machine's owner/);
-  assert.equal(full.created.length + admin.created.length, 0);
+  const demoted = forkHarness({ canCreate: false });
+  await assert.rejects(demoted.service.fork(demoted.access, null, {}), /Guests cannot create/);
+  assert.equal(full.created.length + admin.created.length + demoted.created.length, 0);
 });
 
 test('a fork copies the machine row and its sessions, minus agent chat ids, and queues ids only', async () => {
@@ -755,66 +762,73 @@ test('kubernetes fork without a matching VolumeSnapshotClass fails terminally an
 });
 
 test('kubernetes fork snapshots the source home, then restores the new CR from it', async () => {
-  const k = k8sRunner(FORK_ROW, {
-    claim: {
-      metadata: { name: `home-sbx-${SBX}` },
-      spec: { storageClassName: 'ceph-block', volumeMode: 'Block' }
-    },
-    classes: [
-      { metadata: { name: 'ceph-snap' }, driver: 'rbd.csi.ceph.com' },
-      {
-        metadata: {
-          name: 'ceph-default',
-          annotations: { 'snapshot.storage.kubernetes.io/is-default-class': 'true' }
-        },
-        driver: 'rbd.csi.ceph.com'
-      }
-    ]
-  });
-  const cr = k.handlers.get(SANDBOX_OP_CR)!;
-  await cr({
-    dedupeKey: 'c',
-    opType: SANDBOX_OP_CR,
-    manifest: { sandboxId: FORK },
-    deploymentId: null
-  });
-  assert.equal(k.applied.length, 0, 'the CR waits for the snapshot');
-  await k.handlers.get(SANDBOX_OP_FORK_SNAPSHOT)!({
-    dedupeKey: 'x',
-    opType: SANDBOX_OP_FORK_SNAPSHOT,
-    manifest: { sandboxId: FORK, sourceSandboxId: SBX },
-    deploymentId: null
-  });
-  const snapshot = k.applied[0];
-  assert.equal(snapshot.kind, 'VolumeSnapshot');
-  assert.equal(snapshot.spec.volumeSnapshotClassName, 'ceph-default');
-  assert.equal(snapshot.spec.source.persistentVolumeClaimName, `home-sbx-${SBX}`);
-  assert.equal(snapshot.metadata.labels['orchard.my/sandbox-id'], FORK);
-  assert.deepEqual(forkSnapshotOf(k.current().runnerState), {
-    name: `sbx-${FORK}-fork`,
-    volumeMode: 'Block',
-    storageClassName: 'ceph-block'
-  });
-  assert.ok(k.enqueued.some((e) => e.opType === SANDBOX_OP_CR && e.manifest.sandboxId === FORK));
-  await cr({
-    dedupeKey: 'c',
-    opType: SANDBOX_OP_CR,
-    manifest: { sandboxId: FORK },
-    deploymentId: null
-  });
-  const applied = k.applied[1];
-  assert.equal(applied.kind, 'Sandbox');
-  const claim = applied.spec.volumeClaimTemplates[0];
-  assert.deepEqual(claim.spec.dataSource, {
-    apiGroup: 'snapshot.storage.k8s.io',
-    kind: 'VolumeSnapshot',
-    name: `sbx-${FORK}-fork`
-  });
-  assert.equal(claim.spec.volumeMode, 'Block');
-  assert.equal(claim.spec.storageClassName, 'ceph-block');
-  assert.equal(claim.spec.resources.requests.storage, '10Gi');
-  noSecrets(k.applied);
-  noSecrets(k.enqueued);
+  const prevRuntime = process.env.SANDBOX_RUNTIME_CLASS;
+  process.env.SANDBOX_RUNTIME_CLASS = 'kata';
+  try {
+    const k = k8sRunner(FORK_ROW, {
+      claim: {
+        metadata: { name: `home-sbx-${SBX}` },
+        spec: { storageClassName: 'ceph-block', volumeMode: 'Block' }
+      },
+      classes: [
+        { metadata: { name: 'ceph-snap' }, driver: 'rbd.csi.ceph.com' },
+        {
+          metadata: {
+            name: 'ceph-default',
+            annotations: { 'snapshot.storage.kubernetes.io/is-default-class': 'true' }
+          },
+          driver: 'rbd.csi.ceph.com'
+        }
+      ]
+    });
+    const cr = k.handlers.get(SANDBOX_OP_CR)!;
+    await cr({
+      dedupeKey: 'c',
+      opType: SANDBOX_OP_CR,
+      manifest: { sandboxId: FORK },
+      deploymentId: null
+    });
+    assert.equal(k.applied.length, 0, 'the CR waits for the snapshot');
+    await k.handlers.get(SANDBOX_OP_FORK_SNAPSHOT)!({
+      dedupeKey: 'x',
+      opType: SANDBOX_OP_FORK_SNAPSHOT,
+      manifest: { sandboxId: FORK, sourceSandboxId: SBX },
+      deploymentId: null
+    });
+    const snapshot = k.applied[0];
+    assert.equal(snapshot.kind, 'VolumeSnapshot');
+    assert.equal(snapshot.spec.volumeSnapshotClassName, 'ceph-default');
+    assert.equal(snapshot.spec.source.persistentVolumeClaimName, `home-sbx-${SBX}`);
+    assert.equal(snapshot.metadata.labels['orchard.my/sandbox-id'], FORK);
+    assert.deepEqual(forkSnapshotOf(k.current().runnerState), {
+      name: `sbx-${FORK}-fork`,
+      volumeMode: 'Block',
+      storageClassName: 'ceph-block'
+    });
+    assert.ok(k.enqueued.some((e) => e.opType === SANDBOX_OP_CR && e.manifest.sandboxId === FORK));
+    await cr({
+      dedupeKey: 'c',
+      opType: SANDBOX_OP_CR,
+      manifest: { sandboxId: FORK },
+      deploymentId: null
+    });
+    const applied = k.applied[1];
+    assert.equal(applied.kind, 'Sandbox');
+    const claim = applied.spec.volumeClaimTemplates[0];
+    assert.deepEqual(claim.spec.dataSource, {
+      apiGroup: 'snapshot.storage.k8s.io',
+      kind: 'VolumeSnapshot',
+      name: `sbx-${FORK}-fork`
+    });
+    assert.equal(claim.spec.volumeMode, 'Block');
+    assert.equal(claim.spec.storageClassName, 'ceph-block');
+    assert.equal(claim.spec.resources.requests.storage, '10Gi');
+    noSecrets(k.applied);
+    noSecrets(k.enqueued);
+  } finally {
+    if (prevRuntime === undefined) delete process.env.SANDBOX_RUNTIME_CLASS;
+    else process.env.SANDBOX_RUNTIME_CLASS = prevRuntime;
+  }
 });
 
 test('a plain sandbox CR never carries a snapshot data source', () => {

@@ -139,7 +139,10 @@ export class SlackKickoffService implements OnModuleInit, OnModuleDestroy {
     const verb = text.toLowerCase();
     if (!text || verb === 'help') return { response_type: 'ephemeral', text: USAGE };
     if (verb === 'link') {
-      const url = await this.links.createLink(teamId, slackUserId);
+      const url = await this.links.createLink(teamId, slackUserId, Date.now(), {
+        userName: body.user_name,
+        teamDomain: body.team_domain
+      });
       return { response_type: 'ephemeral', text: linkPrompt(url, false) };
     }
     if (verb === 'unlink') {
@@ -153,7 +156,10 @@ export class SlackKickoffService implements OnModuleInit, OnModuleDestroy {
     }
     const userId = await this.links.mappedUser(teamId, slackUserId);
     if (!userId) {
-      const url = await this.links.createLink(teamId, slackUserId);
+      const url = await this.links.createLink(teamId, slackUserId, Date.now(), {
+        userName: body.user_name,
+        teamDomain: body.team_domain
+      });
       return { response_type: 'ephemeral', text: linkPrompt(url, true) };
     }
     const dedupe = typeof body.trigger_id === 'string' ? body.trigger_id : null;

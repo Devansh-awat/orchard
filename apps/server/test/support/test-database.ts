@@ -22,6 +22,14 @@ function dotenvValue(file: string, key: string): string | null {
   return null;
 }
 
+function isLoopbackHost(raw: string): boolean {
+  const host = raw.toLowerCase().replace(/\.$/, '');
+  if (LOCAL_HOSTS.has(host) || host.endsWith('.localhost')) return true;
+  if (/^127(\.\d{1,3}){0,3}$/.test(host)) return true;
+  const bare = host.replace(/^\[|\]$/g, '');
+  return bare === '::1' || /^::ffff:(7f[0-9a-f]{2}:[0-9a-f]{1,4}|127(\.\d{1,3}){3})$/.test(bare);
+}
+
 export function isDefaultLocalDatabase(url: string): boolean {
   let parsed: URL;
   try {
@@ -29,9 +37,17 @@ export function isDefaultLocalDatabase(url: string): boolean {
   } catch {
     return false;
   }
-  const host = parsed.hostname.toLowerCase();
-  const local = LOCAL_HOSTS.has(host) || host.endsWith('.localhost');
-  return local && (parsed.port || DEFAULT_PORT) === DEFAULT_PORT;
+  return isLoopbackHost(parsed.hostname) && (parsed.port || DEFAULT_PORT) === DEFAULT_PORT;
+}
+
+function isThrowawayCandidate(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return isLoopbackHost(parsed.hostname) && (parsed.port || DEFAULT_PORT) !== DEFAULT_PORT;
 }
 
 export function resolveTestDatabase(
@@ -56,6 +72,11 @@ export function resolveTestDatabase(
   if (isDefaultLocalDatabase(url)) {
     return {
       refused: `${source} points at localhost:5432, which is usually a port-forward to a real database. This test writes and deletes rows, so it refuses to run there. Set TEST_DATABASE_URL to a throwaway Postgres instead.`
+    };
+  }
+  if (!isThrowawayCandidate(url)) {
+    return {
+      refused: `${source} is not a loopback database on a non-default port, so it could be a real one. This test writes and deletes rows; set TEST_DATABASE_URL to a throwaway Postgres to run it.`
     };
   }
   return { url, source };

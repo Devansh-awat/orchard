@@ -508,7 +508,8 @@ test('opencode proxy paths map to the right minimum role', () => {
     ['POST', 'session', 'collaborator'],
     ['GET', 'file?path=x', 'collaborator'],
     ['GET', 'find/file?query=x', 'collaborator'],
-    ['GET', 'config', 'collaborator'],
+    ['GET', 'config', 'owner'],
+    ['GET', 'config/providers', 'collaborator'],
     ['PATCH', 'config', 'owner'],
     ['PUT', 'auth/anthropic', 'owner'],
     ['POST', 'mcp', 'owner'],
@@ -585,6 +586,18 @@ test('sandbox roles resolve from ownership, membership and org admin rights', as
   assert.equal(await role('exMember'), null, 'a member who left the org loses the share');
   assert.equal(await role('stranger'), null);
   assert.equal(await role(''), null);
+});
+
+test('an owner who left the organization loses the machine with it', async () => {
+  const { service, sandbox } = accessService({
+    ownerId: 'gone',
+    superadmins: ['root'],
+    orgMembers: { admin: 'admin' }
+  });
+  const role = async (userId: string) => (await service.sandboxRoleOf(sandbox, userId)).role;
+  assert.equal(await role('gone'), null);
+  assert.equal(await role('admin'), 'admin', 'org admins keep lifecycle on the orphaned machine');
+  assert.equal(await role('root'), 'owner');
 });
 
 test('an org-scoped session or a project-scoped token reaches no other tenant sandbox', async () => {

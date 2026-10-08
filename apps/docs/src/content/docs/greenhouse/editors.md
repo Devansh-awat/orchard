@@ -35,7 +35,7 @@ It does four things, and is safe to run again:
      User dev
      IdentityFile ~/.orchard/ssh/id_ed25519
      IdentitiesOnly yes
-     ProxyCommand "/path/to/orchard" sandbox proxy --host %n
+     ProxyCommand "/path/to/orchard" sandbox proxy --host '%n'
      StrictHostKeyChecking accept-new
      UserKnownHostsFile ~/.orchard/ssh/known_hosts
      ServerAliveInterval 30

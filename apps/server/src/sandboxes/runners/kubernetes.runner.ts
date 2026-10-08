@@ -54,12 +54,13 @@ import {
   forkSourceOf,
   specOf
 } from './sandbox-runner';
-import { SandboxSecretsService, sandboxSpecHash } from './sandbox-secrets';
+import { SandboxSecretsService, deriveSandboxSecret, sandboxSpecHash } from './sandbox-secrets';
 import {
   GIT_IDENTITY_INIT_FILE,
   authorizedKeysFile,
   gitIdentityFile,
   opencodeAuthJson,
+  opencodeBasicAuth,
   opencodeConfigJson
 } from './sandbox-init-files';
 import {
@@ -881,6 +882,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     if (input.githubToken) data['github-token'] = input.githubToken;
     if (input.claudeToken) data['claude-token'] = input.claudeToken;
     if (input.openaiToken) data['openai-token'] = input.openaiToken;
+    data['opencode-password'] = input.opencodePassword || '';
     data['setup.sh'] = input.setupScript || '';
     data['opencode-auth.json'] = opencodeAuthJson(input.claudeToken);
     data['opencode-config.json'] = opencodeConfigJson(input.mcpToken);
@@ -935,6 +937,11 @@ export class KubernetesSandboxRunner implements SandboxRunner {
         : sandboxHomeMode();
     const storageClassName = forkSnapshot?.storageClassName ?? process.env.SANDBOX_STORAGE_CLASS;
     const runtimeClass = process.env.SANDBOX_RUNTIME_CLASS || '';
+    if (homeMode === 'block' && !runtimeClass) {
+      throw new Error(
+        'This machine has a block-mode home disk, which needs a privileged container and is only safe inside a VM. Set SANDBOX_RUNTIME_CLASS (for example kata) to start it.'
+      );
+    }
     const secretName = this.secretName(spec.podName);
     const secretEnv = (name: string, key: string) => ({
       name,
@@ -1002,6 +1009,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
                     { key: 'setup.sh', path: 'setup.sh' },
                     { key: 'opencode-auth.json', path: 'opencode-auth.json' },
                     { key: 'opencode-config.json', path: 'opencode-config.json' },
+                    { key: 'opencode-password', path: 'opencode-password', mode: 0o600 },
                     { key: ORCHARD_ENV_INIT_FILE, path: ORCHARD_ENV_INIT_FILE, mode: 0o600 },
                     { key: GIT_IDENTITY_INIT_FILE, path: GIT_IDENTITY_INIT_FILE }
                   ],
@@ -1515,7 +1523,12 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     if (process.env.SANDBOX_TUNNEL_MODE === 'portforward') return { kind: 'exec' };
     const ip = await this.resolvePodIp(ref);
     if (!ip) throw new SandboxNotRunningError('Sandbox pod has no address');
-    return { kind: 'url', baseUrl: `http://${ip}:${port}`, headers: {} };
+    const headers: Record<string, string> = {};
+    if (port === SANDBOX_OPENCODE_PORT) {
+      const password = deriveSandboxSecret('opencode-password', ref.id);
+      if (password) headers.authorization = opencodeBasicAuth(password);
+    }
+    return { kind: 'url', baseUrl: `http://${ip}:${port}`, headers };
   }
 
   async openTcp(ref: SandboxRef, port: number): Promise<Duplex> {

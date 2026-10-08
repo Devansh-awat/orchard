@@ -40,7 +40,7 @@ export const GITHUB_NOT_LINKED = {
 export const FALLBACK_GIT_EMAIL = 'sandbox@orchard.dev';
 
 export const GIT_CREDENTIAL_HELPER =
-  '!f(){ [ "$1" = get ] || return 0; echo username=x-access-token; echo "password=$ORCHARD_GIT_TOKEN"; }; f';
+  '!f(){ [ "$1" = get ] || return 0; p=; h=; while IFS= read -r l && [ -n "$l" ]; do case "$l" in protocol=*) p=${l#protocol=};; host=*) h=${l#host=};; esac; done; [ "$p" = https ] && [ "$h" = github.com ] || return 0; echo username=x-access-token; echo "password=$ORCHARD_GIT_TOKEN"; }; f';
 
 export const GIT_TOKEN_EXIT = 70;
 
@@ -105,7 +105,11 @@ export function gitAuthConfig(withToken: boolean): Array<[string, string]> {
 }
 
 export function gitAuthFlags(): string {
-  return gitAuthConfig(true)
+  return [
+    ...gitAuthConfig(true),
+    ['core.hooksPath', '/dev/null'] as [string, string],
+    ['core.fsmonitor', ''] as [string, string]
+  ]
     .map(([key, value]) => `-c ${shellQuote(`${key}=${value}`)}`)
     .join(' ');
 }

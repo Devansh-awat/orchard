@@ -16,6 +16,7 @@ export interface IssueCommentCommand {
   senderId: string;
   senderLogin: string;
   instruction: string;
+  commentId: string | null;
 }
 
 export type IssueCommentClassification =
@@ -61,7 +62,11 @@ export function classifyIssueComment(body: any): IssueCommentClassification {
       issue,
       senderId: String(senderId),
       senderLogin: String(body?.sender?.login ?? body?.comment?.user?.login ?? ''),
-      instruction: parsed.instruction
+      instruction: parsed.instruction,
+      commentId:
+        body?.comment?.id !== undefined && body?.comment?.id !== null
+          ? String(body.comment.id)
+          : null
     }
   };
 }
@@ -95,6 +100,12 @@ export class GithubKickoffService implements OnModuleInit, OnModuleDestroy {
       return { received: true, action: 'ignored', reason: 'duplicate delivery' };
     }
     const { command } = classified;
+    if (
+      command.commentId &&
+      !(await this.kickoff.claimDelivery('github', `comment:${command.commentId}`))
+    ) {
+      return { received: true, action: 'ignored', reason: 'duplicate comment' };
+    }
     const user = await this.prisma.user.findUnique({
       where: { githubId: command.senderId },
       select: { id: true }
@@ -124,11 +135,16 @@ export class GithubKickoffService implements OnModuleInit, OnModuleDestroy {
       issue: githubIssueContext(command.owner, command.repo, command.issue),
       contentAuthorUserId: author?.id ?? null
     });
+    if (result.kind !== 'started') {
+      this.logger.warn(
+        `github kickoff for ${command.owner}/${command.repo}#${command.issue.number} failed: ${result.reason}`
+      );
+    }
     const mention = command.senderLogin ? `@${command.senderLogin} ` : '';
     const text =
       result.kind === 'started'
         ? `${mention}started a Greenhouse session for this issue: ${result.url}`
-        : `${mention}I could not start a Greenhouse session: ${result.reason}.`;
+        : `${mention}I could not start a Greenhouse session for this issue. Open Greenhouse in Orchard to see why.`;
     await this.reply(command, text);
   }
 

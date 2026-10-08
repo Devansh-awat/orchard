@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { refOf } from './runners/sandbox-runner';
-import { SandboxesService, type SandboxDto } from './sandboxes.service';
+import { SandboxesService, withRole, type SandboxDto } from './sandboxes.service';
 import type { SandboxAccess } from './sandbox-access.service';
 
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -106,6 +106,7 @@ export class SandboxForkService {
     if (source.desiredState === 'deleted' || source.status === 'deleting') {
       throw new BadRequestException('Sandbox is being deleted');
     }
+    await this.sandboxes.requireCanCreateIn(source.organizationId, userId);
     const runner = this.registry.for(source);
     if (!this.registry.enabled(runner.id)) {
       throw new ConflictException(`${runner.label} sandboxes are turned off on this server`);
@@ -211,8 +212,8 @@ export class SandboxForkService {
         },
         include: WITH_IDENTITY
       });
-      return { ...(await this.sandboxes.dto(failed)), myRole: 'owner' };
+      return withRole(await this.sandboxes.dto(failed), 'owner');
     }
-    return { ...(await this.sandboxes.dto(row)), myRole: 'owner' };
+    return withRole(await this.sandboxes.dto(row), 'owner');
   }
 }

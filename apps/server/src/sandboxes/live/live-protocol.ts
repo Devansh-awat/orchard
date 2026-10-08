@@ -175,8 +175,8 @@ export function parseRoom(
   const rest = room.slice(5);
   const colon = rest.indexOf(':');
   if (colon !== 36) return null;
-  const sid = rest.slice(0, 36).toLowerCase();
-  if (!isSessionId(sid)) return null;
+  const sid = rest.slice(0, 36);
+  if (sid !== sid.toLowerCase() || !isSessionId(sid)) return null;
   const path = normalizePath(rest.slice(37));
   if (!path || path !== rest.slice(37)) return null;
   return { sid, path };
@@ -287,7 +287,14 @@ export class TokenBucket {
   }
 }
 
-export type LimitClass = 'draft' | 'comment' | 'presence' | 'yjs' | 'awareness' | 'control';
+export type LimitClass =
+  | 'draft'
+  | 'comment'
+  | 'presence'
+  | 'yjs'
+  | 'awareness'
+  | 'control'
+  | 'room';
 
 export const LIVE_LIMITS: Record<LimitClass, { rate: number; burst: number }> = {
   draft: { rate: 10, burst: 10 },
@@ -295,7 +302,8 @@ export const LIVE_LIMITS: Record<LimitClass, { rate: number; burst: number }> = 
   presence: { rate: 20, burst: 20 },
   yjs: { rate: 60, burst: 120 },
   awareness: { rate: 30, burst: 30 },
-  control: { rate: 10, burst: 20 }
+  control: { rate: 10, burst: 20 },
+  room: { rate: 1, burst: 16 }
 };
 
 export const LIMIT_CLASS: Record<LiveMessageType, LimitClass> = {
@@ -318,4 +326,36 @@ export function createLimiters(now: () => number = Date.now): Record<LimitClass,
     out[key] = new TokenBucket(LIVE_LIMITS[key].rate, LIVE_LIMITS[key].burst, now);
   }
   return out;
+}
+
+export const LIVE_MAX_PENDING_FRAMES = 256;
+
+export class FrameQueue {
+  private tail: Promise<void> = Promise.resolve();
+
+  private pending = 0;
+
+  constructor(
+    private readonly max: number = LIVE_MAX_PENDING_FRAMES,
+    private readonly onError: (e: unknown) => void = () => {}
+  ) {}
+
+  push(task: () => Promise<unknown>): boolean {
+    if (this.pending >= this.max) return false;
+    this.pending += 1;
+    this.tail = this.tail
+      .then(task)
+      .then(
+        () => undefined,
+        (e) => this.onError(e)
+      )
+      .finally(() => {
+        this.pending -= 1;
+      });
+    return true;
+  }
+
+  idle(): Promise<void> {
+    return this.tail;
+  }
 }

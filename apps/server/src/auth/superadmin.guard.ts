@@ -19,6 +19,7 @@ import {
   ApiTokenScopeName
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
+import { sandboxMcpOrgScope } from './sandbox-mcp-scope';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
 
 /**
@@ -187,7 +188,7 @@ export class SuperAdminGuard implements CanActivate {
       }
       const actingSession = await this.prisma.session.findUnique({
         where: { id: actingSessionId },
-        select: { userId: true }
+        select: { userId: true, deviceName: true }
       });
       this.sessionsService.touchSession(actingSessionId).catch(() => {});
 
@@ -215,15 +216,24 @@ export class SuperAdminGuard implements CanActivate {
       if (!actingSession || actingSession.userId !== dbUserId) {
         throw new UnauthorizedException('Acting user does not own that session');
       }
-      request['auth'] = { userId: dbUserId, viaMcpGateway: true };
+      const gatewayOrgScope = sandboxMcpOrgScope(actingSession.deviceName);
+      if (gatewayOrgScope && deniedToOrgScopedSession(request.method, request.path)) {
+        throw new ForbiddenException('This sandbox MCP token is scoped to a single organization');
+      }
+      request['auth'] = {
+        userId: dbUserId,
+        viaMcpGateway: true,
+        ...(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {})
+      };
       request['user'] = {
         sub: dbUserId,
         email: actingEmail,
         externalAuthId: actingExternalAuthId,
         sessionId: actingSessionId,
-        viaMcpGateway: true
+        viaMcpGateway: true,
+        ...(gatewayOrgScope ? { orgScope: gatewayOrgScope } : {})
       };
-      publishAuthContext({});
+      publishAuthContext(gatewayOrgScope ? { sessionOrgId: gatewayOrgScope } : {});
 
       const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(
         REQUIRES_SUPERADMIN_KEY,
@@ -231,6 +241,9 @@ export class SuperAdminGuard implements CanActivate {
       );
       if (requiresAuth && !requiresSuperadminGw) {
         return true;
+      }
+      if (gatewayOrgScope) {
+        throw new ForbiddenException('Superadmin access required');
       }
       const sa = await this.prisma.user.findFirst({
         where: { id: dbUserId },

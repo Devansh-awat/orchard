@@ -306,6 +306,30 @@ test('the real git binary takes the actor token from the helper and never the in
   assert.ok(!noToken.stdout.toString().includes(HOST_TOKEN), 'no host fallback without a token');
 });
 
+test('the credential helper only answers github.com over https and network git skips repo hooks', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orchard-git-'));
+  const env = {
+    PATH: process.env.PATH ?? '',
+    HOME: dir,
+    GIT_CONFIG_GLOBAL: join(dir, 'none'),
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    ...gitConfigEnv(gitAuthConfig(true)),
+    ORCHARD_GIT_TOKEN: GUEST_TOKEN
+  };
+  const fill = (input: string) =>
+    spawnSync('git', ['credential', 'fill'], { env, input }).stdout.toString();
+  assert.ok(!fill('protocol=https\nhost=evil.example\n\n').includes(GUEST_TOKEN));
+  assert.ok(!fill('protocol=http\nhost=github.com\n\n').includes(GUEST_TOKEN));
+  assert.ok(!fill('protocol=https\nhost=github.com.evil.example\n\n').includes(GUEST_TOKEN));
+  assert.match(
+    fill('protocol=https\nhost=github.com\npath=acme/api.git\n\n'),
+    new RegExp(GUEST_TOKEN)
+  );
+  assert.match(gitAuthFlags(), /core\.hooksPath=\/dev\/null/);
+  assert.match(gitAuthFlags(), /'core\.fsmonitor='/);
+});
+
 test('guest terminals get their own tmux session and their own git env; host terminals are unchanged', () => {
   const base = { sessionId: SID, worktreePath: '/persist/home/.worktrees/app/fix', index: '0' };
   const host = sandboxTerminalCommand({ ...base, mode: 'rw' }, ENGINE).join(' ');

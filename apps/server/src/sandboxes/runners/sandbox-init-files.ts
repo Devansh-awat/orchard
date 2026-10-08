@@ -8,6 +8,16 @@ export const SECRET_INIT_FILES: readonly string[] = [
   ORCHARD_ENV_INIT_FILE
 ];
 
+export const OPENCODE_LOCAL_AUTH =
+  'oc_env=/persist/home/.config/opencode/server.env; OPENCODE_SERVER_PASSWORD=; [ -r "$oc_env" ] && . "$oc_env"';
+
+export const OPENCODE_LOCAL_CURL_AUTH =
+  '${OPENCODE_SERVER_PASSWORD:+-u "opencode:$OPENCODE_SERVER_PASSWORD"}';
+
+export function opencodeBasicAuth(password: string): string {
+  return `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`;
+}
+
 export function opencodeAuthJson(claudeToken: string | null): string {
   if (!claudeToken) return '{}';
   return JSON.stringify({

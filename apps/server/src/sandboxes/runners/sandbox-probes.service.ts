@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SANDBOX_PHASE_FILE } from '../sandbox-bootstrap';
 import { SandboxNotRunningError, SandboxRowLike, refOf } from './sandbox-runner';
 import { SandboxRunnerRegistry } from './sandbox-runner.registry';
+import { OPENCODE_LOCAL_AUTH, OPENCODE_LOCAL_CURL_AUTH } from './sandbox-init-files';
 
-const BUSY_SCRIPT =
-  "pgrep -af 'claude|codex' | grep -vE 'pgrep|opencode serve' | head -1; curl -s -m 3 http://127.0.0.1:4096/session/status | grep -o '\"type\":\"busy\"' | head -1";
+export const BUSY_SCRIPT = `pgrep -af 'claude|codex' | grep -vE 'pgrep|opencode serve' | head -1; ${OPENCODE_LOCAL_AUTH}; curl -s -m 3 ${OPENCODE_LOCAL_CURL_AUTH} http://127.0.0.1:4096/session/status | grep -o '"type":"busy"' | head -1`;
 
 @Injectable()
 export class SandboxProbesService {

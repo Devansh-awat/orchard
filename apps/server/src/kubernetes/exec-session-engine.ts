@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../auth/sessions.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
+import { originAllowed, platformOrigins } from '../sandboxes/live/live-auth';
 import type { PtyHandle } from '../sandboxes/runners/sandbox-runner';
 import {
   DETACH_GRACE_MS,
@@ -125,6 +126,8 @@ interface ConnectionContext {
   userId: string;
   recheckAuth: () => Promise<boolean>;
   browserSessionId: string | undefined;
+  sessionOrgScope: string | undefined;
+  tokenAuthCtx: TokenAuthContext | null;
   requested: string;
   isProxyHop: boolean;
   proto: Proto;
@@ -207,6 +210,9 @@ export async function authenticateUpgrade(
       : undefined;
   const token = cookies['session_token'] || bearer;
   if (!token) return unauthorized;
+  if (cookies['session_token'] && !originAllowed(req.headers.origin, platformOrigins(), 'cookie')) {
+    return { reject: 403, message: 'Forbidden' };
+  }
   try {
     const { payload } = await jwtVerify(token, deps.jwtSecret);
     const sessionId = assertBrowserSession(payload);
@@ -278,6 +284,74 @@ export async function authenticateUpgrade(
       isProxyHop: false
     };
   }
+}
+
+export const PROXY_HOP_TYPE = 'exec-proxy';
+
+export async function signProxyHopToken(
+  secret: Uint8Array,
+  hop: {
+    sid: string;
+    userId: string;
+    browserSessionId: string | undefined;
+    sessionOrgScope: string | undefined;
+    tokenAuthCtx: TokenAuthContext | null;
+  }
+): Promise<string> {
+  return new SignJWT({
+    type: PROXY_HOP_TYPE,
+    sid: hop.sid,
+    ...(hop.browserSessionId ? { sessionId: hop.browserSessionId } : {}),
+    ...(hop.sessionOrgScope ? { orgScope: hop.sessionOrgScope } : {}),
+    ...(hop.tokenAuthCtx ? { tac: hop.tokenAuthCtx } : {})
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(hop.userId)
+    .setAudience(PROXY_HOP_TYPE)
+    .setIssuedAt()
+    .setExpirationTime('30s')
+    .sign(secret);
+}
+
+function hopTokenAuthCtx(value: unknown): TokenAuthContext | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const strings = (x: unknown) =>
+    Array.isArray(x) ? x.filter((i): i is string => typeof i === 'string') : [];
+  return {
+    apiTokenId: typeof v.apiTokenId === 'string' ? v.apiTokenId : '',
+    tokenScopes: strings(v.tokenScopes),
+    tokenProjectIds: strings(v.tokenProjectIds)
+  };
+}
+
+export async function verifyProxyHopToken(
+  header: string,
+  secret: Uint8Array,
+  requested: string
+): Promise<EngineAuth | Rejection> {
+  const { payload } = await jwtVerify(header, secret, { audience: PROXY_HOP_TYPE });
+  const sub = payload.sub;
+  const sid = payload.sid;
+  const parsed = requested ? parseHandle(requested) : null;
+  if (
+    (payload.type !== undefined && payload.type !== PROXY_HOP_TYPE) ||
+    typeof sub !== 'string' ||
+    typeof sid !== 'string' ||
+    !parsed ||
+    parsed.id !== sid
+  ) {
+    return { reject: 401, message: 'Unauthorized' };
+  }
+  return {
+    userId: sub,
+    actorEmail: null,
+    browserSessionId:
+      typeof payload.sessionId === 'string' && payload.sessionId ? payload.sessionId : undefined,
+    sessionOrgScope: typeof payload.orgScope === 'string' ? payload.orgScope : undefined,
+    tokenAuthCtx: hopTokenAuthCtx(payload.tac),
+    isProxyHop: true
+  };
 }
 
 export class ExecSessionEngine {
@@ -361,6 +435,8 @@ export class ExecSessionEngine {
       userId: auth.userId,
       recheckAuth: resolved.recheckAuth,
       browserSessionId: auth.browserSessionId,
+      sessionOrgScope: auth.sessionOrgScope,
+      tokenAuthCtx: auth.tokenAuthCtx,
       requested,
       isProxyHop: auth.isProxyHop,
       proto: handshake.proto,
@@ -377,24 +453,7 @@ export class ExecSessionEngine {
 
   private async verifyProxyHop(header: string, requested: string): Promise<EngineAuth | Rejection> {
     try {
-      const { payload } = await jwtVerify(header, this.deps.jwtSecret, { audience: 'exec-proxy' });
-      const sub = payload.sub;
-      const sid = payload.sid;
-      const parsed = requested ? parseHandle(requested) : null;
-      if (typeof sub !== 'string' || typeof sid !== 'string' || !parsed || parsed.id !== sid) {
-        return { reject: 401, message: 'Unauthorized' };
-      }
-      return {
-        userId: sub,
-        actorEmail: null,
-        browserSessionId:
-          typeof payload.sessionId === 'string' && payload.sessionId
-            ? payload.sessionId
-            : undefined,
-        sessionOrgScope: undefined,
-        tokenAuthCtx: null,
-        isProxyHop: true
-      };
+      return await verifyProxyHopToken(header, this.deps.jwtSecret, requested);
     } catch {
       return { reject: 401, message: 'Unauthorized' };
     }
@@ -803,16 +862,13 @@ export class ExecSessionEngine {
   ): Promise<boolean> {
     let token: string;
     try {
-      token = await new SignJWT({
+      token = await signProxyHopToken(this.deps.jwtSecret, {
         sid: sessionId,
-        ...(ctx.browserSessionId ? { sessionId: ctx.browserSessionId } : {})
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setSubject(ctx.userId)
-        .setAudience('exec-proxy')
-        .setIssuedAt()
-        .setExpirationTime('30s')
-        .sign(this.deps.jwtSecret);
+        userId: ctx.userId,
+        browserSessionId: ctx.browserSessionId,
+        sessionOrgScope: ctx.sessionOrgScope,
+        tokenAuthCtx: ctx.tokenAuthCtx
+      });
     } catch {
       return false;
     }

@@ -23,7 +23,7 @@ import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
-import { SandboxesService } from './sandboxes.service';
+import { SandboxesService, withRole } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
 import { SandboxConversationsService } from './sandbox-conversations.service';
@@ -522,7 +522,7 @@ export class SandboxesController {
   async get(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
     const access = await this.access.requireSandboxRole(id, user.id, 'viewer');
-    return { ...(await this.sandboxes.dto(access.sandbox)), myRole: access.role };
+    return withRole(await this.sandboxes.dto(access.sandbox), access.role);
   }
 
   @Patch(':id')

@@ -399,6 +399,29 @@ test('ports come from /proc, filtered to dev processes, matched to the session w
   ]);
 });
 
+test('ports map a symlinked /persist back to the logical worktree path', () => {
+  const out = [
+    '@@home@@',
+    '/vercel/sandbox/orchard/home',
+    '@@listen@@',
+    '00000000:0BB8 111',
+    '00000000:0BB9 222',
+    '@@sock@@',
+    '/proc/10/fd socket:[111]',
+    '/proc/11/fd socket:[222]',
+    '@@proc@@',
+    '10 /vercel/sandbox/orchard/home/.worktrees/app/fix/web node',
+    '11 /vercel/sandbox/orchard/homework python3'
+  ].join('\n');
+  assert.deepEqual(
+    parsePortsOutput(out, '/persist/home/.worktrees/app/fix').map((p) => [p.port, p.inSession]),
+    [
+      [3000, true],
+      [3001, false]
+    ]
+  );
+});
+
 test('terminal commands attach to per-session tmux names and viewers are read-only', () => {
   const base = { sessionId: SID, worktreePath: '/persist/home/.worktrees/app/fix' };
   const rw = sandboxTerminalCommand({ ...base, index: '0', mode: 'rw' }, SID2).join(' ');

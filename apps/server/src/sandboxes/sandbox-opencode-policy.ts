@@ -38,8 +38,26 @@ const PROMPT_RE = /^\/session\/(ses_[A-Za-z0-9]{1,60})\/(prompt_async|message|co
 
 export const OPENCODE_MESSAGE_ID_RE = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 
+const SAFE_RAW_PATH = /^[A-Za-z0-9_.~/%-]*$/;
+
+const SAFE_CONTENT_TYPES = new Set(['application/json', 'text/event-stream', 'text/plain']);
+
+export const OPENCODE_RESPONSE_HEADERS: Record<string, string> = {
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
+  'cross-origin-resource-policy': 'same-origin'
+};
+
+export function opencodeContentType(raw: string | string[] | undefined): string {
+  if (raw === undefined) return 'application/json';
+  if (Array.isArray(raw)) return 'application/octet-stream';
+  const base = raw.split(';')[0].trim().toLowerCase();
+  return SAFE_CONTENT_TYPES.has(base) ? base : 'application/octet-stream';
+}
+
 export function normalizeOpencodePath(suffix: string): string | null {
   const raw = suffix.split('?')[0] ?? '';
+  if (!SAFE_RAW_PATH.test(raw)) return null;
   let decoded: string;
   try {
     decoded = decodeURIComponent(raw);
@@ -64,10 +82,11 @@ export function opencodeMinRole(method: string, suffix: string): SandboxMinRole 
   if (path === null) return 'owner';
   const verb = (method || '').toUpperCase();
   if (OWNER_ONLY.some((re) => re.test(path))) {
-    if ((verb === 'GET' || verb === 'HEAD') && /^\/(config|mcp|provider)(\/|$)/.test(path)) {
+    if ((verb === 'GET' || verb === 'HEAD') && /^\/config\/providers$/.test(path)) {
       return 'collaborator';
     }
-    if ((verb === 'GET' || verb === 'HEAD') && /^\/global\/event$/.test(path)) return 'viewer';
+    if ((verb === 'GET' || verb === 'HEAD') && /^\/(global\/event|doc)$/.test(path))
+      return 'viewer';
     return 'owner';
   }
   if (verb === 'GET' || verb === 'HEAD') {

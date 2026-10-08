@@ -107,11 +107,25 @@ Taken literally, that means:
   agent uses, anything in the host's dotfiles.
 - **Terminals can be watched.** Whatever the host types in a terminal, a guest
   can watch, and the other way round.
+- **The agent's Orchard access is the host's.** The agent holds an Orchard MCP
+  token for the host, issued for this machine and limited to its organization. A
+  guest can read it and act as the host in that organization (projects,
+  deployments, variables) until it is rotated. Removing a guest, or making them
+  read-only, revokes it and issues a new one; the agent's Orchard tools pick it
+  up when the machine next starts.
 - **A guest's own GitHub token is used inside the host's machine** when the guest
   pushes. A push from the workspace gets it for that one command, and it is never
   written to the machine's disk or git config. In the guest's own terminals it
-  sits in the shell's environment while the terminal is open. Either way the
-  command runs on a machine the host controls.
+  sits in the shell's environment while the terminal is open, where the host,
+  other guests and the agent can read it. Either way the command runs on a
+  machine the host controls.
+- **Org admins can look in.** An admin of the machine's organization can see
+  sessions, transcripts, files and diffs, watch terminals and open previews,
+  without an invite.
+- **Removing a guest is not a reset.** Their terminals are ended and the agent's
+  Orchard token is rotated, but anything they changed or copied while they had
+  access stays changed or copied. Rebuild the machine if you no longer trust
+  someone who had access.
 
 Share a machine with people you would hand your laptop to. For anyone else, use a
 [read-only share link](#read-only-share-links), which shows the transcript and the

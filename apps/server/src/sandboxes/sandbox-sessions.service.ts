@@ -1081,7 +1081,9 @@ export class SandboxSessionsService {
     this.requireRunning(sandbox);
     const runner = this.registry.for(sandbox);
     const [result, declared] = await Promise.all([
-      runner.exec(refOf(sandbox), ['/bin/sh', '-c', buildPortsScript()], { timeoutMs: 15_000 }),
+      runner.exec(refOf(sandbox), ['su', 'dev', '-s', '/bin/sh', '-c', buildPortsScript()], {
+        timeoutMs: 15_000
+      }),
       this.probeScripts(sandbox, row).then(
         (probe) => probe.config.ports,
         () => [] as number[]

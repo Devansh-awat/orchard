@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -37,7 +38,11 @@ func fetchSandboxHostKeys(ctx context.Context, cl *api.Client, id string) ([]str
 		if len(fields) < 2 {
 			continue
 		}
-		keys = append(keys, fields[0]+" "+fields[1])
+		key := fields[0] + " " + fields[1]
+		if !validHostKey(key) {
+			continue
+		}
+		keys = append(keys, key)
 	}
 	return keys, nil
 }
@@ -73,7 +78,19 @@ func knownHostsLineMatches(hostsField, alias string) bool {
 	return false
 }
 
+var (
+	knownHostsAliasRe = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,252}$`)
+	hostKeyRe         = regexp.MustCompile(`^(ssh-[a-z0-9-]+|ecdsa-sha2-[a-z0-9-]+|sk-[a-z0-9@.-]+) [A-Za-z0-9+/]+={0,2}$`)
+)
+
+func validHostKey(key string) bool {
+	return hostKeyRe.MatchString(key)
+}
+
 func rewriteKnownHosts(content, alias string, keys []string) string {
+	if !knownHostsAliasRe.MatchString(alias) {
+		return content
+	}
 	var kept []string
 	sc := bufio.NewScanner(strings.NewReader(content))
 	sc.Buffer(make([]byte, 64*1024), 1<<20)

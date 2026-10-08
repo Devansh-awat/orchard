@@ -280,13 +280,21 @@ export class GreenhouseIssuesService implements OnModuleInit, OnModuleDestroy {
   async githubTokenFor(
     userId: string,
     target: { owner: string; repo: string },
-    sandboxRemote: { owner: string; repo: string } | null
+    sandboxRemote: { owner: string; repo: string } | null,
+    hostId: string | null = null
   ): Promise<string | null> {
     const sameRepo =
       !!sandboxRemote &&
       sandboxRemote.owner.toLowerCase() === target.owner.toLowerCase() &&
       sandboxRemote.repo.toLowerCase() === target.repo.toLowerCase();
-    if (sameRepo) return this.github.resolveRepoToken(userId, target.owner, target.repo);
+    if (sameRepo) {
+      for (const candidate of [...new Set([userId, hostId].filter((id): id is string => !!id))]) {
+        const allowed = await this.github
+          .verifyUserCanAccessRepo(candidate, target.owner, target.repo)
+          .catch(() => false);
+        if (allowed) return this.github.resolveRepoToken(userId, target.owner, target.repo);
+      }
+    }
     return this.github.getValidUserToken(userId);
   }
 
@@ -299,7 +307,7 @@ export class GreenhouseIssuesService implements OnModuleInit, OnModuleDestroy {
     const remote = await this.sessions.repoRemote(sandbox, repo);
     const parsed = parseIssueRef(ref, remote);
     if (!parsed) return null;
-    const token = await this.githubTokenFor(userId, parsed, remote);
+    const token = await this.githubTokenFor(userId, parsed, remote, sandbox.userId);
     if (!token) return null;
     const issue = await this.githubIssues.issue(token, parsed.owner, parsed.repo, parsed.number);
     if (!issue) return null;
@@ -325,7 +333,7 @@ export class GreenhouseIssuesService implements OnModuleInit, OnModuleDestroy {
     }
     const remote = await this.sessions.repoRemote(sandbox, repo);
     if (!remote) return { repo: null, issues: [] };
-    const token = await this.githubTokenFor(userId, remote, remote);
+    const token = await this.githubTokenFor(userId, remote, remote, sandbox.userId);
     if (!token) {
       throw new BadRequestException('Link your GitHub account to browse issues');
     }

@@ -565,6 +565,10 @@ export class SandboxLiveHub {
             this.send(conn, { t: 'error', code: 'too_many_rooms' });
             return;
           }
+          if (!conn.limiters.room.take()) {
+            this.send(conn, { t: 'error', code: 'rate_limited' });
+            return;
+          }
           conn.rooms.add(frame.room);
         }
         const yframe =

@@ -1,4 +1,5 @@
 import {
+  type BridgeArch,
   SANDBOX_BRIDGE_CLI_VERSION,
   SHA256_RE,
   bridgeArchiveName,
@@ -14,9 +15,9 @@ const MAX_CHECKSUMS_BYTES = 64 * 1024;
 export type ChecksumFetch = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
 
 export class BridgeChecksumResolver {
-  private pending: Promise<string | null> | null = null;
+  private pending: Promise<Partial<Record<BridgeArch, string>> | null> | null = null;
 
-  private value: string | null = null;
+  private values: Partial<Record<BridgeArch, string>> | null = null;
 
   private failedAt = 0;
 
@@ -25,33 +26,42 @@ export class BridgeChecksumResolver {
     private readonly version: string = SANDBOX_BRIDGE_CLI_VERSION
   ) {}
 
-  async resolve(bridgeUrl: string, configured: string | null): Promise<string | null> {
+  async resolve(
+    bridgeUrl: string,
+    configured: string | null,
+    arch: BridgeArch = 'amd64'
+  ): Promise<string | null> {
     const pinned = (configured || '').trim().toLowerCase();
     if (pinned) return SHA256_RE.test(pinned) ? pinned : null;
-    if (bridgeUrl !== defaultBridgeBinaryUrl(this.version)) return null;
-    if (this.value) return this.value;
+    if (bridgeUrl !== defaultBridgeBinaryUrl(this.version, arch)) return null;
+    if (this.values) return this.values[arch] ?? null;
     if (this.failedAt && Date.now() - this.failedAt < FAILURE_RETRY_MS) return null;
     if (!this.pending) {
-      this.pending = this.fetchChecksum().finally(() => {
+      this.pending = this.fetchChecksums().finally(() => {
         this.pending = null;
       });
     }
-    return this.pending;
+    return (await this.pending)?.[arch] ?? null;
   }
 
-  private async fetchChecksum(): Promise<string | null> {
+  private async fetchChecksums(): Promise<Partial<Record<BridgeArch, string>> | null> {
     try {
       const res = await this.fetcher(bridgeChecksumsUrl(this.version), {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
       });
       if (!res.ok) throw new Error(`checksums.txt returned ${res.status}`);
       const text = (await res.text()).slice(0, MAX_CHECKSUMS_BYTES);
-      const sha = checksumFor(text, bridgeArchiveName(this.version));
-      if (!sha)
+      const values: Partial<Record<BridgeArch, string>> = {};
+      for (const arch of ['amd64', 'arm64'] as const) {
+        const sha = checksumFor(text, bridgeArchiveName(this.version, arch));
+        if (sha) values[arch] = sha;
+      }
+      if (!values.amd64) {
         throw new Error(`checksums.txt has no entry for ${bridgeArchiveName(this.version)}`);
-      this.value = sha;
+      }
+      this.values = values;
       this.failedAt = 0;
-      return sha;
+      return values;
     } catch {
       this.failedAt = Date.now();
       return null;

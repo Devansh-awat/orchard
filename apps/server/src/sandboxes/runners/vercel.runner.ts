@@ -11,7 +11,7 @@ import { InstanceSettingsService } from '../../instance-settings/instance-settin
 import { ApplyQueueService } from '../../apply/apply-queue.service';
 import { ApplyExecutorService, ApplyItemInput } from '../../apply/apply-executor.service';
 import { INSTANCE_SETTING_KEY } from '../sandbox-cr';
-import { defaultBridgeBinaryUrl } from '../sandbox-bootstrap';
+import { SANDBOX_PHASE_FILE, defaultBridgeBinaryUrl } from '../sandbox-bootstrap';
 import { BridgeChecksumResolver } from './bridge-checksum';
 import {
   ExecOptions,
@@ -34,7 +34,7 @@ import {
   forkSourceOf
 } from './sandbox-runner';
 import { SandboxSecretsService, deriveSandboxSecret } from './sandbox-secrets';
-import { SECRET_INIT_FILES, stagedInitFiles } from './sandbox-init-files';
+import { SECRET_INIT_FILES, opencodeBasicAuth, stagedInitFiles } from './sandbox-init-files';
 import { deriveObservedStatus } from './sandbox-status';
 
 export const VERCEL_OP_PROVISION = 'vercel.provision';
@@ -74,6 +74,8 @@ const HEALTH_ATTEMPTS = 20;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const USER_RE = /^[a-z_][a-z0-9_-]*$/;
 const MISSING_FILE_EXIT = 44;
+const PROCESS_GROUP_WRAPPER =
+  'setsid -w "$@" <&0 & pid=$!; trap \'kill -TERM -- -$pid $pid 2>/dev/null\' TERM INT HUP; wait $pid; s=$?; if kill -0 $pid 2>/dev/null; then wait $pid; s=$?; fi; exit $s';
 
 export type VercelSandboxStatus =
   | 'pending'
@@ -275,7 +277,7 @@ export function githubNetworkPolicy(token: string | null): unknown {
           match: {
             headers: [
               {
-                key: { regex: '(?i)^authorization$' },
+                key: { exact: 'authorization' },
                 value: { exact: basicAuth(VERCEL_HOST_GIT_PLACEHOLDER) }
               }
             ]
@@ -287,10 +289,6 @@ export function githubNetworkPolicy(token: string | null): unknown {
       '*': []
     }
   };
-}
-
-export function opencodeBasicAuth(password: string): string {
-  return `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`;
 }
 
 function shellQuote(s: string): string {
@@ -977,10 +975,19 @@ export class VercelSandboxRunner implements SandboxRunner {
     return sha;
   }
 
+  async bridgeArm64(): Promise<{ url: string; sha: string } | null> {
+    const { bridgeUrl } = this.settings();
+    if (bridgeUrl !== defaultBridgeBinaryUrl()) return null;
+    const url = defaultBridgeBinaryUrl(undefined, 'arm64');
+    const sha = await this.bridgeChecksums.resolve(url, null, 'arm64');
+    return sha ? { url, sha } : null;
+  }
+
   bootstrapEnv(
     row: { repoUrl: string | null },
     secrets: SandboxSecrets,
-    bridgeSha256: string | null = null
+    bridgeSha256: string | null = null,
+    arm64: { url: string; sha: string } | null = null
   ): Record<string, string> {
     return {
       ORCHARD_INIT_STAGE: VERCEL_INIT_STAGE,
@@ -991,7 +998,10 @@ export class VercelSandboxRunner implements SandboxRunner {
       OPENAI_API_KEY: secrets.openaiToken || '',
       GIT_TOKEN: secrets.githubToken ? VERCEL_HOST_GIT_PLACEHOLDER : '',
       ORCHARD_BRIDGE_URL: this.settings().bridgeUrl,
-      ...(bridgeSha256 ? { ORCHARD_BRIDGE_SHA256: bridgeSha256 } : {})
+      ...(bridgeSha256 ? { ORCHARD_BRIDGE_SHA256: bridgeSha256 } : {}),
+      ...(arm64
+        ? { ORCHARD_BRIDGE_URL_ARM64: arm64.url, ORCHARD_BRIDGE_SHA256_ARM64: arm64.sha }
+        : {})
     };
   }
 
@@ -1002,17 +1012,20 @@ export class VercelSandboxRunner implements SandboxRunner {
   ): Promise<void> {
     const files = stagedInitFiles(secrets, { requireHttpsMcp: true });
     await session.writeFiles(
-      Object.entries(files).map(([name, content]) => ({
-        path: `${VERCEL_INIT_STAGE}/${name}`,
-        content: Buffer.from(content, 'utf8'),
-        mode: SECRET_INIT_FILES.includes(name) ? 0o600 : 0o644
-      })),
+      [
+        ...Object.entries(files).map(([name, content]) => ({
+          path: `${VERCEL_INIT_STAGE}/${name}`,
+          content: Buffer.from(content, 'utf8'),
+          mode: SECRET_INIT_FILES.includes(name) ? 0o600 : 0o644
+        })),
+        { path: SANDBOX_PHASE_FILE, content: Buffer.from('starting'), mode: 0o644 }
+      ],
       { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
     );
     await session.runCommand({
       cmd: 'bash',
       args: [`${VERCEL_INIT_STAGE}/bootstrap.sh`],
-      env: this.bootstrapEnv(row, secrets, await this.bridgeSha256()),
+      env: this.bootstrapEnv(row, secrets, await this.bridgeSha256(), await this.bridgeArm64()),
       sudo: true,
       detached: true,
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
@@ -1183,7 +1196,13 @@ export class VercelSandboxRunner implements SandboxRunner {
     });
     return {
       cmd: '/bin/sh',
-      args: ['-c', 'f=$1; shift; "$@" < "$f"; s=$?; rm -f "$f"; exit $s', 'sh', path, ...command]
+      args: [
+        '-c',
+        'f=$1; shift; exec < "$f" || exit 1; rm -f "$f"; exec "$@"',
+        'sh',
+        path,
+        ...command
+      ]
     };
   }
 
@@ -1230,8 +1249,8 @@ export class VercelSandboxRunner implements SandboxRunner {
     return this.withSession(ref, async (session) => {
       const { cmd, args } = await this.withStdin(session, command, opts.stdin);
       const running = await session.runCommand({
-        cmd,
-        args,
+        cmd: '/bin/sh',
+        args: ['-c', PROCESS_GROUP_WRAPPER, 'sh', cmd, ...args],
         env: opts.env,
         sudo: true,
         detached: true,

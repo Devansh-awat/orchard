@@ -46,3 +46,21 @@ test('the guard reads DATABASE_URL from .env the way Prisma would', () => {
   const db = resolveTestDatabase({}, [file]);
   assert.ok('refused' in db && db.refused.includes(file));
 });
+
+test('DATABASE_URL only counts as a test database when it is loopback on another port', () => {
+  for (const url of [
+    'postgresql://u@127.1:5432/db',
+    'postgresql://u@127.0.0.2/db',
+    'postgresql://u@localhost.:5432/db',
+    'postgresql://u@[::ffff:7f00:1]:5432/db',
+    'postgresql://u@[::ffff:127.0.0.1]/db',
+    'postgresql://u@db.orchard.svc.cluster.local:5432/orchard',
+    'postgresql://u@prod.example.com:15432/orchard',
+    'not a url'
+  ]) {
+    const db = resolveTestDatabase({ DATABASE_URL: url }, none);
+    assert.ok('refused' in db, url);
+  }
+  const ok = resolveTestDatabase({ DATABASE_URL: 'postgresql://t@localhost:55440/t' }, none);
+  assert.ok('url' in ok);
+});

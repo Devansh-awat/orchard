@@ -85,16 +85,22 @@ export class SandboxAccessService {
     if (await this.authz.isSuperAdmin(userId)) {
       return { role: 'owner', orgAdmin: true, superadmin: true };
     }
-    if (sandbox.userId === userId) return { role: 'owner', orgAdmin: false, superadmin: false };
-    if (!sandbox.organizationId) return { role: null, orgAdmin: false, superadmin: false };
+    if (!sandbox.organizationId) {
+      if (sandbox.userId === userId) return { role: 'owner', orgAdmin: false, superadmin: false };
+      return { role: null, orgAdmin: false, superadmin: false };
+    }
+    const owner = sandbox.userId === userId;
     const [org, member] = await Promise.all([
       this.authz.getOrgAccess(sandbox.organizationId, userId).catch(() => null),
-      this.prisma.sandboxMember.findUnique({
-        where: { sandboxId_userId: { sandboxId: sandbox.id, userId } },
-        select: { role: true }
-      })
+      owner
+        ? Promise.resolve(null)
+        : this.prisma.sandboxMember.findUnique({
+            where: { sandboxId_userId: { sandboxId: sandbox.id, userId } },
+            select: { role: true }
+          })
     ]);
     if (!org) return { role: null, orgAdmin: false, superadmin: false };
+    if (owner) return { role: 'owner', orgAdmin: false, superadmin: false };
     const orgAdmin = org.isAdmin;
     if (member?.role === 'collaborator')
       return { role: 'collaborator', orgAdmin, superadmin: false };

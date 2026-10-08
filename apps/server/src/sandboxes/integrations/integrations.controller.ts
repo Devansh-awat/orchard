@@ -49,48 +49,68 @@ export class IntegrationsController {
     return user;
   }
 
+  private requireAccountSession(opts: { refuseApiTokens?: boolean } = {}) {
+    const ctx = requestAuthStorage.getStore();
+    if (
+      ctx?.sessionOrgId ||
+      ctx?.tokenProjectIds?.length ||
+      (opts.refuseApiTokens && ctx?.apiTokenId)
+    ) {
+      throw new ForbiddenException('Manage linked accounts from a regular Orchard session');
+    }
+  }
+
   @Get('users/me/integrations')
   async linked(@Req() req: any) {
     const user = await this.resolveUser(req);
     return this.issues.linkedIntegrations(user.id);
   }
 
+  @Post('integrations/slack/link/preview')
+  async previewSlackLink(@Req() req: any, @Body() body: { token?: unknown }) {
+    this.requireAccountSession({ refuseApiTokens: true });
+    await this.resolveUser(req);
+    return this.slackLinks.preview(body?.token);
+  }
+
   @Post('integrations/slack/link')
   async linkSlack(@Req() req: any, @Body() body: { token?: unknown }) {
-    const ctx = requestAuthStorage.getStore();
-    if (ctx?.sessionOrgId || ctx?.tokenProjectIds?.length) {
-      throw new ForbiddenException('Link Slack from a regular Orchard session');
-    }
+    this.requireAccountSession({ refuseApiTokens: true });
     const user = await this.resolveUser(req);
     return this.slackLinks.confirm(user.id, body?.token);
   }
 
   @Delete('users/me/integrations/slack')
   async unlinkSlack(@Req() req: any) {
+    this.requireAccountSession();
     const user = await this.resolveUser(req);
     return this.slackLinks.unlinkUser(user.id);
   }
 
   @Get('users/me/integrations/linear')
   async linearStatus(@Req() req: any) {
+    this.requireAccountSession();
     const user = await this.resolveUser(req);
     return this.issues.linearStatus(user.id);
   }
 
   @Put('users/me/integrations/linear')
   async connectLinear(@Req() req: any, @Body() body: { apiKey?: unknown }) {
+    this.requireAccountSession({ refuseApiTokens: true });
     const user = await this.resolveUser(req);
     return this.issues.connectLinear(user.id, body?.apiKey);
   }
 
   @Delete('users/me/integrations/linear')
   async disconnectLinear(@Req() req: any) {
+    this.requireAccountSession();
     const user = await this.resolveUser(req);
     return this.issues.disconnectLinear(user.id);
   }
 
   @Get('integrations/linear/issues')
   async linearIssues(@Req() req: any, @Query('q') q?: string) {
+    this.requireAccountSession();
     const user = await this.resolveUser(req);
     return this.issues.linearIssues(user.id, q);
   }

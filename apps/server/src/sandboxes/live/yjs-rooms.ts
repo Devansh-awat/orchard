@@ -153,6 +153,45 @@ function fromB64(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, 'base64'));
 }
 
+export function yjsUpdateAllowed(doc: YModule.Doc, update: Uint8Array): boolean {
+  let decoded: ReturnType<typeof YModule.decodeUpdate>;
+  try {
+    decoded = Y.decodeUpdate(update);
+  } catch {
+    return false;
+  }
+  const next = new Map<number, number>(Y.decodeStateVector(Y.encodeStateVector(doc)));
+  const ordered = [...decoded.structs].sort(
+    (a, b) => a.id.client - b.id.client || a.id.clock - b.id.clock
+  );
+  for (const struct of ordered) {
+    if (struct instanceof Y.Skip) return false;
+    const have = next.get(struct.id.client) ?? 0;
+    if (struct.id.clock > have) return false;
+    next.set(struct.id.client, Math.max(have, struct.id.clock + struct.length));
+  }
+  const known = (id: { client: number; clock: number } | null) =>
+    !id || id.clock < (next.get(id.client) ?? 0);
+  for (const struct of decoded.structs) {
+    if (!(struct instanceof Y.Item)) continue;
+    if (struct.parentSub !== null) return false;
+    const parent: unknown = struct.parent;
+    if (parent !== null && parent !== YROOM_TEXT) return false;
+    if (
+      !(struct.content instanceof Y.ContentString || struct.content instanceof Y.ContentDeleted)
+    ) {
+      return false;
+    }
+    if (!known(struct.origin) || !known(struct.rightOrigin)) return false;
+  }
+  for (const [client, deletes] of decoded.ds.clients) {
+    for (const range of deletes) {
+      if (range.clock + range.len > (next.get(client) ?? 0)) return false;
+    }
+  }
+  return true;
+}
+
 export function splitRoom(room: string): { sid: string; path: string } {
   const rest = room.slice(5);
   return { sid: rest.slice(0, 36), path: rest.slice(37) };
@@ -541,7 +580,14 @@ export class YRoomManager {
     }
     try {
       const update = decoding.readVarUint8Array(decoder);
+      if (!yjsUpdateAllowed(owned.doc, update)) {
+        this.send(owned, entry.sub, { t: 'yjs-reset', room: owned.room, gen: owned.gen });
+        return;
+      }
       Y.applyUpdate(owned.doc, update, key);
+      if (owned.doc.store.pendingStructs || owned.doc.store.pendingDs) {
+        this.reset(owned, 'This file changed in a way the editor could not follow');
+      }
     } catch (e: any) {
       this.warn(`yjs update rejected in ${owned.room}: ${e?.message}`);
       this.send(owned, entry.sub, { t: 'yjs-reset', room: owned.room, gen: owned.gen });

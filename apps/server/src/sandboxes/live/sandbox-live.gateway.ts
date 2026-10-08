@@ -8,7 +8,12 @@ import { AnalyticsService } from '../../analytics/analytics.service';
 import { InstanceSettingsService } from '../../instance-settings/instance-settings.service';
 import { PUBLIC_USER_SELECT, publicUser } from '../sandbox-members.service';
 import { authenticateUpgrade, originAllowed, platformOrigins, rejectUpgrade } from './live-auth';
-import { LIVE_MAX_FRAME_BYTES, isSessionId } from './live-protocol';
+import {
+  FrameQueue,
+  LIVE_MAX_FRAME_BYTES,
+  LIVE_MAX_PENDING_FRAMES,
+  isSessionId
+} from './live-protocol';
 import { SandboxLiveService } from './sandbox-live.service';
 import { SandboxPreviewService } from '../preview/sandbox-preview.service';
 
@@ -100,7 +105,9 @@ export function attachSandboxLiveWebSocket(server: http.Server, app: INestApplic
         } catch {}
       }, PING_MS);
       ping.unref?.();
-      let queue = Promise.resolve();
+      const queue = new FrameQueue(LIVE_MAX_PENDING_FRAMES, (e: any) =>
+        logger.warn(`live message failed: ${e?.message}`)
+      );
       ws.on('pong', () => {
         alive = true;
       });
@@ -113,9 +120,9 @@ export function attachSandboxLiveWebSocket(server: http.Server, app: INestApplic
         const raw = Array.isArray(data)
           ? Buffer.concat(data).toString('utf8')
           : Buffer.from(data as ArrayBuffer).toString('utf8');
-        queue = queue
-          .then(() => live.hub.handleMessage(conn, raw))
-          .catch((e: any) => logger.warn(`live message failed: ${e?.message}`));
+        if (!queue.push(() => live.hub.handleMessage(conn, raw))) {
+          ws.close(1008, 'too many frames');
+        }
       });
       const close = () => {
         clearInterval(ping);

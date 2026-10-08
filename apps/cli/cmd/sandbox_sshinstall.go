@@ -99,7 +99,7 @@ func renderOrchardSSHConfig(exe string) (string, error) {
 		"  User dev",
 		"  IdentityFile ~/.orchard/ssh/id_ed25519",
 		"  IdentitiesOnly yes",
-		"  ProxyCommand \"" + quoted + "\" sandbox proxy --host %n",
+		"  ProxyCommand \"" + quoted + "\" sandbox proxy --host '%n'",
 		"  StrictHostKeyChecking accept-new",
 		"  UserKnownHostsFile ~/.orchard/ssh/known_hosts",
 		"  ServerAliveInterval 30",

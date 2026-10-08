@@ -26,6 +26,20 @@ function validIdentity(teamId: string, slackUserId: string): boolean {
   return SLACK_ID_RE.test(teamId) && SLACK_ID_RE.test(slackUserId);
 }
 
+export function slackLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80);
+  return clean || null;
+}
+
+export interface SlackLinkPreview {
+  teamId: string;
+  slackUserId: string;
+  slackUserName: string | null;
+  teamDomain: string | null;
+  expiresAt: string;
+}
+
 @Injectable()
 export class SlackLinkService {
   constructor(private readonly prisma: PrismaService) {}
@@ -39,7 +53,12 @@ export class SlackLinkService {
     return row?.userId ?? null;
   }
 
-  async createLink(teamId: string, slackUserId: string, nowMs = Date.now()): Promise<string> {
+  async createLink(
+    teamId: string,
+    slackUserId: string,
+    nowMs = Date.now(),
+    labels: { userName?: unknown; teamDomain?: unknown } = {}
+  ): Promise<string> {
     if (!validIdentity(teamId, slackUserId)) {
       throw new BadRequestException('Slack did not say who sent this command');
     }
@@ -54,10 +73,30 @@ export class SlackLinkService {
         tokenHash: hashLinkToken(token),
         teamId,
         slackUserId,
+        slackUserName: slackLabel(labels.userName),
+        teamDomain: slackLabel(labels.teamDomain),
         expiresAt: new Date(nowMs + SLACK_LINK_TTL_MS)
       }
     });
     return slackLinkUrl(token);
+  }
+
+  async preview(token: unknown, nowMs = Date.now()): Promise<SlackLinkPreview> {
+    const expired = new BadRequestException(
+      'This link has expired or was already used. Run /greenhouse link in Slack for a new one.'
+    );
+    if (typeof token !== 'string' || !TOKEN_RE.test(token)) throw expired;
+    const row = await this.prisma.slackLinkToken.findUnique({
+      where: { tokenHash: hashLinkToken(token) }
+    });
+    if (!row || row.usedAt || row.expiresAt.getTime() <= nowMs) throw expired;
+    return {
+      teamId: row.teamId,
+      slackUserId: row.slackUserId,
+      slackUserName: row.slackUserName ?? null,
+      teamDomain: row.teamDomain ?? null,
+      expiresAt: row.expiresAt.toISOString()
+    };
   }
 
   async confirm(

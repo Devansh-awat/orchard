@@ -14,6 +14,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxRunnerRegistry, SandboxRunnerDescription } from './runners/sandbox-runner.registry';
+import { parseRepoUrl } from './sandbox-repo-url';
 import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
@@ -93,6 +94,10 @@ export function toSandboxDto(
     updatedAt: row.updatedAt,
     lastActiveAt: row.lastActiveAt
   };
+}
+
+export function withRole(dto: SandboxDto, role: SandboxRole): SandboxDto {
+  return { ...dto, myRole: role, setupScript: role === 'owner' ? dto.setupScript : null };
 }
 
 @Injectable()
@@ -230,7 +235,7 @@ export class SandboxesService {
     const dtos = await this.dtos(rows);
     const { runners, defaultRunner } = this.registry.describe();
     return {
-      sandboxes: dtos.map((dto, i) => ({ ...dto, myRole: roleOf(rows[i]) })),
+      sandboxes: dtos.map((dto, i) => withRole(dto, roleOf(rows[i]))),
       maxSandboxes,
       runners,
       defaultRunner
@@ -268,6 +273,10 @@ export class SandboxesService {
         'Sandbox name must be a lowercase DNS label (a-z, 0-9, hyphens, max 63 chars)'
       );
     }
+  }
+
+  async requireCanCreateIn(organizationId: string | null, userId: string): Promise<void> {
+    if (organizationId) await this.authz.requireOrgCanCreateProjects(organizationId, userId);
   }
 
   private async resolveOrganization(
@@ -358,15 +367,7 @@ export class SandboxesService {
       );
     }
     if (body.repoUrl !== undefined && body.repoUrl !== null && body.repoUrl !== '') {
-      let parsed: URL;
-      try {
-        parsed = new URL(body.repoUrl);
-      } catch {
-        throw new BadRequestException('repoUrl must be a valid URL');
-      }
-      if (parsed.protocol !== 'https:') {
-        throw new BadRequestException('repoUrl must be an https URL');
-      }
+      parseRepoUrl(body.repoUrl);
     }
     let name = body.name?.trim() || '';
     if (name) {

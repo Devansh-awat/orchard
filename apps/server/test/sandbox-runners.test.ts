@@ -20,6 +20,11 @@ import {
 } from '../src/sandboxes/runners/kubernetes.runner';
 import { SPEC_HASH_ANNOTATION } from '../src/sandboxes/sandbox-cr';
 import type { SandboxRef, SandboxRunner } from '../src/sandboxes/runners/sandbox-runner';
+import {
+  OPENCODE_LOCAL_AUTH,
+  OPENCODE_LOCAL_CURL_AUTH
+} from '../src/sandboxes/runners/sandbox-init-files';
+import { BUSY_SCRIPT } from '../src/sandboxes/runners/sandbox-probes.service';
 
 function collectStrings(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') {
@@ -455,11 +460,49 @@ test('an existing claim template and its volume mode survive a re-apply', () => 
       ]
     }
   };
-  const cr = runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', existing);
-  assert.deepEqual(cr.spec.volumeClaimTemplates, existing.spec.volumeClaimTemplates);
-  const container = cr.spec.podTemplate.spec.containers[0];
-  assert.deepEqual(container.volumeDevices, [{ name: 'home', devicePath: '/dev/sandboxhome' }]);
-  assert.equal(container.env.find((e: any) => e.name === 'SANDBOX_HOME_MODE').value, 'block');
+  const prev = process.env.SANDBOX_RUNTIME_CLASS;
+  process.env.SANDBOX_RUNTIME_CLASS = 'kata';
+  try {
+    const cr = runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', existing);
+    assert.deepEqual(cr.spec.volumeClaimTemplates, existing.spec.volumeClaimTemplates);
+    const container = cr.spec.podTemplate.spec.containers[0];
+    assert.deepEqual(container.volumeDevices, [{ name: 'home', devicePath: '/dev/sandboxhome' }]);
+    assert.equal(container.env.find((e: any) => e.name === 'SANDBOX_HOME_MODE').value, 'block');
+    assert.equal(cr.spec.podTemplate.spec.runtimeClassName, 'kata');
+  } finally {
+    if (prev === undefined) delete process.env.SANDBOX_RUNTIME_CLASS;
+    else process.env.SANDBOX_RUNTIME_CLASS = prev;
+  }
+});
+
+test('a block home never runs as a privileged container without a VM runtime', () => {
+  const { runner } = k8sRunner();
+  const existing = {
+    spec: {
+      volumeClaimTemplates: [{ metadata: { name: 'home' }, spec: { volumeMode: 'Block' } }]
+    }
+  };
+  const prevClass = process.env.SANDBOX_RUNTIME_CLASS;
+  const prevMode = process.env.SANDBOX_HOME_MODE;
+  delete process.env.SANDBOX_RUNTIME_CLASS;
+  try {
+    assert.throws(
+      () => runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', existing),
+      /SANDBOX_RUNTIME_CLASS/
+    );
+    process.env.SANDBOX_HOME_MODE = 'block';
+    assert.throws(
+      () => runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null),
+      /SANDBOX_RUNTIME_CLASS/
+    );
+    delete process.env.SANDBOX_HOME_MODE;
+    const cr = runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null);
+    assert.equal(cr.spec.podTemplate.spec.containers[0].securityContext, undefined);
+  } finally {
+    if (prevClass !== undefined) process.env.SANDBOX_RUNTIME_CLASS = prevClass;
+    if (prevMode === undefined) delete process.env.SANDBOX_HOME_MODE;
+    else process.env.SANDBOX_HOME_MODE = prevMode;
+  }
 });
 
 test('file writes carry their content on stdin, not in argv', async () => {
@@ -575,4 +618,46 @@ test('kubernetes previews are proxied only while a safe preview domain is config
     if (saved.frontend === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = saved.frontend;
   }
+});
+
+test('kubernetes opencode requires its derived password and every server path sends it', async () => {
+  const prev = process.env.SECRETS_ENCRYPTION_KEY;
+  process.env.SECRETS_ENCRYPTION_KEY = 'k'.repeat(64);
+  try {
+    const { runner } = k8sRunner();
+    const password = deriveSandboxSecret('opencode-password', REF.id)!;
+    const data = runner.secretData({
+      authorizedKeys: [],
+      githubToken: null,
+      claudeToken: null,
+      openaiToken: null,
+      setupScript: null,
+      mcpToken: null,
+      opencodePassword: password,
+      bridgeToken: null
+    } as never);
+    assert.equal(data['opencode-password'], password);
+    const cr = runner.buildCr({ ...ROW, setupScript: null } as never, 'inst-1', null);
+    const init = cr.spec.podTemplate.spec.volumes.find((v: any) => v.name === 'init');
+    const item = init.secret.items.find((i: any) => i.key === 'opencode-password');
+    assert.equal(item.mode, 0o600);
+    (runner as any).resolvePodIp = async () => '10.0.0.9';
+    const target: any = await runner.httpTarget(REF, 4096);
+    assert.equal(
+      target.headers.authorization,
+      `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`
+    );
+    const other: any = await runner.httpTarget(REF, 3000);
+    assert.equal(other.headers.authorization, undefined);
+  } finally {
+    if (prev === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+    else process.env.SECRETS_ENCRYPTION_KEY = prev;
+  }
+});
+
+test('in-box calls to opencode read the server password before curling', () => {
+  assert.match(OPENCODE_LOCAL_AUTH, /server\.env/);
+  assert.match(OPENCODE_LOCAL_CURL_AUTH, /-u/);
+  assert.ok(BUSY_SCRIPT.includes(OPENCODE_LOCAL_AUTH));
+  assert.ok(BUSY_SCRIPT.includes(OPENCODE_LOCAL_CURL_AUTH));
 });

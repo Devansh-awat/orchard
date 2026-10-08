@@ -102,10 +102,30 @@ func resolveSandbox(ctx context.Context, cl *api.Client, v string) (map[string]a
 			return s, nil
 		}
 	}
+	named := []map[string]any{}
 	for _, s := range items {
 		if str(s["name"]) == v {
-			return s, nil
+			named = append(named, s)
 		}
+	}
+	if len(named) == 1 {
+		return named[0], nil
+	}
+	if len(named) > 1 {
+		owned := []map[string]any{}
+		for _, s := range named {
+			if role := str(s["myRole"]); role == "" || role == "owner" {
+				owned = append(owned, s)
+			}
+		}
+		if len(owned) == 1 {
+			return owned[0], nil
+		}
+		labels := make([]string, 0, len(named))
+		for _, m := range named {
+			labels = append(labels, str(m["name"])+" ("+str(m["id"])+")")
+		}
+		return nil, fmt.Errorf("sandbox %q is ambiguous between: %s; pass the id", v, strings.Join(labels, ", "))
 	}
 	matches := []map[string]any{}
 	for _, s := range items {

@@ -249,6 +249,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'POST', path: '/integrations/slack/commands', auth: 'public' },
   { method: 'POST', path: '/integrations/slack/events', auth: 'public' },
   { method: 'POST', path: '/integrations/slack/link', auth: 'authenticated' },
+  { method: 'POST', path: '/integrations/slack/link/preview', auth: 'authenticated' },
   { method: 'GET', path: '/invitations/:token', auth: 'public' },
   { method: 'POST', path: '/invitations/:token/accept', auth: 'authenticated' },
   { method: 'POST', path: '/invitations/:token/decline', auth: 'authenticated' },

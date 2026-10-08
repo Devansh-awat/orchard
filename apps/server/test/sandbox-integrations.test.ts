@@ -359,6 +359,25 @@ test('github kickoff dedupes on delivery id', async () => {
   );
 });
 
+test('a replayed comment under a new delivery id never starts a second session', async () => {
+  const { service, runs } = githubKickoffHarness({ mapped: true });
+  assert.equal((await service.handle('delivery-a', issueCommentPayload())).action, 'queued');
+  const replay = await service.handle('delivery-b', issueCommentPayload());
+  assert.equal(replay.action, 'ignored');
+  assert.equal(runs.length, 1);
+  const linear = classifyLinearComment(
+    {
+      type: 'Comment',
+      action: 'create',
+      actor: { id: 'lin-user', type: 'user' },
+      data: { id: 'c9', body: '/greenhouse go', issueId: 'i1', issue: { id: 'i1' } },
+      webhookTimestamp: NOW
+    },
+    'unsigned-header'
+  );
+  assert.equal(linear.kind === 'command' && linear.command.deliveryId, 'comment:c9');
+});
+
 test('github kickoff never acts for an unmapped commenter', async () => {
   const { service, runs } = githubKickoffHarness({ mapped: false });
   const result = await service.handle('delivery-2', issueCommentPayload());
@@ -835,6 +854,24 @@ test('slack link tokens are hashed, single use, expiring and bound to the Slack 
   await assert.rejects(links.confirm('orchard-b', 42, NOW), /expired/);
 });
 
+test('the link page can show which Slack account is asking before anyone confirms', async () => {
+  const { prisma } = fakeLinkPrisma();
+  const links = new SlackLinkService(prisma as any);
+  const token = tokenFrom(
+    await links.createLink('T1', 'U9', NOW, { userName: 'mallory\u202e', teamDomain: 'acme-corp' })
+  );
+  assert.deepEqual(await links.preview(token, NOW + 1000), {
+    teamId: 'T1',
+    slackUserId: 'U9',
+    slackUserName: 'mallory',
+    teamDomain: 'acme-corp',
+    expiresAt: new Date(NOW + SLACK_LINK_TTL_MS).toISOString()
+  });
+  await links.confirm('orchard-a', token, NOW + 2000);
+  await assert.rejects(links.preview(token, NOW + 3000), /expired or was already used/);
+  await assert.rejects(links.preview('nope', NOW), /expired/);
+});
+
 test('a newer slack link replaces older ones and a linked identity cannot be stolen', async () => {
   const { prisma, integrations } = fakeLinkPrisma();
   const links = new SlackLinkService(prisma as any);
@@ -1058,6 +1095,7 @@ test('slack thread watcher steps', () => {
 test('issue lookups only use the installation token for the sandbox repo', async () => {
   const calls: string[] = [];
   const github = {
+    verifyUserCanAccessRepo: async () => true,
     resolveRepoToken: async () => {
       calls.push('installation');
       return 'inst';
@@ -1096,6 +1134,44 @@ test('issue lookups only use the installation token for the sandbox repo', async
   assert.deepEqual(calls, ['installation', 'user', 'user']);
 });
 
+test('the installation token is only used when the caller or the host can see the repo on GitHub', async () => {
+  const calls: string[] = [];
+  const canSee = new Set<string>();
+  const github = {
+    verifyUserCanAccessRepo: async (userId: string, owner: string, repo: string) => {
+      calls.push(`verify:${userId}`);
+      return canSee.has(`${userId}:${owner}/${repo}`);
+    },
+    resolveRepoToken: async () => {
+      calls.push('installation');
+      return 'inst';
+    },
+    getValidUserToken: async () => {
+      calls.push('user');
+      return 'user';
+    }
+  };
+  const service = new GreenhouseIssuesService(
+    {} as any,
+    {} as any,
+    github as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any
+  );
+  const victim = { owner: 'victim-org', repo: 'secret' };
+  assert.equal(await service.githubTokenFor('guest', victim, victim, 'host'), 'user');
+  assert.ok(!calls.includes('installation'));
+  canSee.add('host:victim-org/secret');
+  assert.equal(await service.githubTokenFor('guest', victim, victim, 'host'), 'inst');
+  calls.length = 0;
+  canSee.clear();
+  canSee.add('guest:victim-org/secret');
+  assert.equal(await service.githubTokenFor('guest', victim, victim, 'host'), 'inst');
+  assert.deepEqual(calls, ['verify:guest', 'installation']);
+});
+
 test('session create with an outsider-authored GitHub issue is host only', async () => {
   const roles: Record<string, string> = {
     host: 'owner',
@@ -1109,7 +1185,11 @@ test('session create with an outsider-authored GitHub issue is host only', async
       }
     } as any,
     {} as any,
-    { resolveRepoToken: async () => 'inst', getValidUserToken: async () => 'user' } as any,
+    {
+      verifyUserCanAccessRepo: async () => true,
+      resolveRepoToken: async () => 'inst',
+      getValidUserToken: async () => 'user'
+    } as any,
     { repoRemote: async () => ({ owner: 'acme', repo: 'api' }) } as any,
     { resolve: async (_s: string, u: string) => (roles[u] ? { role: roles[u] } : null) } as any,
     {} as any,

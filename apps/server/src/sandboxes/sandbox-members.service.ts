@@ -4,16 +4,21 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  Optional
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { SandboxMemberRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { RateLimitService } from '../auth/rate-limit.service';
 import { SandboxAccess, SandboxRole } from './sandbox-access.service';
 import { SandboxLiveService } from './live/sandbox-live.service';
 import { LIVE_MAX_COMMENT_CHARS, TokenBucket, isChatId, sanitizeText } from './live/live-protocol';
 import { OPENCODE_MESSAGE_ID_RE } from './sandbox-opencode-policy';
 import { isUuid } from './sandbox-session-commands';
+import { endGuestShells, rotateHostMcpAccess } from './sandbox-member-offboarding';
 
 export const PUBLIC_USER_SELECT = {
   id: true,
@@ -92,10 +97,14 @@ export class SandboxMembersService {
     this.promptListener = listener;
   }
 
+  private readonly logger = new Logger(SandboxMembersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly live: SandboxLiveService
+    private readonly live: SandboxLiveService,
+    @Optional() private readonly moduleRef?: ModuleRef,
+    @Optional() private readonly rateLimit?: RateLimitService
   ) {
     this.live.setCommentSink((input) =>
       this.createComment(input.sandboxId, input.sid, input.userId, {
@@ -269,6 +278,9 @@ export class SandboxMembersService {
       })
       .catch(() => {});
     await this.live.aclChanged(sandbox.id, userId);
+    if (existing.role === 'collaborator' && role !== 'collaborator') {
+      void this.offboardGuest(sandbox, userId, actor.id);
+    }
     return this.toMember(row);
   }
 
@@ -301,6 +313,21 @@ export class SandboxMembersService {
       })
       .catch(() => {});
     await this.live.aclChanged(sandbox.id, userId);
+    if (existing.role === 'collaborator') void this.offboardGuest(sandbox, userId, actor.id);
+  }
+
+  private async offboardGuest(sandbox: SandboxAccess['sandbox'], userId: string, actorId: string) {
+    let registry: any = null;
+    try {
+      const { SandboxRunnerRegistry } = await import('./runners/sandbox-runner.registry.js');
+      registry = this.moduleRef?.get(SandboxRunnerRegistry, { strict: false }) ?? null;
+    } catch {}
+    await endGuestShells(registry, sandbox, userId).catch((e: any) =>
+      this.logger.warn(`could not end the guest shells of ${userId}: ${e?.message}`)
+    );
+    await rotateHostMcpAccess(this.prisma as any, registry, sandbox, actorId).catch((e: any) =>
+      this.logger.warn(`could not rotate the host MCP token: ${e?.message}`)
+    );
   }
 
   private async requireSession(sandboxId: string, sid: string) {
@@ -426,6 +453,7 @@ export class SandboxMembersService {
       select: { userId: true }
     });
     if (existing) return existing.userId === input.userId;
+    await this.rateLimit?.checkRateLimit(input.userId, 'user', 'sandbox_prompt');
     const session = await this.prisma.sandboxConversation.findFirst({
       where: {
         sandboxId: input.sandboxId,
