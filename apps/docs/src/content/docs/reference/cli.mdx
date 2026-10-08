@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **350 commands** are available.
+override the saved context. **366 commands** are available.
 
 ## alert
 
@@ -3056,6 +3056,7 @@ orchard create [name]
 | --- | --- | --- | --- |
 | `--identity` | string |  | ssh identity name or id (default: your only identity) |
 | `--repo` | string |  | git repository URL to clone into the sandbox |
+| `--runner` | string |  | where the sandbox runs: kubernetes\|vercel (default: the instance default) |
 | `--setup` | string |  | setup script file run once on first boot (- reads stdin) |
 | `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
 | `--wait` | bool | `false` | block until the operation reaches a terminal state |
@@ -3125,6 +3126,20 @@ orchard diff <name>
 | `--file` | string |  | limit the diff to one file |
 | `--stat` | bool | `false` | list changed files instead of the diff |
 
+### `orchard sandbox fork`
+
+Fork a machine you own into a new one with the same disk and sessions
+
+```bash
+orchard fork <sandbox>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--name` | string |  | Name of the new machine (defaults to &lt;name&gt;-fork) |
+| `--timeout` | duration | `10m0s` | give up waiting after this long (exit 8) |
+| `--wait` | bool | `false` | block until the operation reaches a terminal state |
+
 ### `orchard sandbox get`
 
 Show a sandbox
@@ -3132,6 +3147,44 @@ Show a sandbox
 ```bash
 orchard get <name>
 ```
+
+### `orchard sandbox link`
+
+Attach Orchard projects so their env vars land in the sandbox
+
+```bash
+orchard link
+```
+
+Aliases: `links`
+
+### `orchard sandbox link add`
+
+Attach a project environment to a sandbox (host only); --env picks the environment
+
+```bash
+orchard add <sandbox> <project>
+```
+
+### `orchard sandbox link list`
+
+List projects attached to a sandbox
+
+```bash
+orchard list <sandbox>
+```
+
+Aliases: `ls`
+
+### `orchard sandbox link remove`
+
+Detach a project from a sandbox (host only)
+
+```bash
+orchard remove <sandbox> <project>
+```
+
+Aliases: `rm`
 
 ### `orchard sandbox list`
 
@@ -3169,6 +3222,128 @@ orchard list <sandbox>
 
 Aliases: `ls`
 
+### `orchard sandbox session`
+
+Manage worktree agent sessions inside a sandbox
+
+```bash
+orchard session
+```
+
+Aliases: `sessions`
+
+### `orchard sandbox session archive`
+
+Archive a session (removes the worktree, keeps the branch)
+
+```bash
+orchard archive <sandbox> <session>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--restore` | bool | `false` | Restore an archived session instead |
+
+### `orchard sandbox session create`
+
+Start a session on a fresh git worktree (branch orchard/&lt;slug&gt;)
+
+```bash
+orchard create <sandbox> <repo>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--base` | string |  | Base branch (defaults to the repo's default branch) |
+| `--prompt` | string |  | First prompt for the agent |
+| `--title` | string |  | Session title |
+
+### `orchard sandbox session list`
+
+List sessions with their branch, diffstat and PR
+
+```bash
+orchard list <sandbox>
+```
+
+Aliases: `ls`
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--all` | bool | `false` | Include archived sessions |
+
+### `orchard sandbox session preview`
+
+Deploy a session branch as a gh-&lt;slug&gt; preview environment (host only)
+
+```bash
+orchard preview <sandbox> <session>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--deployment` | string |  | Deployment id whose config is copied |
+| `--remove` | bool | `false` | Tear the preview environment down instead |
+
+### `orchard sandbox session prompt`
+
+Send a prompt to a session's agent as yourself (reads stdin with - or no text)
+
+```bash
+orchard prompt <sandbox> <session> [text|-]
+```
+
+### `orchard sandbox session transcript`
+
+Print the latest messages of a session's agent chat
+
+```bash
+orchard transcript <sandbox> <session>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--limit` | int | `0` | How many of the latest messages to show (1-200, default 30) |
+
+### `orchard sandbox share`
+
+Read-only share links for org teammates (transcript and diff only)
+
+```bash
+orchard share
+```
+
+### `orchard sandbox share create`
+
+Create a share link (the token is shown once)
+
+```bash
+orchard create <sandbox>
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--expires-in` | int | `0` | Hours until the link expires (1-720, default 168) |
+| `--session` | string |  | Share one session (id or slug) instead of every active session |
+
+### `orchard sandbox share list`
+
+List share links and whether they are active, expired or revoked
+
+```bash
+orchard list <sandbox>
+```
+
+Aliases: `ls`
+
+### `orchard sandbox share revoke`
+
+Revoke a share link; viewers lose access on their next request
+
+```bash
+orchard revoke <sandbox> <link-id>
+```
+
 ### `orchard sandbox ssh`
 
 SSH into a sandbox through the orchard tunnel
@@ -3184,11 +3359,15 @@ orchard ssh <name> [-- ssh-args...]
 
 ### `orchard sandbox ssh-config`
 
-Print ssh config Host blocks (for ~/.ssh/config and vscode remote-ssh)
+Print ssh config Host blocks, or --install a wildcard orchard-* entry into ~/.ssh/config
 
 ```bash
 orchard ssh-config [name]
 ```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--install` | bool | `false` | generate an orchard ssh key, register it, and wire `ssh orchard-&lt;name&gt;` into ~/.ssh/config |
 
 ### `orchard sandbox start`
 

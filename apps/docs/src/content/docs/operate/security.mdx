@@ -75,8 +75,10 @@ image builds run with host-level privileges**, the same posture as
 Docker-based platforms, and genuinely fine when whoever wrote the Dockerfile
 already owns the box.
 
-Sandboxes (the [dev environments](/run/sandboxes/)) are the exception: they run
-as Kata VMs already, with internet egress only.
+Greenhouse machines (the [AI dev environments](/greenhouse/)) are the exception:
+on the Kubernetes runner they run as Kata VMs when the cluster has Kata, with
+internet egress only. Their security model is described in
+[Running Greenhouse](/operate/greenhouse/#security-model).
 
 ## Turning kernel isolation on
 

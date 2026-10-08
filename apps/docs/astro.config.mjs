@@ -6,7 +6,10 @@ import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 export default defineConfig({
   site: 'https://docs.orchard.my',
   // The landing page is the front door; docs open straight into the docs.
-  redirects: { '/': '/start/what-is-orchard/' },
+  redirects: {
+    '/': '/start/what-is-orchard/',
+    '/run/sandboxes': '/greenhouse/'
+  },
   server: { port: 5174, host: true },
   integrations: [
     starlight({
@@ -85,8 +88,25 @@ export default defineConfig({
             { label: 'Notifications', slug: 'run/notifications' },
             { label: 'Webhooks', slug: 'run/webhooks' },
             { label: 'Terraform and OpenTofu', slug: 'run/terraform' },
-            { label: 'Sandboxes', slug: 'run/sandboxes' },
             { label: 'The Grove', slug: 'run/grove' }
+          ]
+        },
+        {
+          label: 'Greenhouse',
+          items: [
+            { label: 'Overview', slug: 'greenhouse' },
+            { label: 'Get started', slug: 'greenhouse/getting-started' },
+            { label: 'Machines', slug: 'greenhouse/machines' },
+            { label: 'The workspace', slug: 'greenhouse/workspace' },
+            { label: 'Open in your editor', slug: 'greenhouse/editors' },
+            { label: 'Setup and run scripts', slug: 'greenhouse/scripts' },
+            { label: 'Previews and ports', slug: 'greenhouse/previews' },
+            { label: 'Pull requests and checks', slug: 'greenhouse/pull-requests' },
+            { label: 'Attach an Orchard project', slug: 'greenhouse/projects' },
+            { label: 'Sharing and multiplayer', slug: 'greenhouse/sharing' },
+            { label: 'GitHub, Linear and Slack', slug: 'greenhouse/integrations' },
+            { label: 'Automating Greenhouse', slug: 'greenhouse/automation' },
+            { label: 'Troubleshooting', slug: 'greenhouse/troubleshooting' }
           ]
         },
         {
@@ -116,6 +136,7 @@ export default defineConfig({
             { label: 'Finishing setup', slug: 'operate/finishing-setup' },
             { label: 'Host commands', slug: 'operate/host-commands' },
             { label: 'Nodes and pools', slug: 'operate/nodes' },
+            { label: 'Running Greenhouse', slug: 'operate/greenhouse' },
             { label: 'Upgrades', slug: 'operate/upgrades' },
             { label: 'Going to production', slug: 'operate/production' },
             { label: 'Security and isolation', slug: 'operate/security' },

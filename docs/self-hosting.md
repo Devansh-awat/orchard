@@ -17,17 +17,18 @@ chart with dev values.
 
 ## Cluster prerequisites
 
-| Component                                              | Needed for                                                                                       | Notes                                                                                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| [CloudNativePG](https://cloudnative-pg.io) operator    | Control-plane DB and every user database                                                         | The chart only creates `Cluster` resources                                                                                  |
-| [Traefik](https://traefik.io) with Gateway API support | Control-plane ingress (`IngressRoute`) and user app routing (`HTTPRoute` via a shared `Gateway`) | Gateway API CRDs must be installed                                                                                          |
-| [cert-manager](https://cert-manager.io)                | TLS certificates                                                                                 | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
-| A default StorageClass                                 | Postgres volumes, buildkit cache, Redis, metrics                                                 | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default                                 |
-| An OCI registry (e.g. [Harbor](https://goharbor.io))   | Where built user images are pushed and pulled from                                               | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env                               |
-| An ingress controller for tenant ingresses             | Custom-domain ingresses for user apps                                                            | Class name via `tenant.ingressClass` (default `haproxy`)                                                                    |
-| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io))   | Public database exposure and TCP/UDP passthrough                                                 | Only if you enable those features                                                                                           |
-| gVisor / Kata RuntimeClasses                           | Sandboxed tenant/builder pods                                                                    | Optional; Talos-specific setup in `values.yaml`                                                                             |
-| Datadog agent                                          | APM/tracing                                                                                      | Optional; `datadog.enabled: false` turns it all off                                                                         |
+| Component                                                                    | Needed for                                                                                       | Notes                                                                                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| [CloudNativePG](https://cloudnative-pg.io) operator                          | Control-plane DB and every user database                                                         | The chart only creates `Cluster` resources                                                                                  |
+| [Traefik](https://traefik.io) with Gateway API support                       | Control-plane ingress (`IngressRoute`) and user app routing (`HTTPRoute` via a shared `Gateway`) | Gateway API CRDs must be installed                                                                                          |
+| [cert-manager](https://cert-manager.io)                                      | TLS certificates                                                                                 | Plus a DNS-01 `ClusterIssuer` if you want wildcard certs for the app domain (see `infra/charts/orchard/SETUP-wildcards.md`) |
+| A default StorageClass                                                       | Postgres volumes, buildkit cache, Redis, metrics                                                 | Set `tenant.storageClass` / the chart `storageClass` values if it isn't the cluster default                                 |
+| An OCI registry (e.g. [Harbor](https://goharbor.io))                         | Where built user images are pushed and pulled from                                               | Configure via `DOCKER_REGISTRY_PUSH` / `DOCKER_REGISTRY_PULL` / `REGISTRY_PROJECT` server env                               |
+| An ingress controller for tenant ingresses                                   | Custom-domain ingresses for user apps                                                            | Class name via `tenant.ingressClass` (default `haproxy`)                                                                    |
+| L4 LoadBalancer (e.g. [MetalLB](https://metallb.io))                         | Public database exposure and TCP/UDP passthrough                                                 | Only if you enable those features                                                                                           |
+| gVisor / Kata RuntimeClasses                                                 | Sandboxed tenant/builder pods                                                                    | Optional; Talos-specific setup in `values.yaml`                                                                             |
+| [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller | Greenhouse machines on the Kubernetes runner                                                     | Optional; only with `sandbox.enabled`. See [Greenhouse](#greenhouse-ai-dev-machines)                                        |
+| Datadog agent                                                                | APM/tracing                                                                                      | Optional; `datadog.enabled: false` turns it all off                                                                         |
 
 ## ServiceAccount permissions
 
@@ -910,6 +911,74 @@ through the ingress's `annotations` field. Orchard only forwards annotation
 keys on its allowlist (`ALLOWED_INGRESS_ANNOTATION_KEYS` in
 `apps/server/src/kubernetes/kubernetes.service.ts`), and none of the ones above
 are on it yet, so add the ones you need there first.
+
+## Greenhouse (AI dev machines)
+
+Greenhouse gives people cloud machines with coding agents on them, worktree
+sessions, a browser IDE and multiplayer sharing. It is off by default. The full
+operator guide, with every setting, the Slack app manifest and the security
+model, is on the docs site under **Operating Orchard → Running Greenhouse**
+(`apps/docs/src/content/docs/operate/greenhouse.md`); the design is in
+[`docs/ai-sandbox.md`](ai-sandbox.md). The short version:
+
+**The switch.** `SANDBOX_ENABLED` pins it (`true`/`false`, locks the admin
+switch); unset, admins flip it at **Admin -> Configuration**, off by default in
+production. `sandbox.enabled: true` in the chart sets it and renders the
+namespace, quota, NetworkPolicy and RBAC the Kubernetes runner needs.
+
+**Runners.** Machines run on the instance's own cluster (`kubernetes`) or on
+Vercel Sandbox (`vercel`). Enable either at **Admin -> Configuration -> Sandbox
+runners** or with `SANDBOX_RUNNER_KUBERNETES_ENABLED` /
+`SANDBOX_RUNNER_VERCEL_ENABLED`, and pick `SANDBOX_DEFAULT_RUNNER`. Turning a
+runner off never strands machines already on it.
+
+- **Kubernetes** needs the agent-sandbox controller and CRDs (pinned, installed
+  out of band), ideally a Kata RuntimeClass (`sandbox.runtimeClassName`; empty
+  runs unprivileged on runc), and a VolumeSnapshotClass if you want forking. No
+  custom image: a bootstrap script installs the tools into `debian:bookworm`.
+- **Vercel** needs a token (from a Secret, `sandbox.runners.vercel.tokenSecret`),
+  team id, project id and `SECRETS_ENCRYPTION_KEY`. Vercel ports are public: the
+  agent server and SSH bridge are protected by per-machine secrets derived from
+  that key, preview ports are not. Persistent snapshots contain the machine's
+  secrets.
+
+**Everything is queued.** Machine changes go through the apply queue and the
+`sandboxes` mirror shard like deployments do. The queue drains only on servers
+that are members of the cluster, so a laptop pointed at production enqueues and
+never applies.
+
+**Previews** on Kubernetes need `SANDBOX_PREVIEW_DOMAIN`: a domain that is not,
+does not contain and is not under Orchard's cookie domain or hostnames, with
+wildcard DNS and a wildcard certificate, and an IngressRoute you add that sends
+every path on `*.<previewDomain>` to the `server` service:
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: { name: orchard-sandbox-previews, namespace: orchard }
+spec:
+  entryPoints: [websecure]
+  routes:
+    - kind: Rule
+      match: HostRegexp(`^[0-9]+-[0-9a-f]{8}\.preview\.example\.com$`)
+      services: [{ name: server, port: 3001 }]
+  tls: { secretName: wildcard-preview-tls }
+```
+
+**Integrations.** `/greenhouse` on GitHub issues needs the GitHub App to have
+**Issues: Read and write** and the **Issue comment** event, which the manifest
+flow does not request; add them in the App's settings. Slack needs an app with
+the `/greenhouse` command, the `app_mention` event and the `app_mentions:read`,
+`chat:write` and `commands` scopes (`SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`,
+optional `SLACK_APP_ID`). Linear needs a Comments webhook to
+`/apiv1/integrations/linear/webhook` (`LINEAR_WEBHOOK_SECRET`). People link
+their Slack and Linear accounts themselves; nothing is matched by email.
+
+**Limits.** `SANDBOX_MAX_PER_USER` (1), `SANDBOX_IDLE_TIMEOUT_MINUTES` (60),
+`SANDBOX_MAX_LIFETIME_HOURS` (168), plus the chart's `sandbox.quota`.
+
+**PostHog.** With `POSTHOG_API_KEY` set, Greenhouse is also gated per person by
+the `greenhouse` feature flag.
 
 ## Anonymous usage reports
 

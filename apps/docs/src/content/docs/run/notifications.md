@@ -30,6 +30,13 @@ during a resize does not page anyone.
 This is worth turning on. A database that only breaks at night is otherwise
 invisible until somebody happens to open its page.
 
+## Personal notifications
+
+Some events are about you rather than a team, and only go to your own channels
+under **User settings → Notifications**. Alongside sign-in alerts, **Session
+needs input** fires when a [Greenhouse](/greenhouse/) agent you prompted finishes
+its turn and is waiting, unless you are looking at the machine at the time.
+
 ## Deliveries
 
 Every attempt is recorded with its outcome, so a channel that quietly stopped

@@ -242,6 +242,51 @@ The chart also creates a ClusterRoleBinding granting the `default` ServiceAccoun
 
 When `postgres.enabled`, the CNPG cluster manages the `orchard_r2_proxy` login role and the server grants it `SELECT` on `databases`, `projects` and `organizations` at boot. The proxy never holds the app owner's credentials.
 
+### Greenhouse (`sandbox.*`)
+
+AI dev machines. Off by default. Full operator guide:
+`apps/docs/src/content/docs/operate/greenhouse.md` (docs site: Operating Orchard → Running Greenhouse).
+
+| Key | Default | Description |
+|---|---|---|
+| `sandbox.enabled` | `false` | Sets `SANDBOX_ENABLED=true` (locks the admin switch on) and renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. Needed for the kubernetes runner. |
+| `sandbox.namespace` | `orchard-sandboxes` | Namespace for kubernetes machines. |
+| `sandbox.image` | `debian:bookworm` | Base image. A bootstrap script installs sshd, git, tmux, Node.js, Claude Code, Codex and opencode on first boot. |
+| `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |
+| `sandbox.idleTimeoutMinutes` | `60` | Stop machines with no terminal or SSH activity and no busy agent. `0` never. |
+| `sandbox.maxLifetimeHours` | `168` | Stop machines this long after their last start. `0` never. |
+| `sandbox.maxPerUserDefault` | `1` | Default machines per person; overridable per user in `/admin/users`. |
+| `sandbox.storageClass` | `""` | Home volume StorageClass. Empty = cluster default. |
+| `sandbox.diskSize` / `cpuLimit` / `memoryLimit` | `10Gi` / `"2"` / `4Gi` | Per-machine size. Keep memory at least `1Gi` under kata. |
+| `sandbox.tunnelMode` | `""` | `portforward` only for a server outside the cluster. |
+| `sandbox.homeMode` | `""` | `block`, `filesystem`, or empty for auto. |
+| `sandbox.quota.{pods,cpu,memory}` | `"20"`, `"40"`, `"80Gi"` | Namespace ResourceQuota. |
+| `sandbox.runners.default` | `""` | `kubernetes` or `vercel`. Empty lets the admin pick. |
+| `sandbox.runners.kubernetes.enabled` | `null` | `true`/`false` pins the runner; `null` leaves it to the admin (default on). |
+| `sandbox.runners.vercel.enabled` | `null` | Same for Vercel (default off). |
+| `sandbox.runners.vercel.tokenSecret.{name,key}` | `""`, `token` | Secret holding the Vercel access token. |
+| `sandbox.runners.vercel.{teamId,projectId,image,vcpus,timeoutMinutes}` | `""` | Vercel team, project and machine settings. |
+| `sandbox.runners.bridgeBinaryUrl` | `""` | https URL of the linux/amd64 orchard CLI tarball used as the ssh bridge on Vercel machines. |
+| `sandbox.runners.previewDomain` | `""` | Bare domain for kubernetes previews. Must not share the Orchard cookie domain or hostnames. |
+
+Prerequisites the chart does **not** install: the kubernetes-sigs/agent-sandbox controller and CRDs (`agents.x-k8s.io/v1beta1`), the kata RuntimeClass handler on the nodes, a VolumeSnapshotClass if you want forking, and for previews a wildcard DNS record, a wildcard certificate and an IngressRoute sending every path on `*.<previewDomain>` to the `server` service. Values under `sandbox.runners` left empty render no env var, so those fields stay editable at Instance admin → Configuration → Sandbox runners. Slack and Linear integrations are configured there too (`SLACK_*`, `LINEAR_WEBHOOK_SECRET` via `server.env` if you want them pinned).
+
+Example:
+
+```yaml
+sandbox:
+  enabled: true
+  runtimeClassName: kata
+  runners:
+    default: kubernetes
+    vercel:
+      enabled: true
+      tokenSecret: { name: orchard-vercel, key: token }
+      teamId: team_abc123
+      projectId: prj_abc123
+    previewDomain: orchard-preview.dev
+```
+
 ### Metrics (`metrics.*`)
 
 | Key | Default | Description |

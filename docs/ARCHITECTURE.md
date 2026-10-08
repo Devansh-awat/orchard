@@ -15,6 +15,12 @@
 `ai-chat`, `scim`, `sso`, …). Those module boundaries are the future service
 seams.
 
+Design notes for individual subsystems live next to this file. The largest is
+[`ai-sandbox.md`](ai-sandbox.md): Greenhouse, the AI dev environment, with its
+pluggable sandbox runners (Kubernetes and Vercel), the apply-queue and mirror
+pipeline it shares with deployments, terminals, the multiplayer live gateway,
+previews and integrations.
+
 ## Splitting into services
 
 **Prerequisite — `packages/contracts`.** Before carving a module out, the
