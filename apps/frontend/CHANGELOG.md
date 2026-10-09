@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.61.0](https://github.com/hackclub/orchard/compare/frontend/v1.60.0...frontend/v1.61.0) (2026-10-09)
+
+
+### Features
+
+* **frontend:** greenhouse settings context section for CLAUDE.md and imported claude code setup ([e70282a](https://github.com/hackclub/orchard/commit/e70282a0af1743c03b18932fffd79a5cd3cc4f4b))
+* **frontend:** greenhouse tour walks the real ui with pip, one piece at a time ([5296385](https://github.com/hackclub/orchard/commit/52963855546ecf78733e812fe1d99cd253fba835))
+* **frontend:** pip the pixel mascot replaces the sprout across greenhouse ([b4ed148](https://github.com/hackclub/orchard/commit/b4ed148cb74c703a491c0b8a6bbec359b7b48604))
+
+
+### Bug Fixes
+
+* **frontend:** a stopped machine says so in the sidebar with a start button ([8ca294b](https://github.com/hackclub/orchard/commit/8ca294b549f0c316d2d0f3fdbb1165f58fee1cb9))
+* **frontend:** app fonts ship as hashed woff2 and the sans is preloaded ([490b52d](https://github.com/hackclub/orchard/commit/490b52deea54e55b0ad2954f22a80d7c80cee482))
+* **frontend:** closing menus stay pinned even when the positioner writes late ([04eeade](https://github.com/hackclub/orchard/commit/04eeadea72e19f065654e0dd595b90143e447a37))
+* **frontend:** fork and revert live in the turn menu instead of a pill on your message ([ff458fd](https://github.com/hackclub/orchard/commit/ff458fd61deb11d9d71565e3e83089a18b5bf2f9))
+* **frontend:** greenhouse dock loads the terminal after first paint ([8ca235b](https://github.com/hackclub/orchard/commit/8ca235bd7459f403e090813c32a208613cbbe91f))
+* **frontend:** greenhouse env imports the chat store without the chat barrel ([6e990d1](https://github.com/hackclub/orchard/commit/6e990d14ad047aeab7b1ff8612a00c2a93db73db))
+* **frontend:** greenhouse fetches sessions and the machine list in parallel ([e248fed](https://github.com/hackclub/orchard/commit/e248fedbe26cc3f16b576b614b7b635dafcd2e06))
+* **frontend:** greenhouse home asks you to start your machine before showing the chat ([96d68bd](https://github.com/hackclub/orchard/commit/96d68bd5d0ec716b711dfa37e5ca00e9f9b40ab1))
+* **frontend:** greenhouse loads the center pane only once a session is open ([dc25efc](https://github.com/hackclub/orchard/commit/dc25efc0dcf08d5fdd625f73f3d8926e8d47a10d))
+* **frontend:** greenhouse loads yjs and the editor view when a file tab first opens ([9ade3ca](https://github.com/hackclub/orchard/commit/9ade3ca0fbda9b1db38b0e68a8e420eecdec005e))
+* **frontend:** greenhouse renders without waiting on the instance features check ([e1f7cc4](https://github.com/hackclub/orchard/commit/e1f7cc498461ef1683036dd0ab931286f9686220))
+* **frontend:** greenhouse sheets and settings load the first time they open ([f25bd87](https://github.com/hackclub/orchard/commit/f25bd877e3003db8c1bb85e5032c303f5cc85df1))
+* **frontend:** new session creates the session right away instead of waiting for a prompt ([6eda423](https://github.com/hackclub/orchard/commit/6eda4234b63161d2fc4b2ec7d024c2567bd2b44d))
+* **frontend:** posthog loads on idle instead of in the first chunk ([9922b65](https://github.com/hackclub/orchard/commit/9922b65f54c68346ba847e208f56adc929f908c4))
+* **frontend:** root layout skips the components barrel and loads modals and search on demand ([c77acf1](https://github.com/hackclub/orchard/commit/c77acf15aebf8bc0c1e08874396fd0b455525dc3))
+* **frontend:** the agent connects as soon as the machine runs and session setup shows centered progress ([ed99de9](https://github.com/hackclub/orchard/commit/ed99de9ab033513f1255e95d7e492df13c86ceea))
+
 ## [1.60.0](https://github.com/hackclub/orchard/compare/frontend/v1.59.0...frontend/v1.60.0) (2026-10-09)
 
 

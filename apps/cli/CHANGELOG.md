@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/hackclub/orchard/compare/cli/v0.25.0...cli/v0.26.0) (2026-10-09)
+
+
+### Features
+
+* **cli:** orchard claude import, list and remove your claude code setup ([d318cf0](https://github.com/hackclub/orchard/commit/d318cf09f21bc7a8d7957bb924ebca2ab3e66f77))
+
 ## [0.25.0](https://github.com/hackclub/orchard/compare/cli/v0.24.0...cli/v0.25.0) (2026-10-09)
 
 

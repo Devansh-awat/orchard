@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.67.0](https://github.com/hackclub/orchard/compare/server/v2.66.0...server/v2.67.0) (2026-10-09)
+
+
+### Features
+
+* **server:** encrypted per user context library synced into your own machines ([b788d28](https://github.com/hackclub/orchard/commit/b788d28b8e6141cad9362bf36bd0982294ed0be4))
+
 ## [2.66.0](https://github.com/hackclub/orchard/compare/server/v2.65.1...server/v2.66.0) (2026-10-09)
 
 
