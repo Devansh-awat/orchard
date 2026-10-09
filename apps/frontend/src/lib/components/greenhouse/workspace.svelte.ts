@@ -420,13 +420,14 @@ export class MachineWorkspace {
 			this.mode = 'server';
 			return;
 		}
+		const repos = this.refreshRepos();
 		await Promise.all([
-			this.refreshRepos(),
+			repos,
 			this.refreshMembers(),
 			this.refreshConnect(),
-			this.refreshIdentity()
+			this.refreshIdentity(),
+			this.refreshSessions(repos)
 		]);
-		await this.refreshSessions();
 	}
 
 	async refreshRepos() {
@@ -437,7 +438,7 @@ export class MachineWorkspace {
 		this.reposLoaded = true;
 	}
 
-	async refreshSessions() {
+	async refreshSessions(repos?: Promise<void>) {
 		if (untrack(() => this.lifecycleOnly)) return;
 		const res = await api.listSessions(this.sandboxId, true);
 		if (this.#disposed) return;
@@ -447,6 +448,8 @@ export class MachineWorkspace {
 			return;
 		}
 		if (res.status === 404 || res.status === 405 || res.status === 0) {
+			await repos;
+			if (this.#disposed) return;
 			this.mode = 'legacy';
 			this.sessions = this.repos.map((repo) => legacySession(this.sandboxId, repo));
 		}

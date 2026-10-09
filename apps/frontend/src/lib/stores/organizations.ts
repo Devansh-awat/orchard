@@ -19,7 +19,7 @@ const organizationsList = writable<Organization[]>([]);
 const selectedOrg = writable<Organization | null>(null);
 const loadingState = writable(false);
 
-function loadSelectedFromStorage() {
+export function loadSelectedFromStorage() {
 	if (!browser) return null;
 	return localStorage.getItem(STORAGE_KEY);
 }
