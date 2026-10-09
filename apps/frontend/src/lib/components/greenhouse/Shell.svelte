@@ -185,6 +185,12 @@
 	});
 
 	function newSession(repo: string | null = null) {
+		const current = ws;
+		const target = repo ?? current?.session?.repo ?? current?.repos[0]?.name ?? null;
+		if (current?.canEdit && current.running && target) {
+			void current.createSession({ repo: target });
+			return;
+		}
 		homeRepo = repo;
 		app.goHome();
 		queueMicrotask(() => home?.focus());
