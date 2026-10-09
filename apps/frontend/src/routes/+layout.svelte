@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import 'blobatar/motion.css';
-	import { onMount } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { browser, dev } from '$app/environment';
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { page, updated } from '$app/stores';
@@ -15,10 +15,10 @@
 		themeStore,
 		toasts
 	} from '$lib/stores';
-	import { ToastContainer, OnboardingModal, UpdatesModal } from '$lib/components';
+	import ToastContainer from '$lib/components/Toast.svelte';
+	import OnboardingModal from '$lib/components/OnboardingModal.svelte';
 	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
 	import MobileTopBar from '$lib/components/MobileTopBar.svelte';
-	import QuickSearch from '$lib/components/QuickSearch.svelte';
 	import LogTimestampTooltip from '$lib/components/LogTimestampTooltip.svelte';
 	import TelemetryPrompt from '$lib/components/telemetry/TelemetryPrompt.svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
@@ -26,11 +26,68 @@
 	import { env } from '$env/dynamic/public';
 	import { initPostHog, identifyUser } from '$lib/posthog';
 	import { captureUrlSecrets, rememberReturnTo, secretRoute } from '$lib/utils/url-secrets';
+	import { latestUpdateId } from '$lib/updates/meta';
+	import { registerShortcut } from '$lib/utils/shortcuts';
+	import { whenIdle } from '$lib/utils/idle';
+	import { Lazy } from '$lib/utils/lazy.svelte';
 
 	let { children } = $props();
 
 	let loading = $state(true);
 	let mainScrolled = $state(false);
+
+	const updatesModal = new Lazy(() => import('$lib/components/UpdatesModal.svelte'));
+	const UpdatesModal = $derived(updatesModal.current);
+	const updateUnseen = $derived(
+		!!$user && !!latestUpdateId && !($user.seenUpdates ?? []).includes(latestUpdateId)
+	);
+
+	$effect(() => {
+		if (loading || !updateUnseen) return;
+		untrack(() => updatesModal.preload());
+	});
+
+	const quickSearch = new Lazy(() => import('$lib/components/QuickSearch.svelte'));
+	const QuickSearch = $derived(quickSearch.current);
+	let quickSearchRef = $state<{ openSearch: () => void } | null>(null);
+	let stopQuickSearchBoot: (() => void) | null = null;
+
+	async function bootQuickSearch(): Promise<boolean> {
+		const component = await quickSearch.preload();
+		if (!component) return false;
+		stopQuickSearchBoot?.();
+		stopQuickSearchBoot = null;
+		await tick();
+		return true;
+	}
+
+	function openQuickSearch() {
+		void bootQuickSearch().then((ready) => {
+			if (ready) quickSearchRef?.openSearch();
+		});
+	}
+
+	onMount(() => {
+		window.addEventListener('open-quick-search', openQuickSearch);
+		const unregister = registerShortcut({
+			id: 'palette',
+			key: 'k',
+			mod: true,
+			label: 'Search and actions',
+			allowInInputs: true,
+			run: openQuickSearch
+		});
+		stopQuickSearchBoot = () => {
+			window.removeEventListener('open-quick-search', openQuickSearch);
+			unregister();
+		};
+		const cancelIdle = whenIdle(() => bootQuickSearch(), 5000);
+		return () => {
+			cancelIdle();
+			stopQuickSearchBoot?.();
+			stopQuickSearchBoot = null;
+		};
+	});
 
 	function onMainScroll(e: Event) {
 		const next = (e.currentTarget as HTMLElement).scrollTop > 4;
@@ -232,9 +289,13 @@
 	<OnboardingModal />
 	{#if !loading}
 		<TelemetryPrompt />
-		<UpdatesModal />
+		{#if UpdatesModal}
+			<UpdatesModal />
+		{/if}
 	{/if}
-	<QuickSearch />
+	{#if QuickSearch}
+		<QuickSearch bind:this={quickSearchRef} />
+	{/if}
 	<LogTimestampTooltip />
 </QueryClientProvider>
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { Lazy } from '$lib/utils/lazy.svelte';
 	import { registerShortcut } from '$lib/utils/shortcuts';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -33,7 +35,6 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg, Avatar } from '$lib/components/ui';
-	import CliModal from './CliModal.svelte';
 	import {
 		springRotate,
 		springCollapse,
@@ -174,6 +175,12 @@
 	let isMobile = $state(false);
 	let railed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
 	let cliOpen = $state(false);
+	const cliModal = new Lazy(() => import('./CliModal.svelte'));
+	const CliModal = $derived(cliModal.current);
+
+	$effect(() => {
+		if (cliOpen) untrack(() => cliModal.preload());
+	});
 
 	$effect(() => {
 		const path = $page.url.pathname;
@@ -677,7 +684,9 @@
 	</div>
 </aside>
 
-<CliModal bind:open={cliOpen} />
+{#if CliModal}
+	<CliModal bind:open={cliOpen} />
+{/if}
 
 <style>
 	.deck-host {

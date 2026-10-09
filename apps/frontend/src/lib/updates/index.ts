@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { files, parseFrontmatter } from './meta';
 
 export interface UpdateSection {
 	icon: string;
@@ -16,25 +17,7 @@ export interface Update {
 	sections: UpdateSection[];
 }
 
-const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 const HEADING = /^###\s+(?:\[([\w-]+)\]\s*)?(.+)$/;
-
-function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
-	const match = raw.match(FRONTMATTER);
-	if (!match) return { meta: {}, body: raw };
-
-	const meta: Record<string, string> = {};
-	for (const line of match[1].split(/\r?\n/)) {
-		const sep = line.indexOf(':');
-		if (sep === -1) continue;
-		meta[line.slice(0, sep).trim()] = line
-			.slice(sep + 1)
-			.trim()
-			.replace(/^['"]|['"]$/g, '');
-	}
-
-	return { meta, body: raw.slice(match[0].length) };
-}
 
 function render(markdown: string): string {
 	const trimmed = markdown.trim();
@@ -74,12 +57,6 @@ function parseSections(body: string): { intro: string; sections: UpdateSection[]
 
 	return { intro: render(introLines.join('\n')), sections };
 }
-
-const files = import.meta.glob('./*.md', {
-	query: '?raw',
-	import: 'default',
-	eager: true
-}) as Record<string, string>;
 
 export const updates: Update[] = Object.values(files)
 	.map((raw) => parseFrontmatter(raw))

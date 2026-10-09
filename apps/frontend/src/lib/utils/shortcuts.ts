@@ -53,7 +53,7 @@ export function registerShortcut(shortcut: Shortcut): () => void {
 		listening = true;
 	}
 	return () => {
-		registry.delete(shortcut.id);
+		if (registry.get(shortcut.id) === shortcut) registry.delete(shortcut.id);
 	};
 }
 
