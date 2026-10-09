@@ -34,6 +34,7 @@ import {
   isValidBranchPrefix,
   isValidGitRef,
   isValidRepoName,
+  inWorktree,
   isValidSlug,
   isWorktreePath,
   parseDiffstatBatch,
@@ -1017,7 +1018,7 @@ export class SandboxSessionsService {
           s &&
           typeof s.id === 'string' &&
           !s.parentID &&
-          (s.directory === row.worktreePath || s.id === row.opencodeSessionId)
+          (inWorktree(s.directory, row.worktreePath) || s.id === row.opencodeSessionId)
       )
       .map((s) => ({
         id: s.id as string,

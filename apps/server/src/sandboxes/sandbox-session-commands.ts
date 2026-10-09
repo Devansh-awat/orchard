@@ -583,6 +583,13 @@ function hexAddrIsLoopback(addr: string): boolean {
   return false;
 }
 
+export function inWorktree(directory: unknown, worktreePath: string | null): boolean {
+  if (typeof directory !== 'string' || !worktreePath) return false;
+  if (directory === worktreePath) return true;
+  if (!worktreePath.startsWith(`${HOME_ROOT}/`) || !directory.startsWith('/')) return false;
+  return directory.endsWith(worktreePath.slice(HOME_ROOT.length));
+}
+
 function logicalHomePath(path: string, physicalHome: string | undefined): string {
   if (!physicalHome || physicalHome === HOME_ROOT || !physicalHome.startsWith('/')) return path;
   if (path !== physicalHome && !path.startsWith(`${physicalHome}/`)) return path;

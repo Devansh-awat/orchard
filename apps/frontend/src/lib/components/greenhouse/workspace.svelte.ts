@@ -27,6 +27,7 @@ import { presenceColorVar } from './format';
 import type { GreenhouseEnv } from './env';
 import { greenhousePrefs } from './prefs.svelte';
 import { playGreenhouseSound } from './sounds';
+import { inWorktree } from './worktree-dir';
 import type { LiveClient } from './live.svelte';
 import type {
 	CenterTab,
@@ -230,7 +231,7 @@ export class MachineWorkspace {
 			.filter(
 				(s) =>
 					!s.pending &&
-					s.directory === session.worktreePath &&
+					inWorktree(s.directory, session.worktreePath) &&
 					!ids.has(s.id) &&
 					!this.#hiddenChats.has(s.id)
 			)
@@ -515,7 +516,8 @@ export class MachineWorkspace {
 		const ids = new Set<string>();
 		if (session.opencodeSessionId) ids.add(session.opencodeSessionId);
 		for (const chat of this.chats.get(session.id) ?? []) ids.add(chat.id);
-		for (const s of this.store.sessions) if (s.directory === session.worktreePath) ids.add(s.id);
+		for (const s of this.store.sessions)
+			if (inWorktree(s.directory, session.worktreePath)) ids.add(s.id);
 		return ids;
 	}
 
@@ -536,7 +538,7 @@ export class MachineWorkspace {
 		);
 		if (direct) return direct;
 		const dir = this.store.sessions.find((s) => s.id === chatId)?.directory ?? null;
-		return dir ? (sessions.find((s) => s.worktreePath === dir) ?? null) : null;
+		return dir ? (sessions.find((s) => inWorktree(dir, s.worktreePath)) ?? null) : null;
 	}
 
 	#watching(chatId: string, session: GhSession | null): { open: boolean; watched: boolean } {

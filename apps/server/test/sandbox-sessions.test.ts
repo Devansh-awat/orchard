@@ -53,7 +53,8 @@ import {
   setupStateOf,
   shellQuote,
   slugify,
-  tmuxSessionName
+  tmuxSessionName,
+  inWorktree
 } from '../src/sandboxes/sandbox-session-commands';
 import { parseSandboxTerminalQuery } from '../src/sandboxes/sandbox-terminal.gateway';
 import {
@@ -570,6 +571,20 @@ test('preview ports follow the runner: vercel exposes its fixed list, kubernetes
     [3000, 3001, 4173, 5173, 8000, 8080, 8787, 9229]
   );
   assert.deepEqual(previewablePorts('none', [9229]), []);
+});
+
+test('chats match their worktree even when the agent stored the resolved home path', () => {
+  const worktree = '/persist/home/.worktrees/orchard-releases/hi-67b406';
+  assert.equal(inWorktree(worktree, worktree), true);
+  assert.equal(
+    inWorktree('/vercel/sandbox/orchard/home/.worktrees/orchard-releases/hi-67b406', worktree),
+    true
+  );
+  assert.equal(inWorktree('/persist/home/.worktrees/orchard-releases/hi-other', worktree), false);
+  assert.equal(inWorktree('/vercel/sandbox/orchard/home/.worktrees/x/hi-67b406', worktree), false);
+  assert.equal(inWorktree('/vercel/sandbox/orchard/home', worktree), false);
+  assert.equal(inWorktree(undefined, worktree), false);
+  assert.equal(inWorktree('/persist/home/x', null), false);
 });
 
 test('ports map a symlinked /persist back to the logical worktree path', () => {
