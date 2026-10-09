@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **367 commands** are available.
+override the saved context. **368 commands** are available.
 
 ## alert
 
@@ -3417,6 +3417,14 @@ orchard update <name>
 | `--name` | string |  | new sandbox name |
 | `--no-setup` | bool | `false` | remove the setup script |
 | `--setup` | string |  | setup script file run once on first boot (- reads stdin) |
+
+### `orchard sandbox usage`
+
+Show a machine's CPU, memory, disk and time limits
+
+```bash
+orchard usage <sandbox>
+```
 
 ## service
 

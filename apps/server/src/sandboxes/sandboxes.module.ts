@@ -29,6 +29,7 @@ import { SandboxProjectLinksService } from './links/sandbox-project-links.servic
 import { SandboxPreviewDeployService } from './links/sandbox-preview-deploy.service';
 import { SandboxLinksController } from './links/sandbox-links.controller';
 import { SandboxAgentService } from './sandbox-agent.service';
+import { SandboxAgentUsageService } from './sandbox-agent-usage.service';
 import { SandboxCoauthorsService } from './sandbox-coauthors.service';
 import { SandboxAgentController } from './sandbox-agent.controller';
 import { SandboxForkService } from './sandbox-fork.service';
@@ -44,11 +45,22 @@ import { SandboxSecretsService } from './runners/sandbox-secrets';
 import { SandboxProbesService } from './runners/sandbox-probes.service';
 import { SANDBOX_RUNNER_PROVIDERS, SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
 import { SandboxRunner } from './runners/sandbox-runner';
+import { SandboxUsageService } from './sandbox-usage.service';
+import { SandboxUsageController } from './sandbox-usage.controller';
+import { MetricsModule } from '../metrics/metrics.module';
 
 const REAPER_INTERVAL_MS = 60_000;
 
 @Module({
-  imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
+  imports: [
+    AuthModule,
+    PrismaModule,
+    KubernetesModule,
+    UsersModule,
+    AuditModule,
+    AnalyticsModule,
+    MetricsModule
+  ],
   controllers: [
     SandboxesController,
     SandboxSessionsController,
@@ -57,7 +69,8 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxAgentController,
     SandboxForkController,
     SandboxShareLinksController,
-    SandboxShareViewerController
+    SandboxShareViewerController,
+    SandboxUsageController
   ],
   providers: [
     SandboxesService,
@@ -91,9 +104,11 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxProjectLinksService,
     SandboxPreviewDeployService,
     SandboxAgentService,
+    SandboxAgentUsageService,
     SandboxCoauthorsService,
     SandboxForkService,
-    SandboxShareLinksService
+    SandboxShareLinksService,
+    SandboxUsageService
   ],
   exports: [
     SandboxesService,

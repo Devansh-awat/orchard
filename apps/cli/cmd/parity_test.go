@@ -202,6 +202,7 @@ var routeCoverage = map[string]string{
 	"GET /sandboxes":                                     "sandbox list",
 	"POST /sandboxes":                                    "sandbox create",
 	"GET /sandboxes/:id":                                 "sandbox get",
+	"GET /sandboxes/:id/usage":                           "sandbox usage",
 	"PATCH /sandboxes/:id":                               "sandbox update",
 	"POST /sandboxes/:id/start":                          "sandbox start",
 	"POST /sandboxes/:id/stop":                           "sandbox stop",
@@ -507,6 +508,7 @@ var routeExclusions = map[string]string{
 	"POST /integrations/slack/link":         "browser confirmation page for the one-time link from /greenhouse link in Slack",
 	"POST /integrations/slack/link/preview": "web-only: shows the Slack account on the link confirm page",
 	"POST /sandboxes/:id/repos/init":        "web-only: start a session from an empty repository",
+	"GET /sandboxes/:id/agent/usage":        "web composer context popover (host Claude subscription limits)",
 	"DELETE /users/me/integrations/slack":   "web user settings (unlink Slack); /greenhouse unlink in Slack does the same",
 
 	// server plumbing

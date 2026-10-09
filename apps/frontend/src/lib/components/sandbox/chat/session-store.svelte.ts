@@ -6,6 +6,7 @@ import {
 	OC_MODEL,
 	ocBase,
 	ocErrorMessage,
+	ocFastSibling,
 	ocFilePart,
 	ocFmtBytes,
 	ocFmtTokens,
@@ -194,6 +195,7 @@ export type ContextMeter = {
 	limit: number | null;
 	pct: number;
 	tooltip: string;
+	tokens: OcTokens | null;
 };
 
 export type SessionStoreOptions = {
@@ -494,6 +496,7 @@ export class ChatSessionStore {
 	self = $state.raw<ChatAuthor | null>(null);
 	comments = $state.raw<ChatComment[]>([]);
 	authorOf = $state.raw<(messageId: string) => ChatAuthor | null>(() => null);
+	isHost = $state.raw<() => boolean>(() => true);
 	beforePrompt: SessionStoreOptions['beforePrompt'] | null = null;
 	onDraftChange: ((text: string) => void) | null = null;
 	onTurnDone: (() => void) | null = null;
@@ -544,12 +547,14 @@ export class ChatSessionStore {
 
 	readonly variants = $derived(this.model?.variants ?? []);
 
+	readonly fastSibling = $derived(this.model ? ocFastSibling(this.model, this.models) : null);
+
 	readonly modelGroups = $derived(ocModelGroups(this.models));
 
 	readonly context = $derived.by((): ContextMeter => {
 		const tokens = this.active?.ctxTokens ?? null;
 		const limit = this.model?.context ?? null;
-		if (!tokens) return { used: 0, limit, pct: 0, tooltip: '' };
+		if (!tokens) return { used: 0, limit, pct: 0, tooltip: '', tokens: null };
 		const used =
 			tokens.total ??
 			tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write;
@@ -563,7 +568,8 @@ export class ChatSessionStore {
 				`reasoning ${ocFmtTokens(tokens.reasoning)}`,
 				`cache read ${ocFmtTokens(tokens.cache.read)}`,
 				`cache write ${ocFmtTokens(tokens.cache.write)}`
-			].join('\n')
+			].join('\n'),
+			tokens
 		};
 	});
 
@@ -754,6 +760,22 @@ export class ChatSessionStore {
 	pickVariant(variant: string | null) {
 		this.variant = variant;
 		this.#savePrefs();
+	}
+
+	cycleVariant() {
+		const order: (string | null)[] = [null, ...this.variants];
+		if (order.length < 2) return;
+		const at = order.indexOf(this.variant);
+		this.pickVariant(order[(at + 1) % order.length]);
+	}
+
+	toggleFast() {
+		const sibling = this.fastSibling;
+		if (sibling) this.pickModel(sibling);
+	}
+
+	agentDirectory(): string | null {
+		return (this.activeId ? this.#sessionDir(this.activeId) : null) ?? this.directory;
 	}
 
 	setPlan(plan: boolean) {

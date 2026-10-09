@@ -15,6 +15,7 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxAccessService } from './sandbox-access.service';
 import { SandboxAgentService } from './sandbox-agent.service';
+import { SandboxAgentUsageService } from './sandbox-agent-usage.service';
 import { requireSandboxAccess } from './sandbox-role-gate';
 import { resolveGreenhouseUser } from './sandbox-greenhouse-user';
 
@@ -26,7 +27,8 @@ export class SandboxAgentController {
     private readonly access: SandboxAccessService,
     private readonly agent: SandboxAgentService,
     private readonly usersService: UsersService,
-    private readonly analytics: AnalyticsService
+    private readonly analytics: AnalyticsService,
+    private readonly usageService: SandboxAgentUsageService
   ) {}
 
   @Post(':id/sessions/:sid/prompt')
@@ -53,5 +55,13 @@ export class SandboxAgentController {
     const user = await resolveGreenhouseUser(this.usersService, this.analytics, req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'viewer');
     return this.agent.transcript(row, sid, { limit });
+  }
+
+  @Get(':id/agent/usage')
+  @RequireScope('read')
+  async usage(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await resolveGreenhouseUser(this.usersService, this.analytics, req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.usageService.forSandbox(row, user.id);
   }
 }

@@ -208,6 +208,88 @@ const sessionTranscript = z.object({
 
 const shareLinkState = z.enum(['active', 'expired', 'revoked']);
 
+const agentUsageWindow = z.object({
+  usedPercent: z.number().min(0).max(100),
+  leftPercent: z.number().min(0).max(100),
+  resetsAt: z.string().nullable()
+});
+
+const agentUsage = z.discriminatedUnion('available', [
+  z.object({
+    available: z.literal(true),
+    provider: z.string(),
+    loginMethod: z.string(),
+    plan: z.string().nullable(),
+    email: z.string().nullable().describe('Masked unless you are the host'),
+    emailMasked: z.boolean(),
+    fiveHour: agentUsageWindow.nullable(),
+    sevenDay: agentUsageWindow.nullable(),
+    fetchedAt: z.string()
+  }),
+  z.object({
+    available: z.literal(false),
+    reason: z.enum(['no_token', 'api_key', 'unavailable'])
+  })
+]);
+
+const usageCount = z.number().nonnegative().nullable();
+
+const usageDisk = z.object({ usedBytes: usageCount, capacityBytes: usageCount });
+
+const machineUsage = z.object({
+  runner: sandboxRunnerId,
+  status: sandboxStatus,
+  startedAt: z.string().nullable().describe('When the current run started; null unless running'),
+  uptimeSeconds: z.number().int().nullable(),
+  lastActiveAt: z.string().nullable(),
+  idleTimeoutMinutes: z.number().int().nullable().describe('null when idle stop is off'),
+  stopsAt: z
+    .string()
+    .nullable()
+    .describe('When the machine stops if nobody uses it; a busy agent pushes it back'),
+  maxLifetimeHours: z.number().int().nullable(),
+  lifetimeEndsAt: z.string().nullable().describe('When the max lifetime stops this run'),
+  machines: z
+    .object({
+      count: z.number().int(),
+      limit: z.number().int().nullable().describe('null when the owner is uncapped')
+    })
+    .nullable()
+    .describe("The owner's machines against their cap"),
+  kubernetes: z
+    .object({
+      cpu: z.object({
+        usedMillicores: usageCount,
+        limitMillicores: usageCount,
+        requestMillicores: usageCount
+      }),
+      memory: z.object({ usedBytes: usageCount, limitBytes: usageCount }),
+      disk: usageDisk.describe('The home volume')
+    })
+    .nullable(),
+  vercel: z
+    .object({
+      vcpus: usageCount,
+      memoryBytes: usageCount,
+      sessionExpiresAt: z
+        .string()
+        .nullable()
+        .describe('When the provider session times out unless it is extended'),
+      sessionTimeoutMinutes: usageCount,
+      activeCpuMs: usageCount.describe(
+        'Active CPU this session: from Vercel once reported, otherwise measured in the guest'
+      ),
+      totalActiveCpuMs: usageCount.describe('Across every session of this machine'),
+      networkIngressBytes: usageCount,
+      networkEgressBytes: usageCount,
+      totalIngressBytes: usageCount,
+      totalEgressBytes: usageCount,
+      disk: usageDisk
+    })
+    .nullable(),
+  fetchedAt: z.string()
+});
+
 const shareLink = z.object({
   id: z.string().uuid(),
   sandboxId: z.string().uuid(),
@@ -950,6 +1032,18 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
     response: sessionTranscript,
     scope: 'exec'
+  },
+  'GET /sandboxes/:id/agent/usage': {
+    summary:
+      "The host's Claude subscription limits that this machine's agent spends (guest or host): 5-hour and 7-day percentages with reset times, plan and login. Cached 60s; available is false for API keys or when Anthropic does not answer",
+    response: agentUsage,
+    scope: 'read'
+  },
+  'GET /sandboxes/:id/usage': {
+    summary:
+      'Usage and limits of the machine (anyone who can see it, including org admins): uptime, idle stop and max lifetime, the owner machine count, and live CPU, memory and disk (Kubernetes, cached 15s) or allocation, session end, active CPU and network (Vercel, cached 30s). Anything not measurable is null',
+    response: machineUsage,
+    scope: 'read'
   },
   'POST /sandboxes/:id/fork': {
     summary:

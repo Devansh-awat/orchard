@@ -297,6 +297,7 @@ export class MachineWorkspace {
 				? { id: author.id, name: author.name, avatarUrl: author.avatarUrl ?? null }
 				: null;
 		};
+		this.store.isHost = () => this.isOwner;
 		this.live.selfId = host.self()?.id ?? null;
 		this.live.onSession = (session) => this.upsert(session);
 	}

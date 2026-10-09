@@ -15,6 +15,7 @@
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
+	import MachineUsage from './MachineUsage.svelte';
 	import { sandboxStatus } from '$lib/components/ui/status';
 	import { getGreenhouseApp } from './app.svelte';
 	import { runnerLabel } from './format';
@@ -81,6 +82,7 @@
 		<div class="gh-menu-sep"></div>
 	{/if}
 	{#if machine && ws}
+		<MachineUsage {machine} {open} owner={ws.isOwner} />
 		{#if machine.applyError}
 			<div class="apply" role="status">
 				<p class="apply-title">

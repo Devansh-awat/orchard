@@ -53,6 +53,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxForkCmd(),
 		sandboxShareCmd(),
 		sandboxLinkCmd(),
+		sandboxUsageCmd(),
 	)
 	return c
 }

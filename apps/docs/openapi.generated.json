@@ -47675,6 +47675,174 @@
         ]
       }
     },
+    "/sandboxes/{id}/agent/usage": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "available": {
+                          "enum": [
+                            true
+                          ],
+                          "type": "boolean"
+                        },
+                        "email": {
+                          "description": "Masked unless you are the host",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "emailMasked": {
+                          "type": "boolean"
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "fiveHour": {
+                          "properties": {
+                            "leftPercent": {
+                              "maximum": 100,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "resetsAt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "usedPercent": {
+                              "maximum": 100,
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "usedPercent",
+                            "leftPercent",
+                            "resetsAt"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "loginMethod": {
+                          "type": "string"
+                        },
+                        "plan": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "sevenDay": {
+                          "properties": {
+                            "leftPercent": {
+                              "maximum": 100,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "resetsAt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "usedPercent": {
+                              "maximum": 100,
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "usedPercent",
+                            "leftPercent",
+                            "resetsAt"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "provider",
+                        "loginMethod",
+                        "plan",
+                        "email",
+                        "emailMasked",
+                        "fiveHour",
+                        "sevenDay",
+                        "fetchedAt"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "available": {
+                          "enum": [
+                            false
+                          ],
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "enum": [
+                            "no_token",
+                            "api_key",
+                            "unavailable"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "reason"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "The host's Claude subscription limits that this machine's agent spends (guest or host): 5-hour and 7-day percentages with reset times, plan and login. Cached 60s; available is false for API keys or when Anthropic does not answer",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/apply/retry": {
       "post": {
         "description": "Auth: authenticated (scope: deploy)",
@@ -55244,6 +55412,360 @@
           }
         ],
         "summary": "Suspend a running sandbox (workspace and host key persist)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/usage": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "fetchedAt": {
+                      "type": "string"
+                    },
+                    "idleTimeoutMinutes": {
+                      "description": "null when idle stop is off",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "kubernetes": {
+                      "properties": {
+                        "cpu": {
+                          "properties": {
+                            "limitMillicores": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "requestMillicores": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedMillicores": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedMillicores",
+                            "limitMillicores",
+                            "requestMillicores"
+                          ],
+                          "type": "object"
+                        },
+                        "disk": {
+                          "description": "The home volume",
+                          "properties": {
+                            "capacityBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "capacityBytes"
+                          ],
+                          "type": "object"
+                        },
+                        "memory": {
+                          "properties": {
+                            "limitBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "limitBytes"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "cpu",
+                        "memory",
+                        "disk"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lifetimeEndsAt": {
+                      "description": "When the max lifetime stops this run",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "machines": {
+                      "description": "The owner's machines against their cap",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "description": "null when the owner is uncapped",
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "limit"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "maxLifetimeHours": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "runner": {
+                      "enum": [
+                        "kubernetes",
+                        "vercel"
+                      ],
+                      "type": "string"
+                    },
+                    "startedAt": {
+                      "description": "When the current run started; null unless running",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "stopsAt": {
+                      "description": "When the machine stops if nobody uses it; a busy agent pushes it back",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "uptimeSeconds": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "vercel": {
+                      "properties": {
+                        "activeCpuMs": {
+                          "description": "Active CPU this session: from Vercel once reported, otherwise measured in the guest",
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "disk": {
+                          "properties": {
+                            "capacityBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "capacityBytes"
+                          ],
+                          "type": "object"
+                        },
+                        "memoryBytes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "networkEgressBytes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "networkIngressBytes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "sessionExpiresAt": {
+                          "description": "When the provider session times out unless it is extended",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sessionTimeoutMinutes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "totalActiveCpuMs": {
+                          "description": "Across every session of this machine",
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "totalEgressBytes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "totalIngressBytes": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "vcpus": {
+                          "minimum": 0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "vcpus",
+                        "memoryBytes",
+                        "sessionExpiresAt",
+                        "sessionTimeoutMinutes",
+                        "activeCpuMs",
+                        "totalActiveCpuMs",
+                        "networkIngressBytes",
+                        "networkEgressBytes",
+                        "totalIngressBytes",
+                        "totalEgressBytes",
+                        "disk"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "runner",
+                    "status",
+                    "startedAt",
+                    "uptimeSeconds",
+                    "lastActiveAt",
+                    "idleTimeoutMinutes",
+                    "stopsAt",
+                    "maxLifetimeHours",
+                    "lifetimeEndsAt",
+                    "machines",
+                    "kubernetes",
+                    "vercel",
+                    "fetchedAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Usage and limits of the machine (anyone who can see it, including org admins): uptime, idle stop and max lifetime, the owner machine count, and live CPU, memory and disk (Kubernetes, cached 15s) or allocation, session end, active CPU and network (Vercel, cached 30s). Anything not measurable is null",
         "tags": [
           "sandboxes"
         ]

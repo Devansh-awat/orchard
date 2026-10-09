@@ -2,7 +2,6 @@
 	import {
 		ArrowUp,
 		Check,
-		ChevronDown,
 		ListChecks,
 		ListPlus,
 		MessageCircle,
@@ -13,10 +12,11 @@
 	} from 'lucide-svelte';
 	import { Avatar, Menu, MenuItem } from '$lib/components/ui';
 	import { fly, slide } from '$lib/utils/transitions';
-	import { OC_ATTACH_MAX_COUNT, ocShortModelName } from '../opencode';
+	import { OC_ATTACH_MAX_COUNT } from '../opencode';
 	import type { ChatSessionStore, RemoteDraft, SlashCommand } from './session-store.svelte';
 	import ContextRing from './ContextRing.svelte';
-	import ModelOptions from './ModelOptions.svelte';
+	import McpServers from './McpServers.svelte';
+	import ModelPicker from './ModelPicker.svelte';
 	import FileParts from './parts/FileParts.svelte';
 	import { truncate } from './format';
 
@@ -63,10 +63,6 @@
 		commenting
 			? commentBody.length > 0
 			: store.draft.trim().length > 0 || store.attachments.length > 0
-	);
-	const modelLabel = $derived(ocShortModelName(store.model?.name ?? store.modelID));
-	const variantLabel = $derived(
-		store.variant ? store.variant.charAt(0).toUpperCase() + store.variant.slice(1) : null
 	);
 
 	function autosize() {
@@ -328,43 +324,7 @@
 			onkeydown={onKey}
 			onpaste={onPaste}></textarea>
 		<div class="bar">
-			<Menu placement="top-start">
-				{#snippet trigger(props, open)}
-					<button
-						type="button"
-						class="model"
-						class:model--open={open}
-						aria-label="Model and effort"
-						title="Model and effort"
-						{...props}
-					>
-						<span class="model-name" data-align="content">{modelLabel}</span>
-						{#if variantLabel}<span class="model-effort">{variantLabel}</span>{/if}
-						<ChevronDown size={16} strokeWidth={1.75} />
-					</button>
-				{/snippet}
-				<div class="menu-scroll">
-					<ModelOptions
-						groups={store.modelGroups}
-						providerID={store.providerID}
-						modelID={store.modelID}
-						onpick={(m) => store.pickModel(m)}
-					/>
-					{#if store.variants.length > 0}
-						<div class="menu-group">Effort</div>
-						<MenuItem onclick={() => store.pickVariant(null)}>
-							<span class="menu-label">Default</span>
-							{#if !store.variant}<Check class="h-3 w-3" />{/if}
-						</MenuItem>
-						{#each store.variants as v (v)}
-							<MenuItem onclick={() => store.pickVariant(v)}>
-								<span class="menu-label">{v.charAt(0).toUpperCase() + v.slice(1)}</span>
-								{#if store.variant === v}<Check class="h-3 w-3" />{/if}
-							</MenuItem>
-						{/each}
-					{/if}
-				</div>
-			</Menu>
+			<ModelPicker {store} />
 			{#if store.plan}
 				<button
 					type="button"
@@ -377,7 +337,8 @@
 				</button>
 			{/if}
 			<span class="bar-spacer"></span>
-			<ContextRing meter={store.context} />
+			<ContextRing meter={store.context} sandboxId={store.sandboxId} />
+			<McpServers {store} />
 			<input
 				bind:this={fileInputEl}
 				class="file-input"
@@ -691,46 +652,6 @@
 		display: none;
 	}
 
-	.model {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		min-width: 0;
-		max-width: 16rem;
-		height: 1.75rem;
-		margin-left: calc(-1 * var(--space-2));
-		padding: 0 var(--space-1) 0 var(--space-2);
-		border: none;
-		border-radius: var(--radius-xs);
-		background: none;
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
-		color: var(--text-default);
-		cursor: pointer;
-		white-space: nowrap;
-		transition: background-color var(--dur-fast);
-	}
-
-	.model:hover,
-	.model--open {
-		background: var(--bg-hover);
-	}
-
-	.model-name {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.model-effort {
-		color: var(--text-muted);
-	}
-
-	.model :global(svg) {
-		flex-shrink: 0;
-		color: var(--text-faint);
-	}
-
 	.plan-chip {
 		display: inline-flex;
 		align-items: center;
@@ -790,18 +711,6 @@
 		height: 1rem;
 		border-radius: var(--radius-pill);
 		box-shadow: inset 0 0 0 1.5px currentColor;
-	}
-
-	.menu-scroll {
-		max-height: 22rem;
-		overflow-y: auto;
-	}
-
-	.menu-group {
-		padding: var(--space-2) var(--space-3) var(--space-1);
-		font-size: var(--text-caption);
-		line-height: 1rem;
-		color: var(--text-faint);
 	}
 
 	.menu-label {

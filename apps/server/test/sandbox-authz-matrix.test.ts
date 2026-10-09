@@ -13,6 +13,8 @@ import { sshUpgradeSandboxId } from '../src/sandboxes/sandbox-ssh.gateway';
 import { SandboxesController } from '../src/sandboxes/sandboxes.controller';
 import { SandboxSessionsController } from '../src/sandboxes/sandbox-sessions.controller';
 import { SandboxMembersController } from '../src/sandboxes/sandbox-members.controller';
+import { SandboxAgentController } from '../src/sandboxes/sandbox-agent.controller';
+import { SandboxUsageController } from '../src/sandboxes/sandbox-usage.controller';
 import {
   LIVE_MESSAGE_ROLE,
   LIVE_MESSAGE_TYPES,
@@ -472,6 +474,37 @@ test('member, comment, author and preview routes declare the contract minimum ro
   );
 });
 
+test('agent controller routes declare the contract minimum role', async () => {
+  const r = recorder();
+  const c = new SandboxAgentController(
+    r.access as any,
+    any,
+    r.users as any,
+    r.analytics as any,
+    any
+  );
+  const routes: Record<string, [Gate | null, () => Promise<unknown>]> = {
+    'POST /sandboxes/:id/sessions/:sid/prompt': [
+      { min: 'collaborator' },
+      () => c.prompt(req(), SANDBOX, SID, {})
+    ],
+    'GET /sandboxes/:id/sessions/:sid/transcript': [
+      { min: 'viewer' },
+      () => c.transcript(req(), SANDBOX, SID)
+    ],
+    'GET /sandboxes/:id/agent/usage': [{ min: 'collaborator' }, () => c.usage(req(), SANDBOX)]
+  };
+  await checkRoutes(routes, r.calls, Object.getOwnPropertyNames(SandboxAgentController.prototype));
+  const usageGate = await gateOf(routes['GET /sandboxes/:id/agent/usage'][1], r.calls);
+  assert.equal(allows('guest', usageGate!), true, 'guests see the usage they spend');
+  assert.equal(allows('viewer', usageGate!), false, 'read-only guests do not');
+  assert.equal(allows('orgAdmin', usageGate!), false, 'org admins do not look inside');
+  const covered = new Set(['constructor', 'prompt', 'transcript', 'usage']);
+  for (const name of Object.getOwnPropertyNames(SandboxAgentController.prototype)) {
+    assert.ok(covered.has(name), `SandboxAgentController.${name} is missing from the authz matrix`);
+  }
+});
+
 test('host-only and guest-level contract items hold for each principal', async () => {
   const r = recorder();
   const c = new SandboxesController(
@@ -606,6 +639,13 @@ test('opencode proxy paths map to the right minimum role', () => {
     ['PATCH', 'config', 'owner'],
     ['PUT', 'auth/anthropic', 'owner'],
     ['POST', 'mcp', 'owner'],
+    ['GET', 'mcp', 'owner'],
+    ['GET', 'mcp?directory=%2Fpersist%2Fhome%2Fx', 'owner'],
+    ['POST', 'mcp/github/connect', 'owner'],
+    ['POST', 'mcp/github/disconnect', 'owner'],
+    ['POST', 'mcp/github/auth', 'owner'],
+    ['POST', 'mcp/github/auth/callback', 'owner'],
+    ['DELETE', 'mcp/github/auth', 'owner'],
     ['GET', 'pty', 'owner'],
     ['POST', 'session/ses_a/share', 'owner'],
     ['GET', 'session/../config', 'owner'],
@@ -808,4 +848,25 @@ test('upgrade handlers step aside for preview hosts', () => {
     id,
     'a hostile Host header cannot crash the handler'
   );
+});
+
+test('machine usage is lifecycle-level, like the machine itself', async () => {
+  const r = recorder();
+  const c = new SandboxUsageController(r.access as any, any, r.users as any, r.analytics as any);
+  const routes: Record<string, [Gate | null, () => Promise<unknown>]> = {
+    'GET /sandboxes/:id/usage': [{ min: 'viewer', orgAdmin: true }, () => c.usage(req(), SANDBOX)]
+  };
+  await checkRoutes(routes, r.calls, Object.getOwnPropertyNames(SandboxUsageController.prototype));
+  const gate = await gateOf(routes['GET /sandboxes/:id/usage'][1], r.calls);
+  for (const principal of Object.keys(PRINCIPALS) as Principal[]) {
+    assert.equal(
+      allows(principal, gate!),
+      EXPECTED['viewer+orgAdmin'].includes(principal),
+      `${principal} GET /sandboxes/:id/usage`
+    );
+  }
+  const covered = new Set(['constructor', 'usage']);
+  for (const name of Object.getOwnPropertyNames(SandboxUsageController.prototype)) {
+    assert.ok(covered.has(name), `SandboxUsageController.${name} is missing from the authz matrix`);
+  }
 });

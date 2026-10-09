@@ -20,13 +20,13 @@ export function transitionWindowMs(runnerState: unknown): number {
   return forkSourceOf(runnerState) ? FORK_TRANSITION_MS : STUCK_TRANSITION_MS;
 }
 
-function idleTimeoutMs(): number {
+export function idleTimeoutMs(): number {
   const minutes = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES);
   const resolved = Number.isFinite(minutes) ? minutes : 60;
   return resolved > 0 ? resolved * 60 * 1000 : 0;
 }
 
-function maxLifetimeMs(): number {
+export function maxLifetimeMs(): number {
   const hours = Number(process.env.SANDBOX_MAX_LIFETIME_HOURS);
   const resolved = Number.isFinite(hours) ? hours : 168;
   return resolved > 0 ? resolved * 60 * 60 * 1000 : 0;

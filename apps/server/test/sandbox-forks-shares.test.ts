@@ -131,6 +131,7 @@ test('new sandbox routes declare their Host/Guest minimum role', async () => {
       () => agent.transcript(req(), SBX, SID),
       'viewer'
     ],
+    ['GET /sandboxes/:id/agent/usage', () => agent.usage(req(), SBX), 'collaborator'],
     ['POST /sandboxes/:id/fork', () => fork.fork(req(), SBX, {}), 'owner'],
     ['GET /sandboxes/:id/share-links', () => shares.list(req(), SBX), 'owner'],
     ['POST /sandboxes/:id/share-links', () => shares.create(req(), SBX, {}), 'owner'],
@@ -139,7 +140,7 @@ test('new sandbox routes declare their Host/Guest minimum role', async () => {
   for (const [route, fn, min] of routes) {
     assert.deepEqual(await gateOf(fn, r.gates), { min }, route);
   }
-  const covered = new Set(['prompt', 'transcript', 'fork', 'list', 'create', 'revoke']);
+  const covered = new Set(['prompt', 'transcript', 'usage', 'fork', 'list', 'create', 'revoke']);
   for (const proto of [
     SandboxAgentController.prototype,
     SandboxForkController.prototype,
@@ -892,8 +893,12 @@ test('vercel fork goes through the queue with ids only and forks instead of crea
     delete: async () => {},
     update: async () => {}
   };
+  const drives: any[] = [];
   runner.sdk = {
-    get: async () => {
+    get: async (params: any) => {
+      if (params.name === `sbx-${SBX}` && !params.resume) {
+        return { ...box, name: params.name, status: 'stopped', region: 'iad1' } as never;
+      }
       throw Object.assign(new Error('nf'), { response: { status: 404 } });
     },
     create: async () => {
@@ -902,7 +907,15 @@ test('vercel fork goes through the queue with ids only and forks instead of crea
     fork: async (params: any) => {
       forked.push(params);
       return box as never;
-    }
+    },
+    getDrive: async () => {
+      throw Object.assign(new Error('nf'), { response: { status: 404 } });
+    },
+    getOrCreateDrive: async (params: any) => {
+      drives.push(params);
+      return { name: params.name, region: params.region } as never;
+    },
+    driveForksAvailable: async () => true
   };
   runner.bootPollMs = 1;
   await runner.requestFork(
@@ -926,6 +939,9 @@ test('vercel fork goes through the queue with ids only and forks instead of crea
   assert.equal(forked[0].tags.orchard_sandbox, FORK);
   assert.equal(forked[0].tags.orchard_user, OWNER);
   assert.ok(forked[0].networkPolicy, 'the network policy is set for the new owner, not inherited');
+  assert.equal(drives[0].name, `orchard-${FORK}`);
+  assert.equal(forked[0].mounts['/mnt/orchard-drive'].drive, `orchard-${FORK}`);
+  assert.equal(forked[0].snapshotExpiration, 0);
   assert.ok(row.runnerState.forkedAt, 'a later re-provision creates instead of re-forking');
   assert.equal(row.status, 'running');
 });

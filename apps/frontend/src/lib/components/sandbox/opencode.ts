@@ -94,6 +94,12 @@ export type OcMcpState =
 
 export type OcMcpServer = { name: string; status: OcMcpState; error?: string };
 
+export type OcMcpType = 'local' | 'remote';
+
+export type OcMcpConfig =
+	| { type: 'local'; command: string[]; environment?: Record<string, string>; enabled?: boolean }
+	| { type: 'remote'; url: string; headers?: Record<string, string>; enabled?: boolean };
+
 export type OcMessage = { info: OcMessageInfo; parts: OcPart[] };
 
 export type OcEvent = { type: string; properties?: Record<string, unknown> };
@@ -252,6 +258,71 @@ export function ocModelGroups(models: OcModel[]): OcModelGroup[] {
 	return groups;
 }
 
+export function ocModelKey(model: { providerID: string; modelID: string }): string {
+	return `${model.providerID}/${model.modelID}`;
+}
+
+export type OcProviderKind = 'anthropic' | 'openai' | 'other';
+
+export function ocProviderKind(model: OcModel): OcProviderKind {
+	const provider = model.providerID.toLowerCase();
+	if (
+		provider.includes('anthropic') ||
+		/claude/i.test(model.modelID) ||
+		/^claude/i.test(model.name)
+	)
+		return 'anthropic';
+	if (provider.includes('openai') || /^(gpt|o\d|codex)/i.test(model.modelID)) return 'openai';
+	return 'other';
+}
+
+export function ocEffortLabel(variant: string | null): string {
+	return variant ? variant.charAt(0).toUpperCase() + variant.slice(1) : 'Default';
+}
+
+const FAST_SUFFIX = /\s+Fast$/i;
+
+export function ocIsFast(model: OcModel): boolean {
+	return FAST_SUFFIX.test(ocShortModelName(model.name));
+}
+
+export function ocModelLabel(model: OcModel): string {
+	return ocShortModelName(model.name).replace(FAST_SUFFIX, '');
+}
+
+export function ocFastSibling(model: OcModel, models: OcModel[]): OcModel | null {
+	const base = ocModelLabel(model).toLowerCase();
+	const fast = ocIsFast(model);
+	const matches = models.filter(
+		(m) =>
+			m.providerID === model.providerID &&
+			m.modelID !== model.modelID &&
+			ocIsFast(m) !== fast &&
+			ocModelLabel(m).toLowerCase() === base
+	);
+	return matches.find(isAlias) ?? matches[0] ?? null;
+}
+
+export function ocDefaultFavourites(groups: OcModelGroup[]): OcModel[] {
+	const claude = groups.filter((g) => CLAUDE_FAMILIES.includes(g.name));
+	const source = claude.length > 0 ? claude : groups.slice(0, 3);
+	const picks: OcModel[] = [];
+	for (const group of source) {
+		const newest = group.models.find((m) => !ocIsFast(m)) ?? group.models[0];
+		if (newest) picks.push(newest);
+	}
+	return picks;
+}
+
+export function ocSearchModels(models: OcModel[], query: string): OcModel[] {
+	const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+	if (terms.length === 0) return models;
+	return models.filter((m) => {
+		const haystack = `${ocShortModelName(m.name)} ${m.modelID} ${m.providerName}`.toLowerCase();
+		return terms.every((t) => haystack.includes(t));
+	});
+}
+
 export function ocMcpServers(
 	map: Record<string, { status: string; error?: string }>
 ): OcMcpServer[] {
@@ -358,4 +429,127 @@ export function ocErrorMessage(error: unknown): string {
 		if (e.name) return e.name;
 	}
 	return 'The agent hit an error';
+}
+
+function ocMcpPath(sandboxId: string, path: string, directory: string | null): string {
+	const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+	return `${ocBase(sandboxId)}/mcp${path}${query}`;
+}
+
+async function ocMcpError(res: Response, fallback: string): Promise<Error> {
+	if (res.status === 403) return new Error('Only the host can change MCP servers');
+	const data = (await res.json().catch(() => null)) as {
+		message?: string;
+		error?: string;
+		data?: { message?: string };
+	} | null;
+	return new Error(data?.data?.message ?? data?.message ?? data?.error ?? fallback);
+}
+
+export type OcMcpList = { servers: OcMcpServer[]; forbidden: boolean };
+
+export async function ocMcpList(sandboxId: string, directory: string | null): Promise<OcMcpList> {
+	const res = await apiFetch(ocMcpPath(sandboxId, '', directory));
+	if (res.status === 403) return { servers: [], forbidden: true };
+	if (!res.ok) throw await ocMcpError(res, 'Could not load MCP servers');
+	const map = (await res.json()) as Record<string, { status: string; error?: string }>;
+	return { servers: ocMcpServers(map ?? {}), forbidden: false };
+}
+
+export async function ocMcpTypes(
+	sandboxId: string,
+	directory: string | null
+): Promise<Record<string, OcMcpType>> {
+	const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+	const res = await apiFetch(`${ocBase(sandboxId)}/config${query}`);
+	if (!res.ok) return {};
+	const config = (await res.json().catch(() => null)) as {
+		mcp?: Record<string, { type?: string }>;
+	} | null;
+	const types: Record<string, OcMcpType> = {};
+	for (const [name, entry] of Object.entries(config?.mcp ?? {})) {
+		if (entry?.type === 'local' || entry?.type === 'remote') types[name] = entry.type;
+	}
+	return types;
+}
+
+export async function ocMcpAdd(
+	sandboxId: string,
+	directory: string | null,
+	name: string,
+	config: OcMcpConfig
+): Promise<void> {
+	const res = await apiFetch(ocMcpPath(sandboxId, '', directory), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ name, config })
+	});
+	if (!res.ok) throw await ocMcpError(res, `Could not add ${name}`);
+}
+
+export async function ocMcpToggle(
+	sandboxId: string,
+	directory: string | null,
+	name: string,
+	action: 'connect' | 'disconnect'
+): Promise<void> {
+	const res = await apiFetch(
+		ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/${action}`, directory),
+		{ method: 'POST' }
+	);
+	if (!res.ok) throw await ocMcpError(res, `Could not ${action} ${name}`);
+}
+
+export async function ocMcpAuthStart(
+	sandboxId: string,
+	directory: string | null,
+	name: string
+): Promise<string> {
+	const res = await apiFetch(ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/auth`, directory), {
+		method: 'POST'
+	});
+	if (!res.ok) throw await ocMcpError(res, `${name} does not support signing in from the browser`);
+	const data = (await res.json().catch(() => null)) as { authorizationUrl?: string } | null;
+	const url = data?.authorizationUrl;
+	if (!url || !/^https?:\/\//i.test(url)) throw new Error(`${name} did not return a sign in page`);
+	return url;
+}
+
+export async function ocMcpAuthFinish(
+	sandboxId: string,
+	directory: string | null,
+	name: string,
+	code: string
+): Promise<void> {
+	const res = await apiFetch(
+		ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/auth/callback`, directory),
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ code })
+		}
+	);
+	if (!res.ok) throw await ocMcpError(res, `Could not finish signing in to ${name}`);
+}
+
+export async function ocMcpAuthRemove(
+	sandboxId: string,
+	directory: string | null,
+	name: string
+): Promise<void> {
+	const res = await apiFetch(ocMcpPath(sandboxId, `/${encodeURIComponent(name)}/auth`, directory), {
+		method: 'DELETE'
+	});
+	if (!res.ok) throw await ocMcpError(res, `Could not sign out of ${name}`);
+}
+
+export function ocOauthCode(input: string): string | null {
+	const text = input.trim();
+	if (!text) return null;
+	try {
+		const url = new URL(text);
+		return url.searchParams.get('code');
+	} catch {
+		return /^[\w.~-]+$/.test(text) ? text : null;
+	}
 }
