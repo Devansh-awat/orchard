@@ -612,6 +612,28 @@ export function motionPanel(isActive: () => boolean) {
 	};
 }
 
+const PIN_KEYS = ['position', 'left', 'top', 'right', 'bottom', 'margin', 'translate', 'width'];
+
+function pinInPlace(el: HTMLElement, rect: DOMRect | null): (() => void) | null {
+	if (!rect || rect.width === 0) return null;
+	const saved = PIN_KEYS.map((key) => el.style.getPropertyValue(key));
+	el.style.position = 'fixed';
+	el.style.margin = '0';
+	el.style.right = 'auto';
+	el.style.bottom = 'auto';
+	el.style.translate = 'none';
+	el.style.width = `${rect.width}px`;
+	el.style.left = '0px';
+	el.style.top = '0px';
+	const origin = el.getBoundingClientRect();
+	el.style.left = `${rect.left - origin.left}px`;
+	el.style.top = `${rect.top - origin.top}px`;
+	return () =>
+		PIN_KEYS.forEach((key, i) =>
+			saved[i] ? el.style.setProperty(key, saved[i]) : el.style.removeProperty(key)
+		);
+}
+
 export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } = {}) {
 	const from = { opacity: 0, scale: 0.96, y: -6 };
 	return (el: Element) => {
@@ -623,11 +645,33 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 		// next frame and the panel paints at full opacity for one frame first.
 		const seedClosed = () => target.classList.add('motion-entering');
 
+		let lastRect: DOMRect | null = null;
+		let exiting = false;
+		let unpin: (() => void) | null = null;
+		const release = () => {
+			exiting = false;
+			unpin?.();
+			unpin = null;
+		};
+		const pin = () => {
+			if (exiting && !unpin && !target.matches(':popover-open')) {
+				unpin = pinInPlace(target, lastRect);
+			}
+		};
+		const remember = (event: Event) => {
+			if ((event as ToggleEvent).newState !== 'closed') return;
+			lastRect = target.getBoundingClientRect();
+			queueMicrotask(pin);
+		};
+		target.addEventListener('beforetoggle', remember);
+
 		if (!overlayOpen.has(target)) overlayOpen.set(target, isOpen());
 		$effect(() => {
 			const open = isOpen();
 			if (open === overlayOpen.get(target)) return;
 			overlayOpen.set(target, open);
+			release();
+			if (open) lastRect = null;
 
 			if (!motionEnabled()) {
 				target.classList.remove('motion-entering');
@@ -674,6 +718,8 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 			// Outlive the `display: none` that CSS applies once the panel closes,
 			// otherwise there is nothing left on screen to animate.
 			target.style.display = 'block';
+			exiting = true;
+			pin();
 			// Not exit-scaled: a menu that is already only 250ms reads as a blink if
 			// it is shortened further, and the dismissal is the half that has to be
 			// legible for the panel to feel like it went somewhere.
@@ -683,16 +729,19 @@ export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } =
 				'snappy'
 			);
 			if (!exit) {
+				release();
 				target.style.display = '';
 				return;
 			}
 			exit.finished.then(() => {
 				if (isOpen()) return;
+				release();
 				target.style.display = '';
 				target.style.opacity = '';
 				target.style.transform = '';
 			});
 		});
+		return () => target.removeEventListener('beforetoggle', remember);
 	};
 }
 
