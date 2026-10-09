@@ -51,8 +51,14 @@ stringData:
 {{- $user := .Values.builders.harbor.username }}
 {{- $pass := .Values.builders.harbor.password }}
 {{- $auth := printf "%s:%s" $user $pass | b64enc }}
-{{- range $i, $h := $hosts }}
-        {{ if $i }},{{ end }}"{{ $h }}": { "username": "{{ $user }}", "password": "{{ $pass }}", "auth": "{{ $auth }}" }
+{{- $httpHosts := .Values.builders.httpRegistries | default list }}
+{{- $sep := "" }}
+{{- range $h := $hosts }}
+        {{ $sep }}"{{ $h }}": { "username": "{{ $user }}", "password": "{{ $pass }}", "auth": "{{ $auth }}" }
+{{- $sep = "," }}
+{{- if and (has $h $httpHosts) (not (regexMatch ":\\d+$" $h)) }}
+        {{ $sep }}"{{ $h }}:80": { "username": "{{ $user }}", "password": "{{ $pass }}", "auth": "{{ $auth }}" }
+{{- end }}
 {{- end }}
       }
     }
