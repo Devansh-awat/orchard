@@ -4,7 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { greenhouseFlag, sandboxEnabled } from '$lib/flags';
+	import { greenhouseFlag, sandboxEnvOverride, sandboxesOn } from '$lib/flags';
+	import { instanceFeatures } from '$lib/stores/instance-features';
 	import {
 		Leaf,
 		Zap,
@@ -118,7 +119,7 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
-		...(sandboxEnabled() && $greenhouseFlag
+		...($sandboxesOn && $greenhouseFlag
 			? [
 					{
 						id: 'sandboxes',
@@ -300,6 +301,10 @@
 
 	$effect(() => {
 		if ($isSuperAdmin) instanceChecklist.load();
+	});
+
+	$effect(() => {
+		if (browser && sandboxEnvOverride() === null) void instanceFeatures.load();
 	});
 </script>
 

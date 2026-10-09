@@ -20,7 +20,7 @@
 		Sprout
 	} from 'lucide-svelte';
 	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
-	import { greenhouseFlag, sandboxEnabled } from '$lib/flags';
+	import { greenhouseFlag, sandboxesOn } from '$lib/flags';
 	import { SandboxUsageTab } from '$lib/components/sandbox';
 
 	const formatPods = (n: number) => `${n}`;
@@ -139,7 +139,7 @@
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
 			{ id: 'me', label: 'Yours', icon: Gauge }
 		];
-		if (sandboxEnabled() && $greenhouseFlag) {
+		if ($sandboxesOn && $greenhouseFlag) {
 			tabs.push({ id: 'sandbox', label: 'Sandboxes', icon: Sprout });
 		}
 		if (isAdmin) {

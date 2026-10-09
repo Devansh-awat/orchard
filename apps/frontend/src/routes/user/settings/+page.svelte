@@ -22,7 +22,7 @@
 		type EarlyAccessFeature
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
-	import { sandboxEnabled } from '$lib/flags';
+	import { sandboxesOn } from '$lib/flags';
 	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
 	import { scrollFade } from '$lib/utils/scroll-fade';
 	import { SandboxCredentialsPanel } from '$lib/components/sandbox';
@@ -44,8 +44,6 @@
 		UserGreenhouseAccounts,
 		UserLogs
 	} from '$lib/components/user-settings';
-
-	const sandboxOn = sandboxEnabled();
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -156,7 +154,7 @@
 				label: 'Security',
 				items: [{ id: 'security', label: 'Passkeys and devices' }]
 			},
-			...(sandboxOn
+			...($sandboxesOn
 				? [
 						{
 							label: 'Greenhouse',
@@ -871,7 +869,7 @@
 				/>
 			{/if}
 
-			{#if activeTab === 'sandbox' && sandboxOn}
+			{#if activeTab === 'sandbox' && $sandboxesOn}
 				<UserGreenhouseAccounts index={0} />
 				<UserSshIdentities index={1} />
 				<SandboxCredentialsPanel index={2} />
