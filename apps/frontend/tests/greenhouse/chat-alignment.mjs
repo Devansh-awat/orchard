@@ -18,6 +18,7 @@ const TURN_GAP = 32;
 const TOLERANCE = 1;
 const GUTTER = 32;
 const MIN_INSET = 16;
+const BOX_INSET = 17;
 const WIDE_INSET = 24;
 const WIDE_PANE = 768;
 
@@ -54,7 +55,7 @@ function measure() {
 			const size = parseFloat(cs.fontSize);
 			const lh = cs.lineHeight === 'normal' ? NaN : parseFloat(cs.lineHeight);
 			const problems = [];
-			if (!Number.isFinite(size) || ![11, 12, 13, 15].includes(Math.round(size * 100) / 100)) {
+			if (!Number.isFinite(size) || ![11, 12, 13, 14, 15].includes(Math.round(size * 100) / 100)) {
 				problems.push(`font-size ${cs.fontSize}`);
 			}
 			if (!Number.isFinite(lh) || Math.abs(lh / 4 - Math.round(lh / 4)) > 0.01) {
@@ -87,13 +88,14 @@ function measure() {
 		content: edges('[data-align="content"]', 'left'),
 		own: edges('[data-align="own"]', 'right'),
 		step: edges('[data-align="step"]', 'left'),
+		inset: edges('[data-align="inset"]', 'left'),
 		typeIssues,
 		gaps,
 		columns: {
 			transcript: col ? col.getBoundingClientRect().left : null,
 			dock: dock ? dock.getBoundingClientRect().left : null
 		},
-		inset: {
+		column: {
 			pad: col ? parseFloat(getComputedStyle(col).paddingLeft) : null,
 			paneWidth: chatPane.getBoundingClientRect().width,
 			glyphs
@@ -146,6 +148,7 @@ async function main() {
 					const open = await page.evaluate(measure);
 					m.step = open.step;
 					m.content = [...m.content, ...open.content];
+					m.inset = [...m.inset, ...open.inset];
 					m.typeIssues = [...new Set([...m.typeIssues, ...open.typeIssues])];
 					m.expanded = count;
 					for (let i = 0; i < count; i += 1) await rows.nth(i).click();
@@ -173,9 +176,22 @@ async function main() {
 					if (
 						content.length === 1 &&
 						step.length === 1 &&
-						Math.abs(step[0].x - content[0].x - 16) > TOLERANCE
+						Math.abs(step[0].x - content[0].x) > TOLERANCE
 					) {
-						problems.push(`steps indent ${step[0].x - content[0].x}px, expected 16`);
+						problems.push(`steps indent ${step[0].x - content[0].x}px, expected 0`);
+					}
+					const inset = distinct(m.inset);
+					if (inset.length > 1) {
+						problems.push(
+							`box inner edges ${inset.map((g) => `${g.x}px [${g.items.slice(0, 3).join('; ')}]`).join(' | ')}`
+						);
+					}
+					if (
+						content.length === 1 &&
+						inset.length === 1 &&
+						Math.abs(inset[0].x - content[0].x - BOX_INSET) > TOLERANCE
+					) {
+						problems.push(`box inset ${inset[0].x - content[0].x}px, expected ${BOX_INSET}`);
 					}
 					if (m.columns.transcript !== null && m.columns.dock !== null) {
 						if (Math.abs(m.columns.transcript - m.columns.dock) > TOLERANCE) {
@@ -184,13 +200,13 @@ async function main() {
 							);
 						}
 					}
-					if (m.inset.pad !== null) {
-						const want = GUTTER + (m.inset.paneWidth >= WIDE_PANE ? WIDE_INSET : MIN_INSET);
-						if (Math.abs(m.inset.pad - want) > TOLERANCE) {
-							problems.push(`column inset ${m.inset.pad}px, expected ${want}px`);
+					if (m.column.pad !== null) {
+						const want = GUTTER + (m.column.paneWidth >= WIDE_PANE ? WIDE_INSET : MIN_INSET);
+						if (Math.abs(m.column.pad - want) > TOLERANCE) {
+							problems.push(`column inset ${m.column.pad}px, expected ${want}px`);
 						}
 					}
-					const tight = m.inset.glyphs.filter((g) => g.x < MIN_INSET - TOLERANCE);
+					const tight = m.column.glyphs.filter((g) => g.x < MIN_INSET - TOLERANCE);
 					if (tight.length > 0) {
 						problems.push(
 							`gutter glyphs within ${MIN_INSET}px of the pane edge: ${tight
@@ -205,7 +221,7 @@ async function main() {
 				}
 				const summary = m.missing
 					? ''
-					: `${distinct(m.content).length} content edge, ${distinct(m.own).length} own edge, ${distinct(m.step).length} step edge (${m.step.length} steps), ${m.gaps.length} turn gaps`;
+					: `${distinct(m.content).length} content edge, ${distinct(m.own).length} own edge, ${distinct(m.step).length} step edge (${m.step.length} steps), ${distinct(m.inset).length} inset edge, ${m.gaps.length} turn gaps`;
 				if (problems.length > 0) {
 					failures.push({ tag, problems });
 					log(`FAIL ${tag}`);

@@ -391,6 +391,7 @@
 	{/if}
 	<form
 		class="cmp"
+		data-align="content"
 		class:cmp--drop={dropActive}
 		ondragover={onDragOver}
 		ondragleave={onDragLeave}
@@ -459,7 +460,7 @@
 		{#if queue.length > 0}
 			<ol class="queue" transition:slide aria-label="Queued prompts">
 				{#each queue as item, qi (item.id)}
-					<li class="queued" data-align="content">
+					<li class="queued" data-align="inset">
 						<span class="queued-index">{qi + 1}</span>
 						{#if editingId === item.id}
 							<input
@@ -513,7 +514,7 @@
 			</ol>
 		{/if}
 		{#if notice}
-			<div class="cmp-note" transition:slide data-align="content" role="status">
+			<div class="cmp-note" transition:slide data-align="inset" role="status">
 				<div class="note-body">
 					<span class="note-text">{notice.text}</span>
 					{#if notice.todos}
@@ -543,10 +544,10 @@
 			</div>
 		{/if}
 		{#if hint}
-			<div class="cmp-mode cmp-hint" transition:slide data-align="content">{hint}</div>
+			<div class="cmp-mode cmp-hint" transition:slide data-align="inset">{hint}</div>
 		{/if}
 		{#if commenting}
-			<div class="cmp-mode" transition:slide data-align="content">
+			<div class="cmp-mode" transition:slide data-align="inset">
 				<MessageCircle size={14} strokeWidth={1.75} />
 				Comment to the people in this session. The agent will not see it.
 			</div>
@@ -569,7 +570,7 @@
 			aria-label="Message"
 			aria-autocomplete="list"
 			aria-activedescendant={listed > 0 ? `${uid}-slash-${active}` : undefined}
-			data-align="content"
+			data-align="inset"
 			oninput={autosize}
 			onkeydown={onKey}
 			onpaste={onPaste}></textarea>
@@ -698,6 +699,7 @@
 		align-items: center;
 		gap: var(--space-2);
 		min-width: 0;
+		margin-top: var(--space-2);
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		color: var(--text-muted);
@@ -729,7 +731,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4) var(--space-2);
+		padding: var(--space-3) calc(var(--space-4) + 1px) var(--space-2);
 		border: none;
 		border-radius: var(--radius-lg);
 		background: var(--bg-raised);

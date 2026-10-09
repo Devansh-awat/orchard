@@ -15,7 +15,7 @@
 	const elapsed = $derived(fmtElapsed(now - (start ?? mounted)));
 </script>
 
-<div class="work" data-align="content">
+<div class="work" data-align="step">
 	<span class="work-glyph"><Pip pose="thinking" size={18} /></span>
 	<span class="work-time" role="timer">{elapsed}</span>
 	<span class="work-sep" aria-hidden="true">·</span>
@@ -35,10 +35,11 @@
 	}
 
 	.work-glyph {
-		display: inline-grid;
-		place-items: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		flex-shrink: 0;
-		width: 1.125rem;
+		width: 1rem;
 		height: 1.125rem;
 	}
 

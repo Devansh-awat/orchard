@@ -346,7 +346,7 @@
 			title="Model and effort"
 			{...props}
 		>
-			<span class="model-name" data-align="content">{modelLabel}</span>
+			<span class="model-name" data-align="inset">{modelLabel}</span>
 			{#if variantLabel}<span class="model-effort">{variantLabel}</span>{/if}
 			<ChevronDown size={16} strokeWidth={1.75} />
 		</button>
@@ -566,6 +566,12 @@
 
 	.model-effort {
 		color: var(--text-muted);
+	}
+
+	@container chat-pane (max-width: 32rem) {
+		.model-effort {
+			display: none;
+		}
 	}
 
 	.model :global(svg) {
