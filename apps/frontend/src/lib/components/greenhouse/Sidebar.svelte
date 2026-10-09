@@ -178,7 +178,7 @@
 	</div>
 
 	<div class="list gh-scroll" role="tree" aria-label="Sessions">
-		{#if ws && !ws.lifecycleOnly && !ws.running}
+		{#if ws && !ws.lifecycleOnly && !ws.running && !app.home}
 			<div class="asleep" role="status">
 				<p class="asleep-title">
 					{asleepStatus === 'stopped' || asleepStatus === 'error'

@@ -36,6 +36,7 @@
 	import { askNotificationPermission } from './agent-alerts';
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
+	import WakeUp from './WakeUp.svelte';
 	import * as api from './api';
 	import { linearStatus, linkedIntegrations, type IntegrationProvider } from './integrations';
 	import RepoIcon from './RepoIcon.svelte';
@@ -64,7 +65,6 @@
 	let repoOpen = $state(false);
 	let modeOpen = $state(false);
 	let launching = $state(false);
-	let queued = $state<{ repo: string | null; prompt: string } | null>(null);
 	let blank = $state(false);
 	let box = $state<HTMLTextAreaElement | null>(null);
 	let linked = $state<Set<IntegrationProvider> | null>(null);
@@ -79,11 +79,7 @@
 	);
 	const stopped = $derived(machine?.status === 'stopped' || machine?.status === 'error');
 	const canLaunch = $derived(
-		!!ws &&
-			ws.canEdit &&
-			!!prompt.trim() &&
-			!launching &&
-			(stopped || (ws.running && ws.reposLoaded))
+		!!ws && ws.canEdit && !!prompt.trim() && !launching && ws.running && ws.reposLoaded
 	);
 	const models = $derived(ws?.store.models ?? []);
 	const launchChord = $derived(sendChord(greenhousePrefs.values.sendWith, modKey()));
@@ -171,13 +167,6 @@
 		if (initialRepo) repo = initialRepo;
 	});
 
-	$effect(() => {
-		const pending = queued;
-		if (!pending || !ws?.running || !ws.reposLoaded) return;
-		queued = null;
-		void launchNow(pending.repo, pending.prompt);
-	});
-
 	function meta(m: Sandbox) {
 		return sandboxStatus(m.status, {
 			applying: m.applying,
@@ -212,17 +201,6 @@
 		if (!canLaunch || !ws) return;
 		if (greenhousePrefs.values.notifyAgent) askNotificationPermission();
 		const text = prompt.trim();
-		if (stopped) {
-			if (!ws.canStart) return;
-			queued = { repo: chosen?.name ?? null, prompt: text };
-			toasts.add({
-				title: `Starting ${machine?.name}`,
-				description: 'Your session opens as soon as it is up.',
-				color: 'info'
-			});
-			await ws.lifecycle('start');
-			return;
-		}
 		await launchNow(chosen?.name ?? null, text);
 	}
 
@@ -256,160 +234,201 @@
 <div class="home gh-scroll">
 	<div class="inner">
 		<div class="stage">
-			<div class="hero">
-				<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
-				<h1 class="title" data-type="display">What should we build?</h1>
-			</div>
+			{#if !ws?.running}
+				<div class="start" role="status">
+					{#if machine && !stopped}
+						<WakeUp status={machine.status} sandboxId={machine.id} />
+					{:else}
+						<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
+						<h1 class="title" data-type="display">
+							{machine ? `${machine.name} is asleep` : 'Select and start your machine'}
+						</h1>
+						<p class="start-text">
+							{machine
+								? 'Start it to chat with the agent. Your repositories and sessions live on it.'
+								: app.machines.length > 0
+									? 'Greenhouse runs on your own computer in the cloud. Pick one below.'
+									: 'Greenhouse runs on your own computer in the cloud. Create one to start.'}
+						</p>
+						{#if machine}
+							<button
+								type="button"
+								class="gh-btn gh-btn--primary start-btn"
+								disabled={!ws?.canStart || !!ws?.busy}
+								title={ws?.canStart ? undefined : 'Read-only guests cannot start this machine'}
+								onclick={() => ws?.lifecycle('start')}
+							>
+								<Play size={14} strokeWidth={1.75} /> Start {machine.name}
+							</button>
+						{:else if app.machines.length === 0}
+							<button
+								type="button"
+								class="gh-btn gh-btn--primary start-btn"
+								onclick={() => (app.sheet = 'new-machine')}
+							>
+								<Plus size={14} strokeWidth={1.75} /> New machine
+							</button>
+						{/if}
+					{/if}
+				</div>
+			{:else}
+				<div class="hero">
+					<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
+					<h1 class="title" data-type="display">What should we build?</h1>
+				</div>
 
-			<div class="composer" class:composer--off={!ws?.canEdit}>
-				<textarea
-					bind:this={box}
-					bind:value={prompt}
-					class="prompt"
-					rows="3"
-					placeholder={ws && !ws.canEdit ? VIEWER_ONLY : 'Ask Greenhouse to build, fix or explain'}
-					aria-label="Prompt"
-					disabled={!ws?.canEdit}
-					onkeydown={key}
-					{@attach grow}></textarea>
-				<div class="bar">
-					<IssuePicker
-						bind:value={issue}
-						sandboxId={ws?.sandboxId ?? null}
-						repo={chosen?.name ?? null}
-						running={!!ws?.running}
+				<div class="composer" class:composer--off={!ws?.canEdit}>
+					<textarea
+						bind:this={box}
+						bind:value={prompt}
+						class="prompt"
+						rows="3"
+						placeholder={ws && !ws.canEdit
+							? VIEWER_ONLY
+							: 'Ask Greenhouse to build, fix or explain'}
+						aria-label="Prompt"
 						disabled={!ws?.canEdit}
-					/>
-					<span class="grow"></span>
-					<Menu bind:open={modeOpen} placement="bottom-end">
+						onkeydown={key}
+						{@attach grow}></textarea>
+					<div class="bar">
+						<IssuePicker
+							bind:value={issue}
+							sandboxId={ws?.sandboxId ?? null}
+							repo={chosen?.name ?? null}
+							running={!!ws?.running}
+							disabled={!ws?.canEdit}
+						/>
+						<span class="grow"></span>
+						<Menu bind:open={modeOpen} placement="bottom-end">
+							{#snippet trigger(props, isOpen)}
+								<button
+									{...props}
+									type="button"
+									class="mode"
+									class:mode--plan={plan}
+									aria-expanded={isOpen}
+									disabled={!ws?.canEdit}
+									title={plan ? 'Plan: reads and proposes, edits nothing' : 'Build: edits files'}
+								>
+									{#if plan}<ListChecks size={14} strokeWidth={1.75} />{:else}<Hammer
+											size={14}
+											strokeWidth={1.75}
+										/>{/if}
+									<span>{plan ? 'Plan' : 'Build'}</span>
+									<ChevronDown size={14} strokeWidth={1.75} />
+								</button>
+							{/snippet}
+							<MenuItem onclick={() => setPlan(false)}>
+								<Hammer size={14} strokeWidth={1.75} />
+								<span class="menu-label">Build</span>
+								{#if !plan}<Check size={13} />{/if}
+							</MenuItem>
+							<MenuItem onclick={() => setPlan(true)}>
+								<ListChecks size={14} strokeWidth={1.75} />
+								<span class="menu-label">Plan, read only</span>
+								{#if plan}<Check size={13} />{/if}
+							</MenuItem>
+						</Menu>
+						{#if ws && models.length > 0}
+							<span class="model"><ModelPicker store={ws.store} placement="bottom-end" /></span>
+						{/if}
+						<button
+							type="button"
+							class="send"
+							aria-label="Start session"
+							title="Start session ({launchChord})"
+							aria-busy={launching}
+							disabled={!canLaunch}
+							onclick={launch}
+						>
+							{#if launching}
+								<span class="animate-spin inline-grid" data-motion="progress"
+									><LoaderCircle size={16} strokeWidth={2} /></span
+								>
+							{:else}
+								<ArrowUp size={16} strokeWidth={2} />
+							{/if}
+						</button>
+					</div>
+				</div>
+
+				<div class="chips">
+					<Menu bind:open={repoOpen} placement="bottom-start">
 						{#snippet trigger(props, isOpen)}
 							<button
 								{...props}
 								type="button"
-								class="mode"
-								class:mode--plan={plan}
+								class="seg"
 								aria-expanded={isOpen}
-								disabled={!ws?.canEdit}
-								title={plan ? 'Plan: reads and proposes, edits nothing' : 'Build: edits files'}
+								disabled={!ws?.running && repos.length === 0}
+								title={chosen ? `${chosen.name}, sessions branch off ${chosen.branch}` : undefined}
 							>
-								{#if plan}<ListChecks size={14} strokeWidth={1.75} />{:else}<Hammer
-										size={14}
-										strokeWidth={1.75}
-									/>{/if}
-								<span>{plan ? 'Plan' : 'Build'}</span>
+								{#if chosen}
+									<span class="seg-part">
+										<RepoIcon name={chosen.name} github={chosen.github} icon={chosen.icon} />
+										<span class="seg-text">{chosen.name}</span>
+									</span>
+									<span class="seg-part seg-part--branch">
+										<GitBranch size={14} strokeWidth={1.75} />
+										<span class="seg-text gh-mono">{chosen.branch}</span>
+									</span>
+								{:else if ws?.running && !ws.reposLoaded}
+									<span class="seg-part">
+										<span class="seg-text seg-text--muted">Loading repositories</span>
+									</span>
+								{:else}
+									<span class="seg-part">
+										<FilePlus size={14} strokeWidth={1.75} />
+										<span class="seg-text">New empty repository</span>
+									</span>
+								{/if}
 								<ChevronDown size={14} strokeWidth={1.75} />
 							</button>
 						{/snippet}
-						<MenuItem onclick={() => setPlan(false)}>
-							<Hammer size={14} strokeWidth={1.75} />
-							<span class="menu-label">Build</span>
-							{#if !plan}<Check size={13} />{/if}
-						</MenuItem>
-						<MenuItem onclick={() => setPlan(true)}>
-							<ListChecks size={14} strokeWidth={1.75} />
-							<span class="menu-label">Plan, read only</span>
-							{#if plan}<Check size={13} />{/if}
-						</MenuItem>
-					</Menu>
-					{#if ws && models.length > 0}
-						<span class="model"><ModelPicker store={ws.store} placement="bottom-end" /></span>
-					{/if}
-					<button
-						type="button"
-						class="send"
-						aria-label={stopped ? 'Start the machine and launch' : 'Start session'}
-						title="{stopped ? 'Start the machine and launch' : 'Start session'} ({launchChord})"
-						aria-busy={launching || !!queued}
-						disabled={!canLaunch}
-						onclick={launch}
-					>
-						{#if launching || queued}
-							<span class="animate-spin inline-grid" data-motion="progress"
-								><LoaderCircle size={16} strokeWidth={2} /></span
+						{#each repos as r (r.name)}
+							<MenuItem
+								onclick={() => {
+									repo = r.name;
+									blank = false;
+								}}
 							>
-						{:else}
-							<ArrowUp size={16} strokeWidth={2} />
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div class="chips">
-				<Menu bind:open={repoOpen} placement="bottom-start">
-					{#snippet trigger(props, isOpen)}
-						<button
-							{...props}
-							type="button"
-							class="seg"
-							aria-expanded={isOpen}
-							disabled={!ws?.running && repos.length === 0}
-							title={chosen ? `${chosen.name}, sessions branch off ${chosen.branch}` : undefined}
-						>
-							{#if chosen}
-								<span class="seg-part">
-									<RepoIcon name={chosen.name} github={chosen.github} icon={chosen.icon} />
-									<span class="seg-text">{chosen.name}</span>
-								</span>
-								<span class="seg-part seg-part--branch">
-									<GitBranch size={14} strokeWidth={1.75} />
-									<span class="seg-text gh-mono">{chosen.branch}</span>
-								</span>
-							{:else if ws?.running && !ws.reposLoaded}
-								<span class="seg-part">
-									<span class="seg-text seg-text--muted">Loading repositories</span>
-								</span>
-							{:else}
-								<span class="seg-part">
-									<FilePlus size={14} strokeWidth={1.75} />
-									<span class="seg-text">New empty repository</span>
-								</span>
-							{/if}
-							<ChevronDown size={14} strokeWidth={1.75} />
-						</button>
-					{/snippet}
-					{#each repos as r (r.name)}
+								<RepoIcon name={r.name} github={r.github} icon={r.icon} />
+								<span>{r.name}</span>
+								<span class="gh-menu-kbd gh-mono">{r.branch}</span>
+								{#if chosen?.name === r.name}<Check size={13} />{/if}
+							</MenuItem>
+						{/each}
+						{#if repos.length > 0}<div class="gh-menu-sep"></div>{/if}
 						<MenuItem
 							onclick={() => {
-								repo = r.name;
-								blank = false;
+								repo = null;
+								blank = true;
 							}}
+							disabled={!ws?.canEdit}
 						>
-							<RepoIcon name={r.name} github={r.github} icon={r.icon} />
-							<span>{r.name}</span>
-							<span class="gh-menu-kbd gh-mono">{r.branch}</span>
-							{#if chosen?.name === r.name}<Check size={13} />{/if}
+							<FilePlus size={14} /> New empty repository
+							{#if !chosen}<Check size={13} />{/if}
 						</MenuItem>
-					{/each}
-					{#if repos.length > 0}<div class="gh-menu-sep"></div>{/if}
-					<MenuItem
-						onclick={() => {
-							repo = null;
-							blank = true;
-						}}
-						disabled={!ws?.canEdit}
-					>
-						<FilePlus size={14} /> New empty repository
-						{#if !chosen}<Check size={13} />{/if}
-					</MenuItem>
-					<MenuItem
-						onclick={() => (app.sheet = 'add-repo')}
-						disabled={!ws?.running || !ws.isOwner}
-						title={ws && !ws.isOwner ? hostOnly('clone repositories') : undefined}
-					>
-						<Plus size={14} /> Clone a repository…
-					</MenuItem>
-				</Menu>
-				<span class="grow"></span>
-				{#if ws?.running}
-					<McpServers store={ws.store} placement="bottom-end" label="MCP tools" />
-				{/if}
-				{#if usage}
-					<span class="chip" title={usage.title}>
-						<Gauge size={14} strokeWidth={1.75} />
-						<span class="gh-num">{usage.used}% used</span>
-					</span>
-				{/if}
-			</div>
+						<MenuItem
+							onclick={() => (app.sheet = 'add-repo')}
+							disabled={!ws?.running || !ws.isOwner}
+							title={ws && !ws.isOwner ? hostOnly('clone repositories') : undefined}
+						>
+							<Plus size={14} /> Clone a repository…
+						</MenuItem>
+					</Menu>
+					<span class="grow"></span>
+					{#if ws?.running}
+						<McpServers store={ws.store} placement="bottom-end" label="MCP tools" />
+					{/if}
+					{#if usage}
+						<span class="chip" title={usage.title}>
+							<Gauge size={14} strokeWidth={1.75} />
+							<span class="gh-num">{usage.used}% used</span>
+						</span>
+					{/if}
+				</div>
+			{/if}
 
 			{#if showConnect}
 				<section class="connect" aria-label="Connect integrations" transition:slide>
@@ -563,6 +582,27 @@
 		flex-direction: column;
 		justify-content: center;
 		padding: 3rem 0 2rem;
+	}
+
+	.start {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 3rem 0 2rem;
+		text-align: center;
+	}
+
+	.start-text {
+		max-width: 26rem;
+		margin: 0;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+	}
+
+	.start-btn {
+		margin-top: 0.5rem;
 	}
 
 	.hero {
