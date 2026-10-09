@@ -5,6 +5,7 @@
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
 	import { ensureTerminalFont } from '$lib/terminal/font';
+	import { activeTarget, mayTakeFocus } from '$lib/utils/focus-routing';
 	import { RemoteCursorLayer, type CollabBinding, type RemoteCursor } from './collab';
 	import type { MonacoApi } from './load';
 	import { baseOptions, lookOptions } from './options';
@@ -18,6 +19,7 @@
 		readOnly = false,
 		fontSize = undefined,
 		minimap = false,
+		autofocus = false,
 		collab = undefined,
 		remoteCursors = [],
 		onCursor = undefined,
@@ -30,6 +32,7 @@
 		readOnly?: boolean;
 		fontSize?: number;
 		minimap?: boolean;
+		autofocus?: boolean;
 		collab?: CollabBinding;
 		remoteCursors?: readonly RemoteCursor[];
 		onCursor?: (line: number, col: number) => void;
@@ -45,6 +48,7 @@
 	let cursors: RemoteCursorLayer | null = null;
 	let releaseTheme: (() => void) | null = null;
 	let disposed = false;
+	let focusedOnce = false;
 
 	const doc = $derived(workspace.get(path));
 	const size = $derived(fontSize ?? terminalDisplay.fontSize);
@@ -84,7 +88,7 @@
 					label: 'Save',
 					keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
 					run: () => {
-						if (shown) void workspace.save(shown);
+						if (shown && !readOnly) void workspace.save(shown);
 					}
 				});
 				instance.onDidChangeCursorPosition((e) => {
@@ -125,8 +129,18 @@
 			instance.setModel(model);
 			if (current.viewState) instance.restoreViewState(current.viewState);
 			shown = current.uri;
+			if (autofocus && !focusedOnce) {
+				focusedOnce = true;
+				requestAnimationFrame(() => takeFocus(instance));
+			}
 		});
 	});
+
+	function takeFocus(instance: Monaco.editor.IStandaloneCodeEditor) {
+		if (disposed || editor !== instance) return;
+		if (!mayTakeFocus(activeTarget(), (el) => el instanceof Node && host.contains(el))) return;
+		instance.focus();
+	}
 
 	$effect(() => {
 		editor?.updateOptions({ ...look(), readOnly, minimap: { enabled: minimap } });

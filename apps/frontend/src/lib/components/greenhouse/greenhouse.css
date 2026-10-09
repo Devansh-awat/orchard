@@ -15,6 +15,7 @@
 		0 8px 24px -12px color-mix(in oklab, var(--ink, black) 18%, transparent);
 	--gh-text: var(--text-default);
 	--gh-muted: var(--text-muted);
+	--gh-muted-strong: color-mix(in oklab, var(--text-default) 55%, var(--text-muted));
 	--gh-faint: var(--text-faint);
 	--gh-add: var(--status-success);
 	--gh-del: var(--status-error);

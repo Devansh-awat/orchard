@@ -18,7 +18,10 @@
 
 	let line = $state(1);
 	let col = $state(1);
+	let saved = $state(false);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let savedTimer: ReturnType<typeof setTimeout> | null = null;
+	let wasSaving = false;
 
 	function cursor(l: number, c: number) {
 		line = l;
@@ -37,6 +40,21 @@
 			timer = null;
 		};
 	});
+
+	$effect(() => {
+		const saving = doc?.saving ?? false;
+		const failed = !!doc?.error;
+		const finished = wasSaving && !saving && !failed;
+		wasSaving = saving;
+		if (savedTimer) clearTimeout(savedTimer);
+		savedTimer = null;
+		saved = finished;
+		if (finished) savedTimer = setTimeout(() => (saved = false), 1600);
+	});
+
+	$effect(() => () => {
+		if (savedTimer) clearTimeout(savedTimer);
+	});
 </script>
 
 <div class="view">
@@ -46,6 +64,7 @@
 				workspace={ws.editor}
 				path={tab.path}
 				readOnly={!ws.canEdit}
+				autofocus
 				remoteCursors={ws.remoteCursors}
 				onCursor={cursor}
 			/>
@@ -65,7 +84,7 @@
 		{#if tab.kind === 'file'}
 			{#if doc?.saving}<span data-align="status-item">Saving…</span>{:else if doc?.dirty}<span
 					data-align="status-item">Unsaved</span
-				>{/if}
+				>{:else if saved}<span class="saved" data-align="status-item">Saved</span>{/if}
 			{#if doc?.error}<span class="err" data-align="status-item">{doc.error}</span>{/if}
 			{#if !ws.canEdit}<span data-align="status-item">Read only</span>{/if}
 			<span class="gh-num" data-align="status-item">Ln {line}, Col {col}</span>
@@ -118,6 +137,10 @@
 
 	.grow {
 		flex: 1;
+	}
+
+	.saved {
+		color: var(--gh-muted);
 	}
 
 	.err {

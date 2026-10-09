@@ -93,7 +93,7 @@
 >
 	{#if renaming}
 		<div class="main">
-			<span class="ico" data-align="sidebar-icon"
+			<span class="ico" data-align="sidebar-child-icon"
 				><SessionGlyph {activity} {draft} merged={session.prState === 'merged'} /></span
 			>
 			<input
@@ -112,10 +112,10 @@
 			onclick={open}
 			title={`${session.title}\n${session.branch}`}
 		>
-			<span class="ico" data-align="sidebar-icon"
+			<span class="ico" data-align="sidebar-child-icon"
 				><SessionGlyph {activity} {draft} merged={session.prState === 'merged'} /></span
 			>
-			<span class="title" data-align="sidebar-label">{session.title}</span>
+			<span class="title" data-align="sidebar-child-label">{session.title}</span>
 			<span class="end">
 				{#if people.length > 0}
 					<AvatarStack users={people} max={2} size={16} hostBadge={false} />
@@ -186,7 +186,7 @@
 		gap: 0.5rem;
 		width: 100%;
 		height: var(--gh-session-row);
-		padding: 0 var(--row-pad, 0.5rem);
+		padding: 0 var(--row-pad, 0.5rem) 0 calc(var(--row-pad, 0.5rem) + var(--indent, 0px));
 		border-radius: var(--gh-r-row);
 		border-block: 1px solid transparent;
 		background-clip: padding-box;

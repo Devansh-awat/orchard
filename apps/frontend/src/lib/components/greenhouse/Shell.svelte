@@ -1,6 +1,6 @@
 <script lang="ts">
 	import './greenhouse.css';
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { MessageSquare, GitCompare, PanelsTopLeft } from 'lucide-svelte';
 	import { Button, Input, Modal } from '$lib/components/ui';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -24,7 +24,9 @@
 	import SettingsSheet from './SettingsSheet.svelte';
 	import ShareSheet from './ShareSheet.svelte';
 	import Sidebar from './Sidebar.svelte';
+	import { shellShortcut } from './shortcuts';
 	import { isLegacy } from './workspace.svelte';
+	import { inTerminal } from '$lib/utils/focus-routing';
 	import type { PersonRef } from './types';
 
 	let {
@@ -162,36 +164,57 @@
 		if (session) await ws?.renameSession(session, renameValue);
 	}
 
+	function openRight(then: (panel: RightPanel) => void) {
+		if (!layout.rightOpen) layout.toggle('right');
+		void tick().then(() => {
+			if (right) then(right);
+		});
+	}
+
+	function saveActive() {
+		const tab = ws?.activeTab;
+		if (!ws?.canEdit || tab?.kind !== 'file') return;
+		void ws.editor.save(tab.path);
+	}
+
 	function keydown(event: KeyboardEvent) {
-		const mod = event.metaKey || event.ctrlKey;
-		if (!mod) return;
-		if (
-			!event.metaKey &&
-			event.target instanceof Element &&
-			event.target.closest('.pod-terminal')
-		) {
-			return;
-		}
-		if (event.code === 'KeyB' && !event.shiftKey) {
-			event.preventDefault();
-			layout.toggle(event.altKey ? 'right' : 'left');
-		} else if (event.code === 'KeyJ' && !event.altKey && !event.shiftKey) {
-			event.preventDefault();
-			layout.toggle('dock');
-		} else if (event.code === 'KeyN' && !event.altKey && !event.shiftKey) {
-			if (!ws?.canEdit) return;
-			event.preventDefault();
-			newSession(ws.session?.repo ?? null);
-		} else if (event.code === 'Backquote' && !event.altKey) {
-			if (ws?.lifecycleOnly) return;
-			event.preventDefault();
-			if (!layout.rightOpen) layout.toggle('right');
-			right?.terminal();
-		} else if (event.code === 'KeyG' && event.shiftKey) {
-			if (ws?.lifecycleOnly) return;
-			event.preventDefault();
-			if (!layout.rightOpen) layout.toggle('right');
-			right?.showTab('changes');
+		const target = event.target instanceof Element ? event.target : null;
+		const action = shellShortcut(event, { terminal: inTerminal(target) });
+		if (!action) return;
+		switch (action) {
+			case 'save':
+				event.preventDefault();
+				saveActive();
+				return;
+			case 'toggle-left':
+			case 'toggle-right':
+				event.preventDefault();
+				layout.toggle(action === 'toggle-right' ? 'right' : 'left');
+				return;
+			case 'toggle-dock':
+				event.preventDefault();
+				layout.toggle('dock');
+				return;
+			case 'new-session':
+				if (!ws?.canEdit) return;
+				event.preventDefault();
+				newSession(ws.session?.repo ?? null);
+				return;
+			case 'terminal':
+				if (!ws || ws.lifecycleOnly) return;
+				event.preventDefault();
+				openRight((panel) => panel.terminal());
+				return;
+			case 'changes':
+				if (!ws || ws.lifecycleOnly) return;
+				event.preventDefault();
+				openRight((panel) => panel.showTab('changes'));
+				return;
+			case 'find-file':
+				if (!ws?.session || ws.lifecycleOnly || app.home) return;
+				event.preventDefault();
+				openRight((panel) => panel.findFile());
+				return;
 		}
 	}
 

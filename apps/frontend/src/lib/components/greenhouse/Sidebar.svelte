@@ -133,7 +133,7 @@
 			{#each ws.groups as group (group.name)}
 				{@const closed = collapsed[group.name] ?? false}
 				<div class="group" role="group" aria-label={group.name}>
-					<div class="repo">
+					<div class="repo" class:repo--closed={closed}>
 						<button
 							type="button"
 							class="repo-main gh-row"
@@ -146,8 +146,13 @@
 								</span>
 							</span>
 							<span class="label repo-name" data-align="sidebar-label">{group.name}</span>
-							<span class="chev" {@attach springRotate(() => !closed, { rest: 0, on: 90 })}>
-								<ChevronRight size={16} strokeWidth={1.75} />
+							<span class="repo-end">
+								{#if group.sessions.length > 0}
+									<span class="gh-num count" data-align="sidebar-end">{group.sessions.length}</span>
+								{/if}
+								<span class="chev" {@attach springRotate(() => !closed, { rest: 0, on: 90 })}>
+									<ChevronRight size={16} strokeWidth={1.75} />
+								</span>
 							</span>
 						</button>
 						<button
@@ -161,7 +166,7 @@
 							<Plus size={16} strokeWidth={1.75} />
 						</button>
 					</div>
-					<div class="sessions" {@attach springCollapse(() => closed)}>
+					<div class="sessions" inert={closed} {@attach springCollapse(() => closed)}>
 						{#each group.sessions as session (session.id)}
 							<SessionRow
 								{session}
@@ -169,7 +174,18 @@
 								people={ws.presenceIn(session.id)}
 							/>
 						{:else}
-							<p class="empty">No sessions yet</p>
+							<button
+								type="button"
+								class="new gh-row"
+								disabled={!ws.canEdit}
+								title={ws.canEdit ? `New session in ${group.name}` : VIEWER_ONLY}
+								onclick={() => onnewsession(group.name)}
+							>
+								<span class="ico" data-align="sidebar-child-icon">
+									<Plus size={14} strokeWidth={1.75} />
+								</span>
+								<span class="label" data-align="sidebar-child-label">New session</span>
+							</button>
 						{/each}
 					</div>
 				</div>
@@ -202,7 +218,7 @@
 						<span class="label repo-name" data-align="sidebar-label">Archived</span>
 						<span class="gh-num count" data-align="sidebar-end">{ws.archived.length}</span>
 					</button>
-					<div class="sessions" {@attach springCollapse(() => !archivedOpen)}>
+					<div class="sessions" inert={!archivedOpen} {@attach springCollapse(() => !archivedOpen)}>
 						{#each ws.archived as session (session.id)}
 							<SessionRow {session} selected={session.id === app.sessionId} />
 						{/each}
@@ -335,7 +351,7 @@
 	.list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		flex: 1;
 		min-height: 0;
 		padding: 0.5rem 0.5rem 0.75rem;
@@ -347,7 +363,7 @@
 		justify-content: space-between;
 		flex: none;
 		height: var(--gh-row);
-		margin-bottom: -0.5rem;
+		margin-bottom: -0.75rem;
 		padding: 0 calc(var(--row-pad) - var(--gh-ibtn-inset)) 0 var(--row-pad);
 	}
 
@@ -389,18 +405,26 @@
 		border-radius: var(--gh-r-row);
 		border-block: 1px solid transparent;
 		background-clip: padding-box;
-		color: var(--gh-text);
-		font-weight: 600;
+		color: var(--gh-muted-strong);
 		text-align: left;
-		transition: background-color var(--dur-fast) ease;
+		transition: color var(--dur-fast) ease;
 	}
 
 	.repo-main:hover {
-		background: var(--gh-hover);
+		color: var(--gh-text);
+	}
+
+	.repo-name {
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		font-weight: 600;
 	}
 
 	.repo-main.archived {
 		color: var(--gh-muted);
+	}
+
+	.repo-main.archived .repo-name {
 		font-weight: 400;
 	}
 
@@ -417,6 +441,17 @@
 		line-height: var(--gh-lh-caption);
 	}
 
+	.repo-end {
+		display: grid;
+		justify-items: end;
+		align-items: center;
+		flex: none;
+	}
+
+	.repo-end > * {
+		grid-area: 1 / 1;
+	}
+
 	.chev,
 	.chev-lead {
 		display: inline-grid;
@@ -424,14 +459,24 @@
 		color: var(--gh-faint);
 	}
 
-	.repo .chev {
-		opacity: 0;
+	.repo-end .count,
+	.repo-end .chev {
 		transition: opacity var(--dur-fast) ease;
 	}
 
-	.repo:hover .chev,
-	.repo-main:focus-visible .chev {
+	.repo-end .chev {
+		opacity: 0;
+	}
+
+	.repo:hover .repo-end .chev,
+	.repo-main:focus-visible .repo-end .chev,
+	.repo--closed .repo-end .chev:only-child {
 		opacity: 1;
+	}
+
+	.repo:hover .repo-end .count,
+	.repo-main:focus-visible .repo-end .count {
+		opacity: 0;
 	}
 
 	.repo-add {
@@ -446,26 +491,61 @@
 	}
 
 	.sessions {
+		--indent: 1rem;
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+	}
+
+	.sessions::before {
+		content: '';
+		position: absolute;
+		top: 0.25rem;
+		bottom: 0.25rem;
+		left: calc(var(--row-pad) + var(--gh-glyph) / 2 - 0.5px);
+		z-index: 1;
+		width: 1px;
+		background: var(--gh-line-soft);
+		pointer-events: none;
 	}
 
 	.count {
 		color: var(--gh-faint);
 	}
 
-	.empty,
-	.hint {
-		margin: 0;
-		padding: 0.5rem var(--row-pad) 0.5rem calc(var(--row-pad) + var(--gh-glyph) + 0.5rem);
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
+	.new {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		height: var(--gh-session-row);
+		padding: 0 var(--row-pad) 0 calc(var(--row-pad) + var(--indent));
+		border-radius: var(--gh-r-row);
+		border-block: 1px solid transparent;
+		background-clip: padding-box;
 		color: var(--gh-faint);
+		text-align: left;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
+	}
+
+	.new:hover:not(:disabled) {
+		background: var(--gh-hover);
+		color: var(--gh-text);
+	}
+
+	.new:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	.hint {
-		padding-left: var(--row-pad);
+		margin: 0;
+		padding: 0.5rem var(--row-pad);
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
 	}
 
 	.runner {

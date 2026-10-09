@@ -1,7 +1,18 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { ChevronDown, Eye, Globe, Play, Plus, Radio, Square, X } from 'lucide-svelte';
+	import {
+		ChevronDown,
+		Eye,
+		Globe,
+		Play,
+		Plus,
+		Radio,
+		Sparkles,
+		Square,
+		Wand2,
+		X
+	} from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
@@ -280,18 +291,23 @@
 	}
 </script>
 
-{#snippet missing(kind: 'setup' | 'run', line: string, action: string)}
+{#snippet missing(kind: 'setup' | 'run')}
 	<div class="empty">
-		<p class="empty-line">{line}</p>
+		<span class="empty-glyph" aria-hidden="true"><Sparkles size={20} strokeWidth={1.75} /></span>
+		<p class="empty-title">{kind === 'setup' ? 'No setup script' : 'No run script'}</p>
+		<p class="empty-line">
+			Let the agent write <span class="gh-mono empty-path">{CONFIG_PATH}</span> for this repo.
+		</p>
 		<div class="empty-actions">
 			<button
 				type="button"
-				class="gh-btn gh-btn--primary"
+				class="gh-btn"
 				disabled={!ws.canEdit}
 				title={ws.canEdit ? undefined : VIEWER_ONLY}
 				onclick={() => askAgent(kind)}
 			>
-				{action}
+				<Wand2 size={14} strokeWidth={1.75} />
+				Ask the agent
 			</button>
 			<button
 				type="button"
@@ -493,7 +509,7 @@
 							{#if scripts === null}
 								<p class="note">Checking for a setup script…</p>
 							{:else if !scripts.setup && scripts.setupState === 'none'}
-								{@render missing('setup', 'No setup script yet.', 'Ask the agent to write it')}
+								{@render missing('setup')}
 							{:else}
 								<PodTerminal
 									endpoint={endpoint('setup', 'ro')}
@@ -510,11 +526,7 @@
 								{#if scripts === null}
 									<p class="note">Checking the run script…</p>
 								{:else if !scripts.running && !scripts.run}
-									{@render missing(
-										'run',
-										'No run script yet.',
-										'Ask the agent to write a run script'
-									)}
+									{@render missing('run')}
 								{:else if !scripts.running}
 									<p class="note">The run script is stopped. Press Run to start it.</p>
 								{:else}
@@ -791,21 +803,49 @@
 	.empty {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: var(--gh-edge);
+		align-items: center;
+		justify-content: safe center;
+		flex: 1;
+		min-height: 0;
+		padding: 1rem var(--gh-edge);
+		overflow: auto;
+		text-align: center;
 	}
 
-	.empty-line {
+	.empty-glyph {
+		display: inline-grid;
+		place-items: center;
+		margin-bottom: 0.5rem;
+		color: var(--gh-faint);
+	}
+
+	.empty-title {
 		margin: 0;
 		font-size: var(--gh-ui);
 		line-height: var(--gh-lh-ui);
+		font-weight: 600;
+		color: var(--gh-text);
+	}
+
+	.empty-line {
+		max-width: 20rem;
+		margin: 0.25rem 0 0;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-muted);
+	}
+
+	.empty-path {
+		font-size: var(--gh-caption);
+		overflow-wrap: anywhere;
 	}
 
 	.empty-actions {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
+		justify-content: center;
 		gap: 0.5rem;
+		margin-top: 1rem;
 	}
 </style>

@@ -18,14 +18,13 @@ const CURSOR: Record<TerminalCursor, 'line' | 'block' | 'underline'> = {
 };
 
 export function lookOptions(look: LookOptions): Monaco.editor.IEditorOptions {
-	const full = look.motion === 'full';
 	const blink = look.cursorBlink !== false && look.motion !== 'off';
 	return {
 		fontSize: look.fontSize,
 		lineHeight: Math.round(look.fontSize * 1.65),
-		cursorSmoothCaretAnimation: full ? 'on' : 'off',
-		smoothScrolling: full,
-		cursorBlinking: blink ? (full ? 'smooth' : 'blink') : 'solid',
+		cursorSmoothCaretAnimation: 'off',
+		smoothScrolling: false,
+		cursorBlinking: blink ? 'blink' : 'solid',
 		cursorStyle: CURSOR[look.cursorStyle ?? 'bar']
 	};
 }

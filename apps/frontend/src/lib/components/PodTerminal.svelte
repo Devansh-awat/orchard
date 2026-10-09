@@ -11,6 +11,7 @@
 	} from '$lib/terminal';
 	import type { DisposablePredictTarget } from '$lib/terminal/predict-target';
 	import { PredictiveEcho } from '$lib/utils/terminal-predict';
+	import { activeTarget, mayTakeFocus } from '$lib/utils/focus-routing';
 	import { terminalDisplay, setTerminalDisplay } from '$lib/stores/terminal-display.svelte';
 
 	interface Props {
@@ -62,6 +63,7 @@
 	let appliedFontSize = 0;
 	let currentHandle: string | null = null;
 	let wasReconnect = false;
+	let shownBefore: boolean | null = null;
 
 	const encoder = new TextEncoder();
 	const isMac =
@@ -287,6 +289,16 @@
 		return `${proto}//${location.host}/apiv1/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}&container=${encodeURIComponent(container)}${extra}`;
 	}
 
+	function claimFocus(force: boolean) {
+		const h = handle;
+		const root = terminalRef;
+		if (!h || !root) return;
+		if (!force && !mayTakeFocus(activeTarget(), (el) => el instanceof Node && root.contains(el))) {
+			return;
+		}
+		h.focus();
+	}
+
 	function connectWebSocket() {
 		const socket = new WebSocket(socketUrl());
 		socket.binaryType = 'arraybuffer';
@@ -299,7 +311,7 @@
 			error = null;
 			retries = 0;
 			sendResize();
-			if (visible) handle?.focus();
+			if (visible) claimFocus(false);
 		};
 
 		socket.onmessage = (event) => {
@@ -388,11 +400,13 @@
 		const h = handle;
 		if (!h) return;
 		h.setPaused(!show);
+		const appeared = shownBefore === false && show;
+		shownBefore = show;
 		if (show) {
 			requestAnimationFrame(() => {
 				if (disposed) return;
 				fitNow();
-				h.focus();
+				claimFocus(appeared);
 			});
 		} else {
 			h.blur();

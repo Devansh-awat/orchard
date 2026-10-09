@@ -250,6 +250,24 @@ function audit({ fontSizes, displaySizes, tolerance }) {
 		return r.left + r.width / 2;
 	});
 	same(
+		'sidebar child label x',
+		all('[data-align="sidebar-child-label"]'),
+		(el) => el.getBoundingClientRect().left
+	);
+	const centre = (el) => {
+		const r = el.getBoundingClientRect();
+		return r.left + r.width / 2;
+	};
+	same('sidebar child icon centre x', all('[data-align="sidebar-child-icon"]'), centre);
+	{
+		const parent = all('[data-align="sidebar-icon"]')[0];
+		const child = all('[data-align="sidebar-child-icon"]')[0];
+		if (parent && child && !near(centre(child) - centre(parent), 16))
+			failures.push(
+				`sidebar child indent is ${(centre(child) - centre(parent)).toFixed(1)}, expected 16.0`
+			);
+	}
+	same(
 		'sidebar trailing edge',
 		all('[data-align="sidebar-end"]'),
 		(el) => el.getBoundingClientRect().right

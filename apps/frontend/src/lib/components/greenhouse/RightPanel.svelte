@@ -24,6 +24,7 @@
 	let tab = $state<RightTab>('changes');
 	let searching = $state(false);
 	let filter = $state('');
+	let searchField = $state<HTMLInputElement | null>(null);
 	let tree = $state<FileTree | null>(null);
 	let dock = $state<Dock | null>(null);
 	let stack = $state<HTMLDivElement | null>(null);
@@ -51,6 +52,12 @@
 
 	export function showTab(next: RightTab) {
 		pick(next);
+	}
+
+	export function findFile() {
+		tab = 'files';
+		if (searching) searchField?.focus();
+		else searching = true;
 	}
 
 	export function terminal() {
@@ -154,6 +161,7 @@
 					<Search size={16} strokeWidth={1.75} />
 					<input
 						class="search-field"
+						bind:this={searchField}
 						bind:value={filter}
 						placeholder="Find a file"
 						aria-label="Find a file"
