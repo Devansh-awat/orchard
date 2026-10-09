@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.24.0](https://github.com/hackclub/orchard/compare/cli/v0.23.0...cli/v0.24.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse answers agent permissions, questions and plan handoffs inline, repos get icons, and the title bar tells machines from repos ([b2736fe](https://github.com/hackclub/orchard/commit/b2736fe5397d1386a3a6d4d9d459e8b2a6998691))
+* greenhouse gets a title bar with floating panels, two line sessions you can delete, a settings dialog with appearance and usage, live cpu and memory for every machine, and a calmer home ([5640c07](https://github.com/hackclub/orchard/commit/5640c070a01a0cc6b58a8890458f62525acb2b8f))
+* greenhouse model switcher with favourites and effort, mcp server manager, context and claude usage popover, and machine usage in the menu ([de256d1](https://github.com/hackclub/orchard/commit/de256d160c0406d7a48eefec77efed474370f4de))
+
+
+### Bug Fixes
+
+* greenhouse sessions open instantly, chats get live updates from worktrees, agent errors show, ports hide infrastructure, agents can write setup scripts and sandbox terminals predict keystrokes ([a96b6ac](https://github.com/hackclub/orchard/commit/a96b6acc4600aa914d12d39db32fd76b5f48097e))
+
 ## [0.23.0](https://github.com/hackclub/orchard/compare/cli/v0.22.0...cli/v0.23.0) (2026-10-08)
 
 

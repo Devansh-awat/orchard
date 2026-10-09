@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.64.0](https://github.com/hackclub/orchard/compare/server/v2.63.0...server/v2.64.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse answers agent permissions, questions and plan handoffs inline, repos get icons, and the title bar tells machines from repos ([b2736fe](https://github.com/hackclub/orchard/commit/b2736fe5397d1386a3a6d4d9d459e8b2a6998691))
+* greenhouse gets a title bar with floating panels, two line sessions you can delete, a settings dialog with appearance and usage, live cpu and memory for every machine, and a calmer home ([5640c07](https://github.com/hackclub/orchard/commit/5640c070a01a0cc6b58a8890458f62525acb2b8f))
+* greenhouse model switcher with favourites and effort, mcp server manager, context and claude usage popover, and machine usage in the menu ([de256d1](https://github.com/hackclub/orchard/commit/de256d160c0406d7a48eefec77efed474370f4de))
+* greenhouse settings for sending, steering, sounds, notifications, fonts, git and agents, an ide sidebar with orchard touches, and no more absolutely right ([b29e011](https://github.com/hackclub/orchard/commit/b29e011fae7abf076d40c2f0c1c6df1195cf7dd3))
+* vercel greenhouse machines keep their home on a per machine drive and snapshots never expire ([7bc0585](https://github.com/hackclub/orchard/commit/7bc058559d25ed6f414d0c17ae9c36445464477a))
+
+
+### Bug Fixes
+
+* greenhouse opencode runs with plan mode so agents can hand plans off for approval ([6c10eca](https://github.com/hackclub/orchard/commit/6c10eca92d71c5bc792c76913af77124fba569cc))
+* greenhouse sessions open instantly, chats get live updates from worktrees, agent errors show, ports hide infrastructure, agents can write setup scripts and sandbox terminals predict keystrokes ([a96b6ac](https://github.com/hackclub/orchard/commit/a96b6acc4600aa914d12d39db32fd76b5f48097e))
+* pin the opencode anthropic auth plugin to 1.22.0, 1.23.0 fails every prompt with a custody state mismatch ([4c48547](https://github.com/hackclub/orchard/commit/4c485475699eed8d47d27e6a81732ef934d648e8))
+
 ## [2.63.0](https://github.com/hackclub/orchard/compare/server/v2.62.0...server/v2.63.0) (2026-10-08)
 
 

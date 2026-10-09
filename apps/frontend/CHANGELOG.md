@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.57.0](https://github.com/hackclub/orchard/compare/frontend/v1.56.1...frontend/v1.57.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse answers agent permissions, questions and plan handoffs inline, repos get icons, and the title bar tells machines from repos ([b2736fe](https://github.com/hackclub/orchard/commit/b2736fe5397d1386a3a6d4d9d459e8b2a6998691))
+* greenhouse clones repositories with the same account then repo picker as new deployments ([593979d](https://github.com/hackclub/orchard/commit/593979d637aec730fbf4b152ecbe0b9c6aa5664f))
+* greenhouse gets a title bar with floating panels, two line sessions you can delete, a settings dialog with appearance and usage, live cpu and memory for every machine, and a calmer home ([5640c07](https://github.com/hackclub/orchard/commit/5640c070a01a0cc6b58a8890458f62525acb2b8f))
+* greenhouse model switcher with favourites and effort, mcp server manager, context and claude usage popover, and machine usage in the menu ([de256d1](https://github.com/hackclub/orchard/commit/de256d160c0406d7a48eefec77efed474370f4de))
+* greenhouse settings for sending, steering, sounds, notifications, fonts, git and agents, an ide sidebar with orchard touches, and no more absolutely right ([b29e011](https://github.com/hackclub/orchard/commit/b29e011fae7abf076d40c2f0c1c6df1195cf7dd3))
+* greenhouse wakes the sandbox with a pixel art sprout growing in a pot instead of a boot checklist ([51e3474](https://github.com/hackclub/orchard/commit/51e3474542f4ad99b3c57e358abd3b68e7aa73b0))
+* share and machine settings sheets are short step flows with almost no copy, and avatars no longer render full size ([60aae45](https://github.com/hackclub/orchard/commit/60aae4592fbbfd2cd6cc05fc28b84c254712d477))
+* vercel greenhouse machines keep their home on a per machine drive and snapshots never expire ([7bc0585](https://github.com/hackclub/orchard/commit/7bc058559d25ed6f414d0c17ae9c36445464477a))
+
+
+### Bug Fixes
+
+* greenhouse editor keeps focus so cmd s and editor shortcuts work, no animated caret, repos read as headers over indented workspaces, calmer setup pane ([5379f9c](https://github.com/hackclub/orchard/commit/5379f9c1a547b3389a057c9b5e79b16b7836edea))
+* greenhouse machine list polls while a machine is starting, stopping or applying ([4518647](https://github.com/hackclub/orchard/commit/4518647f1456e9f79b96212b2fa717ee8d812298))
+* greenhouse machine settings are one page with name, ssh key, people, setup script, projects and the danger zone ([969fc02](https://github.com/hackclub/orchard/commit/969fc029cb93928a7b2618593a4275edc13d4d4a))
+* greenhouse nav, usage tab and settings follow the instance sandboxes setting instead of a build time env var ([48697ff](https://github.com/hackclub/orchard/commit/48697ff64ef1046f046e085c9f6d790c47ed686b))
+* greenhouse panels sit flush with straight edges and hairline dividers instead of floating cards ([490d1e9](https://github.com/hackclub/orchard/commit/490d1e9a2901153feaf3e90562b7e5b8f05b401c))
+* greenhouse session rows are one line with just the title and when it last changed ([fa9690d](https://github.com/hackclub/orchard/commit/fa9690d6ef894051cfdd9df172f3978566e4841a))
+* greenhouse sessions open instantly, chats get live updates from worktrees, agent errors show, ports hide infrastructure, agents can write setup scripts and sandbox terminals predict keystrokes ([a96b6ac](https://github.com/hackclub/orchard/commit/a96b6acc4600aa914d12d39db32fd76b5f48097e))
+* greenhouse setup and run terminals wait for their scripts, one deduped model picker grouped by family, and a cleaner composer caret ([fb18b1d](https://github.com/hackclub/orchard/commit/fb18b1d386b432628513fc430c2f9a63022671b9))
+* greenhouse sidebar row highlights keep a small gap so neighbouring rows never touch ([8acff55](https://github.com/hackclub/orchard/commit/8acff55fecb7220d9184abc6366db10a4d3fcc3a))
+* org dashboard styles no longer leak into greenhouse after visiting it, machine switcher shows a server glyph with a status badge ([e993dce](https://github.com/hackclub/orchard/commit/e993dceb91b0da0528f1cf9476aa04fb63ba969c))
+
 ## [1.56.1](https://github.com/hackclub/orchard/compare/frontend/v1.56.0...frontend/v1.56.1) (2026-10-09)
 
 

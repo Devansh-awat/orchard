@@ -221,8 +221,7 @@
 							startRatio = app.layout.dock;
 							app.layout.dragging = 'dock';
 						}}
-						ondrag={(delta) =>
-							app.layout.setDock(startRatio - delta / dockHeight())}
+						ondrag={(delta) => app.layout.setDock(startRatio - delta / dockHeight())}
 						onend={() => {
 							app.layout.dragging = null;
 							app.layout.save();

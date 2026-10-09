@@ -29,10 +29,8 @@
 	import { modelFavourites } from './model-favourites.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
 
-	let {
-		store,
-		placement = 'top-start'
-	}: { store: ChatSessionStore; placement?: Placement } = $props();
+	let { store, placement = 'top-start' }: { store: ChatSessionStore; placement?: Placement } =
+		$props();
 	const uid = $props.id();
 
 	type View = 'main' | 'effort' | 'edit';
