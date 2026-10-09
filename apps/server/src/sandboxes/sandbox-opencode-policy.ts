@@ -9,6 +9,8 @@ const VIEWER_READS: RegExp[] = [
   /^\/session\/[^/]+$/,
   /^\/session\/[^/]+\/(message|children|todo|diff)$/,
   /^\/session\/[^/]+\/message\/[^/]+$/,
+  /^\/permission$/,
+  /^\/question$/,
   /^\/agent$/,
   /^\/command$/,
   /^\/project$/,
@@ -35,6 +37,12 @@ const OWNER_ONLY: RegExp[] = [
 ];
 
 const PROMPT_RE = /^\/session\/(ses_[A-Za-z0-9]{1,60})\/(prompt_async|message|command)$/;
+
+const REPLY_RES: Array<[RegExp, OpencodeReplyTarget['kind']]> = [
+  [/^\/permission\/([A-Za-z0-9_-]{1,80})\/reply$/, 'permission'],
+  [/^\/session\/ses_[A-Za-z0-9]{1,60}\/permissions\/([A-Za-z0-9_-]{1,80})$/, 'permission'],
+  [/^\/question\/([A-Za-z0-9_-]{1,80})\/(?:reply|reject)$/, 'question']
+];
 
 export const OPENCODE_MESSAGE_ID_RE = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
 
@@ -112,6 +120,30 @@ export function opencodePromptTarget(method: string, suffix: string): OpencodePr
   const match = `/${decoded.replace(/^\/+/, '').replace(/\/+$/, '')}`.match(PROMPT_RE);
   if (!match) return null;
   return { chatId: match[1], kind: match[2] as OpencodePromptTarget['kind'] };
+}
+
+export interface OpencodeReplyTarget {
+  requestId: string;
+  kind: 'permission' | 'question';
+}
+
+export function opencodeReplyTarget(method: string, suffix: string): OpencodeReplyTarget | null {
+  if ((method || '').toUpperCase() !== 'POST') return null;
+  const path = normalizeOpencodePath(suffix);
+  if (path === null) return null;
+  const raw = suffix.split('?')[0] ?? '';
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  const exact = `/${decoded.replace(/^\/+/, '').replace(/\/+$/, '')}`;
+  for (const [re, kind] of REPLY_RES) {
+    const match = exact.match(re);
+    if (match && exact.toLowerCase() === path) return { requestId: match[1], kind };
+  }
+  return null;
 }
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';

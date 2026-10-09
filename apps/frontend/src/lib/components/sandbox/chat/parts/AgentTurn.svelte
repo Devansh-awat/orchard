@@ -6,6 +6,7 @@
 	import type { AgentBlock } from '../turns';
 	import ActivityRow from './ActivityRow.svelte';
 	import ErrorPart from './ErrorPart.svelte';
+	import NoteLine from './NoteLine.svelte';
 	import TextPart from './TextPart.svelte';
 	import TurnFooter from './TurnFooter.svelte';
 
@@ -29,7 +30,12 @@
 	const result = $derived(block.result?.entry.kind === 'result' ? block.result.entry : null);
 	const resultIndex = $derived(block.result?.index ?? 0);
 	const empty = $derived(
-		!!result && !live && !activity && block.answer.length === 0 && block.errors.length === 0
+		!!result &&
+			!live &&
+			!activity &&
+			block.answer.length === 0 &&
+			block.errors.length === 0 &&
+			block.notes.length === 0
 	);
 </script>
 
@@ -44,6 +50,15 @@
 	{#if activity}
 		<ActivityRow {block} {store} {live} {status} />
 	{/if}
+	{#each block.notes as part (part.entry.key)}
+		{#if part.entry.kind === 'note'}
+			<NoteLine
+				entry={part.entry}
+				author={store.noteAuthor(part.entry)}
+				selfId={store.self?.id ?? null}
+			/>
+		{/if}
+	{/each}
 	{#each block.answer as part (part.entry.key)}
 		{#if part.entry.kind === 'text'}
 			<TextPart text={tidy ? stripSycophancy(part.entry.text) : part.entry.text} align />

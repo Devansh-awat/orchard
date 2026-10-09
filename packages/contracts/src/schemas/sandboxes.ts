@@ -679,7 +679,9 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         z.object({
           name: z.string(),
           branch: z.string().nullable(),
-          dirtyFiles: z.number().int()
+          dirtyFiles: z.number().int(),
+          github: z.object({ owner: z.string(), name: z.string() }).nullable(),
+          icon: z.string().nullable()
         })
       )
     }),
@@ -696,6 +698,13 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({ name: z.string().max(63) }),
     response: z.object({ name: z.string() }),
     scope: 'exec'
+  },
+  'PUT /sandboxes/:id/repos/:name/icon': {
+    summary:
+      'Set or clear the icon of a repository on the machine: one emoji, "github" for the owner avatar, or lucide:<name> from the allowlist. Stored as orchard.icon in the repo git config',
+    request: z.object({ icon: z.string().max(64).nullable() }),
+    response: z.object({ name: z.string(), icon: z.string().nullable() }),
+    scope: 'deploy'
   },
   'GET /sandboxes/:id/changes': {
     summary: 'Git working-tree changes inside the sandbox workspace',

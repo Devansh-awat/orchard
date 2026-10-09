@@ -216,6 +216,7 @@ var routeCoverage = map[string]string{
 	"GET /sandboxes/:id/repos":                           "sandbox repo list",
 	"GET /sandboxes/:id/boot":                            "sandbox create --wait (boot progress, web workspace)",
 	"POST /sandboxes/:id/repos":                          "sandbox repo add",
+	"PUT /sandboxes/:id/repos/:name/icon":                "sandbox repo icon",
 	"GET /sandboxes/:id/conversations":                   "sandbox conversations",
 	"POST /sandboxes/:id/conversations":                  "sandbox conversations --new",
 	"PATCH /sandboxes/:id/conversations/:cid":            "sandbox conversations --rename",

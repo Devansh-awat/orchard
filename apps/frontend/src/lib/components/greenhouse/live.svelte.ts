@@ -72,6 +72,7 @@ export class LiveClient {
 	readonly drafts = new SvelteMap<string, LiveDraft>();
 	comments = $state.raw<LiveComment[]>([]);
 	readonly promptAuthors = new SvelteMap<string, PersonRef>();
+	readonly answerAuthors = new SvelteMap<string, PersonRef>();
 	following = $state<string | null>(null);
 	selfId = $state<string | null>(null);
 	kicked = $state<string | null>(null);
@@ -108,6 +109,7 @@ export class LiveClient {
 		this.drafts.clear();
 		this.comments = [];
 		this.promptAuthors.clear();
+		this.answerAuthors.clear();
 		this.following = null;
 		this.#disconnect();
 		if (!sid || this.#closed) return;
@@ -232,6 +234,13 @@ export class LiveClient {
 				this.promptAuthors.set(messageId, user);
 				this.drafts.delete(user.id);
 				this.onPrompt?.(user, String(frame.chatId ?? ''), messageId);
+				return;
+			}
+			case 'answer': {
+				const user = frame.user as PersonRef | undefined;
+				const requestId = String(frame.requestId ?? '');
+				if (!user?.id || !requestId || this.answerAuthors.has(requestId)) return;
+				this.answerAuthors.set(requestId, user);
 				return;
 			}
 			case 'comment': {

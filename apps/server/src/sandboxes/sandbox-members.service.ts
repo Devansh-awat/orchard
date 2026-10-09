@@ -503,6 +503,25 @@ export class SandboxMembersService {
     return true;
   }
 
+  async recordAnswer(input: {
+    sandboxId: string;
+    userId: string;
+    requestId: string;
+    kind: 'permission' | 'question';
+  }): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+      select: PUBLIC_USER_SELECT
+    });
+    if (!user) return;
+    await this.live.broadcast(input.sandboxId, {
+      t: 'answer',
+      user: publicUser(user),
+      requestId: input.requestId,
+      kind: input.kind
+    });
+  }
+
   async coAuthors(
     sandboxId: string,
     sid: string,

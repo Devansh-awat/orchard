@@ -38,6 +38,22 @@ import {
 	midTruncate,
 	truncate
 } from './format';
+import {
+	noteFor,
+	parseOutcome,
+	parsePermission,
+	parseQuestion,
+	parseRequestList,
+	planHandoff,
+	replyGone,
+	requestDetail,
+	type AgentRequest,
+	type NoteTone,
+	type PermissionReply,
+	type PermissionRequest,
+	type QuestionRequest,
+	type RequestOutcome
+} from './pending';
 
 export type ChatAuthor = { id: string; name: string; avatarUrl?: string | null };
 
@@ -128,6 +144,18 @@ export type ErrorEntry = {
 	messageID?: string;
 };
 
+export type NoteEntry = {
+	kind: 'note';
+	key: string;
+	time: number;
+	requestId: string;
+	tone: NoteTone;
+	lead: string;
+	target: string | null;
+	mono: boolean;
+	auto: boolean;
+};
+
 export type ChatEntry =
 	| UserEntry
 	| ThinkingEntry
@@ -135,7 +163,19 @@ export type ChatEntry =
 	| ToolEntry
 	| AgentEntry
 	| ResultEntry
-	| ErrorEntry;
+	| ErrorEntry
+	| NoteEntry;
+
+export type PendingState = 'open' | 'sending' | 'auto';
+
+export type PendingItem = {
+	request: AgentRequest;
+	dir: string | null;
+	state: PendingState;
+	seen: number;
+};
+
+type ReplyResult = { ok: true } | { gone: true } | { error: string };
 
 export type FeedEntry = { entry: ChatEntry; index: number };
 
@@ -215,8 +255,10 @@ export type SessionStoreOptions = {
 };
 
 const TEMP_PREFIX = 'pending-';
-const ASK_EVENTS = new Set(['permission.asked', 'permission.updated', 'question.asked']);
-const ANSWER_EVENTS = new Set(['permission.replied', 'question.replied', 'question.rejected']);
+const AUTO_LINGER_MS = 1500;
+const GONE_GRACE_MS = 3000;
+const PARENT_HOPS = 4;
+const DONE_CAP = 500;
 const RETRY_PROBE_MS = 10_000;
 const RECONNECT_MS = 2000;
 const STATUS_POLL_MS = 5000;
@@ -447,16 +489,22 @@ function userEntriesFrom(info: OcMessageInfo, parts: OcPart[]): UserEntry[] {
 	return out;
 }
 
-function askDetail(props: Record<string, unknown>): string | null {
-	if (typeof props.title === 'string' && props.title.trim()) return props.title;
-	const questions = props.questions;
-	if (Array.isArray(questions)) {
-		const first = questions[0] as { question?: unknown; header?: unknown } | undefined;
-		if (typeof first?.question === 'string') return first.question;
-		if (typeof first?.header === 'string') return first.header;
+async function readBody(res: Response): Promise<unknown> {
+	const text = await res.text().catch(() => '');
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
 	}
-	if (typeof props.permission === 'string') return `Permission to use ${props.permission}`;
-	return null;
+}
+
+function bodyMessage(body: unknown, fallback: string): string {
+	if (body && typeof body === 'object') {
+		const data = body as { message?: unknown; data?: { message?: unknown } };
+		if (typeof data.data?.message === 'string') return data.data.message;
+		if (typeof data.message === 'string') return data.message;
+	}
+	return fallback;
 }
 
 export class SessionThread {
@@ -504,6 +552,7 @@ export class ChatSessionStore {
 	readonly threads = new SvelteMap<string, SessionThread>();
 	readonly activity = new SvelteMap<string, SessionActivity>();
 	readonly waiting = new SvelteSet<string>();
+	readonly pending = new SvelteMap<string, PendingItem>();
 
 	providerID = $state(OC_MODEL.providerID);
 	modelID = $state(OC_MODEL.modelID);
@@ -519,6 +568,9 @@ export class ChatSessionStore {
 	comments = $state.raw<ChatComment[]>([]);
 	authorOf = $state.raw<(messageId: string) => ChatAuthor | null>(() => null);
 	isHost = $state.raw<() => boolean>(() => true);
+	canAnswer = $state.raw<() => boolean>(() => true);
+	autoAccept = $state.raw<() => boolean>(() => false);
+	answerAuthorOf = $state.raw<(requestId: string) => ChatAuthor | null>(() => null);
 	beforePrompt: SessionStoreOptions['beforePrompt'] | null = null;
 	onDraftChange: ((text: string) => void) | null = null;
 	onTurnDone: (() => void) | null = null;
@@ -530,6 +582,12 @@ export class ChatSessionStore {
 	#roles = new Map<string, string>();
 	#children = new Map<string, { thread: SessionThread; agent: AgentEntry }>();
 	#asked = new Set<string>();
+	readonly #parents = new SvelteMap<string, string>();
+	readonly #answeredHere = new SvelteSet<string>();
+	#notes = new Map<string, NoteEntry[]>();
+	#done = new Set<string>();
+	#replyApi: 'current' | 'legacy' | null = null;
+	#pendingSync: Promise<void> | null = null;
 	#createWork: Promise<void> | null = null;
 	#probing: Promise<void> | null = null;
 	#live = false;
@@ -575,6 +633,14 @@ export class ChatSessionStore {
 	readonly fastSibling = $derived(this.model ? ocFastSibling(this.model, this.models) : null);
 
 	readonly modelGroups = $derived(ocModelGroups(this.models));
+
+	readonly requests = $derived.by((): PendingItem[] => {
+		const id = this.activeId;
+		if (!id) return [];
+		return [...this.pending.values()]
+			.filter((item) => item.state !== 'sending' && this.rootOf(item.request.sessionID) === id)
+			.sort((a, b) => a.seen - b.seen);
+	});
 
 	readonly context = $derived.by((): ContextMeter => {
 		const tokens = this.active?.ctxTokens ?? null;
@@ -823,6 +889,7 @@ export class ChatSessionStore {
 			} else {
 				await this.selectSession(this.sessions[0].id);
 			}
+			void this.#syncPending();
 		} catch {
 			return;
 		}
@@ -853,6 +920,7 @@ export class ChatSessionStore {
 			return;
 		}
 		await this.#loadHistory(thread);
+		void this.#syncPending();
 	}
 
 	async createSession(directory: string | null = this.directory) {
@@ -985,6 +1053,7 @@ export class ChatSessionStore {
 		}
 		this.threads.delete(id);
 		this.#prefs.delete(id);
+		this.#notes.delete(id);
 	}
 
 	async fork(messageID: string) {
@@ -1166,7 +1235,19 @@ export class ChatSessionStore {
 				};
 			}
 		}
+		this.#mergeNotes(thread);
 		if (thread.id === this.activeId) this.#restorePrefs(thread);
+	}
+
+	#mergeNotes(thread: SessionThread) {
+		const notes = this.#notes.get(thread.id);
+		if (!notes || notes.length === 0) return;
+		const keys = new Set(thread.entries.map((e) => e.key));
+		for (const note of notes) {
+			if (keys.has(note.key)) continue;
+			const at = thread.entries.findIndex((e) => typeof e.time === 'number' && e.time > note.time);
+			thread.entries.splice(at === -1 ? thread.entries.length : at, 0, note);
+		}
 	}
 
 	#appendPart(
@@ -1201,6 +1282,10 @@ export class ChatSessionStore {
 		}
 		if (part.type === 'tool' && part.tool === 'task') {
 			const fields = agentFields(part);
+			if (fields.childID && this.#parents.get(fields.childID) !== thread.id) {
+				this.#parents.set(fields.childID, thread.id);
+				if (this.pending.size > 0) this.#syncWaiting();
+			}
 			if (existing && existing.kind === 'agent') {
 				Object.assign(existing, fields);
 				if (existing.loaded && fields.childID) {
@@ -1553,7 +1638,7 @@ export class ChatSessionStore {
 	}
 
 	#settle(thread: SessionThread) {
-		this.waiting.delete(thread.id);
+		this.#dropPending(thread.id);
 		const failed = this.#turnFailed(thread);
 		this.#finishTurn(thread, true);
 		if (!failed) this.#signal('done', thread.id, this.lastAnswer(thread.id));
@@ -1583,7 +1668,7 @@ export class ChatSessionStore {
 	}
 
 	#endTurnQuietly(thread: SessionThread) {
-		this.waiting.delete(thread.id);
+		this.#dropPending(thread.id);
 		thread.busy = false;
 		thread.turnCosts.clear();
 		thread.turnStart = 0;
@@ -1668,6 +1753,7 @@ export class ChatSessionStore {
 					status.type === 'busy' ? 'busy' : status.type === 'retry' ? 'retry' : 'idle';
 				if (state === 'idle') {
 					this.activity.set(sessionID, 'idle');
+					this.#dropPending(sessionID);
 					const thread = this.threads.get(sessionID);
 					if (thread?.busy) this.#settle(thread);
 				} else {
@@ -1678,6 +1764,7 @@ export class ChatSessionStore {
 			case 'session.idle': {
 				if (!sessionID) return;
 				this.activity.set(sessionID, 'idle');
+				this.#dropPending(sessionID);
 				const thread = this.threads.get(sessionID);
 				if (thread?.busy) this.#settle(thread);
 				return;
@@ -1693,7 +1780,7 @@ export class ChatSessionStore {
 						: [];
 				for (const thread of targets) {
 					if (aborted) {
-						this.waiting.delete(thread.id);
+						this.#dropPending(thread.id);
 						if (thread.busy) this.#finishTurn(thread, false);
 						continue;
 					}
@@ -1707,23 +1794,21 @@ export class ChatSessionStore {
 				return;
 			}
 			case 'permission.asked':
-			case 'permission.updated':
-			case 'question.asked':
+			case 'permission.updated': {
+				const request = parsePermission(props);
+				if (request) this.#ask(request, directory);
+				return;
+			}
+			case 'question.asked': {
+				const request = parseQuestion(props);
+				if (request) this.#ask(request, directory);
+				return;
+			}
 			case 'permission.replied':
 			case 'question.replied':
 			case 'question.rejected': {
-				if (!sessionID) return;
-				const owner = this.#owner(sessionID)?.thread.id ?? sessionID;
-				if (ANSWER_EVENTS.has(event.type)) {
-					this.waiting.delete(owner);
-					return;
-				}
-				if (!ASK_EVENTS.has(event.type)) return;
-				const requestId = typeof props.id === 'string' ? props.id : null;
-				if (requestId && this.#asked.has(requestId)) return;
-				if (requestId) this.#asked.add(requestId);
-				this.waiting.add(owner);
-				this.#signal('attention', owner, askDetail(props));
+				const outcome = parseOutcome(event.type, props);
+				if (outcome) this.#resolve(outcome);
 				return;
 			}
 			case 'message.updated': {
@@ -1779,6 +1864,393 @@ export class ChatSessionStore {
 				return;
 			}
 		}
+	}
+
+	rootOf(sessionID: string): string {
+		if (this.threads.has(sessionID)) return sessionID;
+		return this.#parents.get(sessionID) ?? this.#children.get(sessionID)?.thread.id ?? sessionID;
+	}
+
+	noteAuthor(entry: NoteEntry): ChatAuthor | null {
+		if (this.#answeredHere.has(entry.requestId)) return this.self;
+		return this.answerAuthorOf(entry.requestId);
+	}
+
+	addRequest(request: AgentRequest, dir: string | null = null) {
+		this.#ask(request, dir, true);
+	}
+
+	#syncWaiting() {
+		const owners = new Set<string>();
+		for (const item of this.pending.values()) {
+			if (item.state === 'open') owners.add(this.rootOf(item.request.sessionID));
+		}
+		for (const id of [...this.waiting]) if (!owners.has(id)) this.waiting.delete(id);
+		for (const id of owners) if (!this.waiting.has(id)) this.waiting.add(id);
+	}
+
+	#dropPending(sessionID: string) {
+		for (const [id, item] of [...this.pending]) {
+			const owner = item.request.sessionID;
+			if (owner === sessionID || this.rootOf(owner) === sessionID) this.pending.delete(id);
+		}
+		this.#syncWaiting();
+	}
+
+	#remember(id: string) {
+		this.#done.add(id);
+		if (this.#done.size <= DONE_CAP) return;
+		const oldest = this.#done.values().next().value;
+		if (oldest !== undefined) this.#done.delete(oldest);
+	}
+
+	#setState(id: string, state: PendingState) {
+		const item = this.pending.get(id);
+		if (!item || item.state === state) return;
+		this.pending.set(id, { ...item, state });
+		this.#syncWaiting();
+	}
+
+	#sentLastPrompt(owner: string): boolean {
+		const last = this.lastPrompt(owner);
+		if (!last) return false;
+		return last.local || (!!this.self && last.authorId === this.self.id);
+	}
+
+	#ask(request: AgentRequest, dir: string | null, quiet = false) {
+		if (this.#done.has(request.id)) return;
+		const known = this.pending.get(request.id);
+		if (known) {
+			if (!known.dir && dir) this.pending.set(request.id, { ...known, dir });
+			return;
+		}
+		const owner = this.rootOf(request.sessionID);
+		if (owner === request.sessionID && !this.sessions.some((s) => s.id === owner)) {
+			void this.#findParent(owner);
+		}
+		const auto =
+			request.kind === 'permission' &&
+			this.autoAccept() &&
+			this.canAnswer() &&
+			this.#sentLastPrompt(owner);
+		this.pending.set(request.id, {
+			request,
+			dir,
+			state: auto ? 'auto' : 'open',
+			seen: Date.now()
+		});
+		this.#syncWaiting();
+		if (auto && request.kind === 'permission') {
+			void this.#autoReply(request);
+			return;
+		}
+		if (quiet || this.#asked.has(request.id)) return;
+		this.#asked.add(request.id);
+		this.#signal('attention', owner, requestDetail(request, this.#sessionDir(owner)));
+	}
+
+	async #findParent(sessionID: string) {
+		let id = sessionID;
+		for (let hop = 0; hop < PARENT_HOPS; hop += 1) {
+			let session: OcSession;
+			try {
+				const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${encodeURIComponent(id)}`);
+				if (!res.ok) return;
+				session = (await res.json()) as OcSession;
+			} catch {
+				return;
+			}
+			if (!session.parentID) break;
+			id = session.parentID;
+			if (this.threads.has(id) || this.sessions.some((s) => s.id === id)) break;
+		}
+		if (this.#destroyed || id === sessionID || this.#parents.get(sessionID) === id) return;
+		this.#parents.set(sessionID, id);
+		this.#syncWaiting();
+	}
+
+	async #autoReply(request: PermissionRequest) {
+		const result = await this.#postPermission(request, 'once');
+		const outcome: RequestOutcome = {
+			kind: 'permission',
+			id: request.id,
+			sessionID: request.sessionID,
+			reply: 'once'
+		};
+		if ('error' in result) {
+			this.#answeredHere.delete(request.id);
+			this.#setState(request.id, 'open');
+			const owner = this.rootOf(request.sessionID);
+			this.#signal('attention', owner, requestDetail(request, this.#sessionDir(owner)));
+			return;
+		}
+		this.#finish(request.id, result, outcome);
+	}
+
+	#resolve(outcome: RequestOutcome) {
+		if (this.#done.has(outcome.id)) return;
+		this.#remember(outcome.id);
+		const item = this.pending.get(outcome.id);
+		if (!item) return;
+		const owner = this.rootOf(item.request.sessionID);
+		const auto = item.state === 'auto';
+		this.#note(owner, item, outcome, auto);
+		if (auto) {
+			setTimeout(() => {
+				if (this.pending.get(outcome.id)?.state !== 'auto') return;
+				this.pending.delete(outcome.id);
+			}, AUTO_LINGER_MS);
+		} else {
+			this.pending.delete(outcome.id);
+		}
+		this.#syncWaiting();
+		const plan = planHandoff(item.request);
+		if (plan && outcome.kind === 'question' && outcome.answers?.[0]?.[0] === plan.yes) {
+			this.#leavePlan(owner);
+		}
+	}
+
+	#note(owner: string, item: PendingItem, outcome: RequestOutcome, auto: boolean) {
+		const dir = this.#sessionDir(owner) ?? this.directory;
+		const entry: NoteEntry = {
+			kind: 'note',
+			key: nextKey(),
+			time: Date.now(),
+			requestId: item.request.id,
+			...noteFor(item.request, outcome, dir),
+			auto
+		};
+		const list = this.#notes.get(owner) ?? [];
+		list.push(entry);
+		this.#notes.set(owner, list);
+		const thread = this.threads.get(owner);
+		if (thread && (thread.loaded || thread.loading)) thread.push(entry);
+	}
+
+	#leavePlan(owner: string) {
+		if (owner === this.activeId) {
+			if (this.plan) this.setPlan(false);
+			return;
+		}
+		const prefs = this.#prefs.get(owner);
+		if (prefs) this.#prefs.set(owner, { ...prefs, plan: false });
+	}
+
+	#replyDir(item: { request: AgentRequest; dir: string | null }): string {
+		const dir = item.dir ?? this.#sessionDir(this.rootOf(item.request.sessionID)) ?? this.directory;
+		return dir ? `?directory=${encodeURIComponent(dir)}` : '';
+	}
+
+	async #postPermission(
+		request: PermissionRequest,
+		reply: PermissionReply,
+		message?: string
+	): Promise<ReplyResult & { api?: 'current' | 'legacy' }> {
+		const item = this.pending.get(request.id) ?? { request, dir: null };
+		const base = ocBase(this.sandboxId);
+		const query = this.#replyDir(item);
+		const post = (path: string, body: unknown) =>
+			apiFetch(`${base}${path}${query}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+		const calls = {
+			current: () =>
+				post(`/permission/${encodeURIComponent(request.id)}/reply`, {
+					reply,
+					...(message ? { message } : {})
+				}),
+			legacy: () =>
+				post(
+					`/session/${encodeURIComponent(request.sessionID)}/permissions/${encodeURIComponent(request.id)}`,
+					{ response: reply }
+				)
+		};
+		const order: Array<'current' | 'legacy'> =
+			request.legacy || this.#replyApi === 'legacy' ? ['legacy', 'current'] : ['current', 'legacy'];
+		this.#answeredHere.add(request.id);
+		let missing = false;
+		for (const api of order) {
+			let res: Response;
+			try {
+				res = await calls[api]();
+			} catch {
+				return { error: 'Could not reach the agent' };
+			}
+			if (res.ok) {
+				this.#replyApi = api;
+				return { ok: true, api };
+			}
+			const body = await readBody(res);
+			const gone = replyGone({ status: res.status, body });
+			if (gone === true) return { gone: true };
+			if (gone === false) {
+				missing = true;
+				continue;
+			}
+			return { error: bodyMessage(body, 'The agent did not take the answer') };
+		}
+		return missing ? { gone: true } : { error: 'The agent did not take the answer' };
+	}
+
+	#finish(id: string, result: ReplyResult, outcome: RequestOutcome) {
+		if ('ok' in result) {
+			this.#resolve(outcome);
+			return;
+		}
+		if ('gone' in result) {
+			this.#answeredHere.delete(id);
+			this.#setState(id, 'sending');
+			setTimeout(() => {
+				if (this.pending.get(id)?.state !== 'sending') return;
+				this.pending.delete(id);
+				this.#syncWaiting();
+			}, GONE_GRACE_MS);
+		}
+	}
+
+	#replyFailed(id: string, error: string) {
+		this.#answeredHere.delete(id);
+		this.#setState(id, 'open');
+		toasts.add({ title: 'Could not send your answer', description: error, color: 'error' });
+	}
+
+	#queueFor(threadId: string, text: string, plan: boolean | null = null) {
+		const thread = this.threads.get(threadId);
+		if (!thread) return;
+		const base =
+			threadId === this.activeId
+				? this.choice()
+				: (this.#prefs.get(threadId) ?? thread.lastChoice ?? this.choice());
+		thread.queue.push({
+			id: crypto.randomUUID(),
+			text,
+			attachments: [],
+			choice: plan === null ? base : { ...base, plan },
+			createdAt: Date.now()
+		});
+		this.#drain(thread);
+	}
+
+	async replyPermission(id: string, reply: PermissionReply, message?: string): Promise<boolean> {
+		const item = this.pending.get(id);
+		if (!item || item.request.kind !== 'permission' || item.state !== 'open') return false;
+		if (!this.canAnswer()) return false;
+		const request = item.request;
+		const text = reply === 'reject' ? message?.trim() || undefined : undefined;
+		this.#setState(id, 'sending');
+		const result = await this.#postPermission(request, reply, text);
+		if ('error' in result) {
+			this.#replyFailed(id, result.error);
+			return false;
+		}
+		this.#finish(id, result, { kind: 'permission', id, sessionID: request.sessionID, reply });
+		if (text && 'ok' in result && result.api === 'legacy') {
+			this.#queueFor(this.rootOf(request.sessionID), text);
+		}
+		return true;
+	}
+
+	async #postQuestion(request: QuestionRequest, answers: string[][] | null): Promise<ReplyResult> {
+		const item = this.pending.get(request.id) ?? { request, dir: null };
+		const action = answers ? 'reply' : 'reject';
+		this.#answeredHere.add(request.id);
+		try {
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/question/${encodeURIComponent(request.id)}/${action}${this.#replyDir(item)}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(answers ? { answers } : {})
+				}
+			);
+			if (res.ok) return { ok: true };
+			const body = await readBody(res);
+			if (replyGone({ status: res.status, body }) === true) return { gone: true };
+			return { error: bodyMessage(body, 'The agent did not take the answer') };
+		} catch {
+			return { error: 'Could not reach the agent' };
+		}
+	}
+
+	async #settleQuestion(id: string, answers: string[][] | null): Promise<boolean> {
+		const item = this.pending.get(id);
+		if (!item || item.request.kind !== 'question' || item.state !== 'open') return false;
+		if (!this.canAnswer()) return false;
+		const request = item.request;
+		this.#setState(id, 'sending');
+		const result = await this.#postQuestion(request, answers);
+		if ('error' in result) {
+			this.#replyFailed(id, result.error);
+			return false;
+		}
+		this.#finish(id, result, { kind: 'question', id, sessionID: request.sessionID, answers });
+		return true;
+	}
+
+	answerQuestion(id: string, answers: string[][]): Promise<boolean> {
+		return this.#settleQuestion(id, answers);
+	}
+
+	rejectQuestion(id: string): Promise<boolean> {
+		return this.#settleQuestion(id, null);
+	}
+
+	async answerPlan(id: string, build: boolean, feedback?: string): Promise<boolean> {
+		const item = this.pending.get(id);
+		const plan = item ? planHandoff(item.request) : null;
+		if (!item || !plan) return false;
+		const owner = this.rootOf(item.request.sessionID);
+		const ok = await this.#settleQuestion(id, [[build ? plan.yes : plan.no]]);
+		const text = feedback?.trim();
+		if (ok && !build && text) this.#queueFor(owner, text, true);
+		return ok;
+	}
+
+	#syncPending(): Promise<void> {
+		if (this.#pendingSync) return this.#pendingSync;
+		this.#pendingSync = this.#readPending().finally(() => (this.#pendingSync = null));
+		return this.#pendingSync;
+	}
+
+	async #readPending() {
+		const started = Date.now();
+		const dirs = new Set<string | null>();
+		if (this.directory) dirs.add(this.directory);
+		for (const thread of this.threads.values()) {
+			const dir = this.#sessionDir(thread.id);
+			if (dir) dirs.add(dir);
+		}
+		dirs.add(null);
+		const found: Array<{ request: AgentRequest; dir: string | null }> = [];
+		const covered = new Set<string>();
+		await Promise.all(
+			[...dirs].flatMap((dir) =>
+				(['permission', 'question'] as const).map(async (kind) => {
+					try {
+						const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
+						const res = await apiFetch(`${ocBase(this.sandboxId)}/${kind}${query}`);
+						if (!res.ok) return;
+						for (const request of parseRequestList(kind, await res.json())) {
+							found.push({ request, dir });
+						}
+						covered.add(`${kind}:${dir ?? ''}`);
+					} catch {
+						return;
+					}
+				})
+			)
+		);
+		if (this.#destroyed || covered.size === 0) return;
+		const listed = new Set(found.map((f) => f.request.id));
+		for (const [id, item] of [...this.pending]) {
+			if (item.state !== 'open' || item.seen > started || listed.has(id)) continue;
+			if (covered.has(`${item.request.kind}:${item.dir ?? ''}`)) this.pending.delete(id);
+		}
+		found.sort((a, b) => (a.dir ? 0 : 1) - (b.dir ? 0 : 1));
+		for (const { request, dir } of found) this.#ask(request, dir, true);
+		this.#syncWaiting();
 	}
 
 	#syncStatus(): Promise<void> {
@@ -1874,6 +2346,7 @@ export class ChatSessionStore {
 				if (this.#connectedOnce) this.#invalidateBackground();
 				this.#connectedOnce = true;
 				void this.#syncStatus();
+				void this.#syncPending();
 				const reader = res.body.getReader();
 				const decoder = new TextDecoder();
 				let buffer = '';
@@ -1925,6 +2398,9 @@ export class ChatSessionStore {
 					`-- ${entry.duration !== null ? fmtDuration(entry.duration) : 'turn complete'}${entry.cost !== null ? ` · ${fmtCost(entry.cost)}` : ''}`
 				);
 			} else if (entry.kind === 'error') lines.push(`! ${entry.detail}`);
+			else if (entry.kind === 'note') {
+				lines.push(`· ${entry.lead}${entry.target ? ` ${entry.target}` : ''}`);
+			}
 		}
 		return lines.join('\n');
 	}

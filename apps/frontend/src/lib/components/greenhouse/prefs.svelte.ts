@@ -30,6 +30,7 @@ export interface PrefValues {
 	terminalFont: string;
 	sendWith: SendWith;
 	followUp: FollowUp;
+	autoAcceptPermissions: boolean;
 	notifyAgent: boolean;
 	sounds: Record<SoundEvent, SoundChoice>;
 	notAbsolutelyRight: boolean;
@@ -52,6 +53,7 @@ export const PREF_DEFAULTS: PrefValues = {
 	terminalFont: '',
 	sendWith: 'enter',
 	followUp: 'queue',
+	autoAcceptPermissions: false,
 	notifyAgent: false,
 	sounds: { done: 'success', attention: 'arrival', error: 'error' },
 	notAbsolutelyRight: false,
@@ -110,6 +112,7 @@ function clean(raw: Record<string, unknown>): PrefValues {
 		terminalFont: text(raw.terminalFont),
 		sendWith: oneOf(raw.sendWith, ['enter', 'mod-enter'] as const, d.sendWith),
 		followUp: oneOf(raw.followUp, ['queue', 'steer'] as const, d.followUp),
+		autoAcceptPermissions: bool(raw.autoAcceptPermissions, d.autoAcceptPermissions),
 		notifyAgent: bool(raw.notifyAgent, d.notifyAgent),
 		sounds: {
 			done: sound(sounds.done, d.sounds.done),

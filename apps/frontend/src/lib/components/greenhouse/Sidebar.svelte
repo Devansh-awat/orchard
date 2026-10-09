@@ -1,10 +1,14 @@
 <script lang="ts">
-	import { ChevronRight, House, Plus, Search, Settings } from 'lucide-svelte';
+	import { ChevronRight, Ellipsis, House, Plus, Search, Settings, SmilePlus } from 'lucide-svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import { user } from '$lib/stores';
 	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
+	import ContextMenu from './ContextMenu.svelte';
 	import MachineMenu from './MachineMenu.svelte';
+	import RepoIcon from './RepoIcon.svelte';
+	import RepoIconPicker from './RepoIconPicker.svelte';
 	import SessionRow from './SessionRow.svelte';
 	import { modKey } from './format';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
@@ -40,6 +44,62 @@
 
 	function search() {
 		window.dispatchEvent(new Event('open-quick-search'));
+	}
+
+	let menuRepo = $state<string | null>(null);
+	let menuOpen = $state(false);
+	let menuPlacement = $state<'bottom-start' | 'bottom-end'>('bottom-start');
+	let mx = $state(0);
+	let my = $state(0);
+	let headRect: DOMRect | null = null;
+	let wasOpen = false;
+
+	let pickRepo = $state<string | null>(null);
+	let pickerOpen = $state(false);
+	let px = $state(0);
+	let py = $state(0);
+
+	const picking = $derived(ws?.repos.find((r) => r.name === pickRepo) ?? null);
+	const iconBlocked = $derived(ws?.running ? undefined : 'Start the machine to change the icon');
+
+	function headOf(event: MouseEvent): DOMRect | null {
+		const head = (event.currentTarget as HTMLElement).closest('.head');
+		return head ? head.getBoundingClientRect() : null;
+	}
+
+	function repoContext(event: MouseEvent, name: string) {
+		if (!ws?.canEdit) return;
+		event.preventDefault();
+		headRect = headOf(event);
+		menuRepo = name;
+		menuPlacement = 'bottom-start';
+		mx = event.clientX;
+		my = event.clientY;
+		menuOpen = true;
+	}
+
+	function repoMore(event: MouseEvent, name: string) {
+		if (wasOpen && menuRepo === name) {
+			menuOpen = false;
+			return;
+		}
+		headRect = headOf(event);
+		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		menuRepo = name;
+		menuPlacement = 'bottom-end';
+		mx = rect.right;
+		my = rect.bottom + 10;
+		menuOpen = true;
+	}
+
+	function changeIcon() {
+		const name = menuRepo;
+		menuOpen = false;
+		if (!name) return;
+		pickRepo = name;
+		px = headRect ? headRect.left : mx;
+		py = headRect ? headRect.bottom + 4 : my;
+		requestAnimationFrame(() => (pickerOpen = true));
 	}
 </script>
 
@@ -83,13 +143,26 @@
 			{#each ws.groups as group (group.name)}
 				{@const closed = collapsed[group.name] ?? false}
 				<div class="group" role="group" aria-label={group.name}>
-					<div class="head" class:head--closed={closed}>
+					<div
+						class="head"
+						class:head--closed={closed}
+						class:head--menu={menuOpen && menuRepo === group.name}
+						role="presentation"
+						oncontextmenu={(e) => group.repo && repoContext(e, group.name)}
+					>
 						<button
 							type="button"
 							class="head-main gh-row"
 							aria-expanded={!closed}
 							onclick={() => (collapsed[group.name] = !closed)}
 						>
+							<span class="head-icon"
+								><RepoIcon
+									name={group.name}
+									github={group.repo?.github}
+									icon={group.repo?.icon}
+								/></span
+							>
 							<span class="head-name">{group.name}</span>
 							{#if closed && group.sessions.length > 0}
 								<span class="head-count">{group.sessions.length}</span>
@@ -98,16 +171,32 @@
 								<ChevronRight size={14} strokeWidth={1.75} />
 							</span>
 						</button>
-						<button
-							type="button"
-							class="gh-ibtn head-add"
-							aria-label="New session in {group.name}"
-							title={ws.canEdit ? `New session in ${group.name}` : VIEWER_ONLY}
-							disabled={!ws.canEdit}
-							onclick={() => onnewsession(group.name)}
-						>
-							<Plus size={16} strokeWidth={1.75} />
-						</button>
+						<div class="head-actions">
+							{#if ws.canEdit && group.repo}
+								<button
+									type="button"
+									class="gh-ibtn"
+									aria-label="More actions for {group.name}"
+									title="More actions"
+									aria-haspopup="menu"
+									aria-expanded={menuOpen && menuRepo === group.name}
+									onpointerdown={() => (wasOpen = menuOpen)}
+									onclick={(e) => repoMore(e, group.name)}
+								>
+									<Ellipsis size={16} strokeWidth={1.75} />
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="gh-ibtn"
+								aria-label="New session in {group.name}"
+								title={ws.canEdit ? `New session in ${group.name}` : VIEWER_ONLY}
+								disabled={!ws.canEdit}
+								onclick={() => onnewsession(group.name)}
+							>
+								<Plus size={16} strokeWidth={1.75} />
+							</button>
+						</div>
 					</div>
 					<div class="sessions" inert={closed} {@attach springCollapse(() => closed)}>
 						{#each group.sessions as session (session.id)}
@@ -177,6 +266,26 @@
 			{/if}
 		{/if}
 	</div>
+
+	{#if ws?.canEdit}
+		<ContextMenu bind:open={menuOpen} x={mx} y={my} placement={menuPlacement}>
+			<MenuItem onclick={() => menuRepo && onnewsession(menuRepo)}>
+				<Plus size={14} /> New session
+			</MenuItem>
+			<MenuItem onclick={changeIcon} disabled={!!iconBlocked} title={iconBlocked}>
+				<SmilePlus size={14} /> Change icon…
+			</MenuItem>
+		</ContextMenu>
+		{#if picking}
+			<RepoIconPicker
+				bind:open={pickerOpen}
+				x={px}
+				y={py}
+				repo={picking}
+				onpick={(icon) => ws?.setRepoIcon(picking.name, icon)}
+			/>
+		{/if}
+	{/if}
 
 	<div class="foot">
 		{#if face}
@@ -382,6 +491,12 @@
 		color: var(--gh-text);
 	}
 
+	.head-icon {
+		display: inline-grid;
+		flex: none;
+		margin-right: 0.25rem;
+	}
+
 	.head-name {
 		min-width: 0;
 		overflow: hidden;
@@ -410,19 +525,44 @@
 		opacity: 1;
 	}
 
-	.head-add {
+	.head-actions {
 		position: absolute;
+		top: 0;
+		bottom: 0;
 		right: calc(var(--row-pad) - var(--gh-ibtn-inset));
+		display: flex;
+		align-items: center;
 		opacity: 0;
-		transition:
-			opacity var(--dur-fast) ease,
-			color var(--dur-fast) ease,
-			background-color var(--dur-fast) ease;
+		pointer-events: none;
+		transition: opacity var(--dur-fast) ease;
 	}
 
-	.head:hover .head-add,
-	.head-add:focus-visible {
+	.head:hover .head-actions,
+	.head:focus-within .head-actions,
+	.head--menu .head-actions {
 		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.head:hover .head-main,
+	.head:focus-within .head-main,
+	.head--menu .head-main {
+		padding-right: calc(var(--gh-icon) * 2 + var(--row-pad) - var(--gh-ibtn-inset));
+	}
+
+	.head--menu .head-main {
+		color: var(--gh-text);
+	}
+
+	@media (hover: none) {
+		.head-actions {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.head-main {
+			padding-right: calc(var(--gh-icon) * 2 + var(--row-pad) - var(--gh-ibtn-inset));
+		}
 	}
 
 	.sessions {

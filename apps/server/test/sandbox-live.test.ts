@@ -29,7 +29,8 @@ import {
 import {
   OPENCODE_MESSAGE_ID_RE,
   newOpencodeMessageId,
-  opencodePromptTarget
+  opencodePromptTarget,
+  opencodeReplyTarget
 } from '../src/sandboxes/sandbox-opencode-policy';
 import { needsAttention } from '../src/sandboxes/sandbox-attention.service';
 
@@ -518,4 +519,29 @@ test('a connection cannot pile up unprocessed frames while one is slow', async (
   );
   await queue.idle();
   assert.deepEqual(seen, [1, 2, 3, 5]);
+});
+
+test('answers to agent permissions and questions are recognised for attribution', () => {
+  assert.deepEqual(opencodeReplyTarget('POST', 'permission/per_abc/reply?directory=%2Fx'), {
+    requestId: 'per_abc',
+    kind: 'permission'
+  });
+  assert.deepEqual(opencodeReplyTarget('POST', 'session/ses_a/permissions/per_old'), {
+    requestId: 'per_old',
+    kind: 'permission'
+  });
+  assert.deepEqual(opencodeReplyTarget('POST', 'question/que_1/reply'), {
+    requestId: 'que_1',
+    kind: 'question'
+  });
+  assert.deepEqual(opencodeReplyTarget('POST', 'question/que_1/reject'), {
+    requestId: 'que_1',
+    kind: 'question'
+  });
+  assert.equal(opencodeReplyTarget('GET', 'permission/per_abc/reply'), null);
+  assert.equal(opencodeReplyTarget('POST', 'permission'), null);
+  assert.equal(opencodeReplyTarget('POST', 'permission//per_abc/reply'), null);
+  assert.equal(opencodeReplyTarget('POST', 'permission/per_abc/../reply'), null);
+  assert.equal(opencodeReplyTarget('POST', 'permission/per{a}/reply'), null);
+  assert.equal(opencodeReplyTarget('POST', 'session/ses_a/prompt_async'), null);
 });

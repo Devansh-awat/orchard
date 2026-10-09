@@ -308,6 +308,14 @@ export class MachineWorkspace {
 				: null;
 		};
 		this.store.isHost = () => this.isOwner;
+		this.store.canAnswer = () => this.canEdit;
+		this.store.autoAccept = () => greenhousePrefs.values.autoAcceptPermissions;
+		this.store.answerAuthorOf = (id: string): ChatAuthor | null => {
+			const author = this.live.answerAuthors.get(id);
+			return author
+				? { id: author.id, name: author.name, avatarUrl: author.avatarUrl ?? null }
+				: null;
+		};
 		this.live.selfId = host.self()?.id ?? null;
 		this.live.onSession = (session) => this.upsert(session);
 	}
@@ -701,6 +709,28 @@ export class MachineWorkspace {
 			});
 			return null;
 		}
+	}
+
+	async setRepoIcon(name: string, icon: string | null) {
+		const previous = this.repos.find((r) => r.name === name);
+		if (!previous || (previous.icon ?? null) === icon) return;
+		const patch = (value: string | null) =>
+			(this.repos = this.repos.map((r) => (r.name === name ? { ...r, icon: value } : r)));
+		patch(icon);
+		try {
+			const saved = await api.setRepoIcon(this.sandboxId, name, icon);
+			if (this.#disposed) return;
+			patch(saved.icon);
+		} catch (e) {
+			if (this.#disposed) return;
+			patch(previous.icon ?? null);
+			toasts.add({
+				title: 'Could not change the icon',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		}
+		void this.refreshRepos();
 	}
 
 	async renameSession(session: GhSession, title: string) {

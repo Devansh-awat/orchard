@@ -1,7 +1,6 @@
 <script lang="ts">
 	import {
 		ArrowLeft,
-		Boxes,
 		Check,
 		ChevronDown,
 		CircleAlert,
@@ -10,7 +9,6 @@
 		Play,
 		RotateCw,
 		Plus,
-		Server,
 		Settings2,
 		Square
 	} from 'lucide-svelte';
@@ -18,6 +16,7 @@
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import MachineUsage from './MachineUsage.svelte';
+	import RunnerTile from './RunnerTile.svelte';
 	import { sandboxStatus } from '$lib/components/ui/status';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
@@ -73,17 +72,7 @@
 				: 'Choose a machine'}
 			title={machine ? idle : undefined}
 		>
-			<span class="tile" aria-hidden="true">
-				{#if machine?.runner === 'vercel'}
-					<svg class="vercel" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-						<path d="M12 2.5 22 19.5H2Z" fill="currentColor" />
-					</svg>
-				{:else if machine}
-					<Boxes size={14} strokeWidth={1.75} />
-				{:else}
-					<Server size={14} strokeWidth={1.75} />
-				{/if}
-			</span>
+			<RunnerTile runner={machine ? (machine.runner ?? 'kubernetes') : null} />
 			<span class="text">
 				<span class="name">{machine?.name ?? 'No machine'}</span>
 				<span class="cap">
@@ -197,25 +186,6 @@
 	.switch:focus-visible {
 		outline: none;
 		box-shadow: 0 0 0 2px var(--focus-ring);
-	}
-
-	.tile {
-		display: inline-grid;
-		place-items: center;
-		flex: none;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: var(--radius-xs);
-		background: linear-gradient(
-			135deg,
-			color-mix(in srgb, var(--accent) 22%, transparent),
-			color-mix(in srgb, var(--accent) 8%, transparent)
-		);
-		color: var(--accent);
-	}
-
-	.vercel {
-		display: block;
 	}
 
 	.text {

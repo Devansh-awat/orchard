@@ -1,3 +1,4 @@
+import { parsePermission, parseQuestion } from '$lib/components/sandbox/chat/pending';
 import {
 	ChatSessionStore,
 	SessionThread,
@@ -505,4 +506,73 @@ export function longStore(): ChatSessionStore {
 	store.comments = longComments();
 	store.authorOf = (id) => (id === 'msg_u1' || id === 'msg_u3' ? SEB : null);
 	return store;
+}
+
+const DIR = '/persist/home/.worktrees/orchard/fix-login';
+
+export function seedRequests(store: ChatSessionStore, kind: 'ask' | 'plan') {
+	const requests =
+		kind === 'plan'
+			? [
+					parseQuestion({
+						id: 'que_plan',
+						sessionID: 'ses_login',
+						questions: [
+							{
+								question: `Plan at ${DIR}/.opencode/plans/1-login.md is complete. Would you like to switch to the build agent and start implementing?`,
+								header: 'Build Agent',
+								custom: false,
+								options: [
+									{
+										label: 'Yes',
+										description: 'Switch to build agent and start implementing the plan'
+									},
+									{ label: 'No', description: 'Stay with plan agent to continue refining the plan' }
+								]
+							}
+						]
+					})
+				]
+			: [
+					parsePermission({
+						id: 'per_edit',
+						sessionID: 'ses_login',
+						permission: 'edit',
+						patterns: ['src/auth/auth.controller.ts'],
+						always: ['*'],
+						metadata: {
+							filepath: `${DIR}/src/auth/auth.controller.ts`,
+							diff: `--- a\n+++ b\n@@ -40,3 +40,3 @@\n   const token = await this.sessions.mint(user);\n-  res.cookie('session', token, { domain: req.hostname });\n+  res.cookie('session', token, { domain: env.COOKIE_DOMAIN, sameSite: 'lax' });\n   return res.redirect(returnTo);\n`
+						}
+					}),
+					parsePermission({
+						id: 'per_bash',
+						sessionID: 'ses_login',
+						permission: 'bash',
+						patterns: ['pnpm --filter server test'],
+						always: ['pnpm *'],
+						metadata: { command: 'pnpm --filter server test' }
+					}),
+					parseQuestion({
+						id: 'que_db',
+						sessionID: 'ses_login',
+						questions: [
+							{
+								question: 'Where should the cookie domain come from?',
+								header: 'Cookie domain',
+								options: [
+									{ label: 'COOKIE_DOMAIN', description: 'A new env var, set per deployment' },
+									{ label: 'PUBLIC_URL', description: 'Derive it from the existing public URL' }
+								]
+							},
+							{
+								question: 'Which environments need the fix?',
+								header: 'Environments',
+								multiple: true,
+								options: [{ label: 'Production' }, { label: 'Staging' }, { label: 'Previews' }]
+							}
+						]
+					})
+				];
+	for (const request of requests) if (request) store.addRequest(request, DIR);
 }

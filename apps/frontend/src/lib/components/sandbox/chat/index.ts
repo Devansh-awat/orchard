@@ -12,6 +12,7 @@ export {
 } from './model-favourites.svelte';
 export { default as SessionTabs } from './SessionTabs.svelte';
 export { default as Transcript } from './Transcript.svelte';
+export { default as PendingDock } from './PendingDock.svelte';
 export { ChatSessionStore, SessionThread, commentTime } from './session-store.svelte';
 export type {
 	AgentEntry,
@@ -26,6 +27,9 @@ export type {
 	FeedItem,
 	FollowUpMode,
 	ModelChoice,
+	NoteEntry,
+	PendingItem,
+	PendingState,
 	QueuedPrompt,
 	RemoteDraft,
 	ResultEntry,
@@ -39,3 +43,11 @@ export type {
 } from './session-store.svelte';
 export { default as HumanMessage } from './parts/HumanMessage.svelte';
 export { default as TextPart } from './parts/TextPart.svelte';
+export type {
+	AgentRequest,
+	PermissionReply,
+	PermissionRequest,
+	QuestionInfo,
+	QuestionOption,
+	QuestionRequest
+} from './pending';

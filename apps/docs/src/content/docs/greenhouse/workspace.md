@@ -24,8 +24,10 @@ terminals.
 
 ## Title bar
 
-The breadcrumb reads `machine › repo › session`. The machine goes home, and the
-session title opens the session menu:
+The breadcrumb reads `machine › repo › session`. The machine shows its runner
+(the Vercel triangle or a Kubernetes box) and a status dot, and goes home. The
+repository shows its icon; hover it to see the GitHub repository it pushes to.
+The session title opens the session menu:
 
 - **Rename**, **Archive** and **Delete** (keeping the branch or deleting it too).
 - **Fork session.** A new session branched from this one's branch, for trying a
@@ -61,6 +63,13 @@ A session's menu (the **⋯** on hover, or right-click) renames it, copies its
 branch name, opens its pull request, archives it, or deletes it with or without
 its branch.
 
+Each repository has an icon, its initial on a coloured tile until someone picks
+one. Right-click a repository, or use the **⋯** on hover, and choose **Change
+icon…** to pick a symbol, an emoji, or the GitHub owner's avatar. The icon lives
+in the repository's own git config as `orchard.icon`, so everyone on the machine
+sees the same one (run `git config --unset orchard.icon` in a terminal to clear
+it by hand). Read-only guests cannot change it.
+
 ## Settings
 
 **⌘,** or the gear in the sidebar footer opens settings.
@@ -83,9 +92,8 @@ its branch.
 Machine sections are read-only for guests. Everything under **You** is yours
 alone and is kept in this browser.
 
-**I'm not absolutely right, thank you very much** strips "You're absolutely
-right!" from agent messages. It only changes what you see; the transcript is
-untouched.
+**Hold the applause** cuts openers like "You're absolutely right!" from agent
+replies. It only changes what you see; the transcript is untouched.
 
 ## Centre
 
@@ -123,6 +131,35 @@ single step in progress. Expand it to see every step.
 
 Under each turn a quiet footer gives the time and duration, a copy button and
 chips for the files that turn changed. Click a chip to open the file's diff.
+
+### Permissions and questions
+
+When the agent needs a decision it waits, and a card appears above the composer.
+The session shows as needing input until someone answers.
+
+- **Permission cards** say what the agent wants to do: run a command, edit a file
+  (with a preview of the change), fetch a page or work outside the worktree.
+  **Allow** lets it through once, **Always allow** stops asking for that kind of
+  request until the agent restarts, and **Deny** stops the agent. Type what it should do instead before
+  you deny and it carries on with that.
+- **Question cards** list the agent's options. Pick one, or several when it
+  asks for more than one, or type your own under **Other**. **Skip** dismisses
+  the question and stops the agent.
+- **Plan ready.** In plan mode the agent asks before it starts editing.
+  **Start building** switches it to build mode, **Keep planning** keeps it
+  read only, or type feedback to send instead.
+
+With a card focused, **Enter** allows or submits, **⌘Enter** always allows,
+**Escape** starts a denial (Enter sends it) and **1** to **9** pick an option.
+A card takes focus when it appears, unless you are typing.
+
+The composer stays usable while a card is open, so you can still steer the
+agent. Once answered, the card leaves a quiet line in the thread, such as
+`Allowed npm test`, with the avatar of whoever answered.
+
+Read-only guests see the cards but cannot answer them. **Auto-accept
+permissions** in Settings allows every permission request in chats where you
+sent the last prompt. Questions still wait for you.
 
 ### The composer
 
@@ -226,3 +263,7 @@ On Windows and Linux, use **Ctrl** for **⌘**.
 | **Escape**         | Stop the agent while it is working                  |
 | **⌘Enter**         | Commit, in the Changes tab; post, in a diff comment |
 | **/** then **Tab** | Complete a command in the composer                  |
+| **Enter**          | Allow, or submit an answer, on a focused card       |
+| **⌘Enter**         | Always allow, on a focused permission card          |
+| **Escape**         | Deny, on a focused permission card                  |
+| **1** to **9**     | Pick an option, on a focused question card          |

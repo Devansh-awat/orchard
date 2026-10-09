@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import ChatPanel from '$lib/components/sandbox/chat/ChatPanel.svelte';
 	import type { RemoteDraft } from '$lib/components/sandbox/chat/session-store.svelte';
-	import { fixtureStore, longStore } from './fixtures';
+	import { fixtureStore, longStore, seedRequests } from './fixtures';
 
 	const view = page.url.searchParams.get('view') ?? 'busy';
 	const store = view === 'long' ? longStore() : fixtureStore();
@@ -17,6 +17,10 @@
 	if (view === 'plan') store.plan = true;
 	if (view === 'slash') store.draft = '/';
 	if (view === 'comment') store.draft = '/chat looks good, merging after CI';
+	if (view === 'ask' || view === 'plan-ready' || view === 'ask-viewer') {
+		seedRequests(store, view === 'plan-ready' ? 'plan' : 'ask');
+	}
+	if (view === 'ask-viewer') store.canAnswer = () => false;
 
 	const remoteDrafts: RemoteDraft[] =
 		view === 'busy'

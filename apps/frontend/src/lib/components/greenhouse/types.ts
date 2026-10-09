@@ -45,6 +45,8 @@ export interface GhRepo {
 	name: string;
 	branch: string;
 	dirtyFiles: number;
+	github?: { owner: string; name: string } | null;
+	icon?: string | null;
 }
 
 export interface GhMember {

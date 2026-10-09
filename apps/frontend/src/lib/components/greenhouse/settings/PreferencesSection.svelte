@@ -86,6 +86,12 @@
 			/>
 		{/snippet}
 	</Row>
+	<Row
+		title="Auto-accept permissions"
+		description="Allow every permission request automatically"
+		checked={prefs.autoAcceptPermissions}
+		ontoggle={(v) => greenhousePrefs.set('autoAcceptPermissions', v)}
+	/>
 </Card>
 
 <Card title="Notifications">
@@ -100,8 +106,8 @@
 
 <Card title="Transcript">
 	<Row
-		title="I'm not absolutely right, thank you very much"
-		description={'Strip "You\'re absolutely right!" from agent messages'}
+		title="Hold the applause"
+		description="Cut the flattery from agent replies"
 		checked={prefs.notAbsolutelyRight}
 		ontoggle={(v) => greenhousePrefs.set('notAbsolutelyRight', v)}
 	/>

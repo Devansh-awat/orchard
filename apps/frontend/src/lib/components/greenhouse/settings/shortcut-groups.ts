@@ -54,6 +54,15 @@ export function shortcutGroups(
 			]
 		},
 		{
+			title: 'Permission and question cards',
+			items: [
+				{ keys: ['↵'], label: 'Allow, or submit the answer' },
+				{ keys: [mod, '↵'], label: 'Always allow' },
+				{ keys: ['Esc'], label: 'Deny, then ↵ to send' },
+				{ keys: ['1–9'], label: 'Pick an option' }
+			]
+		},
+		{
 			title: 'Editor',
 			items: [
 				{ keys: [mod, 'P'], label: 'Find a file' },

@@ -166,6 +166,14 @@ export function initRepo(sandboxId: string, name: string) {
 	return send<{ name: string }>(`${base(sandboxId)}/repos/init`, 'POST', { name });
 }
 
+export function setRepoIcon(sandboxId: string, repo: string, icon: string | null) {
+	return send<{ name: string; icon: string | null }>(
+		`${base(sandboxId)}/repos/${encodeURIComponent(repo)}/icon`,
+		'PUT',
+		{ icon }
+	);
+}
+
 export function changes(sandboxId: string, scope: Scope) {
 	return get<GhChanges>(`${base(sandboxId)}/changes${qs(scoped(scope))}`);
 }

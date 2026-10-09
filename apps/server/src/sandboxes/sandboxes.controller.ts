@@ -37,6 +37,7 @@ import {
   newOpencodeMessageId,
   opencodeMinRole,
   opencodePromptTarget,
+  opencodeReplyTarget,
   opencodeSuffixOf
 } from './sandbox-opencode-policy';
 
@@ -173,6 +174,22 @@ export class SandboxesController {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
     return this.workspace.initRepo(row, body?.name || '', user.id);
+  }
+
+  @Put(':id/repos/:name/icon')
+  @RequireScope('deploy')
+  async setRepoIcon(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('name') name: string,
+    @Body() body: { icon?: unknown }
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    if (!body || typeof body !== 'object' || !('icon' in body)) {
+      throw new BadRequestException('icon is required; send null to clear it');
+    }
+    return this.workspace.setRepoIcon(row, name, body.icon);
   }
 
   @Get(':id/conversations')
@@ -504,7 +521,13 @@ export class SandboxesController {
       });
       if (!recorded) throw new ConflictException('That message id is already in use');
     }
+    const reply = opencodeReplyTarget(req.method, suffix);
     await this.workspace.proxyOpencode(row, req, res);
+    if (reply && res.statusCode >= 200 && res.statusCode < 300) {
+      void this.members
+        .recordAnswer({ sandboxId: row.id, userId: user.id, ...reply })
+        .catch(() => null);
+    }
   }
 
   @Get(':id/ssh')

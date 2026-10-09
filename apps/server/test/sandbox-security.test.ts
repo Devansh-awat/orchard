@@ -541,6 +541,55 @@ test('prompts and new sessions go through the shared per-person rate limiter', a
   assert.deepEqual(checks, [`${HOST}:user:sandbox_session`]);
 });
 
+test('whoever answers an agent permission or question is announced to the machine', async () => {
+  const frames: Array<{ sandboxId: string; frame: Record<string, unknown> }> = [];
+  const lookups: string[] = [];
+  const members = new SandboxMembersService(
+    {
+      user: {
+        findUnique: async ({ where }: any) => {
+          lookups.push(where.id);
+          return where.id === HOST
+            ? { id: HOST, username: 'seb', firstName: 'Seb', lastName: null, imageUrl: null }
+            : null;
+        }
+      }
+    } as any,
+    {} as any,
+    {
+      setCommentSink: () => {},
+      broadcast: async (sandboxId: string, frame: Record<string, unknown>) => {
+        frames.push({ sandboxId, frame });
+      }
+    } as any
+  );
+  await members.recordAnswer({
+    sandboxId: SANDBOX,
+    userId: HOST,
+    requestId: 'per_abc',
+    kind: 'permission'
+  });
+  assert.deepEqual(frames, [
+    {
+      sandboxId: SANDBOX,
+      frame: {
+        t: 'answer',
+        user: { id: HOST, name: 'Seb', avatarUrl: null },
+        requestId: 'per_abc',
+        kind: 'permission'
+      }
+    }
+  ]);
+  await members.recordAnswer({
+    sandboxId: SANDBOX,
+    userId: 'gone',
+    requestId: 'que_1',
+    kind: 'question'
+  });
+  assert.equal(frames.length, 1);
+  assert.deepEqual(lookups, [HOST, 'gone']);
+});
+
 test('a removed or downgraded guest loses the shells that hold their GitHub token', async () => {
   const guest = '33333333-3333-4333-8333-333333333333';
   const script = guestShellKillScript(guest);

@@ -11,7 +11,8 @@ import {
 import type { Request, Response } from 'express';
 import type { SandboxConversation } from '@prisma/client';
 import { OPENCODE_RESPONSE_HEADERS, opencodeContentType } from './sandbox-opencode-policy';
-import { parseRepoUrl } from './sandbox-repo-url';
+import { githubRepoOf, parseRepoUrl } from './sandbox-repo-url';
+import { normalizeRepoIcon, storedRepoIcon } from './sandbox-repo-icon';
 import { OPENCODE_LOCAL_AUTH, OPENCODE_LOCAL_CURL_AUTH } from './runners/sandbox-init-files';
 import { PrismaService } from '../prisma/prisma.service';
 import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
@@ -130,6 +131,44 @@ export interface SandboxRepo {
   name: string;
   branch: string | null;
   dirtyFiles: number;
+  github: { owner: string; name: string } | null;
+  icon: string | null;
+}
+
+export const LIST_REPOS_SCRIPT = [
+  "e() { printf '%s' \"$1\" | base64 | tr -d '\\n'; }",
+  'for d in /persist/home/*/.git; do',
+  '  [ -e "$d" ] || continue',
+  '  r="${d%/.git}"',
+  '  b=$(git -C "$r" rev-parse --abbrev-ref HEAD 2>/dev/null)',
+  '  n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l | tr -d " ")',
+  '  u=$(git -C "$r" config --get remote.origin.url 2>/dev/null)',
+  '  i=$(git -C "$r" config --get orchard.icon 2>/dev/null)',
+  '  printf \'%s|%s|%s|%s|%s\\n\' "$(e "${r##*/}")" "$(e "$b")" "$n" "$(e "$u")" "$(e "$i")"',
+  'done'
+].join('\n');
+
+function fromBase64(value: string): string | null {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return null;
+  return Buffer.from(value, 'base64').toString('utf8');
+}
+
+export function parseRepoListing(stdout: string): SandboxRepo[] {
+  const repos: SandboxRepo[] = [];
+  for (const line of stdout.split('\n')) {
+    const parts = line.trim().split('|');
+    if (parts.length !== 5) continue;
+    const [name, branch, url, icon] = [parts[0], parts[1], parts[3], parts[4]].map(fromBase64);
+    if (!name || name.includes('/') || branch === null || url === null || icon === null) continue;
+    repos.push({
+      name,
+      branch: branch.trim() || null,
+      dirtyFiles: Number(parts[2]) || 0,
+      github: githubRepoOf(url),
+      icon: storedRepoIcon(icon)
+    });
+  }
+  return repos;
 }
 
 export interface SandboxChangedFile {
@@ -832,27 +871,34 @@ export class SandboxWorkspaceService {
 
   async listRepos(sandbox: WorkspaceSandbox): Promise<{ repos: SandboxRepo[] }> {
     this.requireRunning(sandbox);
-    const script = [
-      'for d in /persist/home/*/.git; do',
-      '  [ -e "$d" ] || continue',
-      '  r="${d%/.git}"',
-      '  b=$(git -C "$r" rev-parse --abbrev-ref HEAD 2>/dev/null)',
-      '  n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l)',
-      '  echo "${r##*/}|$b|$n"',
-      'done'
-    ].join('\n');
-    const result = await this.devExec(sandbox, script);
-    const repos: SandboxRepo[] = [];
-    for (const line of result.stdout.split('\n')) {
-      const parts = line.trim().split('|');
-      if (parts.length !== 3 || !parts[0]) continue;
-      repos.push({
-        name: parts[0],
-        branch: parts[1] || null,
-        dirtyFiles: Number(parts[2]) || 0
-      });
+    const result = await this.devExec(sandbox, LIST_REPOS_SCRIPT);
+    return { repos: parseRepoListing(result.stdout) };
+  }
+
+  async setRepoIcon(
+    sandbox: WorkspaceSandbox,
+    rawName: string,
+    rawIcon: unknown
+  ): Promise<{ name: string; icon: string | null }> {
+    const name = typeof rawName === 'string' ? rawName : '';
+    if (!REPO_RE.test(name) || name.length > 100) {
+      throw new BadRequestException('Invalid repository name');
     }
-    return { repos };
+    const icon = normalizeRepoIcon(rawIcon);
+    this.requireRunning(sandbox);
+    const target = shellQuote(`/persist/home/${name}`);
+    const write =
+      icon === null
+        ? `git -C ${target} config --unset-all orchard.icon; rc=$?; [ $rc -eq 0 ] || [ $rc -eq 5 ] || exit $rc`
+        : `git -C ${target} config --replace-all orchard.icon ${shellQuote(icon)}`;
+    const result = await this.devExec(sandbox, `[ -e ${target}/.git ] || exit 4\n${write}`);
+    if (result.exitCode === 4) {
+      throw new NotFoundException(`No repository named "${name}" on this machine`);
+    }
+    if (!result.ok) {
+      throw new BadRequestException('Could not save the repository icon');
+    }
+    return { name, icon };
   }
 
   async addRepo(sandbox: WorkspaceSandbox, repoUrl: string): Promise<{ name: string }> {

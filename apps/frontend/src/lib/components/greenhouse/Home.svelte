@@ -37,8 +37,9 @@
 	import IssuePicker from './IssuePicker.svelte';
 	import * as api from './api';
 	import { linearStatus, linkedIntegrations, type IntegrationProvider } from './integrations';
+	import RepoIcon from './RepoIcon.svelte';
 	import SessionGlyph from './SessionGlyph.svelte';
-	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
+	import { ago, modKey, runnerLabel } from './format';
 	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
 	import type { PickedIssue } from './types';
@@ -334,9 +335,7 @@
 						>
 							{#if chosen}
 								<span class="seg-part">
-									<span class="ravatar" style="--hue: var({repoHue(chosen.name)})"
-										>{repoInitial(chosen.name)}</span
-									>
+									<RepoIcon name={chosen.name} github={chosen.github} icon={chosen.icon} />
 									<span class="seg-text">{chosen.name}</span>
 								</span>
 								<span class="seg-part seg-part--branch">
@@ -359,9 +358,7 @@
 								blank = false;
 							}}
 						>
-							<span class="ravatar" style="--hue: var({repoHue(r.name)})"
-								>{repoInitial(r.name)}</span
-							>
+							<RepoIcon name={r.name} github={r.github} icon={r.icon} />
 							<span>{r.name}</span>
 							<span class="gh-menu-kbd gh-mono">{r.branch}</span>
 							{#if chosen?.name === r.name}<Check size={13} />{/if}
@@ -774,20 +771,6 @@
 		border-radius: var(--gh-r-control);
 		color: var(--gh-muted);
 		white-space: nowrap;
-	}
-
-	.ravatar {
-		display: inline-grid;
-		place-items: center;
-		flex: none;
-		width: var(--gh-glyph);
-		height: var(--gh-glyph);
-		border-radius: 0.25rem;
-		background: color-mix(in oklab, var(--hue) 22%, var(--gh-editor));
-		color: color-mix(in oklab, var(--hue) 80%, var(--text-default));
-		font-size: var(--text-micro);
-		line-height: var(--gh-lh-caption);
-		font-weight: 600;
 	}
 
 	.connect {

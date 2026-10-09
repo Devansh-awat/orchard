@@ -7,6 +7,7 @@
 	import SessionTabs from './SessionTabs.svelte';
 	import Transcript from './Transcript.svelte';
 	import Composer from './Composer.svelte';
+	import PendingDock from './PendingDock.svelte';
 
 	let {
 		store,
@@ -52,7 +53,8 @@
 	<Transcript {store} />
 	{#if ready}
 		<div class="chat-dock">
-			<div class="chat-col">
+			<div class="chat-col chat-stack">
+				<PendingDock {store} />
 				<Composer {store} {remoteDrafts} {commands} onComment={comment} />
 			</div>
 		</div>
@@ -102,6 +104,12 @@
 		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
 		padding: 0 calc(var(--chat-gutter) + var(--chat-inset));
+	}
+
+	.chat-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
 	@container chat-pane (min-width: 48rem) {

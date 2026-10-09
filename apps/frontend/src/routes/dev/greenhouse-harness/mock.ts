@@ -219,6 +219,19 @@ export function installFetch(role: HarnessRole) {
 		],
 		[/\/repos$/, 'GET', (u) => ({ repos: u.pathname.includes('sbx-leaf') ? data.repos : [] })],
 		[
+			/\/repos\/[^/]+\/icon$/,
+			'PUT',
+			(u, init) => {
+				const name = decodeURIComponent(u.pathname.split('/').at(-2) ?? '');
+				const icon = (JSON.parse(String(init.body ?? '{}')) as { icon: string | null }).icon;
+				const repo = data.repos.find((r) => r.name === name);
+				if (!repo) return json({ message: 'No such repository' }, 404);
+				if (q.get('icon') === 'fail') return json({ message: 'git config failed' }, 400);
+				repo.icon = icon;
+				return { name, icon };
+			}
+		],
+		[
 			/^\/apiv1\/sandboxes\/[^/]+\/members$/,
 			'GET',
 			() => ({

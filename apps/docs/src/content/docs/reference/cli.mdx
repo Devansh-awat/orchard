@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **368 commands** are available.
+override the saved context. **369 commands** are available.
 
 ## alert
 
@@ -3211,6 +3211,18 @@ Clone another repository into a sandbox
 ```bash
 orchard add <sandbox> <repo-url>
 ```
+
+### `orchard sandbox repo icon`
+
+Set the icon a repository shows in Greenhouse
+
+```bash
+orchard icon <sandbox> <repo> [icon]
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--clear` | bool | `false` | remove the icon |
 
 ### `orchard sandbox repo list`
 

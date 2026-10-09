@@ -181,9 +181,21 @@ export function sessions(): GhSession[] {
 	];
 }
 
-export const repos = [
-	{ name: 'docs', branch: 'main', dirtyFiles: 0 },
-	{ name: 'orchard', branch: 'main', dirtyFiles: 0 }
+export const repos: {
+	name: string;
+	branch: string;
+	dirtyFiles: number;
+	github: { owner: string; name: string } | null;
+	icon: string | null;
+}[] = [
+	{ name: 'docs', branch: 'main', dirtyFiles: 0, github: null, icon: 'lucide:book' },
+	{
+		name: 'orchard',
+		branch: 'main',
+		dirtyFiles: 0,
+		github: { owner: 'hackclub', name: 'orchard' },
+		icon: 'github'
+	}
 ];
 
 export const changes: GhChanges = {

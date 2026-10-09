@@ -21,13 +21,15 @@
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { previewStatus } from '$lib/components/ui/status';
+	import { previewStatus, sandboxStatus } from '$lib/components/ui/status';
 	import { toasts } from '$lib/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import AvatarStack from './AvatarStack.svelte';
 	import OpenIn from './OpenIn.svelte';
 	import PrButton from './PrButton.svelte';
-	import { modKey } from './format';
+	import RepoIcon from './RepoIcon.svelte';
+	import RunnerTile from './RunnerTile.svelte';
+	import { modKey, runnerLabel } from './format';
 	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY, hostOnly, isLegacy } from './workspace.svelte';
 
@@ -44,6 +46,19 @@
 	const archived = $derived(session?.status === 'archived');
 	const lifecycleOnly = $derived(ws?.lifecycleOnly ?? false);
 	const mod = modKey();
+	const machineMeta = $derived(
+		machine
+			? sandboxStatus(machine.status, {
+					applying: machine.applying,
+					applyError: machine.applyError,
+					desiredState: machine.desiredState
+				})
+			: null
+	);
+	const repo = $derived(
+		session && ws ? (ws.repos.find((r) => r.name === session.repo) ?? null) : null
+	);
+	const repoSlug = $derived(repo?.github ? `${repo.github.owner}/${repo.github.name}` : null);
 
 	const preview = $derived(
 		session && (session.previewDeploymentId || session.previewUrl)
@@ -126,18 +141,29 @@
 		{#if machine && (!compact || (lifecycleOnly && !session))}
 			<button
 				type="button"
-				class="crumb"
+				class="crumb crumb--machine"
 				class:crumb--current={lifecycleOnly}
 				onclick={() => app.goHome()}
 				disabled={lifecycleOnly}
+				aria-label="{machine.name}, {runnerLabel(machine.runner)} machine, {machineMeta?.label ??
+					''}"
+				title="{machine.name} · {runnerLabel(machine.runner)} machine · {machineMeta?.label ?? ''}"
 			>
-				{machine.name}
+				<RunnerTile runner={machine.runner ?? 'kubernetes'} size={20} />
+				<span class="crumb-text">{machine.name}</span>
+				{#if machineMeta}<StatusDot meta={machineMeta} size={6} />{/if}
 			</button>
 		{/if}
 		{#if session && ws}
 			{#if !compact}
 				<span class="sep" aria-hidden="true"><ChevronRight size={14} strokeWidth={1.75} /></span>
-				<span class="crumb crumb--repo">{session.repo}</span>
+				<span
+					class="crumb crumb--repo"
+					title={repoSlug ? `${repoSlug} on GitHub` : `${session.repo} repository`}
+				>
+					<RepoIcon name={session.repo} github={repo?.github} icon={repo?.icon} />
+					<span class="crumb-text">{session.repo}</span>
+				</span>
 				<span class="sep" aria-hidden="true"><ChevronRight size={14} strokeWidth={1.75} /></span>
 			{/if}
 			<Menu bind:open={() => menuOpen, setMenu} placement="bottom-start">
@@ -363,8 +389,14 @@
 			color var(--dur-fast) ease;
 	}
 
+	.crumb--machine,
+	.crumb--repo {
+		gap: 0.5rem;
+	}
+
 	.crumb--repo {
 		padding: 0 0.25rem;
+		color: var(--gh-muted-strong);
 	}
 
 	.crumb--current {

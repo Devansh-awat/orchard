@@ -114,6 +114,10 @@ function sandboxesRoutes(
       { min: 'collaborator' },
       () => c.initRepo(req(), SANDBOX, { name: 'scratch' })
     ],
+    'PUT /sandboxes/:id/repos/:name/icon': [
+      { min: 'collaborator' },
+      () => c.setRepoIcon(req(), SANDBOX, 'scratch', { icon: 'lucide:rocket' })
+    ],
     'GET /sandboxes/:id/conversations': [
       { min: 'viewer' },
       () => c.listConversations(req(), SANDBOX)
@@ -380,6 +384,7 @@ test('sandboxes controller routes declare the contract minimum role', async () =
     'listRepos',
     'addRepo',
     'initRepo',
+    'setRepoIcon',
     'listConversations',
     'createConversation',
     'updateConversation',
@@ -653,7 +658,15 @@ test('opencode proxy paths map to the right minimum role', () => {
     ['GET', 'SESSION/ses_a/message', 'viewer'],
     ['PATCH', 'Config', 'owner'],
     ['GET', 'session%2fses_a', 'viewer'],
-    ['GET', 'session/ses_a%00/message', 'owner']
+    ['GET', 'session/ses_a%00/message', 'owner'],
+    ['GET', 'permission', 'viewer'],
+    ['GET', 'permission?directory=%2Fpersist%2Fhome%2Fx', 'viewer'],
+    ['GET', 'question', 'viewer'],
+    ['POST', 'permission/per_a/reply', 'collaborator'],
+    ['POST', 'session/ses_a/permissions/per_a', 'collaborator'],
+    ['POST', 'question/que_a/reply', 'collaborator'],
+    ['POST', 'question/que_a/reject', 'collaborator'],
+    ['GET', 'permission/per_a', 'collaborator']
   ];
   for (const [method, path, expected] of cases) {
     assert.equal(opencodeMinRole(method, path), expected, `${method} ${path}`);

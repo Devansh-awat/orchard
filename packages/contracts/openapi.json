@@ -51183,6 +51183,30 @@
                           "dirtyFiles": {
                             "type": "integer"
                           },
+                          "github": {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "owner": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "owner",
+                              "name"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "name": {
                             "type": "string"
                           }
@@ -51190,7 +51214,9 @@
                         "required": [
                           "name",
                           "branch",
-                          "dirtyFiles"
+                          "dirtyFiles",
+                          "github",
+                          "icon"
                         ],
                         "type": "object"
                       },
@@ -51279,6 +51305,89 @@
           }
         ],
         "summary": "Clone another repository into the sandbox (background, uses your GitHub token)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/repos/{name}/icon": {
+      "put": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "icon": {
+                    "maxLength": 64,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "icon"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "icon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "icon"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set or clear the icon of a repository on the machine: one emoji, \"github\" for the owner avatar, or lucide:<name> from the allowlist. Stored as orchard.icon in the repo git config",
         "tags": [
           "sandboxes"
         ]

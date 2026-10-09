@@ -9,6 +9,7 @@ export type AgentBlock = {
 	steps: FeedEntry[];
 	answer: FeedEntry[];
 	errors: FeedEntry[];
+	notes: FeedEntry[];
 	result: FeedEntry | null;
 };
 
@@ -38,12 +39,14 @@ function toBlock(entries: FeedEntry[]): AgentBlock {
 		steps: [],
 		answer: [],
 		errors: [],
+		notes: [],
 		result: null
 	};
 	entries.forEach((item, i) => {
 		const kind = item.entry.kind;
 		if (kind === 'result') block.result = item;
 		else if (kind === 'error') block.errors.push(item);
+		else if (kind === 'note') block.notes.push(item);
 		else if (kind === 'text' && i > last) block.answer.push(item);
 		else block.steps.push(item);
 	});
@@ -100,6 +103,7 @@ export function buildChunks(feed: FeedItem[], busy: boolean): Chunk[] {
 			steps: [],
 			answer: [],
 			errors: [],
+			notes: [],
 			result: null
 		});
 	}

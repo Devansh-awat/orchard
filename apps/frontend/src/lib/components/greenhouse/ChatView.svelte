@@ -3,7 +3,7 @@
 	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Eye, Play } from 'lucide-svelte';
-	import { ChatPanel, Transcript } from '$lib/components/sandbox/chat';
+	import { ChatPanel, PendingDock, Transcript } from '$lib/components/sandbox/chat';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
 	import SessionPreparing from './SessionPreparing.svelte';
@@ -188,6 +188,7 @@
 	{:else}
 		<Transcript {store} />
 		<div class="viewer">
+			<PendingDock {store} readonly />
 			<div class="viewer-box">
 				<Eye size={14} />
 				<span
@@ -257,6 +258,9 @@
 		width: 100%;
 		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 		padding: 0 calc(var(--chat-gutter) + var(--chat-inset)) 1rem;
 	}
 

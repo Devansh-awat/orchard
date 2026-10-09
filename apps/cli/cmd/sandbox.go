@@ -490,7 +490,7 @@ func sandboxRepoCmd() *cobra.Command {
 		Use:   "repo",
 		Short: "Manage git repositories inside a sandbox",
 	}
-	c.AddCommand(sandboxRepoListCmd(), sandboxRepoAddCmd())
+	c.AddCommand(sandboxRepoListCmd(), sandboxRepoAddCmd(), sandboxRepoIconCmd())
 	return c
 }
 
@@ -518,13 +518,17 @@ func sandboxRepoListCmd() *cobra.Command {
 			}
 			rows := [][]string{}
 			for _, r := range asList(raw["repos"]) {
-				rows = append(rows, []string{pick(r, "name"), pick(r, "branch"), pick(r, "dirtyFiles")})
+				github := ""
+				if gh, ok := r["github"].(map[string]any); ok {
+					github = str(gh["owner"]) + "/" + str(gh["name"])
+				}
+				rows = append(rows, []string{pick(r, "name"), pick(r, "branch"), pick(r, "dirtyFiles"), github, pick(r, "icon")})
 			}
 			if len(rows) == 0 {
 				fmt.Println(output.Dim("no repositories cloned yet"))
 				return nil
 			}
-			output.Table([]string{"name", "branch", "dirty"}, rows)
+			output.Table([]string{"name", "branch", "dirty", "github", "icon"}, rows)
 			return nil
 		},
 	}
@@ -552,6 +556,53 @@ func sandboxRepoAddCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func sandboxRepoIconCmd() *cobra.Command {
+	var clear bool
+	c := &cobra.Command{
+		Use:   "icon <sandbox> <repo> [icon]",
+		Short: "Set the icon a repository shows in Greenhouse",
+		Long: "Set the icon a repository shows in Greenhouse, for everyone on the machine.\n" +
+			"The icon is one emoji, \"github\" for the owner's avatar, or lucide:<name>\n" +
+			"(rocket, globe, server, database, package, terminal, code, book, leaf, sprout,\n" +
+			"flame, zap, cpu, cloud, shield, palette, gamepad-2, bot, music, camera).\n" +
+			"Pass --clear to go back to the initial letter.",
+		Args: cobra.RangeArgs(2, 3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if clear == (len(args) == 3) {
+				return &exitcode.UsageError{Err: errors.New("pass either an icon or --clear")}
+			}
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			var icon any
+			if !clear {
+				icon = args[2]
+			}
+			var raw map[string]any
+			path := sandboxPath(str(sb["id"]), "repos", url.PathEscape(args[1]), "icon")
+			if err := cl.Send(cmd.Context(), http.MethodPut, path, map[string]any{"icon": icon}, &raw); err != nil {
+				return sandboxFeatureError(err)
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			if raw["icon"] == nil {
+				output.Successf("cleared the icon of %s", pick(raw, "name"))
+			} else {
+				output.Successf("%s now shows %s", pick(raw, "name"), pick(raw, "icon"))
+			}
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&clear, "clear", false, "remove the icon")
+	return c
 }
 
 func sandboxConversationsCmd() *cobra.Command {
