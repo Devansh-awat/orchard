@@ -1,5 +1,8 @@
 import { getContext, setContext } from 'svelte';
-import { ChatSessionStore, type SessionStoreOptions } from '$lib/components/sandbox/chat';
+import {
+	ChatSessionStore,
+	type SessionStoreOptions
+} from '$lib/components/sandbox/chat/session-store.svelte';
 import { LiveClient, type LiveTransport } from './live.svelte';
 
 export interface GreenhouseEnv {
