@@ -1,9 +1,9 @@
 <script lang="ts">
+	import WakeUp from './WakeUp.svelte';
 	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Eye, Play } from 'lucide-svelte';
 	import { ChatPanel, Transcript } from '$lib/components/sandbox/chat';
-	import SandboxBootProgress from '$lib/components/sandbox/SandboxBootProgress.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
 	import SessionPreparing from './SessionPreparing.svelte';
@@ -157,7 +157,7 @@
 	{:else if !ready}
 		<div class="gate">
 			{#if booting}
-				<SandboxBootProgress boot={bootQuery.data ?? null} {status} />
+				<WakeUp boot={bootQuery.data ?? null} {status} />
 			{:else}
 				<p class="gate-title">{machine?.name ?? 'This machine'} is stopped</p>
 				<p class="gate-text">Start it to pick up where the agent left off.</p>
