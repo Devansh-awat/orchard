@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/hackclub/orchard/compare/cli/v0.24.0...cli/v0.25.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse chat tabs can be deleted from their close button, with a confirm ([7909a5c](https://github.com/hackclub/orchard/commit/7909a5ce4c2a88e724f9d862491f6ec149ab6352))
+
 ## [0.24.0](https://github.com/hackclub/orchard/compare/cli/v0.23.0...cli/v0.24.0) (2026-10-09)
 
 

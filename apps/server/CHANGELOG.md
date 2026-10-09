@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.65.0](https://github.com/hackclub/orchard/compare/server/v2.64.0...server/v2.65.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse chat tabs can be deleted from their close button, with a confirm ([7909a5c](https://github.com/hackclub/orchard/commit/7909a5ce4c2a88e724f9d862491f6ec149ab6352))
+* greenhouse composer runs claude code style slash commands plus the repo's own opencode commands ([4dfec12](https://github.com/hackclub/orchard/commit/4dfec12b97acd5e9638c71dc540c39cb65ae0c7d))
+* greenhouse multiplayer file editing with one owner per doc, agent edits merged as diffs, per user undo, offline safe reconnects, live cursors and a sync status; questions wait on whoever prompted, remote prompts show live, and session menus open ([68e3046](https://github.com/hackclub/orchard/commit/68e304668ff2b9324516ddcc9a3b5bae20ff9f4d))
+
+
+### Bug Fixes
+
+* greenhouse machine usage loads instead of restarting its request every time the machine list refreshes, and the server never hangs on a stuck exec ([ffc9b1d](https://github.com/hackclub/orchard/commit/ffc9b1d57cc08a8f1be1b893f8807c6e7f7aef22))
+
 ## [2.64.0](https://github.com/hackclub/orchard/compare/server/v2.63.0...server/v2.64.0) (2026-10-09)
 
 

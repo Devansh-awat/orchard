@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.58.0](https://github.com/hackclub/orchard/compare/frontend/v1.57.0...frontend/v1.58.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse chat tabs can be deleted from their close button, with a confirm ([7909a5c](https://github.com/hackclub/orchard/commit/7909a5ce4c2a88e724f9d862491f6ec149ab6352))
+* greenhouse composer runs claude code style slash commands plus the repo's own opencode commands ([4dfec12](https://github.com/hackclub/orchard/commit/4dfec12b97acd5e9638c71dc540c39cb65ae0c7d))
+* greenhouse multiplayer file editing with one owner per doc, agent edits merged as diffs, per user undo, offline safe reconnects, live cursors and a sync status; questions wait on whoever prompted, remote prompts show live, and session menus open ([68e3046](https://github.com/hackclub/orchard/commit/68e304668ff2b9324516ddcc9a3b5bae20ff9f4d))
+* greenhouse transcript shows the agent working live inside its turn with a pixel sprout and timer, conductor style step rows that collapse when done, a message rail to jump around, and a new chat screen that attaches transcripts and plans ([0d6a3b2](https://github.com/hackclub/orchard/commit/0d6a3b21db57e30e65f50346ed749cc3f653d4e8))
+
+
+### Bug Fixes
+
+* greenhouse machine usage loads instead of restarting its request every time the machine list refreshes, and the server never hangs on a stuck exec ([ffc9b1d](https://github.com/hackclub/orchard/commit/ffc9b1d57cc08a8f1be1b893f8807c6e7f7aef22))
+* greenhouse presence colours come from the live palette index, so avatars stop crashing the workspace and other people's messages show without a refresh ([21e8ff8](https://github.com/hackclub/orchard/commit/21e8ff8240ea6548762c02dcc7e4e1b5227d916f))
+* greenhouse question cards list options as a clean bordered list with descriptions under labels, key hints and a radio dot ([e49bfad](https://github.com/hackclub/orchard/commit/e49bfad12a5439de24f1f2f48d2de3cb8461ee3e))
+* terminal predictions retract when their row changes, scrolls or clears, never outlive a failed write, and stay pinned after repaints ([28ce913](https://github.com/hackclub/orchard/commit/28ce913e33276e3c697e96819128f2927230028d))
+
 ## [1.57.0](https://github.com/hackclub/orchard/compare/frontend/v1.56.1...frontend/v1.57.0) (2026-10-09)
 
 
