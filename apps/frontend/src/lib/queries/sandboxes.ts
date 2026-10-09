@@ -35,6 +35,10 @@ export function sandboxesQueryOptions(organizationId?: string) {
 			if (!res.ok) throw new Error('Failed to fetch sandboxes');
 			return res.json();
 		},
+		refetchInterval: (query: { state: { data?: SandboxListResponse } }) => {
+			const sandboxes = query.state.data?.sandboxes ?? [];
+			return sandboxes.some((s) => isSandboxTransitional(s.status) || s.applying) ? 3_000 : 30_000;
+		},
 		retry: sandboxRetry
 	};
 }
