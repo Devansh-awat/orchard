@@ -197,7 +197,7 @@
 	.hm-bubble {
 		min-width: 0;
 		max-width: min(36rem, 85%);
-		padding: var(--space-2) var(--space-3);
+		padding: var(--space-2) var(--space-4);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		background: linear-gradient(var(--fill-soft), var(--fill-soft)) var(--bg-raised);

@@ -729,7 +729,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-		margin: 0 calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4) var(--space-2);
 		border: none;
 		border-radius: var(--radius-lg);
