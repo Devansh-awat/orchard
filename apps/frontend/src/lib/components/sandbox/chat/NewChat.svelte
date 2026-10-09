@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { Check, LoaderCircle, MessagesSquare, NotebookText } from 'lucide-svelte';
 	import { toasts } from '$lib/stores';
 	import type { ContextChat, ContextPlan } from './context-attach';
@@ -10,17 +10,19 @@
 		branch = null,
 		chats = [],
 		plans = [],
+		attached = [],
 		onchat,
 		onplan
 	}: {
 		branch?: string | null;
 		chats?: ContextChat[];
 		plans?: ContextPlan[];
-		onchat: (chat: ContextChat) => Promise<void>;
-		onplan: (plan: ContextPlan) => Promise<void>;
+		attached?: string[];
+		onchat: (chat: ContextChat) => Promise<string[]>;
+		onplan: (plan: ContextPlan) => Promise<string[]>;
 	} = $props();
 
-	const added = new SvelteSet<string>();
+	const links = new SvelteMap<string, string[]>();
 	const working = new SvelteSet<string>();
 	let allChats = $state(false);
 	let allPlans = $state(false);
@@ -28,12 +30,15 @@
 	const shownChats = $derived(allChats ? chats : chats.slice(0, LIMIT));
 	const shownPlans = $derived(allPlans ? plans : plans.slice(0, LIMIT));
 
-	async function attach(id: string, run: () => Promise<void>, what: string) {
-		if (working.has(id) || added.has(id)) return;
+	function isAdded(id: string) {
+		return links.get(id)?.some((a) => attached.includes(a)) ?? false;
+	}
+
+	async function attach(id: string, run: () => Promise<string[]>, what: string) {
+		if (working.has(id) || isAdded(id)) return;
 		working.add(id);
 		try {
-			await run();
-			added.add(id);
+			links.set(id, await run());
 		} catch (error) {
 			toasts.add({
 				title: `Could not add the ${what}`,
@@ -51,9 +56,9 @@
 	label: string,
 	hint: string | undefined,
 	kind: 'chat' | 'plan',
-	run: () => Promise<void>
+	run: () => Promise<string[]>
 )}
-	{@const done = added.has(id)}
+	{@const done = isAdded(id)}
 	{@const busy = working.has(id)}
 	<button
 		type="button"

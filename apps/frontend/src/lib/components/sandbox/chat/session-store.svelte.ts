@@ -1518,10 +1518,10 @@ export class ChatSessionStore {
 		}
 	}
 
-	async addFiles(files: FileList | File[] | null | undefined) {
-		if (!files) return;
+	async addFiles(files: FileList | File[] | null | undefined): Promise<string[]> {
+		if (!files) return [];
 		const incoming = Array.from(files);
-		if (incoming.length === 0) return;
+		if (incoming.length === 0) return [];
 		const accepted: File[] = [];
 		let oversized = 0;
 		let overflow = 0;
@@ -1550,13 +1550,17 @@ export class ChatSessionStore {
 				color: 'error'
 			});
 		}
+		const added: string[] = [];
 		for (const file of accepted) {
 			try {
-				this.attachments.push(await ocReadAttachment(file));
+				const attachment = await ocReadAttachment(file);
+				this.attachments.push(attachment);
+				added.push(attachment.id);
 			} catch {
 				toasts.add({ title: 'Could not read file', description: file.name, color: 'error' });
 			}
 		}
+		return added;
 	}
 
 	removeAttachment(id: string) {

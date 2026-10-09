@@ -232,14 +232,14 @@
 	}
 
 	async function attachChat(chat: ContextChat) {
-		await store.addFiles([await chatTranscriptFile(ws.sandboxId, chat)]);
+		return store.addFiles([await chatTranscriptFile(ws.sandboxId, chat)]);
 	}
 
 	async function attachPlan(plan: ContextPlan) {
 		const current = session;
-		if (!current) return;
+		if (!current) return [];
 		const content = await api.readFile(ws.sandboxId, { session: current.id }, plan.path);
-		await store.addFiles([textFile(plan.name, content)]);
+		return store.addFiles([textFile(plan.name, content)]);
 	}
 
 	function onComment(text: string) {
@@ -299,6 +299,7 @@
 					branch={session?.branch ?? null}
 					chats={contextChats}
 					{plans}
+					attached={store.attachments.map((a) => a.id)}
 					onchat={attachChat}
 					onplan={attachPlan}
 				/>
