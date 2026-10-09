@@ -470,6 +470,7 @@
 					role="tab"
 					class="gh-tab"
 					aria-selected={tab === 'ports'}
+					data-tour="ports"
 					onclick={() => select('ports')}
 				>
 					<span class="gh-tl" data-label="Ports">Ports</span>

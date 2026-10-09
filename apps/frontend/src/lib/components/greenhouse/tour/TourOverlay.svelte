@@ -15,6 +15,8 @@
 	} = $props();
 
 	const PAD = 8;
+	const EDGE = 3;
+	const HEAD = 32;
 	const GAP = 16;
 	const CARD_W = 340;
 
@@ -29,7 +31,7 @@
 	let ringEl = $state<HTMLDivElement | null>(null);
 	let moving: { stop: () => void } | null = null;
 	let cardEl = $state<HTMLDivElement | null>(null);
-	let cardPos = $state<{ left: number; top: number } | null>(null);
+	let session: string | null = null;
 	let run = 0;
 
 	const beat = $derived(TOUR_BEATS[index]);
@@ -52,21 +54,32 @@
 		return null;
 	}
 
-	async function step(s: TourStep) {
+	async function step(s: TourStep): Promise<boolean> {
 		if (s.kind === 'session') {
+			if (s.id === session) return false;
+			session = s.id;
 			onsession(s.id);
-			await sleep(400);
-		} else if (s.kind === 'escape') {
-			for (const el of document.querySelectorAll<HTMLElement>('[popover]:popover-open')) {
-				if (el !== cardEl) el.hidePopover();
-			}
-			document.querySelector<HTMLElement>('dialog[open] [aria-label="Close"]')?.click();
-			await sleep(250);
-		} else {
-			const el = await find(s.selector);
-			el?.click();
-			await sleep(350);
+			await sleep(150);
+			return false;
 		}
+		if (s.kind === 'escape') {
+			let closed = false;
+			for (const el of document.querySelectorAll<HTMLElement>('[popover]:popover-open')) {
+				if (el === cardEl) continue;
+				el.hidePopover();
+				closed = true;
+			}
+			const close = document.querySelector<HTMLElement>('dialog[open] [aria-label="Close"]');
+			if (close) {
+				close.click();
+				closed = true;
+			}
+			if (closed) await sleep(180);
+			return closed;
+		}
+		const el = await find(s.selector);
+		el?.click();
+		return true;
 	}
 
 	function paint(box: Box) {
@@ -95,22 +108,26 @@
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		const ch = cardEl?.offsetHeight ?? 220;
-		if (!r) return { left: (vw - CARD_W) / 2, top: Math.max(GAP, (vh - ch) / 2) };
-		const clampTop = (top: number) => Math.min(Math.max(GAP, top), vh - ch - GAP);
+		if (!r) return { left: (vw - CARD_W) / 2, top: Math.max(GAP + HEAD, (vh - ch) / 2) };
+		const clampTop = (top: number) => Math.min(Math.max(GAP + HEAD, top), vh - ch - GAP);
 		if (r.x + r.w + GAP + CARD_W <= vw - GAP) return { left: r.x + r.w + GAP, top: clampTop(r.y) };
 		if (r.x - GAP - CARD_W >= GAP) return { left: r.x - GAP - CARD_W, top: clampTop(r.y) };
 		const left = Math.min(Math.max(GAP, r.x), vw - CARD_W - GAP);
-		if (r.y + r.h + GAP + ch <= vh - GAP) return { left, top: r.y + r.h + GAP };
-		return { left, top: Math.max(GAP, r.y - GAP - ch) };
+		if (r.y + r.h + GAP + HEAD + ch <= vh - GAP) return { left, top: r.y + r.h + GAP + HEAD };
+		return { left, top: Math.max(GAP + HEAD, r.y - GAP - ch) };
 	}
 
-	async function measure() {
+	async function measure(restack = false) {
 		const target = beat.target ? await find(beat.target) : null;
 		if (!target) {
 			hole = null;
 		} else {
 			const r = target.getBoundingClientRect();
-			hole = { x: r.left - PAD, y: r.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 };
+			const x = Math.max(EDGE, r.left - PAD);
+			const y = Math.max(EDGE, r.top - PAD);
+			const right = Math.min(window.innerWidth - EDGE, r.right + PAD);
+			const bottom = Math.min(window.innerHeight - EDGE, r.bottom + PAD);
+			hole = { x, y, w: right - x, h: bottom - y };
 		}
 		const box = hole ?? {
 			x: window.innerWidth / 2,
@@ -121,7 +138,7 @@
 		const from = shown ?? box;
 		moving?.stop();
 		moving = animate(0, 1, {
-			...transition('smooth'),
+			...transition('snappy'),
 			onUpdate: (t) =>
 				paint({
 					x: from.x + (box.x - from.x) * t,
@@ -132,26 +149,41 @@
 		});
 		if (!shown) paint(box);
 		await tick();
-		cardPos = place(hole);
-		await tick();
-		if (cardEl) {
-			if (cardEl.matches(':popover-open')) cardEl.hidePopover();
+		if (!cardEl) return;
+		const pos = place(hole);
+		const to = { left: `${pos.left}px`, top: `${pos.top}px` };
+		const open = cardEl.matches(':popover-open');
+		if (!open || restack || !hole) {
+			if (open) cardEl.hidePopover();
+			Object.assign(cardEl.style, to);
 			cardEl.showPopover();
-			motion(cardEl, { opacity: [0, 1], y: [6, 0] }, 'snappy');
-			cardEl.querySelector<HTMLButtonElement>('.gh-btn--primary')?.focus({ preventScroll: true });
+			motion(
+				cardEl,
+				{
+					left: [to.left, to.left],
+					top: [to.top, to.top],
+					opacity: [0, 1],
+					y: [6, 0]
+				},
+				'snappy'
+			);
+		} else {
+			motion(cardEl, to, 'snappy');
 		}
+		cardEl.querySelector<HTMLButtonElement>('.gh-btn--primary')?.focus({ preventScroll: true });
 	}
 
 	async function show(next: number) {
 		const mine = ++run;
 		busy = true;
 		index = next;
+		let restack = false;
 		for (const s of TOUR_BEATS[next].before ?? []) {
 			if (mine !== run) return;
-			await step(s);
+			restack = (await step(s)) || restack;
 		}
 		if (mine !== run) return;
-		await measure();
+		await measure(restack);
 		busy = false;
 	}
 
@@ -182,6 +214,9 @@
 	onMount(() => {
 		void show(0);
 		window.addEventListener('keydown', onkey, { capture: true });
+		const still = (e: Event) => e.preventDefault();
+		window.addEventListener('wheel', still, { passive: false, capture: true });
+		window.addEventListener('touchmove', still, { passive: false, capture: true });
 		const resize = () => {
 			void measure();
 		};
@@ -189,6 +224,8 @@
 		return () => {
 			window.removeEventListener('resize', resize);
 			window.removeEventListener('keydown', onkey, { capture: true });
+			window.removeEventListener('wheel', still, { capture: true });
+			window.removeEventListener('touchmove', still, { capture: true });
 		};
 	});
 </script>
@@ -205,7 +242,6 @@
 	role="dialog"
 	aria-modal="true"
 	aria-labelledby="tour-title"
-	style={cardPos ? `left: ${cardPos.left}px; top: ${cardPos.top}px` : ''}
 >
 	<span class="pip"><Pip pose={beat.pose} size={48} /></span>
 	<p class="title" id="tour-title">{beat.title}</p>

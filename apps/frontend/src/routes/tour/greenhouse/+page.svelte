@@ -73,6 +73,10 @@
 	};
 
 	function finish(completed: boolean) {
+		if (window.parent === window) {
+			location.assign('/sandboxes');
+			return;
+		}
 		window.parent.postMessage({ type: 'greenhouse-tour', completed }, location.origin);
 	}
 </script>

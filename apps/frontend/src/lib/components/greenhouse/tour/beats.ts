@@ -68,7 +68,8 @@ export const TOUR_BEATS: TourBeat[] = [
 		title: 'The dock',
 		text: 'Setup and run scripts, your terminals and every open port live down here. Ports turn into previews you can open.',
 		pose: 'idle',
-		target: '[data-tour="dock"]'
+		target: '[data-tour="dock"]',
+		before: [{ kind: 'click', selector: '[data-tour="ports"]' }]
 	},
 	{
 		id: 'share',
