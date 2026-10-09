@@ -179,6 +179,8 @@ jobs:
       - name: Unit tests
         run: pnpm --filter frontend test
       - name: Build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter frontend build
 
   typecheck:
