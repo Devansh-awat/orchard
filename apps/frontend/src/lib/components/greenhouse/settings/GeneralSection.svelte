@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { Check } from 'lucide-svelte';
-	import { Button, Field, Input } from '$lib/components/ui';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { Button, Field, Input, Select } from '$lib/components/ui';
+	import { sshIdentitiesQueryOptions } from '$lib/queries/sandboxes';
+	import { getGreenhouseApp } from '../app.svelte';
 	import { toasts } from '$lib/stores';
 	import type { Sandbox } from '$lib/types/sandbox';
 	import FormError from '../FormError.svelte';
@@ -11,6 +14,21 @@
 	let { machine, ws }: { machine: Sandbox; ws: MachineWorkspace } = $props();
 
 	const owner = $derived(ws.isOwner);
+	const app = getGreenhouseApp();
+	const identities = createQuery(() => ({ ...sshIdentitiesQueryOptions(), enabled: owner }));
+	let savingKey = $state(false);
+
+	async function pickKey(id: string) {
+		if (!owner || !id || id === machine.sshIdentity?.id) return;
+		savingKey = true;
+		try {
+			await patchMachine(machine.id, { sshIdentityId: id });
+		} catch (e) {
+			toasts.add({ title: 'Could not change the key', description: errorText(e), color: 'error' });
+		} finally {
+			savingKey = false;
+		}
+	}
 
 	let name = $state('');
 	let saved = $state(false);
@@ -84,6 +102,40 @@
 	</Field>
 </Block>
 
+<Block>
+	<Field label="SSH key" for="gh-settings-key" hint={owner ? undefined : hostOnly('change it')}>
+		<div class="name">
+			{#if owner && (identities.data?.length ?? 0) > 0}
+				<Select
+					id="gh-settings-key"
+					value={machine.sshIdentity?.id ?? ''}
+					disabled={savingKey}
+					onchange={(e: Event) => pickKey((e.currentTarget as HTMLSelectElement).value)}
+				>
+					{#if !machine.sshIdentity}<option value="" disabled>Choose a key</option>{/if}
+					{#each identities.data ?? [] as identity (identity.id)}
+						<option value={identity.id}>{identity.name}</option>
+					{/each}
+				</Select>
+			{:else}
+				<span class="value">{machine.sshIdentity?.name ?? 'None'}</span>
+			{/if}
+		</div>
+	</Field>
+</Block>
+
+<Block>
+	<div class="row">
+		<span class="row-text">
+			<span class="row-title">People</span>
+			<span class="row-hint">Who can see and work on this machine</span>
+		</span>
+		<Button variant="secondary" size="sm" onclick={() => (app.sheet = 'share')}>
+			{owner ? 'Manage' : 'View'}
+		</Button>
+	</div>
+</Block>
+
 {#if machine.applyError}
 	<Block>
 		<div class="apply">
@@ -106,6 +158,33 @@
 		align-items: center;
 		gap: 0.5rem;
 		max-width: 22rem;
+	}
+
+	.value {
+		color: var(--gh-muted);
+	}
+
+	.row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.row-text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.row-title {
+		font-weight: 600;
+	}
+
+	.row-hint {
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-muted);
 	}
 
 	.saved {

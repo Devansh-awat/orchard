@@ -15,13 +15,17 @@ export type SettingsSectionId =
 	| 'integrations'
 	| 'shortcuts';
 
-export const MACHINE_SECTIONS: readonly SettingsSectionId[] = [
-	'general',
-	'setup',
-	'projects',
-	'usage',
-	'danger'
-];
+export const MACHINE_SECTIONS: readonly SettingsSectionId[] = ['general', 'usage'];
+
+const MERGED: Partial<Record<SettingsSectionId, SettingsSectionId>> = {
+	setup: 'general',
+	projects: 'general',
+	danger: 'general'
+};
+
+export function canonicalSection(id: SettingsSectionId): SettingsSectionId {
+	return MERGED[id] ?? id;
+}
 
 export const PERSONAL_SECTIONS: readonly SettingsSectionId[] = [
 	'preferences',
@@ -36,7 +40,7 @@ export const PERSONAL_SECTIONS: readonly SettingsSectionId[] = [
 export const DEFAULT_SECTION: SettingsSectionId = 'preferences';
 
 export const SECTION_LABELS: Record<SettingsSectionId, string> = {
-	general: 'General',
+	general: 'Machine',
 	setup: 'Setup script',
 	projects: 'Projects',
 	usage: 'Usage',
@@ -53,7 +57,7 @@ export const SECTION_LABELS: Record<SettingsSectionId, string> = {
 export function isSettingsSection(value: unknown): value is SettingsSectionId {
 	return (
 		typeof value === 'string' &&
-		[...MACHINE_SECTIONS, ...PERSONAL_SECTIONS].includes(value as SettingsSectionId)
+		[...MACHINE_SECTIONS, ...Object.keys(MERGED), ...PERSONAL_SECTIONS].includes(value)
 	);
 }
 

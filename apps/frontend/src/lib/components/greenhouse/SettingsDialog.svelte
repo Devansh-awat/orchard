@@ -23,6 +23,7 @@
 		MACHINE_SECTIONS,
 		PERSONAL_SECTIONS,
 		SECTION_LABELS,
+		canonicalSection,
 		isSettingsSection,
 		type SettingsSectionId
 	} from './settings/sections';
@@ -44,7 +45,7 @@
 			? [
 					{
 						label: 'Machine',
-						ids: MACHINE_SECTIONS.filter((id) => id !== 'danger' || owner)
+						ids: MACHINE_SECTIONS
 					}
 				]
 			: []),
@@ -104,7 +105,7 @@
 		if (isOpen && (!wasOpen || want !== lastRequest)) {
 			untrack(() => {
 				moves = 0;
-				section = isSettingsSection(want) ? want : DEFAULT_SECTION;
+				section = isSettingsSection(want) ? canonicalSection(want) : DEFAULT_SECTION;
 			});
 		}
 		wasOpen = isOpen;
@@ -327,14 +328,16 @@
 						{:else if machine && ws}
 							{#if current === 'general'}
 								<GeneralSection {machine} {ws} />
-							{:else if current === 'setup'}
+								<h4 class="sub">Setup script</h4>
 								<SetupSection {machine} owner={ws.isOwner} />
-							{:else if current === 'projects'}
+								<h4 class="sub">Projects</h4>
 								<ProjectsSection {machine} {ws} />
+								{#if owner}
+									<h4 class="sub sub--danger">Danger zone</h4>
+									<DangerSection {machine} onclose={close} />
+								{/if}
 							{:else if current === 'usage'}
 								<MachineUsagePanel {machine} owner={ws.isOwner} />
-							{:else if current === 'danger'}
-								<DangerSection {machine} onclose={close} />
 							{/if}
 						{/if}
 					</div>
@@ -602,6 +605,18 @@
 	.section {
 		display: flex;
 		flex-direction: column;
+	}
+
+	.sub {
+		margin: 1.5rem 0 0.5rem;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		font-weight: 600;
+		color: var(--gh-muted);
+	}
+
+	.sub--danger {
+		color: var(--status-error);
 	}
 
 	.foot {
