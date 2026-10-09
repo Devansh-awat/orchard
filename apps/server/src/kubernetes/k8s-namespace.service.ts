@@ -499,7 +499,65 @@ export class K8sNamespaceService implements OnModuleInit {
       }
     }
 
+    const projects = await this.prisma.environment.findMany({
+      where: { isDefault: false },
+      select: { projectId: true },
+      distinct: ['projectId']
+    });
+    for (const { projectId } of projects) {
+      await this.applyProjectDatabaseIngress(projectId).catch((e) =>
+        this.logger.warn(`could not apply database ingress for project ${projectId}: ${e?.message}`)
+      );
+    }
+
     return { updated, failed };
+  }
+
+  async applyProjectDatabaseIngress(projectId: string) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { namespace: true, environments: { select: { namespace: true } } }
+    });
+    if (!project) return;
+
+    const namespaces = [
+      ...new Set([project.namespace, ...project.environments.map((env) => env.namespace)])
+    ].filter(Boolean);
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const name = 'allow-project-databases';
+
+    for (const namespace of namespaces) {
+      if (namespaces.length < 2) {
+        await networkingApi.deleteNamespacedNetworkPolicy(name, namespace).catch((e: any) => {
+          if (e?.response?.statusCode !== 404) throw e;
+        });
+        continue;
+      }
+
+      const body: k8s.V1NetworkPolicy = {
+        metadata: { name, namespace, labels: { 'orchard.my/managed': 'true' } },
+        spec: {
+          podSelector: { matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }] },
+          policyTypes: ['Ingress'],
+          ingress: [
+            {
+              from: namespacePeers(namespaces),
+              ports: [{ protocol: 'TCP', port: 5432 }]
+            }
+          ]
+        }
+      };
+
+      try {
+        await networkingApi.createNamespacedNetworkPolicy(namespace, body);
+      } catch (e: any) {
+        if (e?.response?.statusCode !== 409) throw e;
+        await networkingApi.replaceNamespacedNetworkPolicy(name, namespace, body);
+      }
+    }
   }
 
   async createNetworkPolicy(namespace: string) {

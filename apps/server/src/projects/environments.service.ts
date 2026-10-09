@@ -189,6 +189,9 @@ export class EnvironmentsService {
       .catch((e) =>
         this.logger.warn(`registry secret sync after env create failed: ${e?.message}`)
       );
+    await this.k8sNamespace
+      .applyProjectDatabaseIngress(projectId)
+      .catch((e) => this.logger.warn(`database ingress after env create failed: ${e?.message}`));
 
     this.emitChanged(project.organizationId, projectId, env.id);
     void this.audit.log({
@@ -307,6 +310,9 @@ export class EnvironmentsService {
       .deleteNamespace(env.namespace)
       .catch((e) => this.logger.warn(`deleteNamespace(${env.namespace}) failed: ${e?.message}`));
     await this.prisma.environment.deleteMany({ where: { id: env.id } });
+    await this.k8sNamespace
+      .applyProjectDatabaseIngress(env.projectId)
+      .catch((e) => this.logger.warn(`database ingress after env delete failed: ${e?.message}`));
 
     this.emitChanged(env.project.organizationId, env.projectId, env.id);
     void this.audit.log({
