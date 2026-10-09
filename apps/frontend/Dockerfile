@@ -24,6 +24,7 @@ COPY --from=deps /app/apps/frontend/node_modules ./apps/frontend/node_modules
 COPY . .
 
 WORKDIR /app/apps/frontend
+ENV NODE_OPTIONS=--max-old-space-size=4096
 # Cache Vite's transform output between builds. Persists across CI runs via
 # the registry-backed cache (Vite/Rollup re-uses .vite/deps and friends).
 RUN --mount=type=cache,id=vite,target=/app/apps/frontend/node_modules/.vite \
