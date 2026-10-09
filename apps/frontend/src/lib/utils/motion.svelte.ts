@@ -798,7 +798,11 @@ export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 				firstRun = false;
 				return;
 			}
-			if (!c) return;
+			if (!c) {
+				if (motionEnabled()) animate(target, { opacity: 1 }, transition('smooth') as never);
+				else target.style.opacity = '';
+				return;
+			}
 			if (!motionEnabled()) {
 				onClosed();
 				return;
