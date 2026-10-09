@@ -29,7 +29,7 @@
 		seen = next;
 	});
 
-	const open = $derived(toggled ?? greenhousePrefs.values.expandTools);
+	const open = $derived(live ? toggled !== false : (toggled ?? greenhousePrefs.values.expandTools));
 	const steps = $derived(
 		greenhousePrefs.values.showReasoning
 			? block.steps
@@ -47,7 +47,7 @@
 </script>
 
 <div class="act" class:act--live={live}>
-	{#if !live && expandable}
+	{#if expandable}
 		<button
 			type="button"
 			class="act-row"
@@ -57,7 +57,7 @@
 			onclick={() => (toggled = !open)}
 			in:fade
 		>
-			<span class="act-label">{workedLabel(summary)}</span>
+			<span class="act-label">{live ? 'Working' : workedLabel(summary)}</span>
 			{#if count}
 				<span class="act-sep" aria-hidden="true">·</span>
 				<span class="act-meta">{count}</span>
@@ -83,7 +83,7 @@
 			</span>
 		</button>
 	{/if}
-	{#if expandable && (live || open)}
+	{#if expandable && open}
 		<div class="act-steps" transition:slide>
 			{#if visible.hidden > 0}
 				<button
