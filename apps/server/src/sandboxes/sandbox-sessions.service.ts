@@ -1017,7 +1017,8 @@ export class SandboxSessionsService {
     });
     for (const row of rows) await this.remove(sandbox, row.id);
     const result = await this.devExec(sandbox, buildRepoRemoveScript(repo), WORKTREE_TIMEOUT_MS);
-    if (!result.ok && result.exitCode !== 4) throw new BadRequestException('Could not remove the repository');
+    if (!result.ok && result.exitCode !== 4)
+      throw new BadRequestException('Could not remove the repository');
     return { name: repo, sessions: rows.length };
   }
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.59.0](https://github.com/hackclub/orchard/compare/frontend/v1.58.1...frontend/v1.59.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse repos can be removed from a machine ([a331497](https://github.com/hackclub/orchard/commit/a3314970d4e33047baa3ff0846be1b648285d7bc))
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse panel tabs shrink so the file actions stay on screen ([fbccf02](https://github.com/hackclub/orchard/commit/fbccf021ca2960f3d9a3efeedb0a210447424574))
+* **frontend:** greenhouse sessions load their own chat first with cached models ([a3128aa](https://github.com/hackclub/orchard/commit/a3128aa64c05c860d96772b525493be1843c9980))
+* **frontend:** menus and popovers close in place instead of jumping ([141f215](https://github.com/hackclub/orchard/commit/141f2157736c8189dbae6867f9391e1a58c3a25e))
+* **frontend:** repo picker loads in parallel, caches, and prefetches in greenhouse ([60ae48a](https://github.com/hackclub/orchard/commit/60ae48a28f6ed91cc221d4fb1d3869cd5aa12dd6))
+* greenhouse clones use your github token and report failures ([4af72a4](https://github.com/hackclub/orchard/commit/4af72a42cd2fada2267bf5709b8f4596eba2743b))
+
 ## [1.58.1](https://github.com/hackclub/orchard/compare/frontend/v1.58.0...frontend/v1.58.1) (2026-10-09)
 
 

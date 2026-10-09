@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.66.0](https://github.com/hackclub/orchard/compare/server/v2.65.1...server/v2.66.0) (2026-10-09)
+
+
+### Features
+
+* greenhouse repos can be removed from a machine ([a331497](https://github.com/hackclub/orchard/commit/a3314970d4e33047baa3ff0846be1b648285d7bc))
+
+
+### Bug Fixes
+
+* greenhouse clones use your github token and report failures ([4af72a4](https://github.com/hackclub/orchard/commit/4af72a42cd2fada2267bf5709b8f4596eba2743b))
+* **server:** cache feature flags per user so greenhouse stops flipping off ([105d7f4](https://github.com/hackclub/orchard/commit/105d7f426bf5b6e6d4d807cb814b29f9df022916))
+
 ## [2.65.1](https://github.com/hackclub/orchard/compare/server/v2.65.0...server/v2.65.1) (2026-10-09)
 
 
