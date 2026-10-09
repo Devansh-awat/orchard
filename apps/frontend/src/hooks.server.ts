@@ -1,5 +1,6 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
+import sansFont from '$lib/assets/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.woff2';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 
@@ -38,7 +39,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	return resolve(event, {
+		transformPageChunk: ({ html }) => html.replace('%orchard.font.sans%', sansFont)
+	});
 };
 
 // Forward SSR errors to PostHog Error Tracking. SvelteKit's server context
