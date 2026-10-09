@@ -11,7 +11,6 @@
 	import AddRepoSheet from './AddRepoSheet.svelte';
 	import AdminMachine from './AdminMachine.svelte';
 	import { GreenhouseApp, setGreenhouseApp, type GreenhouseNav } from './app.svelte';
-	import CenterPane from './CenterPane.svelte';
 	import ForkSheet from './ForkSheet.svelte';
 	import { setGreenhouseEnv, type GreenhouseEnv } from './env';
 	import Home from './Home.svelte';
@@ -30,6 +29,7 @@
 	import { greenhousePrefs } from './prefs.svelte';
 	import { isLegacy } from './workspace.svelte';
 	import { inTerminal } from '$lib/utils/focus-routing';
+	import { Lazy } from '$lib/utils/lazy.svelte';
 	import type { PersonRef } from './types';
 
 	let {
@@ -59,6 +59,14 @@
 
 	const ws = $derived(app.ws);
 	const layout = app.layout;
+
+	const center = new Lazy(() => import('./CenterPane.svelte'));
+	const CenterPane = $derived(center.current);
+
+	$effect(() => {
+		if (!nav.sessionId() && !ws?.session) return;
+		untrack(() => center.preload());
+	});
 
 	$effect(() => {
 		const current = ws;
@@ -305,6 +313,13 @@
 
 <svelte:window onkeydown={keydown} />
 
+{#snippet paneLoading()}
+	<div class="loading">
+		<Skeleton height="0.75rem" width="40%" />
+		<Skeleton height="0.75rem" width="65%" />
+	</div>
+{/snippet}
+
 <div
 	class="gh shell"
 	class:shell--dragging={!!layout.dragging}
@@ -338,7 +353,11 @@
 					<RightPanel {ws} showDock={false} header />
 				{:else if ws}
 					<TitleBar onrename={openRename} compact />
-					<CenterPane {ws} />
+					{#if CenterPane}
+						<CenterPane {ws} />
+					{:else}
+						{@render paneLoading()}
+					{/if}
 				{/if}
 			</div>
 			<div class="switcher" role="tablist" aria-label="View">
@@ -406,13 +425,10 @@
 					<AdminMachine {ws} />
 				{:else if app.home || !ws}
 					<Home bind:this={home} initialRepo={homeRepo} />
-				{:else if ws.session}
+				{:else if ws.session && CenterPane}
 					<CenterPane {ws} />
-				{:else if ws.mode === 'loading'}
-					<div class="loading">
-						<Skeleton height="0.75rem" width="40%" />
-						<Skeleton height="0.75rem" width="65%" />
-					</div>
+				{:else if ws.session || ws.mode === 'loading'}
+					{@render paneLoading()}
 				{:else}
 					<div class="blank">
 						<p class="blank-title">This session is gone</p>
