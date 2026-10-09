@@ -135,6 +135,8 @@
 			schedule();
 		});
 		ro.observe(el);
+		const viewport = el.closest('.tx-scroll');
+		if (viewport) ro.observe(viewport);
 		return () => ro.disconnect();
 	}
 
