@@ -1,125 +1,121 @@
-<script lang="ts">
-	import { Copy, Link, X } from 'lucide-svelte';
-	import { Button } from '$lib/components/ui';
-	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
-	import StatusDot from '$lib/components/ui/StatusDot.svelte';
-	import { statusMeta, type StatusMeta } from '$lib/components/ui/status';
-	import { toasts } from '$lib/stores';
+<script lang="ts" module>
 	import * as api from './api';
-	import { getGreenhouseApp } from './app.svelte';
-	import FormError from './FormError.svelte';
-	import { ago } from './format';
 	import type { GhShareLink } from './types';
 
-	let { active }: { active: boolean } = $props();
-
-	const app = getGreenhouseApp();
-	const ws = $derived(app.ws);
-	const session = $derived(ws?.session ?? null);
-
-	const EXPIRY = [
+	export const LINK_EXPIRY = [
 		{ value: '24', label: '1 day' },
 		{ value: '168', label: '7 days' },
 		{ value: '720', label: '30 days' }
 	];
 
-	let links = $state.raw<GhShareLink[]>([]);
-	let loaded = $state(false);
-	let expiry = $state('168');
-	let scope = $state<'session' | 'machine'>('session');
-	let busy = $state<string | null>(null);
-	let error = $state<string | null>(null);
-	let fresh = $state<{ id: string; url: string } | null>(null);
+	export class ShareLinkStore {
+		links = $state.raw<GhShareLink[]>([]);
+		loaded = $state(false);
+		expiry = $state('168');
+		scope = $state<'session' | 'machine'>('session');
+		busy = $state<string | null>(null);
+		error = $state<string | null>(null);
+		fresh = $state<{ id: string; url: string; made: string } | null>(null);
+		copied = $state(false);
+		#copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const scopeOptions = $derived(
-		session
-			? [
-					{ value: 'session', label: 'This session' },
-					{ value: 'machine', label: 'Every session' }
-				]
-			: []
-	);
-	const shown = $derived(
-		[...links]
-			.filter((l) => l.state === 'active' || l.id === fresh?.id)
-			.concat(links.filter((l) => l.state !== 'active').slice(0, 3))
-			.filter((l, i, all) => all.findIndex((x) => x.id === l.id) === i)
-	);
+		active = $derived(this.links.filter((l) => l.state === 'active'));
+		current = $derived(!!this.fresh && this.fresh.made === `${this.scope}:${this.expiry}`);
 
-	let loadedFor: string | null = null;
-	$effect(() => {
-		const id = active ? (ws?.sandboxId ?? null) : null;
-		if (!id || id === loadedFor) return;
-		loadedFor = id;
-		fresh = null;
-		error = null;
-		void refresh(id);
-	});
+		async load(sandboxId: string) {
+			this.fresh = null;
+			this.error = null;
+			const res = await api.listShareLinks(sandboxId);
+			this.links = res.ok ? (res.data.links ?? []) : [];
+			this.loaded = true;
+		}
 
-	async function refresh(id: string) {
-		const res = await api.listShareLinks(id);
-		links = res.ok ? (res.data.links ?? []) : [];
-		loaded = true;
-	}
+		async create(sandboxId: string, sessionId: string | null): Promise<string | null> {
+			if (this.busy) return null;
+			this.busy = 'create';
+			this.error = null;
+			try {
+				const link = await api.createShareLink(sandboxId, {
+					sessionId: sessionId && this.scope === 'session' ? sessionId : null,
+					expiresInHours: Number(this.expiry)
+				});
+				const url = `${location.origin}/share/sandbox#${link.token}`;
+				this.fresh = { id: link.id, url, made: `${this.scope}:${this.expiry}` };
+				this.links = [link, ...this.links.filter((l) => l.id !== link.id)];
+				return url;
+			} catch (e) {
+				this.error = e instanceof Error ? e.message : 'Could not create the link';
+				return null;
+			} finally {
+				this.busy = null;
+			}
+		}
 
-	function viewerUrl(token: string): string {
-		return `${location.origin}/share/sandbox#${token}`;
-	}
+		async copy(url: string): Promise<boolean> {
+			try {
+				await navigator.clipboard.writeText(url);
+				this.copied = true;
+				if (this.#copiedTimer) clearTimeout(this.#copiedTimer);
+				this.#copiedTimer = setTimeout(() => (this.copied = false), 1600);
+				return true;
+			} catch {
+				return false;
+			}
+		}
 
-	async function copy(url: string) {
-		try {
-			await navigator.clipboard.writeText(url);
-			toasts.add({
-				title: 'Read-only link copied',
-				description: 'People in your organization can open it until it expires.',
-				color: 'success'
-			});
-		} catch {
-			toasts.add({
-				title: 'Copy the link from here',
-				description: url,
-				color: 'info',
-				duration: 0
-			});
+		async revoke(sandboxId: string, link: GhShareLink): Promise<string | null> {
+			if (this.busy) return null;
+			this.busy = link.id;
+			try {
+				const next = await api.revokeShareLink(sandboxId, link.id);
+				this.links = this.links.map((l) => (l.id === link.id ? { ...l, ...next } : l));
+				if (this.fresh?.id === link.id) this.fresh = null;
+				return null;
+			} catch (e) {
+				return e instanceof Error ? e.message : 'Could not revoke the link';
+			} finally {
+				this.busy = null;
+			}
 		}
 	}
+</script>
 
-	async function create() {
-		if (!ws || busy) return;
-		busy = 'create';
-		error = null;
-		try {
-			const link = await api.createShareLink(ws.sandboxId, {
-				sessionId: session && scope === 'session' ? session.id : null,
-				expiresInHours: Number(expiry)
-			});
-			const url = viewerUrl(link.token);
-			fresh = { id: link.id, url };
-			links = [link, ...links.filter((l) => l.id !== link.id)];
-			await copy(url);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not create the link';
-		} finally {
-			busy = null;
-		}
+<script lang="ts">
+	import { Check, Copy, X } from 'lucide-svelte';
+	import { Button, Input } from '$lib/components/ui';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+	import { toasts } from '$lib/stores';
+	import { getGreenhouseApp } from './app.svelte';
+	import FormError from './FormError.svelte';
+	import { ago } from './format';
+
+	let { store }: { store: ShareLinkStore } = $props();
+
+	const app = getGreenhouseApp();
+	const ws = $derived(app.ws);
+	const session = $derived(ws?.session ?? null);
+
+	const SCOPES = [
+		{ value: 'session', label: 'This session' },
+		{ value: 'machine', label: 'Every session' }
+	];
+
+	const others = $derived(store.active.filter((l) => l.id !== store.fresh?.id));
+
+	async function copyLink(url: string) {
+		if (!(await store.copy(url)))
+			toasts.add({ title: 'Copy the link from the field', color: 'info' });
+	}
+
+	function focusField(node: HTMLElement) {
+		requestAnimationFrame(() => node.querySelector('input')?.focus({ preventScroll: true }));
 	}
 
 	async function revoke(link: GhShareLink) {
-		if (!ws || busy) return;
-		busy = link.id;
-		try {
-			const next = await api.revokeShareLink(ws.sandboxId, link.id);
-			links = links.map((l) => (l.id === link.id ? { ...l, ...next } : l));
-			if (fresh?.id === link.id) fresh = null;
-		} catch (e) {
-			toasts.add({
-				title: 'Could not revoke the link',
-				description: e instanceof Error ? e.message : undefined,
-				color: 'error'
-			});
-		} finally {
-			busy = null;
-		}
+		if (!ws) return;
+		const failed = await store.revoke(ws.sandboxId, link);
+		if (failed)
+			toasts.add({ title: 'Could not revoke the link', description: failed, color: 'error' });
 	}
 
 	function remaining(iso: string | null): string {
@@ -127,157 +123,82 @@
 		const ms = Date.parse(iso) - Date.now();
 		if (ms <= 0) return 'Expired';
 		const hours = Math.round(ms / 3_600_000);
-		if (hours < 24) return `Expires in ${Math.max(1, hours)} h`;
+		if (hours < 24) return `${Math.max(1, hours)} h left`;
 		const days = Math.round(hours / 24);
-		return `Expires in ${days} ${days === 1 ? 'day' : 'days'}`;
-	}
-
-	function linkMeta(link: GhShareLink): StatusMeta {
-		if (link.state === 'revoked') return statusMeta('neutral', 'Revoked');
-		if (link.state === 'expired') return statusMeta('neutral', 'Expired');
-		return statusMeta('success', remaining(link.expiresAt));
+		return `${days} ${days === 1 ? 'day' : 'days'} left`;
 	}
 </script>
 
-<section class="links" aria-labelledby="gh-share-links">
-	<p class="title" id="gh-share-links">Read-only link</p>
-	<p class="muted">
-		Anyone in your organization with the link can read the transcript and the changes. They cannot
-		prompt, open terminals or see files outside the diff.
-	</p>
-	<div class="create">
-		{#if scopeOptions.length > 0}
-			<SegmentedControl options={scopeOptions} bind:value={scope} label="What the link shows" />
-		{/if}
-		<SegmentedControl options={EXPIRY} bind:value={expiry} label="Expires after" />
-		<span class="grow"></span>
-		<Button variant="secondary" disabled={!!busy} onclick={create}>
-			<Link size={14} />
-			{busy === 'create' ? 'Creating…' : 'Create link'}
+<div class="opts">
+	{#if session}
+		<SegmentedControl options={SCOPES} bind:value={store.scope} label="What the link shows" grow />
+	{/if}
+	<SegmentedControl options={LINK_EXPIRY} bind:value={store.expiry} label="Expires after" grow />
+</div>
+
+{#if store.fresh}
+	{@const url = store.fresh.url}
+	<div class="fresh" {@attach focusField}>
+		<Input
+			value={url}
+			readonly
+			aria-label="Read-only link"
+			class="gh-mono"
+			onfocus={(e: FocusEvent) => (e.currentTarget as HTMLInputElement).select()}
+		/>
+		<Button variant="secondary" onclick={() => copyLink(url)}>
+			{#if store.copied}<Check size={14} /> Copied{:else}<Copy size={14} /> Copy{/if}
 		</Button>
 	</div>
-	{#if error}<FormError message={error} />{/if}
+{/if}
 
-	{#if loaded && shown.length > 0}
-		<div class="list">
-			{#each shown as link (link.id)}
-				{@const meta = linkMeta(link)}
-				<div class="row" class:row--dead={link.state !== 'active'} data-align="share-row">
-					<span class="ico"><StatusDot {meta} size={8} /></span>
-					<span class="who">
-						<span class="name">{link.session?.title ?? 'Every session on this machine'}</span>
-						<span class="meta">
-							{meta.label}{link.lastUsedAt ? ` · opened ${ago(link.lastUsedAt)}` : ''}
-						</span>
-					</span>
-					{#if fresh?.id === link.id && link.state === 'active'}
-						<button
-							type="button"
-							class="gh-ibtn"
-							aria-label="Copy link"
-							title="Copy link again. It is only shown once."
-							onclick={() => fresh && copy(fresh.url)}
-						>
-							<Copy size={16} strokeWidth={1.75} />
-						</button>
-					{/if}
-					{#if link.state === 'active'}
-						<button
-							type="button"
-							class="gh-ibtn"
-							aria-label="Revoke link"
-							title="Revoke link"
-							disabled={!!busy}
-							onclick={() => revoke(link)}
-						>
-							<X size={16} strokeWidth={1.75} />
-						</button>
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
-</section>
+{#if store.error}<FormError message={store.error} />{/if}
+
+{#if others.length > 0}
+	<ul class="gh-group" aria-label="Active links">
+		{#each others as link (link.id)}
+			<li class="gh-group-row gh-group-row--tight">
+				<span class="gh-group-name">{link.session?.title ?? 'Every session'}</span>
+				<span class="meta">
+					{remaining(link.expiresAt)}{link.lastUsedAt ? ` · opened ${ago(link.lastUsedAt)}` : ''}
+				</span>
+				<button
+					type="button"
+					class="gh-ibtn"
+					aria-label="Revoke link"
+					title="Revoke link"
+					disabled={!!store.busy}
+					onclick={() => revoke(link)}
+				>
+					<X size={16} strokeWidth={1.75} />
+				</button>
+			</li>
+		{/each}
+	</ul>
+{/if}
 
 <style>
-	.links {
+	.opts {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding-top: 1rem;
-		border-top: 1px solid var(--gh-line);
 	}
 
-	.title,
-	.muted {
-		margin: 0;
-	}
-
-	.title {
-		font-weight: 600;
-	}
-
-	.muted {
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--text-muted);
-	}
-
-	.create {
+	.fresh {
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
 		gap: 0.5rem;
-		margin-top: 0.25rem;
 	}
 
-	.grow {
-		flex: 1;
-	}
-
-	.list {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		min-height: 2.75rem;
-		padding: 0.25rem calc(0.5rem - var(--gh-ibtn-inset)) 0.25rem 0.5rem;
-		border-radius: var(--gh-r-row);
-	}
-
-	.row--dead .name {
-		color: var(--text-muted);
-	}
-
-	.ico {
-		display: inline-grid;
-		place-items: center;
-		flex: none;
-		width: 1.75rem;
-		height: var(--gh-glyph);
-	}
-
-	.who {
-		display: flex;
-		flex-direction: column;
+	.fresh :global(.input) {
 		flex: 1;
 		min-width: 0;
 	}
 
-	.name {
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-		color: var(--text-default);
-	}
-
 	.meta {
+		flex: none;
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
-		color: var(--text-faint);
+		color: var(--gh-faint);
 	}
 </style>

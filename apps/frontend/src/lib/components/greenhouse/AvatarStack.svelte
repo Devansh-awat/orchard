@@ -127,6 +127,16 @@
 		overflow: hidden;
 	}
 
+	.disc > :global(img),
+	.disc > :global(svg) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		object-fit: cover;
+		border-radius: inherit;
+	}
+
 	button.face {
 		cursor: pointer;
 	}

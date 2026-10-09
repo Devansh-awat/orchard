@@ -1,16 +1,7 @@
-export const HOST_DISCLOSURE =
-	'Guests can run your agent on your Claude subscription, read and change every file on this machine including credentials stored in it, use terminals, and see anything you type in shared terminals.';
-
-export const HOST_DISCLOSURE_POINTS = [
-	'Your agent has Orchard tools scoped to this organization, so anyone who can prompt it can use your Orchard access here.',
-	'Admins of this organization can start, stop and delete this machine. They cannot see inside it unless you invite them.',
-	"Removing a guest rotates the agent's Orchard password on this machine. It does not undo anything they already did or copied."
-] as const;
-
 export function guestDisclosure(host: string, readOnly: boolean): string {
-	const base = `This machine belongs to ${host}. They can see everything you do here, including your terminal sessions.`;
-	if (readOnly) return base;
-	return `${base} When you push, your GitHub token is used for that command inside their machine. Your terminals carry it, so ${host}, other guests and the agent can read it there.`;
+	return readOnly
+		? `${host}'s machine, read only.`
+		: `${host}'s machine. They can see what you do here.`;
 }
 
 function read(key: string): boolean {
@@ -31,16 +22,7 @@ function write(key: string) {
 	}
 }
 
-const shareKey = (machineId: string) => `greenhouse-share-ack:${machineId}`;
 const joinKey = (userId: string, machineId: string) => `greenhouse-join-ack:${userId}:${machineId}`;
-
-export function shareAcknowledged(machineId: string): boolean {
-	return read(shareKey(machineId));
-}
-
-export function acknowledgeShare(machineId: string) {
-	write(shareKey(machineId));
-}
 
 export function joinAcknowledged(userId: string, machineId: string): boolean {
 	return read(joinKey(userId, machineId));

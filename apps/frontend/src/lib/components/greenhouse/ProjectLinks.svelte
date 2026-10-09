@@ -1,266 +1,203 @@
-<script lang="ts">
-	import { FolderGit2, X } from 'lucide-svelte';
-	import { Button, Select } from '$lib/components/ui';
-	import { organizations, toasts } from '$lib/stores';
+<script lang="ts" module>
 	import * as api from './api';
-	import { getGreenhouseApp } from './app.svelte';
-	import FormError from './FormError.svelte';
 	import type { GhEnvironment, GhOrchardProject, GhProjectLink } from './types';
 
-	let { active }: { active: boolean } = $props();
+	export class ProjectLinkStore {
+		links = $state.raw<GhProjectLink[]>([]);
+		loaded = $state(false);
+		projects = $state.raw<GhOrchardProject[]>([]);
+		environments = $state.raw<GhEnvironment[]>([]);
+		projectId = $state('');
+		environmentId = $state('');
+		busy = $state<string | null>(null);
+		error = $state<string | null>(null);
+		#projectsFor: string | null = null;
 
-	const app = getGreenhouseApp();
-	const ws = $derived(app.ws);
-	const owner = $derived(ws?.isOwner ?? false);
-	const orgId = $derived(app.machine?.organizationId ?? app.organizationId ?? null);
-
-	let links = $state.raw<GhProjectLink[]>([]);
-	let linksLoaded = $state(false);
-	let projects = $state.raw<GhOrchardProject[]>([]);
-	let environments = $state.raw<GhEnvironment[]>([]);
-	let projectId = $state('');
-	let environmentId = $state('');
-	let busy = $state<string | null>(null);
-	let error = $state<string | null>(null);
-
-	const linked = $derived(new Set(links.map((l) => l.projectId)));
-	const available = $derived(projects.filter((p) => !linked.has(p.id)));
-
-	let loadedFor: string | null = null;
-	$effect(() => {
-		const id = active ? (ws?.sandboxId ?? null) : null;
-		if (!id || id === loadedFor) return;
-		loadedFor = id;
-		error = null;
-		void refresh(id);
-		if (owner && orgId) void loadProjects(orgId);
-	});
-
-	async function refresh(id: string) {
-		const res = await api.listLinks(id);
-		links = res.ok ? (res.data.links ?? []) : [];
-		linksLoaded = true;
-	}
-
-	async function loadProjects(org: string) {
-		const role = $organizations.find((o) => o.id === org)?.myRole ?? null;
-		const res = await api.listEditableProjects(org, {
-			userId: app.self?.id ?? null,
-			orgRole: role,
-			superAdmin: app.superAdmin
+		available = $derived.by(() => {
+			const linked = new Set(this.links.map((l) => l.projectId));
+			return this.projects.filter((p) => !linked.has(p.id));
 		});
-		projects = res.ok ? res.data : [];
-	}
 
-	async function pickProject(id: string) {
-		projectId = id;
-		environmentId = '';
-		environments = [];
-		if (!id) return;
-		const list = await api.listEnvironments(id);
-		if (projectId !== id) return;
-		environments = list;
-		environmentId = (list.find((e) => e.isDefault) ?? list[0])?.id ?? '';
-	}
+		summary = $derived(
+			!this.loaded
+				? ''
+				: this.links.length === 0
+					? 'None'
+					: this.links.map((l) => l.project.name).join(', ')
+		);
 
-	async function attach() {
-		if (!ws || !projectId || busy) return;
-		busy = 'attach';
-		error = null;
-		try {
-			const link = await api.attachProject(ws.sandboxId, {
-				projectId,
-				environmentId: environmentId || null
-			});
-			links = [...links.filter((l) => l.projectId !== link.projectId), link];
-			toasts.add({
-				title: `Attached ${link.project.name}`,
-				description: `Variables land in ${link.envFile}`,
-				color: 'success'
-			});
-			projectId = '';
-			environmentId = '';
-			environments = [];
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Could not attach the project';
-		} finally {
-			busy = null;
+		async load(sandboxId: string) {
+			this.error = null;
+			const res = await api.listLinks(sandboxId);
+			this.links = res.ok ? (res.data.links ?? []) : [];
+			this.loaded = true;
 		}
-	}
 
-	async function detach(link: GhProjectLink) {
-		if (!ws || busy) return;
-		busy = link.projectId;
-		try {
-			await api.detachProject(ws.sandboxId, link.projectId);
-			links = links.filter((l) => l.projectId !== link.projectId);
-		} catch (e) {
-			toasts.add({
-				title: 'Could not detach the project',
-				description: e instanceof Error ? e.message : undefined,
-				color: 'error'
-			});
-		} finally {
-			busy = null;
+		async loadProjects(
+			org: string,
+			who: { userId: string | null; orgRole: string | null; superAdmin: boolean }
+		) {
+			if (this.#projectsFor === org) return;
+			this.#projectsFor = org;
+			const res = await api.listEditableProjects(org, who);
+			this.projects = res.ok ? res.data : [];
+		}
+
+		resetPick() {
+			this.projectId = '';
+			this.environmentId = '';
+			this.environments = [];
+			this.error = null;
+		}
+
+		async pickProject(id: string) {
+			this.projectId = id;
+			this.environmentId = '';
+			this.environments = [];
+			if (!id) return;
+			const list = await api.listEnvironments(id);
+			if (this.projectId !== id) return;
+			this.environments = list;
+			this.environmentId = (list.find((e) => e.isDefault) ?? list[0])?.id ?? '';
+		}
+
+		async attach(sandboxId: string): Promise<GhProjectLink | null> {
+			if (!this.projectId || this.busy) return null;
+			this.busy = 'attach';
+			this.error = null;
+			try {
+				const link = await api.attachProject(sandboxId, {
+					projectId: this.projectId,
+					environmentId: this.environmentId || null
+				});
+				this.links = [...this.links.filter((l) => l.projectId !== link.projectId), link];
+				this.resetPick();
+				return link;
+			} catch (e) {
+				this.error = e instanceof Error ? e.message : 'Could not attach the project';
+				return null;
+			} finally {
+				this.busy = null;
+			}
+		}
+
+		async detach(sandboxId: string, link: GhProjectLink): Promise<string | null> {
+			if (this.busy) return null;
+			this.busy = link.projectId;
+			try {
+				await api.detachProject(sandboxId, link.projectId);
+				this.links = this.links.filter((l) => l.projectId !== link.projectId);
+				return null;
+			} catch (e) {
+				return e instanceof Error ? e.message : 'Could not detach the project';
+			} finally {
+				this.busy = null;
+			}
 		}
 	}
 </script>
 
-<section class="links" aria-labelledby="gh-links-title">
-	<p class="title" id="gh-links-title">Projects</p>
-	{#if linksLoaded && links.length === 0}
-		<p class="muted">
-			No projects attached. Attaching one writes its variables and database address to a file on
-			this machine.
-		</p>
-	{/if}
-	{#each links as link (link.id)}
-		<div class="row" data-align="link-row">
-			<span class="ico"><FolderGit2 size={16} strokeWidth={1.75} /></span>
-			<span class="who">
-				<span class="name"
-					>{link.project.name} <span class="env">{link.environment.name}</span></span
-				>
-				<span class="path gh-mono">{link.envFile}</span>
-			</span>
-			{#if owner}
-				<button
-					type="button"
-					class="gh-ibtn"
-					aria-label="Detach {link.project.name}"
-					title="Detach {link.project.name}"
-					disabled={!!busy}
-					onclick={() => detach(link)}
-				>
-					<X size={16} strokeWidth={1.75} />
-				</button>
-			{/if}
-		</div>
-	{/each}
+<script lang="ts">
+	import { FolderGit2, X } from 'lucide-svelte';
+	import { Select } from '$lib/components/ui';
+	import { toasts } from '$lib/stores';
+	import { getGreenhouseApp } from './app.svelte';
+	import FormError from './FormError.svelte';
 
-	{#if owner}
-		<p class="disclosure">
-			Every guest on this machine can read these variables from a terminal. The agent picks up new
-			variables after it restarts.
-		</p>
-		<div class="add">
-			<div class="pick">
-				<Select
-					value={projectId}
-					aria-label="Project"
-					disabled={available.length === 0}
-					onchange={(e: Event) => pickProject((e.currentTarget as HTMLSelectElement).value)}
-				>
-					<option value="" disabled>
-						{available.length === 0 ? 'No more projects you can edit' : 'Project'}
-					</option>
-					{#each available as p (p.id)}
-						<option value={p.id}>{p.name}</option>
-					{/each}
-				</Select>
-			</div>
-			<div class="pick">
-				<Select
-					bind:value={environmentId}
-					aria-label="Environment"
-					disabled={environments.length === 0}
-				>
-					{#if environments.length === 0}<option value="">Environment</option>{/if}
-					{#each environments as env (env.id)}
-						<option value={env.id}>{env.name}</option>
-					{/each}
-				</Select>
-			</div>
-			<Button variant="secondary" disabled={!projectId || !!busy} onclick={attach}>
-				{busy === 'attach' ? 'Attaching…' : 'Attach'}
-			</Button>
-		</div>
-		{#if error}<FormError message={error} />{/if}
+	let { store, mode }: { store: ProjectLinkStore; mode: 'list' | 'attach' } = $props();
+
+	const app = getGreenhouseApp();
+	const ws = $derived(app.ws);
+	const owner = $derived(ws?.isOwner ?? false);
+
+	async function detach(link: GhProjectLink) {
+		if (!ws) return;
+		const failed = await store.detach(ws.sandboxId, link);
+		if (failed)
+			toasts.add({ title: 'Could not detach the project', description: failed, color: 'error' });
+	}
+</script>
+
+{#if mode === 'list'}
+	{#if store.links.length > 0}
+		<ul class="gh-group" aria-label="Attached projects">
+			{#each store.links as link (link.id)}
+				<li class="gh-group-row" class:gh-group-row--tight={owner} title={link.envFile}>
+					<span class="glyph"><FolderGit2 size={16} strokeWidth={1.75} /></span>
+					<span class="gh-group-name">{link.project.name}</span>
+					<span class="env">{link.environment.name}</span>
+					{#if owner}
+						<button
+							type="button"
+							class="gh-ibtn"
+							aria-label="Detach {link.project.name}"
+							title="Detach {link.project.name}"
+							disabled={!!store.busy}
+							onclick={() => detach(link)}
+						>
+							<X size={16} strokeWidth={1.75} />
+						</button>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	{:else if store.loaded}
+		<p class="gh-sheet-note">No projects</p>
 	{/if}
-</section>
+	{#if owner}
+		<p class="gh-sheet-note">Guests can read these variables.</p>
+	{/if}
+{:else}
+	<div class="picks">
+		<Select
+			value={store.projectId}
+			aria-label="Project"
+			data-autofocus
+			disabled={store.available.length === 0}
+			onchange={(e: Event) => store.pickProject((e.currentTarget as HTMLSelectElement).value)}
+		>
+			<option value="" disabled>
+				{store.available.length === 0 ? 'No more projects you can edit' : 'Project'}
+			</option>
+			{#each store.available as p (p.id)}
+				<option value={p.id}>{p.name}</option>
+			{/each}
+		</Select>
+		<Select
+			bind:value={store.environmentId}
+			aria-label="Environment"
+			disabled={store.environments.length === 0}
+		>
+			{#if store.environments.length === 0}<option value="">Environment</option>{/if}
+			{#each store.environments as env (env.id)}
+				<option value={env.id}>{env.name}</option>
+			{/each}
+		</Select>
+	</div>
+	{#if store.error}<FormError message={store.error} />{/if}
+{/if}
 
 <style>
-	.links {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.title,
-	.muted,
-	.disclosure {
-		margin: 0;
-	}
-
-	.title {
-		font-weight: 600;
-		font-size: var(--text-footnote);
-	}
-
-	.muted {
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--text-muted);
-	}
-
-	.disclosure {
-		margin-top: 0.25rem;
-		color: var(--text-default);
-	}
-
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-height: 2.75rem;
-		padding: 0.25rem calc(0.75rem - var(--gh-ibtn-inset)) 0.25rem 0.75rem;
-		border-radius: var(--gh-r-row);
-		border: 1px solid var(--gh-line);
-	}
-
-	.ico {
+	.glyph {
 		display: inline-grid;
 		place-items: center;
 		flex: none;
 		width: var(--gh-glyph);
-		height: var(--gh-glyph);
-		color: var(--text-muted);
-	}
-
-	.who {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.name {
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
+		color: var(--gh-muted);
 	}
 
 	.env {
-		color: var(--text-muted);
-	}
-
-	.path {
+		flex: none;
+		max-width: 40%;
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--text-faint);
+		color: var(--gh-muted);
 	}
 
-	.add {
+	.picks {
 		display: flex;
-		align-items: center;
+		flex-direction: column;
 		gap: 0.5rem;
-	}
-
-	.pick {
-		flex: 1;
-		min-width: 0;
 	}
 </style>

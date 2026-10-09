@@ -30,7 +30,7 @@
 	}
 </script>
 
-<Modal bind:open title="You are joining {machine?.name ?? 'a machine'}" size="sm" closable={false}>
+<Modal bind:open title={machine?.name ?? 'Joining'} size="sm" closable={false}>
 	<p class="text">{guestDisclosure(host, readOnly)}</p>
 	{#snippet footer()}
 		<Button variant="primary" onclick={proceed}>Continue</Button>
