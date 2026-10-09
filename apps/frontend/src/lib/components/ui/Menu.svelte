@@ -7,11 +7,13 @@
 	let {
 		placement = 'bottom-end',
 		open = $bindable(false),
+		inside,
 		trigger,
 		children
 	}: {
 		placement?: Placement;
 		open?: boolean;
+		inside?: (target: Element | Window | Document) => boolean;
 		trigger: Snippet<[Record<string, unknown>, boolean]>;
 		children: Snippet;
 	} = $props();
@@ -19,6 +21,7 @@
 	const popover = new Popover({
 		open: () => open,
 		onOpenChange: (v) => (open = v),
+		closeOnOutsideClick: (target: Element | Window | Document) => !inside?.(target),
 		floatingConfig: {
 			computePosition: { placement },
 			offset: { mainAxis: 6 }

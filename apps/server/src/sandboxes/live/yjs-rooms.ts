@@ -4,16 +4,15 @@ import type * as SyncModule from 'y-protocols/sync' with { 'resolution-mode': 'i
 import type * as AwarenessModule from 'y-protocols/awareness' with { 'resolution-mode': 'import' };
 import type * as EncodingModule from 'lib0/encoding' with { 'resolution-mode': 'import' };
 import type * as DecodingModule from 'lib0/decoding' with { 'resolution-mode': 'import' };
-import type * as DiffModule from 'lib0/diff' with { 'resolution-mode': 'import' };
 import type { SandboxRole } from '../sandbox-access.service';
 import { canWrite } from './live-protocol';
+import { diffText, mergeText } from './text-diff';
 
 let Y: typeof YModule;
 let syncProtocol: typeof SyncModule;
 let awarenessProtocol: typeof AwarenessModule;
 let encoding: typeof EncodingModule;
 let decoding: typeof DecodingModule;
-let simpleDiffString: (typeof DiffModule)['simpleDiffString'];
 let yjsLoading: Promise<void> | null = null;
 
 export function loadYjs(): Promise<void> {
@@ -22,15 +21,13 @@ export function loadYjs(): Promise<void> {
     import('y-protocols/sync'),
     import('y-protocols/awareness'),
     import('lib0/encoding'),
-    import('lib0/decoding'),
-    import('lib0/diff')
-  ]).then(([y, sync, awareness, enc, dec, diff]) => {
+    import('lib0/decoding')
+  ]).then(([y, sync, awareness, enc, dec]) => {
     Y = y;
     syncProtocol = sync;
     awarenessProtocol = awareness;
     encoding = enc;
     decoding = dec;
-    simpleDiffString = diff.simpleDiffString;
   });
   return yjsLoading;
 }
@@ -65,9 +62,12 @@ export interface YRoomSubscriber {
 }
 
 export interface YClientFrame {
-  t: 'yjs' | 'yjs-awareness' | 'yjs-save' | 'yjs-reload' | 'yjs-leave';
+  t: 'yjs' | 'yjs-awareness' | 'yjs-adopt' | 'yjs-save' | 'yjs-reload' | 'yjs-leave';
   b64?: string;
   gen?: string | null;
+  n?: number | null;
+  hash?: string | null;
+  base?: string | null;
 }
 
 export type YEnvelope =
@@ -103,6 +103,7 @@ export interface YRoomTimings {
   ownerHeartbeatMs: number;
   subscriberTtlMs: number;
   ownerCacheMs: number;
+  adoptGraceMs: number;
 }
 
 export const DEFAULT_YROOM_TIMINGS: YRoomTimings = {
@@ -112,7 +113,8 @@ export const DEFAULT_YROOM_TIMINGS: YRoomTimings = {
   ownerTtlMs: 15_000,
   ownerHeartbeatMs: 5_000,
   subscriberTtlMs: 30_000,
-  ownerCacheMs: 2_000
+  ownerCacheMs: 2_000,
+  adoptGraceMs: 3_000
 };
 
 interface RoomSub {
@@ -129,6 +131,11 @@ interface OwnedRoom {
   doc: YModule.Doc;
   awareness: AwarenessModule.Awareness;
   gen: string;
+  adoptable: boolean;
+  adoptUntil: number;
+  waiting: Array<() => void>;
+  waitTimer: ReturnType<typeof setTimeout> | null;
+  unwire: () => void;
   subs: Map<string, RoomSub>;
   lastDisk: string;
   baseUpdate: Uint8Array;
@@ -151,6 +158,15 @@ function toB64(bytes: Uint8Array): string {
 
 function fromB64(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, 'base64'));
+}
+
+export function applyTextDiff(text: YModule.Text, from: string, to: string) {
+  const edits = diffText(from, to);
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const edit = edits[i];
+    if (edit.remove > 0) text.delete(edit.index, edit.remove);
+    if (edit.insert.length > 0) text.insert(edit.index, edit.insert);
+  }
 }
 
 export function yjsUpdateAllowed(doc: YModule.Doc, update: Uint8Array): boolean {
@@ -330,7 +346,7 @@ export class YRoomManager {
     });
   }
 
-  async handleEnvelope(envelope: YEnvelope): Promise<void> {
+  async handleEnvelope(envelope: YEnvelope, sandboxId?: string): Promise<void> {
     await loadYjs();
     if (envelope.k === 'y-out') {
       if (envelope.replica === this.replicaId) {
@@ -349,7 +365,10 @@ export class YRoomManager {
       if (entry) {
         entry.seen = Date.now();
         entry.sub = envelope.sub;
+        return;
       }
+      const home = owned?.sandboxId ?? sandboxId;
+      if (home) await this.process(home, envelope.room, envelope.sub, { t: 'yjs-reload' });
       return;
     }
     if (envelope.k === 'y-left') {
@@ -358,13 +377,7 @@ export class YRoomManager {
   }
 
   private send(room: OwnedRoom, sub: YRoomSubscriber, frame: Record<string, unknown>) {
-    if (sub.replica === this.replicaId) {
-      this.transport.deliverLocal(sub.connId, frame);
-      return;
-    }
-    this.transport
-      .publish(room.sandboxId, { k: 'y-out', replica: sub.replica, connId: sub.connId, frame })
-      .catch(() => {});
+    this.sendTo(room.sandboxId, sub, frame);
   }
 
   private broadcast(room: OwnedRoom, frame: Record<string, unknown>, exceptKey: string | null) {
@@ -374,51 +387,34 @@ export class YRoomManager {
     }
   }
 
-  private async open(sandboxId: string, room: string): Promise<OwnedRoom | null> {
+  private async open(
+    sandboxId: string,
+    room: string,
+    recovering: boolean
+  ): Promise<OwnedRoom | null> {
     const existing = this.rooms.get(room);
     if (existing) return existing;
     const pending = this.creating.get(room);
     if (pending) return pending;
-    const promise = this.create(sandboxId, room).finally(() => this.creating.delete(room));
+    const promise = this.create(sandboxId, room, recovering).finally(() =>
+      this.creating.delete(room)
+    );
     this.creating.set(room, promise);
     return promise;
   }
 
-  private async create(sandboxId: string, room: string): Promise<OwnedRoom | null> {
-    await loadYjs();
-    const { sid, path } = splitRoom(room);
-    const file = await this.files.read(sandboxId, sid, path);
-    const doc = new Y.Doc();
-    doc.getText(YROOM_TEXT).insert(0, file.content);
-    const awareness = new awarenessProtocol.Awareness(doc);
-    awareness.setLocalState(null);
-    const owned: OwnedRoom = {
-      room,
-      sandboxId,
-      sid,
-      path,
-      doc,
-      awareness,
-      gen: randomUUID(),
-      subs: new Map(),
-      lastDisk: file.content,
-      baseUpdate: Y.encodeStateAsUpdate(doc),
-      hash: file.hash,
-      dirty: false,
-      version: 0,
-      saving: false,
-      saveAgain: false,
-      saveTimer: null,
-      emptySince: Date.now(),
-      polling: false,
-      destroyed: false
-    };
-    doc.on('update', (update: Uint8Array, origin: unknown) => {
-      if (owned.destroyed) return;
+  private wireDoc(owned: OwnedRoom, doc: YModule.Doc) {
+    const onUpdate = (update: Uint8Array, origin: unknown) => {
+      if (owned.destroyed || owned.doc !== doc) return;
       owned.version += 1;
       const encoder = encoding.createEncoder();
       syncProtocol.writeUpdate(encoder, update);
-      const frame = { t: 'yjs', room, gen: owned.gen, b64: toB64(encoding.toUint8Array(encoder)) };
+      const frame = {
+        t: 'yjs',
+        room: owned.room,
+        gen: owned.gen,
+        b64: toB64(encoding.toUint8Array(encoder))
+      };
       const exceptKey = typeof origin === 'string' && owned.subs.has(origin) ? origin : null;
       this.broadcast(owned, frame, exceptKey);
       if (exceptKey) {
@@ -428,7 +424,52 @@ export class YRoomManager {
       if (doc.getText(YROOM_TEXT).length > YROOM_MAX_DOC_CHARS) {
         this.reset(owned, 'This file grew too large to edit together');
       }
-    });
+    };
+    doc.on('update', onUpdate);
+    owned.doc = doc;
+    owned.unwire = () => doc.off('update', onUpdate);
+  }
+
+  private async create(
+    sandboxId: string,
+    room: string,
+    recovering: boolean
+  ): Promise<OwnedRoom | null> {
+    await loadYjs();
+    const { sid, path } = splitRoom(room);
+    const file = await this.files.read(sandboxId, sid, path);
+    const doc = new Y.Doc();
+    doc.getText(YROOM_TEXT).insert(0, file.content);
+    const awareness = new awarenessProtocol.Awareness(doc);
+    awareness.setLocalState(null);
+    const now = Date.now();
+    const owned: OwnedRoom = {
+      room,
+      sandboxId,
+      sid,
+      path,
+      doc,
+      awareness,
+      gen: randomUUID(),
+      adoptable: true,
+      adoptUntil: recovering ? now + this.timings.adoptGraceMs : 0,
+      waiting: [],
+      waitTimer: null,
+      unwire: () => {},
+      subs: new Map(),
+      lastDisk: file.content,
+      baseUpdate: Y.encodeStateAsUpdate(doc),
+      hash: file.hash,
+      dirty: false,
+      version: 0,
+      saving: false,
+      saveAgain: false,
+      saveTimer: null,
+      emptySince: now,
+      polling: false,
+      destroyed: false
+    };
+    this.wireDoc(owned, doc);
     awareness.on(
       'update',
       (
@@ -474,6 +515,44 @@ export class YRoomManager {
     if (owned.subs.size === 0) owned.emptySince = Date.now();
   }
 
+  private syncType(b64: string | undefined): number | null {
+    if (!b64) return null;
+    try {
+      return decoding.readVarUint(decoding.createDecoder(fromB64(b64)));
+    } catch {
+      return null;
+    }
+  }
+
+  private sendStep1(owned: OwnedRoom, sub: YRoomSubscriber) {
+    const encoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep1(encoder, owned.doc);
+    this.send(owned, sub, {
+      t: 'yjs',
+      room: owned.room,
+      gen: owned.gen,
+      b64: toB64(encoding.toUint8Array(encoder))
+    });
+  }
+
+  private stateVector(owned: OwnedRoom): string {
+    return toB64(Y.encodeStateVector(owned.doc));
+  }
+
+  private baseFrame(owned: OwnedRoom): Record<string, unknown> | null {
+    if (owned.doc.getText(YROOM_TEXT).toString() !== owned.lastDisk) return null;
+    return { t: 'yjs-base', room: owned.room, hash: owned.hash, sv: this.stateVector(owned) };
+  }
+
+  private sendReset(owned: OwnedRoom, sub: YRoomSubscriber) {
+    this.send(owned, sub, {
+      t: 'yjs-reset',
+      room: owned.room,
+      gen: owned.gen,
+      adopt: owned.adoptable && canWrite(sub.role)
+    });
+  }
+
   private async process(
     sandboxId: string,
     room: string,
@@ -486,7 +565,8 @@ export class YRoomManager {
     }
     let owned: OwnedRoom | null;
     try {
-      owned = await this.open(sandboxId, room);
+      const recovering = !!frame.gen || frame.t === 'yjs-reload' || frame.t === 'yjs-adopt';
+      owned = await this.open(sandboxId, room, recovering);
     } catch (e: any) {
       const message = e instanceof YRoomFileError ? e.message : 'Could not open that file';
       if (!(e instanceof YRoomFileError))
@@ -498,14 +578,9 @@ export class YRoomManager {
     const { entry, fresh } = this.addSub(owned, sub);
     const key = subKeyOf(sub);
     if (fresh) {
-      const encoder = encoding.createEncoder();
-      syncProtocol.writeSyncStep1(encoder, owned.doc);
-      this.send(owned, sub, {
-        t: 'yjs',
-        room,
-        gen: owned.gen,
-        b64: toB64(encoding.toUint8Array(encoder))
-      });
+      const startsHandshake =
+        frame.t === 'yjs' && this.syncType(frame.b64) === syncProtocol.messageYjsSyncStep1;
+      if (!startsHandshake) this.sendStep1(owned, sub);
       const states = [...owned.awareness.getStates().keys()];
       if (states.length > 0) {
         this.send(owned, sub, {
@@ -517,6 +592,12 @@ export class YRoomManager {
     }
     if (frame.t === 'yjs' && frame.b64) {
       this.handleSync(owned, entry, key, frame);
+      this.ack(owned, sub, frame.n);
+      return;
+    }
+    if (frame.t === 'yjs-adopt' && frame.b64) {
+      await this.handleAdopt(owned, entry, key, frame);
+      this.ack(owned, sub, frame.n);
       return;
     }
     if (frame.t === 'yjs-awareness' && frame.b64) {
@@ -536,6 +617,10 @@ export class YRoomManager {
     }
   }
 
+  private ack(owned: OwnedRoom, sub: YRoomSubscriber, n: number | null | undefined) {
+    if (typeof n === 'number') this.send(owned, sub, { t: 'yjs-ack', room: owned.room, n });
+  }
+
   private sendTo(sandboxId: string, sub: YRoomSubscriber, frame: Record<string, unknown>) {
     if (sub.replica === this.replicaId) {
       this.transport.deliverLocal(sub.connId, frame);
@@ -544,6 +629,42 @@ export class YRoomManager {
     this.transport
       .publish(sandboxId, { k: 'y-out', replica: sub.replica, connId: sub.connId, frame })
       .catch(() => {});
+  }
+
+  private replyStep1(owned: OwnedRoom, sub: YRoomSubscriber, stateVector: Uint8Array) {
+    if (owned.destroyed) return;
+    owned.adoptable = false;
+    const encoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep2(encoder, owned.doc, stateVector);
+    this.send(owned, sub, {
+      t: 'yjs',
+      room: owned.room,
+      gen: owned.gen,
+      b64: toB64(encoding.toUint8Array(encoder))
+    });
+    if (canWrite(sub.role)) this.sendStep1(owned, sub);
+    const base = this.baseFrame(owned);
+    if (base) this.send(owned, sub, base);
+  }
+
+  private defer(owned: OwnedRoom, run: () => void) {
+    owned.waiting.push(run);
+    if (owned.waitTimer) return;
+    owned.waitTimer = setTimeout(
+      () => {
+        owned.waitTimer = null;
+        this.flushWaiting(owned);
+      },
+      Math.max(0, owned.adoptUntil - Date.now())
+    );
+    owned.waitTimer.unref?.();
+  }
+
+  private flushWaiting(owned: OwnedRoom) {
+    if (owned.waitTimer) clearTimeout(owned.waitTimer);
+    owned.waitTimer = null;
+    const waiting = owned.waiting.splice(0);
+    for (const run of waiting) run();
   }
 
   private handleSync(owned: OwnedRoom, entry: RoomSub, key: string, frame: YClientFrame) {
@@ -556,17 +677,26 @@ export class YRoomManager {
       return;
     }
     if (type === syncProtocol.messageYjsSyncStep1) {
+      if (frame.gen && frame.gen !== owned.gen) {
+        this.sendReset(owned, entry.sub);
+        return;
+      }
+      let stateVector: Uint8Array;
       try {
-        const stateVector = decoding.readVarUint8Array(decoder);
-        const encoder = encoding.createEncoder();
-        syncProtocol.writeSyncStep2(encoder, owned.doc, stateVector);
-        this.send(owned, entry.sub, {
-          t: 'yjs',
-          room: owned.room,
-          gen: owned.gen,
-          b64: toB64(encoding.toUint8Array(encoder))
-        });
-      } catch {}
+        stateVector = decoding.readVarUint8Array(decoder);
+      } catch {
+        return;
+      }
+      const reply = () => {
+        try {
+          this.replyStep1(owned, entry.sub, stateVector);
+        } catch {}
+      };
+      if (!frame.gen && owned.adoptable && Date.now() < owned.adoptUntil) {
+        this.defer(owned, reply);
+        return;
+      }
+      reply();
       return;
     }
     if (type !== syncProtocol.messageYjsSyncStep2 && type !== syncProtocol.messageYjsUpdate) return;
@@ -575,23 +705,109 @@ export class YRoomManager {
       return;
     }
     if (frame.gen && frame.gen !== owned.gen) {
-      this.send(owned, entry.sub, { t: 'yjs-reset', room: owned.room, gen: owned.gen });
+      this.sendReset(owned, entry.sub);
       return;
     }
     try {
       const update = decoding.readVarUint8Array(decoder);
       if (!yjsUpdateAllowed(owned.doc, update)) {
-        this.send(owned, entry.sub, { t: 'yjs-reset', room: owned.room, gen: owned.gen });
+        this.sendReset(owned, entry.sub);
         return;
       }
+      const before = owned.version;
       Y.applyUpdate(owned.doc, update, key);
+      if (owned.version !== before) owned.adoptable = false;
       if (owned.doc.store.pendingStructs || owned.doc.store.pendingDs) {
         this.reset(owned, 'This file changed in a way the editor could not follow');
       }
     } catch (e: any) {
       this.warn(`yjs update rejected in ${owned.room}: ${e?.message}`);
-      this.send(owned, entry.sub, { t: 'yjs-reset', room: owned.room, gen: owned.gen });
+      this.sendReset(owned, entry.sub);
     }
+  }
+
+  private replyAdopted(owned: OwnedRoom, sub: YRoomSubscriber, update: Uint8Array) {
+    const encoder = encoding.createEncoder();
+    syncProtocol.writeSyncStep2(encoder, owned.doc, Y.encodeStateVectorFromUpdate(update));
+    this.send(owned, sub, {
+      t: 'yjs',
+      room: owned.room,
+      gen: owned.gen,
+      b64: toB64(encoding.toUint8Array(encoder))
+    });
+  }
+
+  private async handleAdopt(owned: OwnedRoom, entry: RoomSub, key: string, frame: YClientFrame) {
+    if (!canWrite(entry.sub.role)) {
+      this.send(owned, entry.sub, { t: 'yjs-denied', room: owned.room });
+      return;
+    }
+    if (!frame.gen) return;
+    let update: Uint8Array;
+    try {
+      update = fromB64(frame.b64!);
+    } catch {
+      return;
+    }
+    if (frame.gen === owned.gen) {
+      try {
+        if (!yjsUpdateAllowed(owned.doc, update)) {
+          this.sendReset(owned, entry.sub);
+          return;
+        }
+        Y.applyUpdate(owned.doc, update, key);
+        if (owned.doc.store.pendingStructs || owned.doc.store.pendingDs) {
+          this.reset(owned, 'This file changed in a way the editor could not follow');
+          return;
+        }
+      } catch (e: any) {
+        this.warn(`yjs adopt merge rejected in ${owned.room}: ${e?.message}`);
+        this.sendReset(owned, entry.sub);
+        return;
+      }
+      this.replyAdopted(owned, entry.sub, update);
+      return;
+    }
+    if (!owned.adoptable) {
+      this.sendReset(owned, entry.sub);
+      return;
+    }
+    const doc = new Y.Doc();
+    try {
+      if (!yjsUpdateAllowed(doc, update)) throw new Error('update not allowed');
+      Y.applyUpdate(doc, update);
+      if (doc.store.pendingStructs || doc.store.pendingDs) throw new Error('incomplete state');
+      if (doc.getText(YROOM_TEXT).length > YROOM_MAX_DOC_CHARS) throw new Error('too large');
+    } catch (e: any) {
+      doc.destroy();
+      this.warn(`yjs adopt rejected in ${owned.room}: ${e?.message}`);
+      owned.adoptable = false;
+      this.sendReset(owned, entry.sub);
+      return;
+    }
+    const text = doc.getText(YROOM_TEXT);
+    const current = text.toString();
+    const disk = owned.lastDisk;
+    const target =
+      current !== disk && frame.hash !== owned.hash && typeof frame.base === 'string'
+        ? mergeText(frame.base, current, disk)
+        : current;
+    if (target !== current) doc.transact(() => applyTextDiff(text, current, target), 'disk');
+    owned.unwire();
+    this.wireDoc(owned, doc);
+    owned.gen = frame.gen;
+    owned.adoptable = false;
+    owned.version += 1;
+    owned.baseUpdate = Y.encodeStateAsUpdate(doc);
+    owned.dirty = target !== disk;
+    this.replyAdopted(owned, entry.sub, update);
+    this.flushWaiting(owned);
+    if (owned.dirty) {
+      await this.save(owned, true);
+      return;
+    }
+    const base = this.baseFrame(owned);
+    if (base) this.broadcast(owned, base, null);
   }
 
   private handleAwareness(owned: OwnedRoom, entry: RoomSub, key: string, b64: string) {
@@ -670,11 +886,7 @@ export class YRoomManager {
       Y.applyUpdate(temp, owned.baseUpdate);
       const text = temp.getText(YROOM_TEXT);
       const base = text.toString();
-      const diff = simpleDiffString(base, content);
-      temp.transact(() => {
-        if (diff.remove > 0) text.delete(diff.index, diff.remove);
-        if (diff.insert.length > 0) text.insert(diff.index, diff.insert);
-      });
+      temp.transact(() => applyTextDiff(text, base, content));
       const update = Y.encodeStateAsUpdate(temp, Y.encodeStateVectorFromUpdate(owned.baseUpdate));
       Y.applyUpdate(owned.doc, update, 'disk');
       owned.baseUpdate = Y.encodeStateAsUpdate(temp);
@@ -683,11 +895,18 @@ export class YRoomManager {
     } finally {
       temp.destroy();
     }
-    if (!owned.dirty) {
-      const current = owned.doc.getText(YROOM_TEXT).toString();
-      if (current !== content) owned.dirty = true;
-    }
-    this.broadcast(owned, { t: 'yjs-disk', room: owned.room, hash }, null);
+    const current = owned.doc.getText(YROOM_TEXT).toString();
+    if (!owned.dirty && current !== content) owned.dirty = true;
+    this.broadcast(
+      owned,
+      {
+        t: 'yjs-disk',
+        room: owned.room,
+        hash,
+        ...(current === content ? { sv: this.stateVector(owned) } : {})
+      },
+      null
+    );
   }
 
   private async poll(owned: OwnedRoom): Promise<void> {
@@ -723,12 +942,13 @@ export class YRoomManager {
       }
       const content = owned.doc.getText(YROOM_TEXT).toString();
       const snapshot = Y.encodeStateAsUpdate(owned.doc);
+      const sv = this.stateVector(owned);
       const version = owned.version;
       if (content === owned.lastDisk) {
         owned.dirty = false;
         owned.baseUpdate = snapshot;
         if (explicit)
-          this.broadcast(owned, { t: 'yjs-saved', room: owned.room, hash: owned.hash }, null);
+          this.broadcast(owned, { t: 'yjs-saved', room: owned.room, hash: owned.hash, sv }, null);
         return;
       }
       if (Buffer.byteLength(content, 'utf8') > YROOM_MAX_FILE_BYTES) {
@@ -744,7 +964,7 @@ export class YRoomManager {
       owned.baseUpdate = snapshot;
       owned.hash = hash;
       if (owned.version === version) owned.dirty = false;
-      this.broadcast(owned, { t: 'yjs-saved', room: owned.room, hash }, null);
+      this.broadcast(owned, { t: 'yjs-saved', room: owned.room, hash, sv }, null);
     } catch (e: any) {
       const message = e instanceof YRoomFileError ? e.message : 'Could not save that file';
       if (!(e instanceof YRoomFileError))
@@ -770,6 +990,9 @@ export class YRoomManager {
       clearTimeout(owned.saveTimer);
       owned.saveTimer = null;
     }
+    if (owned.waitTimer) clearTimeout(owned.waitTimer);
+    owned.waitTimer = null;
+    owned.waiting = [];
     if (flush && owned.dirty) await this.save(owned, false).catch(() => {});
     owned.destroyed = true;
     this.rooms.delete(owned.room);
@@ -785,7 +1008,11 @@ export class YRoomManager {
     if (owner === this.replicaId) {
       const owned = this.rooms.get(room);
       const entry = owned?.subs.get(subKeyOf(sub));
-      if (entry) entry.seen = Date.now();
+      if (entry) {
+        entry.seen = Date.now();
+        return;
+      }
+      await this.process(sandboxId, room, sub, { t: 'yjs-reload' });
       return;
     }
     await this.transport.publish(sandboxId, { k: 'y-sub', owner, room, sub });

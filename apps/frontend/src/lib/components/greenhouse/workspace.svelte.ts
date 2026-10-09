@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { goto } from '$app/navigation';
 import { toasts } from '$lib/stores';
@@ -22,6 +22,7 @@ import type { Sandbox, SandboxStatus } from '$lib/types/sandbox';
 import * as api from './api';
 import { alertCopy, showAgentNotification } from './agent-alerts';
 import { DEFAULT_BRANCH_PREFIX, branchPrefixFor } from './branch-prefix';
+import { CollabFiles } from './collab.svelte';
 import { presenceColorVar } from './format';
 import type { GreenhouseEnv } from './env';
 import { greenhousePrefs } from './prefs.svelte';
@@ -119,6 +120,12 @@ export function scopeOf(session: GhSession | null | undefined): api.Scope {
 	return isLegacy(session) ? { repo: session.repo } : { session: session.id };
 }
 
+function chatTime(value: string | number | null | undefined): number {
+	if (typeof value === 'number') return value;
+	const parsed = value ? Date.parse(value) : NaN;
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function chatTabId(chatId: string): string {
 	return `chat:${chatId}`;
 }
@@ -136,6 +143,7 @@ export class MachineWorkspace {
 	readonly comments = new DiffComments();
 	readonly store: ChatSessionStore;
 	readonly live: LiveClient;
+	readonly collab: CollabFiles;
 
 	sessions = $state.raw<GhSession[]>([]);
 	mode = $state<SessionsMode>('loading');
@@ -152,6 +160,7 @@ export class MachineWorkspace {
 	readonly changes = new SvelteMap<string, GhChanges>();
 	readonly pendingPrompts = new SvelteMap<string, string>();
 	readonly launches = new SvelteMap<string, SessionLaunch>();
+	readonly #hiddenChats = new SvelteSet<string>();
 
 	readonly machine = $derived.by(() => this.host.machine());
 	readonly running = $derived(this.machine?.status === 'running');
@@ -215,12 +224,19 @@ export class MachineWorkspace {
 	readonly chatList = $derived.by((): GhChat[] => {
 		const session = this.session;
 		if (!session) return [];
-		const known = this.chats.get(session.id);
-		if (known && known.length > 0) return known;
+		const known = (this.chats.get(session.id) ?? []).filter((c) => !this.#hiddenChats.has(c.id));
+		const ids = new Set(known.map((c) => c.id));
 		const fromStore = this.store.sessions
-			.filter((s) => !s.pending && s.directory === session.worktreePath)
-			.map((s) => ({ id: s.id, title: s.title, createdAt: s.createdAt }));
-		if (fromStore.length > 0) return fromStore;
+			.filter(
+				(s) =>
+					!s.pending &&
+					s.directory === session.worktreePath &&
+					!ids.has(s.id) &&
+					!this.#hiddenChats.has(s.id)
+			)
+			.map((s) => ({ id: s.id, title: s.title, createdAt: s.createdAt }))
+			.sort((a, b) => chatTime(a.createdAt) - chatTime(b.createdAt));
+		if (known.length + fromStore.length > 0) return [...known, ...fromStore];
 		if (session.opencodeSessionId) {
 			return [
 				{ id: session.opencodeSessionId, title: session.title, createdAt: session.createdAt }
@@ -291,6 +307,7 @@ export class MachineWorkspace {
 				const sid = untrack(() => this.sessionId);
 				if (sid) void this.refreshChanges(sid);
 				void this.refreshSessions();
+				this.collab.reloadAll();
 			},
 			onSignal: (signal) => this.#alert(signal),
 			onDraftChange: (text) => {
@@ -319,6 +336,21 @@ export class MachineWorkspace {
 		};
 		this.live.selfId = host.self()?.id ?? null;
 		this.live.onSession = (session) => this.upsert(session);
+		this.live.onPrompt = (user, chatId, messageId) => {
+			if (user.id === host.self()?.id) this.store.claimPrompt(chatId, messageId);
+		};
+		this.collab = new CollabFiles({
+			live: this.live,
+			editor: this.editor,
+			canWrite: () => untrack(() => this.canEdit),
+			selfId: () => host.self()?.id ?? null,
+			target: (path) => {
+				const { session, rel } = this.resolve(path);
+				if (!session || isLegacy(session) || isPreparing(session)) return null;
+				if (!rel || rel.startsWith('/')) return null;
+				return { sid: session.id, rel };
+			}
+		});
 	}
 
 	fs(): EditorFs {
@@ -611,7 +643,12 @@ export class MachineWorkspace {
 		const list = this.openTabs.get(session.id) ?? [];
 		const tab = list.find((t) => t.id === id);
 		if (!tab) return false;
-		if (tab.kind === 'file' && !this.editor.close(tab.path)) return false;
+		if (tab.kind === 'file') {
+			const shared = this.collab.get(tab.path)?.active ?? false;
+			if (!shared && this.editor.isDirty(tab.path)) return false;
+			this.collab.release(tab.path);
+			this.editor.close(tab.path, { force: true });
+		}
 		const all = this.tabs;
 		const index = all.findIndex((t) => t.id === id);
 		this.openTabs.set(
@@ -649,6 +686,7 @@ export class MachineWorkspace {
 			session.id,
 			before.filter((c) => c.id !== chatId)
 		);
+		this.#hiddenChats.add(chatId);
 		if (wasActive) {
 			const next = tabs[index + 1] ?? tabs[index - 1] ?? null;
 			this.host.openTab(next && next.id !== chatTabId(chatId) ? next.id : null);
@@ -658,6 +696,7 @@ export class MachineWorkspace {
 			if (res.remaining === 0) await this.newChat();
 		} catch (e) {
 			this.chats.set(session.id, before);
+			this.#hiddenChats.delete(chatId);
 			toasts.add({
 				title: 'Could not delete the chat',
 				description: e instanceof Error ? e.message : undefined,
@@ -976,6 +1015,7 @@ export class MachineWorkspace {
 		this.#disposed = true;
 		for (const timer of this.#timers) clearInterval(timer);
 		this.#timers = [];
+		this.collab.dispose();
 		this.live.close();
 		this.store.destroy();
 		this.editor.dispose();

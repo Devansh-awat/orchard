@@ -65,14 +65,15 @@
 		menuOpen = true;
 	}
 
-	let wasOpen = false;
+	let moreButton = $state<HTMLButtonElement | null>(null);
 
-	function more(event: MouseEvent) {
-		if (wasOpen) {
+	function more() {
+		if (menuOpen) {
 			menuOpen = false;
 			return;
 		}
-		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		if (!moreButton) return;
+		const rect = moreButton.getBoundingClientRect();
 		placement = 'bottom-end';
 		mx = rect.right;
 		my = rect.bottom + 10;
@@ -174,7 +175,7 @@
 				title="More actions"
 				aria-haspopup="menu"
 				aria-expanded={menuOpen}
-				onpointerdown={() => (wasOpen = menuOpen)}
+				bind:this={moreButton}
 				onclick={more}
 			>
 				<Ellipsis size={16} strokeWidth={1.75} />
@@ -183,7 +184,7 @@
 	{/if}
 </div>
 
-<ContextMenu bind:open={menuOpen} x={mx} y={my} {placement}>
+<ContextMenu bind:open={menuOpen} x={mx} y={my} {placement} toggle={moreButton}>
 	<MenuItem onclick={startRename} disabled={!canEdit} title={canEdit ? undefined : VIEWER_ONLY}>
 		<Pencil size={14} /> Rename
 	</MenuItem>

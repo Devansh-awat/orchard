@@ -134,8 +134,14 @@
 		const current = ws;
 		if (!current) return;
 		current.live.onFollowView = (user) => {
-			const tab = user.view?.tab;
-			if (tab && tab !== app.nav.tab()) app.nav.go({ tab }, { replace: true });
+			const view = user.view;
+			const tab = view?.tab;
+			if (!tab) return;
+			if (view?.file && tab.startsWith('file:') && !current.tabs.some((t) => t.id === tab)) {
+				current.openFile(view.file);
+				return;
+			}
+			if (tab !== app.nav.tab()) app.nav.go({ tab }, { replace: true });
 		};
 	});
 

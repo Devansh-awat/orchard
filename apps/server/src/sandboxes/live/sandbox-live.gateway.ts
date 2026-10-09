@@ -10,7 +10,7 @@ import { PUBLIC_USER_SELECT, publicUser } from '../sandbox-members.service';
 import { authenticateUpgrade, originAllowed, platformOrigins, rejectUpgrade } from './live-auth';
 import {
   FrameQueue,
-  LIVE_MAX_FRAME_BYTES,
+  LIVE_MAX_YJS_FRAME_BYTES,
   LIVE_MAX_PENDING_FRAMES,
   isSessionId
 } from './live-protocol';
@@ -30,7 +30,7 @@ export function attachSandboxLiveWebSocket(server: http.Server, app: INestApplic
   const settings = app.get(InstanceSettingsService);
   const live = app.get(SandboxLiveService);
   const previews = app.get(SandboxPreviewService);
-  const wss = new WebSocket.Server({ noServer: true, maxPayload: LIVE_MAX_FRAME_BYTES });
+  const wss = new WebSocket.Server({ noServer: true, maxPayload: LIVE_MAX_YJS_FRAME_BYTES });
   const allowed = platformOrigins();
   const jwtSecret = process.env.JWT_SECRET || '';
 
@@ -120,7 +120,7 @@ export function attachSandboxLiveWebSocket(server: http.Server, app: INestApplic
         const raw = Array.isArray(data)
           ? Buffer.concat(data).toString('utf8')
           : Buffer.from(data as ArrayBuffer).toString('utf8');
-        if (!queue.push(() => live.hub.handleMessage(conn, raw))) {
+        if (!queue.push(() => live.hub.handleMessage(conn, raw), raw.length)) {
           ws.close(1008, 'too many frames');
         }
       });

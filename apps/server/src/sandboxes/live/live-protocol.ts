@@ -1,6 +1,8 @@
 import type { SandboxRole } from '../sandbox-access.service';
 
 export const LIVE_MAX_FRAME_BYTES = 64 * 1024;
+export const LIVE_MAX_YJS_FRAME_BYTES = 2 * 1024 * 1024;
+export const LIVE_MAX_BASE_CHARS = 1_000_000;
 export const LIVE_MAX_DRAFT_CHARS = 4000;
 export const LIVE_MAX_COMMENT_CHARS = 4000;
 export const LIVE_MAX_ROOMS_PER_CONNECTION = 8;
@@ -18,6 +20,7 @@ export type LiveMessageType =
   | 'follow'
   | 'yjs'
   | 'yjs-awareness'
+  | 'yjs-adopt'
   | 'yjs-save'
   | 'yjs-reload'
   | 'yjs-leave'
@@ -31,6 +34,7 @@ export const LIVE_MESSAGE_TYPES: readonly LiveMessageType[] = [
   'follow',
   'yjs',
   'yjs-awareness',
+  'yjs-adopt',
   'yjs-save',
   'yjs-reload',
   'yjs-leave',
@@ -47,6 +51,7 @@ export const LIVE_MESSAGE_ROLE: Record<LiveMessageType, LiveMinRole> = {
   follow: 'viewer',
   yjs: 'viewer',
   'yjs-awareness': 'viewer',
+  'yjs-adopt': 'collaborator',
   'yjs-save': 'collaborator',
   'yjs-reload': 'viewer',
   'yjs-leave': 'viewer',
@@ -68,8 +73,17 @@ export type ClientFrame =
   | { t: 'draft'; sid: string; chatId: string; text: string }
   | { t: 'comment'; sid: string; chatId: string; body: string }
   | { t: 'follow'; target: string | null }
-  | { t: 'yjs'; room: string; b64: string; gen: string | null }
+  | { t: 'yjs'; room: string; b64: string; gen: string | null; n: number | null }
   | { t: 'yjs-awareness'; room: string; b64: string }
+  | {
+      t: 'yjs-adopt';
+      room: string;
+      b64: string;
+      gen: string;
+      n: number | null;
+      hash: string | null;
+      base: string | null;
+    }
   | { t: 'yjs-save'; room: string }
   | { t: 'yjs-reload'; room: string }
   | { t: 'yjs-leave'; room: string }
@@ -190,8 +204,20 @@ function b64(value: unknown, maxBytes: number): string | null {
   return value;
 }
 
+function seq(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function genOf(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= 64 ? value : null;
+}
+
+function isYjsSized(t: unknown): boolean {
+  return t === 'yjs' || t === 'yjs-adopt';
+}
+
 export function parseClientFrame(raw: string): ParseResult {
-  if (raw.length > LIVE_MAX_FRAME_BYTES) return { ok: false, error: 'frame_too_large' };
+  if (raw.length > LIVE_MAX_YJS_FRAME_BYTES) return { ok: false, error: 'frame_too_large' };
   let data: Record<string, unknown>;
   try {
     const parsed = JSON.parse(raw);
@@ -203,6 +229,9 @@ export function parseClientFrame(raw: string): ParseResult {
     return { ok: false, error: 'bad_json' };
   }
   const t = data.t;
+  if (raw.length > LIVE_MAX_FRAME_BYTES && !isYjsSized(t)) {
+    return { ok: false, error: 'frame_too_large' };
+  }
   const sid = data.sid === undefined || data.sid === null ? null : data.sid;
   switch (t) {
     case 'hello': {
@@ -239,10 +268,27 @@ export function parseClientFrame(raw: string): ParseResult {
     }
     case 'yjs': {
       if (typeof data.room !== 'string') return { ok: false, error: 'bad_room' };
-      const payload = b64(data.b64, LIVE_MAX_FRAME_BYTES);
+      const payload = b64(data.b64, LIVE_MAX_YJS_FRAME_BYTES);
       if (!payload) return { ok: false, error: 'bad_payload' };
-      const gen = typeof data.gen === 'string' && data.gen.length <= 64 ? data.gen : null;
-      return { ok: true, frame: { t, room: data.room, b64: payload, gen } };
+      return {
+        ok: true,
+        frame: { t, room: data.room, b64: payload, gen: genOf(data.gen), n: seq(data.n) }
+      };
+    }
+    case 'yjs-adopt': {
+      if (typeof data.room !== 'string') return { ok: false, error: 'bad_room' };
+      const payload = b64(data.b64, LIVE_MAX_YJS_FRAME_BYTES);
+      if (!payload) return { ok: false, error: 'bad_payload' };
+      const gen = genOf(data.gen);
+      if (!gen) return { ok: false, error: 'bad_gen' };
+      const hash =
+        typeof data.hash === 'string' && /^[0-9a-f]{32}$/.test(data.hash) ? data.hash : null;
+      const base =
+        typeof data.base === 'string' && data.base.length <= LIVE_MAX_BASE_CHARS ? data.base : null;
+      return {
+        ok: true,
+        frame: { t, room: data.room, b64: payload, gen, n: seq(data.n), hash, base }
+      };
     }
     case 'yjs-awareness': {
       if (typeof data.room !== 'string') return { ok: false, error: 'bad_room' };
@@ -315,6 +361,7 @@ export const LIMIT_CLASS: Record<LiveMessageType, LimitClass> = {
   follow: 'presence',
   yjs: 'yjs',
   'yjs-awareness': 'awareness',
+  'yjs-adopt': 'control',
   'yjs-save': 'control',
   'yjs-reload': 'control',
   'yjs-leave': 'control',
@@ -330,20 +377,25 @@ export function createLimiters(now: () => number = Date.now): Record<LimitClass,
 }
 
 export const LIVE_MAX_PENDING_FRAMES = 256;
+export const LIVE_MAX_PENDING_BYTES = 8 * 1024 * 1024;
 
 export class FrameQueue {
   private tail: Promise<void> = Promise.resolve();
 
   private pending = 0;
 
+  private bytes = 0;
+
   constructor(
     private readonly max: number = LIVE_MAX_PENDING_FRAMES,
-    private readonly onError: (e: unknown) => void = () => {}
+    private readonly onError: (e: unknown) => void = () => {},
+    private readonly maxBytes: number = LIVE_MAX_PENDING_BYTES
   ) {}
 
-  push(task: () => Promise<unknown>): boolean {
-    if (this.pending >= this.max) return false;
+  push(task: () => Promise<unknown>, size = 0): boolean {
+    if (this.pending >= this.max || this.bytes + size > this.maxBytes) return false;
     this.pending += 1;
+    this.bytes += size;
     this.tail = this.tail
       .then(task)
       .then(
@@ -352,6 +404,7 @@ export class FrameQueue {
       )
       .finally(() => {
         this.pending -= 1;
+        this.bytes -= size;
       });
     return true;
   }

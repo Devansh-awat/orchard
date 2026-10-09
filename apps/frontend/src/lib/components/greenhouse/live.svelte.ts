@@ -51,6 +51,12 @@ export const wsTransport: LiveTransport = {
 
 export type LiveState = 'idle' | 'connecting' | 'open' | 'retrying' | 'unavailable';
 
+export interface LiveRoomSink {
+	connect(): void;
+	disconnect(): void;
+	receive(frame: LiveFrame): void;
+}
+
 export interface LiveDraft {
 	user: PersonRef;
 	chatId: string;
@@ -96,6 +102,7 @@ export class LiveClient {
 	#lastDraftAt = 0;
 	#view: LiveView | null = null;
 	#closed = false;
+	readonly #rooms = new Map<string, LiveRoomSink>();
 
 	constructor(sandboxId: string, transport: LiveTransport = wsTransport) {
 		this.sandboxId = sandboxId;
@@ -129,6 +136,7 @@ export class LiveClient {
 				this.#attempt = 0;
 				socket.send({ t: 'hello', sid, ...(this.#view ? { view: this.#view } : {}) });
 				this.#startPing();
+				for (const sink of [...this.#rooms.values()]) sink.connect();
 			},
 			frame: (frame) => {
 				if (this.#socket !== socket) return;
@@ -138,6 +146,7 @@ export class LiveClient {
 				if (this.#socket !== socket) return;
 				this.#socket = null;
 				this.#stopPing();
+				this.#roomsDown();
 				if (this.#closed) return;
 				if (code === 4401 || code === 4403) {
 					this.state = 'unavailable';
@@ -183,9 +192,33 @@ export class LiveClient {
 		this.#socket = null;
 		socket?.close();
 		this.state = 'idle';
+		this.#roomsDown();
+	}
+
+	#roomsDown() {
+		for (const sink of [...this.#rooms.values()]) sink.disconnect();
+	}
+
+	attachRoom(room: string, sink: LiveRoomSink): () => void {
+		this.#rooms.set(room, sink);
+		if (this.#socket && this.state === 'open') sink.connect();
+		return () => {
+			if (this.#rooms.get(room) === sink) this.#rooms.delete(room);
+		};
+	}
+
+	sendRoom(frame: LiveFrame): boolean {
+		const socket = this.#socket;
+		if (!socket || this.state !== 'open') return false;
+		socket.send(frame);
+		return true;
 	}
 
 	#onFrame(frame: LiveFrame) {
+		if (frame.t.startsWith('yjs') && typeof frame.room === 'string') {
+			this.#rooms.get(frame.room)?.receive(frame);
+			return;
+		}
 		switch (frame.t) {
 			case 'roster': {
 				if (frame.sid && frame.sid !== this.sid) return;

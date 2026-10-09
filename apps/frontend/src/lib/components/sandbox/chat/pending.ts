@@ -359,6 +359,25 @@ export function requestDetail(request: AgentRequest, directory: string | null = 
 	return first.question || first.header;
 }
 
+export type RequestAuthor = { id: string; name: string; avatarUrl?: string | null };
+
+export type PromptRef = {
+	local?: boolean;
+	messageID?: string;
+	author?: RequestAuthor | null;
+};
+
+export function waitingOn(
+	prompt: PromptRef | null,
+	authorOf: (messageId: string) => RequestAuthor | null,
+	selfId: string | null
+): RequestAuthor | null {
+	if (!prompt || prompt.local || !selfId) return null;
+	const author = (prompt.messageID ? authorOf(prompt.messageID) : null) ?? prompt.author ?? null;
+	if (!author || author.id === selfId) return null;
+	return author;
+}
+
 export type PlanHandoff = { path: string | null; yes: string; no: string };
 
 export function planHandoff(request: AgentRequest): PlanHandoff | null {

@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { MonacoDiff, MonacoEditor, languageLabel } from '$lib/components/sandbox/editor';
+	import { COLLAB_STATUS_LABEL } from './collab.svelte';
 	import type { CenterTab } from './types';
 	import type { MachineWorkspace } from './workspace.svelte';
 
@@ -9,6 +11,10 @@
 	}: { ws: MachineWorkspace; tab: Extract<CenterTab, { kind: 'file' } | { kind: 'diff' }> } =
 		$props();
 
+	const collab = untrack(() => (tab.kind === 'file' ? ws.collab.acquire(tab.path) : null));
+	const shared = $derived(collab && !collab.failed ? collab : null);
+	const readOnly = $derived(!ws.canEdit || (!!shared && (!shared.ready || shared.paused)));
+	const cursors = $derived(shared?.active ? shared.cursors : ws.remoteCursors);
 	const doc = $derived(ws.editor.get(tab.path));
 	const rel = $derived(ws.resolve(tab.path).rel);
 	const author = $derived.by(() => {
@@ -63,9 +69,10 @@
 			<MonacoEditor
 				workspace={ws.editor}
 				path={tab.path}
-				readOnly={!ws.canEdit}
+				{readOnly}
 				autofocus
-				remoteCursors={ws.remoteCursors}
+				collab={shared ?? undefined}
+				remoteCursors={cursors}
 				onCursor={cursor}
 			/>
 		{:else}
@@ -82,7 +89,16 @@
 		<span class="path gh-mono" data-align="status-item" title={tab.path}>{rel}</span>
 		<span class="grow"></span>
 		{#if tab.kind === 'file'}
-			{#if doc?.saving}<span data-align="status-item">Saving…</span>{:else if doc?.dirty}<span
+			{#if shared}
+				<span
+					class:saved={shared.status === 'synced'}
+					data-align="status-item"
+					title={shared.status === 'synced'
+						? 'Everyone here sees the same text, saved to the machine automatically'
+						: undefined}>{COLLAB_STATUS_LABEL[shared.status]}</span
+				>
+				{#if shared.error}<span class="err" data-align="status-item">{shared.error}</span>{/if}
+			{:else if doc?.saving}<span data-align="status-item">Saving…</span>{:else if doc?.dirty}<span
 					data-align="status-item">Unsaved</span
 				>{:else if saved}<span class="saved" data-align="status-item">Saved</span>{/if}
 			{#if doc?.error}<span class="err" data-align="status-item">{doc.error}</span>{/if}

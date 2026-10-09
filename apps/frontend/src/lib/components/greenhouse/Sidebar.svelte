@@ -52,7 +52,7 @@
 	let mx = $state(0);
 	let my = $state(0);
 	let headRect: DOMRect | null = null;
-	let wasOpen = false;
+	let menuToggle = $state<HTMLElement | null>(null);
 
 	let pickRepo = $state<string | null>(null);
 	let pickerOpen = $state(false);
@@ -72,6 +72,7 @@
 		event.preventDefault();
 		headRect = headOf(event);
 		menuRepo = name;
+		menuToggle = null;
 		menuPlacement = 'bottom-start';
 		mx = event.clientX;
 		my = event.clientY;
@@ -79,12 +80,14 @@
 	}
 
 	function repoMore(event: MouseEvent, name: string) {
-		if (wasOpen && menuRepo === name) {
+		const button = event.currentTarget as HTMLElement;
+		if (menuOpen && menuRepo === name && menuToggle === button) {
 			menuOpen = false;
 			return;
 		}
 		headRect = headOf(event);
-		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		const rect = button.getBoundingClientRect();
+		menuToggle = button;
 		menuRepo = name;
 		menuPlacement = 'bottom-end';
 		mx = rect.right;
@@ -180,7 +183,6 @@
 									title="More actions"
 									aria-haspopup="menu"
 									aria-expanded={menuOpen && menuRepo === group.name}
-									onpointerdown={() => (wasOpen = menuOpen)}
 									onclick={(e) => repoMore(e, group.name)}
 								>
 									<Ellipsis size={16} strokeWidth={1.75} />
@@ -268,7 +270,7 @@
 	</div>
 
 	{#if ws?.canEdit}
-		<ContextMenu bind:open={menuOpen} x={mx} y={my} placement={menuPlacement}>
+		<ContextMenu bind:open={menuOpen} x={mx} y={my} placement={menuPlacement} toggle={menuToggle}>
 			<MenuItem onclick={() => menuRepo && onnewsession(menuRepo)}>
 				<Plus size={14} /> New session
 			</MenuItem>

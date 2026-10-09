@@ -55,6 +55,7 @@ import {
 	type RequestOutcome
 } from './pending';
 import { parseTodos, undoTarget, type TodoItem } from './slash-commands';
+import { claimForMessage, claimOwnPrompt, placeUserPart } from './prompt-claims';
 
 export type ChatAuthor = { id: string; name: string; avatarUrl?: string | null };
 
@@ -1865,19 +1866,36 @@ export class ChatSessionStore {
 
 	#onUserPart(thread: SessionThread, part: OcPart) {
 		if (part.type !== 'text' || !part.text?.trim() || part.synthetic || part.ignored) return;
-		const known = thread.entries.find(
-			(e): e is UserEntry => e.kind === 'user' && e.messageID === part.messageID
+		const author = this.authorOf(part.messageID);
+		const placement = placeUserPart(
+			thread.entries,
+			{ messageID: part.messageID, text: part.text },
+			author,
+			this.self?.id ?? null
 		);
-		if (known) return;
-		const unclaimed = thread.entries.some((e) => e.kind === 'user' && !e.messageID && e.local);
-		if (unclaimed) return;
+		if (!placement) return;
+		if ('claim' in placement) {
+			const entry = thread.entries[placement.claim];
+			if (entry.kind === 'user') entry.messageID = part.messageID;
+			return;
+		}
 		thread.push({
 			kind: 'user',
 			key: nextKey(),
 			text: part.text,
 			time: part.time?.start ?? Date.now(),
-			messageID: part.messageID
+			messageID: part.messageID,
+			...(author ? { author } : {})
 		});
+	}
+
+	claimPrompt(sessionId: string, messageId: string) {
+		const thread = this.threads.get(sessionId);
+		if (!thread) return;
+		const index = claimOwnPrompt(thread.entries, messageId);
+		if (index === null) return;
+		const entry = thread.entries[index];
+		if (entry.kind === 'user') entry.messageID = messageId;
 	}
 
 	#handleEvent(event: OcEvent, directory: string | null = null) {
@@ -1988,13 +2006,14 @@ export class ChatSessionStore {
 				const thread = this.threads.get(info.sessionID);
 				if (!thread) return;
 				if (info.role === 'user') {
-					if (thread.entries.some((e) => e.kind === 'user' && e.messageID === info.id)) return;
-					for (let i = thread.entries.length - 1; i >= 0; i -= 1) {
-						const entry = thread.entries[i];
-						if (entry.kind !== 'user') continue;
-						if (!entry.messageID) entry.messageID = info.id;
-						break;
-					}
+					const index = claimForMessage(
+						thread.entries,
+						info.id,
+						this.authorOf(info.id),
+						this.self?.id ?? null
+					);
+					const entry = index === null ? null : thread.entries[index];
+					if (entry?.kind === 'user') entry.messageID = info.id;
 					return;
 				}
 				if (info.role !== 'assistant') return;

@@ -44,6 +44,11 @@ export class SandboxLiveService implements OnModuleInit, OnModuleDestroy {
   ) {
     const warn = (message: string) => this.logger.warn(message);
     this.backend = createLiveBackend(warn);
+    if (!this.backend.shared) {
+      this.logger.warn(
+        'REDIS_URL is not set: live presence and collaborative editing only reach people on this server replica'
+      );
+    }
     this.hub = new SandboxLiveHub({
       backend: this.backend,
       rooms: null,

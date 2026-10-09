@@ -12,9 +12,11 @@ import {
 	parseRequestList,
 	planHandoff,
 	replyGone,
+	waitingOn,
 	requestDetail,
 	type PermissionRequest,
-	type QuestionRequest
+	type QuestionRequest,
+	type RequestAuthor
 } from './pending';
 
 const DIR = '/persist/home/.worktrees/orchard/fix-login';
@@ -396,4 +398,20 @@ test('a second reply to an answered request is told apart from a missing route',
 	assert.equal(replyGone({ status: 404, body: null }), false);
 	assert.equal(replyGone({ status: 500, body: null }), null);
 	assert.equal(replyGone({ status: 403, body: { message: 'Forbidden' } }), null);
+});
+
+test('a request waits on whoever sent the prompt that led to it', () => {
+	const annabel = { id: 'u_annabel', name: 'Annabel', avatarUrl: null };
+	const seb = { id: 'u_seb', name: 'seb' };
+	const authors: Record<string, RequestAuthor> = { msg_a: annabel, msg_s: seb };
+	const authorOf = (id: string) => authors[id] ?? null;
+
+	assert.deepEqual(waitingOn({ messageID: 'msg_a' }, authorOf, 'u_seb'), annabel);
+	assert.deepEqual(waitingOn({ messageID: 'msg_x', author: annabel }, authorOf, 'u_seb'), annabel);
+	assert.equal(waitingOn({ messageID: 'msg_a' }, authorOf, 'u_annabel'), null);
+	assert.equal(waitingOn({ messageID: 'msg_s' }, authorOf, 'u_seb'), null);
+	assert.equal(waitingOn({ local: true, author: annabel }, authorOf, 'u_seb'), null);
+	assert.equal(waitingOn({ messageID: 'msg_x' }, authorOf, 'u_seb'), null);
+	assert.equal(waitingOn({ messageID: 'msg_a' }, authorOf, null), null);
+	assert.equal(waitingOn(null, authorOf, 'u_seb'), null);
 });

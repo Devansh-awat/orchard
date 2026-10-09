@@ -7,17 +7,23 @@
 		x = 0,
 		y = 0,
 		placement = 'bottom-start',
+		toggle = null,
 		children
 	}: {
 		open?: boolean;
 		x?: number;
 		y?: number;
 		placement?: 'bottom-start' | 'bottom-end';
+		toggle?: HTMLElement | null;
 		children: Snippet;
 	} = $props();
+
+	function inside(target: Element | Window | Document): boolean {
+		return !!toggle && target instanceof Node && toggle.contains(target);
+	}
 </script>
 
-<Menu bind:open {placement}>
+<Menu bind:open {placement} {inside}>
 	{#snippet trigger(props)}
 		<span
 			{...props}

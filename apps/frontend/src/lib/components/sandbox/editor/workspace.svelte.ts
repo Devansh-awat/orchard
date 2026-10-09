@@ -85,6 +85,7 @@ export class EditorWorkspace {
 	active = $derived(this.documents.find((doc) => doc.uri === this.activeUri) ?? null);
 	dirtyCount = $derived(this.documents.filter((doc) => doc.dirty).length);
 	monaco = $state.raw<MonacoApi | null>(null);
+	saveHook: ((path: string) => boolean) | null = null;
 
 	private readonly fs: EditorFs;
 	private readonly originals = new Map<string, Monaco.editor.ITextModel>();
@@ -155,6 +156,7 @@ export class EditorWorkspace {
 	async save(path?: string): Promise<boolean> {
 		const doc = path ? this.get(path) : this.active;
 		if (!doc?.model || doc.saving) return false;
+		if (this.saveHook?.(doc.path)) return true;
 		const content = doc.model.getValue();
 		const version = doc.model.getAlternativeVersionId();
 		doc.saving = true;

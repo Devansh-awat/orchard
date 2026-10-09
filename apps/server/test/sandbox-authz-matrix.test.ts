@@ -622,7 +622,7 @@ test('an org admin reaches no opencode path, whatever the method', () => {
 });
 
 test('live channel messages are enforced per role', () => {
-  const writes = new Set(['draft', 'comment', 'yjs-save']);
+  const writes = new Set(['draft', 'comment', 'yjs-save', 'yjs-adopt']);
   for (const type of LIVE_MESSAGE_TYPES) {
     const min = LIVE_MESSAGE_ROLE[type];
     assert.equal(min, writes.has(type) ? 'collaborator' : 'viewer', type);

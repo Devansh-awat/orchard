@@ -16,7 +16,7 @@ import {
   parseClientFrame,
   parseRoom
 } from './live-protocol';
-import { YEnvelope, YRoomManager, YRoomSubscriber } from './yjs-rooms';
+import { YClientFrame, YEnvelope, YRoomManager, YRoomSubscriber } from './yjs-rooms';
 
 export const LIVE_MAX_CONNECTIONS_PER_USER = 16;
 export const LIVE_MAX_CONNECTIONS_TOTAL = 4000;
@@ -111,6 +111,31 @@ export interface RosterUser {
   role: SandboxRole;
   sid: string | null;
   view: LiveView | null;
+}
+
+type YFrameSource = Extract<
+  ClientFrame,
+  { t: 'yjs' | 'yjs-awareness' | 'yjs-adopt' | 'yjs-save' | 'yjs-reload' | 'yjs-leave' }
+>;
+
+function yClientFrame(frame: YFrameSource): YClientFrame {
+  switch (frame.t) {
+    case 'yjs':
+      return { t: frame.t, b64: frame.b64, gen: frame.gen, n: frame.n };
+    case 'yjs-adopt':
+      return {
+        t: frame.t,
+        b64: frame.b64,
+        gen: frame.gen,
+        n: frame.n,
+        hash: frame.hash,
+        base: frame.base
+      };
+    case 'yjs-awareness':
+      return { t: frame.t, b64: frame.b64 };
+    default:
+      return { t: frame.t };
+  }
 }
 
 export class SandboxLiveHub {
@@ -312,7 +337,7 @@ export class SandboxLiveHub {
       await Promise.all(targets.map((c) => this.recheck(c)));
       return;
     }
-    if (this.rooms) await this.rooms.handleEnvelope(envelope as YEnvelope);
+    if (this.rooms) await this.rooms.handleEnvelope(envelope as YEnvelope, sandboxId);
   }
 
   private presenceEntry(conn: LiveConnection): PresenceEntry {
@@ -537,6 +562,7 @@ export class SandboxLiveHub {
         return;
       case 'yjs':
       case 'yjs-awareness':
+      case 'yjs-adopt':
       case 'yjs-save':
       case 'yjs-reload':
       case 'yjs-leave': {
@@ -571,12 +597,7 @@ export class SandboxLiveHub {
           }
           conn.rooms.add(frame.room);
         }
-        const yframe =
-          frame.t === 'yjs'
-            ? { t: frame.t, b64: frame.b64, gen: frame.gen }
-            : frame.t === 'yjs-awareness'
-              ? { t: frame.t, b64: frame.b64 }
-              : { t: frame.t };
+        const yframe = yClientFrame(frame);
         await rooms.handleLocal(conn.sandboxId, frame.room, this.subscriberOf(conn), yframe);
         return;
       }

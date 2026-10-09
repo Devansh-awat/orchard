@@ -32,6 +32,17 @@ export {
 	type RemoteCursor,
 	type RemoteSelection
 } from './collab';
+export {
+	YjsRoom,
+	frameRoom,
+	applyTextDiff,
+	type CollabStatus,
+	type RoomPeer,
+	type RoomEvent,
+	type YFrame
+} from './yjs-room';
+export { TextBinding, type BindingModel } from './text-binding';
+export { diffText, mergeText, type TextEdit } from './text-diff';
 export { loadMonaco, monacoLoaded, type MonacoApi } from './load';
 export { buildMonacoTheme, applyMonacoTheme, useMonacoTheme, MONACO_THEME } from './theme';
 export { languageForPath, languageLabel } from './languages';
