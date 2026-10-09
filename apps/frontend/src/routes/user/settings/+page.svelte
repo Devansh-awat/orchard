@@ -136,6 +136,13 @@
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 	const notificationsEnabled = featureFlag('notifications');
 
+	let tailscaleChecked = false;
+	$effect(() => {
+		if (!$tailscaleEnabled || tailscaleChecked) return;
+		tailscaleChecked = true;
+		void checkTailscaleStatus();
+	});
+
 	const activeTab = $derived.by(() => {
 		const t = $page.url.searchParams.get('tab');
 		return !t || t === 'profile' ? 'connections' : t;
@@ -736,7 +743,6 @@
 
 		checkGitHubStatus();
 		instanceFeatures.load();
-		if (isFeatureEnabledNow('tailscale-integration')) checkTailscaleStatus();
 		fetchPasskeys();
 		fetchSessions();
 		fetchEarlyAccessFeatures();

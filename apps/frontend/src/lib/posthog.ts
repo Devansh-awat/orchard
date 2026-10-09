@@ -1,27 +1,31 @@
 import { readable, type Readable } from 'svelte/store';
-import posthog from 'posthog-js';
+import type { PostHog } from 'posthog-js';
 import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import { scrubDeep, scrubUrlSecrets } from '$lib/utils/url-secrets';
+import { whenIdle } from '$lib/utils/idle';
 
-let initialized = false;
+const MAX_PENDING = 100;
 
-export function initPostHog() {
-	if (!browser || initialized) return;
-	const key = env.PUBLIC_POSTHOG_KEY;
-	if (!key) return;
+let scheduled = false;
+let client: PostHog | null = null;
+let loading: Promise<PostHog | null> | null = null;
+const pending: Array<(posthog: PostHog) => void> = [];
+const waiters = new Set<(posthog: PostHog) => void>();
+let detachEarlyErrors: (() => void) | null = null;
+
+function enabled(): boolean {
+	return browser && !!env.PUBLIC_POSTHOG_KEY;
+}
+
+function start(posthog: PostHog, key: string) {
 	posthog.init(key, {
 		api_host: env.PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
 		ui_host: 'https://us.posthog.com',
 		defaults: '2025-05-24',
 		capture_pageview: 'history_change',
 		person_profiles: 'identified_only',
-		// 2025-05-24 defaults already enable capture_exceptions + dead clicks.
-		// We additionally turn on Web Vitals (LCP/CLS/INP/FCP) and explicit
-		// network timing so PostHog's performance dashboards have data.
 		capture_performance: { web_vitals: true, network_timing: true },
-		// Flags + experiments are auto-loaded; surveys auto-render in the DOM.
-		// Early access features are opt-in via getEarlyAccessFeatures() below.
 		disable_surveys: false,
 		advanced_disable_feature_flags: false,
 		disable_capture_url_hashes: true,
@@ -50,7 +54,68 @@ export function initPostHog() {
 			}
 		}
 	});
-	initialized = true;
+}
+
+function load(): Promise<PostHog | null> {
+	const key = env.PUBLIC_POSTHOG_KEY;
+	if (!browser || !key) return Promise.resolve(null);
+	loading ??= import('posthog-js')
+		.then(({ default: posthog }) => {
+			start(posthog, key);
+			client = posthog;
+			detachEarlyErrors?.();
+			detachEarlyErrors = null;
+			for (const run of pending.splice(0)) run(posthog);
+			for (const run of [...waiters]) run(posthog);
+			waiters.clear();
+			return posthog;
+		})
+		.catch((error) => {
+			console.warn('PostHog failed to load', error);
+			return null;
+		});
+	return loading;
+}
+
+function withClient(run: (posthog: PostHog) => void) {
+	if (client) {
+		run(client);
+		return;
+	}
+	if (!enabled() || pending.length >= MAX_PENDING) return;
+	pending.push(run);
+}
+
+function onReady(run: (posthog: PostHog) => void): () => void {
+	if (client) {
+		run(client);
+		return () => {};
+	}
+	if (!enabled()) return () => {};
+	waiters.add(run);
+	return () => waiters.delete(run);
+}
+
+function captureEarlyErrors(): () => void {
+	const onError = (event: ErrorEvent) => {
+		captureException(event.error ?? event.message, { $exception_source: 'window.onerror' });
+	};
+	const onRejection = (event: PromiseRejectionEvent) => {
+		captureException(event.reason, { $exception_source: 'window.onunhandledrejection' });
+	};
+	window.addEventListener('error', onError);
+	window.addEventListener('unhandledrejection', onRejection);
+	return () => {
+		window.removeEventListener('error', onError);
+		window.removeEventListener('unhandledrejection', onRejection);
+	};
+}
+
+export function initPostHog() {
+	if (!enabled() || scheduled) return;
+	scheduled = true;
+	if (!client) detachEarlyErrors = captureEarlyErrors();
+	whenIdle(() => load(), 4000);
 }
 
 export function identifyUser(user: {
@@ -59,70 +124,59 @@ export function identifyUser(user: {
 	name?: string;
 	username?: string;
 }) {
-	if (!browser || !initialized) return;
-	posthog.identify(user.id, {
-		email: user.email,
-		name: user.name,
-		username: user.username
-	});
+	withClient((posthog) =>
+		posthog.identify(user.id, {
+			email: user.email,
+			name: user.name,
+			username: user.username
+		})
+	);
 }
 
 export function resetPostHog() {
-	if (!browser || !initialized) return;
-	posthog.reset();
+	withClient((posthog) => posthog.reset());
 }
 
-/** Send an exception to PostHog Error Tracking with optional context. */
 export function captureException(error: unknown, properties?: Record<string, unknown>) {
-	if (!browser || !initialized) return;
 	const err = error instanceof Error ? error : new Error(String(error));
-	posthog.captureException(err, properties);
+	withClient((posthog) => posthog.captureException(err, properties));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Feature flags & experiments
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Reactive store for a boolean feature flag. Updates when flags reload
- * (login, identify, manual reload).
- */
 export function featureFlag(key: string): Readable<boolean> {
 	return readable(false, (set) => {
-		if (!browser || !initialized) return;
-		set(Boolean(posthog.isFeatureEnabled(key)));
-		return posthog.onFeatureFlags(() => set(Boolean(posthog.isFeatureEnabled(key))));
+		let off: (() => void) | null = null;
+		const cancel = onReady((posthog) => {
+			set(Boolean(posthog.isFeatureEnabled(key)));
+			off = posthog.onFeatureFlags(() => set(Boolean(posthog.isFeatureEnabled(key))));
+		});
+		return () => {
+			cancel();
+			off?.();
+		};
 	});
 }
 
-/**
- * Reactive store for a multivariate flag / experiment variant. Returns the
- * variant string (e.g. 'control', 'treatment-a'), `true`/`false` for boolean
- * flags, or `undefined` while loading.
- */
 export function experimentVariant(key: string): Readable<string | boolean | undefined> {
 	return readable<string | boolean | undefined>(undefined, (set) => {
-		if (!browser || !initialized) return;
-		set(posthog.getFeatureFlag(key));
-		return posthog.onFeatureFlags(() => set(posthog.getFeatureFlag(key)));
+		let off: (() => void) | null = null;
+		const cancel = onReady((posthog) => {
+			set(posthog.getFeatureFlag(key));
+			off = posthog.onFeatureFlags(() => set(posthog.getFeatureFlag(key)));
+		});
+		return () => {
+			cancel();
+			off?.();
+		};
 	});
 }
 
-/** Imperative one-shot check — use when a Svelte store is overkill. */
 export function isFeatureEnabledNow(key: string): boolean {
-	if (!browser || !initialized) return false;
-	return Boolean(posthog.isFeatureEnabled(key));
+	return client ? Boolean(client.isFeatureEnabled(key)) : false;
 }
 
-/** Force a flag reload — call after server-side state changes that affect targeting. */
 export function reloadFeatureFlags() {
-	if (!browser || !initialized) return;
-	posthog.reloadFeatureFlags();
+	withClient((posthog) => posthog.reloadFeatureFlags());
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Early access features (beta opt-in UI)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface EarlyAccessFeature {
 	name: string;
@@ -132,12 +186,10 @@ export interface EarlyAccessFeature {
 	flagKey: string;
 }
 
-export function loadEarlyAccessFeatures(): Promise<EarlyAccessFeature[]> {
+export async function loadEarlyAccessFeatures(): Promise<EarlyAccessFeature[]> {
+	const posthog = await load();
+	if (!posthog) return [];
 	return new Promise((resolve) => {
-		if (!browser || !initialized) {
-			resolve([]);
-			return;
-		}
 		posthog.getEarlyAccessFeatures((features) => {
 			resolve(
 				(features ?? [])
@@ -155,22 +207,13 @@ export function loadEarlyAccessFeatures(): Promise<EarlyAccessFeature[]> {
 }
 
 export function setEarlyAccessFeatureEnrollment(flagKey: string, enrolled: boolean) {
-	if (!browser || !initialized) return;
-	posthog.updateEarlyAccessFeatureEnrollment(flagKey, enrolled);
+	withClient((posthog) => posthog.updateEarlyAccessFeatureEnrollment(flagKey, enrolled));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Surveys — autorenders by default; expose helpers for in-app triggers
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function loadActiveSurveys(): Promise<unknown[]> {
+export async function loadActiveSurveys(): Promise<unknown[]> {
+	const posthog = await load();
+	if (!posthog) return [];
 	return new Promise((resolve) => {
-		if (!browser || !initialized) {
-			resolve([]);
-			return;
-		}
 		posthog.getActiveMatchingSurveys((surveys) => resolve(surveys ?? []), true);
 	});
 }
-
-export { posthog };
