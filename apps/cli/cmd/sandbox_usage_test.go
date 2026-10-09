@@ -60,6 +60,8 @@ func TestSandboxUsagePairsVercel(t *testing.T) {
 		"kubernetes": null,
 		"vercel": {
 			"vcpus": 2, "memoryBytes": 4294967296, "activeCpuMs": 95000,
+			"cpu": {"usedCores": 0.42, "totalCores": 2},
+			"memory": {"usedBytes": 1610612736, "totalBytes": 4294967296},
 			"networkEgressBytes": 1048576, "sessionExpiresAt": "2026-10-08T15:12:00Z",
 			"disk": {"usedBytes": null, "capacityBytes": 68719476736}
 		}
@@ -71,12 +73,33 @@ func TestSandboxUsagePairsVercel(t *testing.T) {
 		lines = append(lines, p[0]+"="+p[1])
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"vcpus=2", "memory=4Gi", "active cpu=1m35s", "network out=1Mi", "session ends=in 3h 12m", "machines=1"} {
+	for _, want := range []string{"cpu=0.42 of 2 cores", "memory=1.5Gi of 4Gi", "active cpu=1m35s", "network out=1Mi", "machines=1"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in\n%s", want, joined)
 		}
 	}
-	if strings.Contains(joined, "disk=") {
-		t.Errorf("disk without a measurement should be omitted:\n%s", joined)
+	for _, gone := range []string{"disk=", "session ends="} {
+		if strings.Contains(joined, gone) {
+			t.Errorf("%s should be omitted:\n%s", gone, joined)
+		}
+	}
+}
+
+func TestSandboxUsagePairsVercelBeforeLiveStats(t *testing.T) {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(`{
+		"runner": "vercel",
+		"status": "stopped",
+		"kubernetes": null,
+		"vercel": {"vcpus": 1, "memoryBytes": 2147483648, "disk": {"usedBytes": null, "capacityBytes": null}}
+	}`), &raw); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, p := range sandboxUsagePairs(raw, time.Now()) {
+		got[p[0]] = p[1]
+	}
+	if got["cpu"] != "limit 1 core" || got["memory"] != "limit 2Gi" {
+		t.Errorf("allocation should show as limits, got cpu=%q memory=%q", got["cpu"], got["memory"])
 	}
 }

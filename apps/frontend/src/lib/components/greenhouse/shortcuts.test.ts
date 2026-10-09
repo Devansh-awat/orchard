@@ -25,7 +25,7 @@ test('cmd s is always claimed so the browser save dialog never opens', () => {
 });
 
 test('keys a focused editor already handled never reach the shell', () => {
-	for (const code of ['KeyS', 'KeyB', 'KeyJ', 'KeyN', 'KeyP']) {
+	for (const code of ['KeyS', 'KeyB', 'KeyJ', 'KeyN', 'KeyP', 'Comma']) {
 		assert.equal(
 			shellShortcut(key(code, { metaKey: true, defaultPrevented: true }), anywhere),
 			null
@@ -44,6 +44,14 @@ test('panel shortcuts keep their bindings', () => {
 	assert.equal(shellShortcut(key('Backquote', { ctrlKey: true }), anywhere), 'terminal');
 	assert.equal(shellShortcut(key('KeyG', { metaKey: true, shiftKey: true }), anywhere), 'changes');
 	assert.equal(shellShortcut(key('KeyP', { metaKey: true }), anywhere), 'find-file');
+});
+
+test('cmd comma opens settings, also from a terminal', () => {
+	assert.equal(shellShortcut(key('Comma', { metaKey: true }), anywhere), 'settings');
+	assert.equal(shellShortcut(key('Comma', { ctrlKey: true }), anywhere), 'settings');
+	assert.equal(shellShortcut(key('Comma', { metaKey: true }), terminal), 'settings');
+	assert.equal(shellShortcut(key('Comma', { ctrlKey: true }), terminal), null);
+	assert.equal(shellShortcut(key('Comma', { metaKey: true, shiftKey: true }), anywhere), null);
 });
 
 test('cmd k is left to the editor chord and the palette', () => {

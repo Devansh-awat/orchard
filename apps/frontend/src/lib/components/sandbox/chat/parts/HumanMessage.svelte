@@ -182,7 +182,7 @@
 
 	.hm-avatar {
 		position: absolute;
-		top: var(--space-2);
+		top: calc(var(--space-2) + (var(--gh-lh-reading, 1.5rem) - 1.5rem) / 2);
 		left: calc(-1 * var(--chat-gutter));
 		display: flex;
 		justify-content: center;
@@ -214,8 +214,8 @@
 
 	.hm-text {
 		margin: 0;
-		font-size: var(--text-body);
-		line-height: 1.5rem;
+		font-size: var(--gh-reading, var(--text-body));
+		line-height: var(--gh-lh-reading, 1.5rem);
 		color: var(--text-default);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;

@@ -60,8 +60,8 @@
 			title="Copy this reply"
 			onclick={copy}
 		>
-			{#if copied}<Check size={16} strokeWidth={1.75} />{:else}<Copy
-					size={16}
+			{#if copied}<Check size={14} strokeWidth={1.75} />{:else}<Copy
+					size={14}
 					strokeWidth={1.75}
 				/>{/if}
 		</button>
@@ -75,7 +75,7 @@
 					title="More"
 					{...props}
 				>
-					<Ellipsis size={16} strokeWidth={1.75} />
+					<Ellipsis size={14} strokeWidth={1.75} />
 				</button>
 			{/snippet}
 			<MenuItem onclick={copy}><Copy class="h-3.5 w-3.5" /> Copy reply</MenuItem>
@@ -119,7 +119,7 @@
 		flex-wrap: wrap;
 		gap: var(--space-2);
 		min-width: 0;
-		min-height: 1.75rem;
+		min-height: 1.5rem;
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		color: var(--text-muted);
@@ -128,20 +128,26 @@
 	.foot-meta {
 		flex-shrink: 0;
 		font-variant-numeric: tabular-nums;
+		color: var(--text-faint);
 	}
 
 	.foot-actions {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--space-2);
+		gap: 0.125rem;
+		margin-left: calc(-1 * var(--space-1));
+	}
+
+	.foot-meta + .foot-actions {
+		margin-left: 0;
 	}
 
 	.foot-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
+		width: 1.5rem;
+		height: 1.5rem;
 		flex-shrink: 0;
 		border: none;
 		border-radius: var(--radius-xs);
@@ -180,7 +186,7 @@
 		align-items: center;
 		gap: var(--space-1);
 		max-width: 14rem;
-		height: 1.5rem;
+		height: 1.25rem;
 		padding: 0 var(--space-2);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-xs);

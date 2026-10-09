@@ -1,73 +1,61 @@
 <script lang="ts">
-	import { CircleAlert } from 'lucide-svelte';
+	import { getContext } from 'svelte';
+	import { ChevronRight } from 'lucide-svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import { clock } from '$lib/utils/clock.svelte';
-	import { USAGE_POLL_MS, fetchMachineUsage, usageView, type MachineUsage } from './machine-usage';
+	import { getGreenhouseApp } from './app.svelte';
+	import { usageView } from './machine-usage';
+	import { UsagePoll, levelStatus } from './usage-live.svelte';
 	import type { Sandbox } from '$lib/types/sandbox';
 
 	let { machine, open, owner }: { machine: Sandbox; open: boolean; owner: boolean } = $props();
 
-	let usage = $state<MachineUsage | null>(null);
-	let failed = $state(false);
-	let skew = $state(0);
-	let shownFor: string | null = null;
+	const app = getGreenhouseApp();
+	const menu = getContext<{ close: () => void } | undefined>('ui-menu');
+	const poll = new UsagePoll();
 
-	const view = $derived(usage ? usageView(usage, clock.now + skew, owner) : null);
-	const empty = $derived(
-		!!view && view.meters.length === 0 && view.lines.length === 0 && !view.footer
-	);
+	const view = $derived(poll.usage ? usageView(poll.usage, poll.now, owner) : null);
+	const hidden = $derived(poll.failed && !poll.usage);
 
 	$effect(() => {
 		const id = machine.id;
 		void machine.status;
 		if (!open) return;
-		if (shownFor !== id) {
-			shownFor = id;
-			usage = null;
-			failed = false;
-		}
-		let cancelled = false;
-		const load = async () => {
-			const next = await fetchMachineUsage(id);
-			if (cancelled) return;
-			if (next) {
-				usage = next;
-				failed = false;
-				const server = Date.parse(next.fetchedAt);
-				skew = Number.isFinite(server) ? server - Date.now() : 0;
-			} else {
-				failed = true;
-			}
-		};
-		void load();
-		const timer = setInterval(load, USAGE_POLL_MS);
-		return () => {
-			cancelled = true;
-			clearInterval(timer);
-		};
+		return poll.watch(id);
 	});
+
+	function viewUsage() {
+		app.openSettings('usage');
+		menu?.close();
+	}
 </script>
 
-{#if !empty && !(failed && !usage)}
+{#if !hidden}
 	<div class="usage" role="group" aria-label="Machine usage">
 		{#if !view}
-			{#each [0, 1, 2] as i (i)}
-				<div class="meter" aria-hidden="true">
-					<div class="top"><Skeleton width={i === 0 ? '40%' : '55%'} height="0.5rem" /></div>
-					<Skeleton height="0.25rem" rounded="0.125rem" />
-				</div>
-			{/each}
+			<div class="meters" aria-hidden="true">
+				{#each [0, 1, 2] as i (i)}
+					<div class="meter">
+						<div class="top">
+							<Skeleton width="2.5rem" height="0.5rem" />
+							<Skeleton width={i === 2 ? '4.5rem' : '3.5rem'} height="0.5rem" />
+						</div>
+						<Skeleton height="0.25rem" rounded="0.125rem" />
+					</div>
+				{/each}
+			</div>
 		{:else}
-			{#if view.meters.length}
-				<div class="group">
-					{#each view.meters as m (m.key)}
+			{#if view.measured.length}
+				<div class="meters">
+					{#each view.measured as m (m.key)}
+						{@const status = levelStatus(m.level)}
 						<div class="meter">
 							<div class="top">
 								<span class="label">{m.label}</span>
-								{#if m.near}
-									<span class="near">
-										<span class="near-glyph"><CircleAlert size={12} strokeWidth={1.75} /></span>
-										Near limit
+								{#if status}
+									{@const Icon = status.icon}
+									<span class="level status--{status.kind}">
+										<span class="level-glyph"><Icon size={12} strokeWidth={1.75} /></span>
+										{status.label}
 									</span>
 								{/if}
 								<span class="value">{m.value}</span>
@@ -78,25 +66,32 @@
 								aria-label={m.label}
 								aria-valuemin={0}
 								aria-valuemax={100}
-								aria-valuenow={Math.round(m.fraction * 100)}
-								aria-valuetext={m.value}
+								aria-valuenow={m.percent ?? 0}
+								aria-valuetext={status ? `${m.value}, ${status.label}` : m.value}
 							>
-								<div class="fill" style:width="{Math.max(m.fraction * 100, 1.5)}%"></div>
+								<div
+									class="fill"
+									class:fill--warning={status?.kind === 'warning'}
+									class:fill--error={status?.kind === 'error'}
+									style:width="{Math.max((m.fraction ?? 0) * 100, 1.5)}%"
+								></div>
 							</div>
 						</div>
 					{/each}
 				</div>
+			{:else if !view.live && view.limits}
+				<p class="line">{view.limits}</p>
 			{/if}
-			{#if view.lines.length}
-				<div class="lines">
-					{#each view.lines as line (line)}
-						<p class="line">{line}</p>
-					{/each}
-				</div>
+			{#if view.time.length}
+				<p class="line">{view.time.join(' · ')}</p>
 			{/if}
-			{#if view.footer}
-				<p class="foot">{view.footer}</p>
-			{/if}
+			<div class="foot">
+				<span class="foot-text">{view.footer ?? ''}</span>
+				<button type="button" class="more" role="menuitem" onclick={viewUsage}>
+					View usage
+					<ChevronRight size={12} strokeWidth={1.75} />
+				</button>
+			</div>
 		{/if}
 	</div>
 	<div class="gh-menu-sep"></div>
@@ -109,21 +104,16 @@
 		gap: 0.5rem;
 		width: 0;
 		min-width: 100%;
-		padding: 0.25rem 0.5rem 0.5rem;
+		padding: 0.25rem 0.5rem 0.25rem;
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
 		color: var(--gh-muted);
 	}
 
-	.group {
+	.meters {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-	}
-
-	.lines {
-		display: flex;
-		flex-direction: column;
 	}
 
 	.meter {
@@ -135,6 +125,7 @@
 	.top {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 0.5rem;
 		min-width: 0;
 		min-height: var(--gh-lh-caption);
@@ -155,7 +146,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.near {
+	.level {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
@@ -165,9 +156,16 @@
 		white-space: nowrap;
 	}
 
-	.near-glyph {
+	.level-glyph {
 		display: inline-grid;
+	}
+
+	.status--warning .level-glyph {
 		color: var(--status-warning);
+	}
+
+	.status--error .level-glyph {
+		color: var(--status-error);
 	}
 
 	.bar {
@@ -183,8 +181,15 @@
 		background: color-mix(in oklab, var(--gh-text) 45%, transparent);
 	}
 
-	.line,
-	.foot {
+	.fill--warning {
+		background: var(--status-warning);
+	}
+
+	.fill--error {
+		background: var(--status-error);
+	}
+
+	.line {
 		margin: 0;
 		overflow: hidden;
 		white-space: nowrap;
@@ -193,6 +198,45 @@
 	}
 
 	.foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.foot-text {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 		color: var(--gh-faint);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.more {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex: none;
+		height: 1.5rem;
+		margin-right: -0.25rem;
+		padding: 0 0.25rem 0 0.5rem;
+		border-radius: var(--gh-r-control);
+		color: var(--gh-muted-strong);
+		transition:
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
+	}
+
+	.more:hover,
+	.more:focus-visible {
+		color: var(--gh-text);
+		background: var(--gh-hover);
+	}
+
+	.more:focus-visible {
+		outline: 2px solid var(--gh-accent);
+		outline-offset: -2px;
 	}
 </style>

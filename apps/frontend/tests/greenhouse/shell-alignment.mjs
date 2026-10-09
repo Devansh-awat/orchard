@@ -6,7 +6,7 @@ const base = process.env.HARNESS_URL ?? `http://localhost:${process.env.HARNESS_
 const pty = process.env.PTY_URL ?? `ws://localhost:${process.env.FAKE_PTY_PORT ?? 7681}/pty`;
 const channel = process.env.PW_CHROMIUM_CHANNEL;
 const SESSION = '11111111-1111-4111-8111-111111111111';
-const FONT_SIZES = [11, 12, 13, 15];
+const FONT_SIZES = [11, 12, 13, 14, 15];
 const DISPLAY_SIZES = [24];
 const TOLERANCE = 1;
 const log = (line) => process.stdout.write(`${line}\n`);

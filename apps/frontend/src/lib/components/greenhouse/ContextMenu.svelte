@@ -6,16 +6,18 @@
 		open = $bindable(false),
 		x = 0,
 		y = 0,
+		placement = 'bottom-start',
 		children
 	}: {
 		open?: boolean;
 		x?: number;
 		y?: number;
+		placement?: 'bottom-start' | 'bottom-end';
 		children: Snippet;
 	} = $props();
 </script>
 
-<Menu bind:open placement="bottom-start">
+<Menu bind:open {placement}>
 	{#snippet trigger(props)}
 		<span
 			{...props}

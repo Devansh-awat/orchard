@@ -12,7 +12,11 @@
 	import { VIEWER_ONLY, type MachineWorkspace } from './workspace.svelte';
 	import type { RightTab } from './types';
 
-	let { ws, showDock = true }: { ws: MachineWorkspace; showDock?: boolean } = $props();
+	let {
+		ws,
+		showDock = true,
+		header = false
+	}: { ws: MachineWorkspace; showDock?: boolean; header?: boolean } = $props();
 
 	const app = getGreenhouseApp();
 	const session = $derived(ws.session);
@@ -70,10 +74,12 @@
 </script>
 
 <aside class="right" aria-label="Session panel">
-	<div class="bar" data-align="topbar">
-		<span class="grow"></span>
-		<PrButton {ws} />
-	</div>
+	{#if header}
+		<div class="bar" data-align="topbar">
+			<span class="grow"></span>
+			<PrButton {ws} />
+		</div>
+	{/if}
 
 	<div class="stack" bind:this={stack}>
 		<div
@@ -215,7 +221,8 @@
 							startRatio = app.layout.dock;
 							app.layout.dragging = 'dock';
 						}}
-						ondrag={(delta) => app.layout.setDock(startRatio - delta / dockHeight())}
+						ondrag={(delta) =>
+							app.layout.setDock(startRatio - delta / dockHeight())}
 						onend={() => {
 							app.layout.dragging = null;
 							app.layout.save();
@@ -248,8 +255,8 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex: none;
-		height: var(--gh-bar);
-		padding: 0 var(--gh-edge);
+		height: var(--gh-titlebar);
+		padding: 0 calc(var(--gh-edge) - var(--gh-ibtn-inset)) 0 var(--gh-edge);
 		border-bottom: 1px solid var(--gh-line);
 	}
 

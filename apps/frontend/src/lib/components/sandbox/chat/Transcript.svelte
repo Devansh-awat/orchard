@@ -246,15 +246,15 @@
 	}
 
 	.tx-empty-title {
-		font-size: var(--text-body);
-		line-height: 1.5rem;
+		font-size: var(--gh-reading, var(--text-body));
+		line-height: var(--gh-lh-reading, 1.5rem);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.tx-empty-sub {
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
+		font-size: calc(var(--gh-reading, var(--text-body)) - 0.0625rem);
+		line-height: calc(var(--gh-lh-reading, 1.5rem) - 0.25rem);
 		color: var(--text-muted);
 	}
 

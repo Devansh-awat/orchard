@@ -5,10 +5,13 @@ sidebar:
   order: 4
 ---
 
-Opening a machine opens its workspace: a full-height IDE with four regions.
+Opening a machine opens its workspace: a full-height IDE with a title bar across
+the top, the sidebar on the left and the centre and right panels floating beside
+it.
 
 | Region            | What it holds                                                                       |
 | ----------------- | ----------------------------------------------------------------------------------- |
+| **Title bar**     | Back and forward, where you are, the people here, and the session's actions.        |
 | **Sidebar**       | The machine switcher, navigation, and every session grouped by repository.          |
 | **Centre**        | The session's tabs: its chats, open files, diffs and previews.                      |
 | **Right panel**   | Files, changes, checks and review comments for the session, over the terminal dock. |
@@ -19,41 +22,63 @@ remembered. Below 960 pixels wide the workspace becomes a single column for
 reviewing on a phone: sessions, transcript and changes, without the editor or
 terminals.
 
+## Title bar
+
+The breadcrumb reads `machine › repo › session`. The machine goes home, and the
+session title opens the session menu:
+
+- **Rename**, **Archive** and **Delete** (keeping the branch or deleting it too).
+- **Fork session.** A new session branched from this one's branch, for trying a
+  different approach from the same point.
+- **Copy share link.** See [Sharing](/greenhouse/sharing/).
+- **Deploy preview.** See [Previews](/greenhouse/previews/#deploy-a-session-as-a-preview-environment).
+
+On the right: the people here (click someone to follow them), the preview,
+**Open in** for your editor, the pull request button, **Share**, and the right
+panel toggle.
+
 ## Sidebar
 
-- **Machine switcher.** The current machine with its status. The menu switches
-  machines, starts or stops this one, opens machine settings and sharing, and
-  creates a new machine.
+- **Machine switcher.** The current machine, its runner and its status. The menu
+  switches machines, shows live CPU, memory and disk against the machine's limits,
+  starts or stops it, opens machine settings, forks it, and creates a new machine.
 - **Home.** The launch composer and your recent sessions across machines,
   including machines shared with you.
 - **New session** (**⌘N**) and **Search** (**⌘K**).
 - **Repositories.** One group per repository cloned on the machine, with a **+**
   to start a session in it. **Add repository** clones another one.
-- **Sessions.** Each row shows what the agent is doing, the title, the diffstat
-  against the base branch (`+42 −7`) and who else is looking at it. Archived
-  sessions collapse under **Archived**.
-- **Footer.** The runner and, on hover, how long until the idle stop.
+- **Sessions.** Each row shows what the agent is doing and the title, and under
+  it the branch, when it last changed, and the diffstat against the base branch
+  (`+42 −7`). Hover a row to archive it or open its menu. Archived sessions
+  collapse under **Archived**.
+- **Footer.** You, help, and **Settings** (**⌘,**).
 
 A session's status glyph tells you whether the agent is **working**, **waiting
 for you**, idle, or whether the work is **done** (its pull request merged). A
 pencil means you have an unsent draft in its composer.
 
-Right-click a session (or use its menu) to rename it, copy its branch name, open
-its pull request, archive it, or delete it with or without its branch.
+A session's menu (the **⋯** on hover, or right-click) renames it, copies its
+branch name, opens its pull request, archives it, or deletes it with or without
+its branch.
+
+## Settings
+
+**⌘,** or the gear in the sidebar footer opens settings.
+
+| Section          | What it holds                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| **General**      | The machine's name, runner and size.                                                                  |
+| **Setup script** | The script that runs on every start. See [Machines](/greenhouse/machines/).                           |
+| **Projects**     | Orchard projects whose environment variables the machine gets. See [Projects](/greenhouse/projects/). |
+| **Usage**        | Live CPU, memory and disk against the machine's limits, uptime, idle sleep and network.               |
+| **Danger zone**  | Delete the machine. Host only.                                                                        |
+| **Appearance**   | Interface zoom, chat text size, and the code size for the editor and terminals.                       |
+| **Integrations** | Your GitHub, Linear and Slack links.                                                                  |
+
+Machine sections are read-only for guests. Appearance is yours alone and is kept
+in this browser.
 
 ## Centre
-
-The top bar shows `repo › branch`. The branch menu copies the branch name or the
-worktree path. The session menu (**⋯**) holds:
-
-- **Rename** and **Archive**.
-- **Fork session.** A new session branched from this one's branch, for trying a
-  different approach from the same point.
-- **Copy share link** and **Share machine**. See [Sharing](/greenhouse/sharing/).
-- **Deploy preview.** See [Previews](/greenhouse/previews/#deploy-a-session-as-a-preview-environment).
-
-On the right of the top bar: the people here (click someone to follow them),
-**Open in** for your editor, and the pull request button.
 
 ### Tabs
 
@@ -184,6 +209,8 @@ On Windows and Linux, use **Ctrl** for **⌘**.
 | **⌘`**             | Focus the terminal                                  |
 | **⌘⇧G**            | Open the Changes tab                                |
 | **⌘S**             | Save the open file                                  |
+| **⌘,**             | Open settings                                       |
+| **⌘+** / **⌘−**    | Code size, in a terminal                            |
 | **Enter**          | Send the prompt                                     |
 | **Shift+Enter**    | New line in the prompt                              |
 | **Escape**         | Stop the agent while it is working                  |

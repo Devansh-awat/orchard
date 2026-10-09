@@ -6,7 +6,8 @@ export type ShellAction =
 	| 'terminal'
 	| 'changes'
 	| 'save'
-	| 'find-file';
+	| 'find-file'
+	| 'settings';
 
 export interface ShellKey {
 	code: string;
@@ -42,6 +43,8 @@ export function shellShortcut(event: ShellKey, origin: KeyOrigin): ShellAction |
 			return alt ? null : 'terminal';
 		case 'KeyG':
 			return shift && !alt ? 'changes' : null;
+		case 'Comma':
+			return alt || shift ? null : 'settings';
 		default:
 			return null;
 	}

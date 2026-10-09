@@ -10,21 +10,22 @@
 	import AddRepoSheet from './AddRepoSheet.svelte';
 	import AdminMachine from './AdminMachine.svelte';
 	import { GreenhouseApp, setGreenhouseApp, type GreenhouseNav } from './app.svelte';
-	import CenterBar from './CenterBar.svelte';
 	import CenterPane from './CenterPane.svelte';
 	import ForkSheet from './ForkSheet.svelte';
 	import { setGreenhouseEnv, type GreenhouseEnv } from './env';
 	import Home from './Home.svelte';
 	import JoinNotice from './JoinNotice.svelte';
-	import { LEFT, RIGHT } from './layout.svelte';
+	import { GUTTER, LEFT, RIGHT } from './layout.svelte';
 	import NewMachineSheet from './NewMachineSheet.svelte';
 	import PreviewSheet from './PreviewSheet.svelte';
 	import ResizeHandle from './ResizeHandle.svelte';
 	import RightPanel from './RightPanel.svelte';
-	import SettingsSheet from './SettingsSheet.svelte';
+	import SettingsDialog from './SettingsDialog.svelte';
 	import ShareSheet from './ShareSheet.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import { shellShortcut } from './shortcuts';
+	import TitleBar from './TitleBar.svelte';
+	import { greenhousePrefs } from './prefs.svelte';
 	import { isLegacy } from './workspace.svelte';
 	import { inTerminal } from '$lib/utils/focus-routing';
 	import type { PersonRef } from './types';
@@ -81,7 +82,16 @@
 	});
 
 	$effect(() => {
-		layout.total = width;
+		layout.total = Math.max(0, width - GUTTER * 3);
+	});
+
+	$effect(() => {
+		const zoom = greenhousePrefs.zoom;
+		const root = document.documentElement;
+		root.style.fontSize = zoom === 1 ? '' : `${zoom * 100}%`;
+		return () => {
+			root.style.fontSize = '';
+		};
 	});
 
 	$effect(() => {
@@ -215,6 +225,10 @@
 				event.preventDefault();
 				openRight((panel) => panel.findFile());
 				return;
+			case 'settings':
+				event.preventDefault();
+				app.openSettings();
+				return;
 		}
 	}
 
@@ -235,7 +249,7 @@
 	class:shell--dragging={!!layout.dragging}
 	class:shell--mobile={mobile}
 	bind:clientWidth={width}
-	style="grid-template-columns: {mobile ? 'minmax(0, 1fr)' : columns}"
+	style={greenhousePrefs.style}
 >
 	{#if listState === 'disabled'}
 		<div class="blank">
@@ -254,15 +268,15 @@
 				{#if app.mobilePane === 'sessions' || (!ws?.session && !app.home && !lifecycleOnly)}
 					<Sidebar onnewsession={newSession} compact />
 				{:else if ws && lifecycleOnly}
-					<CenterBar onrename={openRename} compact />
+					<TitleBar onrename={openRename} compact />
 					<AdminMachine {ws} />
 				{:else if app.home}
-					<CenterBar onrename={openRename} compact />
+					<TitleBar onrename={openRename} compact />
 					<Home bind:this={home} initialRepo={homeRepo} />
 				{:else if ws && app.mobilePane === 'changes'}
-					<RightPanel {ws} showDock={false} />
+					<RightPanel {ws} showDock={false} header />
 				{:else if ws}
-					<CenterBar onrename={openRename} compact />
+					<TitleBar onrename={openRename} compact />
 					<CenterPane {ws} />
 				{/if}
 			</div>
@@ -295,92 +309,96 @@
 			</div>
 		</div>
 	{:else}
-		{#if showLeft}
-			<div class="col col--left">
-				<Sidebar onnewsession={newSession} />
-				<div class="grip-anchor grip-anchor--right">
-					<ResizeHandle
-						label="Resize sidebar"
-						value={layout.left}
-						min={LEFT.min}
-						max={layout.maxLeft()}
-						active={layout.dragging === 'left'}
-						onstart={() => {
-							startLeft = layout.left;
-							layout.dragging = 'left';
-						}}
-						ondrag={(d) => layout.setLeft(startLeft + d)}
-						onend={() => {
-							layout.dragging = null;
-							layout.save();
-						}}
-						onnudge={(d) => {
-							layout.setLeft(layout.left + d);
-							layout.save();
-						}}
-						onreset={() => layout.reset('left')}
-					/>
-				</div>
-			</div>
-		{/if}
-
-		<main class="col col--center">
-			<CenterBar onrename={openRename} />
-			{#if ws && lifecycleOnly}
-				<AdminMachine {ws} />
-			{:else if app.home || !ws}
-				<Home bind:this={home} initialRepo={homeRepo} />
-			{:else if ws.session}
-				<CenterPane {ws} />
-			{:else if ws.mode === 'loading'}
-				<div class="loading">
-					<Skeleton height="0.75rem" width="40%" />
-					<Skeleton height="0.75rem" width="65%" />
-				</div>
-			{:else}
-				<div class="blank">
-					<p class="blank-title">This session is gone</p>
-					<p class="blank-text">It may have been deleted, or you no longer have access.</p>
-					<button type="button" class="gh-btn" onclick={() => app.goHome()}>Go home</button>
+		<TitleBar onrename={openRename} lead={showLeft ? layout.left : null} />
+		<div class="body" class:body--flush={showLeft} style:grid-template-columns={columns}>
+			{#if showLeft}
+				<div class="col col--left">
+					<Sidebar onnewsession={newSession} />
+					<div class="grip-anchor grip-anchor--right">
+						<ResizeHandle
+							label="Resize sidebar"
+							value={layout.left}
+							min={LEFT.min}
+							max={layout.maxLeft()}
+							active={layout.dragging === 'left'}
+							onstart={() => {
+								startLeft = layout.left;
+								layout.dragging = 'left';
+							}}
+							ondrag={(d) => layout.setLeft(startLeft + d)}
+							onend={() => {
+								layout.dragging = null;
+								layout.save();
+							}}
+							onnudge={(d) => {
+								layout.setLeft(layout.left + d);
+								layout.save();
+							}}
+							onreset={() => layout.reset('left')}
+						/>
+					</div>
 				</div>
 			{/if}
-		</main>
 
-		{#if showRight && ws}
-			<div class="col col--right">
-				<div class="grip-anchor grip-anchor--left">
-					<ResizeHandle
-						label="Resize panel"
-						value={layout.right}
-						min={RIGHT.min}
-						max={layout.maxRight()}
-						active={layout.dragging === 'right'}
-						onstart={() => {
-							startRight = layout.right;
-							layout.dragging = 'right';
-						}}
-						ondrag={(d) => layout.setRight(startRight - d)}
-						onend={() => {
-							layout.dragging = null;
-							layout.save();
-						}}
-						onnudge={(d) => {
-							layout.setRight(layout.right - d);
-							layout.save();
-						}}
-						onreset={() => layout.reset('right')}
-					/>
+			<main class="col panel">
+				{#if ws && lifecycleOnly}
+					<AdminMachine {ws} />
+				{:else if app.home || !ws}
+					<Home bind:this={home} initialRepo={homeRepo} />
+				{:else if ws.session}
+					<CenterPane {ws} />
+				{:else if ws.mode === 'loading'}
+					<div class="loading">
+						<Skeleton height="0.75rem" width="40%" />
+						<Skeleton height="0.75rem" width="65%" />
+					</div>
+				{:else}
+					<div class="blank">
+						<p class="blank-title">This session is gone</p>
+						<p class="blank-text">It may have been deleted, or you no longer have access.</p>
+						<button type="button" class="gh-btn" onclick={() => app.goHome()}>Go home</button>
+					</div>
+				{/if}
+			</main>
+
+			{#if showRight && ws}
+				<div class="col col--right">
+					<div class="grip-anchor grip-anchor--left">
+						<ResizeHandle
+							label="Resize panel"
+							value={layout.right}
+							min={RIGHT.min}
+							max={layout.maxRight()}
+							active={layout.dragging === 'right'}
+							onstart={() => {
+								startRight = layout.right;
+								layout.dragging = 'right';
+							}}
+							ondrag={(d) => layout.setRight(startRight - d)}
+							onend={() => {
+								layout.dragging = null;
+								layout.save();
+							}}
+							onnudge={(d) => {
+								layout.setRight(layout.right - d);
+								layout.save();
+							}}
+							onreset={() => layout.reset('right')}
+						/>
+					</div>
+					<div class="panel">
+						<RightPanel bind:this={right} {ws} />
+					</div>
 				</div>
-				<RightPanel bind:this={right} {ws} />
-			</div>
-		{/if}
+			{/if}
+		</div>
 	{/if}
 
 	<NewMachineSheet
 		bind:open={() => app.sheet === 'new-machine', (v) => (app.sheet = v ? 'new-machine' : null)}
 	/>
 	<ShareSheet bind:open={() => app.sheet === 'share', (v) => (app.sheet = v ? 'share' : null)} />
-	<SettingsSheet
+	<SettingsDialog
 		bind:open={() => app.sheet === 'settings', (v) => (app.sheet = v ? 'settings' : null)}
 	/>
 	<AddRepoSheet
@@ -406,17 +424,34 @@
 
 <style>
 	.shell {
-		display: grid;
-		grid-template-rows: minmax(0, 1fr);
-		height: 100dvh;
+		display: flex;
+		flex-direction: column;
 		width: 100%;
+		height: 100dvh;
 		overflow: hidden;
+		background: var(--gh-frame);
+	}
+
+	.shell--mobile {
 		background: var(--gh-editor);
 	}
 
 	.shell--dragging {
 		cursor: col-resize;
 		user-select: none;
+	}
+
+	.body {
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
+		gap: var(--gh-gutter);
+		flex: 1;
+		min-height: 0;
+		padding: 0 var(--gh-gutter) var(--gh-gutter);
+	}
+
+	.body--flush {
+		padding-left: 0;
 	}
 
 	.col {
@@ -427,12 +462,16 @@
 		min-height: 0;
 	}
 
-	.col--left {
-		border-right: 1px solid var(--gh-line);
-	}
-
-	.col--right {
-		border-left: 1px solid var(--gh-line);
+	.panel {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		border: 1px solid var(--gh-line);
+		border-radius: var(--gh-r-panel);
+		background: var(--gh-editor);
+		overflow: hidden;
 	}
 
 	.grip-anchor {
@@ -443,11 +482,11 @@
 	}
 
 	.grip-anchor--right {
-		right: 0;
+		right: calc(var(--gh-gutter) / -2);
 	}
 
 	.grip-anchor--left {
-		left: 0;
+		left: calc(var(--gh-gutter) / -2);
 	}
 
 	.loading {
@@ -484,7 +523,7 @@
 	.mobile {
 		display: flex;
 		flex-direction: column;
-		height: 100dvh;
+		flex: 1;
 		min-height: 0;
 		min-width: 0;
 		overflow: hidden;
@@ -505,7 +544,7 @@
 		height: calc(3rem + env(safe-area-inset-bottom));
 		padding-bottom: env(safe-area-inset-bottom);
 		border-top: 1px solid var(--gh-line);
-		background: var(--gh-sidebar);
+		background: var(--gh-frame);
 	}
 
 	.switcher button {

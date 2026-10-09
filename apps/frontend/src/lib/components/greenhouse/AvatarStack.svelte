@@ -48,7 +48,7 @@
 					aria-pressed={following === user.id}
 					onclick={() => onpick?.(user)}
 				>
-					<span class="disc"
+					<span class="disc gh-face"
 						><Avatar
 							user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }}
 							{size}
@@ -61,7 +61,7 @@
 					style="--ring: var({user.color?.startsWith('--') ? user.color : '--accent'})"
 					title={user.name}
 				>
-					<span class="disc"
+					<span class="disc gh-face"
 						><Avatar
 							user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }}
 							{size}
@@ -118,6 +118,7 @@
 	}
 
 	.disc {
+		--face: var(--av);
 		display: inline-grid;
 		place-items: center;
 		width: var(--av);
@@ -125,16 +126,6 @@
 		border-radius: var(--radius-pill);
 		box-shadow: 0 0 0 1.5px var(--gh-editor, var(--bg-app));
 		overflow: hidden;
-	}
-
-	.disc > :global(img),
-	.disc > :global(svg) {
-		display: block;
-		width: 100%;
-		height: 100%;
-		max-width: none;
-		object-fit: cover;
-		border-radius: inherit;
 	}
 
 	button.face {

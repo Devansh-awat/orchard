@@ -17,15 +17,15 @@
 <style>
 	.md {
 		min-width: 0;
-		font-size: var(--text-body);
-		line-height: 1.5rem;
+		font-size: var(--gh-reading, var(--text-body));
+		line-height: var(--gh-lh-reading, 1.5rem);
 		color: var(--text-default);
 		overflow-wrap: anywhere;
 	}
 
 	.md--compact {
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
+		font-size: calc(var(--gh-reading, var(--text-body)) - 0.0625rem);
+		line-height: calc(var(--gh-lh-reading, 1.5rem) - 0.25rem);
 		color: var(--text-muted);
 	}
 
@@ -75,14 +75,10 @@
 
 	.md :global(code) {
 		font-family: var(--font-mono, monospace);
-		font-size: var(--text-footnote);
+		font-size: min(var(--gh-code-size, 13px), 0.93em);
 		padding: 0.125rem 0.25rem;
 		border-radius: var(--radius-xs);
 		background: var(--fill-quiet);
-	}
-
-	.md--compact :global(code) {
-		font-size: var(--text-caption);
 	}
 
 	.md :global(pre) {
@@ -98,8 +94,8 @@
 		padding: 0;
 		border-radius: 0;
 		background: none;
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
+		font-size: var(--gh-code-size, 13px);
+		line-height: round(up, calc(var(--gh-code-size, 13px) * 1.5), 0.25rem);
 	}
 
 	.md :global(h1),
@@ -135,8 +131,8 @@
 	.md :global(table) {
 		margin: var(--space-3) 0;
 		border-collapse: collapse;
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
+		font-size: calc(var(--gh-reading, var(--text-body)) - 0.0625rem);
+		line-height: calc(var(--gh-lh-reading, 1.5rem) - 0.25rem);
 	}
 
 	.md :global(th),

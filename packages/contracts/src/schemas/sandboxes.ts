@@ -271,10 +271,18 @@ const machineUsage = z.object({
     .object({
       vcpus: usageCount,
       memoryBytes: usageCount,
+      cpu: z
+        .object({ usedCores: usageCount, totalCores: usageCount })
+        .describe('CPU in use over a short window sampled inside the machine'),
+      memory: z
+        .object({ usedBytes: usageCount, totalBytes: usageCount })
+        .describe('Memory in use inside the machine against its allocation'),
       sessionExpiresAt: z
         .string()
         .nullable()
-        .describe('When the provider session times out unless it is extended'),
+        .describe(
+          'When the provider session times out unless it is extended; Orchard extends it while the machine is in use'
+        ),
       sessionTimeoutMinutes: usageCount,
       activeCpuMs: usageCount.describe(
         'Active CPU this session: from Vercel once reported, otherwise measured in the guest'

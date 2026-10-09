@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import type { Placement } from '@floating-ui/dom';
 	import { ChevronLeft, LogOut, Plug, Plus, RefreshCw } from 'lucide-svelte';
 	import {
 		Button,
@@ -27,7 +28,11 @@
 	} from '../opencode';
 	import type { ChatSessionStore } from './session-store.svelte';
 
-	let { store }: { store: ChatSessionStore } = $props();
+	let {
+		store,
+		placement = 'top-end',
+		label = null
+	}: { store: ChatSessionStore; placement?: Placement; label?: string | null } = $props();
 
 	const HOST_ONLY = 'Only the host can change MCP servers';
 	const NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -258,17 +263,19 @@
 	}
 </script>
 
-<PopoverPanel bind:open placement="top-end" class="mcp-panel">
+<PopoverPanel bind:open {placement} class="mcp-panel">
 	{#snippet trigger(props, isOpen)}
 		<button
 			type="button"
 			class="mcp-trigger"
 			class:mcp-trigger--open={isOpen}
-			aria-label="MCP servers"
+			class:mcp-trigger--label={!!label}
+			aria-label={label ? undefined : 'MCP servers'}
 			title="MCP servers"
 			{...props}
 		>
-			<Plug size={16} strokeWidth={1.75} />
+			<Plug size={label ? 14 : 16} strokeWidth={1.75} />
+			{#if label}<span>{label}</span>{/if}
 		</button>
 	{/snippet}
 	{#snippet children()}
@@ -481,6 +488,16 @@
 		transition:
 			color var(--dur-fast),
 			background-color var(--dur-fast);
+	}
+
+	.mcp-trigger--label {
+		gap: var(--space-1);
+		width: auto;
+		padding: 0 var(--space-2);
+		border: 1px solid var(--border-default);
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
+		white-space: nowrap;
 	}
 
 	.mcp-trigger:hover,

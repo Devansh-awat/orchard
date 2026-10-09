@@ -11,6 +11,7 @@
 		Settings,
 		Star
 	} from 'lucide-svelte';
+	import type { Placement } from '@floating-ui/dom';
 	import { PopoverPanel } from '$lib/components/ui';
 	import { motion } from '$lib/utils/motion.svelte';
 	import {
@@ -28,7 +29,10 @@
 	import { modelFavourites } from './model-favourites.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
 
-	let { store }: { store: ChatSessionStore } = $props();
+	let {
+		store,
+		placement = 'top-start'
+	}: { store: ChatSessionStore; placement?: Placement } = $props();
 	const uid = $props.id();
 
 	type View = 'main' | 'effort' | 'edit';
@@ -331,7 +335,7 @@
 	</div>
 {/snippet}
 
-<PopoverPanel bind:open placement="top-start" class="mp-panel">
+<PopoverPanel bind:open {placement} class="mp-panel">
 	{#snippet trigger(props, isOpen)}
 		<button
 			bind:this={triggerEl}

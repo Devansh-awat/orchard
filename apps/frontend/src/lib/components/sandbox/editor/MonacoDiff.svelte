@@ -5,6 +5,7 @@
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import { ensureTerminalFont } from '$lib/terminal/font';
 	import {
 		type DiffComments,
@@ -73,7 +74,7 @@
 
 	const fsPath = $derived(toFsPath(toDocumentUri(path)));
 	const doc = $derived(workspace.get(path));
-	const size = $derived(fontSize ?? terminalDisplay.fontSize);
+	const size = $derived(fontSize ?? greenhousePrefs.codeSize);
 	const loading = $derived(!diff || attached !== `${ref}\u0000${fsPath}`);
 
 	$effect(() => {

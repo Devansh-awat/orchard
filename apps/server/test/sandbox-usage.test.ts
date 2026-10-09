@@ -22,18 +22,64 @@ const POD = `sbx-${ID}`;
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const GIB = 1024 ** 3;
 
-const GUEST_OUT = [
-  '5368709120 68719476736',
-  '---',
-  '100',
-  '---',
-  'cpu  1200 30 270 90000 10 0 0 50 0 0',
-  '---',
+const NET_DEV = [
   'Inter-|   Receive                                                |  Transmit',
   ' face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed',
   '    lo: 999 1 0 0 0 0 0 0 999 1 0 0 0 0 0 0',
   '  eth0: 1000000 10 0 0 0 0 0 0 250000 5 0 0 0 0 0 0'
-].join('\n');
+];
+
+function guestOut(parts: {
+  first: string[];
+  last: string[];
+  nproc?: string;
+  memory: string[];
+  df?: string;
+}): string {
+  return [
+    ...parts.first,
+    '---',
+    parts.df ?? '5368709120 68719476736',
+    '---',
+    '100',
+    '---',
+    ...NET_DEV,
+    '---',
+    parts.nproc ?? '4',
+    '---',
+    ...parts.memory,
+    '---',
+    ...parts.last
+  ].join('\n');
+}
+
+const VM_FIRST = ['cpu  1200 30 270 90000 10 0 0 50 0 0', 'uptime 1000.00', 'usage_usec 15000000'];
+const VM_LAST = ['cpu  1240 30 280 90150 10 0 0 50 0 0', 'uptime 1000.50', 'usage_usec 15500000'];
+const VM_MEMORY = ['MemTotal:        8000000 kB', 'MemAvailable:    6951424 kB'];
+
+const GUEST_OUT = guestOut({ first: VM_FIRST, last: VM_LAST, memory: VM_MEMORY });
+
+const CONTAINER_OUT = guestOut({
+  first: [
+    'cpu  880000 1200 300000 9000000 4000 0 2000 0 0 0',
+    'uptime 86400.10',
+    'usage_usec 92000000'
+  ],
+  last: [
+    'cpu  880600 1200 300200 9006400 4000 0 2000 0 0 0',
+    'uptime 86400.60',
+    'usage_usec 92210000'
+  ],
+  nproc: '16',
+  memory: [
+    'MemTotal:       65536000 kB',
+    'MemAvailable:   40000000 kB',
+    'memory.current 2147483648',
+    'memory.max 4294967296',
+    'cpu.max 200000 100000',
+    'inactive_file 536870912'
+  ]
+});
 
 function row(overrides: Partial<UsageRow> = {}): UsageRow {
   return {
@@ -242,6 +288,7 @@ test('a running kubernetes machine reports live cpu, memory and disk against its
   assert.deepEqual(usage.machines, { count: 2, limit: 3 });
   assert.ok(h.queries.every((q) => q.includes(`pod="${POD}"`) && q.includes(`namespace="${NS}"`)));
   assert.deepEqual(h.summaries, ['house']);
+  assert.equal(h.execs.length, 0);
 });
 
 test('kubernetes usage is cached for 15 seconds, then sampled again', async () => {
@@ -261,6 +308,7 @@ test('kubernetes usage is cached for 15 seconds, then sampled again', async () =
 test('every missing kubernetes metric becomes null instead of an error', async () => {
   const h = harness({ pod: pod(), claim: claim() });
   const usage = await h.svc.forSandbox(row());
+  assert.equal(h.execs.length, 1);
   assert.equal(usage.kubernetes?.cpu.usedMillicores, null);
   assert.equal(usage.kubernetes?.memory.usedBytes, null);
   assert.equal(usage.kubernetes?.disk.usedBytes, null);
@@ -301,7 +349,50 @@ test('a block-mode home disk is measured with df inside the machine, not the kub
   const usage = await h.svc.forSandbox(row());
   assert.deepEqual(usage.kubernetes?.disk, { usedBytes: 5 * GIB, capacityBytes: 64 * GIB });
   assert.equal(h.summaries.length, 0);
+  assert.equal(h.execs.length, 1);
   assert.deepEqual(h.execs[0], ['/bin/sh', '-c', GUEST_STATS_SCRIPT, 'sh', '/persist']);
+});
+
+test('without metrics a kubernetes machine falls back to cpu and memory measured in its cgroup', async () => {
+  const h = harness({
+    pod: pod(),
+    claim: claim(),
+    summary: () => SUMMARY,
+    exec: () => ({ ok: true, stdout: CONTAINER_OUT })
+  });
+  const usage = await h.svc.forSandbox(row());
+  assert.deepEqual(usage.kubernetes, {
+    cpu: { usedMillicores: 420, limitMillicores: 3000, requestMillicores: 500 },
+    memory: { usedBytes: 1.5 * GIB, limitBytes: 6 * GIB },
+    disk: { usedBytes: 3 * GIB, capacityBytes: 9.8 * GIB }
+  });
+  assert.equal(h.execs.length, 1);
+
+  const partial = harness({
+    pod: pod(),
+    claim: claim(),
+    vm: (q) => (q.includes('cpu_usage') ? 900 : null),
+    summary: () => SUMMARY,
+    exec: () => ({ ok: true, stdout: CONTAINER_OUT })
+  });
+  const mixed = await partial.svc.forSandbox(row());
+  assert.equal(mixed.kubernetes?.cpu.usedMillicores, 900);
+  assert.equal(mixed.kubernetes?.memory.usedBytes, 1.5 * GIB);
+});
+
+test('the guest fallback never runs past the lookup budget', async () => {
+  const h = harness({
+    pod: pod(),
+    claim: claim(),
+    vm: () => {
+      h.advance(7_000);
+      return null;
+    },
+    exec: () => ({ ok: true, stdout: CONTAINER_OUT })
+  });
+  const usage = await h.svc.forSandbox(row());
+  assert.equal(h.execs.length, 0);
+  assert.equal(usage.kubernetes?.cpu.usedMillicores, null);
 });
 
 test('the owner machine count is uncapped when the owner is a superadmin', async () => {
@@ -344,6 +435,8 @@ test('a running vercel machine reports its allocation, session end and in-guest 
   assert.deepEqual(usage.vercel, {
     vcpus: 4,
     memoryBytes: 8 * GIB,
+    cpu: { usedCores: 1, totalCores: 4 },
+    memory: { usedBytes: 1 * GIB, totalBytes: 8 * GIB },
     sessionExpiresAt: new Date(NOW + (3 * 60 + 12) * 60_000).toISOString(),
     sessionTimeoutMinutes: 45,
     activeCpuMs: 15_000,
@@ -380,6 +473,8 @@ test('vercel usage falls back to config and nulls when the API does not answer, 
   assert.deepEqual(usage.vercel, {
     vcpus: 2,
     memoryBytes: 4 * GIB,
+    cpu: { usedCores: null, totalCores: 2 },
+    memory: { usedBytes: null, totalBytes: 4 * GIB },
     sessionExpiresAt: '2026-10-08T13:00:00.000Z',
     sessionTimeoutMinutes: 1440,
     activeCpuMs: null,
@@ -406,21 +501,63 @@ test('an unconfigured vercel runner never calls the API', async () => {
   assert.equal(usage.vercel?.disk.usedBytes, null);
 });
 
-test('guest stats parse df, busy jiffies and non-loopback interface bytes', () => {
+test('guest stats parse df, busy jiffies, a sampled cpu window, memory and interface bytes', () => {
   assert.deepEqual(parseGuestStats(GUEST_OUT), {
     diskUsedBytes: 5 * GIB,
     diskSizeBytes: 64 * GIB,
     activeCpuMs: 15_000,
     rxBytes: 1_000_000,
-    txBytes: 250_000
+    txBytes: 250_000,
+    cpuUsedCores: 1,
+    cpuCores: 4,
+    memoryUsedBytes: 1 * GIB,
+    memoryTotalBytes: 8_000_000 * 1024
   });
   assert.deepEqual(parseGuestStats(''), {
     diskUsedBytes: null,
     diskSizeBytes: null,
     activeCpuMs: null,
     rxBytes: null,
-    txBytes: null
+    txBytes: null,
+    cpuUsedCores: null,
+    cpuCores: null,
+    memoryUsedBytes: null,
+    memoryTotalBytes: null
   });
+});
+
+test('a container is measured against its cgroup limits, not the host it shares', () => {
+  const stats = parseGuestStats(CONTAINER_OUT);
+  assert.equal(stats.cpuUsedCores, 0.42);
+  assert.equal(stats.cpuCores, 2);
+  assert.equal(stats.memoryUsedBytes, 1.5 * GIB);
+  assert.equal(stats.memoryTotalBytes, 4 * GIB);
+});
+
+test('without cgroup counters cpu comes from the /proc/stat busy share across online cpus', () => {
+  const noCgroup = (lines: string[]) => lines.filter((l) => !l.startsWith('usage_usec'));
+  const stats = parseGuestStats(
+    guestOut({
+      first: noCgroup(VM_FIRST),
+      last: noCgroup(VM_LAST),
+      nproc: '2',
+      memory: ['memory.current 100', 'memory.max max', 'cpu.max max 100000', ...VM_MEMORY]
+    })
+  );
+  assert.equal(stats.cpuUsedCores, 0.5);
+  assert.equal(stats.cpuCores, 2);
+  assert.equal(stats.memoryUsedBytes, 1 * GIB);
+  assert.equal(stats.memoryTotalBytes, 8_000_000 * 1024);
+});
+
+test('a guest that could not sample twice reports no cpu use rather than a guess', () => {
+  const stats = parseGuestStats(
+    guestOut({ first: VM_FIRST, last: [], memory: ['MemTotal:        8000000 kB'] })
+  );
+  assert.equal(stats.cpuUsedCores, null);
+  assert.equal(stats.cpuCores, 4);
+  assert.equal(stats.memoryUsedBytes, null);
+  assert.equal(stats.memoryTotalBytes, 8_000_000 * 1024);
 });
 
 test('usage is lifecycle-level: viewers and uninvited org admins may read it', async () => {

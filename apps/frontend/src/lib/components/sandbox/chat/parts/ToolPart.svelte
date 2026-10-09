@@ -196,8 +196,8 @@
 		max-height: 16rem;
 		overflow: auto;
 		font-family: var(--font-mono, monospace);
-		font-size: var(--text-footnote);
-		line-height: 1.25rem;
+		font-size: var(--gh-code-size, 13px);
+		line-height: round(up, calc(var(--gh-code-size, 13px) * 1.5), 0.25rem);
 		color: var(--text-muted);
 		white-space: pre;
 	}

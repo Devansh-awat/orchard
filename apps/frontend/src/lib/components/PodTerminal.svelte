@@ -22,6 +22,8 @@
 		visible?: boolean;
 		resizeFrozen?: boolean;
 		sessionHandle?: string;
+		fontSize?: number;
+		onZoom?: (step: 1 | -1 | 0) => void;
 		onTitle?: (title: string) => void;
 		onBell?: () => void;
 		onSession?: (handle: string) => void;
@@ -36,6 +38,8 @@
 		visible = true,
 		resizeFrozen = false,
 		sessionHandle,
+		fontSize = undefined,
+		onZoom = undefined,
 		onTitle,
 		onBell,
 		onSession,
@@ -43,6 +47,7 @@
 	}: Props = $props();
 
 	let terminalRef = $state<HTMLDivElement | null>(null);
+	const textSize = $derived(fontSize ?? terminalDisplay.fontSize);
 	let handle: TerminalHandle | null = null;
 	let fitScheduler: FitScheduler | null = null;
 	let target: DisposablePredictTarget | null = null;
@@ -124,7 +129,7 @@
 			const created = await createTerminal({
 				host,
 				backgroundToken: '--console-bg',
-				fontSize: terminalDisplay.fontSize,
+				fontSize: textSize,
 				cursorStyle: terminalDisplay.cursorStyle,
 				cursorBlink: terminalDisplay.cursorBlink,
 				onData: userData,
@@ -143,7 +148,7 @@
 				return;
 			}
 			handle = created;
-			appliedFontSize = terminalDisplay.fontSize;
+			appliedFontSize = textSize;
 			created.setPaused(!visible);
 			if (!visible) created.blur();
 
@@ -167,7 +172,8 @@
 					userData('\x0c');
 				},
 				onZoom: (step) => {
-					if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
+					if (onZoom) onZoom(step);
+					else if (step === 0) setTerminalDisplay('fontSize', DEFAULT_FONT_SIZE);
 					else setTerminalDisplay('fontSize', terminalDisplay.fontSize + step);
 				}
 			});
@@ -431,7 +437,7 @@
 
 	$effect(() => {
 		void ready;
-		const size = terminalDisplay.fontSize;
+		const size = textSize;
 		const h = handle;
 		if (!h || size === appliedFontSize) return;
 		appliedFontSize = size;

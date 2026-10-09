@@ -1,16 +1,25 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { createQuery } from '@tanstack/svelte-query';
 	import {
 		ArrowUp,
 		Check,
 		ChevronDown,
-		ClipboardList,
+		ChevronRight,
 		FilePlus,
+		Gauge,
 		GitBranch,
-		Monitor,
+		Github,
+		Hammer,
+		ListChecks,
+		MessageSquare,
 		Play,
 		Plus,
 		RotateCw,
-		Square
+		Sprout,
+		Square,
+		SquareKanban,
+		X
 	} from 'lucide-svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
@@ -18,33 +27,43 @@
 	import { sandboxStatus } from '$lib/components/ui/status';
 	import { toasts } from '$lib/stores';
 	import type { Sandbox } from '$lib/types/sandbox';
+	import { slide } from '$lib/utils/transitions';
+	import McpServers from '$lib/components/sandbox/chat/McpServers.svelte';
+	import ModelPicker from '$lib/components/sandbox/chat/ModelPicker.svelte';
+	import { agentUsageQueryOptions, fmtResetTime } from '$lib/components/sandbox/chat/agent-usage';
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
 	import * as api from './api';
-	import ModelOptions from '$lib/components/sandbox/chat/ModelOptions.svelte';
-	import { ocShortModelName } from '$lib/components/sandbox/opencode';
+	import { linearStatus, linkedIntegrations, type IntegrationProvider } from './integrations';
 	import SessionGlyph from './SessionGlyph.svelte';
-	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
+	import { ago, repoHue, repoInitial, runnerLabel } from './format';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
 	import type { PickedIssue } from './types';
 
 	let { initialRepo = null }: { initialRepo?: string | null } = $props();
 
+	const CONNECT_KEY = 'greenhouse.home.connect.dismissed';
+	const CONNECT = [
+		{ id: 'linear', name: 'Linear', caption: 'Start sessions from issues', icon: SquareKanban },
+		{ id: 'github', name: 'GitHub', caption: 'Clone repos and open PRs', icon: Github },
+		{ id: 'slack', name: 'Slack', caption: 'Start sessions from a thread', icon: MessageSquare }
+	] as const;
+
 	const app = getGreenhouseApp();
 	const ws = $derived(app.ws);
 	const machine = $derived(app.machine);
-	const mod = modKey();
 
 	let prompt = $state('');
 	let repo = $state<string | null>(null);
 	let issue = $state<PickedIssue | null>(null);
-	let machineOpen = $state(false);
 	let repoOpen = $state(false);
-	let modelOpen = $state(false);
+	let modeOpen = $state(false);
 	let launching = $state(false);
 	let queued = $state<{ repo: string | null; prompt: string } | null>(null);
 	let blank = $state(false);
 	let box = $state<HTMLTextAreaElement | null>(null);
+	let linked = $state<Set<IntegrationProvider> | null>(null);
+	let connectDismissed = $state(true);
 
 	const repos = $derived(ws?.repos ?? []);
 	const chosen = $derived(blank ? null : (repos.find((r) => r.name === repo) ?? repos[0] ?? null));
@@ -57,6 +76,54 @@
 	const canLaunch = $derived(
 		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || ws.running)
 	);
+	const models = $derived(ws?.store.models ?? []);
+	const plan = $derived(ws?.store.plan ?? false);
+
+	const usageQuery = createQuery(() =>
+		agentUsageQueryOptions(ws?.sandboxId ?? '', !!ws && ws.running && ws.canEdit)
+	);
+	const usage = $derived.by(() => {
+		const data = usageQuery.data;
+		if (!data?.available || !data.fiveHour) return null;
+		const used = Math.max(0, Math.min(100, Math.round(data.fiveHour.usedPercent)));
+		const resets = fmtResetTime(data.fiveHour.resetsAt);
+		return {
+			used,
+			title: `Claude 5 hour limit, ${used}% used${resets ? `. Resets ${resets}` : ''}`
+		};
+	});
+
+	const missing = $derived(linked ? CONNECT.filter((c) => !linked?.has(c.id)) : []);
+	const showConnect = $derived(!connectDismissed && missing.length > 0);
+
+	onMount(() => {
+		try {
+			connectDismissed = localStorage.getItem(CONNECT_KEY) === '1';
+		} catch {
+			connectDismissed = false;
+		}
+		if (connectDismissed) return;
+		void Promise.all([linkedIntegrations(), linearStatus().catch(() => null)])
+			.then(([list, linear]) => {
+				const set = new Set<IntegrationProvider>(
+					(list.integrations ?? []).map((i) => i.provider)
+				);
+				if (linear?.connected) set.add('linear');
+				linked = set;
+			})
+			.catch(() => {
+				linked = null;
+			});
+	});
+
+	function dismissConnect() {
+		connectDismissed = true;
+		try {
+			localStorage.setItem(CONNECT_KEY, '1');
+		} catch {
+			return;
+		}
+	}
 
 	function blankName(text: string): string {
 		const base =
@@ -87,9 +154,6 @@
 		await ws.refreshRepos();
 		return res.data.name;
 	}
-	const models = $derived(ws?.store.models ?? []);
-	const modelGroups = $derived(ws?.store.modelGroups ?? []);
-	const model = $derived(ws?.store.model ?? null);
 
 	$effect(() => {
 		if (initialRepo) repo = initialRepo;
@@ -166,6 +230,11 @@
 		return () => node.removeEventListener('input', fit);
 	}
 
+	function setPlan(on: boolean) {
+		ws?.store.setPlan(on);
+		modeOpen = false;
+	}
+
 	export function focus() {
 		box?.focus();
 	}
@@ -173,62 +242,105 @@
 
 <div class="home gh-scroll">
 	<div class="inner">
-		<h1 class="title" data-type="display">What should we build?</h1>
+		<div class="stage">
+			<div class="hero">
+				<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
+				<h1 class="title" data-type="display">What should we build?</h1>
+			</div>
 
-		<div class="composer" class:composer--off={!ws?.canEdit}>
-			<textarea
-				bind:this={box}
-				bind:value={prompt}
-				class="prompt"
-				rows="3"
-				placeholder={ws && !ws.canEdit
-					? VIEWER_ONLY
-					: 'Describe a change, paste an issue, or ask a question about the code'}
-				disabled={!ws?.canEdit}
-				onkeydown={key}
-				{@attach grow}></textarea>
-			<div class="row">
-				<Menu bind:open={machineOpen} placement="bottom-start">
-					{#snippet trigger(props, isOpen)}
-						<button {...props} type="button" class="chip" aria-expanded={isOpen}>
-							{#if machine}<span class="dot"><StatusDot meta={meta(machine)} size={8} /></span
-								>{:else}<Monitor size={14} strokeWidth={1.75} />{/if}
-							<span>{machine?.name ?? 'Machine'}</span>
-							<ChevronDown size={14} strokeWidth={1.75} />
-						</button>
-					{/snippet}
-					{#each app.machines as m (m.id)}
-						<MenuItem onclick={() => app.openMachine(m.id)}>
-							<StatusDot meta={meta(m)} size={7} />
-							<span>{m.name}</span>
-							<span class="gh-menu-kbd">{runnerLabel(m.runner)}</span>
-							{#if m.id === machine?.id}<Check size={13} />{/if}
+			<div class="composer" class:composer--off={!ws?.canEdit}>
+				<textarea
+					bind:this={box}
+					bind:value={prompt}
+					class="prompt"
+					rows="3"
+					placeholder={ws && !ws.canEdit ? VIEWER_ONLY : 'Ask Greenhouse to build, fix or explain'}
+					aria-label="Prompt"
+					disabled={!ws?.canEdit}
+					onkeydown={key}
+					{@attach grow}></textarea>
+				<div class="bar">
+					<IssuePicker
+						bind:value={issue}
+						sandboxId={ws?.sandboxId ?? null}
+						repo={chosen?.name ?? null}
+						running={!!ws?.running}
+						disabled={!ws?.canEdit}
+					/>
+					<span class="grow"></span>
+					<Menu bind:open={modeOpen} placement="bottom-end">
+						{#snippet trigger(props, isOpen)}
+							<button
+								{...props}
+								type="button"
+								class="mode"
+								class:mode--plan={plan}
+								aria-expanded={isOpen}
+								disabled={!ws?.canEdit}
+								title={plan ? 'Plan: reads and proposes, edits nothing' : 'Build: edits files'}
+							>
+								{#if plan}<ListChecks size={14} strokeWidth={1.75} />{:else}<Hammer
+										size={14}
+										strokeWidth={1.75}
+									/>{/if}
+								<span>{plan ? 'Plan' : 'Build'}</span>
+								<ChevronDown size={14} strokeWidth={1.75} />
+							</button>
+						{/snippet}
+						<MenuItem onclick={() => setPlan(false)}>
+							<Hammer size={14} strokeWidth={1.75} />
+							<span class="menu-label">Build</span>
+							{#if !plan}<Check size={13} />{/if}
 						</MenuItem>
-					{/each}
-					<div class="gh-menu-sep"></div>
-					<MenuItem onclick={() => (app.sheet = 'new-machine')}
-						><Plus size={14} /> New machine…</MenuItem
+						<MenuItem onclick={() => setPlan(true)}>
+							<ListChecks size={14} strokeWidth={1.75} />
+							<span class="menu-label">Plan, read only</span>
+							{#if plan}<Check size={13} />{/if}
+						</MenuItem>
+					</Menu>
+					{#if ws && models.length > 0}
+						<span class="model"><ModelPicker store={ws.store} placement="bottom-end" /></span>
+					{/if}
+					<button
+						type="button"
+						class="send"
+						aria-label={stopped ? 'Start the machine and launch' : 'Start session'}
+						title="{stopped ? 'Start the machine and launch' : 'Start session'} (↵)"
+						disabled={!canLaunch}
+						onclick={launch}
 					>
-				</Menu>
+						<ArrowUp size={16} strokeWidth={2} />
+					</button>
+				</div>
+			</div>
 
+			<div class="chips">
 				<Menu bind:open={repoOpen} placement="bottom-start">
 					{#snippet trigger(props, isOpen)}
 						<button
 							{...props}
 							type="button"
-							class="chip"
+							class="seg"
 							aria-expanded={isOpen}
 							disabled={!ws?.running && repos.length === 0}
+							title={chosen ? `${chosen.name}, sessions branch off ${chosen.branch}` : undefined}
 						>
 							{#if chosen}
-								<span class="ravatar" style="--hue: var({repoHue(chosen.name)})"
-									>{repoInitial(chosen.name)}</span
-								>
-								<span>{chosen.name}</span>
-								<span class="gh-mono branch">{chosen.branch}</span>
+								<span class="seg-part">
+									<span class="ravatar" style="--hue: var({repoHue(chosen.name)})"
+										>{repoInitial(chosen.name)}</span
+									>
+									<span class="seg-text">{chosen.name}</span>
+								</span>
+								<span class="seg-part seg-part--branch">
+									<GitBranch size={14} strokeWidth={1.75} />
+									<span class="seg-text gh-mono">{chosen.branch}</span>
+								</span>
 							{:else}
-								<GitBranch size={14} strokeWidth={1.75} />
-								<span>New empty repository</span>
+								<span class="seg-part">
+									<FilePlus size={14} strokeWidth={1.75} />
+									<span class="seg-text">New empty repository</span>
+								</span>
 							{/if}
 							<ChevronDown size={14} strokeWidth={1.75} />
 						</button>
@@ -267,65 +379,51 @@
 						<Plus size={14} /> Clone a repository…
 					</MenuItem>
 				</Menu>
-
-				<IssuePicker
-					bind:value={issue}
-					sandboxId={ws?.sandboxId ?? null}
-					repo={chosen?.name ?? null}
-					running={!!ws?.running}
-					disabled={!ws?.canEdit}
-				/>
-
 				<span class="grow"></span>
-
-				{#if models.length > 0}
-					<Menu bind:open={modelOpen} placement="bottom-end">
-						{#snippet trigger(props, isOpen)}
-							<button {...props} type="button" class="chip chip--quiet" aria-expanded={isOpen}>
-								<span>{model ? ocShortModelName(model.name) : 'Model'}</span>
-								<ChevronDown size={14} strokeWidth={1.75} />
-							</button>
-						{/snippet}
-						<div class="model-scroll">
-							<ModelOptions
-								groups={modelGroups}
-								providerID={model?.providerID ?? null}
-								modelID={model?.modelID ?? null}
-								onpick={(m) => {
-									if (!ws) return;
-									ws.store.pickModel(m);
-									modelOpen = false;
-								}}
-							/>
-						</div>
-					</Menu>
+				{#if ws?.running}
+					<McpServers store={ws.store} placement="bottom-end" label="MCP tools" />
 				{/if}
-				<button
-					type="button"
-					class="chip chip--quiet"
-					class:chip--set={ws?.store.plan}
-					aria-pressed={ws?.store.plan ?? false}
-					title="Plan first: the agent proposes a plan before it edits anything"
-					onclick={() => ws && (ws.store.plan = !ws.store.plan)}
-				>
-					<ClipboardList size={14} strokeWidth={1.75} /> Plan
-				</button>
-				<button
-					type="button"
-					class="send"
-					aria-label={stopped ? 'Start the machine and launch' : 'Start session'}
-					title="{stopped ? 'Start the machine and launch' : 'Start session'} (Enter)"
-					disabled={!canLaunch}
-					onclick={launch}
-				>
-					<ArrowUp size={16} strokeWidth={1.75} />
-				</button>
+				{#if usage}
+					<span class="chip" title={usage.title}>
+						<Gauge size={14} strokeWidth={1.75} />
+						<span class="gh-num">{usage.used}% used</span>
+					</span>
+				{/if}
 			</div>
+
+			{#if showConnect}
+				<section class="connect" aria-label="Connect integrations" transition:slide>
+					<div class="connect-bar">
+						<h2 class="list-head">Connect integrations</h2>
+						<button
+							type="button"
+							class="gh-ibtn"
+							aria-label="Dismiss"
+							title="Dismiss"
+							onclick={dismissConnect}
+						>
+							<X size={14} strokeWidth={1.75} />
+						</button>
+					</div>
+					<div class="cards">
+						{#each missing as c (c.id)}
+							<button
+								type="button"
+								class="card"
+								onclick={() => app.openSettings('integrations')}
+							>
+								<span class="card-ico"><c.icon size={16} strokeWidth={1.75} /></span>
+								<span class="card-text">
+									<span class="card-name">{c.name}</span>
+									<span class="card-cap">{c.caption}</span>
+								</span>
+								<span class="card-chev"><ChevronRight size={14} strokeWidth={1.75} /></span>
+							</button>
+						{/each}
+					</div>
+				</section>
+			{/if}
 		</div>
-		<p class="hint">
-			Each session gets its own branch and worktree, so you can run several side by side.
-			<span class="gh-kbd">{mod}N</span> opens a new one from anywhere.
-		</p>
 
 		{#if recent.length > 0}
 			<section class="list">
@@ -427,12 +525,6 @@
 </div>
 
 <style>
-	.model-scroll {
-		max-height: 22rem;
-		overflow-y: auto;
-		min-width: 14rem;
-	}
-
 	.home {
 		flex: 1;
 		min-height: 0;
@@ -443,13 +535,40 @@
 		display: flex;
 		flex-direction: column;
 		width: 100%;
-		max-width: 46rem;
+		max-width: 41.5rem;
+		min-height: 100%;
 		margin: 0 auto;
-		padding: clamp(3rem, 14vh, 8rem) 1.5rem 3rem;
+		padding: 0 1.5rem 3rem;
+	}
+
+	.stage {
+		display: flex;
+		flex: 1 0 auto;
+		flex-direction: column;
+		justify-content: center;
+		padding: 3rem 0 2rem;
+	}
+
+	.hero {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.mark {
+		display: inline-grid;
+		place-items: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: var(--gh-r-row);
+		background: var(--fill-soft);
+		color: var(--gh-muted);
 	}
 
 	.title {
-		margin: 0 0 1.5rem;
+		margin: 0;
 		text-align: center;
 		font-size: 1.5rem;
 		line-height: 2rem;
@@ -477,39 +596,53 @@
 	}
 
 	.prompt {
+		display: block;
 		width: 100%;
-		min-height: 5.5rem;
+		min-height: calc(3 * var(--gh-lh-reading) + 1.5rem);
+		margin: 0;
 		padding: 1rem 1rem 0.5rem;
+		border: none;
 		background: transparent;
-		color: var(--gh-text);
-		caret-color: var(--accent);
-		font-size: var(--gh-reading);
-		line-height: var(--gh-lh-reading);
 		resize: none;
 		outline: none;
+		font-family: inherit;
+		font-size: var(--gh-reading);
+		line-height: var(--gh-lh-reading);
+		letter-spacing: normal;
+		text-indent: 0;
+		text-align: start;
+		vertical-align: top;
+		color: var(--gh-text);
+		caret-color: var(--accent);
 	}
 
 	.prompt::placeholder {
+		font: inherit;
+		letter-spacing: inherit;
+		text-indent: 0;
 		color: var(--gh-faint);
+		opacity: 1;
 	}
 
-	.row {
+	.bar {
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
 		gap: 0.5rem;
-		padding: 0.5rem 0.75rem 0.75rem;
+		padding: 0.25rem 0.5rem 0.5rem calc(1rem - var(--gh-ibtn-inset));
 	}
 
-	.chip {
+	.grow {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.mode {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		max-width: 16rem;
 		height: var(--gh-icon);
-		padding: 0 0.5rem;
+		padding: 0 0.375rem 0 0.5rem;
 		border-radius: var(--gh-r-control);
-		border: 1px solid var(--gh-line);
 		color: var(--gh-muted);
 		white-space: nowrap;
 		transition:
@@ -517,41 +650,127 @@
 			color var(--dur-fast) ease;
 	}
 
-	.chip > span {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.chip:hover:not(:disabled),
-	.chip[aria-expanded='true'] {
+	.mode:hover:not(:disabled),
+	.mode[aria-expanded='true'] {
 		background: var(--gh-hover);
 		color: var(--gh-text);
 	}
 
-	.chip:disabled {
-		opacity: 0.5;
-	}
-
-	.chip--quiet {
-		border-color: transparent;
-	}
-
-	.chip--set {
+	.mode--plan {
 		color: var(--gh-text);
 		background: var(--gh-selected);
 	}
 
-	.dot {
-		display: inline-grid;
-		place-items: center;
-		width: 0.875rem;
+	.mode:disabled {
+		opacity: 0.5;
 	}
 
-	.branch {
+	.menu-label {
+		flex: 1;
+		min-width: 0;
+		text-align: left;
+	}
+
+	.model {
+		display: inline-flex;
+		min-width: 0;
+		padding-left: 0.5rem;
+	}
+
+	.send {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-icon);
+		height: var(--gh-icon);
+		border-radius: var(--gh-r-control);
+		background: var(--accent);
+		color: var(--text-on-accent);
+		transition:
+			opacity var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
+	}
+
+	.send:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--accent) 88%, var(--text-default));
+	}
+
+	.send:disabled {
+		background: var(--gh-selected);
+		color: var(--gh-faint);
+	}
+
+	.chips {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+	}
+
+	.seg {
+		display: inline-flex;
+		align-items: center;
+		min-width: 0;
+		max-width: 100%;
+		height: var(--gh-icon);
+		padding-right: 0.375rem;
+		border: 1px solid var(--gh-line);
+		border-radius: var(--gh-r-control);
+		color: var(--gh-muted);
+		white-space: nowrap;
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
+	}
+
+	.seg:hover:not(:disabled),
+	.seg[aria-expanded='true'] {
+		background: var(--gh-hover);
+		color: var(--gh-text);
+	}
+
+	.seg:disabled {
+		opacity: 0.5;
+	}
+
+	.seg-part {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		height: 100%;
+		padding: 0 0.5rem;
+	}
+
+	.seg-part--branch {
+		gap: 0.25rem;
+		border-left: 1px solid var(--gh-line);
+		color: var(--gh-faint);
+	}
+
+	.seg-text {
+		min-width: 0;
+		max-width: 12rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.seg-part--branch .seg-text {
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
-		color: var(--gh-faint);
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		height: var(--gh-icon);
+		padding: 0 0.5rem;
+		border: 1px solid var(--gh-line);
+		border-radius: var(--gh-r-control);
+		color: var(--gh-muted);
+		white-space: nowrap;
 	}
 
 	.ravatar {
@@ -568,40 +787,94 @@
 		font-weight: 600;
 	}
 
-	.grow {
-		flex: 1;
+	.connect {
+		display: flex;
+		flex-direction: column;
+		margin-top: 2rem;
 	}
 
-	.send {
+	.connect-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.25rem;
+		padding-right: calc(0.75rem - var(--gh-ibtn-inset));
+	}
+
+	.connect-bar .list-head {
+		margin: 0;
+	}
+
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.5rem;
+	}
+
+	.card {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+		padding: 0.75rem;
+		border: 1px solid var(--gh-line);
+		border-radius: var(--gh-r-row);
+		text-align: left;
+		color: var(--gh-text);
+		transition:
+			background-color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
+	}
+
+	.card:hover {
+		background: var(--gh-hover);
+	}
+
+	.card:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--focus-ring);
+	}
+
+	.card-ico {
 		display: inline-grid;
 		place-items: center;
-		width: var(--gh-icon);
-		height: var(--gh-icon);
+		flex: none;
+		width: 2rem;
+		height: 2rem;
 		border-radius: var(--gh-r-control);
-		background: var(--accent);
-		color: var(--text-on-accent);
-		transition:
-			opacity var(--dur-fast) ease,
-			background-color var(--dur-fast) ease;
+		background: var(--fill-soft);
+		color: var(--gh-muted);
 	}
 
-	.send:disabled {
-		background: var(--gh-selected);
+	.card-text {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.card-name {
+		font-weight: 600;
+	}
+
+	.card-cap {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
 	}
 
-	.hint {
-		margin: 0.75rem 0 0;
-		text-align: center;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
+	.card-chev {
+		display: inline-flex;
+		flex: none;
 		color: var(--gh-faint);
 	}
 
 	.list {
 		display: flex;
 		flex-direction: column;
-		margin-top: 3rem;
 	}
 
 	.list + .list {
@@ -636,17 +909,21 @@
 		padding: 0 0.75rem;
 		border-radius: var(--gh-r-row);
 		text-align: left;
-		color: var(--gh-text);
-		transition: background-color var(--dur-fast) ease;
+		color: var(--gh-muted);
+		transition:
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.item:hover {
 		background: var(--gh-hover);
+		color: var(--gh-text);
 	}
 
 	.item--on,
 	.item--on:hover {
 		background: var(--gh-selected);
+		color: var(--gh-text);
 	}
 
 	.item--machine {
@@ -661,6 +938,7 @@
 		min-width: 0;
 		height: 100%;
 		text-align: left;
+		color: inherit;
 	}
 
 	.ico {

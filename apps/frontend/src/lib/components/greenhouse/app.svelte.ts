@@ -39,6 +39,7 @@ export class GreenhouseApp {
 	superAdmin = $state(false);
 	organizationId = $state<string | null>(null);
 	sheet = $state<Sheet>(null);
+	settingsSection = $state<string | null>(null);
 	mobilePane = $state<'sessions' | 'chat' | 'changes'>('chat');
 	ws = $state.raw<MachineWorkspace | null>(null);
 	lastMachine = $state<string | null>(null);
@@ -125,6 +126,11 @@ export class GreenhouseApp {
 		const machine = this.machineId;
 		this.nav.go({ machine, session: sid, tab });
 		if (sid) this.mobilePane = 'chat';
+	}
+
+	openSettings(section: string | null = null) {
+		this.settingsSection = section;
+		this.sheet = 'settings';
 	}
 
 	goHome() {

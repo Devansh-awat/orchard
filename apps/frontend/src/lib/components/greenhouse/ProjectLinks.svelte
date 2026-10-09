@@ -99,7 +99,7 @@
 
 <script lang="ts">
 	import { FolderGit2, X } from 'lucide-svelte';
-	import { Select } from '$lib/components/ui';
+	import { Field, Select } from '$lib/components/ui';
 	import { toasts } from '$lib/stores';
 	import { getGreenhouseApp } from './app.svelte';
 	import FormError from './FormError.svelte';
@@ -149,30 +149,34 @@
 	{/if}
 {:else}
 	<div class="picks">
-		<Select
-			value={store.projectId}
-			aria-label="Project"
-			data-autofocus
-			disabled={store.available.length === 0}
-			onchange={(e: Event) => store.pickProject((e.currentTarget as HTMLSelectElement).value)}
-		>
-			<option value="" disabled>
-				{store.available.length === 0 ? 'No more projects you can edit' : 'Project'}
-			</option>
-			{#each store.available as p (p.id)}
-				<option value={p.id}>{p.name}</option>
-			{/each}
-		</Select>
-		<Select
-			bind:value={store.environmentId}
-			aria-label="Environment"
-			disabled={store.environments.length === 0}
-		>
-			{#if store.environments.length === 0}<option value="">Environment</option>{/if}
-			{#each store.environments as env (env.id)}
-				<option value={env.id}>{env.name}</option>
-			{/each}
-		</Select>
+		<Field label="Project" for="gh-link-project">
+			<Select
+				id="gh-link-project"
+				value={store.projectId}
+				data-autofocus
+				disabled={store.available.length === 0}
+				onchange={(e: Event) => store.pickProject((e.currentTarget as HTMLSelectElement).value)}
+			>
+				<option value="" disabled>
+					{store.available.length === 0 ? 'No more projects you can edit' : 'Choose a project'}
+				</option>
+				{#each store.available as p (p.id)}
+					<option value={p.id}>{p.name}</option>
+				{/each}
+			</Select>
+		</Field>
+		<Field label="Environment" for="gh-link-env">
+			<Select
+				id="gh-link-env"
+				bind:value={store.environmentId}
+				disabled={store.environments.length === 0}
+			>
+				{#if store.environments.length === 0}<option value="">Default</option>{/if}
+				{#each store.environments as env (env.id)}
+					<option value={env.id}>{env.name}</option>
+				{/each}
+			</Select>
+		</Field>
 	</div>
 	{#if store.error}<FormError message={store.error} />{/if}
 {/if}
@@ -196,8 +200,14 @@
 	}
 
 	.picks {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+
+	@media (max-width: 720px) {
+		.picks {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 </style>

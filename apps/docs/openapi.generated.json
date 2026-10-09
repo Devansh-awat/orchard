@@ -55628,6 +55628,30 @@
                             "null"
                           ]
                         },
+                        "cpu": {
+                          "description": "CPU in use over a short window sampled inside the machine",
+                          "properties": {
+                            "totalCores": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedCores": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedCores",
+                            "totalCores"
+                          ],
+                          "type": "object"
+                        },
                         "disk": {
                           "properties": {
                             "capacityBytes": {
@@ -55648,6 +55672,30 @@
                           "required": [
                             "usedBytes",
                             "capacityBytes"
+                          ],
+                          "type": "object"
+                        },
+                        "memory": {
+                          "description": "Memory in use inside the machine against its allocation",
+                          "properties": {
+                            "totalBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "usedBytes": {
+                              "minimum": 0,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "usedBytes",
+                            "totalBytes"
                           ],
                           "type": "object"
                         },
@@ -55673,7 +55721,7 @@
                           ]
                         },
                         "sessionExpiresAt": {
-                          "description": "When the provider session times out unless it is extended",
+                          "description": "When the provider session times out unless it is extended; Orchard extends it while the machine is in use",
                           "type": [
                             "string",
                             "null"
@@ -55719,6 +55767,8 @@
                       "required": [
                         "vcpus",
                         "memoryBytes",
+                        "cpu",
+                        "memory",
                         "sessionExpiresAt",
                         "sessionTimeoutMinutes",
                         "activeCpuMs",

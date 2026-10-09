@@ -1,5 +1,6 @@
 .gh {
 	--gh-editor: var(--bg-app);
+	--gh-frame: color-mix(in oklab, var(--text-default) 4%, var(--bg-app));
 	--gh-sidebar: color-mix(in oklab, var(--text-default) 3.5%, var(--bg-app));
 	--gh-panel: var(--bg-app);
 	--gh-line: var(--border-default);
@@ -11,8 +12,8 @@
 	--gh-composer: color-mix(in oklab, var(--text-default) 2%, var(--bg-raised));
 	--gh-composer-edge: color-mix(in oklab, var(--text-default) 12%, transparent);
 	--gh-composer-shadow:
-		0 1px 2px color-mix(in oklab, var(--ink, black) 6%, transparent),
-		0 8px 24px -12px color-mix(in oklab, var(--ink, black) 18%, transparent);
+		0 1px 2px color-mix(in oklab, black 5%, transparent),
+		0 8px 24px -12px color-mix(in oklab, black 14%, transparent);
 	--gh-text: var(--text-default);
 	--gh-muted: var(--text-muted);
 	--gh-muted-strong: color-mix(in oklab, var(--text-default) 55%, var(--text-muted));
@@ -23,10 +24,13 @@
 	--gh-new: var(--status-success);
 	--gh-accent: var(--accent);
 	--gh-bar: 2.5rem;
+	--gh-titlebar: 2.75rem;
+	--gh-gutter: 0.5rem;
 	--gh-tab: 2.25rem;
 	--gh-row: 2rem;
 	--gh-list-row: 1.75rem;
-	--gh-session-row: 2rem;
+	--gh-session-row: 2.75rem;
+	--gh-row-gap: 0.25rem;
 	--gh-icon: 1.75rem;
 	--gh-glyph: 1rem;
 	--gh-ibtn-inset: calc((var(--gh-icon) - var(--gh-glyph)) / 2);
@@ -42,9 +46,10 @@
 	--gh-r-control: var(--radius-xs);
 	--gh-r-row: var(--radius-md);
 	--gh-r-sheet: var(--radius-lg);
+	--gh-r-panel: var(--radius-lg);
 	--gh-overlay-shadow:
-		0 1px 2px color-mix(in oklab, var(--ink, black) 8%, transparent),
-		0 12px 32px -8px color-mix(in oklab, var(--ink, black) 22%, transparent);
+		0 1px 2px color-mix(in oklab, black 7%, transparent),
+		0 12px 32px -8px color-mix(in oklab, black 18%, transparent);
 	--console-bg: var(--gh-panel);
 	--console-quiet: var(--gh-hover);
 	--console-faint: var(--text-faint);
@@ -53,6 +58,16 @@
 	line-height: var(--gh-lh-ui);
 	font-weight: 400;
 	-webkit-font-smoothing: antialiased;
+}
+
+:root.dark .gh {
+	--gh-frame: color-mix(in oklab, var(--bg-app) 70%, black);
+	--gh-composer-shadow:
+		0 1px 2px color-mix(in oklab, black 16%, transparent),
+		0 8px 24px -12px color-mix(in oklab, black 32%, transparent);
+	--gh-overlay-shadow:
+		0 1px 2px color-mix(in oklab, black 20%, transparent),
+		0 12px 32px -8px color-mix(in oklab, black 40%, transparent);
 }
 
 .gh-ibtn {
@@ -128,6 +143,17 @@
 
 .gh-btn--primary:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--accent) 88%, var(--text-default));
+}
+
+.gh-btn--inverse {
+	border-color: transparent;
+	background: var(--ink);
+	color: var(--bg-app);
+	font-weight: 600;
+}
+
+.gh-btn--inverse:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--ink) 84%, var(--bg-app));
 }
 
 .gh-btn--ghost {

@@ -13,8 +13,8 @@ func sandboxUsageCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "usage <sandbox>",
 		Short: "Show a machine's CPU, memory, disk and time limits",
-		Long: "Usage shows live CPU, memory and disk against the limits (Kubernetes) or the allocation, " +
-			"active CPU, network and session end (Vercel), plus uptime, when the machine stops if idle, " +
+		Long: "Usage shows live CPU, memory and disk against the machine's limits, active CPU and network " +
+			"(Vercel), plus uptime, when the machine stops if idle, " +
 			"its max lifetime and how many machines the owner has against their cap. Unmeasurable values are omitted.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -74,6 +74,17 @@ func usageCores(m map[string]any, key string) string {
 	return fmt.Sprintf("%.0fm", v)
 }
 
+func usageCoreCount(m map[string]any, key string) string {
+	v, ok := usageNumber(m, key)
+	if !ok {
+		return ""
+	}
+	if v == 1 {
+		return "1 core"
+	}
+	return fmt.Sprintf("%g cores", v)
+}
+
 func usageSpan(d time.Duration) string {
 	if d < 0 {
 		d = 0
@@ -121,10 +132,22 @@ func sandboxUsagePairs(raw map[string]any, now time.Time) [][2]string {
 		add("disk", usageOf(usageBytes(disk, "usedBytes"), usageBytes(disk, "capacityBytes")))
 	}
 	if v := quotaSub(raw, "vercel"); v != nil {
-		if cpus, ok := usageNumber(v, "vcpus"); ok {
-			add("vcpus", fmt.Sprintf("%g", cpus))
+		cpu := quotaSub(v, "cpu")
+		total := usageCoreCount(cpu, "totalCores")
+		if total == "" {
+			total = usageCoreCount(v, "vcpus")
 		}
-		add("memory", usageBytes(v, "memoryBytes"))
+		used := usageCoreCount(cpu, "usedCores")
+		if u, ok := usageNumber(cpu, "usedCores"); ok && total != "" {
+			used = fmt.Sprintf("%g", u)
+		}
+		add("cpu", usageOf(used, total))
+		mem := quotaSub(v, "memory")
+		memTotal := usageBytes(mem, "totalBytes")
+		if memTotal == "" {
+			memTotal = usageBytes(v, "memoryBytes")
+		}
+		add("memory", usageOf(usageBytes(mem, "usedBytes"), memTotal))
 		if ms, ok := usageNumber(v, "activeCpuMs"); ok {
 			add("active cpu", (time.Duration(ms) * time.Millisecond).Round(time.Second).String())
 		}
@@ -134,7 +157,6 @@ func sandboxUsagePairs(raw map[string]any, now time.Time) [][2]string {
 		if usageBytes(disk, "usedBytes") != "" {
 			add("disk", usageOf(usageBytes(disk, "usedBytes"), usageBytes(disk, "capacityBytes")))
 		}
-		add("session ends", usageUntil(v, "sessionExpiresAt", now))
 	}
 	add("stops if idle", usageUntil(raw, "stopsAt", now))
 	add("max lifetime ends", usageUntil(raw, "lifetimeEndsAt", now))

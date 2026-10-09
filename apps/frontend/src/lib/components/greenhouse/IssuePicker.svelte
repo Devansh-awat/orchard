@@ -4,6 +4,7 @@
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import * as api from './api';
+	import { getGreenhouseApp } from './app.svelte';
 	import { linearIssues } from './integrations';
 	import type { GhIssue, IssueProvider, PickedIssue } from './types';
 
@@ -20,6 +21,8 @@
 		running: boolean;
 		disabled?: boolean;
 	} = $props();
+
+	const app = getGreenhouseApp();
 
 	const PROVIDERS = [
 		{ value: 'github', label: 'GitHub' },
@@ -135,11 +138,12 @@
 			class="chip"
 			class:chip--set={!!value}
 			aria-expanded={isOpen}
+			aria-label={value ? undefined : 'Start from an issue'}
 			{disabled}
 			title={value?.title ?? 'Start from an issue'}
 		>
-			<CircleDot size={14} strokeWidth={1.75} />
-			<span class="chip-label">{value ? value.ref : 'Issue'}</span>
+			<CircleDot size={16} strokeWidth={1.75} />
+			{#if value}<span class="chip-label">{value.ref}</span>{/if}
 		</button>
 	{/snippet}
 	<div class="picker" data-align="issue-picker">
@@ -172,7 +176,14 @@
 			{:else if phase === 'disconnected'}
 				<div class="empty">
 					<p>Connect your Linear account to pick its issues.</p>
-					<a class="gh-btn" href="/user/settings?tab=sandbox">Connect Linear</a>
+					<button
+						type="button"
+						class="gh-btn"
+						onclick={() => {
+							open = false;
+							app.openSettings('integrations');
+						}}>Connect Linear</button
+					>
 				</div>
 			{:else if phase === 'unavailable' || phase === 'error'}
 				<p class="note">{message}</p>
@@ -221,12 +232,13 @@
 	.chip {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.25rem;
+		min-width: var(--gh-icon);
 		max-width: 16rem;
 		height: var(--gh-icon);
-		padding: 0 0.5rem;
+		padding: 0 var(--gh-ibtn-inset);
 		border-radius: var(--gh-r-control);
-		border: 1px solid var(--gh-line);
 		color: var(--gh-muted);
 		white-space: nowrap;
 		transition:
@@ -251,6 +263,7 @@
 	}
 
 	.chip--set {
+		padding: 0 0.5rem 0 var(--gh-ibtn-inset);
 		color: var(--gh-text);
 		background: var(--gh-selected);
 	}

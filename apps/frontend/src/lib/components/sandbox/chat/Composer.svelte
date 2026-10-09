@@ -563,16 +563,23 @@
 	}
 
 	.cmp-input {
+		display: block;
 		width: 100%;
-		min-height: 3rem;
-		padding: 0 0 0 1px;
-		caret-color: var(--accent);
+		min-height: calc(2 * var(--gh-lh-reading, 1.5rem));
+		margin: 0;
+		padding: 0;
 		border: none;
 		background: none;
 		resize: none;
-		font-size: var(--text-body);
-		line-height: 1.5rem;
+		font-family: inherit;
+		font-size: var(--gh-reading, var(--text-body));
+		line-height: var(--gh-lh-reading, 1.5rem);
+		letter-spacing: normal;
+		text-indent: 0;
+		text-align: start;
+		vertical-align: top;
 		color: var(--text-default);
+		caret-color: var(--accent);
 	}
 
 	.cmp-input:focus-visible {
@@ -580,7 +587,11 @@
 	}
 
 	.cmp-input::placeholder {
+		font: inherit;
+		letter-spacing: inherit;
+		text-indent: 0;
 		color: var(--text-faint);
+		opacity: 1;
 	}
 
 	.slash {

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import {
 		ArrowLeft,
+		Boxes,
 		Check,
-		ChevronDown,
+		ChevronsUpDown,
 		CircleAlert,
 		GitFork,
 		Play,
@@ -10,8 +11,7 @@
 		Plus,
 		Server,
 		Settings2,
-		Square,
-		Users
+		Square
 	} from 'lucide-svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
@@ -19,7 +19,7 @@
 	import MachineUsage from './MachineUsage.svelte';
 	import { sandboxStatus } from '$lib/components/ui/status';
 	import { getGreenhouseApp } from './app.svelte';
-	import { runnerLabel } from './format';
+	import { ago, runnerLabel } from './format';
 	import { hostOnly } from './workspace.svelte';
 	import type { Sandbox } from '$lib/types/sandbox';
 
@@ -44,6 +44,12 @@
 
 	let open = $state(false);
 
+	const idle = $derived(
+		machine?.lastActiveAt
+			? `Last active ${ago(machine.lastActiveAt)}. Idle machines stop on their own.`
+			: 'Idle machines stop on their own.'
+	);
+
 	function machineStatus(m: Sandbox) {
 		return sandboxStatus(m.status, {
 			applying: m.applying,
@@ -60,14 +66,34 @@
 			type="button"
 			class="switch"
 			aria-expanded={isOpen}
-			title={machine ? `${machine.name} · ${runnerLabel(machine.runner)} · ${meta?.label}` : ''}
+			aria-label={machine
+				? `${machine.name}, ${meta?.label ?? ''} on ${runnerLabel(machine.runner)}, switch machine`
+				: 'Choose a machine'}
+			title={machine ? idle : undefined}
 		>
-			<span class="ico" data-align="sidebar-icon">
-				<Server size={16} strokeWidth={1.75} />
-				{#if meta}<span class="badge"><StatusDot {meta} size={6} /></span>{/if}
+			<span class="tile" aria-hidden="true">
+				{#if machine?.runner === 'vercel'}
+					<svg class="vercel" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+						<path d="M12 2.5 22 19.5H2Z" fill="currentColor" />
+					</svg>
+				{:else if machine}
+					<Boxes size={16} strokeWidth={1.75} />
+				{:else}
+					<Server size={16} strokeWidth={1.75} />
+				{/if}
 			</span>
-			<span class="name" data-align="sidebar-label">{machine?.name ?? 'No machine'}</span>
-			<span class="chev"><ChevronDown size={16} strokeWidth={1.75} /></span>
+			<span class="text">
+				<span class="name">{machine?.name ?? 'No machine'}</span>
+				<span class="cap">
+					{#if machine && meta}
+						<StatusDot {meta} size={6} />
+						<span class="cap-text">{meta.label} · {runnerLabel(machine.runner)}</span>
+					{:else}
+						<span class="cap-text">Create one to start</span>
+					{/if}
+				</span>
+			</span>
+			<span class="chev"><ChevronsUpDown size={14} strokeWidth={1.75} /></span>
 		</button>
 	{/snippet}
 	{#if app.machines.length > 0}
@@ -123,15 +149,11 @@
 		{/if}
 		{#if !ws.lifecycleOnly}
 			<MenuItem
-				onclick={() => (app.sheet = 'settings')}
+				onclick={() => app.openSettings('general')}
 				disabled={!ws.isOwner}
 				title={ws.isOwner ? undefined : hostOnly('change machine settings')}
 			>
 				<Settings2 size={14} /> Machine settings
-			</MenuItem>
-			<MenuItem onclick={() => (app.sheet = 'share')}>
-				<Users size={14} />
-				{ws.isOwner ? 'Share' : 'People'}
 			</MenuItem>
 			<MenuItem onclick={() => (app.sheet = 'fork')} disabled={!!forkBlocked} title={forkBlocked}>
 				<GitFork size={14} /> Fork machine…
@@ -152,35 +174,13 @@
 		gap: 0.5rem;
 		width: 100%;
 		min-width: 0;
-		height: var(--gh-row);
-		padding: 0 var(--row-pad, 0.5rem);
+		height: var(--gh-session-row);
+		padding: 0 calc(var(--gh-side-edge) - 0.5rem) 0
+			calc(var(--gh-side-edge) - 0.5rem - (var(--gh-icon) - var(--gh-glyph)) / 2);
 		border-radius: var(--gh-r-row);
 		color: var(--gh-text);
-		font-weight: 600;
 		text-align: left;
 		transition: background-color var(--dur-fast) ease;
-	}
-
-	.ico {
-		position: relative;
-		display: inline-grid;
-		place-items: center;
-		flex: none;
-		width: var(--gh-glyph);
-		height: var(--gh-glyph);
-		color: var(--gh-muted);
-	}
-
-	.badge {
-		position: absolute;
-		right: -0.125rem;
-		bottom: -0.125rem;
-		display: inline-grid;
-		place-items: center;
-		width: 0.625rem;
-		height: 0.625rem;
-		border-radius: 50%;
-		background: var(--gh-sidebar);
 	}
 
 	.switch:hover,
@@ -188,10 +188,32 @@
 		background: var(--gh-hover);
 	}
 
-	.chev {
+	.switch:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--focus-ring);
+	}
+
+	.tile {
 		display: inline-grid;
+		place-items: center;
 		flex: none;
-		color: var(--gh-muted);
+		width: var(--gh-icon);
+		height: var(--gh-icon);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--gh-line);
+		background: var(--gh-editor);
+		color: var(--gh-text);
+	}
+
+	.vercel {
+		display: block;
+	}
+
+	.text {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.name {
@@ -199,6 +221,33 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		font-weight: 600;
+		line-height: var(--gh-lh-ui);
+	}
+
+	.cap {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-muted);
+	}
+
+	.cap-text {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.chev {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: var(--gh-glyph);
+		color: var(--gh-faint);
 	}
 
 	.item-name {

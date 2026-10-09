@@ -20,6 +20,7 @@
 	import { statusMeta } from '$lib/components/ui/status';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
+	import { greenhousePrefs } from './prefs.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import * as api from './api';
@@ -512,6 +513,8 @@
 								{@render missing('setup')}
 							{:else}
 								<PodTerminal
+									fontSize={greenhousePrefs.codeSize}
+									onZoom={(s) => greenhousePrefs.stepCode(s)}
 									endpoint={endpoint('setup', 'ro')}
 									visible={tab === 'setup'}
 									sessionHandle={handleFor(session.id, 'setup')}
@@ -531,6 +534,8 @@
 									<p class="note">The run script is stopped. Press Run to start it.</p>
 								{:else}
 									<PodTerminal
+										fontSize={greenhousePrefs.codeSize}
+										onZoom={(s) => greenhousePrefs.stepCode(s)}
 										endpoint={endpoint('run', 'ro')}
 										visible={tab === 'run'}
 										sessionHandle={handleFor(session.id, 'run')}
@@ -584,6 +589,8 @@
 					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `term:${n}`}>
 						<PodTerminal
+							fontSize={greenhousePrefs.codeSize}
+							onZoom={(s) => greenhousePrefs.stepCode(s)}
 							endpoint={endpoint(n)}
 							visible={tab === `term:${n}`}
 							sessionHandle={handleFor(scope, `term:${n}`)}
@@ -604,6 +611,8 @@
 					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `watch:${user.id}`}>
 						<PodTerminal
+							fontSize={greenhousePrefs.codeSize}
+							onZoom={(s) => greenhousePrefs.stepCode(s)}
 							endpoint={endpoint('1', 'ro', user.id)}
 							visible={tab === `watch:${user.id}`}
 							sessionHandle={handleFor(scope, `watch:${user.id}`)}
