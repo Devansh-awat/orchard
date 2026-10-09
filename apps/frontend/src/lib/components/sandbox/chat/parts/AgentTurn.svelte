@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Sprout } from 'lucide-svelte';
+	import Pip from '$lib/components/greenhouse/mascot/Pip.svelte';
 	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import type { ChatSessionStore } from '../session-store.svelte';
 	import { stripSycophancy } from '../sycophancy';
@@ -53,7 +53,7 @@
 	data-live={live ? 'true' : undefined}
 >
 	<span class="turn-mark turn-mark--{lead}" aria-hidden="true">
-		<span class="mark"><Sprout size={14} strokeWidth={1.75} /></span>
+		<span class="mark"><Pip size={18} playing={false} /></span>
 	</span>
 	{#if activity}
 		<ActivityRow {block} {store} {live} />
@@ -133,8 +133,6 @@
 		place-items: center;
 		width: 1.25rem;
 		height: 1.25rem;
-		border-radius: var(--radius-xs);
-		background: var(--fill-soft);
 		color: var(--text-muted);
 	}
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { decorativeMotion } from '$lib/utils/motion.svelte';
+	import Pip from './mascot/Pip.svelte';
 	import type { SandboxBoot, SandboxBootPhase, SandboxStatus } from '$lib/types/sandbox';
 	import { fmtElapsed } from '$lib/components/sandbox/chat/steps';
 
@@ -57,29 +57,7 @@
 		untrack(() => localStorage.setItem(key, String(Date.now() - startedAt)));
 	});
 
-	const POT = ['rrrrrrrrr', '.ppppppp.', '.ppppppp.', '..ppppp..'];
-
-	const PLANTS = [
-		['.........', '.........', '.........', '.........', '.........', '...eee...'],
-		['.........', '.........', '.........', '.........', '....g....', '...ese...'],
-		['.........', '.........', '....g....', '...gsg...', '....s....', '...ese...'],
-		['....g....', '...gsg...', '....s....', '..ggsgg..', '..g.s.g..', '...ese...'],
-		['.....g...', '....sgg..', '....s....', '..ggsgg..', '.g..s..g.', '...ese...'],
-		['...g.....', '..ggs....', '....s....', '..ggsgg..', '..g.s.g..', '...ese...']
-	];
-
-	const SEQUENCE = [0, 1, 2, 3, 4, 3, 5, 3, 4, 3, 5, 3];
-	const TICK_MS = 260;
-
-	let tick = $state(0);
-
-	$effect(() => {
-		if (!decorativeMotion()) return;
-		const timer = setInterval(() => (tick = (tick + 1) % SEQUENCE.length), TICK_MS);
-		return () => clearInterval(timer);
-	});
-
-	const frame = $derived([...PLANTS[decorativeMotion() ? SEQUENCE[tick] : 3], ...POT]);
+	const pose = $derived(!waking ? 'idle' : boot?.ready ? 'happy' : 'thinking');
 
 	const title = $derived(
 		status === 'stopping'
@@ -93,13 +71,7 @@
 </script>
 
 <div class="wake" role="status" aria-live="polite">
-	<div class="art" aria-hidden="true">
-		{#each frame as row, y (y)}
-			{#each row.split('') as cell, x (x)}
-				<span class="px px--{cell === '.' ? 'off' : cell}"></span>
-			{/each}
-		{/each}
-	</div>
+	<span class="art" aria-hidden="true"><Pip {pose} size={72} /></span>
 	<p class="title">{title}</p>
 	{#if detail}<p class="detail">{detail}</p>{/if}
 	{#if waking && boot}
@@ -129,36 +101,9 @@
 	}
 
 	.art {
-		--px: 0.4375rem;
-		display: grid;
-		grid-template-columns: repeat(9, var(--px));
-		grid-auto-rows: var(--px);
-		margin-bottom: 1rem;
-		image-rendering: pixelated;
-	}
-
-	.px--off {
-		background: transparent;
-	}
-
-	.px--g {
-		background: var(--status-success);
-	}
-
-	.px--s {
-		background: color-mix(in oklab, var(--status-success) 65%, var(--text-default));
-	}
-
-	.px--e {
-		background: color-mix(in oklab, var(--accent) 40%, black);
-	}
-
-	.px--r {
-		background: color-mix(in oklab, var(--accent) 75%, var(--text-default));
-	}
-
-	.px--p {
-		background: var(--accent);
+		display: inline-grid;
+		place-items: center;
+		margin-bottom: 0.75rem;
 	}
 
 	.title {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fmtElapsed } from '../steps';
-	import PixelSprout from './PixelSprout.svelte';
+	import Pip from '$lib/components/greenhouse/mascot/Pip.svelte';
 
 	let { start = null, label }: { start?: number | null; label: string } = $props();
 
@@ -16,7 +16,7 @@
 </script>
 
 <div class="work" data-align="content">
-	<span class="work-glyph"><PixelSprout /></span>
+	<span class="work-glyph"><Pip pose="thinking" size={18} /></span>
 	<span class="work-time" role="timer">{elapsed}</span>
 	<span class="work-sep" aria-hidden="true">·</span>
 	<span class="work-label" role="status" aria-live="polite">{label}</span>
@@ -38,8 +38,8 @@
 		display: inline-grid;
 		place-items: center;
 		flex-shrink: 0;
-		width: 1rem;
-		height: 1rem;
+		width: 1.125rem;
+		height: 1.125rem;
 	}
 
 	.work-time {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { HumanMessage } from '$lib/components/sandbox/chat';
-	import PixelSprout from '$lib/components/sandbox/chat/parts/PixelSprout.svelte';
+	import Pip from './mascot/Pip.svelte';
 	import { fmtElapsed } from '$lib/components/sandbox/chat/steps';
 	import ErrorPart from '$lib/components/sandbox/chat/parts/ErrorPart.svelte';
 	import type { PersonRef } from './types';
@@ -75,7 +75,7 @@
 		</div>
 	{:else}
 		<div class="prep-center" role="status" aria-live="polite">
-			<span class="prep-plant" aria-hidden="true"><PixelSprout /></span>
+			<span class="prep-plant" aria-hidden="true"><Pip pose="thinking" size={54} /></span>
 			<p class="prep-title">{title}</p>
 			<p class="prep-detail">{detail}</p>
 			<div
@@ -154,10 +154,7 @@
 	.prep-plant {
 		display: inline-grid;
 		place-items: center;
-		margin-bottom: 1rem;
-		transform: scale(2.5);
-		transform-origin: center bottom;
-		height: 3rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.prep-title {

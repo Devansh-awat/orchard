@@ -17,7 +17,6 @@
 		Play,
 		Plus,
 		RotateCw,
-		Sprout,
 		Square,
 		SquareKanban,
 		X
@@ -37,6 +36,7 @@
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
 	import WakeUp from './WakeUp.svelte';
+	import Pip from './mascot/Pip.svelte';
 	import * as api from './api';
 	import { linearStatus, linkedIntegrations, type IntegrationProvider } from './integrations';
 	import RepoIcon from './RepoIcon.svelte';
@@ -239,7 +239,7 @@
 					{#if machine && !stopped}
 						<WakeUp status={machine.status} sandboxId={machine.id} />
 					{:else}
-						<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
+						<span class="mark" aria-hidden="true"><Pip size={54} /></span>
 						<h1 class="title" data-type="display">
 							{machine ? `${machine.name} is asleep` : 'Select and start your machine'}
 						</h1>
@@ -273,7 +273,7 @@
 				</div>
 			{:else}
 				<div class="hero">
-					<span class="mark" aria-hidden="true"><Sprout size={20} strokeWidth={1.75} /></span>
+					<span class="mark" aria-hidden="true"><Pip pose="wave" size={54} /></span>
 					<h1 class="title" data-type="display">What should we build?</h1>
 				</div>
 
@@ -616,11 +616,6 @@
 	.mark {
 		display: inline-grid;
 		place-items: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: var(--gh-r-row);
-		background: var(--fill-soft);
-		color: var(--gh-muted);
 	}
 
 	.title {
