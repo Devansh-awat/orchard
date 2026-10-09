@@ -15,10 +15,12 @@
 	} = $props();
 
 	const PAD = 8;
+	const PANEL = 160;
 	const EDGE = 3;
 	const HEAD = 32;
 	const GAP = 16;
 	const CARD_W = 340;
+	const CARD_MIN = 240;
 
 	let index = $state(0);
 	let busy = $state(false);
@@ -30,7 +32,8 @@
 	let blurEl = $state<HTMLDivElement | null>(null);
 	let ringEl = $state<HTMLDivElement | null>(null);
 	let moving: { stop: () => void } | null = null;
-	let cardEl = $state<HTMLDivElement | null>(null);
+	let cardEl = $state<HTMLDialogElement | null>(null);
+	let bodyEl = $state<HTMLDivElement | null>(null);
 	let session: string | null = null;
 	let run = 0;
 
@@ -41,17 +44,25 @@
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
-	async function find(selector: string, timeout = 3000): Promise<HTMLElement | null> {
+	function visible(selector: string): HTMLElement[] {
+		return [...document.querySelectorAll<HTMLElement>(selector)].filter((el) => {
+			const r = el.getBoundingClientRect();
+			return r.width > 0 && r.height > 0;
+		});
+	}
+
+	async function findAll(selector: string, timeout = 3000): Promise<HTMLElement[]> {
 		const until = Date.now() + timeout;
 		while (Date.now() < until) {
-			const el = document.querySelector<HTMLElement>(selector);
-			if (el) {
-				const r = el.getBoundingClientRect();
-				if (r.width > 0 && r.height > 0) return el;
-			}
+			const found = visible(selector);
+			if (found.length > 0) return found;
 			await sleep(50);
 		}
-		return null;
+		return [];
+	}
+
+	async function find(selector: string, timeout = 3000): Promise<HTMLElement | null> {
+		return (await findAll(selector, timeout))[0] ?? null;
 	}
 
 	async function step(s: TourStep): Promise<boolean> {
@@ -65,11 +76,12 @@
 		if (s.kind === 'escape') {
 			let closed = false;
 			for (const el of document.querySelectorAll<HTMLElement>('[popover]:popover-open')) {
-				if (el === cardEl) continue;
 				el.hidePopover();
 				closed = true;
 			}
-			const close = document.querySelector<HTMLElement>('dialog[open] [aria-label="Close"]');
+			const close = [...document.querySelectorAll('dialog[open]')]
+				.find((d) => d !== cardEl)
+				?.querySelector<HTMLElement>('[aria-label="Close"]');
 			if (close) {
 				close.click();
 				closed = true;
@@ -104,29 +116,55 @@
 		}
 	}
 
-	function place(r: { x: number; y: number; w: number; h: number } | null) {
+	function fit(width: number): number {
+		if (!cardEl) return 220;
+		cardEl.style.width = `${width}px`;
+		return cardEl.offsetHeight;
+	}
+
+	function place(r: Box | null): { left: number; top: number; width: number } {
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
-		const ch = cardEl?.offsetHeight ?? 220;
-		if (!r) return { left: (vw - CARD_W) / 2, top: Math.max(GAP + HEAD, (vh - ch) / 2) };
-		const clampTop = (top: number) => Math.min(Math.max(GAP + HEAD, top), vh - ch - GAP);
-		if (r.x + r.w + GAP + CARD_W <= vw - GAP) return { left: r.x + r.w + GAP, top: clampTop(r.y) };
-		if (r.x - GAP - CARD_W >= GAP) return { left: r.x - GAP - CARD_W, top: clampTop(r.y) };
-		const left = Math.min(Math.max(GAP, r.x), vw - CARD_W - GAP);
-		if (r.y + r.h + GAP + HEAD + ch <= vh - GAP) return { left, top: r.y + r.h + GAP + HEAD };
-		return { left, top: Math.max(GAP + HEAD, r.y - GAP - ch) };
+		const full = Math.min(CARD_W, vw - GAP * 2);
+		const clampTop = (top: number, ch: number) =>
+			Math.min(Math.max(GAP + HEAD, top), Math.max(GAP + HEAD, vh - ch - GAP));
+		if (!r) {
+			const ch = fit(full);
+			return { left: (vw - full) / 2, top: clampTop((vh - ch) / 2, ch), width: full };
+		}
+		const rightSpace = vw - GAP - (r.x + r.w + GAP);
+		if (rightSpace >= CARD_MIN) {
+			const width = Math.min(CARD_W, rightSpace);
+			return { left: r.x + r.w + GAP, top: clampTop(r.y, fit(width)), width };
+		}
+		const leftSpace = r.x - GAP * 2;
+		if (leftSpace >= CARD_MIN) {
+			const width = Math.min(CARD_W, leftSpace);
+			return { left: r.x - GAP - width, top: clampTop(r.y, fit(width)), width };
+		}
+		const ch = fit(full);
+		const left = Math.min(Math.max(GAP, r.x), vw - full - GAP);
+		if (r.y + r.h + GAP + HEAD + ch <= vh - GAP) {
+			return { left, top: r.y + r.h + GAP + HEAD, width: full };
+		}
+		return { left, top: clampTop(r.y - GAP - ch, ch), width: full };
 	}
 
 	async function measure(restack = false) {
-		const target = beat.target ? await find(beat.target) : null;
-		if (!target) {
+		const targets = beat.target ? await findAll(beat.target) : [];
+		if (targets.length === 0) {
 			hole = null;
 		} else {
-			const r = target.getBoundingClientRect();
-			const x = Math.max(EDGE, r.left - PAD);
-			const y = Math.max(EDGE, r.top - PAD);
-			const right = Math.min(window.innerWidth - EDGE, r.right + PAD);
-			const bottom = Math.min(window.innerHeight - EDGE, r.bottom + PAD);
+			const rects = targets.map((el) => el.getBoundingClientRect());
+			const left = Math.min(...rects.map((r) => r.left));
+			const top = Math.min(...rects.map((r) => r.top));
+			const outer = Math.max(...rects.map((r) => r.right));
+			const under = Math.max(...rects.map((r) => r.bottom));
+			const pad = Math.min(outer - left, under - top) >= PANEL ? 0 : PAD;
+			const x = Math.max(EDGE, left - pad);
+			const y = Math.max(EDGE, top - pad);
+			const right = Math.min(window.innerWidth - EDGE, outer + pad);
+			const bottom = Math.min(window.innerHeight - EDGE, under + pad);
 			hole = { x, y, w: right - x, h: bottom - y };
 		}
 		const box = hole ?? {
@@ -150,13 +188,20 @@
 		if (!shown) paint(box);
 		await tick();
 		if (!cardEl) return;
+		const open = cardEl.open;
+		const fresh = !open || restack || !hole;
+		if (fresh) {
+			if (open) cardEl.close();
+			cardEl.style.opacity = '0';
+			cardEl.showModal();
+			const primary = cardEl.querySelector<HTMLButtonElement>('.gh-btn--primary');
+			primary?.blur();
+			primary?.focus({ preventScroll: true, focusVisible: false });
+		}
 		const pos = place(hole);
 		const to = { left: `${pos.left}px`, top: `${pos.top}px` };
-		const open = cardEl.matches(':popover-open');
-		if (!open || restack || !hole) {
-			if (open) cardEl.hidePopover();
+		if (fresh) {
 			Object.assign(cardEl.style, to);
-			cardEl.showPopover();
 			motion(
 				cardEl,
 				{
@@ -169,8 +214,8 @@
 			);
 		} else {
 			motion(cardEl, to, 'snappy');
+			if (bodyEl) motion(bodyEl, { opacity: [0, 1] }, 'snappy');
 		}
-		cardEl.querySelector<HTMLButtonElement>('.gh-btn--primary')?.focus({ preventScroll: true });
 	}
 
 	async function show(next: number) {
@@ -188,6 +233,7 @@
 	}
 
 	function go(delta: number) {
+		if (busy) return;
 		const next = index + delta;
 		if (next < 0) return;
 		if (next >= TOUR_BEATS.length) {
@@ -208,7 +254,7 @@
 		if (!action) return;
 		e.preventDefault();
 		e.stopImmediatePropagation();
-		if (!busy) action();
+		action();
 	}
 
 	onMount(() => {
@@ -235,22 +281,22 @@
 	<div class="ring" bind:this={ringEl}></div>
 </div>
 
-<div
+<dialog
 	class="gh card"
-	popover="manual"
 	bind:this={cardEl}
-	role="dialog"
-	aria-modal="true"
 	aria-labelledby="tour-title"
+	oncancel={(e) => e.preventDefault()}
 >
 	<span class="pip"><Pip pose={beat.pose} size={48} /></span>
-	<p class="title" id="tour-title">{beat.title}</p>
-	<p class="text">{beat.text}</p>
-	{#if beat.id === 'ssh'}
-		<code class="cmd gh-mono">orchard sandbox ssh-config --install</code>
-	{:else if beat.id === 'context'}
-		<code class="cmd gh-mono">orchard claude import</code>
-	{/if}
+	<div class="body" bind:this={bodyEl}>
+		<p class="title" id="tour-title">{beat.title}</p>
+		<p class="text">{beat.text}</p>
+		{#if beat.id === 'ssh'}
+			<code class="cmd gh-mono">orchard sandbox ssh-config --install</code>
+		{:else if beat.id === 'context'}
+			<code class="cmd gh-mono">orchard claude import</code>
+		{/if}
+	</div>
 	<div class="foot">
 		<span class="dots" aria-label="Step {index + 1} of {TOUR_BEATS.length}">
 			{#each TOUR_BEATS as b, i (b.id)}
@@ -258,25 +304,18 @@
 			{/each}
 		</span>
 		{#if index > 0}
-			<button
-				type="button"
-				class="gh-ibtn"
-				aria-label="Back"
-				title="Back"
-				disabled={busy}
-				onclick={() => go(-1)}
-			>
+			<button type="button" class="gh-ibtn" aria-label="Back" title="Back" onclick={() => go(-1)}>
 				<ArrowLeft size={16} strokeWidth={1.75} />
 			</button>
 		{/if}
-		<button type="button" class="gh-btn gh-btn--primary" disabled={busy} onclick={() => go(1)}>
+		<button type="button" class="gh-btn gh-btn--primary" onclick={() => go(1)}>
 			{last ? 'Start building' : index === 0 ? 'Show me' : 'Next'}
 		</button>
 	</div>
 	{#if !last}
 		<button type="button" class="skip" onclick={() => onfinish(false)}>Skip tour</button>
 	{/if}
-</div>
+</dialog>
 
 <style>
 	.tour {
@@ -304,6 +343,8 @@
 		position: fixed;
 		inset: auto;
 		width: 340px;
+		max-width: calc(100vw - 2rem);
+		max-height: none;
 		margin: 0;
 		padding: 1rem;
 		overflow: visible;
@@ -312,6 +353,10 @@
 		background: var(--bg-raised);
 		box-shadow: var(--elev-3, 0 12px 32px rgb(0 0 0 / 0.18));
 		color: var(--gh-text);
+	}
+
+	.card::backdrop {
+		background: transparent;
 	}
 
 	.pip {

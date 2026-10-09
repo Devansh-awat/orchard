@@ -39,7 +39,7 @@ export const TOUR_BEATS: TourBeat[] = [
 		title: 'Repositories and sessions',
 		text: 'Your repositories live on the machine. Each session under them is its own branch in its own folder, so you can run as many as you like side by side.',
 		pose: 'idle',
-		target: '[data-tour="repos"]'
+		target: '[data-tour="repos"] > *'
 	},
 	{
 		id: 'chat',
@@ -90,9 +90,9 @@ export const TOUR_BEATS: TourBeat[] = [
 	{
 		id: 'context',
 		title: 'Coming from Claude Code?',
-		text: 'Run orchard claude import to bring over your CLAUDE.md, subagents, slash commands, skills and MCP servers, or edit them here. They are encrypted at rest and only go to machines you own.',
+		text: 'Run this once to bring over your CLAUDE.md, subagents, slash commands, skills and MCP servers, or edit them right here.',
 		pose: 'happy',
-		target: '[data-tour="context"]',
+		target: 'dialog[open] .pane:has([data-tour="context"])',
 		before: [
 			...CLOSE,
 			{ kind: 'click', selector: '.side [aria-label="Settings"]' },

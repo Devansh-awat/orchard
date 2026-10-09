@@ -7,7 +7,7 @@ import {
 	type ChatComment
 } from '$lib/components/sandbox/chat/session-store.svelte';
 
-const BASE = Date.parse('2026-10-08T14:02:00Z');
+const BASE = Date.now() - 8 * 60_000;
 const SEB = { id: 'user-seb', name: 'Seb' };
 const ALEX = { id: 'user-alex', name: 'Alex Rivera' };
 const SAM = { id: 'user-sam', name: 'Sam Okafor' };
