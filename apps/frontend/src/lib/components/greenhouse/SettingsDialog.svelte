@@ -16,6 +16,7 @@
 	import PreferencesSection from './settings/PreferencesSection.svelte';
 	import ProjectsSection from './settings/ProjectsSection.svelte';
 	import SectionIcon from './settings/SectionIcon.svelte';
+	import Pip from './mascot/Pip.svelte';
 	import SetupSection from './settings/SetupSection.svelte';
 	import ShortcutsSection from './settings/ShortcutsSection.svelte';
 	import SoundsSection from './settings/SoundsSection.svelte';
@@ -232,6 +233,7 @@
 								<button
 									type="button"
 									class="tab"
+									data-section={id}
 									class:tab--on={id === current}
 									aria-current={id === current ? 'page' : undefined}
 									tabindex={id === current ? 0 : -1}
@@ -250,6 +252,17 @@
 			</div>
 
 			<div class="rail-foot">
+				<button
+					type="button"
+					class="tab"
+					onclick={() => {
+						close();
+						window.dispatchEvent(new Event('greenhouse-tour'));
+					}}
+				>
+					<Pip size={16} playing={false} />
+					<span class="tab-label">Take the tour</span>
+				</button>
 				<a class="tab" href={DOCS} target="_blank" rel="noreferrer">
 					<BookOpen size={16} strokeWidth={1.75} />
 					<span class="tab-label">Docs</span>
@@ -311,7 +324,11 @@
 
 			<div class="body gh-scroll" tabindex="-1" bind:this={panelEl}>
 				{#key current}
-					<div class="section" {@attach enter}>
+					<div
+						class="section"
+						data-tour={current === 'context' ? 'context' : undefined}
+						{@attach enter}
+					>
 						{#if current === 'preferences'}
 							<PreferencesSection />
 						{:else if current === 'sounds'}

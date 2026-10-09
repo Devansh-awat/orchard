@@ -103,7 +103,13 @@
 		{LINK_GITHUB}
 	</a>
 {:else}
-	<div class="gh-split" class:gh-split--primary={!pr} role="group" aria-label="Pull request">
+	<div
+		class="gh-split"
+		class:gh-split--primary={!pr}
+		role="group"
+		aria-label="Pull request"
+		data-tour="pr"
+	>
 		<button
 			type="button"
 			disabled={!session || (!pr && !canPush) || !!busy}

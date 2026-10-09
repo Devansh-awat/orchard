@@ -18,6 +18,7 @@
 	import JoinNotice from './JoinNotice.svelte';
 	import { GUTTER, LEFT, RIGHT } from './layout.svelte';
 	import NewMachineSheet from './NewMachineSheet.svelte';
+	import TourHost from './tour/TourHost.svelte';
 	import PreviewSheet from './PreviewSheet.svelte';
 	import ResizeHandle from './ResizeHandle.svelte';
 	import RightPanel from './RightPanel.svelte';
@@ -454,6 +455,7 @@
 		</div>
 	{/if}
 
+	<TourHost auto={!env.harness} />
 	<NewMachineSheet
 		bind:open={() => app.sheet === 'new-machine', (v) => (app.sheet = v ? 'new-machine' : null)}
 	/>

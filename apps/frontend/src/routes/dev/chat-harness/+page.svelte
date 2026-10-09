@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import ChatPanel from '$lib/components/sandbox/chat/ChatPanel.svelte';
 	import type { RemoteDraft } from '$lib/components/sandbox/chat/session-store.svelte';
-	import { fixtureStore, longStore, seedRequests } from './fixtures';
+	import { fixtureStore, longStore, seedRequests } from '$lib/components/greenhouse/demo/chat-fixtures';
 
 	const view = page.url.searchParams.get('view') ?? 'busy';
 	const store = view === 'long' ? longStore() : fixtureStore();

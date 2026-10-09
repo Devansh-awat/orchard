@@ -55,7 +55,8 @@
 		'/mcp',
 		'/cli',
 		'/auth/protect',
-		'/setup/claim'
+		'/setup/claim',
+		'/tour/'
 	];
 
 	// /<org>/login is the org's own SSO entry point and is meant to be reached
@@ -64,7 +65,10 @@
 	// definition, and a tenant's branded login screen should not open on the
 	// app's boot spinner.
 	const isOrgLoginRoute = $derived($page.route.id === '/[orgSlug=orgSlug]/login');
-	const isDevHarness = $derived(dev && ($page.route.id?.startsWith('/dev/') ?? false));
+	const isDevHarness = $derived(
+		(dev && ($page.route.id?.startsWith('/dev/') ?? false)) ||
+			($page.route.id?.startsWith('/tour/') ?? false)
+	);
 
 	function isPublicPath(pathname: string) {
 		if (dev && pathname.startsWith('/dev/')) return true;
@@ -206,7 +210,7 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.url.pathname.startsWith('/sandboxes') || $page.url.pathname.startsWith('/share/sandbox') || $page.route.id?.startsWith('/status'))}
+	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.url.pathname.startsWith('/sandboxes') || $page.url.pathname.startsWith('/share/sandbox') || $page.url.pathname.startsWith('/tour/') || $page.route.id?.startsWith('/status'))}
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="app-shell">

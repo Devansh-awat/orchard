@@ -83,6 +83,7 @@
 
 	<div class="stack" bind:this={stack}>
 		<div
+			data-tour="changes"
 			class="top"
 			style={showDock && app.layout.dockOpen
 				? `flex: 0 0 ${(1 - app.layout.dock) * 100}%`

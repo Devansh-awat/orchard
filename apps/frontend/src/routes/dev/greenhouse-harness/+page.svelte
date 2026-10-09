@@ -9,9 +9,9 @@
 		type GreenhouseNav,
 		type NavTarget
 	} from '$lib/components/greenhouse';
-	import { fixtureStore } from '../chat-harness/fixtures';
-	import { SEB } from './data';
-	import { fakeLive, installFetch, type HarnessRole } from './mock';
+	import { fixtureStore } from '$lib/components/greenhouse/demo/chat-fixtures';
+	import { SEB } from '$lib/components/greenhouse/demo/data';
+	import { fakeLive, installFetch, type HarnessRole } from '$lib/components/greenhouse/demo/mock';
 
 	const params = page.url.searchParams;
 	const role = (params.get('role') ?? 'owner') as HarnessRole;

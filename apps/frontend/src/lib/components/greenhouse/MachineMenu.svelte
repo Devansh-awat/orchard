@@ -66,6 +66,7 @@
 			{...props}
 			type="button"
 			class="switch"
+			data-tour="machine"
 			aria-expanded={isOpen}
 			aria-label={machine
 				? `${machine.name}, ${meta?.label ?? ''} on ${runnerLabel(machine.runner)}, switch machine`

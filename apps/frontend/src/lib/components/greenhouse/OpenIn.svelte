@@ -89,7 +89,7 @@
 	}
 </script>
 
-<div class="openin">
+<div class="openin" data-tour="editor">
 	<div class="gh-split" role="group" aria-label="Open in editor">
 		<button
 			type="button"

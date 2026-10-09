@@ -301,7 +301,12 @@
 					<Users size={16} strokeWidth={1.75} />
 				</button>
 			{:else}
-				<button type="button" class="gh-btn gh-btn--inverse" onclick={() => (app.sheet = 'share')}>
+				<button
+					type="button"
+					class="gh-btn gh-btn--inverse"
+					data-tour="share"
+					onclick={() => (app.sheet = 'share')}
+				>
 					{ws.isOwner ? 'Share' : 'People'}
 				</button>
 			{/if}

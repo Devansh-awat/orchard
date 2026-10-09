@@ -337,7 +337,7 @@
 	</div>
 {/snippet}
 
-<section class="dock" aria-label="Terminal dock" data-align="dock">
+<section class="dock" aria-label="Terminal dock" data-align="dock" data-tour="dock">
 	<div class="gh-tabs tabs" data-align="tabstrip">
 		<div class="scroll" role="tablist" aria-label="Dock">
 			{#if scripted}
