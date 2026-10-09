@@ -25,11 +25,13 @@ export function opencodeAuthJson(claudeToken: string | null): string {
   });
 }
 
+export const OPENCODE_AUTH_PLUGIN = '@cortexkit/opencode-anthropic-auth@1.22.0';
+
 export function opencodeConfigJson(
   mcpToken: string | null,
   opts: { mcpUrl?: string | null; requireHttpsMcp?: boolean } = {}
 ): string {
-  const config: Record<string, unknown> = { plugin: ['@cortexkit/opencode-anthropic-auth'] };
+  const config: Record<string, unknown> = { plugin: [OPENCODE_AUTH_PLUGIN] };
   const url = opts.mcpUrl ?? process.env.SANDBOX_MCP_URL ?? '';
   const reachable = !opts.requireHttpsMcp || url.startsWith('https://');
   if (mcpToken && url && reachable) {
