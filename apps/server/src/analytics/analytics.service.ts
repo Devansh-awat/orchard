@@ -11,9 +11,16 @@ export interface CaptureInput {
   groups?: Record<string, string>;
 }
 
+const FLAG_TTL_MS = 60_000;
+const FLAG_UNKNOWN_TTL_MS = 5_000;
+const FLAG_CACHE_MAX = 5_000;
+
 @Injectable()
 export class AnalyticsService implements OnModuleDestroy {
   private readonly logger = new Logger(AnalyticsService.name);
+
+  private readonly flagCache = new Map<string, { value: boolean; at: number }>();
+  private readonly flagInflight = new Map<string, Promise<boolean>>();
 
   private readonly client: PostHog | null;
 
@@ -86,8 +93,9 @@ export class AnalyticsService implements OnModuleDestroy {
   }
 
   /**
-   * Server-side feature flag check. Returns false when PostHog is disabled or
-   * on error — failing closed avoids surprise rollouts when the SDK is down.
+   * Server-side feature flag check, cached per user for a minute and refreshed
+   * in the background. Returns false when PostHog is disabled, and the last
+   * known answer when PostHog fails, so a slow flags call never flips a user off.
    */
   async isFeatureEnabled(
     key: string,
@@ -95,12 +103,48 @@ export class AnalyticsService implements OnModuleDestroy {
     options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> }
   ): Promise<boolean> {
     if (!this.client) return false;
+    if (options) return (await this.evaluateFlag(key, distinctId, options)) ?? false;
+    const id = `${key}\u0000${distinctId}`;
+    const cached = this.flagCache.get(id);
+    if (cached) {
+      if (Date.now() - cached.at >= FLAG_TTL_MS) void this.refreshFlag(id, key, distinctId);
+      return cached.value;
+    }
+    return this.refreshFlag(id, key, distinctId);
+  }
+
+  private refreshFlag(id: string, key: string, distinctId: string): Promise<boolean> {
+    const running = this.flagInflight.get(id);
+    if (running) return running;
+    const pending = this.evaluateFlag(key, distinctId).then((value) => {
+      this.flagInflight.delete(id);
+      const previous = this.flagCache.get(id);
+      if (value === null && previous) return previous.value;
+      const resolved = value ?? false;
+      const at = value === null ? Date.now() - FLAG_TTL_MS + FLAG_UNKNOWN_TTL_MS : Date.now();
+      this.flagCache.delete(id);
+      this.flagCache.set(id, { value: resolved, at });
+      if (this.flagCache.size > FLAG_CACHE_MAX) {
+        const oldest = this.flagCache.keys().next().value;
+        if (oldest !== undefined) this.flagCache.delete(oldest);
+      }
+      return resolved;
+    });
+    this.flagInflight.set(id, pending);
+    return pending;
+  }
+
+  private async evaluateFlag(
+    key: string,
+    distinctId: string,
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> }
+  ): Promise<boolean | null> {
     try {
-      const result = await this.client.isFeatureEnabled(key, distinctId, options as any);
-      return Boolean(result);
+      const result = await this.client!.isFeatureEnabled(key, distinctId, options as any);
+      return result === undefined ? null : Boolean(result);
     } catch (err) {
       this.logger.warn(`isFeatureEnabled(${key}) failed: ${(err as Error).message}`);
-      return false;
+      return null;
     }
   }
 

@@ -250,6 +250,8 @@ jobs:
         run: pnpm --filter server test:env-removal
       - name: Notification routing + scope tests
         run: pnpm --filter server test:notifications
+      - name: Feature flag cache tests
+        run: pnpm --filter server test:analytics-flags
       # Managed-database tuning derived from the memory limit. Pins that a
       # derived shared_buffers can never be the whole cgroup (which OOMKilled
       # seven production databases during their own backups) and that a manual
