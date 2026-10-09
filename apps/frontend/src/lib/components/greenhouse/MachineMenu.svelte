@@ -8,6 +8,7 @@
 		Play,
 		RotateCw,
 		Plus,
+		Server,
 		Settings2,
 		Square,
 		Users
@@ -62,7 +63,8 @@
 			title={machine ? `${machine.name} · ${runnerLabel(machine.runner)} · ${meta?.label}` : ''}
 		>
 			<span class="ico" data-align="sidebar-icon">
-				{#if meta}<StatusDot {meta} size={8} />{/if}
+				<Server size={16} strokeWidth={1.75} />
+				{#if meta}<span class="badge"><StatusDot {meta} size={6} /></span>{/if}
 			</span>
 			<span class="name" data-align="sidebar-label">{machine?.name ?? 'No machine'}</span>
 			<span class="chev"><ChevronDown size={16} strokeWidth={1.75} /></span>
@@ -160,11 +162,25 @@
 	}
 
 	.ico {
+		position: relative;
 		display: inline-grid;
 		place-items: center;
 		flex: none;
 		width: var(--gh-glyph);
 		height: var(--gh-glyph);
+		color: var(--gh-muted);
+	}
+
+	.badge {
+		position: absolute;
+		right: -0.125rem;
+		bottom: -0.125rem;
+		display: inline-grid;
+		place-items: center;
+		width: 0.625rem;
+		height: 0.625rem;
+		border-radius: 50%;
+		background: var(--gh-sidebar);
 	}
 
 	.switch:hover,

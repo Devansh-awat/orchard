@@ -603,7 +603,7 @@
 	}
 </script>
 
-<div class="page">
+<div class="page org-dash">
 	<!-- Header -->
 	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
 		<h1 class="title">Your Apps</h1>
