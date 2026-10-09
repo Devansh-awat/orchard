@@ -4,8 +4,13 @@
 	import SlackLink from '$lib/components/greenhouse/SlackLink.svelte';
 	import { UserGreenhouseAccounts } from '$lib/components/user-settings';
 	import AdminInstance from '../../../admin/instance/+page.svelte';
-	import * as data from '../data';
-	import { installRoutes, integrationRoutes, json, type Route } from '../mock';
+	import * as data from '$lib/components/greenhouse/demo/data';
+	import {
+		installRoutes,
+		integrationRoutes,
+		json,
+		type Route
+	} from '$lib/components/greenhouse/demo/mock';
 
 	const view = page.url.searchParams.get('view') ?? 'share';
 	const share = page.url.searchParams.get('share') ?? 'ok';
