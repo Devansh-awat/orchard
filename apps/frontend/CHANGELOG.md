@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.61.2](https://github.com/hackclub/orchard/compare/frontend/v1.61.1...frontend/v1.61.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **frontend:** integrations harness imports the moved demo data so the build passes ([2776f6d](https://github.com/hackclub/orchard/commit/2776f6d0cf5f54465070faa50d0e254dfef70d15))
+* **frontend:** prompts with attachments from other people show up live in the chat ([d0ec20b](https://github.com/hackclub/orchard/commit/d0ec20beed9719262b924692aaf167ce4230e8a2))
+
 ## [1.61.1](https://github.com/hackclub/orchard/compare/frontend/v1.61.0...frontend/v1.61.1) (2026-10-09)
 
 
