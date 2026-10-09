@@ -69,6 +69,16 @@ export class PanelLayout {
 		}
 	}
 
+	fit(showLeft: boolean, showRight: boolean): { left: number; right: number } {
+		let left = showLeft ? this.left : 0;
+		let right = showRight ? this.right : 0;
+		if (!this.total) return { left, right };
+		const room = this.total - CENTER_MIN;
+		if (right && left + right > room) right = Math.max(RIGHT.min, room - left);
+		if (left && left + right > room) left = Math.max(LEFT.min, room - right);
+		return { left, right };
+	}
+
 	maxLeft(): number {
 		if (!this.total) return LEFT.max;
 		const right = this.rightOpen ? this.right : 0;

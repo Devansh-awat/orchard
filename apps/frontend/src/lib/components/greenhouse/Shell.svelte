@@ -328,8 +328,9 @@
 	const lifecycleOnly = $derived(ws?.lifecycleOnly ?? false);
 	const showRight = $derived(!app.home && layout.rightOpen && !mobile && !lifecycleOnly);
 	const showLeft = $derived(layout.leftOpen && !mobile);
+	const fitted = $derived(layout.fit(showLeft, showRight));
 	const columns = $derived(
-		[showLeft ? `${layout.left}px` : null, 'minmax(0, 1fr)', showRight ? `${layout.right}px` : null]
+		[showLeft ? `${fitted.left}px` : null, 'minmax(0, 1fr)', showRight ? `${fitted.right}px` : null]
 			.filter(Boolean)
 			.join(' ')
 	);
@@ -413,7 +414,7 @@
 			</div>
 		</div>
 	{:else}
-		<TitleBar onrename={openRename} lead={showLeft ? layout.left : null} />
+		<TitleBar onrename={openRename} lead={showLeft ? fitted.left : null} />
 		<div class="body" class:body--flush={showLeft} style:grid-template-columns={columns}>
 			{#if showLeft}
 				<div class="col col--left">
@@ -421,12 +422,12 @@
 					<div class="grip-anchor grip-anchor--right">
 						<ResizeHandle
 							label="Resize sidebar"
-							value={layout.left}
+							value={fitted.left}
 							min={LEFT.min}
 							max={layout.maxLeft()}
 							active={layout.dragging === 'left'}
 							onstart={() => {
-								startLeft = layout.left;
+								startLeft = fitted.left;
 								layout.dragging = 'left';
 							}}
 							ondrag={(d) => layout.setLeft(startLeft + d)}
@@ -435,7 +436,7 @@
 								layout.save();
 							}}
 							onnudge={(d) => {
-								layout.setLeft(layout.left + d);
+								layout.setLeft(fitted.left + d);
 								layout.save();
 							}}
 							onreset={() => layout.reset('left')}
@@ -467,12 +468,12 @@
 					<div class="grip-anchor grip-anchor--left">
 						<ResizeHandle
 							label="Resize panel"
-							value={layout.right}
+							value={fitted.right}
 							min={RIGHT.min}
 							max={layout.maxRight()}
 							active={layout.dragging === 'right'}
 							onstart={() => {
-								startRight = layout.right;
+								startRight = fitted.right;
 								layout.dragging = 'right';
 							}}
 							ondrag={(d) => layout.setRight(startRight - d)}
@@ -481,7 +482,7 @@
 								layout.save();
 							}}
 							onnudge={(d) => {
-								layout.setRight(layout.right - d);
+								layout.setRight(fitted.right - d);
 								layout.save();
 							}}
 							onreset={() => layout.reset('right')}
