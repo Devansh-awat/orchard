@@ -576,6 +576,7 @@ export class ChatSessionStore {
 	connection = $state<ConnectionState>('idle');
 	settled = $state(false);
 	models = $state.raw<OcModel[]>([]);
+	modelsFailed = $state(false);
 	sessions = $state<ChatSession[]>([]);
 	activeId = $state<string | null>(null);
 	readonly threads = new SvelteMap<string, SessionThread>();
@@ -846,7 +847,9 @@ export class ChatSessionStore {
 		}
 		this.connection = 'ready';
 		void models.then((list) => {
-			if (this.#destroyed || list.length === 0) return;
+			if (this.#destroyed) return;
+			this.modelsFailed = list.length === 0 && this.models.length === 0;
+			if (list.length === 0) return;
 			this.models = list;
 			cacheModels(this.sandboxId, list);
 		});

@@ -1,3 +1,9 @@
+<script module lang="ts">
+	import type { GhChecks as CachedChecks } from './types';
+
+	const cache = new Map<string, CachedChecks>();
+</script>
+
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { ExternalLink, GitPullRequest, RefreshCw, Rocket, Trash2, Wand2 } from 'lucide-svelte';
@@ -25,7 +31,8 @@
 	}
 
 	let data = $state.raw<GhChecks | null>(null);
-	let phase = $state<'loading' | 'ready' | 'unavailable'>('loading');
+	let phase = $state<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
+	let failure = $state<string | null>(null);
 	let expanded = $state<string | null>(null);
 
 	const failing = $derived((data?.checks ?? []).filter((c) => isFailure(c)));
@@ -58,20 +65,27 @@
 			phase = 'unavailable';
 			return;
 		}
-		const res = await api.listChecks(ws.sandboxId, session.id);
+		const id = session.id;
+		const res = await api.listChecks(ws.sandboxId, id);
+		if (id !== session.id) return;
 		if (res.ok) {
 			data = res.data;
+			cache.set(id, res.data);
 			phase = 'ready';
-		} else {
-			phase = res.status === 404 ? 'unavailable' : 'ready';
+		} else if (res.status === 404) {
+			phase = 'unavailable';
+		} else if (!data) {
+			failure = res.message || 'Could not load checks';
+			phase = 'error';
 		}
 	}
 
 	$effect(() => {
 		void session.id;
 		untrack(() => {
-			phase = 'loading';
-			data = null;
+			data = cache.get(session.id) ?? null;
+			phase = data ? 'ready' : 'loading';
+			failure = null;
 			void load();
 		});
 		const timer = setInterval(() => {
@@ -157,6 +171,18 @@
 		</div>
 	{:else if phase === 'unavailable'}
 		<p class="note">Checks appear once this session has a pull request.</p>
+	{:else if phase === 'error'}
+		<p class="note">
+			{failure}
+			<button
+				type="button"
+				class="retry"
+				onclick={() => {
+					phase = 'loading';
+					void load();
+				}}>Try again</button
+			>
+		</p>
 	{:else}
 		{#if data?.pr}
 			<a
@@ -388,6 +414,12 @@
 	}
 
 	.fix-note,
+	.retry {
+		color: var(--gh-text);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
 	.note {
 		margin: 0;
 		font-size: var(--gh-caption);

@@ -162,6 +162,7 @@ export class MachineWorkspace {
 	readonly openTabs = new SvelteMap<string, CenterTab[]>();
 	readonly drafts = new SvelteMap<string, boolean>();
 	readonly changes = new SvelteMap<string, GhChanges>();
+	readonly changesError = new SvelteMap<string, string>();
 	readonly pendingPrompts = new SvelteMap<string, string>();
 	readonly launches = new SvelteMap<string, SessionLaunch>();
 	readonly #hiddenChats = new SvelteSet<string>();
@@ -473,7 +474,12 @@ export class MachineWorkspace {
 		const session = this.sessions.find((s) => s.id === sid);
 		if (!session || isPreparing(session) || !untrack(() => this.running)) return;
 		const res = await api.changes(this.sandboxId, scopeOf(session));
-		if (this.#disposed || !res.ok) return;
+		if (this.#disposed) return;
+		if (!res.ok) {
+			this.changesError.set(sid, res.message || 'Could not load the changes');
+			return;
+		}
+		this.changesError.delete(sid);
 		this.changes.set(sid, res.data);
 	}
 

@@ -6,13 +6,20 @@
 	import { goto } from '$app/navigation';
 	import { toasts } from '$lib/stores';
 	import * as api from './api';
-	import { LINK_GITHUB, VIEWER_ONLY, scopeOf, type MachineWorkspace } from './workspace.svelte';
+	import {
+		LINK_GITHUB,
+		VIEWER_ONLY,
+		isPreparing,
+		scopeOf,
+		type MachineWorkspace
+	} from './workspace.svelte';
 	import { modKey } from './format';
 	import type { GhChangedFile, GhSession } from './types';
 
 	let { ws, session }: { ws: MachineWorkspace; session: GhSession } = $props();
 
 	const data = $derived(ws.changes.get(session.id) ?? null);
+	const loadError = $derived(ws.changesError.get(session.id) ?? null);
 	const files = $derived(data?.files ?? []);
 	const staged = $derived(files.filter((f) => f.staged));
 	const unstaged = $derived(files.filter((f) => !f.staged));
@@ -210,7 +217,18 @@
 	</div>
 
 	<div class="list gh-scroll">
-		{#if !data}
+		{#if !data && !ws.running}
+			<p class="note">Start {ws.machine?.name ?? 'the machine'} to see changes.</p>
+		{:else if !data && isPreparing(session)}
+			<p class="note">Changes show up once the worktree is ready.</p>
+		{:else if !data && loadError}
+			<p class="note">
+				{loadError}
+				<button type="button" class="retry" onclick={() => ws.refreshChanges(session.id)}
+					>Try again</button
+				>
+			</p>
+		{:else if !data}
 			<div class="skeletons">
 				<Skeleton height="0.625rem" width="60%" />
 				<Skeleton height="0.625rem" width="45%" />
@@ -402,6 +420,12 @@
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
 		color: var(--gh-faint);
+	}
+
+	.retry {
+		color: var(--gh-text);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.skeletons {

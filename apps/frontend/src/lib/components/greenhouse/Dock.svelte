@@ -62,6 +62,7 @@
 	let watchOpen = $state(false);
 	const active = new SvelteMap<string, DockTab>();
 	let scripts = $state.raw<Scripts | null>(null);
+	let scriptsFailed = $state(false);
 	let ports = $state.raw<GhPort[] | null>(null);
 	let previewPorts = $state.raw<number[]>([]);
 	let runBusy = $state(false);
@@ -170,9 +171,12 @@
 		if (!session || !scripted || !ws.running) return;
 		try {
 			const res = await apiFetch(`/apiv1/sandboxes/${ws.sandboxId}/sessions/${session.id}/scripts`);
-			if (res.ok) scripts = (await res.json()) as Scripts;
+			if (res.ok) {
+				scripts = (await res.json()) as Scripts;
+				scriptsFailed = false;
+			} else scriptsFailed = true;
 		} catch {
-			return;
+			scriptsFailed = true;
 		}
 	}
 
@@ -294,6 +298,13 @@
 		addTerminal();
 	}
 </script>
+
+{#snippet scriptsError()}
+	<p class="note">
+		Could not read the scripts for this session.
+		<button type="button" class="retry" onclick={() => loadScripts()}>Try again</button>
+	</p>
+{/snippet}
 
 {#snippet missing(kind: 'setup' | 'run')}
 	<div class="empty">
@@ -510,7 +521,9 @@
 				{#if scripted && session}
 					{#key `${session.id}:setup`}
 						<div class="pane" class:pane--on={tab === 'setup'}>
-							{#if scripts === null}
+							{#if scripts === null && scriptsFailed}
+								{@render scriptsError()}
+							{:else if scripts === null}
 								<p class="note">Checking for a setup script…</p>
 							{:else if !scripts.setup && scripts.setupState === 'none'}
 								{@render missing('setup')}
@@ -530,7 +543,9 @@
 					{#key `${session.id}:run`}
 						<div class="pane" class:pane--on={tab === 'run'}>
 							{#if scripts?.running || tab === 'run'}
-								{#if scripts === null}
+								{#if scripts === null && scriptsFailed}
+									{@render scriptsError()}
+								{:else if scripts === null}
 									<p class="note">Checking the run script…</p>
 								{:else if !scripts.running && !scripts.run}
 									{@render missing('run')}
@@ -752,6 +767,12 @@
 
 	.pane--ports {
 		padding: 0 var(--gh-edge);
+	}
+
+	.retry {
+		color: var(--gh-text);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.note {

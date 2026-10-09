@@ -381,7 +381,9 @@
 				</label>
 				<div class="mp-list" id="{uid}-list" role="listbox" aria-label="Models">
 					{#if models.length === 0}
-						<div class="mp-empty">Loading models</div>
+						<div class="mp-empty">
+							{store.modelsFailed ? 'The agent did not list any models' : 'Loading models'}
+						</div>
 					{:else if searching}
 						{#each results as group (group.name)}
 							<div class="mp-group">{group.name}</div>
