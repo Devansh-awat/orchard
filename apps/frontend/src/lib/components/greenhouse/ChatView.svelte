@@ -258,7 +258,7 @@
 	{:else if !ready}
 		<div class="gate">
 			{#if booting}
-				<WakeUp boot={bootQuery.data ?? null} {status} />
+				<WakeUp boot={bootQuery.data ?? null} {status} sandboxId={ws.sandboxId} />
 			{:else}
 				<p class="gate-title">{machine?.name ?? 'This machine'} is stopped</p>
 				<p class="gate-text">Start it to pick up where the agent left off.</p>

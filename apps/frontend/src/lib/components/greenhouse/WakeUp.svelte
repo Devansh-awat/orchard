@@ -1,8 +1,61 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { decorativeMotion } from '$lib/utils/motion.svelte';
-	import type { SandboxBoot, SandboxStatus } from '$lib/types/sandbox';
+	import type { SandboxBoot, SandboxBootPhase, SandboxStatus } from '$lib/types/sandbox';
+	import { fmtElapsed } from '$lib/components/sandbox/chat/steps';
 
-	let { boot = null, status }: { boot?: SandboxBoot | null; status: SandboxStatus } = $props();
+	let {
+		boot = null,
+		status,
+		sandboxId = null
+	}: { boot?: SandboxBoot | null; status: SandboxStatus; sandboxId?: string | null } = $props();
+
+	const PHASES: SandboxBootPhase[] = [
+		'starting',
+		'packages',
+		'runtime',
+		'agents',
+		'storage',
+		'account',
+		'services',
+		'ready'
+	];
+	const STEPS = PHASES.length - 1;
+	const startedAt = Date.now();
+	const memoryKey = $derived(sandboxId ? `gh-boot-ms:${sandboxId}` : null);
+
+	let now = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
+
+	const waking = $derived(status !== 'stopping' && status !== 'deleting');
+	const step = $derived(boot ? Math.max(0, PHASES.indexOf(boot.phase)) : 0);
+	const elapsed = $derived(fmtElapsed(now - startedAt));
+	const usual = $derived.by(() => {
+		if (!memoryKey) return null;
+		const stored = Number(localStorage.getItem(memoryKey));
+		return Number.isFinite(stored) && stored > 0 ? fmtElapsed(stored) : null;
+	});
+
+	const meta = $derived(
+		[
+			boot ? `Step ${Math.min(step + 1, STEPS)} of ${STEPS}` : null,
+			elapsed,
+			usual ? `last time ${usual}` : null
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
+
+	let remembered = false;
+	$effect(() => {
+		if (!boot?.ready || !waking || remembered || !memoryKey) return;
+		remembered = true;
+		const key = memoryKey;
+		untrack(() => localStorage.setItem(key, String(Date.now() - startedAt)));
+	});
 
 	const POT = ['rrrrrrrrr', '.ppppppp.', '.ppppppp.', '..ppppp..'];
 
@@ -49,6 +102,21 @@
 	</div>
 	<p class="title">{title}</p>
 	{#if detail}<p class="detail">{detail}</p>{/if}
+	{#if waking && boot}
+		<div
+			class="meter"
+			role="progressbar"
+			aria-label="Boot progress"
+			aria-valuemin={0}
+			aria-valuemax={STEPS}
+			aria-valuenow={step}
+		>
+			<span class="meter-fill" style="width: {(step / STEPS) * 100}%"></span>
+		</div>
+		<p class="meta" aria-hidden="true">{meta}</p>
+	{:else if waking}
+		<p class="meta" aria-hidden="true">{meta}</p>
+	{/if}
 </div>
 
 <style>
@@ -99,6 +167,30 @@
 		line-height: var(--gh-lh-reading);
 		font-weight: 600;
 		color: var(--gh-text);
+	}
+
+	.meter {
+		width: 12rem;
+		height: 0.25rem;
+		margin-top: 0.75rem;
+		border-radius: 999px;
+		background: var(--fill-soft);
+		overflow: hidden;
+	}
+
+	.meter-fill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--text-muted);
+	}
+
+	.meta {
+		margin: 0.25rem 0 0;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.detail {
