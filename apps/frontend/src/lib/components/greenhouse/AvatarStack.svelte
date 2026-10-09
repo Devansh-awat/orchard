@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import { presenceColorVar } from './format';
 	import type { RosterUser } from './types';
 
 	let {
@@ -42,7 +43,7 @@
 					type="button"
 					class="face"
 					class:face--following={following === user.id}
-					style="--ring: var({user.color?.startsWith('--') ? user.color : '--accent'})"
+					style="--ring: var({presenceColorVar(user)})"
 					title={following === user.id ? `Following ${user.name}` : `Follow ${user.name}`}
 					aria-label={following === user.id ? `Stop following ${user.name}` : `Follow ${user.name}`}
 					aria-pressed={following === user.id}
@@ -56,11 +57,7 @@
 					>
 				</button>
 			{:else}
-				<span
-					class="face"
-					style="--ring: var({user.color?.startsWith('--') ? user.color : '--accent'})"
-					title={user.name}
-				>
+				<span class="face" style="--ring: var({presenceColorVar(user)})" title={user.name}>
 					<span class="disc gh-face"
 						><Avatar
 							user={{ id: user.id, name: user.name, imageUrl: user.avatarUrl }}

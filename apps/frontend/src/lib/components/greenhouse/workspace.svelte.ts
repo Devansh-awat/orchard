@@ -13,7 +13,6 @@ import {
 	DiffComments,
 	EditorWorkspace,
 	baseName,
-	remoteColorVar,
 	toFsPath,
 	type EditorFs,
 	type RemoteCursor
@@ -22,6 +21,7 @@ import type { Sandbox, SandboxStatus } from '$lib/types/sandbox';
 import * as api from './api';
 import { alertCopy, showAgentNotification } from './agent-alerts';
 import { DEFAULT_BRANCH_PREFIX, branchPrefixFor } from './branch-prefix';
+import { presenceColorVar } from './format';
 import type { GreenhouseEnv } from './env';
 import { greenhousePrefs } from './prefs.svelte';
 import { playGreenhouseSound } from './sounds';
@@ -267,7 +267,7 @@ export class MachineWorkspace {
 			.map((u) => ({
 				userId: u.id,
 				name: u.name.split(' ')[0] || u.name,
-				colorVar: u.color?.startsWith('--') ? u.color : remoteColorVar(u.id),
+				colorVar: presenceColorVar(u),
 				line: u.view?.line ?? 1,
 				col: u.view?.col ?? 1,
 				selection: u.view?.selection ?? null,

@@ -1,4 +1,15 @@
 import type { SandboxRunnerId } from '$lib/types/sandbox';
+import { REMOTE_COLOR_VARS, remoteColorVar } from '../sandbox/editor/collab';
+
+export function presenceColorVar(user: { id: string; color?: unknown }): string {
+	const color = user.color;
+	if (typeof color === 'string' && color.startsWith('--')) return color;
+	if (typeof color === 'number' && Number.isInteger(color)) {
+		const n = REMOTE_COLOR_VARS.length;
+		return REMOTE_COLOR_VARS[((color % n) + n) % n];
+	}
+	return remoteColorVar(user.id);
+}
 
 const RUNNER_LABELS: Record<string, string> = {
 	kubernetes: 'Kubernetes',

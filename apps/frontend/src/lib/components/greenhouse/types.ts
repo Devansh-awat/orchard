@@ -158,7 +158,7 @@ export interface RosterUser {
 	id: string;
 	name: string;
 	avatarUrl?: string | null;
-	color: string;
+	color: string | number;
 	role: 'owner' | 'collaborator' | 'viewer' | 'admin';
 	view?: LiveView | null;
 }
