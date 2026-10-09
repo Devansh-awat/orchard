@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { GhosttyCore } from '@wterm/ghostty';
 import { PredictiveEcho, type PredictTarget } from './terminal-predict';
 
 class FakeTerm implements PredictTarget {
@@ -601,4 +604,411 @@ test('a sealed line the shell never echoes is retracted quietly', () => {
 	assert.equal(t.overlay, null);
 	assert.equal(p.metrics.pending, 0);
 	assert.equal(p.state, 'active');
+});
+
+const require = createRequire(import.meta.url);
+const ghosttyWasm = URL.createObjectURL(
+	new Blob([readFileSync(require.resolve('@wterm/ghostty/ghostty-vt.wasm'))], {
+		type: 'application/wasm'
+	})
+);
+
+class VtTerm implements PredictTarget {
+	overlay: { row: number; x: number; text: string; cursor: number } | null = null;
+	failWrites = false;
+
+	private constructor(
+		readonly core: GhosttyCore,
+		readonly cols: number,
+		readonly rows: number
+	) {}
+
+	static async create(cols = 38, rows = 14) {
+		const core = await GhosttyCore.load({ wasmPath: ghosttyWasm });
+		core.init(cols, rows);
+		return new VtTerm(core, cols, rows);
+	}
+
+	cursor() {
+		const c = this.core.getCursor();
+		return { x: c.col, y: c.row };
+	}
+
+	cellAt(row: number, col: number) {
+		const cell = this.core.getCell(row, col);
+		if (cell.width === 0) return '\u0000';
+		if (cell.chars) return cell.chars;
+		return cell.char > 0 ? String.fromCodePoint(cell.char) : ' ';
+	}
+
+	isAlternate() {
+		return this.core.usingAltScreen();
+	}
+
+	mouseTracking() {
+		return this.core.mouseTracking() !== 0;
+	}
+
+	scrolledBack() {
+		return false;
+	}
+
+	feed(data: string) {
+		this.core.writeString(data);
+	}
+
+	write(data: string, done: () => void) {
+		this.core.writeString(data);
+		if (this.failWrites) throw new Error('delivery failed');
+		done();
+	}
+
+	showOverlay(row: number, x: number, text: string, cursor: number) {
+		this.overlay = { row, x, text, cursor };
+	}
+
+	hideOverlay() {
+		this.overlay = null;
+	}
+
+	row(y: number) {
+		let s = '';
+		for (let c = 0; c < this.cols; c++) s += this.cellAt(y, c);
+		return s.replace(/\s+$/, '');
+	}
+
+	shown(y: number) {
+		const cells = Array.from({ length: this.cols }, (_, c) => this.cellAt(y, c));
+		if (this.overlay && this.overlay.row === y) {
+			for (let i = 0; i < this.overlay.text.length; i++) {
+				cells[this.overlay.x + i] = this.overlay.text[i];
+			}
+		}
+		return cells.join('').replace(/\s+$/, '');
+	}
+
+	screen() {
+		return Array.from({ length: this.rows }, (_, y) => this.shown(y))
+			.join('\n')
+			.replace(/\n+$/, '');
+	}
+}
+
+const PROMPT_PLAIN = 'dev@4b1ac006-af9:~/.worktrees/orchard-releases/hi-67b406$ ';
+const PROMPT =
+	'\x1b[32m\x1b[1mdev@4b1ac006-af9\x1b(B\x1b[m:\x1b[34m\x1b[1m~/.worktrees/orchard-releases/hi-67b406\x1b(B\x1b[m$ ';
+const PROMPT_TAIL = 'releases/hi-67b406$';
+
+async function vt(cols = 38, rows = 14) {
+	const t = await VtTerm.create(cols, rows);
+	let now = 1000;
+	const clock = {
+		advance(ms: number) {
+			now += ms;
+		}
+	};
+	const p = new PredictiveEcho(t, { now: () => now, timeoutFloorMs: 150, timeoutCeilMs: 600 });
+	return { p, t, clock };
+}
+
+function typeAll(p: PredictiveEcho, text: string) {
+	for (const ch of text) type(p, ch);
+}
+
+function enter(p: PredictiveEcho) {
+	p.noteKeyDown(key('Enter'));
+	p.onUserData('\r');
+}
+
+test('vt: the wrapped prompt really wraps at 38 columns', async () => {
+	const { t } = await vt();
+	t.feed(PROMPT);
+	assert.equal(t.row(0), PROMPT_PLAIN.slice(0, 38));
+	assert.equal(t.row(1), PROMPT_TAIL);
+	assert.deepEqual(t.cursor(), { x: 20, y: 1 });
+});
+
+test('vt: clear under tmux on a wrapped prompt leaves nothing behind', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'clear');
+	assert.deepEqual(t.overlay, { row: 1, x: 20, text: 'clear ', cursor: 5 });
+	clock.advance(80);
+	p.applyRemote('cle');
+	assert.equal(t.shown(1), `${PROMPT_TAIL} clear`);
+	enter(p);
+	clock.advance(40);
+	p.applyRemote('\x1b[?12l\x1b[?25h\x1b[2;24Har\r\n');
+	p.applyRemote(`\x1b[3d\x1b[J\x1b[H\x1b[K${PROMPT}\x1b[K`);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.screen(), `${PROMPT_PLAIN.slice(0, 38)}\n${PROMPT_TAIL}`);
+	assert.deepEqual(t.cursor(), { x: 20, y: 1 });
+});
+
+test('vt: clear typed blind and answered in one chunk leaves nothing behind', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'clear');
+	enter(p);
+	assert.equal(t.shown(1), `${PROMPT_TAIL} clear`);
+	clock.advance(120);
+	p.applyRemote(`clear\x1b[K\r\n\x1b[3d\x1b[J\x1b[H\x1b[K${PROMPT}\x1b[K`);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.screen(), `${PROMPT_PLAIN.slice(0, 38)}\n${PROMPT_TAIL}`);
+});
+
+test('vt: the captured tmux clear bytes leave nothing behind', async () => {
+	const { p, t, clock } = await vt();
+	const short = '\x1b[32m\x1b[1mdev@4b1ac006-af9\x1b(B\x1b[m:\x1b[34m\x1b[1m~\x1b(B\x1b[m$ ';
+	t.feed(`\x1b[H${short}echo hello\x1b[K\r\nhello\x1b[K\x1b[32m\x1b[1m\r\n${short}`);
+	assert.deepEqual(t.cursor(), { x: 20, y: 2 });
+	typeAll(p, 'clear');
+	clock.advance(80);
+	p.applyRemote('cle');
+	enter(p);
+	p.applyRemote('\x1b[K\x1b[?12l\x1b[?25h\x1b[3;24Har\r\n');
+	p.applyRemote(`\x1b[2d\x1b[J\x1b[H\x1b[K${short}`);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.screen(), 'dev@4b1ac006-af9:~$');
+});
+
+test('vt: an echo split across chunks confirms piece by piece', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'hello');
+	clock.advance(80);
+	p.applyRemote('\x1b[?25l\x1b[2;21Hh\x1b[?25h');
+	assert.equal(p.metrics.pending, 4);
+	assert.equal(t.shown(1), `${PROMPT_TAIL} hello`);
+	p.applyRemote('\x1b[?25lel\x1b[?25h');
+	assert.equal(p.metrics.pending, 2);
+	assert.deepEqual(t.overlay, { row: 1, x: 23, text: 'lo ', cursor: 2 });
+	p.applyRemote('lo\x1b[K');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	assert.equal(t.row(1), `${PROMPT_TAIL} hello`);
+});
+
+test('vt: typing never predicts across the wrap and picks up on the next row', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	const fill = 'abcdefghijklmnopq';
+	typeAll(p, fill);
+	assert.equal(p.metrics.pending, 17);
+	assert.equal(t.overlay?.row, 1);
+	assert.equal(t.overlay!.x + t.overlay!.text.length, 38);
+	clock.advance(80);
+	p.applyRemote(fill);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.deepEqual(t.cursor(), { x: 37, y: 1 });
+	type(p, 'r');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	clock.advance(80);
+	p.applyRemote('r');
+	assert.deepEqual(t.cursor(), { x: 37, y: 1 });
+	clock.advance(200);
+	type(p, 's');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	clock.advance(80);
+	p.applyRemote('s');
+	assert.deepEqual(t.cursor(), { x: 1, y: 2 });
+	clock.advance(200);
+	type(p, 't');
+	assert.deepEqual(t.overlay, { row: 2, x: 1, text: 't ', cursor: 1 });
+	clock.advance(80);
+	p.applyRemote('t');
+	assert.equal(t.overlay, null);
+	assert.equal(t.row(1), `${PROMPT_TAIL} abcdefghijklmnopqr`);
+	assert.equal(t.row(2), 'st');
+});
+
+test('vt: a wrap on the bottom row scrolls and the next prediction lands on the new row', async () => {
+	const { p, t, clock } = await vt(38, 4);
+	t.feed(`\x1b[3;1H${PROMPT}`);
+	assert.deepEqual(t.cursor(), { x: 20, y: 3 });
+	typeAll(p, 'abcdefghijklmnopq');
+	clock.advance(80);
+	p.applyRemote('abcdefghijklmnopq');
+	clock.advance(200);
+	type(p, 'r');
+	clock.advance(80);
+	p.applyRemote('r');
+	clock.advance(200);
+	type(p, 's');
+	clock.advance(80);
+	p.applyRemote('s');
+	assert.deepEqual(t.cursor(), { x: 1, y: 3 });
+	assert.equal(t.row(2), `${PROMPT_TAIL} abcdefghijklmnopqr`);
+	clock.advance(200);
+	type(p, 't');
+	assert.deepEqual(t.overlay, { row: 3, x: 1, text: 't ', cursor: 1 });
+	type(p, '\x7f');
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 2);
+	assert.equal(t.shown(3), 's');
+	assert.equal(t.shown(2), `${PROMPT_TAIL} abcdefghijklmnopqr`);
+});
+
+test('vt: backspace on a wrapped continuation row never reaches back across the wrap', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(`${PROMPT}abcdefghijklmnopqrstu`);
+	assert.deepEqual(t.cursor(), { x: 3, y: 2 });
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	clock.advance(80);
+	p.applyRemote('\b \b');
+	type(p, 'X');
+	assert.deepEqual(t.overlay, { row: 2, x: 2, text: 'X ', cursor: 1 });
+	type(p, '\x7f');
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 2);
+	assert.equal(t.shown(2), 'st');
+});
+
+test('vt: a stale input floor from an older prompt on the same row is not trusted', async () => {
+	const { p, t, clock } = await vt(38, 4);
+	t.feed('\x1b[4;1H$ ');
+	type(p, 'a');
+	clock.advance(80);
+	p.applyRemote('a');
+	assert.equal(t.row(3), '$ a');
+	p.applyRemote('\r\n> longer prompt here: ');
+	assert.deepEqual(t.cursor(), { x: 22, y: 3 });
+	type(p, '\x7f');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+});
+
+for (const [name, bytes] of [
+	['erase display', '\x1b[2J'],
+	['full reset', '\x1bc'],
+	['clear scrollback', '\x1b[3J'],
+	['home and erase', '\x1b[H\x1b[2J'],
+	['jump to another row', '\x1b[6;1H'],
+	['vertical position', '\x1b[8d'],
+	['erase the burst row', '\x1b[2K'],
+	['scroll up', '\x1b[S']
+] as const) {
+	test(`vt: a sealed burst is retracted by ${name}`, async () => {
+		const { p, t, clock } = await vt();
+		t.feed(PROMPT);
+		typeAll(p, 'ls');
+		enter(p);
+		assert.equal(t.shown(1), `${PROMPT_TAIL} ls`);
+		clock.advance(80);
+		p.applyRemote(bytes);
+		assert.equal(t.overlay, null);
+		assert.equal(p.metrics.pending, 0);
+	});
+
+	test(`vt: an unsealed burst is retracted by ${name}`, async () => {
+		const { p, t, clock } = await vt();
+		t.feed(PROMPT);
+		typeAll(p, 'ls');
+		assert.equal(t.shown(1), `${PROMPT_TAIL} ls`);
+		clock.advance(80);
+		p.applyRemote(bytes);
+		assert.equal(t.overlay, null);
+		assert.equal(p.metrics.pending, 0);
+	});
+}
+
+test('vt: a burst whose row scrolled off the bottom is retracted', async () => {
+	const { p, t, clock } = await vt(38, 4);
+	t.feed('\x1b[4;1H$ ');
+	typeAll(p, 'ab');
+	clock.advance(80);
+	p.applyRemote('\x1b7\n\x1b8');
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+});
+
+test('vt: an identical prompt redraw that keeps the cursor keeps the prediction', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'ab');
+	clock.advance(80);
+	p.applyRemote(`\x1b[?25l\x1b[H${PROMPT}\x1b[?25h`);
+	assert.equal(p.metrics.pending, 2);
+	assert.equal(t.shown(1), `${PROMPT_TAIL} ab`);
+});
+
+test('vt: enter seals and the echo with its newline flushes the overlay', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'ls');
+	enter(p);
+	clock.advance(80);
+	p.applyRemote('l');
+	assert.equal(t.shown(1), `${PROMPT_TAIL} ls`);
+	p.applyRemote('s\r\n');
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(p.metrics.retracts, 0);
+});
+
+test('vt: a sealed burst that never hears back times out and hides', async () => {
+	const t = await VtTerm.create();
+	let now = 1000;
+	const p = new PredictiveEcho(t, { now: () => now, timeoutFloorMs: 1, timeoutCeilMs: 1 });
+	t.feed(PROMPT);
+	typeAll(p, 'ls');
+	enter(p);
+	assert.notEqual(t.overlay, null);
+	now += 50;
+	await new Promise((r) => setTimeout(r, 25));
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+});
+
+test('vt: a terminal write that throws still takes the overlay down', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'ls');
+	assert.notEqual(t.overlay, null);
+	t.failWrites = true;
+	clock.advance(80);
+	p.applyRemote('\x1b[H\x1b[2J');
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+});
+
+test('vt: a clear split mid escape sequence still retracts', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'ab');
+	clock.advance(80);
+	p.applyRemote('\x1b[?25l\x1b');
+	assert.equal(p.metrics.pending, 2);
+	p.applyRemote(`[2J\x1b[2;1H${PROMPT_TAIL} \x1b[?25h`);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.pending, 0);
+});
+
+test('vt: a predicted backspace confirms when the shell erases the cell', async () => {
+	const { p, t, clock } = await vt();
+	t.feed(PROMPT);
+	typeAll(p, 'abc');
+	clock.advance(80);
+	p.applyRemote('abc');
+	type(p, '\x7f');
+	type(p, '\x7f');
+	assert.equal(t.shown(1), `${PROMPT_TAIL} a`);
+	clock.advance(80);
+	p.applyRemote('\b \b');
+	assert.equal(p.metrics.pending, 1);
+	assert.equal(t.shown(1), `${PROMPT_TAIL} a`);
+	p.applyRemote('\b\x1b[K');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+	assert.equal(p.metrics.retracts, 0);
+	assert.equal(p.metrics.confirms, 5);
+	assert.equal(t.row(1), `${PROMPT_TAIL} a`);
 });

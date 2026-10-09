@@ -49,6 +49,7 @@ interface Burst {
 	ops: Op[];
 	sentAt: number[];
 	sealed: boolean;
+	prefix: string;
 }
 
 interface Token {
@@ -69,11 +70,25 @@ const PASSWORD_RE =
 	/(password|passphrase|passcode|pin|verification code)\s*(for [^\n]{0,60})?[:：]?\s*$/i;
 const ESC = String.fromCharCode(0x1b);
 const ALT_OR_MOUSE_RE = new RegExp(`${ESC}\\[\\?(?:1049|1047|47|100[0-6]|1015)[hl]`);
+const RESHAPE_RE = new RegExp(
+	`[\\n\\v\\f]|${ESC}[cDEM]|${ESC}\\[\\??[0-9;]*[23]J|${ESC}\\[[0-9;]*[LMST]`
+);
+const PARTIAL_ESC_RE = new RegExp(`${ESC}(?:\\[[0-9;?]*)?$`);
 
 function netOf(ops: Op[], m = ops.length): number {
 	let n = 0;
 	for (let i = 0; i < m; i++) n += 'del' in ops[i] ? -1 : 1;
 	return n;
+}
+
+function lowestOf(baseX: number, ops: Op[]): number {
+	let pos = baseX;
+	let low = baseX;
+	for (const op of ops) {
+		pos += 'del' in op ? -1 : 1;
+		low = Math.min(low, pos);
+	}
+	return low;
 }
 
 function simulate(baseX: number, ops: Op[], m: number): Map<number, string> {
@@ -117,6 +132,9 @@ export class PredictiveEcho {
 	private retracts = 0;
 	private inputRow = -1;
 	private inputX: number | null = null;
+	private inputPrefix = '';
+	private carry = '';
+	private reshaped = false;
 	private blockedSince: number | null = null;
 	private lastRemoteAt = 0;
 
@@ -176,7 +194,10 @@ export class PredictiveEcho {
 		const term = this.term;
 		if (!term) return;
 		this.lastRemoteAt = this.now();
-		const leavingLineMode = this.scanTail(data);
+		const scan = this.carry + data;
+		this.carry = PARTIAL_ESC_RE.exec(scan)?.[0] ?? '';
+		const leavingLineMode = this.scanTail(data, scan);
+		const reshaped = RESHAPE_RE.test(scan);
 		this.inApply = true;
 		try {
 			term.write(data, () => {
@@ -187,8 +208,10 @@ export class PredictiveEcho {
 						this.flush('altscreen');
 						return;
 					}
+					this.reshaped = reshaped;
 					if (this.burst) this.validate();
 				} finally {
+					this.reshaped = false;
 					this.inApply = false;
 				}
 			});
@@ -208,6 +231,7 @@ export class PredictiveEcho {
 			this.streak = 0;
 			this.token = null;
 			this.tail = '';
+			this.carry = '';
 			this.inputX = null;
 			this.blockedSince = null;
 		}
@@ -240,6 +264,11 @@ export class PredictiveEcho {
 		this.clearTimer();
 		this.burst = null;
 		this.setState('disabled');
+		try {
+			this.term?.hideOverlay();
+		} catch {
+			return;
+		}
 	}
 
 	private fastLink(): boolean {
@@ -290,9 +319,38 @@ export class PredictiveEcho {
 		return this.term?.cellAt(row, col) ?? ' ';
 	}
 
+	private rowText(row: number, end: number): string {
+		const term = this.term;
+		if (!term) return '';
+		let text = '';
+		for (let c = 0; c < Math.min(end, term.cols); c++) text += term.cellAt(row, c);
+		return text;
+	}
+
+	private inputFloor(row: number): number | null {
+		const x = this.inputX;
+		if (x === null || this.inputRow !== row) return null;
+		if (this.rowText(row, x) === this.inputPrefix) return x;
+		this.inputX = null;
+		return null;
+	}
+
 	private openBurst(row: number, x: number): Burst {
-		const burst: Burst = { row, baseX: x, anchorX: x, ops: [], sentAt: [], sealed: false };
+		const burst: Burst = {
+			row,
+			baseX: x,
+			anchorX: x,
+			ops: [],
+			sentAt: [],
+			sealed: false,
+			prefix: this.rowText(row, x)
+		};
 		this.burst = burst;
+		if (this.inputFloor(row) === null) {
+			this.inputRow = row;
+			this.inputX = x;
+			this.inputPrefix = burst.prefix;
+		}
 		return burst;
 	}
 
@@ -317,13 +375,7 @@ export class PredictiveEcho {
 			this.unpredicted(ch);
 			return;
 		}
-		if (!burst) {
-			burst = this.openBurst(cur.y, cur.x);
-			if (this.inputRow !== cur.y || this.inputX === null) {
-				this.inputRow = cur.y;
-				this.inputX = cur.x;
-			}
-		}
+		burst ??= this.openBurst(cur.y, cur.x);
 		burst.ops.push({ ins: ch });
 		burst.sentAt.push(this.now());
 		this.redraw();
@@ -343,8 +395,7 @@ export class PredictiveEcho {
 			burst = null;
 		}
 		const pos = burst ? burst.baseX + netOf(burst.ops) : cur.x;
-		const floor =
-			this.inputX !== null && this.inputRow === cur.y ? this.inputX : burst ? burst.anchorX : null;
+		const floor = this.inputFloor(cur.y) ?? burst?.anchorX ?? null;
 		let clear = floor !== null && pos > floor && (burst?.ops.length ?? 0) < MAX_PENDING;
 		for (let c = pos; clear && c < Math.min(term.cols, pos + DELETE_LOOKAHEAD); c++) {
 			if (this.predictedCell(burst, cur.y, c) !== ' ') clear = false;
@@ -404,6 +455,11 @@ export class PredictiveEcho {
 			this.endBurst();
 			return;
 		}
+		const low = Math.max(0, lowestOf(burst.baseX, burst.ops));
+		if (this.rowText(burst.row, low) !== burst.prefix.slice(0, low)) {
+			this.flush('mismatch');
+			return;
+		}
 		let best = -1;
 		const k = cur.x - burst.baseX;
 		if (cur.y === burst.row) {
@@ -422,11 +478,13 @@ export class PredictiveEcho {
 			return;
 		}
 		if (best === 0) {
-			this.redraw();
+			if (this.reshaped) this.flush('mismatch');
+			else this.redraw();
 			return;
 		}
 		this.confirm(burst, best);
 		burst.baseX += k;
+		burst.prefix = this.rowText(burst.row, burst.baseX);
 		burst.ops.splice(0, best);
 		burst.sentAt.splice(0, best);
 		if (burst.ops.length === 0) {
@@ -512,13 +570,13 @@ export class PredictiveEcho {
 		}
 	}
 
-	private scanTail(data: string): boolean {
+	private scanTail(data: string, scan: string): boolean {
 		this.tail = (this.tail + data).slice(-TAIL_BYTES);
 		if (PASSWORD_RE.test(this.tail)) {
 			this.suppressUntil = this.now() + PASSWORD_SUPPRESS_MS;
 		} else if (data.includes('\n')) {
 			this.suppressUntil = 0;
 		}
-		return ALT_OR_MOUSE_RE.test(data);
+		return ALT_OR_MOUSE_RE.test(scan);
 	}
 }
