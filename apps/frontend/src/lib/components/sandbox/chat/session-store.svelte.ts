@@ -249,6 +249,8 @@ export type ContextMeter = {
 
 export type SessionStoreOptions = {
 	initialSessionId?: string | null;
+	preferredSessionId?: () => string | null;
+	autoSelect?: boolean;
 	directory?: string | null;
 	self?: ChatAuthor | null;
 	onTurnDone?: () => void;
@@ -258,6 +260,25 @@ export type SessionStoreOptions = {
 };
 
 const TEMP_PREFIX = 'pending-';
+const MODELS_CACHE_PREFIX = 'oc-models:';
+
+function cachedModels(sandboxId: string): OcModel[] {
+	try {
+		const raw = localStorage.getItem(`${MODELS_CACHE_PREFIX}${sandboxId}`);
+		const parsed = raw ? JSON.parse(raw) : null;
+		return Array.isArray(parsed) ? (parsed as OcModel[]) : [];
+	} catch {
+		return [];
+	}
+}
+
+function cacheModels(sandboxId: string, models: OcModel[]) {
+	try {
+		localStorage.setItem(`${MODELS_CACHE_PREFIX}${sandboxId}`, JSON.stringify(models));
+	} catch {
+		return;
+	}
+}
 const AUTO_LINGER_MS = 1500;
 const GONE_GRACE_MS = 3000;
 const PARENT_HOPS = 4;
@@ -588,6 +609,8 @@ export class ChatSessionStore {
 
 	#draft = $state('');
 	#initialSessionId: string | null;
+	readonly #preferredSessionId: (() => string | null) | null;
+	readonly #autoSelect: boolean;
 	#prefs = new Map<string, ModelChoice>();
 	#roles = new Map<string, string>();
 	#children = new Map<string, { thread: SessionThread; agent: AgentEntry }>();
@@ -611,6 +634,9 @@ export class ChatSessionStore {
 	constructor(sandboxId: string, options: SessionStoreOptions = {}) {
 		this.sandboxId = sandboxId;
 		this.#initialSessionId = options.initialSessionId ?? null;
+		this.#preferredSessionId = options.preferredSessionId ?? null;
+		this.#autoSelect = options.autoSelect ?? true;
+		this.models = cachedModels(sandboxId);
 		this.directory = options.directory ?? null;
 		this.self = options.self ?? null;
 		this.onTurnDone = options.onTurnDone ?? null;
@@ -802,6 +828,10 @@ export class ChatSessionStore {
 
 	async #probe() {
 		if (this.connection !== 'unreachable') this.connection = 'connecting';
+		const models = ocModels(this.sandboxId).catch(() => [] as OcModel[]);
+		const listing = apiFetch(`${ocBase(this.sandboxId)}/session?roots=true&limit=20`).catch(
+			() => null
+		);
 		const reachable = await ocProbe(this.sandboxId);
 		if (this.#destroyed) return;
 		if (!reachable) {
@@ -815,12 +845,14 @@ export class ChatSessionStore {
 			return;
 		}
 		this.connection = 'ready';
-		ocModels(this.sandboxId)
-			.then((models) => (this.models = models))
-			.catch(() => {});
+		void models.then((list) => {
+			if (this.#destroyed || list.length === 0) return;
+			this.models = list;
+			cacheModels(this.sandboxId, list);
+		});
 		this.#openStream();
 		try {
-			await this.#loadSessions();
+			await this.#loadSessions(listing);
 		} finally {
 			this.settled = true;
 		}
@@ -894,21 +926,23 @@ export class ChatSessionStore {
 		this.#savePrefs();
 	}
 
-	async #loadSessions() {
+	async #loadSessions(prefetched?: Promise<Response | null>) {
 		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session?roots=true&limit=20`);
-			if (!res.ok) return;
+			const res = await (prefetched ??
+				apiFetch(`${ocBase(this.sandboxId)}/session?roots=true&limit=20`));
+			if (!res?.ok) return;
 			const list = (await res.json()) as OcSession[];
 			this.sessions = list.filter((s) => !s.parentID && !s.time.archived).map(toSession);
-			await this.#syncStatus();
-			const wanted = this.#initialSessionId;
+			const statusSync = this.#syncStatus();
+			const wanted = this.#preferredSessionId?.() ?? this.#initialSessionId;
 			if (wanted && (await this.#ensureListed(wanted))) {
 				await this.selectSession(wanted);
-			} else if (this.sessions.length === 0) {
+			} else if (this.#autoSelect && this.sessions.length === 0) {
 				await this.createSession();
-			} else {
+			} else if (this.#autoSelect) {
 				await this.selectSession(this.sessions[0].id);
 			}
+			await statusSync;
 			void this.#syncPending();
 		} catch {
 			return;

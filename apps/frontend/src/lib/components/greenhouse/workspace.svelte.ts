@@ -309,6 +309,8 @@ export class MachineWorkspace {
 		this.live = env.createLive(sandboxId);
 		this.store = env.createChatStore(sandboxId, {
 			self: host.self(),
+			preferredSessionId: () => untrack(() => this.activeChatId),
+			autoSelect: false,
 			onTurnDone: () => {
 				const sid = untrack(() => this.sessionId);
 				if (sid) void this.refreshChanges(sid);
