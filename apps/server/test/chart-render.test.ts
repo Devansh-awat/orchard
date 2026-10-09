@@ -122,6 +122,7 @@ test(
       'sandbox.runners.vercel.projectId=prj_1',
       'sandbox.runners.vercel.vcpus=4',
       'sandbox.runners.vercel.timeoutMinutes=90',
+      'sandbox.runners.vercel.driveGiB=120',
       'sandbox.runners.bridgeBinaryUrl=https://example.com/orchard.tar.gz',
       `sandbox.runners.bridgeBinarySha256=${'ab'.repeat(32)}`,
       'sandbox.runners.previewDomain=preview.example.com'
@@ -137,6 +138,7 @@ test(
     assert.match(out, /SANDBOX_VERCEL_PROJECT_ID, value: "prj_1"/);
     assert.match(out, /SANDBOX_VERCEL_VCPUS, value: "4"/);
     assert.match(out, /SANDBOX_VERCEL_TIMEOUT_MINUTES, value: "90"/);
+    assert.match(out, /SANDBOX_VERCEL_DRIVE_GIB, value: "120"/);
     assert.match(out, /SANDBOX_BRIDGE_BINARY_URL, value: "https:\/\/example.com\/orchard.tar.gz"/);
     assert.match(out, new RegExp(`SANDBOX_BRIDGE_BINARY_SHA256, value: "${'ab'.repeat(32)}"`));
     assert.match(out, /SANDBOX_PREVIEW_DOMAIN, value: "preview.example.com"/);

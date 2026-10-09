@@ -337,6 +337,7 @@ test('sandbox runner settings refuse values the runners could not use', async ()
       SANDBOX_DEFAULT_RUNNER: undefined,
       SANDBOX_VERCEL_VCPUS: undefined,
       SANDBOX_VERCEL_TIMEOUT_MINUTES: undefined,
+      SANDBOX_VERCEL_DRIVE_GIB: undefined,
       SANDBOX_BRIDGE_BINARY_URL: undefined,
       SANDBOX_BRIDGE_BINARY_SHA256: undefined,
       SANDBOX_PREVIEW_DOMAIN: undefined
@@ -355,6 +356,14 @@ test('sandbox runner settings refuse values the runners could not use', async ()
         /vercelTimeoutMinutes/
       );
       await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { vercelDriveGiB: '20000' }),
+        /vercelDriveGiB/
+      );
+      await assert.rejects(
+        () => service.save(SANDBOX_RUNNERS, { vercelDriveGiB: '1.5' }),
+        /vercelDriveGiB/
+      );
+      await assert.rejects(
         () => service.save(SANDBOX_RUNNERS, { bridgeBinaryUrl: 'http://insecure.example.com/b' }),
         /bridgeBinaryUrl/
       );
@@ -370,11 +379,13 @@ test('sandbox runner settings refuse values the runners could not use', async ()
         defaultRunner: 'vercel',
         vercelVcpus: '4',
         vercelTimeoutMinutes: '45',
+        vercelDriveGiB: '100',
         bridgeBinaryUrl: 'https://assets.example.com/bridge',
         bridgeBinarySha256: 'ab'.repeat(32),
         previewDomain: 'preview.example.com'
       });
       assert.equal(service.value(SANDBOX_RUNNERS, 'defaultRunner'), 'vercel');
+      assert.equal(service.value(SANDBOX_RUNNERS, 'vercelDriveGiB'), '100');
       assert.equal(service.value(SANDBOX_RUNNERS, 'bridgeBinarySha256'), 'ab'.repeat(32));
     }
   );

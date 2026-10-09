@@ -111,7 +111,8 @@ test('new sandbox routes declare their Host/Guest minimum role', async () => {
     r.access as any,
     any,
     r.users as any,
-    r.analytics as any
+    r.analytics as any,
+    any
   );
   const fork = new SandboxForkController(r.access as any, any, r.users as any, r.analytics as any);
   const shares = new SandboxShareLinksController(

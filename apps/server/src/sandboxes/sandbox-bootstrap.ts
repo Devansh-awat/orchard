@@ -17,6 +17,8 @@ export const SANDBOX_PHASES = [
 
 export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';
 
+export const SANDBOX_DRIVE_MARKER = '.orchard-drive';
+
 export const SANDBOX_BRIDGE_CLI_VERSION = '0.23.0';
 
 const BRIDGE_RELEASES = 'https://github.com/LeafdTK/orchard-releases/releases/download';
@@ -232,10 +234,41 @@ if [ "\${SANDBOX_HOME_MODE:-filesystem}" = "block" ] && [ -b /dev/sandboxhome ];
   mkdir -p /persist
   mountpoint -q /persist || mount /dev/sandboxhome /persist
 fi
-if [ -n "\${SANDBOX_PERSIST_ROOT:-}" ] && [ "$SANDBOX_PERSIST_ROOT" != "/persist" ]; then
-  mkdir -p "$SANDBOX_PERSIST_ROOT"
+persist_root="\${SANDBOX_PERSIST_ROOT:-}"
+if [ -n "\${SANDBOX_DRIVE_ROOT:-}" ]; then
+  drive_root="$SANDBOX_DRIVE_ROOT"
+  drive_marker="$drive_root/${SANDBOX_DRIVE_MARKER}"
+  if mountpoint -q "$drive_root" 2>/dev/null || grep -qs " $drive_root " /proc/mounts; then
+    if [ ! -f "$drive_marker" ]; then
+      if [ -n "$persist_root" ] && [ "$persist_root" != "$drive_root" ] && [ -d "$persist_root/home" ]; then
+        log "copying $persist_root into the drive at $drive_root"
+        if have rsync; then
+          rsync -aH "$persist_root/" "$drive_root/"
+        else
+          cp -a "$persist_root/." "$drive_root/"
+        fi
+        copied=$?
+        sync
+        if [ "$copied" -eq 0 ]; then
+          printf 'migrated %s\\n' "$persist_root" > "$drive_marker.tmp" && mv -f "$drive_marker.tmp" "$drive_marker"
+        else
+          log "copying $persist_root into the drive failed ($copied); keeping home in $persist_root"
+        fi
+      else
+        printf 'fresh\\n' > "$drive_marker.tmp" && mv -f "$drive_marker.tmp" "$drive_marker"
+      fi
+    fi
+    if [ -f "$drive_marker" ]; then
+      persist_root="$drive_root"
+    fi
+  else
+    log "no drive is mounted at $drive_root; keeping home in \${persist_root:-/persist}"
+  fi
+fi
+if [ -n "$persist_root" ] && [ "$persist_root" != "/persist" ]; then
+  mkdir -p "$persist_root"
   if [ -L /persist ] || [ ! -e /persist ]; then
-    ln -sfn "$SANDBOX_PERSIST_ROOT" /persist
+    ln -sfn "$persist_root" /persist
   else
     log "/persist already exists and is not a link; leaving it alone"
   fi

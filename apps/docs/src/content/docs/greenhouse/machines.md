@@ -48,12 +48,21 @@ does not share a kernel with anything else.
 The machine is a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) on the
 operator's Vercel account.
 
-- **Disk.** Persistent snapshots. Stopping the machine snapshots its whole
-  filesystem, not only the home directory: files, repositories, packages installed
-  with `apt` or `npm -g`, and anything under `/etc`, `/usr/local`, `/root` and
-  `/tmp` come back when it starts. Running processes do not; Orchard restarts its
-  own services on start, and your dev servers need starting again. The disk size is
-  set by Vercel, not by Orchard (64 GB at the time of writing).
+- **Disk.** Two layers. `/persist` (your home directory, repositories, worktrees,
+  agent history and SSH host keys) lives on a Vercel drive that belongs to the
+  machine alone (50 GiB unless your operator changed it). The drive is kept until
+  the machine is deleted, however long the machine sits stopped, and it survives
+  even if Vercel loses the sandbox itself: the next start puts the machine on a new
+  sandbox with the same drive. Everything outside `/persist` is kept in snapshots:
+  stopping the machine snapshots the rest of its filesystem, so packages installed
+  with `apt` or `npm -g` and anything under `/etc`, `/usr/local` and `/root` come
+  back when it starts. Orchard keeps the last three snapshots and they never
+  expire. Running processes do not come back; Orchard restarts its own services on
+  start, and your dev servers need starting again.
+- **Older machines.** A machine created before drives existed keeps its home in its
+  snapshot until its next start. That start copies the home onto a new drive
+  before anything else runs, and the machine uses the drive from then on. The old
+  copy stays in the snapshot, untouched.
 - **Start time.** A new machine is ready in about 15 to 20 seconds. A stopped
   machine resumes in about 7 seconds, and stopping takes about 7 seconds.
 - **Time limit.** Vercel stops a sandbox after a timeout (60 minutes unless your
@@ -66,9 +75,11 @@ operator's Vercel account.
   proxy on requests to `github.com` and `api.github.com`, so it is never stored
   inside the machine.
 - **Previews.** Public. Anyone with the URL can open them.
-- **Forking.** Always available. It copies the last saved snapshot, including
-  everything outside the home directory, and is ready in a few seconds. The fork
-  gets its own agent password and SSH bridge token.
+- **Forking.** Copies the last saved snapshot and forks the machine's drive into a
+  new drive for the copy, and is ready in a few seconds. The fork gets its own
+  agent password and SSH bridge token. Drive forks are a Vercel feature not every
+  plan has; without it, machines with a drive cannot be forked and the option is
+  hidden.
 
 ## Image and tools
 
@@ -116,11 +127,14 @@ installing dependencies in a fresh worktree, use
 | Delete | Yes  | No    | No              | Yes       |
 
 Stopping kills running agents, terminals and dev servers but keeps everything on
-disk (or in the snapshot). Sessions and their branches are all there on the next
+disk (on Vercel, on the drive and in the snapshot). Sessions and their branches are all there on the next
 start.
 
 **Deleting a machine deletes everything on it.** Anything not pushed is gone.
-Push your branches first.
+Push your branches first. On Vercel that includes the machine's drive and its
+snapshots: once the sandbox is deleted, Orchard deletes the drive too, and there
+is no way to get either back. Deleting is the only thing that ever removes a
+drive; stopping, starting, timeouts and forks never do.
 
 ## Forking
 
@@ -139,10 +153,10 @@ orchard sandbox fork leafy --name leafy-experiment
 The default name is `<name>-fork`. Sessions come across with their worktrees and
 branches; each starts a fresh agent chat on first use.
 
-| Runner     | How it copies                                                                                                                          |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Kubernetes | A volume snapshot of the home volume, restored into the new machine's volume. Only offered when the cluster can snapshot that storage. |
-| Vercel     | A fork of the last saved snapshot. Stop the machine first to include recent changes.                                                   |
+| Runner     | How it copies                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Kubernetes | A volume snapshot of the home volume, restored into the new machine's volume. Only offered when the cluster can snapshot that storage.                                   |
+| Vercel     | A fork of the last saved snapshot plus a fork of the machine's drive. Stop the machine first to include recent changes. Needs Vercel drive forks on the operator's plan. |
 
 On Kubernetes a copy can take a while to start, because the volume has to be
 restored first. A forked machine gets 30 minutes to come up before it is marked

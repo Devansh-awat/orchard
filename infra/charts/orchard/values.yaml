@@ -663,6 +663,10 @@ sandbox:
       # Vercel's own stop timer, 1-1440; empty = 60. Orchard extends it while
       # a machine is in use.
       timeoutMinutes: ""
+      # Size in GiB of the Vercel drive that holds each machine's /persist
+      # (home, ssh host keys), 1-16384; empty = 50; 0 = no drives, homes live
+      # in snapshots only. Existing drives keep the size they were created with.
+      driveGiB: ""
     # https URL of the linux/amd64 orchard CLI tarball that Vercel machines run
     # as their ssh bridge. Empty = the release matching the server's pinned
     # version, verified against that release's checksums.txt.

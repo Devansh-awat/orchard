@@ -6,9 +6,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
 import WebSocket from 'ws';
-import { SANDBOX_PHASE_FILE, defaultBridgeBinaryUrl } from '../src/sandboxes/sandbox-bootstrap';
+import {
+  SANDBOX_DRIVE_MARKER,
+  SANDBOX_PHASE_FILE,
+  defaultBridgeBinaryUrl
+} from '../src/sandboxes/sandbox-bootstrap';
 import {
   VERCEL_BRIDGE_PORT,
+  VERCEL_DRIVE_FORK_UNAVAILABLE,
+  VERCEL_DRIVE_ROOT,
   VERCEL_HOST_GIT_PLACEHOLDER,
   VERCEL_INIT_STAGE,
   VERCEL_OPENCODE_PORT,
@@ -37,8 +43,10 @@ Drives the real VercelSandboxRunner against the real Vercel Sandbox API with an
 in-memory database, apply queue and secrets service: provision, network policy
 credential brokering, exec/execStream/readFile/writeFiles, the password-protected
 opencode port, an interactive PTY, the SSH bridge, stop and resume, reconcile and
-keepAlive, fork, and destroy. Every sandbox is named ${NAME_PREFIX}<random>, tagged
-orchard_instance=${INSTANCE_TAG}, and deleted in a finally block.
+keepAlive, fork, the per-machine drive (home survives losing the sandbox, an old
+snapshot-only machine migrates onto a drive), and destroy. Every sandbox and drive
+is named ${NAME_PREFIX}<random>, sandboxes are tagged orchard_instance=${INSTANCE_TAG},
+and everything is deleted in a finally block.
 
 Credentials come from SANDBOX_VERCEL_TOKEN, SANDBOX_VERCEL_TEAM_ID and
 SANDBOX_VERCEL_PROJECT_ID, read from the environment or apps/server/.env. The token
@@ -47,7 +55,7 @@ is never printed; every line of output is redacted.
 This creates billable Vercel sandboxes (2 vCPU by default, about 20 minutes total).
 
 Options
-  --cleanup             delete every ${NAME_PREFIX}* sandbox in the project and exit
+  --cleanup             delete every ${NAME_PREFIX}* sandbox and drive in the project and exit
   --image IMAGE         sandbox image (default: the runner default)
   --vcpus N             vCPUs (default 2)
   --timeout-minutes N   sandbox timeout (default 15)
@@ -58,6 +66,7 @@ Options
                         for linux/amd64 and pushes the tarball with the init files.
   --boot-timeout SEC    seconds to wait for a boot to reach ready (default 900)
   --skip-fork           skip the fork step
+  --skip-migration      skip the snapshot-only to drive migration step
   -h, --help            show this help
 
 Exit status is 0 when every check passes.
@@ -72,6 +81,7 @@ interface Options {
   bridge: 'auto' | 'release' | 'local';
   bootTimeoutMs: number;
   fork: boolean;
+  migration: boolean;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -83,7 +93,8 @@ function parseArgs(argv: string[]): Options {
     repoUrl: 'https://github.com/octocat/Hello-World.git',
     bridge: 'auto',
     bootTimeoutMs: 900_000,
-    fork: true
+    fork: true,
+    migration: true
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -109,6 +120,7 @@ function parseArgs(argv: string[]): Options {
       opts.bridge = v;
     } else if (arg === '--boot-timeout') opts.bootTimeoutMs = Number(value()) * 1000;
     else if (arg === '--skip-fork') opts.fork = false;
+    else if (arg === '--skip-migration') opts.migration = false;
     else if (arg === '--') continue;
     else throw new Error(`unknown option ${arg}`);
   }
@@ -230,6 +242,34 @@ async function deleteByName(
   }
 }
 
+async function listLiveDrives(creds: { token: string; teamId: string; projectId: string }) {
+  const { Drive } = await sdkModule();
+  const page = await Drive.list({ namePrefix: NAME_PREFIX, sortBy: 'name', limit: 50, ...creds });
+  const out: string[] = [];
+  for await (const drive of page as AsyncIterable<any>) out.push(drive.name);
+  return out.filter((name) => name.startsWith(NAME_PREFIX));
+}
+
+async function deleteDriveByName(
+  name: string,
+  creds: { token: string; teamId: string; projectId: string }
+): Promise<string> {
+  if (!name.startsWith(NAME_PREFIX)) return 'refused: not a live-test drive';
+  const { Drive } = await sdkModule();
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      const drive = await Drive.get({ name, ...creds });
+      await drive.delete();
+      return 'deleted';
+    } catch (e: any) {
+      if (e?.response?.status === 404) return 'already gone';
+      if (attempt === 10) return `delete failed: ${e?.message ?? e}`;
+      await sleep(3000);
+    }
+  }
+  return 'delete failed';
+}
+
 async function cleanupMode(creds: { token: string; teamId: string; projectId: string }) {
   const found = await listLive(creds);
   say(`found ${found.length} ${NAME_PREFIX}* sandbox(es)`);
@@ -245,7 +285,12 @@ async function cleanupMode(creds: { token: string; teamId: string; projectId: st
       ? `still listed: ${left.map((s) => `${s.name}(${s.status})`).join(', ')}`
       : 'none left'
   );
-  return left.length;
+  const drives = await listLiveDrives(creds);
+  say(`found ${drives.length} ${NAME_PREFIX}* drive(s)`);
+  for (const name of drives) say(`  ${name}: ${await deleteDriveByName(name, creds)}`);
+  const drivesLeft = await listLiveDrives(creds);
+  if (drivesLeft.length) say(`drives still listed: ${drivesLeft.join(', ')}`);
+  return left.length + drivesLeft.length;
 }
 
 interface Row {
@@ -412,6 +457,7 @@ function withBridgePush(sdk: VercelSdk, tarball: Buffer): VercelSdk {
       }
     });
   return {
+    ...sdk,
     create: async (params) => wrap(await sdk.create(params)),
     get: async (params) => wrap(await sdk.get(params)),
     fork: sdk.fork ? async (params) => wrap(await sdk.fork!(params)) : undefined
@@ -501,6 +547,8 @@ async function main() {
   const work = mkdtempSync(join(tmpdir(), 'orchard-live-'));
   const tag = randomBytes(4).toString('hex');
   const created = new Set<string>();
+  const createdDrives = new Set<string>();
+  const createdDrivesAll = new Set<string>();
   const db = new FakeDb();
   const queue = new FakeQueue();
   const executor = new FakeExecutor();
@@ -510,6 +558,9 @@ async function main() {
   const finalCleanup = async () => {
     for (const name of created) {
       say(`cleanup: ${name}: ${await deleteByName(name, creds)}`);
+    }
+    for (const name of createdDrives) {
+      say(`cleanup: drive ${name}: ${await deleteDriveByName(name, creds)}`);
     }
     rmSync(work, { recursive: true, force: true });
   };
@@ -559,6 +610,8 @@ async function main() {
       createIfAbsent: async () => undefined
     };
     const fakeSecrets = {
+      boxSecret: async (purpose: 'opencode-password' | 'bridge-token', sandboxId: string) =>
+        deriveSandboxSecret(purpose, sandboxId),
       forSandbox: async (row: {
         id: string;
         setupScript: string | null;
@@ -591,6 +644,12 @@ async function main() {
       fakeSecrets as any
     );
     runner.interactiveSupported = await vercelInteractiveSupported();
+    runner.drivePrefix = NAME_PREFIX;
+    const setConfig = (name: string, value: string | null) => {
+      if (value === null) delete config[name];
+      else config[name] = value;
+      fakeConfig.generation += 1;
+    };
     if (local) runner.sdk = withBridgePush(runner.sdk, local.tarball);
     const configError = runner.configError();
     if (configError) throw new Error(`runner config error: ${configError}`);
@@ -624,6 +683,8 @@ async function main() {
       };
       db.rows.set(row.id, row);
       created.add(row.podName);
+      createdDrives.add(`${NAME_PREFIX}${row.id}`);
+      createdDrivesAll.add(`${NAME_PREFIX}${row.id}`);
       return row;
     };
 
@@ -689,6 +750,26 @@ async function main() {
       return `status=${sb.status} vcpus=${sb.vcpus} memory=${sb.memory} region=${sb.region} image=${sb.image ?? sb.runtime} persistent=${sb.persistent} tags=${JSON.stringify(sb.tags)}`;
     });
 
+    await check('1', 'snapshots never expire and the machine drive is mounted', async () => {
+      const sb: any = await live(src);
+      const driveName = src.runnerState?.driveName;
+      assert(driveName === `${NAME_PREFIX}${src.id}`, `runnerState.driveName is ${driveName}`);
+      assert(sb.snapshotExpiration === 0, `snapshotExpiration ${sb.snapshotExpiration}`);
+      assert(
+        sb.keepLastSnapshots?.count === 3,
+        `keepLastSnapshots ${JSON.stringify(sb.keepLastSnapshots)}`
+      );
+      const mount = sb.mounts?.[VERCEL_DRIVE_ROOT];
+      assert(
+        mount?.drive === driveName && mount.mode === 'read-write',
+        `mounts ${JSON.stringify(sb.mounts)}`
+      );
+      const { Drive } = await sdkModule();
+      const drive = await Drive.get({ name: driveName, ...creds });
+      assert(drive.region === sb.region, `drive in ${drive.region}, sandbox in ${sb.region}`);
+      return `snapshotExpiration 0, keepLast ${JSON.stringify(sb.keepLastSnapshots)}, ${VERCEL_DRIVE_ROOT} <- ${driveName} (${drive.region}, ${(drive.maxSize / 1024 ** 3).toFixed(0)} GiB)`;
+    });
+
     await check('1', 'first boot reaches ready', async () => {
       const ms = await waitReady(src, 'first boot');
       timings.firstBoot = secs(ms);
@@ -701,6 +782,20 @@ async function main() {
         'uname -m; . /etc/os-release; echo "$PRETTY_NAME"; node -v 2>&1; for b in opencode claude codex sshd tmux rg git; do printf "%s=%s " $b "$(command -v $b || echo missing)"; done; echo; readlink /persist; id dev; df -h / /vercel/sandbox 2>/dev/null | tail -n +2'
       );
       assert(r.ok, r.stderr);
+      return r.stdout.trim().replace(/\n/g, ' | ');
+    });
+
+    await check('1', 'home lives on the drive', async () => {
+      const r = await sh(
+        src,
+        `mountpoint ${VERCEL_DRIVE_ROOT}; readlink /persist; cat ${VERCEL_DRIVE_ROOT}/${SANDBOX_DRIVE_MARKER}; stat -c '%U' /persist/home/.; df -h ${VERCEL_DRIVE_ROOT} | tail -1`
+      );
+      assert(r.stdout.includes('is a mountpoint'), r.stdout + r.stderr);
+      assert(
+        r.stdout.includes(`\n${VERCEL_DRIVE_ROOT}\n`),
+        `/persist is not on the drive: ${r.stdout}`
+      );
+      assert(/\nfresh\n/.test(r.stdout), `marker: ${r.stdout}`);
       return r.stdout.trim().replace(/\n/g, ' | ');
     });
 
@@ -1234,16 +1329,63 @@ async function main() {
       say('\n== 9. fork the stopped box ==');
       fork = newRow('-fork');
       fork.runnerState = { forkFrom: { sandboxId: src.id, podName: src.podName } };
-      await check('9', 'fork through the vercel.fork handler', async () => {
-        const t0 = Date.now();
-        await runner.requestFork(ref(), refOf(fork!));
-        await drain();
-        assert(fork!.status === 'running', `fork row ${fork!.status} ${fork!.statusMessage ?? ''}`);
-        assert(fork!.runnerState?.forkedAt, 'forkedAt not recorded');
-        timings.forkHandler = secs(Date.now() - t0);
-        return `fork+wait+pushInit ${timings.forkHandler}`;
-      });
-      if (fork.status === 'running') {
+      const unsupported = await runner.forkSupport(ref());
+      say(`  fork support: ${unsupported ?? 'drive forks available'}`);
+      if (unsupported === VERCEL_DRIVE_FORK_UNAVAILABLE) {
+        const refused = fork;
+        await check(
+          '9',
+          'a fork without drive forks fails clearly and creates nothing',
+          async () => {
+            let message = '';
+            try {
+              await runner.requestFork(ref(), refOf(refused));
+              await drain();
+            } catch (e: any) {
+              message = e?.message ?? String(e);
+              assert(e?.statusCode === 422, `not terminal: ${JSON.stringify(e?.statusCode)}`);
+            }
+            assert(
+              message === VERCEL_DRIVE_FORK_UNAVAILABLE,
+              `error was ${JSON.stringify(message)}`
+            );
+            assert(refused.status === 'error', `fork row ${refused.status}`);
+            assert(runner.capabilities.fork === false, 'capabilities.fork still true');
+            const { Sandbox, Drive } = await sdkModule();
+            const sbGone = await Sandbox.get({ name: refused.podName, ...creds }).then(
+              () => false,
+              (e: any) => e?.response?.status === 404
+            );
+            const driveGone = await Drive.get({
+              name: `${NAME_PREFIX}${refused.id}`,
+              ...creds
+            }).then(
+              () => false,
+              (e: any) => e?.response?.status === 404
+            );
+            assert(sbGone && driveGone, `sandbox gone ${sbGone}, drive gone ${driveGone}`);
+            queue.items.length = 0;
+            db.rows.delete(refused.id);
+            created.delete(refused.podName);
+            return `"${message}", capabilities.fork false, no sandbox or drive left behind`;
+          }
+        );
+        fork = null;
+      }
+      if (fork)
+        await check('9', 'fork through the vercel.fork handler', async () => {
+          const t0 = Date.now();
+          await runner.requestFork(ref(), refOf(fork!));
+          await drain();
+          assert(
+            fork!.status === 'running',
+            `fork row ${fork!.status} ${fork!.statusMessage ?? ''}`
+          );
+          assert(fork!.runnerState?.forkedAt, 'forkedAt not recorded');
+          timings.forkHandler = secs(Date.now() - t0);
+          return `fork+wait+pushInit ${timings.forkHandler}`;
+        });
+      if (fork?.status === 'running') {
         await check('9', 'fork boots to ready', async () => {
           const ms = await waitReady(fork!, 'fork boot', true);
           timings.forkBoot = secs(ms);
@@ -1351,8 +1493,156 @@ async function main() {
       });
     }
 
+    const stopRow = async (row: Row) => {
+      row.desiredState = 'stopped';
+      row.status = 'stopping';
+      const t0 = Date.now();
+      while (row.status !== 'stopped' && Date.now() - t0 < 300_000) {
+        await runner.requestStop(refOf(row));
+        await drain();
+        if (row.status !== 'stopped') await sleep(3000);
+      }
+      assert(row.status === 'stopped', `row ${row.status}`);
+      return secs(Date.now() - t0);
+    };
+
+    const startRow = async (row: Row) => {
+      row.desiredState = 'running';
+      row.status = 'starting';
+      const t0 = Date.now();
+      await runner.requestStart(refOf(row));
+      await drain();
+      assert(row.status === 'running', `row ${row.status} ${row.statusMessage ?? ''}`);
+      return secs(Date.now() - t0);
+    };
+
+    if (stopped && src.status === 'running') {
+      say('\n== 11. the drive outlives its sandbox ==');
+      let lost = false;
+      await check('11', 'stop, then delete only the sandbox (not the drive)', async () => {
+        const w = await sh(
+          src,
+          `echo ${marker}-drive > /persist/home/.orchard-live-drive-marker && chown dev:dev /persist/home/.orchard-live-drive-marker && sync && echo ok`
+        );
+        assert(w.stdout.trim() === 'ok', w.stdout + w.stderr);
+        const took = await stopRow(src);
+        const sb = await live(src);
+        await sb.delete({ deleteOrphanSnapshots: true });
+        const { Sandbox, Drive } = await sdkModule();
+        const gone = await Sandbox.get({ name: src.podName, ...creds }).then(
+          () => false,
+          (e: any) => e?.response?.status === 404
+        );
+        assert(gone, 'the sandbox is still there');
+        const drive = await Drive.get({ name: src.runnerState.driveName, ...creds });
+        lost = true;
+        return `stopped in ${took}, sandbox and its snapshots deleted, drive ${drive.name} still there`;
+      });
+      if (lost) {
+        await check(
+          '11',
+          'start puts the machine on a new sandbox mounting the same drive',
+          async () => {
+            const took = await startRow(src);
+            const sb: any = await live(src);
+            const mount = sb.mounts?.[VERCEL_DRIVE_ROOT];
+            assert(
+              mount?.drive === src.runnerState.driveName,
+              `mounts ${JSON.stringify(sb.mounts)}`
+            );
+            const boot = await waitReady(src, 'replacement boot');
+            return `start ${took}, boot ${secs(boot)}, ${VERCEL_DRIVE_ROOT} <- ${mount.drive}`;
+          }
+        );
+        await check('11', 'home, keys and files came back from the drive', async () => {
+          const r = await sh(
+            src,
+            `cat /persist/home/.orchard-live-drive-marker /persist/home/.orchard-live-marker; readlink /persist; stat -c '%U' /persist/home/.orchard-live-drive-marker; sha256sum /persist/home/live/big.bin | cut -c1-12; [ -s /persist/hostkeys/ssh_host_ed25519_key ] && echo hostkey; cat ${VERCEL_DRIVE_ROOT}/${SANDBOX_DRIVE_MARKER}`
+          );
+          const out = r.stdout;
+          assert(out.includes(`${marker}-drive\n`), `drive marker missing: ${out}`);
+          assert(out.includes(`${marker}\n`), `persist marker missing: ${out}`);
+          assert(out.includes(`${VERCEL_DRIVE_ROOT}\n`), `/persist not on the drive: ${out}`);
+          assert(out.includes(bigSha.slice(0, 12)), `big.bin changed: ${out}`);
+          assert(out.includes('hostkey'), `host key missing: ${out}`);
+          return out.trim().replace(/\n/g, ' | ');
+        });
+      }
+    }
+
+    const extra: Row[] = [];
+    if (opts.migration) {
+      say('\n== 12. a snapshot-only machine moves onto a drive ==');
+      setConfig('vercelDriveGiB', '0');
+      const legacy = newRow('-legacy');
+      extra.push(legacy);
+      let legacyUp = false;
+      await check('12', 'provision with drives off, the way machines used to be', async () => {
+        await runner.requestProvision(refOf(legacy));
+        await drain();
+        assert(legacy.status === 'running', `row ${legacy.status} ${legacy.statusMessage ?? ''}`);
+        assert(!legacy.runnerState?.driveName, 'a drive was recorded');
+        const sb: any = await live(legacy);
+        assert(
+          !sb.mounts || Object.keys(sb.mounts).length === 0,
+          `mounts ${JSON.stringify(sb.mounts)}`
+        );
+        await waitReady(legacy, 'legacy boot');
+        const r = await sh(
+          legacy,
+          `readlink /persist; echo ${marker}-legacy > /persist/home/.orchard-live-legacy && chown dev:dev /persist/home/.orchard-live-legacy && chmod 600 /persist/home/.orchard-live-legacy && sync`
+        );
+        assert(r.stdout.trim() === VERCEL_PERSIST_ROOT, `/persist -> ${r.stdout}`);
+        legacyUp = true;
+        return `home in ${r.stdout.trim()}, snapshotExpiration ${sb.snapshotExpiration}`;
+      });
+      setConfig('vercelDriveGiB', null);
+      if (legacyUp) {
+        await check('12', 'stop, then start with drives on attaches a new drive', async () => {
+          const stopTook = await stopRow(legacy);
+          const startTook = await startRow(legacy);
+          const driveName = legacy.runnerState?.driveName;
+          assert(driveName === `${NAME_PREFIX}${legacy.id}`, `driveName ${driveName}`);
+          const sb: any = await live(legacy);
+          assert(
+            sb.mounts?.[VERCEL_DRIVE_ROOT]?.drive === driveName,
+            `mounts ${JSON.stringify(sb.mounts)}`
+          );
+          const boot = await waitReady(legacy, 'migrating boot');
+          return `stop ${stopTook}, start ${startTook}, boot ${secs(boot)}`;
+        });
+        await check(
+          '12',
+          'the old home was copied onto the drive and left where it was',
+          async () => {
+            const r = await sh(
+              legacy,
+              `readlink /persist; head -c 9 ${VERCEL_DRIVE_ROOT}/${SANDBOX_DRIVE_MARKER}; echo; cat /persist/home/.orchard-live-legacy; stat -c '%U %a' /persist/home/.orchard-live-legacy; cat ${VERCEL_PERSIST_ROOT}/home/.orchard-live-legacy; stat -c '%U' /persist/home/.; [ -s /persist/hostkeys/ssh_host_ed25519_key ] && echo hostkey; [ -f /persist/.setup-done ] && echo setup-done`
+            );
+            const lines = r.stdout.trim().split('\n');
+            assert(lines[0] === VERCEL_DRIVE_ROOT, `/persist -> ${lines[0]}`);
+            assert(lines[1] === 'migrated ', `marker ${lines[1]}`);
+            assert(lines[2] === `${marker}-legacy`, `drive copy ${lines[2]}`);
+            assert(lines[3] === 'dev 600', `owner/mode ${lines[3]}`);
+            assert(lines[4] === `${marker}-legacy`, `old copy ${lines[4]}`);
+            assert(lines[5] === 'dev', `home owner ${lines[5]}`);
+            assert(lines.includes('hostkey'), 'host key not carried over');
+            return lines.join(' | ');
+          }
+        );
+        await check('12', 'sshd and opencode run from the migrated home', async () => {
+          const r = await sh(
+            legacy,
+            'pgrep -x sshd >/dev/null && echo sshd; pgrep -f "opencode serve" >/dev/null && echo opencode; getent passwd dev | cut -d: -f6'
+          );
+          assert(/sshd/.test(r.stdout) && /\/persist\/home/.test(r.stdout), r.stdout);
+          return r.stdout.trim().replace(/\n/g, ' ');
+        });
+      }
+    }
+
     say('\n== 10. destroy ==');
-    for (const row of [src, ...(fork ? [fork] : [])]) {
+    for (const row of [src, ...(fork ? [fork] : []), ...extra]) {
       await check('10', `destroy ${row.podName} through the vercel.destroy handler`, async () => {
         const t0 = Date.now();
         row.desiredState = 'deleted';
@@ -1368,7 +1658,15 @@ async function main() {
           if (e?.response?.status !== 404) throw e;
         }
         created.delete(row.podName);
-        return `${secs(Date.now() - t0)}, get -> 404`;
+        const driveName = `${NAME_PREFIX}${row.id}`;
+        const { Drive } = await sdkModule();
+        const driveGone = await Drive.get({ name: driveName, ...creds }).then(
+          () => false,
+          (e: any) => e?.response?.status === 404
+        );
+        assert(driveGone, `drive ${driveName} survived destroy`);
+        createdDrives.delete(driveName);
+        return `${secs(Date.now() - t0)}, sandbox and drive -> 404`;
       });
     }
   } catch (e: any) {
@@ -1381,6 +1679,11 @@ async function main() {
           s.name.startsWith(`${NAME_PREFIX}${tag}`)
         );
         assert(left.length === 0, `left: ${left.map((s) => s.name).join(', ')}`);
+        return 'none';
+      });
+      await check('10', 'no drives from this run left', async () => {
+        const left = (await listLiveDrives(creds)).filter((name) => createdDrivesAll.has(name));
+        assert(left.length === 0, `left: ${left.join(', ')}`);
         return 'none';
       });
     }

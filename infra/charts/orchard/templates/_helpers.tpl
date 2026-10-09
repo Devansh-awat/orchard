@@ -327,6 +327,9 @@ true
             {{- if .timeoutMinutes }}
             - { name: SANDBOX_VERCEL_TIMEOUT_MINUTES, value: {{ .timeoutMinutes | toString | quote }} }
             {{- end }}
+            {{- if ne (toString (.driveGiB | default "")) "" }}
+            - { name: SANDBOX_VERCEL_DRIVE_GIB, value: {{ .driveGiB | toString | quote }} }
+            {{- end }}
             {{- end }}
             {{- if .bridgeBinaryUrl }}
             - { name: SANDBOX_BRIDGE_BINARY_URL, value: {{ .bridgeBinaryUrl | quote }} }

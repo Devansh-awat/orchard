@@ -58,6 +58,34 @@ export const VERCEL_DEFAULT_IMAGE = 'vercel/sandbox/universal';
 export const VERCEL_PROVIDER_STOPPED = 'Stopped by provider timeout';
 export const VERCEL_SANDBOX_GONE = 'The Vercel sandbox no longer exists';
 export const VERCEL_SANDBOX_FAILED = 'The Vercel sandbox failed';
+export const VERCEL_DRIVE_ROOT = '/mnt/orchard-drive';
+export const VERCEL_DEFAULT_REGION = 'iad1';
+export const VERCEL_DEFAULT_DRIVE_GIB = 50;
+export const VERCEL_MAX_DRIVE_GIB = 16384;
+export const VERCEL_KEEP_SNAPSHOTS = 3;
+export const VERCEL_DRIVE_FORK_UNAVAILABLE =
+  "Forking needs Vercel drive forks, which this team's plan doesn't have";
+
+export const vercelDriveName = (sandboxId: string, prefix = 'orchard-') => `${prefix}${sandboxId}`;
+
+export function vercelRetention() {
+  return {
+    snapshotExpiration: 0,
+    keepLastSnapshots: { count: VERCEL_KEEP_SNAPSHOTS, expiration: 0 }
+  };
+}
+
+export function vercelDriveMounts(driveName: string) {
+  return { [VERCEL_DRIVE_ROOT]: { drive: driveName, mode: 'read-write' as const } };
+}
+
+export function driveNameOf(state: unknown): string | null {
+  const value =
+    state && typeof state === 'object' && !Array.isArray(state)
+      ? (state as Record<string, unknown>).driveName
+      : null;
+  return typeof value === 'string' && value ? value : null;
+}
 
 const DEFAULT_VCPUS = 2;
 const DEFAULT_TIMEOUT_MINUTES = 60;
@@ -70,6 +98,10 @@ const RECONCILE_CONCURRENCY = 5;
 const KEEPALIVE_MARGIN_MS = 10 * 60_000;
 const KEEPALIVE_EXTEND_MS = 30 * 60_000;
 const BOOT_WAIT_MS = 90_000;
+const GIB = 1024 ** 3;
+const DRIVE_DELETE_ATTEMPTS = 10;
+const DRIVES_UNAVAILABLE_RETRY_MS = 60 * 60_000;
+const DRIVE_FORK_PROBE_TTL_MS = 10 * 60_000;
 const HEALTH_ATTEMPTS = 20;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const USER_RE = /^[a-z_][a-z0-9_-]*$/;
@@ -128,14 +160,43 @@ export interface VercelSessionLike {
   openInteractive?(opts?: { signal?: AbortSignal }): Promise<{ url: string; token: string }>;
 }
 
+export interface VercelMount {
+  drive: string;
+  mode: 'read-write' | 'snapshot';
+}
+
+export interface VercelKeepLastSnapshots {
+  count: number;
+  expiration?: number;
+  deleteEvicted?: boolean;
+}
+
+export interface VercelSandboxUpdate {
+  networkPolicy?: unknown;
+  mounts?: Record<string, VercelMount>;
+  snapshotExpiration?: number;
+  keepLastSnapshots?: VercelKeepLastSnapshots;
+}
+
 export interface VercelSandboxLike {
   readonly name: string;
   readonly status: string;
   readonly expiresAt?: Date;
+  readonly region?: string;
+  readonly mounts?: Record<string, VercelMount>;
+  readonly snapshotExpiration?: number;
+  readonly keepLastSnapshots?: VercelKeepLastSnapshots;
   currentSession(): VercelSessionLike;
   stop(opts?: { signal?: AbortSignal }): Promise<unknown>;
   delete(opts?: { deleteOrphanSnapshots?: boolean; signal?: AbortSignal }): Promise<void>;
-  update(params: { networkPolicy?: unknown }, opts?: { signal?: AbortSignal }): Promise<void>;
+  update(params: VercelSandboxUpdate, opts?: { signal?: AbortSignal }): Promise<void>;
+}
+
+export interface VercelDriveLike {
+  readonly name: string;
+  readonly region: string;
+  fork(params: { name: string; signal?: AbortSignal }): Promise<VercelDriveLike>;
+  delete(opts?: { signal?: AbortSignal }): Promise<void>;
 }
 
 export interface VercelSdk {
@@ -146,6 +207,18 @@ export interface VercelSdk {
   fork?(
     params: Record<string, unknown> & { sourceSandbox: string } & VercelCredentials
   ): Promise<VercelSandboxLike>;
+  getDrive(
+    params: { name: string; signal?: AbortSignal } & VercelCredentials
+  ): Promise<VercelDriveLike>;
+  getOrCreateDrive(
+    params: {
+      name: string;
+      region: string;
+      maxSize: number;
+      signal?: AbortSignal;
+    } & VercelCredentials
+  ): Promise<VercelDriveLike>;
+  driveForksAvailable(credentials: VercelCredentials): Promise<boolean>;
 }
 
 let vercelModule: Promise<typeof VercelSandboxModule> | null = null;
@@ -163,7 +236,31 @@ const realSdk: VercelSdk = {
   get: async (params) =>
     (await (await loadVercelModule()).Sandbox.get(params as never)) as unknown as VercelSandboxLike,
   fork: async (params) =>
-    (await (await loadVercelModule()).Sandbox.fork(params as never)) as unknown as VercelSandboxLike
+    (await (
+      await loadVercelModule()
+    ).Sandbox.fork(params as never)) as unknown as VercelSandboxLike,
+  getDrive: async (params) =>
+    (await (await loadVercelModule()).Drive.get(params as never)) as unknown as VercelDriveLike,
+  getOrCreateDrive: async (params) =>
+    (await (
+      await loadVercelModule()
+    ).Drive.getOrCreate(params as never)) as unknown as VercelDriveLike,
+  driveForksAvailable: async ({ token, teamId, projectId }) => {
+    const url = new URL(
+      `https://vercel.com/api/v2/sandboxes/drives/orchard-fork-probe-${randomUUID()}/fork`
+    );
+    url.searchParams.set('teamId', teamId);
+    url.searchParams.set('projectId', projectId);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: `orchard-fork-probe-${randomUUID()}` }),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+    });
+    if (res.status === 403) return false;
+    if (res.status === 404) return true;
+    throw new Error(`the Vercel drive fork probe answered ${res.status}`);
+  }
 };
 
 export async function vercelInteractiveSupported(): Promise<boolean> {
@@ -183,6 +280,7 @@ interface VercelSettings {
   bridgeUrl: string;
   bridgeSha256: string | null;
   bridgeOverridden: boolean;
+  driveGiB: number;
 }
 
 interface LifecycleRow {
@@ -319,6 +417,60 @@ function isStopped(e: unknown): boolean {
   return status === 422 && ['sandbox_stopping', 'sandbox_snapshotting'].includes(apiCode(e) ?? '');
 }
 
+function apiMessage(e: unknown): string {
+  const json = (e as { json?: { error?: { message?: string } } } | null)?.json?.error?.message;
+  return json || (e as { message?: string } | null)?.message || String(e);
+}
+
+function isDriveAttached(e: unknown): boolean {
+  const status = apiStatus(e);
+  return status === 409 || status === 423 || /attach/i.test(`${apiCode(e) ?? ''} ${apiMessage(e)}`);
+}
+
+function drivesForbidden(e: unknown): boolean {
+  const status = apiStatus(e);
+  return status === 402 || status === 403;
+}
+
+function terminalError(message: string): Error {
+  return Object.assign(new Error(message), { statusCode: 422 });
+}
+
+function readSafely<T>(read: () => T): T | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
+}
+
+function regionOf(sandbox: VercelSandboxLike): string {
+  return readSafely(() => sandbox.region) || VERCEL_DEFAULT_REGION;
+}
+
+function retentionPatch(sandbox: VercelSandboxLike): VercelSandboxUpdate {
+  const expiration = readSafely(() => sandbox.snapshotExpiration);
+  const keep = readSafely(() => sandbox.keepLastSnapshots);
+  const current =
+    expiration === 0 &&
+    keep?.count === VERCEL_KEEP_SNAPSHOTS &&
+    (keep.expiration === undefined || keep.expiration === 0);
+  return current ? {} : vercelRetention();
+}
+
+function hasDriveMounted(sandbox: VercelSandboxLike, driveName: string): boolean {
+  const mount = readSafely(() => sandbox.mounts)?.[VERCEL_DRIVE_ROOT];
+  return mount?.drive === driveName && mount.mode === 'read-write';
+}
+
+function withDrive<T extends { runnerState: unknown }>(row: T, driveName: string): T {
+  const state =
+    row.runnerState && typeof row.runnerState === 'object' && !Array.isArray(row.runnerState)
+      ? (row.runnerState as Record<string, unknown>)
+      : {};
+  return { ...row, runnerState: { ...state, driveName } };
+}
+
 function isTimeout(e: unknown): boolean {
   const name = (e as { name?: string } | null)?.name;
   return name === 'TimeoutError' || name === 'AbortError';
@@ -358,6 +510,14 @@ function idleWindowMs(): number {
 function positive(value: string | null, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function driveGiB(value: string | null): number {
+  if (value === null) return VERCEL_DEFAULT_DRIVE_GIB;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= VERCEL_MAX_DRIVE_GIB
+    ? parsed
+    : VERCEL_DEFAULT_DRIVE_GIB;
 }
 
 function interactiveHealthUrl(url: string): string {
@@ -555,6 +715,18 @@ export class VercelSandboxRunner implements SandboxRunner {
 
   bootPollMs = 2000;
 
+  driveDeletePollMs = 3000;
+
+  drivePrefix = 'orchard-';
+
+  private drivesUnavailableUntil = 0;
+
+  private drivesUnavailableLogged = false;
+
+  private driveForks: { available: boolean | null; at: number } | null = null;
+
+  private driveForkProbe: Promise<boolean | null> | null = null;
+
   private settingsCache: { generation: number; value: VercelSettings } | null = null;
 
   private instanceIdCache: string | null = null;
@@ -602,9 +774,185 @@ export class VercelSandboxRunner implements SandboxRunner {
       execStdin: true,
       maxRunMs: null,
       diskSizeConfigurable: false,
-      fork: true,
+      fork: this.forkCapable(),
       previews: 'public'
     };
+  }
+
+  private drivesEnabled(): boolean {
+    return this.settings().driveGiB > 0 && Date.now() >= this.drivesUnavailableUntil;
+  }
+
+  private forkCapable(): boolean {
+    if (!this.drivesEnabled()) return true;
+    if (!this.settings().credentials) return true;
+    void this.driveForksAvailable();
+    return this.driveForks?.available !== false;
+  }
+
+  private driveForksAvailable(): Promise<boolean | null> {
+    if (this.driveForkProbe) return this.driveForkProbe;
+    if (this.driveForks && Date.now() - this.driveForks.at < DRIVE_FORK_PROBE_TTL_MS) {
+      return Promise.resolve(this.driveForks.available);
+    }
+    const credentials = this.settings().credentials;
+    if (!credentials) return Promise.resolve(null);
+    const probe = Promise.resolve()
+      .then(() => this.sdk.driveForksAvailable(credentials))
+      .then(
+        (available): boolean | null => available,
+        (e: any) => {
+          this.logger.warn(
+            `could not check whether Vercel drive forks are available: ${e?.message}`
+          );
+          return this.driveForks?.available ?? null;
+        }
+      )
+      .then((available) => {
+        this.driveForks = { available, at: Date.now() };
+        return available;
+      })
+      .finally(() => {
+        this.driveForkProbe = null;
+      });
+    this.driveForkProbe = probe;
+    return probe;
+  }
+
+  private driveName(sandboxId: string): string {
+    return vercelDriveName(sandboxId, this.drivePrefix);
+  }
+
+  private markDrivesUnavailable(e: unknown): void {
+    this.drivesUnavailableUntil = Date.now() + DRIVES_UNAVAILABLE_RETRY_MS;
+    if (this.drivesUnavailableLogged) return;
+    this.drivesUnavailableLogged = true;
+    this.logger.warn(
+      `Vercel drives are unavailable (${apiStatus(e) ?? 'n/a'} ${apiMessage(e)}); new machines keep their home in snapshots only, which never expire`
+    );
+  }
+
+  private async ensureDrive(
+    name: string,
+    region: string,
+    credentials: VercelCredentials
+  ): Promise<VercelDriveLike> {
+    const gib = this.settings().driveGiB || VERCEL_DEFAULT_DRIVE_GIB;
+    try {
+      const drive = await this.sdk.getOrCreateDrive({
+        name,
+        region,
+        maxSize: gib * GIB,
+        ...credentials,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      });
+      this.markApiOk();
+      return drive;
+    } catch (e) {
+      if (apiStatus(e) !== 409) throw e;
+      const drive = await this.sdk.getDrive({
+        name,
+        ...credentials,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      });
+      this.markApiOk();
+      return drive;
+    }
+  }
+
+  private async machineDrive(
+    row: { id: string; runnerState: unknown },
+    region: string,
+    credentials: VercelCredentials
+  ): Promise<VercelDriveLike | null> {
+    const recorded = driveNameOf(row.runnerState);
+    if (!recorded && !this.drivesEnabled()) return null;
+    const name = recorded ?? this.driveName(row.id);
+    let drive: VercelDriveLike;
+    try {
+      drive = await this.ensureDrive(name, region, credentials);
+    } catch (e) {
+      if (recorded || !drivesForbidden(e)) throw e;
+      this.markDrivesUnavailable(e);
+      return null;
+    }
+    if (!recorded) await this.mergeRunnerState(row.id, { driveName: drive.name });
+    return drive;
+  }
+
+  private async forkedDrive(
+    row: LifecycleRow,
+    sourceDriveName: string,
+    credentials: VercelCredentials
+  ): Promise<VercelDriveLike> {
+    const recorded = driveNameOf(row.runnerState);
+    if (recorded) {
+      return this.sdk.getDrive({
+        name: recorded,
+        ...credentials,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      });
+    }
+    const target = this.driveName(row.id);
+    let source: VercelDriveLike;
+    try {
+      source = await this.sdk.getDrive({
+        name: sourceDriveName,
+        ...credentials,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      });
+    } catch (e) {
+      if (isNotFound(e)) {
+        throw new Error('The drive of the machine being forked no longer exists on Vercel');
+      }
+      throw e;
+    }
+    let forked: VercelDriveLike;
+    try {
+      forked = await source.fork({ name: target, signal: AbortSignal.timeout(CREATE_TIMEOUT_MS) });
+    } catch (e) {
+      if (drivesForbidden(e)) {
+        this.driveForks = { available: false, at: Date.now() };
+        await this.prisma.sandbox.updateMany({
+          where: { id: row.id, desiredState: 'running' },
+          data: { status: 'error', statusMessage: VERCEL_DRIVE_FORK_UNAVAILABLE }
+        });
+        throw terminalError(VERCEL_DRIVE_FORK_UNAVAILABLE);
+      }
+      if (apiStatus(e) !== 409) throw e;
+      forked = await this.sdk.getDrive({
+        name: target,
+        ...credentials,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      });
+    }
+    this.markApiOk();
+    await this.mergeRunnerState(row.id, { driveName: forked.name });
+    return forked;
+  }
+
+  private async deleteDrive(name: string, credentials: VercelCredentials): Promise<void> {
+    for (let attempt = 1; ; attempt += 1) {
+      let drive: VercelDriveLike;
+      try {
+        drive = await this.sdk.getDrive({
+          name,
+          ...credentials,
+          signal: AbortSignal.timeout(API_TIMEOUT_MS)
+        });
+      } catch (e) {
+        if (isNotFound(e)) return;
+        throw e;
+      }
+      try {
+        await drive.delete({ signal: AbortSignal.timeout(API_TIMEOUT_MS) });
+        return;
+      } catch (e) {
+        if (isNotFound(e)) return;
+        if (!isDriveAttached(e) || attempt >= DRIVE_DELETE_ATTEMPTS) throw e;
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.driveDeletePollMs));
+    }
   }
 
   private settings(): VercelSettings {
@@ -628,7 +976,8 @@ export class VercelSandboxRunner implements SandboxRunner {
       timeoutMs: positive(read('vercelTimeoutMinutes'), DEFAULT_TIMEOUT_MINUTES) * 60_000,
       bridgeUrl: read('bridgeBinaryUrl') || defaultBridgeBinaryUrl(),
       bridgeSha256: read('bridgeBinarySha256')?.toLowerCase() || null,
-      bridgeOverridden: !!read('bridgeBinaryUrl')
+      bridgeOverridden: !!read('bridgeBinaryUrl'),
+      driveGiB: driveGiB(read('vercelDriveGiB'))
     };
     this.settingsCache = { generation, value };
     return value;
@@ -738,8 +1087,11 @@ export class VercelSandboxRunner implements SandboxRunner {
     await this.enqueue(ref, vercelSecretKey(ref.id), VERCEL_OP_SECRET, requestedById);
   }
 
-  async forkSupport(): Promise<string | null> {
-    return this.configError();
+  async forkSupport(source: SandboxRef): Promise<string | null> {
+    const error = this.configError();
+    if (error) return error;
+    if (!driveNameOf(source.runnerState)) return null;
+    return (await this.driveForksAvailable()) === false ? VERCEL_DRIVE_FORK_UNAVAILABLE : null;
   }
 
   async requestFork(
@@ -842,30 +1194,38 @@ export class VercelSandboxRunner implements SandboxRunner {
     });
   }
 
-  private async convergeRunning(row: LifecycleRow, credentials: VercelCredentials): Promise<void> {
-    const secrets = await this.secrets.forSandbox(row);
+  private async convergeRunning(
+    loaded: LifecycleRow,
+    credentials: VercelCredentials
+  ): Promise<void> {
+    const secrets = await this.secrets.forSandbox(loaded);
     if (!secrets.opencodePassword || !secrets.bridgeToken) {
       throw new Error('SECRETS_ENCRYPTION_KEY is required to start a Vercel sandbox');
     }
     const policy = githubNetworkPolicy(secrets.githubToken);
-    let sandbox: VercelSandboxLike;
-    try {
-      sandbox = await this.sdk.get({
-        name: row.podName,
-        resume: true,
-        ...credentials,
-        signal: AbortSignal.timeout(CREATE_TIMEOUT_MS)
-      });
-      this.markApiOk();
-      await sandbox.update(
-        { networkPolicy: policy },
-        { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
-      );
-    } catch (e) {
-      if (!isNotFound(e)) throw e;
-      this.markApiOk();
-      sandbox = await this.createOrFork(row, credentials, policy);
+    let row = loaded;
+    let sandbox: VercelSandboxLike | null = await this.find(row.podName, credentials);
+    if (sandbox) {
+      row = await this.prepareExisting(row, sandbox, credentials);
+      try {
+        sandbox = await this.sdk.get({
+          name: row.podName,
+          resume: true,
+          ...credentials,
+          signal: AbortSignal.timeout(CREATE_TIMEOUT_MS)
+        });
+        this.markApiOk();
+        await sandbox.update(
+          { networkPolicy: policy },
+          { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
+        );
+      } catch (e) {
+        if (!isNotFound(e)) throw e;
+        this.markApiOk();
+        sandbox = null;
+      }
     }
+    if (!sandbox) ({ row, sandbox } = await this.createOrFork(row, credentials, policy));
     sandbox = await this.waitRunning(sandbox, row.podName, credentials);
     this.live.set(row.id, { sandbox, at: Date.now() });
     await this.pushInit(sandbox.currentSession(), row, secrets);
@@ -880,11 +1240,40 @@ export class VercelSandboxRunner implements SandboxRunner {
     });
   }
 
+  private async prepareExisting(
+    row: LifecycleRow,
+    sandbox: VercelSandboxLike,
+    credentials: VercelCredentials
+  ): Promise<LifecycleRow> {
+    const region = regionOf(sandbox);
+    const drive = await this.machineDrive(row, region, credentials);
+    if (drive && drive.region !== region) {
+      throw new Error(
+        `The drive ${drive.name} is in ${drive.region} but the machine runs in ${region}, so it cannot be mounted`
+      );
+    }
+    const patch = retentionPatch(sandbox);
+    if (drive && !hasDriveMounted(sandbox, drive.name))
+      patch.mounts = vercelDriveMounts(drive.name);
+    if (Object.keys(patch).length) {
+      await sandbox.update(patch, { signal: AbortSignal.timeout(API_TIMEOUT_MS) });
+    }
+    return drive ? withDrive(row, drive.name) : row;
+  }
+
+  private async sourceDriveName(sandboxId: string): Promise<string | null> {
+    const source = await this.prisma.sandbox.findUnique({
+      where: { id: sandboxId },
+      select: { runnerState: true }
+    });
+    return driveNameOf(source?.runnerState);
+  }
+
   private async createOrFork(
     row: LifecycleRow,
     credentials: VercelCredentials,
     networkPolicy: unknown
-  ): Promise<VercelSandboxLike> {
+  ): Promise<{ row: LifecycleRow; sandbox: VercelSandboxLike }> {
     const fork = forkSourceOf(row.runnerState);
     const state =
       row.runnerState && typeof row.runnerState === 'object'
@@ -892,6 +1281,12 @@ export class VercelSandboxRunner implements SandboxRunner {
         : {};
     if (!fork || state.forkedAt) return this.create(row, credentials, networkPolicy);
     if (!this.sdk.fork) throw new Error('This @vercel/sandbox version cannot fork sandboxes');
+    const source = await this.find(fork.podName, credentials);
+    if (!source) throw new Error('The machine being forked no longer exists on Vercel');
+    const sourceDrive = await this.sourceDriveName(fork.sandboxId);
+    const drive = sourceDrive
+      ? await this.forkedDrive(row, sourceDrive, credentials)
+      : await this.machineDrive(row, regionOf(source), credentials);
     const settings = this.settings();
     let sandbox: VercelSandboxLike;
     try {
@@ -901,6 +1296,9 @@ export class VercelSandboxRunner implements SandboxRunner {
         timeout: settings.timeoutMs,
         ports: vercelPorts(),
         persistent: true,
+        ...vercelRetention(),
+        region: drive?.region ?? regionOf(source),
+        ...(drive ? { mounts: vercelDriveMounts(drive.name) } : {}),
         tags: {
           orchard_instance: await this.instanceId(),
           orchard_sandbox: row.id,
@@ -917,15 +1315,16 @@ export class VercelSandboxRunner implements SandboxRunner {
     }
     this.markApiOk();
     await this.mergeRunnerState(row.id, { forkedAt: new Date().toISOString() });
-    return sandbox;
+    return { row: drive ? withDrive(row, drive.name) : row, sandbox };
   }
 
   private async create(
     row: LifecycleRow,
     credentials: VercelCredentials,
     networkPolicy: unknown
-  ): Promise<VercelSandboxLike> {
+  ): Promise<{ row: LifecycleRow; sandbox: VercelSandboxLike }> {
     const settings = this.settings();
+    const drive = await this.machineDrive(row, VERCEL_DEFAULT_REGION, credentials);
     const sandbox = await this.sdk.create({
       name: row.podName,
       image: row.image || settings.image,
@@ -933,6 +1332,9 @@ export class VercelSandboxRunner implements SandboxRunner {
       timeout: settings.timeoutMs,
       ports: vercelPorts(),
       persistent: true,
+      ...vercelRetention(),
+      region: drive?.region ?? VERCEL_DEFAULT_REGION,
+      ...(drive ? { mounts: vercelDriveMounts(drive.name) } : {}),
       tags: {
         orchard_instance: await this.instanceId(),
         orchard_sandbox: row.id,
@@ -943,7 +1345,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       signal: AbortSignal.timeout(CREATE_TIMEOUT_MS)
     });
     this.markApiOk();
-    return sandbox;
+    return { row: drive ? withDrive(row, drive.name) : row, sandbox };
   }
 
   private async waitRunning(
@@ -984,7 +1386,7 @@ export class VercelSandboxRunner implements SandboxRunner {
   }
 
   bootstrapEnv(
-    row: { repoUrl: string | null },
+    row: { repoUrl: string | null; runnerState?: unknown },
     secrets: SandboxSecrets,
     bridgeSha256: string | null = null,
     arm64: { url: string; sha: string } | null = null
@@ -993,6 +1395,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       ORCHARD_INIT_STAGE: VERCEL_INIT_STAGE,
       SANDBOX_HOME_MODE: 'none',
       SANDBOX_PERSIST_ROOT: VERCEL_PERSIST_ROOT,
+      ...(driveNameOf(row.runnerState) ? { SANDBOX_DRIVE_ROOT: VERCEL_DRIVE_ROOT } : {}),
       SANDBOX_REPO_URL: row.repoUrl || '',
       CLAUDE_CODE_OAUTH_TOKEN: secrets.claudeToken || '',
       OPENAI_API_KEY: secrets.openaiToken || '',
@@ -1007,7 +1410,7 @@ export class VercelSandboxRunner implements SandboxRunner {
 
   private async pushInit(
     session: VercelSessionLike,
-    row: { repoUrl: string | null },
+    row: { repoUrl: string | null; runnerState?: unknown },
     secrets: SandboxSecrets
   ): Promise<void> {
     const files = stagedInitFiles(secrets, { requireHttpsMcp: true });
@@ -1059,7 +1462,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     if (!sandboxId) return;
     const row = await this.prisma.sandbox.findUnique({
       where: { id: sandboxId },
-      select: { id: true, podName: true, desiredState: true, runner: true }
+      select: { id: true, podName: true, desiredState: true, runner: true, runnerState: true }
     });
     if (row && (row.desiredState !== 'deleted' || row.runner !== 'vercel')) {
       this.logger.warn(`refusing to destroy sandbox ${row.id}: it is not marked for deletion`);
@@ -1074,6 +1477,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       });
     }
     this.live.delete(sandboxId);
+    await this.deleteDrive(driveNameOf(row?.runnerState) ?? this.driveName(sandboxId), credentials);
     if (row) {
       await this.prisma.sandbox.deleteMany({ where: { id: row.id, desiredState: 'deleted' } });
     }
@@ -1110,6 +1514,16 @@ export class VercelSandboxRunner implements SandboxRunner {
         return;
       }
       const status = sandbox ? statusOf(sandbox) : null;
+      if (sandbox && row.desiredState !== 'deleted') {
+        const patch = retentionPatch(sandbox);
+        if (Object.keys(patch).length) {
+          await sandbox
+            .update(patch, { signal: AbortSignal.timeout(API_TIMEOUT_MS) })
+            .catch((e: any) =>
+              this.logger.warn(`could not set snapshot retention on ${row.id}: ${e?.message}`)
+            );
+        }
+      }
       const change = vercelStatusChange(row, { exists: !!sandbox, status });
       if (change) {
         await this.prisma.sandbox.updateMany({

@@ -2,16 +2,30 @@ import 'reflect-metadata';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   VERCEL_BRIDGE_PORT,
+  VERCEL_DRIVE_FORK_UNAVAILABLE,
+  VERCEL_DRIVE_ROOT,
   VERCEL_INIT_STAGE,
   VERCEL_OPENCODE_PORT,
   VERCEL_OP_DESTROY,
+  VERCEL_OP_FORK,
   VERCEL_OP_PROVISION,
   VERCEL_OP_SECRET,
+  VERCEL_OP_START,
+  VERCEL_OP_STOP,
+  VERCEL_PERSIST_ROOT,
   VERCEL_PROVIDER_STOPPED,
   VERCEL_SANDBOX_GONE,
   VercelSandboxRunner,
@@ -23,7 +37,7 @@ import {
 } from '../src/sandboxes/runners/vercel.runner';
 import { stagedInitFiles, opencodeConfigJson } from '../src/sandboxes/runners/sandbox-init-files';
 import { SandboxSecretsService, deriveBoxSecret } from '../src/sandboxes/runners/sandbox-secrets';
-import { SANDBOX_PHASE_FILE } from '../src/sandboxes/sandbox-bootstrap';
+import { SANDBOX_DRIVE_MARKER, SANDBOX_PHASE_FILE } from '../src/sandboxes/sandbox-bootstrap';
 import {
   SANDBOX_BOOTSTRAP_SCRIPT,
   bridgeArchiveName,
@@ -68,6 +82,87 @@ function notFound(): Error {
   return Object.assign(new Error('not found'), { response: { status: 404 } });
 }
 
+function apiError(status: number, code: string, message = code): Error {
+  return Object.assign(new Error(message), {
+    response: { status },
+    json: { error: { code, message } }
+  });
+}
+
+const GIB = 1024 ** 3;
+
+class FakeDrive {
+  deletes = 0;
+  deleteErrors: Error[] = [];
+  forkError: Error | null = null;
+
+  constructor(
+    public name: string,
+    public region: string,
+    public maxSize: number,
+    private readonly sdk: FakeSdk
+  ) {}
+
+  async fork(params: { name: string }) {
+    this.sdk.events.push(`drive.fork ${this.name} -> ${params.name}`);
+    if (this.forkError) throw this.forkError;
+    const forked = new FakeDrive(params.name, this.region, this.maxSize, this.sdk);
+    this.sdk.drives.set(params.name, forked);
+    return forked;
+  }
+
+  async delete() {
+    this.sdk.events.push(`drive.delete ${this.name}`);
+    const error = this.deleteErrors.shift();
+    if (error) throw error;
+    this.deletes += 1;
+    this.sdk.drives.delete(this.name);
+    this.sdk.deletedDrives.push(this.name);
+  }
+}
+
+class FakeSdk {
+  events: string[] = [];
+  drives = new Map<string, FakeDrive>();
+  deletedDrives: string[] = [];
+  driveCalls: any[] = [];
+  driveError: Error | null = null;
+  forksAvailable: boolean | Error = true;
+  forkProbes = 0;
+
+  addDrive(name: string, region = 'iad1', maxSize = 50 * GIB) {
+    const drive = new FakeDrive(name, region, maxSize, this);
+    this.drives.set(name, drive);
+    return drive;
+  }
+
+  async getDrive(params: { name: string }) {
+    const drive = this.drives.get(params.name);
+    if (!drive) throw notFound();
+    return drive;
+  }
+
+  async getOrCreateDrive(params: { name: string; region: string; maxSize: number }) {
+    this.driveCalls.push({ name: params.name, region: params.region, maxSize: params.maxSize });
+    this.events.push(`drive.getOrCreate ${params.name}`);
+    if (this.driveError) throw this.driveError;
+    const existing = this.drives.get(params.name);
+    if (existing) {
+      if (existing.region !== params.region || existing.maxSize !== params.maxSize) {
+        throw apiError(409, 'conflict', 'already exists with a different maxSizeBytes');
+      }
+      return existing;
+    }
+    return this.addDrive(params.name, params.region, params.maxSize);
+  }
+
+  async driveForksAvailable() {
+    this.forkProbes += 1;
+    if (this.forksAvailable instanceof Error) throw this.forksAvailable;
+    return this.forksAvailable;
+  }
+}
+
 class FakeSession {
   writes: { path: string; content: Uint8Array; mode?: number }[] = [];
   commands: any[] = [];
@@ -107,6 +202,11 @@ class FakeSandbox {
   updates: any[] = [];
   stops = 0;
   deletes = 0;
+  region = 'iad1';
+  mounts: Record<string, { drive: string; mode: string }> | undefined;
+  snapshotExpiration: number | undefined;
+  keepLastSnapshots: { count: number; expiration?: number } | undefined;
+  events: string[] | null = null;
 
   constructor(
     public name: string,
@@ -125,23 +225,38 @@ class FakeSandbox {
   }
 
   async delete() {
+    this.events?.push(`sandbox.delete ${this.name}`);
     this.deletes += 1;
   }
 
   async update(params: any) {
+    this.events?.push(`sandbox.update ${Object.keys(params).sort().join(',')}`);
     this.updates.push(params);
+    if (params.mounts) this.mounts = params.mounts;
+    if (params.snapshotExpiration !== undefined)
+      this.snapshotExpiration = params.snapshotExpiration;
+    if (params.keepLastSnapshots) this.keepLastSnapshots = params.keepLastSnapshots;
   }
 }
 
 function vercelRunner(
   row: Record<string, unknown> | null,
-  opts: { existing?: FakeSandbox | null; getError?: Error; values?: Record<string, string> } = {}
+  opts: {
+    existing?: FakeSandbox | null;
+    getError?: Error;
+    values?: Record<string, string>;
+    rows?: Record<string, Record<string, unknown>>;
+    sdk?: FakeSdk;
+    sources?: Record<string, FakeSandbox>;
+  } = {}
 ) {
   const enqueued: any[] = [];
   const updates: any[] = [];
   const deleted: any[] = [];
   const created: any[] = [];
+  const forked: any[] = [];
   const handlers = new Map<string, (item: any) => Promise<void>>();
+  const fake = opts.sdk ?? new FakeSdk();
   const values: Record<string, string> = {
     vercelToken: 'vercel-api-token',
     vercelTeamId: 'team_1',
@@ -150,7 +265,7 @@ function vercelRunner(
   };
   const prisma = {
     sandbox: {
-      findUnique: async () => row,
+      findUnique: async (args: any) => opts.rows?.[args?.where?.id] ?? row,
       findMany: async () => (row ? [row] : []),
       updateMany: async (args: any) => {
         updates.push(args);
@@ -174,18 +289,40 @@ function vercelRunner(
       forSandbox: async () => SECRETS
     }) as never
   );
+  if (existing) existing.events = fake.events;
   runner.sdk = {
-    get: async () => {
+    get: async (params: any) => {
       if (opts.getError) throw opts.getError;
-      if (!existing) throw notFound();
+      const source = opts.sources?.[params.name];
+      if (source) return source as never;
+      if (!existing || params.name !== existing.name) throw notFound();
+      fake.events.push(`sandbox.get${params.resume ? ' resume' : ''}`);
+      if (params.resume) existing.status = 'running';
       return existing as never;
     },
     create: async (params: any) => {
+      fake.events.push('sandbox.create');
       created.push(params);
       existing = new FakeSandbox(params.name);
+      existing.events = fake.events;
+      existing.region = params.region;
+      existing.mounts = params.mounts;
       return existing as never;
-    }
+    },
+    fork: async (params: any) => {
+      fake.events.push('sandbox.fork');
+      forked.push(params);
+      existing = new FakeSandbox(params.name);
+      existing.events = fake.events;
+      existing.region = params.region;
+      existing.mounts = params.mounts;
+      return existing as never;
+    },
+    getDrive: (params: any) => fake.getDrive(params) as never,
+    getOrCreateDrive: (params: any) => fake.getOrCreateDrive(params) as never,
+    driveForksAvailable: () => fake.driveForksAvailable()
   };
+  runner.driveDeletePollMs = 1;
   runner.bridgeChecksums = new BridgeChecksumResolver(
     async () => new Response(`${'ab'.repeat(32)}  ${bridgeArchiveName()}\n`)
   );
@@ -196,9 +333,15 @@ function vercelRunner(
     updates,
     deleted,
     created,
+    forked,
     handlers,
+    sdk: fake,
     current: () => existing
   };
+}
+
+function driveOf(sandboxId: string) {
+  return `orchard-${sandboxId}`;
 }
 
 const ROW = {
@@ -393,9 +536,10 @@ test('an existing box is resumed and gets the current network policy instead of 
   const { handlers, created } = vercelRunner(ROW, { existing: box });
   await handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
   assert.equal(created.length, 0);
-  assert.equal(box.updates.length, 1);
+  const policies = box.updates.filter((u) => u.networkPolicy);
+  assert.equal(policies.length, 1);
   assert.equal(
-    box.updates[0].networkPolicy.allow['api.github.com'][0].transform[0].headers.authorization,
+    policies[0].networkPolicy.allow['api.github.com'][0].transform[0].headers.authorization,
     'Bearer ghp_vercel_secret'
   );
 });
@@ -686,4 +830,406 @@ test('the bridge is picked for the machine architecture with a checksum for each
   assert.equal(await custom.bridgeArm64(), null);
   assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /case "\$\(uname -m\)" in/);
   assert.match(SANDBOX_BOOTSTRAP_SCRIPT, /ORCHARD_BRIDGE_SHA256_ARM64/);
+});
+
+test('a new machine gets its own drive in its region, mounted read-write, and snapshots that never expire', async () => {
+  const { handlers, created, updates, sdk, current } = vercelRunner(ROW);
+  await handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
+  assert.deepEqual(sdk.driveCalls, [{ name: driveOf(REF.id), region: 'iad1', maxSize: 50 * GIB }]);
+  const params = created[0];
+  assert.equal(params.region, 'iad1');
+  assert.deepEqual(params.mounts, {
+    [VERCEL_DRIVE_ROOT]: { drive: driveOf(REF.id), mode: 'read-write' }
+  });
+  assert.equal(params.snapshotExpiration, 0);
+  assert.deepEqual(params.keepLastSnapshots, { count: 3, expiration: 0 });
+  assert.ok(
+    sdk.events.indexOf(`drive.getOrCreate ${driveOf(REF.id)}`) <
+      sdk.events.indexOf('sandbox.create')
+  );
+  const recorded = updates.find((u) => u.data?.runnerState?.driveName);
+  assert.equal(recorded?.data.runnerState.driveName, driveOf(REF.id));
+  const boot = current()!.session.commands[0];
+  assert.equal(boot.env.SANDBOX_DRIVE_ROOT, VERCEL_DRIVE_ROOT);
+  assert.equal(boot.env.SANDBOX_PERSIST_ROOT, VERCEL_PERSIST_ROOT);
+});
+
+test('vercelDriveGiB sizes new drives and 0 keeps homes in never-expiring snapshots', async () => {
+  const sized = vercelRunner(ROW, { values: { vercelDriveGiB: '120' } });
+  await sized.handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(sized.sdk.driveCalls[0].maxSize, 120 * GIB);
+
+  const off = vercelRunner(ROW, { values: { vercelDriveGiB: '0' } });
+  await off.handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(off.sdk.driveCalls.length, 0);
+  assert.equal(off.created[0].mounts, undefined);
+  assert.equal(off.created[0].snapshotExpiration, 0);
+  assert.equal(off.current()!.session.commands[0].env.SANDBOX_DRIVE_ROOT, undefined);
+});
+
+test('an existing machine gets its drive and snapshot retention before it resumes', async () => {
+  const box = new FakeSandbox(REF.podName, 'stopped');
+  box.region = 'sfo1';
+  const { handlers, created, sdk } = vercelRunner(
+    { ...ROW, status: 'starting' },
+    { existing: box }
+  );
+  await handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(created.length, 0);
+  assert.deepEqual(sdk.driveCalls, [{ name: driveOf(REF.id), region: 'sfo1', maxSize: 50 * GIB }]);
+  const prepare = box.updates[0];
+  assert.deepEqual(prepare.mounts, {
+    [VERCEL_DRIVE_ROOT]: { drive: driveOf(REF.id), mode: 'read-write' }
+  });
+  assert.equal(prepare.snapshotExpiration, 0);
+  assert.deepEqual(prepare.keepLastSnapshots, { count: 3, expiration: 0 });
+  assert.ok(
+    sdk.events.indexOf('sandbox.update keepLastSnapshots,mounts,snapshotExpiration') <
+      sdk.events.indexOf('sandbox.get resume'),
+    sdk.events.join(' | ')
+  );
+  assert.equal(box.session.commands[0].env.SANDBOX_DRIVE_ROOT, VERCEL_DRIVE_ROOT);
+});
+
+test('a machine with its drive mounted keeps it, even after the configured size changes', async () => {
+  const box = new FakeSandbox(REF.podName, 'stopped');
+  box.mounts = { [VERCEL_DRIVE_ROOT]: { drive: 'orchard-existing', mode: 'read-write' } };
+  box.snapshotExpiration = 0;
+  box.keepLastSnapshots = { count: 3, expiration: 0 };
+  const sdk = new FakeSdk();
+  sdk.addDrive('orchard-existing', 'iad1', 50 * GIB);
+  const { handlers, updates } = vercelRunner(
+    { ...ROW, status: 'starting', runnerState: { driveName: 'orchard-existing' } },
+    { existing: box, sdk, values: { vercelDriveGiB: '200' } }
+  );
+  await handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } });
+  assert.deepEqual(
+    box.updates.map((u) => Object.keys(u)),
+    [['networkPolicy']]
+  );
+  assert.equal(sdk.drives.get('orchard-existing')?.maxSize, 50 * GIB);
+  assert.ok(
+    updates
+      .filter((u) => u.data?.runnerState)
+      .every((u) => u.data.runnerState.driveName === 'orchard-existing')
+  );
+  assert.equal(box.session.commands[0].env.SANDBOX_DRIVE_ROOT, VERCEL_DRIVE_ROOT);
+});
+
+test('a team without drives falls back to never-expiring snapshots and says so once', async () => {
+  const sdk = new FakeSdk();
+  sdk.driveError = apiError(403, 'forbidden', 'Drives are not available on this plan');
+  const { runner, handlers, created } = vercelRunner(ROW, { sdk });
+  const warnings: string[] = [];
+  (runner as any).logger = { warn: (m: string) => warnings.push(m), log() {}, error() {} };
+  await handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(created[0].mounts, undefined);
+  assert.equal(created[0].snapshotExpiration, 0);
+  await handlers.get(VERCEL_OP_PROVISION)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(sdk.driveCalls.length, 1, 'no new drive attempt within the hour');
+  assert.equal(warnings.filter((w) => /drives are unavailable/i.test(w)).length, 1);
+  assert.match(warnings[0], /403 Drives are not available on this plan/);
+});
+
+test('a machine that already has a drive never silently drops it', async () => {
+  const sdk = new FakeSdk();
+  sdk.driveError = apiError(403, 'forbidden');
+  const box = new FakeSandbox(REF.podName, 'stopped');
+  const { handlers } = vercelRunner(
+    { ...ROW, status: 'starting', runnerState: { driveName: driveOf(REF.id) } },
+    { existing: box, sdk }
+  );
+  await assert.rejects(handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } }));
+  assert.equal(box.status, 'stopped');
+});
+
+test('a machine whose sandbox vanished comes back on a new sandbox with the same drive', async () => {
+  const sdk = new FakeSdk();
+  sdk.addDrive(driveOf(REF.id), 'cdg1', 50 * GIB);
+  const { handlers, created } = vercelRunner(
+    { ...ROW, status: 'starting', runnerState: { driveName: driveOf(REF.id) } },
+    { sdk }
+  );
+  await handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(created[0].region, 'cdg1');
+  assert.deepEqual(created[0].mounts, {
+    [VERCEL_DRIVE_ROOT]: { drive: driveOf(REF.id), mode: 'read-write' }
+  });
+});
+
+test('destroy deletes the drive after the sandbox is gone, retrying while it is still attached', async () => {
+  const sdk = new FakeSdk();
+  const drive = sdk.addDrive(driveOf(REF.id));
+  drive.deleteErrors = [
+    apiError(409, 'drive_attached', 'Drive is attached to a sandbox'),
+    apiError(409, 'drive_attached', 'Drive is attached to a sandbox')
+  ];
+  const box = new FakeSandbox(REF.podName, 'stopped');
+  const { handlers, deleted } = vercelRunner(
+    {
+      ...ROW,
+      status: 'deleting',
+      desiredState: 'deleted',
+      runnerState: { driveName: driveOf(REF.id) }
+    },
+    { existing: box, sdk }
+  );
+  await handlers.get(VERCEL_OP_DESTROY)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(box.deletes, 1);
+  assert.deepEqual(sdk.deletedDrives, [driveOf(REF.id)]);
+  assert.ok(
+    sdk.events.indexOf(`sandbox.delete ${REF.podName}`) <
+      sdk.events.indexOf(`drive.delete ${driveOf(REF.id)}`)
+  );
+  assert.equal(sdk.events.filter((e) => e.startsWith('drive.delete')).length, 3);
+  assert.equal(deleted.length, 1);
+});
+
+test('destroy keeps the row when the drive cannot be deleted, so the retry still knows the drive', async () => {
+  const sdk = new FakeSdk();
+  const drive = sdk.addDrive('orchard-custom');
+  drive.deleteErrors = [apiError(500, 'internal')];
+  const box = new FakeSandbox(REF.podName, 'stopped');
+  const { handlers, deleted } = vercelRunner(
+    {
+      ...ROW,
+      status: 'deleting',
+      desiredState: 'deleted',
+      runnerState: { driveName: 'orchard-custom' }
+    },
+    { existing: box, sdk }
+  );
+  await assert.rejects(handlers.get(VERCEL_OP_DESTROY)!({ manifest: { sandboxId: REF.id } }));
+  assert.equal(deleted.length, 0);
+  assert.equal(drive.deletes, 0);
+});
+
+test('only destroy deletes drives: stop, start, secret sync, reconcile and a refused destroy leave them', async () => {
+  const sdk = new FakeSdk();
+  const drive = sdk.addDrive(driveOf(REF.id));
+  const box = new FakeSandbox(REF.podName, 'running');
+  const row: Record<string, unknown> = {
+    ...ROW,
+    status: 'running',
+    runnerState: { driveName: driveOf(REF.id) }
+  };
+  const { runner, handlers } = vercelRunner(row, { existing: box, sdk });
+  await handlers.get(VERCEL_OP_SECRET)!({ manifest: { sandboxId: REF.id } });
+  await runner.reconcile([REF]);
+  await handlers.get(VERCEL_OP_DESTROY)!({ manifest: { sandboxId: REF.id } });
+  row.desiredState = 'stopped';
+  row.status = 'stopping';
+  await handlers.get(VERCEL_OP_STOP)!({ manifest: { sandboxId: REF.id } });
+  row.desiredState = 'running';
+  row.status = 'starting';
+  await handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } });
+  assert.equal(drive.deletes, 0);
+  assert.ok(!sdk.events.some((e) => e.startsWith('drive.delete')));
+});
+
+test('reconcile gives a running legacy box the never-expiring retention without resuming anything', async () => {
+  const box = new FakeSandbox(REF.podName, 'running');
+  const { runner, sdk } = vercelRunner({ ...ROW, status: 'running' }, { existing: box });
+  await runner.reconcile([REF]);
+  assert.deepEqual(box.updates, [
+    { snapshotExpiration: 0, keepLastSnapshots: { count: 3, expiration: 0 } }
+  ]);
+  assert.ok(!sdk.events.includes('sandbox.get resume'));
+  await runner.reconcile([REF]);
+  assert.equal(box.updates.length, 1);
+});
+
+const FORK_ID = '55555555-5555-4555-8555-555555555555';
+const SOURCE_POD = 'sbx-source';
+
+function forkRows(sourceState: Record<string, unknown>) {
+  const target = {
+    ...ROW,
+    id: FORK_ID,
+    podName: `sbx-${FORK_ID}`,
+    runnerState: { forkFrom: { sandboxId: REF.id, podName: SOURCE_POD } }
+  };
+  const source = { ...ROW, status: 'stopped', runnerState: sourceState };
+  return { target, rows: { [FORK_ID]: target, [REF.id]: source } };
+}
+
+test('a fork gets a fork of the source drive, mounted where the source had it', async () => {
+  const sdk = new FakeSdk();
+  sdk.addDrive('orchard-source', 'iad1');
+  const { target, rows } = forkRows({ driveName: 'orchard-source' });
+  const sourceBox = new FakeSandbox(SOURCE_POD, 'stopped');
+  const { handlers, forked, updates } = vercelRunner(target, {
+    rows,
+    sdk,
+    sources: { [SOURCE_POD]: sourceBox }
+  });
+  await handlers.get(VERCEL_OP_FORK)!({
+    manifest: { sandboxId: FORK_ID, sourceSandboxId: REF.id }
+  });
+  assert.ok(sdk.events.includes(`drive.fork orchard-source -> ${driveOf(FORK_ID)}`));
+  assert.equal(forked.length, 1);
+  assert.equal(forked[0].sourceSandbox, SOURCE_POD);
+  assert.deepEqual(forked[0].mounts, {
+    [VERCEL_DRIVE_ROOT]: { drive: driveOf(FORK_ID), mode: 'read-write' }
+  });
+  assert.equal(forked[0].snapshotExpiration, 0);
+  assert.equal(
+    updates.find((u) => u.data?.runnerState?.driveName)?.data.runnerState.driveName,
+    driveOf(FORK_ID)
+  );
+  assert.ok(sdk.drives.has('orchard-source'), 'the source drive is untouched');
+});
+
+test('a fork fails clearly when the plan has no drive forks, and the runner stops offering forks', async () => {
+  const sdk = new FakeSdk();
+  const source = sdk.addDrive('orchard-source', 'iad1');
+  source.forkError = apiError(403, 'forbidden', 'Drive forking is in private beta.');
+  const { target, rows } = forkRows({ driveName: 'orchard-source' });
+  const { runner, handlers, forked, updates } = vercelRunner(target, {
+    rows,
+    sdk,
+    sources: { [SOURCE_POD]: new FakeSandbox(SOURCE_POD, 'stopped') }
+  });
+  await assert.rejects(
+    handlers.get(VERCEL_OP_FORK)!({ manifest: { sandboxId: FORK_ID, sourceSandboxId: REF.id } }),
+    (e: any) => e.message === VERCEL_DRIVE_FORK_UNAVAILABLE && e.statusCode === 422
+  );
+  assert.equal(forked.length, 0);
+  const failed = updates.find((u) => u.data?.status === 'error');
+  assert.equal(failed?.data.statusMessage, VERCEL_DRIVE_FORK_UNAVAILABLE);
+  assert.equal(runner.capabilities.fork, false);
+  assert.equal(
+    await runner.forkSupport({ ...REF, runnerState: { driveName: 'orchard-source' } }),
+    VERCEL_DRIVE_FORK_UNAVAILABLE
+  );
+});
+
+test('fork support comes from the drive fork probe and only matters for machines with a drive', async () => {
+  const sdk = new FakeSdk();
+  sdk.forksAvailable = false;
+  const { runner } = vercelRunner(ROW, { sdk });
+  assert.equal(await runner.forkSupport(REF), null);
+  assert.equal(
+    await runner.forkSupport({ ...REF, runnerState: { driveName: driveOf(REF.id) } }),
+    VERCEL_DRIVE_FORK_UNAVAILABLE
+  );
+  assert.equal(runner.capabilities.fork, false);
+  assert.equal(sdk.forkProbes, 1, 'the probe result is cached');
+
+  const yes = vercelRunner(ROW);
+  assert.equal(
+    await yes.runner.forkSupport({ ...REF, runnerState: { driveName: driveOf(REF.id) } }),
+    null
+  );
+  assert.equal(yes.runner.capabilities.fork, true);
+
+  const off = vercelRunner(ROW, { values: { vercelDriveGiB: '0' } });
+  off.sdk.forksAvailable = false;
+  assert.equal(off.runner.capabilities.fork, true);
+  assert.equal(off.sdk.forkProbes, 0);
+});
+
+test('a fork of a machine without a drive is a snapshot fork that gets its own fresh drive', async () => {
+  const sdk = new FakeSdk();
+  const { target, rows } = forkRows({});
+  const sourceBox = new FakeSandbox(SOURCE_POD, 'stopped');
+  sourceBox.region = 'fra1';
+  const { handlers, forked, current } = vercelRunner(target, {
+    rows,
+    sdk,
+    sources: { [SOURCE_POD]: sourceBox }
+  });
+  await handlers.get(VERCEL_OP_FORK)!({
+    manifest: { sandboxId: FORK_ID, sourceSandboxId: REF.id }
+  });
+  assert.ok(!sdk.events.some((e) => e.startsWith('drive.fork')));
+  assert.deepEqual(sdk.driveCalls, [{ name: driveOf(FORK_ID), region: 'fra1', maxSize: 50 * GIB }]);
+  assert.equal(forked[0].region, 'fra1');
+  assert.equal(forked[0].mounts[VERCEL_DRIVE_ROOT].drive, driveOf(FORK_ID));
+  assert.equal(current()!.session.commands[0].env.SANDBOX_DRIVE_ROOT, VERCEL_DRIVE_ROOT);
+});
+
+test('the bootstrap copies the old home into an unmarked drive before marking it, and never deletes the old copy', () => {
+  const script = SANDBOX_BOOTSTRAP_SCRIPT;
+  const markerCheck = script.indexOf(`[ ! -f "$drive_marker" ]`);
+  const copy = script.indexOf('rsync -aH "$persist_root/" "$drive_root/"');
+  const fallbackCopy = script.indexOf('cp -a "$persist_root/." "$drive_root/"');
+  const mark = script.indexOf(`printf 'migrated %s\\n' "$persist_root" > "$drive_marker.tmp"`);
+  assert.ok(
+    markerCheck > 0 && copy > markerCheck && fallbackCopy > markerCheck,
+    'copy is gated on the marker'
+  );
+  assert.ok(mark > copy && mark > fallbackCopy, 'the marker is written after the copy');
+  assert.match(script, /if \[ "\$copied" -eq 0 \]; then/);
+  assert.match(
+    script,
+    new RegExp(`drive_marker="\\$drive_root/${SANDBOX_DRIVE_MARKER.replace('.', '\\.')}"`)
+  );
+  const block = script.slice(
+    script.indexOf('persist_root="${SANDBOX_PERSIST_ROOT:-}"'),
+    script.indexOf('mkdir -p /persist/home /persist/hostkeys')
+  );
+  assert.doesNotMatch(block, /\brm\b/);
+});
+
+function runDriveBlock(env: Record<string, string>, mounted: string | null): string {
+  const start = SANDBOX_BOOTSTRAP_SCRIPT.indexOf('persist_root="${SANDBOX_PERSIST_ROOT:-}"');
+  const end = SANDBOX_BOOTSTRAP_SCRIPT.indexOf(
+    'if [ -n "$persist_root" ] && [ "$persist_root" != "/persist" ]'
+  );
+  const block = SANDBOX_BOOTSTRAP_SCRIPT.slice(start, end);
+  const script = [
+    'set -uo pipefail',
+    'log() { :; }',
+    'have() { command -v "$1" >/dev/null 2>&1; }',
+    `mountpoint() { [ -n "\${FAKE_MOUNT:-}" ] && [ "$2" = "$FAKE_MOUNT" ]; }`,
+    block,
+    'printf "%s" "$persist_root"'
+  ].join('\n');
+  return execFileSync('bash', ['-c', script], {
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      ...env,
+      ...(mounted ? { FAKE_MOUNT: mounted } : {})
+    }
+  }).toString();
+}
+
+test('the drive migration runs once, keeps modes, and leaves the old home in place', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orchard-drive-'));
+  const old = join(dir, 'old');
+  const drive = join(dir, 'drive');
+  mkdirSync(join(old, 'home', '.ssh'), { recursive: true });
+  mkdirSync(join(drive, 'lost+found'), { recursive: true });
+  writeFileSync(join(old, 'home', '.ssh', 'id'), 'secret');
+  chmodSync(join(old, 'home', '.ssh', 'id'), 0o600);
+  writeFileSync(join(old, '.setup-done'), '');
+  const env = { SANDBOX_PERSIST_ROOT: old, SANDBOX_DRIVE_ROOT: drive };
+
+  assert.equal(runDriveBlock(env, null), old, 'no mounted drive keeps the old home');
+  assert.ok(!existsSync(join(drive, SANDBOX_DRIVE_MARKER)));
+
+  assert.equal(runDriveBlock(env, drive), drive);
+  assert.equal(readFileSync(join(drive, 'home', '.ssh', 'id'), 'utf8'), 'secret');
+  assert.equal(statSync(join(drive, 'home', '.ssh', 'id')).mode & 0o777, 0o600);
+  assert.ok(existsSync(join(drive, '.setup-done')));
+  assert.match(readFileSync(join(drive, SANDBOX_DRIVE_MARKER), 'utf8'), /^migrated /);
+  assert.equal(readFileSync(join(old, 'home', '.ssh', 'id'), 'utf8'), 'secret', 'old copy kept');
+
+  writeFileSync(join(old, 'home', 'later'), 'stale');
+  assert.equal(runDriveBlock(env, drive), drive);
+  assert.ok(!existsSync(join(drive, 'home', 'later')), 'a marked drive is never copied over again');
+
+  const fresh = join(dir, 'fresh');
+  mkdirSync(fresh);
+  assert.equal(
+    runDriveBlock({ SANDBOX_PERSIST_ROOT: join(dir, 'missing'), SANDBOX_DRIVE_ROOT: fresh }, fresh),
+    fresh
+  );
+  assert.equal(readFileSync(join(fresh, SANDBOX_DRIVE_MARKER), 'utf8'), 'fresh\n');
+  assert.equal(
+    runDriveBlock({ SANDBOX_PERSIST_ROOT: old }, null),
+    old,
+    'kubernetes and drive-less boots are unchanged'
+  );
 });

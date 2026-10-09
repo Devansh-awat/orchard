@@ -174,6 +174,7 @@ the API server's port-forward instead.
 | `vercelImage`          | `vercel/sandbox/universal`      | The image new machines start from.                                                                                                |
 | `vercelVcpus`          | 2                               | 1 to 8.                                                                                                                           |
 | `vercelTimeoutMinutes` | 60                              | Vercel's own stop timer. Orchard extends it by 30 minutes at a time while a machine is in use and not idle.                       |
+| `vercelDriveGiB`       | 50                              | Size of each machine's drive. Applies to new drives only; a drive keeps the size it was created with. 0 turns drives off.         |
 | `bridgeBinaryUrl`      | the release matching the server | An `https://` URL of the Linux amd64 `orchard` CLI tarball, run in each machine as the SSH bridge. Set it for air-gapped mirrors. |
 | `bridgeBinarySha256`   | from the release's checksums    | SHA-256 of that tarball. Required when `bridgeBinaryUrl` is set; the runner reports itself unavailable without it.                |
 
@@ -186,11 +187,61 @@ bridge out, so SSH to that machine fails until the checksum is available.
 
 Machines are created as **persistent** sandboxes: stopping one snapshots it and
 starting resumes from the snapshot. The snapshot is the whole root filesystem
-(`/etc`, `/usr/local`, `/root`, `/tmp` and the home directory under
-`/vercel/sandbox/orchard`), not only `/vercel/sandbox`; running processes are not
-kept, so every start reruns the bootstrap, which restarts sshd, the agent server and
-the bridge. Each machine exposes port 4096 (the agent server), 2222 (the SSH
-bridge) and the seven preview ports.
+(`/etc`, `/usr/local`, `/root`, `/tmp`), not only `/vercel/sandbox`; running
+processes are not kept, so every start reruns the bootstrap, which restarts sshd,
+the agent server and the bridge. Each machine exposes port 4096 (the agent
+server), 2222 (the SSH bridge) and the seven preview ports.
+
+### Persistence: drives and snapshots
+
+Vercel expires a snapshot 30 days after it was taken unless told otherwise, which
+would silently wipe any machine nobody opened for a month. Orchard prevents that
+in two ways.
+
+- **Snapshots never expire.** Every machine is created (and every existing one is
+  updated on its next start, or by the leader's poll while it runs) with
+  `snapshotExpiration: 0` and `keepLastSnapshots: { count: 3 }`, so its last three
+  snapshots are kept until the machine is deleted. Vercel cannot change the expiry
+  of a snapshot that already exists, so a machine stopped before this setting
+  arrived keeps its old expiry until it is started once.
+- **The home lives on a drive.** Each machine gets its own
+  [Vercel drive](https://vercel.com/docs/sandbox/concepts/drives) named
+  `orchard-<machine id>`, created in the machine's region with `vercelDriveGiB` of
+  space and mounted read-write at `/mnt/orchard-drive`. `/persist` (home,
+  repositories, worktrees, agent history, SSH host keys, the setup-done flag)
+  points there. Drives never expire, and the drive's name is kept in the
+  machine's `runner_state.driveName`, so if the sandbox itself is lost the next
+  start creates a new sandbox that mounts the same drive. A drive is attached to
+  an existing machine with `Sandbox.update({ mounts })` while it is stopped, which
+  takes effect when it resumes; a machine that is running when the server is
+  upgraded picks up its drive on its next start.
+
+The first boot with a drive migrates the home. If the drive has no
+`.orchard-drive` marker and the old home at `/vercel/sandbox/orchard` exists, the
+bootstrap copies it onto the drive with `rsync -aH` (or `cp -a`), keeping owners
+and modes, and only then writes the marker. The old copy is left where it is. If
+the copy fails, the machine keeps using the old home and the copy is retried on
+the next start. A drive that is not mounted (for example because the plan has no
+drives) leaves the machine on its old home.
+
+Only deleting a machine deletes its drive: after the sandbox is gone, the delete
+step removes `orchard-<machine id>` (retrying while Vercel still reports it
+attached) and only then removes the machine's row. Stopping, starting, provider
+timeouts, failed starts and forks never delete a drive. Vercel lets a drive be
+deleted while a stopped sandbox still mounts it, so never delete `orchard-*`
+drives by hand unless the machine is gone.
+
+If the team cannot create drives (`402` or `403` from Vercel), the runner logs
+once, keeps new machines on snapshots that never expire, and tries drives again an
+hour later. A machine that already has a drive never falls back; it fails to start
+until the drive is reachable. Setting `vercelDriveGiB` to 0 turns drives off for
+new machines the same way.
+
+Forking a machine with a drive needs Vercel **drive forks**, which are in private
+beta and not on every plan. The runner checks once every ten minutes; without
+them the fork option is hidden and a fork request fails with "Forking needs
+Vercel drive forks, which this team's plan doesn't have". A machine without a
+drive forks from its snapshot and gets a fresh drive of its own.
 
 Measured against the live API with the universal image and 2 vCPUs: creating a
 machine takes about 3 seconds and the first boot about 12 to 18 more, because the
@@ -201,8 +252,10 @@ seconds.
 To check a Vercel setup end to end, run `pnpm --filter server live:sandbox-vercel`
 with the three `SANDBOX_VERCEL_*` variables set. It drives the runner against the
 real API (create, credential brokering, exec, the protected ports, a terminal, SSH
-through the bridge, stop and resume, fork, delete) and deletes every machine it
-made. `--cleanup` removes any `orchard-live-*` sandboxes left in the project.
+through the bridge, stop and resume, fork, the machine drive surviving the loss
+of its sandbox, a snapshot-only machine migrating onto a drive, delete) and
+deletes every machine and drive it made. `--cleanup` removes any `orchard-live-*`
+sandboxes and drives left in the project.
 
 ### How credentials reach a Vercel machine
 
@@ -248,10 +301,11 @@ they pick up the new values.
 
 ### Snapshots contain secrets
 
-A persistent snapshot is the whole machine. It includes the host's Claude token
-(in the agent's configuration), the agent server password, the bridge token, the
-`dev` user's files and any attached project env files. Anyone with access to the
-Vercel project's sandboxes and snapshots can read them. Give Vercel team access
+A persistent snapshot is the whole machine, and the drive holds the `dev` user's
+files. Together they include the host's Claude token (in the agent's
+configuration), the agent server password, the bridge token, the `dev` user's
+files and any attached project env files. Anyone with access to the Vercel
+project's sandboxes, snapshots and drives can read them. Give Vercel team access
 on that basis.
 
 ## Previews
@@ -334,6 +388,7 @@ environment variable shown, which locks the field.
 | `vercelImage`          | `SANDBOX_VERCEL_IMAGE`              |                                                                       |
 | `vercelVcpus`          | `SANDBOX_VERCEL_VCPUS`              | 1 to 8.                                                               |
 | `vercelTimeoutMinutes` | `SANDBOX_VERCEL_TIMEOUT_MINUTES`    | 1 to 1440.                                                            |
+| `vercelDriveGiB`       | `SANDBOX_VERCEL_DRIVE_GIB`          | 0 to 16384. Empty means 50; 0 turns drives off.                       |
 | `bridgeBinaryUrl`      | `SANDBOX_BRIDGE_BINARY_URL`         | `https://` only.                                                      |
 | `bridgeBinarySha256`   | `SANDBOX_BRIDGE_BINARY_SHA256`      | 64 hex characters. Required with `bridgeBinaryUrl`.                   |
 | `previewDomain`        | `SANDBOX_PREVIEW_DOMAIN`            | A bare domain on a different site from Orchard and its cookie domain. |
@@ -621,7 +676,7 @@ The residual risks are deliberate and documented:
 - The host, other guests and the agent can read a guest's GitHub token from the
   guest's terminal environment while it is open, and could intercept a push by
   reconfiguring git inside the machine.
-- Vercel snapshots, and therefore forks, contain the machine's secrets, and on
+- Vercel snapshots and drives, and therefore forks, contain the machine's secrets, and on
   Kubernetes the home volume holds the agent's GitHub credential.
 - Issue text reaches the agent fenced as untrusted data, and outsider-written
   issues need the host to start them, but prompt injection is reduced, not

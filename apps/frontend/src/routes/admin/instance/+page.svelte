@@ -117,6 +117,7 @@
 				vercelImage: 'Vercel base image',
 				vercelVcpus: 'Vercel vCPUs',
 				vercelTimeoutMinutes: 'Vercel timeout (minutes)',
+				vercelDriveGiB: 'Vercel drive size (GiB)',
 				bridgeBinaryUrl: 'Bridge binary URL',
 				bridgeBinarySha256: 'Bridge binary SHA-256',
 				previewDomain: 'Preview domain',
@@ -163,6 +164,8 @@
 		vercelImage: 'Leave blank for the default Greenhouse image',
 		vercelVcpus: 'Whole number from 1 to 8',
 		vercelTimeoutMinutes: 'How long a Vercel machine may run before it is stopped, up to 1440',
+		vercelDriveGiB:
+			"Disk for each machine's home, 1 to 16384 (default 50). New machines only; 0 keeps homes in snapshots",
 		bridgeBinaryUrl: 'https:// address of the orchard bridge tarball used for SSH on Vercel',
 		bridgeBinarySha256: 'The 64 character hex checksum of that tarball',
 		previewDomain:

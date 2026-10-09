@@ -193,6 +193,7 @@ export const SANDBOX_RUNNERS = section(
     { name: 'vercelImage', env: 'SANDBOX_VERCEL_IMAGE' },
     { name: 'vercelVcpus', env: 'SANDBOX_VERCEL_VCPUS' },
     { name: 'vercelTimeoutMinutes', env: 'SANDBOX_VERCEL_TIMEOUT_MINUTES' },
+    { name: 'vercelDriveGiB', env: 'SANDBOX_VERCEL_DRIVE_GIB' },
     { name: 'bridgeBinaryUrl', env: 'SANDBOX_BRIDGE_BINARY_URL' },
     { name: 'bridgeBinarySha256', env: 'SANDBOX_BRIDGE_BINARY_SHA256' },
     { name: 'previewDomain', env: 'SANDBOX_PREVIEW_DOMAIN' }
@@ -205,6 +206,13 @@ export const SANDBOX_RUNNERS = section(
     }
     positiveInt(values.vercelVcpus, 'vercelVcpus', 8);
     positiveInt(values.vercelTimeoutMinutes, 'vercelTimeoutMinutes', 1440);
+    const drive = (values.vercelDriveGiB || '').trim();
+    if (drive) {
+      const gib = Number(drive);
+      if (!Number.isInteger(gib) || gib < 0 || gib > 16384) {
+        throw new Error('vercelDriveGiB must be a whole number between 0 and 16384');
+      }
+    }
     const bridge = (values.bridgeBinaryUrl || '').trim();
     if (bridge && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(bridge)) {
       throw new Error('bridgeBinaryUrl must be a plain https:// address');
