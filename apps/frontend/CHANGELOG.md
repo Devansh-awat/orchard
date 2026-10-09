@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.60.0](https://github.com/hackclub/orchard/compare/frontend/v1.59.0...frontend/v1.60.0) (2026-10-09)
+
+
+### Features
+
+* **frontend:** machine wake up shows its step, elapsed time and how long it took last time ([abb98ff](https://github.com/hackclub/orchard/commit/abb98ff761a7e0c8b61feba6fd2027cf7fb1e5e5))
+
+
+### Bug Fixes
+
+* **frontend:** chat boxes share the content column edges and inner padding ([cf691fa](https://github.com/hackclub/orchard/commit/cf691fa30ab5e7ad08d4ca296aaa578fb4968a56))
+* **frontend:** chats show an error with retry when history fails and no empty flash before it loads ([5ff8b90](https://github.com/hackclub/orchard/commit/5ff8b902457328a1ef876f40cbcb2b736e91009c))
+* **frontend:** cloning repos show up in the sidebar while they clone ([7efe60d](https://github.com/hackclub/orchard/commit/7efe60d7df7d4246beb96332b370dae2ebebdf00))
+* **frontend:** greenhouse actions show a spinner and what they are doing while they run ([e351f30](https://github.com/hackclub/orchard/commit/e351f303e991d19881ada0e30d007079783f3551))
+* **frontend:** greenhouse home waits for repos before launching instead of creating a blank one ([aa838b3](https://github.com/hackclub/orchard/commit/aa838b3f30e1a05d1af716b5701a1061c9b67904))
+* **frontend:** greenhouse panels say why they are empty instead of loading forever ([bcdbc39](https://github.com/hackclub/orchard/commit/bcdbc398047d6c5110acb9d71de722f9ecf33142))
+* **frontend:** live agent turns get the same activity header as finished ones ([d4d381e](https://github.com/hackclub/orchard/commit/d4d381ecfc86319d179c4079c55b897ecf3209b7))
+* **frontend:** skeletons wait 200ms before showing so fast loads never flash ([692c8fd](https://github.com/hackclub/orchard/commit/692c8fd63fc1964f8f603f773468b069ff8f2128))
+
 ## [1.59.0](https://github.com/hackclub/orchard/compare/frontend/v1.58.1...frontend/v1.59.0) (2026-10-09)
 
 
