@@ -95,7 +95,7 @@
 			const res = await apiFetch(`/apiv1/sandboxes/${ws.sandboxId}/sessions/${session.id}/scripts`);
 			if (res.ok) scripts = (await res.json()) as Scripts;
 		} catch {
-			scripts = null;
+			return;
 		}
 	}
 
@@ -360,7 +360,9 @@
 				{#if scripted && session}
 					{#key `${session.id}:setup`}
 						<div class="pane" class:pane--on={tab === 'setup'}>
-							{#if scripts && !scripts.setup && scripts.setupState === 'none'}
+							{#if scripts === null}
+								<p class="note">Checking for a setup script…</p>
+							{:else if !scripts.setup && scripts.setupState === 'none'}
 								<p class="note">
 									No setup script. Add <code class="gh-mono">"setup"</code> to
 									<code class="gh-mono">.orchard/greenhouse.json</code> to install dependencies in every
@@ -374,7 +376,9 @@
 					{#key `${session.id}:run`}
 						<div class="pane" class:pane--on={tab === 'run'}>
 							{#if scripts?.running || tab === 'run'}
-								{#if scripts && !scripts.running}
+								{#if scripts === null}
+									<p class="note">Checking the run script…</p>
+								{:else if !scripts.running}
 									<p class="note">
 										{scripts.run
 											? 'The run script is stopped. Press Run to start it.'

@@ -182,6 +182,73 @@ export function ocShortModelName(name: string): string {
 	return name.replace(/^Claude\s+/i, '').replace(/\s*\(latest\)$/i, '');
 }
 
+export type OcModelGroup = { name: string; models: OcModel[] };
+
+const CLAUDE_FAMILIES = ['Opus', 'Sonnet', 'Fable', 'Haiku'];
+
+const CLAUDE_NAME = /^(Opus|Sonnet|Fable|Haiku)\s+(\d+(?:\.\d+)*)(\s+Fast)?$/i;
+
+function versionParts(version: string): number[] {
+	return version.split('.').map((part) => Number(part) || 0);
+}
+
+function compareVersionsDesc(a: string, b: string): number {
+	const left = versionParts(a);
+	const right = versionParts(b);
+	for (let i = 0; i < Math.max(left.length, right.length); i++) {
+		const diff = (right[i] ?? 0) - (left[i] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	return 0;
+}
+
+function isAlias(model: OcModel): boolean {
+	return /\(latest\)\s*$/i.test(model.name) || !/-\d{8}$/.test(model.modelID);
+}
+
+function dedupe(models: OcModel[]): OcModel[] {
+	const byName = new Map<string, OcModel>();
+	for (const model of models) {
+		const key = `${model.providerID}\u0000${ocShortModelName(model.name).toLowerCase()}`;
+		const existing = byName.get(key);
+		if (!existing || (isAlias(model) && !isAlias(existing))) byName.set(key, model);
+	}
+	return [...byName.values()];
+}
+
+export function ocModelGroups(models: OcModel[]): OcModelGroup[] {
+	const claude = new Map<string, { model: OcModel; version: string; fast: boolean }[]>();
+	const others = new Map<string, OcModel[]>();
+	for (const model of dedupe(models)) {
+		const match = ocShortModelName(model.name).match(CLAUDE_NAME);
+		if (match) {
+			const family =
+				CLAUDE_FAMILIES.find((f) => f.toLowerCase() === match[1].toLowerCase()) ?? match[1];
+			const list = claude.get(family) ?? [];
+			list.push({ model, version: match[2], fast: !!match[3] });
+			claude.set(family, list);
+			continue;
+		}
+		const list = others.get(model.providerName) ?? [];
+		list.push(model);
+		others.set(model.providerName, list);
+	}
+	const groups: OcModelGroup[] = [];
+	for (const family of CLAUDE_FAMILIES) {
+		const list = claude.get(family);
+		if (!list?.length) continue;
+		list.sort(
+			(a, b) => compareVersionsDesc(a.version, b.version) || Number(a.fast) - Number(b.fast)
+		);
+		groups.push({ name: family, models: list.map((entry) => entry.model) });
+	}
+	for (const [name, list] of [...others.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+		list.sort((a, b) => ocShortModelName(a.name).localeCompare(ocShortModelName(b.name)));
+		groups.push({ name, models: list });
+	}
+	return groups;
+}
+
 export function ocMcpServers(
 	map: Record<string, { status: string; error?: string }>
 ): OcMcpServer[] {

@@ -9,6 +9,7 @@ import {
 	ocFilePart,
 	ocFmtBytes,
 	ocFmtTokens,
+	ocModelGroups,
 	ocModels,
 	ocNormalizeTool,
 	ocPartAttachment,
@@ -530,15 +531,7 @@ export class ChatSessionStore {
 
 	readonly variants = $derived(this.model?.variants ?? []);
 
-	readonly modelGroups = $derived.by(() => {
-		const groups: { name: string; models: OcModel[] }[] = [];
-		for (const model of this.models) {
-			const group = groups.find((g) => g.name === model.providerName);
-			if (group) group.models.push(model);
-			else groups.push({ name: model.providerName, models: [model] });
-		}
-		return groups;
-	});
+	readonly modelGroups = $derived(ocModelGroups(this.models));
 
 	readonly context = $derived.by((): ContextMeter => {
 		const tokens = this.active?.ctxTokens ?? null;

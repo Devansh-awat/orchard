@@ -19,6 +19,8 @@
 	import type { Sandbox } from '$lib/types/sandbox';
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
+	import ModelOptions from '$lib/components/sandbox/chat/ModelOptions.svelte';
+	import { ocShortModelName } from '$lib/components/sandbox/opencode';
 	import SessionGlyph from './SessionGlyph.svelte';
 	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
@@ -53,6 +55,7 @@
 		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || (ws.running && !!chosen))
 	);
 	const models = $derived(ws?.store.models ?? []);
+	const modelGroups = $derived(ws?.store.modelGroups ?? []);
 	const model = $derived(ws?.store.model ?? null);
 
 	$effect(() => {
@@ -238,24 +241,22 @@
 					<Menu bind:open={modelOpen} placement="bottom-end">
 						{#snippet trigger(props, isOpen)}
 							<button {...props} type="button" class="chip chip--quiet" aria-expanded={isOpen}>
-								<span>{model?.name ?? 'Model'}</span>
+								<span>{model ? ocShortModelName(model.name) : 'Model'}</span>
 								<ChevronDown size={14} strokeWidth={1.75} />
 							</button>
 						{/snippet}
-						{#each models.slice(0, 12) as m (`${m.providerID}/${m.modelID}`)}
-							<MenuItem
-								onclick={() => {
+						<div class="model-scroll">
+							<ModelOptions
+								groups={modelGroups}
+								providerID={model?.providerID ?? null}
+								modelID={model?.modelID ?? null}
+								onpick={(m) => {
 									if (!ws) return;
-									ws.store.providerID = m.providerID;
-									ws.store.modelID = m.modelID;
+									ws.store.pickModel(m);
+									modelOpen = false;
 								}}
-							>
-								<span>{m.name}</span>
-								{#if model && m.modelID === model.modelID && m.providerID === model.providerID}<Check
-										size={13}
-									/>{/if}
-							</MenuItem>
-						{/each}
+							/>
+						</div>
 					</Menu>
 				{/if}
 				<button
@@ -385,6 +386,12 @@
 </div>
 
 <style>
+	.model-scroll {
+		max-height: 22rem;
+		overflow-y: auto;
+		min-width: 14rem;
+	}
+
 	.home {
 		flex: 1;
 		min-height: 0;
@@ -434,6 +441,7 @@
 		padding: 1rem 1rem 0.5rem;
 		background: transparent;
 		color: var(--gh-text);
+		caret-color: var(--accent);
 		font-size: var(--gh-reading);
 		line-height: var(--gh-lh-reading);
 		resize: none;

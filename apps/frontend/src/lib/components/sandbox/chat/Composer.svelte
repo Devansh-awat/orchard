@@ -16,6 +16,7 @@
 	import { OC_ATTACH_MAX_COUNT, ocShortModelName } from '../opencode';
 	import type { ChatSessionStore, RemoteDraft, SlashCommand } from './session-store.svelte';
 	import ContextRing from './ContextRing.svelte';
+	import ModelOptions from './ModelOptions.svelte';
 	import FileParts from './parts/FileParts.svelte';
 	import { truncate } from './format';
 
@@ -343,19 +344,12 @@
 					</button>
 				{/snippet}
 				<div class="menu-scroll">
-					{#each store.modelGroups as group (group.name)}
-						<div class="menu-group">{group.name}</div>
-						{#each group.models as m (m.providerID + m.modelID)}
-							<MenuItem onclick={() => store.pickModel(m)}>
-								<span class="menu-label">{ocShortModelName(m.name)}</span>
-								{#if m.providerID === store.providerID && m.modelID === store.modelID}
-									<Check class="h-3 w-3" />
-								{/if}
-							</MenuItem>
-						{/each}
-					{:else}
-						<div class="menu-group">Loading models</div>
-					{/each}
+					<ModelOptions
+						groups={store.modelGroups}
+						providerID={store.providerID}
+						modelID={store.modelID}
+						onpick={(m) => store.pickModel(m)}
+					/>
 					{#if store.variants.length > 0}
 						<div class="menu-group">Effort</div>
 						<MenuItem onclick={() => store.pickVariant(null)}>
@@ -610,7 +604,8 @@
 	.cmp-input {
 		width: 100%;
 		min-height: 3rem;
-		padding: 0;
+		padding: 0 0 0 1px;
+		caret-color: var(--accent);
 		border: none;
 		background: none;
 		resize: none;
