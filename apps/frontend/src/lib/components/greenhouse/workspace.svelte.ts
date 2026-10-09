@@ -427,10 +427,7 @@ export class MachineWorkspace {
 	}
 
 	async refreshRepos() {
-		if (!untrack(() => this.running)) {
-			this.reposLoaded = true;
-			return;
-		}
+		if (!untrack(() => this.running)) return;
 		const res = await api.listRepos(this.sandboxId);
 		if (this.#disposed) return;
 		if (res.ok) this.repos = res.data.repos ?? [];

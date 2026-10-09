@@ -78,7 +78,11 @@
 	);
 	const stopped = $derived(machine?.status === 'stopped' || machine?.status === 'error');
 	const canLaunch = $derived(
-		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || ws.running)
+		!!ws &&
+			ws.canEdit &&
+			!!prompt.trim() &&
+			!launching &&
+			(stopped || (ws.running && ws.reposLoaded))
 	);
 	const models = $derived(ws?.store.models ?? []);
 	const launchChord = $derived(sendChord(greenhousePrefs.values.sendWith, modKey()));
@@ -341,6 +345,10 @@
 								<span class="seg-part seg-part--branch">
 									<GitBranch size={14} strokeWidth={1.75} />
 									<span class="seg-text gh-mono">{chosen.branch}</span>
+								</span>
+							{:else if ws?.running && !ws.reposLoaded}
+								<span class="seg-part">
+									<span class="seg-text seg-text--muted">Loading repositories</span>
 								</span>
 							{:else}
 								<span class="seg-part">
@@ -754,6 +762,10 @@
 		max-width: 12rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.seg-text--muted {
+		color: var(--gh-faint);
 	}
 
 	.seg-part--branch .seg-text {

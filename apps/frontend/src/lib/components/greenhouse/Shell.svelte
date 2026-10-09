@@ -58,6 +58,14 @@
 	const ws = $derived(app.ws);
 	const layout = app.layout;
 
+	$effect(() => {
+		const current = ws;
+		if (!current?.running || current.reposLoaded || current.lifecycleOnly) return;
+		untrack(() => {
+			void current.refreshRepos();
+		});
+	});
+
 	let width = $state(0);
 	let home = $state<Home | null>(null);
 	let right = $state<RightPanel | null>(null);
