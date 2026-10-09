@@ -80,7 +80,7 @@ export const OPENCODE_PASSWORD_SYNC_FUNCTION = `opencode_password_sync() {
 
 opencode_start() {
   if command -v opencode >/dev/null 2>&1 && ! pgrep -f '[o]pencode serve' >/dev/null 2>&1; then
-    su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; nohup opencode "serve" --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
+    su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; OPENCODE_EXPERIMENTAL_PLAN_MODE=1 nohup opencode "serve" --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
   fi
 }`;
 
@@ -404,7 +404,7 @@ else
   opencode_password_sync < /dev/null
 fi
 if have opencode && ! pgrep -f '[o]pencode serve' >/dev/null 2>&1; then
-  su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; nohup opencode serve --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
+  su - dev -c '[ -f ~/.config/opencode/server.env ] && . ~/.config/opencode/server.env; OPENCODE_EXPERIMENTAL_PLAN_MODE=1 nohup opencode serve --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
 fi
 
 bridge_bin=/usr/local/bin/orchard
