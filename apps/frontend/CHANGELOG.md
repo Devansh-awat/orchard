@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.56.0](https://github.com/hackclub/orchard/compare/frontend/v1.55.0...frontend/v1.56.0) (2026-10-08)
+
+
+### Features
+
+* greenhouse chat follows one grid with a single activity row per turn ([0ec2161](https://github.com/hackclub/orchard/commit/0ec2161cdfd052c670c5fe3f0a068cf293a65705))
+* greenhouse is a full ide with sessions, monaco, a shared chat thread, terminals and host and guest sharing ([ca7b335](https://github.com/hackclub/orchard/commit/ca7b335d0f740aad76ecec0b04b451f49a4bb9a4))
+* greenhouse keeps share and slack tokens out of analytics, shows admins a lifecycle only view, and refreshes credits ([ea01fbc](https://github.com/hackclub/orchard/commit/ea01fbc0e6a42fc72e548b588b0eccbaa402c6b5))
+* greenhouse previews, project links, forks, share viewer, account linking, issue picker and admin settings in the ui ([44317b4](https://github.com/hackclub/orchard/commit/44317b4fc2e338abf0af86ebf3f46714f48ae01b))
+* greenhouse shell follows the hig rules, discloses what sharing grants, and lets everyone push as themselves ([9512856](https://github.com/hackclub/orchard/commit/9512856edfab6cd1d17f9bfd1672ab48f35a8133))
+
+
+### Bug Fixes
+
+* map the slack link preview route in cli parity and format greenhouse docs ([2b54257](https://github.com/hackclub/orchard/commit/2b54257e2d63c569d92419af9a2612607121acb6))
+
 ## [1.55.0](https://github.com/hackclub/orchard/compare/frontend/v1.54.0...frontend/v1.55.0) (2026-10-08)
 
 

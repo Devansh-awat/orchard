@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.5.0...r2-proxy/v0.6.0) (2026-10-08)
+
+
+### Features
+
+* greenhouse keeps share and slack tokens out of analytics, shows admins a lifecycle only view, and refreshes credits ([ea01fbc](https://github.com/hackclub/orchard/commit/ea01fbc0e6a42fc72e548b588b0eccbaa402c6b5))
+
 ## [0.5.0](https://github.com/hackclub/orchard/compare/r2-proxy/v0.4.1...r2-proxy/v0.5.0) (2026-10-07)
 
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.63.0](https://github.com/hackclub/orchard/compare/server/v2.62.0...server/v2.63.0) (2026-10-08)
+
+
+### Features
+
+* greenhouse keeps share and slack tokens out of analytics, shows admins a lifecycle only view, and refreshes credits ([ea01fbc](https://github.com/hackclub/orchard/commit/ea01fbc0e6a42fc72e548b588b0eccbaa402c6b5))
+* greenhouse previews, project links, forks, share links, mcp tools, issue and slack kickoff, and per person git identity ([1214bdb](https://github.com/hackclub/orchard/commit/1214bdb9c1965aa7d52f9108ce9490740f977628))
+* org admins only manage greenhouse machine lifecycle, removing a guest rotates machine secrets, and a live vercel check script ([ed4acac](https://github.com/hackclub/orchard/commit/ed4acace9baa20962a3c730b13ac4a4ba966abce))
+* sandboxes run through pluggable runners and every cluster change goes through the apply queue ([a80b929](https://github.com/hackclub/orchard/commit/a80b929d90f1dccbb976158a08cf516a53cb66a1))
+* vercel sandbox runner, worktree sessions, shared tmux terminals and host and guest multiplayer for greenhouse ([a0c17ea](https://github.com/hackclub/orchard/commit/a0c17ead69b1d8f8ce2933238ddbaab877047ae0))
+
+
+### Bug Fixes
+
+* greenhouse chart, previews, pr drafts, prompt attribution, retries, bridge checksums and access hardening ([82592fd](https://github.com/hackclub/orchard/commit/82592fd984d9415069ae4faa759176cde23f4069))
+* greenhouse security review, proxied content types, scoped mcp tokens, origin checks on upgrades, env var and credential helper confinement ([28669c8](https://github.com/hackclub/orchard/commit/28669c84beb08e61817d0a6497da113e659ed3a9))
+* map the slack link preview route in cli parity and format greenhouse docs ([2b54257](https://github.com/hackclub/orchard/commit/2b54257e2d63c569d92419af9a2612607121acb6))
+
 ## [2.62.0](https://github.com/hackclub/orchard/compare/server/v2.61.0...server/v2.62.0) (2026-10-08)
 
 
