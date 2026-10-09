@@ -99,6 +99,14 @@
 						if (shown && !readOnly) void workspace.save(shown);
 					}
 				});
+				instance.addAction({
+					id: 'orchard.search',
+					label: 'Search and actions',
+					keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+					run: () => {
+						window.dispatchEvent(new Event('open-quick-search'));
+					}
+				});
 				instance.onDidChangeCursorPosition((e) => {
 					onCursor?.(e.position.lineNumber, e.position.column);
 				});

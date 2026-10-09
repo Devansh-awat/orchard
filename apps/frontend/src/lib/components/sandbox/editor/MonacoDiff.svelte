@@ -180,6 +180,14 @@
 					threads[side] = new DiffThreads(monaco, editor, handlersFor(side), () =>
 						Boolean(comments)
 					);
+					editor.addAction({
+						id: 'orchard.search',
+						label: 'Search and actions',
+						keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+						run: () => {
+							window.dispatchEvent(new Event('open-quick-search'));
+						}
+					});
 				}
 				instance.onDidUpdateDiff(() => {
 					let added = 0;
