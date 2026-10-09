@@ -401,6 +401,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://orchard:orchard@localhost:5432/orchard
+      TEST_DATABASE_URL: postgresql://orchard:orchard@localhost:5432/orchard
       JWT_SECRET: ci-e2e-secret-ci-e2e-secret-ci-e2e-secret
       PORT: '3001'
       SERVER_URL: http://localhost:3001

@@ -510,7 +510,7 @@
 		style:--font-mono-terminal={fontFamily ? 'var(--pod-terminal-font)' : undefined}
 		bind:this={terminalRef}
 	></div>
-	{#if !connected && !error && mounted}
+	{#if !connected && !error && mounted && !note}
 		<div class="pod-terminal-status pod-terminal-connecting">Connecting...</div>
 	{/if}
 </div>

@@ -42,5 +42,13 @@
 		width: 1px;
 		height: 1px;
 		pointer-events: none;
+		outline: none;
+		box-shadow: none;
+	}
+
+	.ctx-anchor:focus,
+	.ctx-anchor:focus-visible {
+		outline: none;
+		box-shadow: none;
 	}
 </style>
