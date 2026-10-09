@@ -169,7 +169,9 @@ sent the last prompt. Questions still wait for you.
   runs the agent read only, so it proposes a plan instead of editing.
 - **Attach** adds files or images (up to 10, 5 MB each), or drop them on the
   composer.
-- Typing **/** lists the agent's commands, plus `/chat`; **Tab** completes one.
+- Typing **/** lists commands, grouped and matched loosely on name and
+  description. **↑** and **↓** move, **Tab** completes, and your send key runs a
+  command that takes no arguments. See [Slash commands](#slash-commands).
 - A ring shows how much of the model's context the chat has used.
 
 **Queued prompts.** Send while the agent is still working and your prompt waits
@@ -180,6 +182,55 @@ is idle.
 **Typing.** When a teammate is writing a prompt you see `Alex is typing…` above
 the composer with their draft as they type. Nothing is sent until they press
 Enter.
+
+#### Slash commands
+
+Built-in commands act on Greenhouse itself rather than being sent as a prompt;
+`/init`, `/review` and `/security-review` hand the agent a ready-made prompt.
+After you complete a command the composer shows what it takes, such as
+`/rename <title>`. Anything after **/** that is not a command goes to the agent
+as a normal prompt.
+
+| Command                            | Does                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `/help`                            | Lists every command                                                                  |
+| `/clear`, `/new`                   | Starts a fresh chat in a new tab                                                     |
+| `/compact`                         | Summarizes the chat so it uses less context                                          |
+| `/resume [chat]`, `/continue`      | Switches to another chat in this session                                             |
+| `/rename <title>`                  | Renames the session                                                                  |
+| `/export`                          | Downloads the chat as Markdown                                                       |
+| `/undo`, `/rewind`                 | Rolls back the last prompt and its file changes, like **Checkpoints**                |
+| `/redo`                            | Brings back what `/undo` rolled back                                                 |
+| `/todos`                           | Shows the agent's todo list                                                          |
+| `/stop`                            | Stops the agent                                                                      |
+| `/chat <message>`                  | Messages the people in the session; the agent does not see it                        |
+| `/model [name]`                    | Opens the model menu, or picks the closest match                                     |
+| `/effort [low\|medium\|high\|max]` | Sets the reasoning effort, when the model has levels                                 |
+| `/fast`                            | Switches fast mode, when the model has one                                           |
+| `/plan`, `/build`                  | Turns plan mode on or off                                                            |
+| `/agents [name]`                   | Picks which opencode agent answers                                                   |
+| `/init`                            | Has the agent write an `AGENTS.md` for the repository                                |
+| `/review [target]`                 | Has the agent review your uncommitted changes, or a commit, branch or PR             |
+| `/security-review`                 | Has the agent review the branch for security issues                                  |
+| `/context`, `/cost`, `/usage`      | Opens the context ring: tokens used and your Claude usage limits                     |
+| `/mcp`                             | Opens MCP servers                                                                    |
+| `/memory`                          | Opens `AGENTS.md` or `CLAUDE.md`, and offers to create `AGENTS.md` if neither exists |
+| `/permissions`                     | Opens Preferences, where **Auto-accept permissions** lives                           |
+| `/terminal`                        | Opens a terminal in the dock                                                         |
+| `/diff`                            | Opens the Changes tab                                                                |
+| `/pr`                              | Opens the pull request, or creates one                                               |
+| `/status`                          | Shows the machine, branch, changes and pull request in one line                      |
+| `/share`                           | Opens the share sheet                                                                |
+| `/settings`, `/config`             | Opens settings                                                                       |
+| `/bug`, `/feedback`                | Opens a new Orchard issue on GitHub                                                  |
+
+The repository's own commands are listed under **Repository**: opencode
+commands in `.opencode/command/` or `.opencode/commands/`, commands from the
+`command` key of `opencode.json`, MCP prompts, and skills in `.claude/skills/`,
+`.agents/skills/` or the same folders in your home directory. They run through
+opencode with whatever you type after the name. `/init` and `/review` use
+opencode's own versions when it has them. Claude Code's `.claude/commands/`
+folder is not read; move those files to `.opencode/command/`.
 
 ## Editor
 

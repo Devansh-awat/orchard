@@ -474,6 +474,12 @@ test('prompts are recognised and server message ids match the opencode format', 
   });
   assert.equal(opencodePromptTarget('GET', 'session/ses_abc/message'), null);
   assert.equal(opencodePromptTarget('POST', 'session/ses_abc/abort'), null);
+  assert.deepEqual(opencodePromptTarget('POST', 'session/ses_abc/command?directory=%2Fx'), {
+    chatId: 'ses_abc',
+    kind: 'command'
+  });
+  assert.equal(opencodePromptTarget('POST', 'session/ses_abc/summarize'), null);
+  assert.equal(opencodePromptTarget('POST', 'session/ses_abc/revert'), null);
   const a = newOpencodeMessageId();
   const b = newOpencodeMessageId();
   assert.match(a, OPENCODE_MESSAGE_ID_RE);

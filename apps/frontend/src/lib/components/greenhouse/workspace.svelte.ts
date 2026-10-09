@@ -1,5 +1,6 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { untrack } from 'svelte';
+import { goto } from '$app/navigation';
 import { toasts } from '$lib/stores';
 import { queryClient } from '$lib/query';
 import { optimisticSandboxStatus } from '$lib/queries/sandboxes';
@@ -893,6 +894,40 @@ export class MachineWorkspace {
 		} finally {
 			this.busy = null;
 		}
+	}
+
+	async createPr(draft = false) {
+		const current = this.session;
+		if (!current) return;
+		const res = await api.createPr(this.sandboxId, scopeOf(current), {
+			title: current.title,
+			draft
+		});
+		const number = res.number ?? Number(res.url.split('/').pop());
+		this.upsert({ ...current, prUrl: res.url, prNumber: number || null, prState: 'open' });
+		toasts.add({
+			title: draft ? 'Draft pull request opened' : 'Pull request opened',
+			color: 'success',
+			action: { label: 'View', onClick: () => window.open(res.url, '_blank', 'noopener') }
+		});
+	}
+
+	prFailed(label: string, e: unknown) {
+		if (api.isGithubUnlinked(e)) {
+			this.githubUnlinked = true;
+			toasts.add({
+				title: LINK_GITHUB,
+				description: 'Pushes and pull requests run with your own GitHub account.',
+				color: 'info',
+				action: { label: 'Link GitHub', onClick: () => goto(api.LINK_GITHUB_HREF) }
+			});
+			return;
+		}
+		toasts.add({
+			title: `${label} failed`,
+			description: e instanceof Error ? e.message : undefined,
+			color: 'error'
+		});
 	}
 
 	async removePreview(session: GhSession) {

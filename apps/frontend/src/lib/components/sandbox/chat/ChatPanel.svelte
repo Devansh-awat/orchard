@@ -3,7 +3,8 @@
 	import { Unplug } from 'lucide-svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
-	import type { ChatSessionStore, RemoteDraft, SlashCommand } from './session-store.svelte';
+	import type { ChatSessionStore, RemoteDraft } from './session-store.svelte';
+	import type { SlashCommand, SlashNotice, SlashOption } from './slash-commands';
 	import SessionTabs from './SessionTabs.svelte';
 	import Transcript from './Transcript.svelte';
 	import Composer from './Composer.svelte';
@@ -15,7 +16,9 @@
 		remoteDrafts = [],
 		commands = [],
 		onComment = undefined,
-		onTeamMessage = undefined
+		onTeamMessage = undefined,
+		onCommand = undefined,
+		options = undefined
 	}: {
 		store: ChatSessionStore;
 		tabs?: boolean;
@@ -23,6 +26,12 @@
 		commands?: SlashCommand[];
 		onComment?: (text: string) => void | Promise<void>;
 		onTeamMessage?: (text: string) => void | Promise<void>;
+		onCommand?: (
+			command: SlashCommand,
+			args: string,
+			alias: string | null
+		) => SlashNotice | null | void | Promise<SlashNotice | null | void>;
+		options?: (command: SlashCommand) => SlashOption[];
 	} = $props();
 
 	const comment = $derived(onComment ?? onTeamMessage);
@@ -55,7 +64,7 @@
 		<div class="chat-dock">
 			<div class="chat-col chat-stack">
 				<PendingDock {store} />
-				<Composer {store} {remoteDrafts} {commands} onComment={comment} />
+				<Composer {store} {remoteDrafts} {commands} onComment={comment} {onCommand} {options} />
 			</div>
 		</div>
 	{/if}

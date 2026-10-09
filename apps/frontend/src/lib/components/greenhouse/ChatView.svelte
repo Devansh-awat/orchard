@@ -3,15 +3,20 @@
 	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Eye, Play } from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { ChatPanel, PendingDock, Transcript } from '$lib/components/sandbox/chat';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
+	import { getGreenhouseApp } from './app.svelte';
+	import { GreenhouseCommands } from './chat-commands.svelte';
 	import SessionPreparing from './SessionPreparing.svelte';
 	import { isPreparing, type MachineWorkspace } from './workspace.svelte';
 
 	let { ws, visible = true }: { ws: MachineWorkspace; visible?: boolean } = $props();
 
+	const app = getGreenhouseApp();
 	const store = $derived(ws.store);
+	const commands = $derived(new GreenhouseCommands(ws, app));
 	const machine = $derived(ws.machine);
 	const status = $derived(machine?.status ?? 'stopped');
 	const harness = $derived(ws.env.harness === true);
@@ -41,6 +46,16 @@
 
 	$effect(() => {
 		store.directory = ws.session?.worktreePath ?? null;
+	});
+
+	$effect(() => {
+		if (!ws.canEdit || store.connection !== 'ready') return;
+		const directory = store.agentDirectory();
+		const chatId = store.activeId;
+		const current = commands;
+		untrack(() => {
+			void current.load(directory, chatId);
+		});
 	});
 
 	$effect(() => {
@@ -184,7 +199,15 @@
 			onremove={remove}
 		/>
 	{:else if ws.canEdit}
-		<ChatPanel {store} tabs={false} remoteDrafts={ws.remoteDrafts} {onComment} />
+		<ChatPanel
+			{store}
+			tabs={false}
+			remoteDrafts={ws.remoteDrafts}
+			{onComment}
+			commands={commands.list}
+			onCommand={(command, args, alias) => commands.run(command, args, alias)}
+			options={(command) => commands.options(command)}
+		/>
 	{:else}
 		<Transcript {store} />
 		<div class="viewer">
@@ -198,6 +221,16 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmModal
+	bind:open={() => !!commands.creating, (v) => !v && (commands.creating = null)}
+	title="Create AGENTS.md?"
+	description="This worktree has no AGENTS.md or CLAUDE.md yet. Create an empty AGENTS.md and open it?"
+	confirmLabel="Create"
+	danger={false}
+	onconfirm={() => commands.createMemory()}
+	oncancel={() => (commands.creating = null)}
+/>
 
 <style>
 	.chat {

@@ -54,6 +54,7 @@ import {
 	type QuestionRequest,
 	type RequestOutcome
 } from './pending';
+import { parseTodos, undoTarget, type TodoItem } from './slash-commands';
 
 export type ChatAuthor = { id: string; name: string; avatarUrl?: string | null };
 
@@ -65,7 +66,7 @@ export type ChatComment = {
 	sessionId: string;
 };
 
-export type SlashCommand = { name: string; description: string };
+export type { SlashCommand, SlashOption } from './slash-commands';
 
 export type RemoteDraft = { userId: string; name: string; text: string; avatarUrl?: string | null };
 
@@ -206,6 +207,7 @@ export type ModelChoice = {
 	modelID: string;
 	variant: string | null;
 	plan: boolean;
+	agent: string | null;
 };
 
 export type QueuedPrompt = {
@@ -489,6 +491,11 @@ function userEntriesFrom(info: OcMessageInfo, parts: OcPart[]): UserEntry[] {
 	return out;
 }
 
+export function agentOf(choice: ModelChoice): string {
+	if (choice.plan) return 'plan';
+	return choice.agent ?? 'build';
+}
+
 async function readBody(res: Response): Promise<unknown> {
 	const text = await res.text().catch(() => '');
 	try {
@@ -558,6 +565,7 @@ export class ChatSessionStore {
 	modelID = $state(OC_MODEL.modelID);
 	variant = $state<string | null>(null);
 	plan = $state(false);
+	agent = $state<string | null>(null);
 
 	attachments = $state<OcAttachment[]>([]);
 	revertBusy = $state<string | null>(null);
@@ -741,7 +749,8 @@ export class ChatSessionStore {
 			providerID: this.providerID,
 			modelID: this.modelID,
 			variant: this.variant,
-			plan: this.plan
+			plan: this.plan,
+			agent: this.agent
 		};
 	}
 
@@ -834,6 +843,7 @@ export class ChatSessionStore {
 		this.modelID = choice.modelID;
 		this.variant = choice.variant;
 		this.plan = choice.plan;
+		this.agent = choice.agent ?? null;
 	}
 
 	#restorePrefs(thread: SessionThread) {
@@ -871,6 +881,14 @@ export class ChatSessionStore {
 
 	setPlan(plan: boolean) {
 		this.plan = plan;
+		if (plan) this.agent = null;
+		this.#savePrefs();
+	}
+
+	setAgent(name: string | null) {
+		const next = name?.trim() || null;
+		this.plan = next === 'plan';
+		this.agent = next === 'plan' || next === 'build' ? null : next;
 		this.#savePrefs();
 	}
 
@@ -1090,9 +1108,9 @@ export class ChatSessionStore {
 		}
 	}
 
-	async revert(messageID: string) {
+	async revert(messageID: string): Promise<boolean> {
 		const thread = this.active;
-		if (!thread || this.revertBusy) return;
+		if (!thread || this.revertBusy) return false;
 		this.revertBusy = messageID;
 		try {
 			const res = await apiFetch(
@@ -1108,12 +1126,14 @@ export class ChatSessionStore {
 			await this.#loadHistory(thread);
 			thread.revertedMessageID = session.revert?.messageID ?? messageID;
 			this.onTurnDone?.();
+			return true;
 		} catch (e) {
 			toasts.add({
 				title: 'Revert failed',
 				description: e instanceof Error ? e.message : 'Could not revert to this point',
 				color: 'error'
 			});
+			return false;
 		} finally {
 			this.revertBusy = null;
 		}
@@ -1159,6 +1179,132 @@ export class ChatSessionStore {
 		} finally {
 			thread.stopping = false;
 		}
+	}
+
+	canUndo(): boolean {
+		const thread = this.active;
+		return !!thread && undoTarget(thread.entries, thread.revertedMessageID) !== null;
+	}
+
+	async undoLast(): Promise<boolean> {
+		const thread = this.active;
+		if (!thread || thread.busy) return false;
+		const target = undoTarget(thread.entries, thread.revertedMessageID);
+		if (!target) return false;
+		return this.revert(target);
+	}
+
+	async todos(): Promise<TodoItem[] | null> {
+		const thread = this.active;
+		if (!thread || thread.id.startsWith(TEMP_PREFIX)) return [];
+		try {
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/todo${this.#dir(thread.id)}`
+			);
+			if (!res.ok) return null;
+			return parseTodos(await res.json());
+		} catch {
+			return null;
+		}
+	}
+
+	#idle(): SessionThread | null {
+		const thread = this.active;
+		if (!thread || thread.busy || thread.id.startsWith(TEMP_PREFIX)) return null;
+		return thread;
+	}
+
+	canCompact(): boolean {
+		const thread = this.#idle();
+		return !!thread && thread.entries.some((e) => e.kind === 'user');
+	}
+
+	compact(): Promise<boolean> {
+		const thread = this.#idle();
+		if (!thread || !this.canCompact()) return Promise.resolve(false);
+		this.#beginTurn(thread);
+		return this.#fire(
+			thread,
+			'summarize',
+			{ providerID: this.providerID, modelID: this.modelID },
+			'Could not compact the chat'
+		);
+	}
+
+	async runCommand(command: string, args: string): Promise<boolean> {
+		if (!this.activeId) await this.createSession();
+		const thread = this.active;
+		if (!thread || thread.busy) return false;
+		const choice = this.choice();
+		const text = `/${command}${args ? ` ${args}` : ''}`;
+		const entry = thread.push(this.#localPrompt(text, []));
+		this.#beginTurn(thread);
+		if (this.#createWork) await this.#createWork;
+		if (thread.id.startsWith(TEMP_PREFIX) || !this.threads.has(thread.id)) {
+			this.#failTurn(thread, 'No session available');
+			return false;
+		}
+		const assigned = this.beforePrompt ? await this.beforePrompt(thread.id, text) : null;
+		if (assigned?.messageID) entry.messageID = assigned.messageID;
+		return this.#fire(
+			thread,
+			'command',
+			{
+				...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
+				command,
+				arguments: args,
+				agent: agentOf(choice),
+				model: `${choice.providerID}/${choice.modelID}`,
+				...(choice.variant ? { variant: choice.variant } : {})
+			},
+			`Could not run /${command}`
+		);
+	}
+
+	#beginTurn(thread: SessionThread) {
+		thread.busy = true;
+		thread.turnStart = Date.now();
+		thread.turnCosts.clear();
+		if (!thread.id.startsWith(TEMP_PREFIX)) this.activity.set(thread.id, 'busy');
+		if (thread.id === this.activeId) this.sentTick += 1;
+	}
+
+	#failTurn(thread: SessionThread, detail: string) {
+		thread.push({ kind: 'error', key: nextKey(), time: Date.now(), detail });
+		thread.busy = false;
+		thread.turnStart = 0;
+		this.activity.set(thread.id, 'idle');
+		this.onTurnDone?.();
+	}
+
+	async #fire(
+		thread: SessionThread,
+		action: 'command' | 'summarize',
+		body: Record<string, unknown>,
+		fallback: string
+	): Promise<boolean> {
+		const mark = thread.entries.length;
+		const started = () =>
+			thread.entries.slice(mark).some((e) => e.kind !== 'error' && e.kind !== 'user');
+		let error: string | null = null;
+		try {
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/${action}${this.#dir(thread.id)}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				}
+			);
+			if (!res.ok && (res.status < 500 || !started())) {
+				error = (await failure(res, fallback)).message;
+			}
+		} catch {
+			if (!started()) error = fallback;
+		}
+		if (error === null) return true;
+		if (thread.busy && !started()) this.#failTurn(thread, error);
+		return false;
 	}
 
 	async #loadHistory(thread: SessionThread) {
@@ -1231,7 +1377,13 @@ export class ChatSessionStore {
 					providerID: lastAssistant.providerID,
 					modelID: lastAssistant.modelID,
 					variant: typeof lastAssistant.variant === 'string' ? lastAssistant.variant : null,
-					plan: lastAssistant.agent === 'plan'
+					plan: lastAssistant.agent === 'plan',
+					agent:
+						typeof lastAssistant.agent === 'string' &&
+						lastAssistant.agent !== 'plan' &&
+						lastAssistant.agent !== 'build'
+							? lastAssistant.agent
+							: null
 				};
 			}
 		}
@@ -1418,6 +1570,26 @@ export class ChatSessionStore {
 		if (!thread) return false;
 		this.draft = '';
 		this.attachments = [];
+		const sent = await this.#deliver(thread, text, files, followUp);
+		if (!sent && this.attachments.length === 0) this.attachments = files;
+		return sent;
+	}
+
+	async sendText(text: string, followUp: FollowUpMode = 'queue'): Promise<boolean> {
+		const body = text.trim();
+		if (!body) return false;
+		if (!this.activeId) await this.createSession();
+		const thread = this.active;
+		if (!thread) return false;
+		return this.#deliver(thread, body, [], followUp);
+	}
+
+	async #deliver(
+		thread: SessionThread,
+		text: string,
+		files: OcAttachment[],
+		followUp: FollowUpMode
+	): Promise<boolean> {
 		const choice = this.choice();
 		if (followUp === 'steer' && this.#canSteer(thread)) {
 			return this.#steer(thread, text, files, choice);
@@ -1433,9 +1605,7 @@ export class ChatSessionStore {
 			this.#drain(thread);
 			return true;
 		}
-		const sent = await this.#dispatch(thread, text, files, choice);
-		if (!sent && this.attachments.length === 0) this.attachments = files;
-		return sent;
+		return this.#dispatch(thread, text, files, choice);
 	}
 
 	updateQueued(id: string, text: string) {
@@ -1493,7 +1663,7 @@ export class ChatSessionStore {
 					...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
 					model: { providerID: choice.providerID, modelID: choice.modelID },
 					...(choice.variant ? { variant: choice.variant } : {}),
-					agent: choice.plan ? 'plan' : 'build',
+					agent: agentOf(choice),
 					parts: [...files.map(ocFilePart), { type: 'text', text: entry.text }]
 				})
 			}

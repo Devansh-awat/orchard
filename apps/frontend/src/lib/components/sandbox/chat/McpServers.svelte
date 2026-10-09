@@ -31,8 +31,14 @@
 	let {
 		store,
 		placement = 'top-end',
-		label = null
-	}: { store: ChatSessionStore; placement?: Placement; label?: string | null } = $props();
+		label = null,
+		open = $bindable(false)
+	}: {
+		store: ChatSessionStore;
+		placement?: Placement;
+		label?: string | null;
+		open?: boolean;
+	} = $props();
 
 	const HOST_ONLY = 'Only the host can change MCP servers';
 	const NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -41,7 +47,6 @@
 
 	type SignIn = { name: string; url: string; code: string; error: string | null; busy: boolean };
 
-	let open = $state(false);
 	let view = $state<'list' | 'add'>('list');
 	let rootEl = $state<HTMLDivElement | undefined>(undefined);
 	let servers = $state<OcMcpServer[]>([]);

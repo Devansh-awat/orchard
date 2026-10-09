@@ -24,6 +24,8 @@ export type Sheet =
 	| 'fork'
 	| null;
 
+export type ShellRequest = 'terminal' | 'changes' | 'rename';
+
 type HistoryEntry = { machine: string | null; session: string | null; tab: string | null };
 
 const LAST_MACHINE = 'greenhouse-last-machine';
@@ -43,6 +45,7 @@ export class GreenhouseApp {
 	mobilePane = $state<'sessions' | 'chat' | 'changes'>('chat');
 	ws = $state.raw<MachineWorkspace | null>(null);
 	lastMachine = $state<string | null>(null);
+	onShell: ((request: ShellRequest) => void) | null = null;
 
 	history = $state.raw<HistoryEntry[]>([]);
 	cursor = $state(-1);

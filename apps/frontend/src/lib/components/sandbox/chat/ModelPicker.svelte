@@ -29,8 +29,11 @@
 	import { modelFavourites } from './model-favourites.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
 
-	let { store, placement = 'top-start' }: { store: ChatSessionStore; placement?: Placement } =
-		$props();
+	let {
+		store,
+		placement = 'top-start',
+		open = $bindable(false)
+	}: { store: ChatSessionStore; placement?: Placement; open?: boolean } = $props();
 	const uid = $props.id();
 
 	type View = 'main' | 'effort' | 'edit';
@@ -40,7 +43,6 @@
 	const FAST_KEY = MAC ? '⌘⇧E' : 'Ctrl+Shift+E';
 	const CYCLE_KEY = MAC ? '⌘⇧/' : 'Ctrl+Shift+/';
 
-	let open = $state(false);
 	let view = $state<View>('main');
 	let query = $state('');
 	let cursor = $state(0);

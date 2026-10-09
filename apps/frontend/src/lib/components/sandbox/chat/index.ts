@@ -13,7 +13,9 @@ export {
 export { default as SessionTabs } from './SessionTabs.svelte';
 export { default as Transcript } from './Transcript.svelte';
 export { default as PendingDock } from './PendingDock.svelte';
-export { ChatSessionStore, SessionThread, commentTime } from './session-store.svelte';
+export { ChatSessionStore, SessionThread, agentOf, commentTime } from './session-store.svelte';
+export { exportChat, runChatCommand } from './chat-commands';
+export * from './slash-commands';
 export type {
 	AgentEntry,
 	AgentSignal,
@@ -35,7 +37,6 @@ export type {
 	ResultEntry,
 	SessionActivity,
 	SessionStoreOptions,
-	SlashCommand,
 	ChatComment,
 	ThinkingEntry,
 	ToolEntry,

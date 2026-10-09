@@ -187,6 +187,18 @@ export async function ocModels(sandboxId: string): Promise<OcModel[]> {
 	return models;
 }
 
+export async function ocList(
+	sandboxId: string,
+	path: 'command' | 'agent',
+	directory: string | null
+): Promise<unknown[]> {
+	const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+	const res = await apiFetch(`${ocBase(sandboxId)}/${path}${query}`);
+	if (!res.ok) return [];
+	const data = (await res.json().catch(() => null)) as unknown;
+	return Array.isArray(data) ? data : [];
+}
+
 export function ocShortModelName(name: string): string {
 	return name.replace(/^Claude\s+/i, '').replace(/\s*\(latest\)$/i, '');
 }

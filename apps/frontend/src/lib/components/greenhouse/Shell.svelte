@@ -181,6 +181,19 @@
 		});
 	}
 
+	function terminal() {
+		if (!layout.dockOpen) layout.toggle('dock');
+		openRight((panel) => panel.terminal());
+	}
+
+	app.onShell = (request) => {
+		if (!ws || ws.lifecycleOnly) return;
+		if (request === 'rename') openRename();
+		else if (mobile) app.mobilePane = 'changes';
+		else if (request === 'terminal') terminal();
+		else openRight((panel) => panel.showTab('changes'));
+	};
+
 	function saveActive() {
 		const tab = ws?.activeTab;
 		if (!ws?.canEdit || tab?.kind !== 'file') return;

@@ -1,7 +1,13 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import {
 		ArrowUp,
+		Bot,
 		Check,
+		Circle,
+		CircleCheck,
+		CircleDot,
+		CircleX,
 		ListChecks,
 		ListPlus,
 		MessageCircle,
@@ -17,7 +23,21 @@
 	import { fly, slide } from '$lib/utils/transitions';
 	import { OC_ATTACH_MAX_COUNT } from '../opencode';
 	import { alternateChord, followUpFor, sendChord, sendIntent } from './composer-keys';
-	import type { ChatSessionStore, RemoteDraft, SlashCommand } from './session-store.svelte';
+	import type { ChatSessionStore, RemoteDraft } from './session-store.svelte';
+	import { runChatCommand } from './chat-commands';
+	import {
+		commandLine,
+		findCommand,
+		parseSlash,
+		rankCommands,
+		rankOptions,
+		runsImmediately,
+		sectionsOf,
+		type SlashCommand,
+		type SlashMatch,
+		type SlashNotice,
+		type SlashOption
+	} from './slash-commands';
 	import ContextRing from './ContextRing.svelte';
 	import McpServers from './McpServers.svelte';
 	import ModelPicker from './ModelPicker.svelte';
@@ -28,19 +48,39 @@
 		store,
 		remoteDrafts = [],
 		onComment = undefined,
-		commands = []
+		commands = [],
+		onCommand = undefined,
+		options = undefined
 	}: {
 		store: ChatSessionStore;
 		remoteDrafts?: RemoteDraft[];
 		onComment?: (text: string) => void | Promise<void>;
 		commands?: SlashCommand[];
+		onCommand?: (
+			command: SlashCommand,
+			args: string,
+			alias: string | null
+		) => SlashNotice | null | void | Promise<SlashNotice | null | void>;
+		options?: (command: SlashCommand) => SlashOption[];
 	} = $props();
 
+	const uid = $props.id();
 	const COMMENT = /^\/chat(?:\s([\s\S]*))?$/;
+	const ARGS = /^\/(\S+)\s([\s\S]*)$/;
+	const NOTICE_MS = 6000;
 	const CHAT_COMMAND: SlashCommand = {
 		name: 'chat',
-		description: 'Message the people in this session without asking the agent'
+		group: 'chat',
+		description: 'Message the people in this session without asking the agent',
+		hint: '<message>',
+		args: 'required',
+		source: 'local'
 	};
+	const TODO_ICONS = {
+		completed: CircleCheck,
+		in_progress: CircleDot,
+		cancelled: CircleX
+	} as const;
 
 	let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
 	let fileInputEl = $state<HTMLInputElement | undefined>(undefined);
@@ -49,18 +89,48 @@
 	let editText = $state('');
 	let pick = $state(0);
 	let dismissed = $state<string | null>(null);
+	let notice = $state<SlashNotice | null>(null);
+	let modelOpen = $state(false);
+	let contextOpen = $state(false);
+	let mcpOpen = $state(false);
+	let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const thread = $derived(store.active);
 	const queue = $derived(thread?.queue ?? []);
 	const typing = $derived(remoteDrafts.filter((d) => d.text.trim().length > 0));
-	const available = $derived<SlashCommand[]>([...(onComment ? [CHAT_COMMAND] : []), ...commands]);
+	const available = $derived.by<SlashCommand[]>(() => {
+		const rest = commands.filter((c) => c.name !== 'chat');
+		if (!onComment) return rest;
+		return [commands.find((c) => c.name === 'chat') ?? CHAT_COMMAND, ...rest];
+	});
 	const token = $derived(/^\/(\S*)$/.exec(store.draft)?.[1] ?? null);
-	const matches = $derived(
-		token === null || token === dismissed
-			? []
-			: available.filter((c) => c.name.startsWith(token.toLowerCase()))
+	const matches = $derived<SlashMatch[]>(
+		token === null || token === dismissed ? [] : rankCommands(available, token)
 	);
-	const active = $derived(matches.length === 0 ? 0 : Math.min(pick, matches.length - 1));
+	const sections = $derived(sectionsOf(matches));
+	const typed = $derived.by(() => {
+		if (token !== null) return null;
+		const parts = ARGS.exec(store.draft);
+		if (!parts) return null;
+		const found = findCommand(available, parts[1]);
+		return found ? { ...found, label: parts[1], args: parts[2] } : null;
+	});
+	const choices = $derived.by<SlashOption[]>(() => {
+		if (!typed || typed.command.name === 'chat' || !options) return [];
+		if (dismissed === store.draft) return [];
+		return rankOptions(options(typed.command), typed.args);
+	});
+	const hint = $derived(
+		typed &&
+			typed.command.name !== 'chat' &&
+			!typed.args.trim() &&
+			choices.length === 0 &&
+			typed.command.hint
+			? commandLine(typed.command, typed.label)
+			: null
+	);
+	const listed = $derived(matches.length > 0 ? matches.length : choices.length);
+	const active = $derived(listed === 0 ? 0 : Math.min(pick, listed - 1));
 	const commenting = $derived(!!onComment && token === null && COMMENT.test(store.draft));
 	const commentBody = $derived(commenting ? (COMMENT.exec(store.draft)?.[1] ?? '').trim() : '');
 	const hasInput = $derived(
@@ -99,15 +169,94 @@
 		inputEl.style.height = `${Math.min(inputEl.scrollHeight, 260)}px`;
 	}
 
-	function complete(command: SlashCommand) {
-		store.draft = `/${command.name} `;
+	function hasChoices(command: SlashCommand): boolean {
+		return command.name !== 'chat' && (options?.(command).length ?? 0) > 0;
+	}
+
+	function complete(match: SlashMatch) {
+		store.draft = `/${match.label} `;
 		pick = 0;
+		dismissed = null;
 		inputEl?.focus();
+		requestAnimationFrame(autosize);
+	}
+
+	function choose(match: SlashMatch, run: boolean) {
+		if (run && runsImmediately(match.command, hasChoices(match.command))) {
+			void execute(match.command, '', match.label === match.command.name ? null : match.label);
+			return;
+		}
+		complete(match);
+	}
+
+	function chooseOption(option: SlashOption) {
+		const current = typed;
+		if (!current) return;
+		void execute(current.command, option.value, current.alias);
+	}
+
+	function showNotice(next: SlashNotice | null) {
+		if (noticeTimer) clearTimeout(noticeTimer);
+		noticeTimer = null;
+		notice = next;
+		if (next && !next.todos) noticeTimer = setTimeout(() => (notice = null), NOTICE_MS);
+	}
+
+	async function execute(command: SlashCommand, args: string, alias: string | null) {
+		store.draft = '';
+		pick = 0;
+		dismissed = null;
+		showNotice(null);
+		requestAnimationFrame(autosize);
+		if (command.name === 'chat') {
+			if (args) await onComment?.(args);
+			else store.draft = '/chat ';
+			return;
+		}
+		if (!args && !runsImmediately(command, hasChoices(command))) {
+			store.draft = `/${alias ?? command.name} `;
+			inputEl?.focus();
+			return;
+		}
+		const ui = {
+			help: () => {
+				store.draft = '/';
+				inputEl?.focus();
+			},
+			model: () => (modelOpen = true),
+			context: () => (contextOpen = true),
+			mcp: () => (mcpOpen = true)
+		};
+		let outcome = await runChatCommand({
+			store,
+			command,
+			args,
+			options: options?.(command) ?? [],
+			ui
+		});
+		if (outcome === undefined) outcome = (await onCommand?.(command, args, alias)) ?? null;
+		showNotice(outcome);
+	}
+
+	function scrollActive() {
+		void tick().then(() =>
+			document.getElementById(`${uid}-slash-${active}`)?.scrollIntoView({ block: 'nearest' })
+		);
 	}
 
 	async function submit(alternate = false) {
 		if (matches.length > 0) {
-			complete(matches[active]);
+			choose(matches[active], true);
+			return;
+		}
+		if (choices.length > 0) {
+			chooseOption(choices[active]);
+			return;
+		}
+		const slash = !commenting && store.attachments.length === 0 ? parseSlash(store.draft) : null;
+		const found = slash ? findCommand(available, slash.name) : null;
+		if (slash && found && found.command.name !== 'chat') {
+			await execute(found.command, slash.args, found.alias);
 			return;
 		}
 		if (commenting) {
@@ -127,21 +276,24 @@
 
 	function onKey(e: KeyboardEvent) {
 		if (e.isComposing) return;
-		if (matches.length > 0) {
+		if (listed > 0) {
 			if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 				e.preventDefault();
 				const step = e.key === 'ArrowDown' ? 1 : -1;
-				pick = (active + step + matches.length) % matches.length;
+				pick = (active + step + listed) % listed;
+				scrollActive();
 				return;
 			}
-			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.altKey)) {
+			const send = sendIntent(e, prefs.sendWith) !== null;
+			if (e.key === 'Tab' || send || (e.key === 'Enter' && !e.shiftKey && !e.altKey)) {
 				e.preventDefault();
-				complete(matches[active]);
+				if (matches.length > 0) choose(matches[active], send);
+				else chooseOption(choices[active]);
 				return;
 			}
 			if (e.key === 'Escape') {
 				e.preventDefault();
-				dismissed = token;
+				dismissed = matches.length > 0 ? token : store.draft;
 				return;
 			}
 		}
@@ -250,20 +402,58 @@
 	>
 		{#if matches.length > 0}
 			<div class="slash" role="listbox" aria-label="Commands" transition:fly={{ y: 4 }}>
-				{#each matches as command, ci (command.name)}
-					<button
-						type="button"
-						class="slash-item"
-						class:slash-item--active={ci === active}
-						role="option"
-						aria-selected={ci === active}
-						onmouseenter={() => (pick = ci)}
-						onclick={() => complete(command)}
-					>
-						<span class="slash-name" data-align="content">/{command.name}</span>
-						<span class="slash-desc">{command.description}</span>
-					</button>
+				{#each sections as section (section.group)}
+					<div class="slash-group" role="group" aria-labelledby="{uid}-group-{section.group}">
+						<span class="slash-head" id="{uid}-group-{section.group}">{section.label}</span>
+						{#each section.items as item (item.match.command.name)}
+							<button
+								type="button"
+								id="{uid}-slash-{item.index}"
+								class="slash-item"
+								class:slash-item--active={item.index === active}
+								role="option"
+								aria-selected={item.index === active}
+								tabindex="-1"
+								onmouseenter={() => (pick = item.index)}
+								onmousedown={(e) => e.preventDefault()}
+								onclick={() => choose(item.match, true)}
+							>
+								<span class="slash-name">/{item.match.label}</span>
+								<span class="slash-desc">{item.match.command.description}</span>
+							</button>
+						{/each}
+					</div>
 				{/each}
+			</div>
+		{:else if choices.length > 0 && typed}
+			<div
+				class="slash"
+				role="listbox"
+				aria-label="/{typed.label} options"
+				transition:fly={{ y: 4 }}
+			>
+				<div class="slash-group">
+					<span class="slash-head">{commandLine(typed.command, typed.label)}</span>
+					{#each choices as option, oi (option.value)}
+						<button
+							type="button"
+							id="{uid}-slash-{oi}"
+							class="slash-item"
+							class:slash-item--active={oi === active}
+							role="option"
+							aria-selected={oi === active}
+							tabindex="-1"
+							onmouseenter={() => (pick = oi)}
+							onmousedown={(e) => e.preventDefault()}
+							onclick={() => chooseOption(option)}
+						>
+							<span class="slash-label">{option.label}</span>
+							{#if option.description}
+								<span class="slash-desc">{option.description}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
 			</div>
 		{/if}
 		{#if queue.length > 0}
@@ -322,6 +512,39 @@
 				{/each}
 			</ol>
 		{/if}
+		{#if notice}
+			<div class="cmp-note" transition:slide data-align="content" role="status">
+				<div class="note-body">
+					<span class="note-text">{notice.text}</span>
+					{#if notice.todos}
+						<ul class="todos">
+							{#each notice.todos as todo, ti (ti)}
+								{@const Icon = TODO_ICONS[todo.status as keyof typeof TODO_ICONS] ?? Circle}
+								<li
+									class="todo"
+									class:todo--done={todo.status === 'completed' || todo.status === 'cancelled'}
+								>
+									<Icon size={14} strokeWidth={1.75} aria-label={todo.status.replace('_', ' ')} />
+									<span class="todo-text">{todo.content}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+				<button
+					type="button"
+					class="icon icon--sm"
+					aria-label="Dismiss"
+					title="Dismiss"
+					onclick={() => showNotice(null)}
+				>
+					<X size={14} strokeWidth={1.75} />
+				</button>
+			</div>
+		{/if}
+		{#if hint}
+			<div class="cmp-mode cmp-hint" transition:slide data-align="content">{hint}</div>
+		{/if}
 		{#if commenting}
 			<div class="cmp-mode" transition:slide data-align="content">
 				<MessageCircle size={14} strokeWidth={1.75} />
@@ -345,12 +568,13 @@
 			{placeholder}
 			aria-label="Message"
 			aria-autocomplete="list"
+			aria-activedescendant={listed > 0 ? `${uid}-slash-${active}` : undefined}
 			data-align="content"
 			oninput={autosize}
 			onkeydown={onKey}
 			onpaste={onPaste}></textarea>
 		<div class="bar">
-			<ModelPicker {store} />
+			<ModelPicker {store} bind:open={modelOpen} />
 			{#if store.plan}
 				<button
 					type="button"
@@ -361,15 +585,27 @@
 				>
 					<ListChecks size={16} strokeWidth={1.75} /> Plan
 				</button>
+			{:else if store.agent}
+				<button
+					type="button"
+					class="plan-chip"
+					aria-pressed="true"
+					title="The {store.agent} agent answers. Click to go back to the default agent."
+					onclick={() => store.setAgent(null)}
+				>
+					<Bot size={16} strokeWidth={1.75} />
+					{store.agent}
+				</button>
 			{/if}
 			<span class="bar-spacer"></span>
 			<ContextRing
+				bind:open={contextOpen}
 				meter={store.context}
 				sandboxId={store.sandboxId}
 				always={prefs.alwaysShowContext}
 			/>
-			{#if prefs.showMcpStatus}
-				<McpServers {store} />
+			{#if prefs.showMcpStatus || mcpOpen}
+				<McpServers {store} bind:open={mcpOpen} />
 			{/if}
 			<input
 				bind:this={fileInputEl}
@@ -590,6 +826,56 @@
 		color: var(--text-muted);
 	}
 
+	.cmp-hint {
+		font-family: var(--font-mono, monospace);
+	}
+
+	.cmp-note {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-muted);
+	}
+
+	.note-body {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+		padding-top: var(--space-1);
+	}
+
+	.todos {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.todo {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+		color: var(--text-default);
+	}
+
+	.todo--done {
+		color: var(--text-faint);
+	}
+
+	.todo-text {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.cmp-files {
 		padding-top: var(--space-1);
 	}
@@ -634,6 +920,10 @@
 		z-index: 2;
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-1);
+		max-height: 20rem;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: var(--space-1);
 		border-radius: var(--radius-md);
 		background: var(--bg-overlay);
@@ -642,8 +932,21 @@
 			var(--elev-3);
 	}
 
+	.slash-group {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.slash-head {
+		padding: var(--space-1) var(--space-3) 0;
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-faint);
+	}
+
 	.slash-item {
 		display: flex;
+		flex-shrink: 0;
 		align-items: center;
 		gap: var(--space-3);
 		min-width: 0;
@@ -663,6 +966,17 @@
 	.slash-name {
 		flex-shrink: 0;
 		font-family: var(--font-mono, monospace);
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
+		color: var(--text-default);
+	}
+
+	.slash-label {
+		flex-shrink: 0;
+		max-width: 60%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: var(--text-footnote);
 		line-height: 1.25rem;
 		color: var(--text-default);
@@ -741,6 +1055,11 @@
 	.icon:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	.icon--sm {
+		width: 1.5rem;
+		height: 1.5rem;
 	}
 
 	.icon--stop {

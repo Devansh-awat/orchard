@@ -9,7 +9,6 @@
 		Rocket,
 		Upload
 	} from 'lucide-svelte';
-	import { goto } from '$app/navigation';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import { toasts } from '$lib/stores';
@@ -45,42 +44,15 @@
 		try {
 			await fn();
 		} catch (e) {
-			if (api.isGithubUnlinked(e)) {
-				ws.githubUnlinked = true;
-				toasts.add({
-					title: LINK_GITHUB,
-					description: 'Pushes and pull requests run with your own GitHub account.',
-					color: 'info',
-					action: { label: 'Link GitHub', onClick: () => goto(api.LINK_GITHUB_HREF) }
-				});
-				return;
-			}
-			toasts.add({
-				title: `${label} failed`,
-				description: e instanceof Error ? e.message : undefined,
-				color: 'error'
-			});
+			ws.prFailed(label, e);
 		} finally {
 			busy = null;
 		}
 	}
 
 	function createPr(draft: boolean) {
-		const current = session;
-		if (!current) return;
-		return run(draft ? 'Draft PR' : 'Create PR', async () => {
-			const res = await api.createPr(ws.sandboxId, scopeOf(current), {
-				title: current.title,
-				draft
-			});
-			const number = res.number ?? Number(res.url.split('/').pop());
-			ws.upsert({ ...current, prUrl: res.url, prNumber: number || null, prState: 'open' });
-			toasts.add({
-				title: draft ? 'Draft pull request opened' : 'Pull request opened',
-				color: 'success',
-				action: { label: 'View', onClick: () => window.open(res.url, '_blank', 'noopener') }
-			});
-		});
+		if (!session) return;
+		return run(draft ? 'Draft PR' : 'Create PR', () => ws.createPr(draft));
 	}
 
 	function push() {

@@ -8,12 +8,16 @@
 	let {
 		meter,
 		sandboxId = null,
-		always = true
-	}: { meter: ContextMeter; sandboxId?: string | null; always?: boolean } = $props();
+		always = true,
+		open = $bindable(false)
+	}: {
+		meter: ContextMeter;
+		sandboxId?: string | null;
+		always?: boolean;
+		open?: boolean;
+	} = $props();
 
 	const NOTICE_PCT = 50;
-
-	let open = $state(false);
 
 	const R = 7;
 	const C = 2 * Math.PI * R;
