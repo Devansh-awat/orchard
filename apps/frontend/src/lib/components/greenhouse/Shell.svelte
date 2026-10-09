@@ -67,6 +67,14 @@
 		});
 	});
 
+	$effect(() => {
+		const current = ws;
+		if (!current?.running || current.lifecycleOnly) return;
+		untrack(() => {
+			void current.store.connect();
+		});
+	});
+
 	let contextSynced: string | null = null;
 	$effect(() => {
 		const current = ws;
