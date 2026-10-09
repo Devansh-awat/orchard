@@ -38,11 +38,16 @@
 	let session: string | null = null;
 	let run = 0;
 
-	const beat = $derived(TOUR_BEATS[index]);
-	const last = $derived(index === TOUR_BEATS.length - 1);
+	let shownIndex = $state(0);
+	const beat = $derived(TOUR_BEATS[shownIndex]);
+	const last = $derived(shownIndex === TOUR_BEATS.length - 1);
 
 	function sleep(ms: number) {
 		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	function frame() {
+		return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 	}
 
 	function visible(selector: string): HTMLElement[] {
@@ -57,7 +62,7 @@
 		while (Date.now() < until) {
 			const found = visible(selector);
 			if (found.length > 0) return found;
-			await sleep(50);
+			await frame();
 		}
 		return [];
 	}
@@ -71,7 +76,7 @@
 			if (s.id === session) return false;
 			session = s.id;
 			onsession(s.id);
-			await sleep(150);
+			await frame();
 			return false;
 		}
 		if (s.kind === 'escape') {
@@ -152,7 +157,8 @@
 	}
 
 	async function measure(restack = false) {
-		const targets = beat.target ? await findAll(beat.target) : [];
+		const target = TOUR_BEATS[index].target;
+		const targets = target ? await findAll(target) : [];
 		if (targets.length === 0) {
 			hole = null;
 		} else {
@@ -187,6 +193,7 @@
 				})
 		});
 		if (!shown) paint(box);
+		shownIndex = index;
 		await tick();
 		if (!cardEl || !layerEl) return;
 		const open = layerEl.open;
@@ -297,18 +304,19 @@
 			{/if}
 		</div>
 		<div class="foot">
-			<span class="dots" aria-label="Step {index + 1} of {TOUR_BEATS.length}">
+			<span class="dots" aria-label="Step {shownIndex + 1} of {TOUR_BEATS.length}">
 				{#each TOUR_BEATS as b, i (b.id)}
-					<span class="dot" class:dot--on={i === index} class:dot--seen={i < index}></span>
+					<span class="dot" class:dot--on={i === shownIndex} class:dot--seen={i < shownIndex}
+					></span>
 				{/each}
 			</span>
-			{#if index > 0}
+			{#if shownIndex > 0}
 				<button type="button" class="gh-ibtn" aria-label="Back" title="Back" onclick={() => go(-1)}>
 					<ArrowLeft size={16} strokeWidth={1.75} />
 				</button>
 			{/if}
 			<button type="button" class="gh-btn gh-btn--primary" onclick={() => go(1)}>
-				{last ? 'Start building' : index === 0 ? 'Show me' : 'Next'}
+				{last ? 'Start building' : shownIndex === 0 ? 'Show me' : 'Next'}
 			</button>
 		</div>
 		{#if !last}

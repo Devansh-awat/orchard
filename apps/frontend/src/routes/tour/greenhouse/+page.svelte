@@ -12,6 +12,9 @@
 	import { fakeLive, installFetch, json } from '$lib/components/greenhouse/demo/mock';
 	import TourOverlay from '$lib/components/greenhouse/tour/TourOverlay.svelte';
 
+	void import('$lib/components/greenhouse/CenterPane.svelte');
+	void import('$lib/components/greenhouse/SettingsDialog.svelte');
+
 	const data = installFetch('owner');
 	const demoFetch = window.fetch;
 	window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
