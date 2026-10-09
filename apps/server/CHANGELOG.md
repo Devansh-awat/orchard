@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.67.1](https://github.com/hackclub/orchard/compare/server/v2.67.0...server/v2.67.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **server:** deployments in a non-default environment can reach the project's databases ([81a9a86](https://github.com/hackclub/orchard/commit/81a9a86e9b5c2da40a7fca295d03eb5a998c36af))
+
 ## [2.67.0](https://github.com/hackclub/orchard/compare/server/v2.66.0...server/v2.67.0) (2026-10-09)
 
 
