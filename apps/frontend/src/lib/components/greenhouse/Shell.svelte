@@ -8,21 +8,15 @@
 	import { toasts } from '$lib/stores';
 	import type { SandboxListResponse } from '$lib/types/sandbox';
 	import * as api from './api';
-	import AddRepoSheet from './AddRepoSheet.svelte';
 	import AdminMachine from './AdminMachine.svelte';
 	import { GreenhouseApp, setGreenhouseApp, type GreenhouseNav } from './app.svelte';
-	import ForkSheet from './ForkSheet.svelte';
 	import { setGreenhouseEnv, type GreenhouseEnv } from './env';
 	import Home from './Home.svelte';
 	import JoinNotice from './JoinNotice.svelte';
 	import { GUTTER, LEFT, RIGHT } from './layout.svelte';
-	import NewMachineSheet from './NewMachineSheet.svelte';
 	import TourHost from './tour/TourHost.svelte';
-	import PreviewSheet from './PreviewSheet.svelte';
 	import ResizeHandle from './ResizeHandle.svelte';
 	import RightPanel from './RightPanel.svelte';
-	import SettingsDialog from './SettingsDialog.svelte';
-	import ShareSheet from './ShareSheet.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import { shellShortcut } from './shortcuts';
 	import TitleBar from './TitleBar.svelte';
@@ -30,6 +24,7 @@
 	import { isLegacy } from './workspace.svelte';
 	import { inTerminal } from '$lib/utils/focus-routing';
 	import { Lazy } from '$lib/utils/lazy.svelte';
+	import { whenIdle } from '$lib/utils/idle';
 	import type { PersonRef } from './types';
 
 	let {
@@ -66,6 +61,35 @@
 	$effect(() => {
 		if (!nav.sessionId() && !ws?.session) return;
 		untrack(() => center.preload());
+	});
+
+	const sheets = {
+		'new-machine': new Lazy(() => import('./NewMachineSheet.svelte')),
+		share: new Lazy(() => import('./ShareSheet.svelte')),
+		settings: new Lazy(() => import('./SettingsDialog.svelte')),
+		'add-repo': new Lazy(() => import('./AddRepoSheet.svelte')),
+		preview: new Lazy(() => import('./PreviewSheet.svelte')),
+		fork: new Lazy(() => import('./ForkSheet.svelte'))
+	};
+	const NewMachineSheet = $derived(sheets['new-machine'].current);
+	const ShareSheet = $derived(sheets.share.current);
+	const SettingsDialog = $derived(sheets.settings.current);
+	const AddRepoSheet = $derived(sheets['add-repo'].current);
+	const PreviewSheet = $derived(sheets.preview.current);
+	const ForkSheet = $derived(sheets.fork.current);
+
+	$effect(() => {
+		const lazy = app.sheet && app.sheet in sheets ? sheets[app.sheet as keyof typeof sheets] : null;
+		if (lazy) untrack(() => lazy.preload());
+	});
+
+	$effect(() => {
+		if (!ws?.isOwner || app.env.harness) return;
+		return whenIdle(() => {
+			void import('$lib/components/deployment/GitHubRepoPicker.svelte').then((m) =>
+				m.loadGitHubRepos()
+			);
+		}, 5000);
 	});
 
 	$effect(() => {
@@ -472,20 +496,32 @@
 	{/if}
 
 	<TourHost auto={!env.harness} />
-	<NewMachineSheet
-		bind:open={() => app.sheet === 'new-machine', (v) => (app.sheet = v ? 'new-machine' : null)}
-	/>
-	<ShareSheet bind:open={() => app.sheet === 'share', (v) => (app.sheet = v ? 'share' : null)} />
-	<SettingsDialog
-		bind:open={() => app.sheet === 'settings', (v) => (app.sheet = v ? 'settings' : null)}
-	/>
-	<AddRepoSheet
-		bind:open={() => app.sheet === 'add-repo', (v) => (app.sheet = v ? 'add-repo' : null)}
-	/>
-	<PreviewSheet
-		bind:open={() => app.sheet === 'preview', (v) => (app.sheet = v ? 'preview' : null)}
-	/>
-	<ForkSheet bind:open={() => app.sheet === 'fork', (v) => (app.sheet = v ? 'fork' : null)} />
+	{#if NewMachineSheet}
+		<NewMachineSheet
+			bind:open={() => app.sheet === 'new-machine', (v) => (app.sheet = v ? 'new-machine' : null)}
+		/>
+	{/if}
+	{#if ShareSheet}
+		<ShareSheet bind:open={() => app.sheet === 'share', (v) => (app.sheet = v ? 'share' : null)} />
+	{/if}
+	{#if SettingsDialog}
+		<SettingsDialog
+			bind:open={() => app.sheet === 'settings', (v) => (app.sheet = v ? 'settings' : null)}
+		/>
+	{/if}
+	{#if AddRepoSheet}
+		<AddRepoSheet
+			bind:open={() => app.sheet === 'add-repo', (v) => (app.sheet = v ? 'add-repo' : null)}
+		/>
+	{/if}
+	{#if PreviewSheet}
+		<PreviewSheet
+			bind:open={() => app.sheet === 'preview', (v) => (app.sheet = v ? 'preview' : null)}
+		/>
+	{/if}
+	{#if ForkSheet}
+		<ForkSheet bind:open={() => app.sheet === 'fork', (v) => (app.sheet = v ? 'fork' : null)} />
+	{/if}
 	<JoinNotice />
 	<Modal bind:open={renameOpen} title="Rename session" size="sm">
 		<Input
