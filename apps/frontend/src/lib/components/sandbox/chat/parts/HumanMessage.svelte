@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bot, GitFork, MessageCircle, Undo2 } from 'lucide-svelte';
+	import { Bot, MessageCircle } from 'lucide-svelte';
 	import { Avatar } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
 	import type { OcAttachment } from '../../opencode';
@@ -40,7 +40,6 @@
 	} = $props();
 
 	const comment = $derived(variant === 'comment');
-	const showActions = $derived(!comment && actions && !!messageID && !!onfork && !!onrevert);
 	const clock = $derived(time !== null && Number.isFinite(time) ? fmtClock(time) : null);
 	const showMeta = $derived(!grouped && (!own || comment));
 	const align = $derived(own && comment ? 'own' : 'content');
@@ -87,29 +86,6 @@
 				<div class="hm-files"><FileParts files={attachments} /></div>
 			{/if}
 		</div>
-		{#if showActions && messageID}
-			{@const id = messageID}
-			<div class="hm-actions">
-				<button
-					type="button"
-					class="hm-action"
-					disabled={locked}
-					title="Fork a new session from here"
-					onclick={() => onfork?.(id)}
-				>
-					<GitFork size={14} strokeWidth={1.75} /> Fork
-				</button>
-				<button
-					type="button"
-					class="hm-action"
-					disabled={locked}
-					title="Undo everything from this prompt on"
-					onclick={() => onrevert?.(id)}
-				>
-					<Undo2 size={14} strokeWidth={1.75} /> Revert
-				</button>
-			</div>
-		{/if}
 	</div>
 	{#if reverted}
 		<div class="hm-reverted" transition:slide data-align={align}>
@@ -241,30 +217,6 @@
 
 	.hm--reverted .hm-text {
 		text-decoration: line-through;
-	}
-
-	.hm-actions {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		flex-shrink: 0;
-		opacity: 0;
-		transition: opacity var(--dur-fast);
-	}
-
-	.hm--prompt .hm-actions {
-		position: absolute;
-		top: var(--space-1);
-		right: var(--space-1);
-		padding: 0 var(--space-1);
-		border-radius: var(--radius-xs);
-		background: var(--bg-surface);
-		box-shadow: var(--elev-1);
-	}
-
-	.hm:hover .hm-actions,
-	.hm:focus-within .hm-actions {
-		opacity: 1;
 	}
 
 	.hm-action {

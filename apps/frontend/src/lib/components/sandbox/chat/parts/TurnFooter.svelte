@@ -82,7 +82,7 @@
 			{#if promptId && onfork}
 				{@const id = promptId}
 				<MenuItem disabled={locked} onclick={() => onfork(id)}>
-					<GitFork class="h-3.5 w-3.5" /> Fork from this prompt
+					<GitFork class="h-3.5 w-3.5" /> Fork to new chat
 				</MenuItem>
 			{/if}
 			{#if promptId && onrevert}
