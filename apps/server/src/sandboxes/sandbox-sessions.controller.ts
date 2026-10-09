@@ -154,6 +154,18 @@ export class SandboxSessionsController {
     return this.sessions.createChat(row, sid, body || {});
   }
 
+  @Delete(':id/sessions/:sid/chats/:chatId')
+  @RequireScope('exec')
+  async deleteChat(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Param('chatId') chatId: string
+  ) {
+    const { row } = await this.access(req, id, 'collaborator');
+    return this.sessions.deleteChat(row, sid, chatId);
+  }
+
   @Get(':id/sessions/:sid/scripts')
   @RequireScope('exec')
   async scripts(

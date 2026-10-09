@@ -637,6 +637,34 @@ export class MachineWorkspace {
 		this.openTabs.set(session.id, list);
 	}
 
+	async deleteChat(chatId: string) {
+		const session = this.session;
+		if (!session || !this.canEdit || isLegacy(session)) return;
+		const before = this.chats.get(session.id) ?? this.chatList;
+		const tabs = this.tabs;
+		const index = tabs.findIndex((t) => t.id === chatTabId(chatId));
+		const wasActive = this.activeTab?.id === chatTabId(chatId);
+		this.chats.set(
+			session.id,
+			before.filter((c) => c.id !== chatId)
+		);
+		if (wasActive) {
+			const next = tabs[index + 1] ?? tabs[index - 1] ?? null;
+			this.host.openTab(next && next.id !== chatTabId(chatId) ? next.id : null);
+		}
+		try {
+			const res = await api.deleteChat(this.sandboxId, session.id, chatId);
+			if (res.remaining === 0) await this.newChat();
+		} catch (e) {
+			this.chats.set(session.id, before);
+			toasts.add({
+				title: 'Could not delete the chat',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		}
+	}
+
 	async newChat() {
 		const session = this.session;
 		if (!session || !this.canEdit || isPreparing(session)) return;

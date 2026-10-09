@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FileCode, GitCompare, Globe, History, MessageSquare, Plus, Undo2 } from 'lucide-svelte';
 	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
+	import { Button, Modal } from '$lib/components/ui';
 	import { TabStrip, type StripTab } from '$lib/components/sandbox/editor';
 	import { getGreenhouseApp } from './app.svelte';
 	import ChatView from './ChatView.svelte';
@@ -22,7 +23,7 @@
 			title: tab.title,
 			icon: ICONS[tab.kind],
 			dirty: tab.kind === 'file' ? ws.editor.isDirty(tab.path) : false,
-			closable: tab.kind !== 'chat',
+			closable: tab.kind !== 'chat' || ws.canEdit,
 			tooltip: tab.kind === 'file' || tab.kind === 'diff' ? ws.resolve(tab.path).rel : tab.title
 		}))
 	);
@@ -37,6 +38,23 @@
 	);
 
 	let historyOpen = $state(false);
+
+	let doomed = $state<{ chatId: string; title: string } | null>(null);
+
+	function close(id: string) {
+		const tab = ws.tabs.find((t) => t.id === id);
+		if (tab?.kind === 'chat') {
+			doomed = { chatId: tab.chatId, title: tab.title };
+			return;
+		}
+		ws.closeTab(id);
+	}
+
+	async function confirmDelete() {
+		const target = doomed;
+		doomed = null;
+		if (target) await ws.deleteChat(target.chatId);
+	}
 
 	function select(id: string) {
 		app.nav.go({ tab: id }, { replace: true });
@@ -60,7 +78,7 @@
 		active={active?.id ?? null}
 		label="Session tabs"
 		onselect={select}
-		onclose={(id) => ws.closeTab(id)}
+		onclose={close}
 		onreorder={(from, to) => ws.reorder(from, to)}
 	>
 		{#snippet trailing()}
@@ -131,7 +149,25 @@
 	</div>
 </div>
 
+<Modal
+	open={doomed !== null}
+	onclose={() => (doomed = null)}
+	title="Delete {doomed?.title ?? 'this chat'}?"
+	size="sm"
+>
+	<p class="doomed">Its messages are gone for good. The code it changed stays.</p>
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (doomed = null)}>Cancel</Button>
+		<Button variant="danger" onclick={confirmDelete}>Delete chat</Button>
+	{/snippet}
+</Modal>
+
 <style>
+	.doomed {
+		margin: 0;
+		color: var(--gh-muted);
+	}
+
 	.pane {
 		display: flex;
 		flex-direction: column;

@@ -451,6 +451,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/sandboxes/:id/sessions/:sid/authors', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/sessions/:sid/chats', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/sessions/:sid/chats', auth: 'authenticated' },
+  { method: 'DELETE', path: '/sandboxes/:id/sessions/:sid/chats/:chatId', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/sessions/:sid/checks', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/sessions/:sid/comments', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/sessions/:sid/comments', auth: 'authenticated' },

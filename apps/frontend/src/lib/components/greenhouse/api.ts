@@ -154,6 +154,13 @@ export function createChat(sandboxId: string, sid: string) {
 	return send<GhChat>(`${base(sandboxId)}/sessions/${sid}/chats`, 'POST', {});
 }
 
+export function deleteChat(sandboxId: string, sid: string, chatId: string) {
+	return send<{ success: boolean; remaining: number }>(
+		`${base(sandboxId)}/sessions/${sid}/chats/${encodeURIComponent(chatId)}`,
+		'DELETE'
+	);
+}
+
 export function listRepos(sandboxId: string) {
 	return get<{ repos: GhRepo[] }>(`${base(sandboxId)}/repos`);
 }

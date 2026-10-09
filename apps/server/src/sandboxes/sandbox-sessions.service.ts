@@ -1033,6 +1033,34 @@ export class SandboxSessionsService {
     return { chats };
   }
 
+  async deleteChat(
+    sandbox: WorkspaceSandbox,
+    sessionId: string,
+    chatId: string
+  ): Promise<{ success: true; remaining: number }> {
+    if (!/^ses_[A-Za-z0-9]{1,60}$/.test(chatId)) throw new BadRequestException('Invalid chat');
+    const row = await this.activeRow(sandbox.id, sessionId);
+    this.requireRunning(sandbox);
+    const { chats } = await this.chats(sandbox, sessionId);
+    if (!chats.some((c) => c.id === chatId)) throw new NotFoundException('Chat not found');
+    const res = await this.workspace.opencodeRequest(sandbox, 'DELETE', `/session/${chatId}`, {
+      directory: row.worktreePath
+    });
+    if (res.status >= 300 && res.status !== 404) {
+      throw new BadRequestException('The agent could not delete that chat');
+    }
+    const remaining = chats.filter((c) => c.id !== chatId);
+    if (row.opencodeSessionId === chatId) {
+      await this.prisma.sandboxConversation
+        .update({
+          where: { id: row.id },
+          data: { opencodeSessionId: remaining[0]?.id ?? null }
+        })
+        .catch(() => {});
+    }
+    return { success: true, remaining: remaining.length };
+  }
+
   async createChat(
     sandbox: WorkspaceSandbox,
     sessionId: string,

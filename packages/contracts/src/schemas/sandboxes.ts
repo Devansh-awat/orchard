@@ -852,6 +852,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ id: z.string(), title: z.string() }),
     scope: 'exec'
   },
+  'DELETE /sandboxes/:id/sessions/:sid/chats/:chatId': {
+    summary: 'Delete an opencode chat from the session worktree',
+    response: z.object({ success: z.boolean(), remaining: z.number().int() }),
+    scope: 'exec'
+  },
   'GET /sandboxes/:id/sessions/:sid/scripts': {
     summary: 'Setup/run scripts and ports from .orchard/greenhouse.json, plus their state',
     response: sessionScripts,

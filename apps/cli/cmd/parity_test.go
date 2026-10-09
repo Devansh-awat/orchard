@@ -242,6 +242,7 @@ var routeCoverage = map[string]string{
 	"DELETE /sandboxes/:id/sessions/:sid":                "sandbox session delete (web workspace sidebar)",
 	"GET /sandboxes/:id/sessions/:sid/chats":             "sandbox chat tabs (web workspace)",
 	"POST /sandboxes/:id/sessions/:sid/chats":            "sandbox chat tabs new (web workspace)",
+	"DELETE /sandboxes/:id/sessions/:sid/chats/:chatId":  "sandbox chat tabs delete (web workspace)",
 	"GET /sandboxes/:id/sessions/:sid/scripts":           "sandbox setup/run scripts (web workspace dock)",
 	"POST /sandboxes/:id/sessions/:sid/run":              "sandbox run script (web workspace dock)",
 	"GET /sandboxes/:id/sessions/:sid/ports":             "sandbox ports (web workspace dock)",
