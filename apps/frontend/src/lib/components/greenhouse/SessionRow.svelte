@@ -17,7 +17,6 @@
 	import type { GhSession, RosterUser } from './types';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago } from './format';
-	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY } from './workspace.svelte';
 
 	let {
@@ -38,15 +37,10 @@
 	const draft = $derived(ws?.hasDraft(session.id) ?? false);
 	const archived = $derived(session.status === 'archived');
 	const canEdit = $derived(ws?.canEdit ?? false);
-	const stat = $derived(
-		session.diffstat && (session.diffstat.additions || session.diffstat.deletions)
-			? session.diffstat
-			: null
-	);
-	const tinted = $derived(selected || greenhousePrefs.values.coloredDiffs);
 	const when = $derived.by(() => {
 		void now;
-		return ago(archived ? (session.archivedAt ?? session.updatedAt) : session.updatedAt);
+		const text = ago(archived ? (session.archivedAt ?? session.updatedAt) : session.updatedAt);
+		return text === 'just now' ? 'now' : text.replace(/ ago$/, '');
 	});
 
 	let menuOpen = $state(false);
@@ -119,19 +113,7 @@
 </script>
 
 {#snippet meta()}
-	<span class="meta">
-		<span class="branch">{session.branch}</span>
-		{#if when}<span class="dot" aria-hidden="true">·</span><span class="when">{when}</span>{/if}
-		{#if stat}
-			<span class="dot" aria-hidden="true">·</span>
-			<span class="stat"
-				><span class:gh-add={tinted}>+{stat.additions}</span>
-				<span class:gh-del={tinted}>−{stat.deletions}</span></span
-			>
-		{:else if session.prNumber}
-			<span class="dot" aria-hidden="true">·</span><span class="stat">#{session.prNumber}</span>
-		{/if}
-	</span>
+	{#if when}<span class="when">{when}</span>{/if}
 {/snippet}
 
 <div
@@ -157,10 +139,9 @@
 				aria-label="Session title"
 				{@attach focusInput}
 			/>
-			{@render meta()}
 		</div>
 	{:else}
-		<button type="button" class="main gh-row" onclick={open}>
+		<button type="button" class="main gh-row" title={session.branch} onclick={open}>
 			<span class="ico"
 				><SessionGlyph {activity} {draft} merged={session.prState === 'merged'} /></span
 			>
@@ -250,16 +231,14 @@
 	}
 
 	.main {
-		display: grid;
-		grid-template-columns: var(--gh-glyph) minmax(0, 1fr) auto;
-		grid-template-rows: var(--gh-lh-ui) var(--gh-lh-caption);
+		display: flex;
 		align-items: center;
-		column-gap: 0.5rem;
+		gap: 0.5rem;
 		width: 100%;
 		height: var(--gh-side-session);
-		padding: 0.125rem var(--row-pad, var(--gh-side-pad));
+		padding: 0 var(--row-pad, var(--gh-side-pad));
 		border-radius: var(--gh-r-control);
-		color: var(--gh-text);
+		color: var(--gh-muted);
 		text-align: left;
 		transition:
 			background-color var(--dur-fast) ease,
@@ -269,6 +248,7 @@
 	.row:hover button.main,
 	.row--menu .main {
 		background: var(--gh-hover);
+		color: var(--gh-text);
 	}
 
 	.row--selected .main,
@@ -276,18 +256,19 @@
 	.row--menu.row--selected .main {
 		--gh-glyph-idle: var(--gh-side-on-icon);
 		background: var(--gh-side-on);
+		color: var(--gh-text);
 	}
 
 	.ico {
-		grid-area: 1 / 1;
 		display: inline-grid;
 		place-items: center;
+		flex: none;
 		width: var(--gh-glyph);
-		height: var(--gh-lh-ui);
+		height: var(--gh-glyph);
 	}
 
 	.title {
-		grid-area: 1 / 2;
+		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		white-space: nowrap;
@@ -299,47 +280,21 @@
 	}
 
 	.row--archived .title {
-		color: var(--gh-muted);
+		color: var(--gh-faint);
+	}
+
+	.when {
+		flex: none;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.people {
-		grid-area: 1 / 3;
 		display: inline-flex;
-		align-items: center;
-	}
-
-	.meta {
-		grid-area: 2 / 2 / 3 / 4;
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		min-width: 0;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		font-weight: 400;
-		color: var(--gh-faint);
-		white-space: nowrap;
-	}
-
-	.row--selected .meta {
-		color: var(--gh-muted);
-	}
-
-	.branch {
-		flex: 0 1 auto;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.dot,
-	.when,
-	.stat {
 		flex: none;
-	}
-
-	.stat {
-		font-variant-numeric: tabular-nums;
+		align-items: center;
 	}
 
 	.actions {
@@ -367,6 +322,9 @@
 		padding-right: calc(var(--actions) + var(--row-pad, var(--gh-side-pad)) - var(--gh-ibtn-inset));
 	}
 
+	.row:hover .when,
+	.row:focus-within .when,
+	.row--menu .when,
 	.row:hover .people,
 	.row:focus-within .people,
 	.row--menu .people {
@@ -374,9 +332,9 @@
 	}
 
 	.rename {
-		grid-area: 1 / 2 / 2 / 4;
+		flex: 1;
 		min-width: 0;
-		height: var(--gh-lh-ui);
+		height: 1.375rem;
 		margin-left: -0.25rem;
 		padding: 0 0.25rem;
 		border-radius: var(--gh-r-control);
@@ -399,6 +357,7 @@
 			);
 		}
 
+		.when,
 		.people {
 			display: none;
 		}

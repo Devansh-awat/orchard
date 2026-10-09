@@ -22,8 +22,7 @@
 		'codeSize',
 		'monoFont',
 		'ligatures',
-		'terminalFont',
-		'coloredDiffs'
+		'terminalFont'
 	] as const satisfies readonly (keyof PrefValues)[];
 
 	const themeOptions: { value: ThemeMode; label: string }[] = [
@@ -106,12 +105,6 @@
 			/>
 		{/snippet}
 	</Row>
-	<Row
-		title="Colored sidebar diffs"
-		description="Green and red line counts on sessions"
-		checked={prefs.coloredDiffs}
-		ontoggle={(v) => greenhousePrefs.set('coloredDiffs', v)}
-	/>
 </Card>
 
 <Card title="Code">
