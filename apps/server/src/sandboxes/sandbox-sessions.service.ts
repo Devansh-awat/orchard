@@ -24,6 +24,7 @@ import {
   WORKTREE_EXIT,
   buildDiffstatBatchScript,
   buildPortsScript,
+  buildRepoRemoveScript,
   buildScriptLaunch,
   buildScriptStop,
   buildScriptsProbe,
@@ -1000,6 +1001,24 @@ export class SandboxSessionsService {
     } catch (e: any) {
       this.logger.warn(`session listener failed: ${e?.message}`);
     }
+  }
+
+  async removeRepo(
+    sandbox: WorkspaceSandbox,
+    repo: string
+  ): Promise<{ name: string; sessions: number }> {
+    if (!isValidRepoName(repo)) throw new BadRequestException('Invalid repository name');
+    this.requireRunning(sandbox);
+    const found = await this.devExec(sandbox, `[ -e ${shellQuote(repoPathFor(repo))}/.git ]`);
+    if (!found.ok) throw new NotFoundException(`No repository named "${repo}" on this machine`);
+    const rows = await this.prisma.sandboxConversation.findMany({
+      where: { sandboxId: sandbox.id, repo, slug: { not: null } },
+      select: { id: true }
+    });
+    for (const row of rows) await this.remove(sandbox, row.id);
+    const result = await this.devExec(sandbox, buildRepoRemoveScript(repo), WORKTREE_TIMEOUT_MS);
+    if (!result.ok && result.exitCode !== 4) throw new BadRequestException('Could not remove the repository');
+    return { name: repo, sessions: rows.length };
   }
 
   async chats(

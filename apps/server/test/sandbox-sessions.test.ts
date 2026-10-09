@@ -54,7 +54,8 @@ import {
   shellQuote,
   slugify,
   tmuxSessionName,
-  inWorktree
+  inWorktree,
+  buildRepoRemoveScript
 } from '../src/sandboxes/sandbox-session-commands';
 import { parseSandboxTerminalQuery } from '../src/sandboxes/sandbox-terminal.gateway';
 import {
@@ -296,6 +297,18 @@ test('archiving keeps the branch, deleting can remove it, and tmux sessions are 
   assert.match(remove, new RegExp(`rm -rf -- '/persist/home/.orchard/sessions/${SID}'`));
   assert.equal(tmuxSessionName(SID, '0'), 'orchard-3f2d7e6a-0');
   assert.equal(tmuxSessionName(SID, 'setup'), 'orchard-3f2d7e6a-setup');
+});
+
+test('removing a repo deletes its clone and worktrees, quoted, and refuses unsafe names', () => {
+  const script = buildRepoRemoveScript('orchard-releases');
+  assert.match(script, /\[ -e '\/persist\/home\/orchard-releases'\/\.git \] \|\| exit 4/);
+  assert.match(
+    script,
+    /rm -rf -- '\/persist\/home\/\.worktrees\/orchard-releases' '\/persist\/home\/orchard-releases'/
+  );
+  for (const bad of ['..', '../etc', 'a/b', '', '.hidden', 'x;rm -rf /', 'a b']) {
+    assert.throws(() => buildRepoRemoveScript(bad), /invalid repo/);
+  }
 });
 
 test('.orchard/greenhouse.json parsing tolerates junk and bounds what it keeps', () => {

@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { ChevronRight, Ellipsis, House, Plus, Search, Settings, SmilePlus } from 'lucide-svelte';
+	import {
+		ChevronRight,
+		Ellipsis,
+		House,
+		Plus,
+		Search,
+		Settings,
+		SmilePlus,
+		Trash2
+	} from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import { user } from '$lib/stores';
@@ -93,6 +103,30 @@
 		mx = rect.right;
 		my = rect.bottom + 10;
 		menuOpen = true;
+	}
+
+	let doomedRepo = $state<string | null>(null);
+	const doomedSessions = $derived(
+		doomedRepo ? (ws?.sessions.filter((s) => s.repo === doomedRepo).length ?? 0) : 0
+	);
+	const removeBlocked = $derived(
+		!ws?.isOwner
+			? hostOnly('remove repositories')
+			: !ws.running
+				? 'Start the machine to remove a repository'
+				: undefined
+	);
+
+	function askRemove() {
+		const name = menuRepo;
+		menuOpen = false;
+		if (name) doomedRepo = name;
+	}
+
+	function confirmRemove() {
+		const name = doomedRepo;
+		doomedRepo = null;
+		if (name) void ws?.removeRepo(name);
 	}
 
 	function changeIcon() {
@@ -277,7 +311,21 @@
 			<MenuItem onclick={changeIcon} disabled={!!iconBlocked} title={iconBlocked}>
 				<SmilePlus size={14} /> Change icon…
 			</MenuItem>
+			<MenuItem danger onclick={askRemove} disabled={!!removeBlocked} title={removeBlocked}>
+				<Trash2 size={14} /> Remove repository…
+			</MenuItem>
 		</ContextMenu>
+		<ConfirmModal
+			bind:open={() => !!doomedRepo, (v) => !v && (doomedRepo = null)}
+			title="Remove {doomedRepo}?"
+			description={doomedSessions > 0
+				? `Deletes the clone and its ${doomedSessions} ${doomedSessions === 1 ? 'session' : 'sessions'} from this machine. Anything not pushed is lost.`
+				: 'Deletes the clone from this machine. Anything not pushed is lost.'}
+			confirmLabel="Remove"
+			danger
+			onconfirm={confirmRemove}
+			oncancel={() => (doomedRepo = null)}
+		/>
 		{#if picking}
 			<RepoIconPicker
 				bind:open={pickerOpen}

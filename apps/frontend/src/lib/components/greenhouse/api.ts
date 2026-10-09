@@ -173,6 +173,13 @@ export function initRepo(sandboxId: string, name: string) {
 	return send<{ name: string }>(`${base(sandboxId)}/repos/init`, 'POST', { name });
 }
 
+export function removeRepo(sandboxId: string, repo: string) {
+	return send<{ name: string; sessions: number }>(
+		`${base(sandboxId)}/repos/${encodeURIComponent(repo)}`,
+		'DELETE'
+	);
+}
+
 export function setRepoIcon(sandboxId: string, repo: string, icon: string | null) {
 	return send<{ name: string; icon: string | null }>(
 		`${base(sandboxId)}/repos/${encodeURIComponent(repo)}/icon`,

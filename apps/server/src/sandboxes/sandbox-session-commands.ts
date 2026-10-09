@@ -233,6 +233,17 @@ export function buildWorktreeRemoveScript(
   return lines.join('\n');
 }
 
+export function buildRepoRemoveScript(repo: string): string {
+  if (!isValidRepoName(repo)) throw new Error('invalid repo');
+  const repoPath = shellQuote(repoPathFor(repo));
+  const worktrees = shellQuote(`${WORKTREES_ROOT}/${repo}`);
+  return [
+    `[ -e ${repoPath}/.git ] || exit 4`,
+    `rm -rf -- ${worktrees} ${repoPath}`,
+    `[ ! -e ${repoPath} ]`
+  ].join('\n');
+}
+
 export function killSessionTmuxScript(sessionId: string): string {
   const prefix = `orchard-${sessionShortId(sessionId)}-`;
   return `command -v tmux >/dev/null 2>&1 && tmux ls -F '#{session_name}' 2>/dev/null | grep -F -- ${shellQuote(prefix)} | while read -r s; do case "$s" in ${shellQuote(prefix)}*) tmux kill-session -t "=$s" 2>/dev/null ;; esac; done; true`;

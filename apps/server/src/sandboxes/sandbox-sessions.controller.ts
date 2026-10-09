@@ -131,6 +131,17 @@ export class SandboxSessionsController {
     return { success: true };
   }
 
+  @Delete(':id/repos/:name')
+  @RequireScope('deploy')
+  async removeRepo(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('name') name: string
+  ) {
+    const { row } = await this.access(req, id, 'owner');
+    return this.sessions.removeRepo(row, name);
+  }
+
   @Get(':id/sessions/:sid/chats')
   @RequireScope('exec')
   async chats(

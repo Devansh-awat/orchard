@@ -819,6 +819,29 @@ export class MachineWorkspace {
 		void this.refreshRepos();
 	}
 
+	async removeRepo(name: string): Promise<boolean> {
+		if (!this.isOwner) return false;
+		if (this.session?.repo === name) this.host.openSession(null);
+		try {
+			await api.removeRepo(this.sandboxId, name);
+			if (this.#disposed) return true;
+			this.sessions = this.sessions.filter((s) => s.repo !== name);
+			this.repos = this.repos.filter((r) => r.name !== name);
+			toasts.add({ title: `Removed ${name}`, color: 'success' });
+			return true;
+		} catch (e) {
+			toasts.add({
+				title: `Could not remove ${name}`,
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+			return false;
+		} finally {
+			void this.refreshRepos();
+			void this.refreshSessions();
+		}
+	}
+
 	async renameSession(session: GhSession, title: string) {
 		const next = title.trim();
 		if (!next || next === session.title) return;

@@ -51,6 +51,7 @@
   "DELETE /sandboxes/:id/conversations/:cid": "authenticated",
   "DELETE /sandboxes/:id/links/:projectId": "authenticated",
   "DELETE /sandboxes/:id/members/:userId": "authenticated",
+  "DELETE /sandboxes/:id/repos/:name": "authenticated",
   "DELETE /sandboxes/:id/sessions/:sid": "authenticated",
   "DELETE /sandboxes/:id/sessions/:sid/chats/:chatId": "authenticated",
   "DELETE /sandboxes/:id/sessions/:sid/preview-deploy": "authenticated",
