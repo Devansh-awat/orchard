@@ -235,6 +235,10 @@ function sessionRoutes(
       { min: 'collaborator' },
       () => c.deleteChat(req(), SANDBOX, SID, 'ses_abc')
     ],
+    'DELETE /sandboxes/:id/repos/:name': [
+      { min: 'owner' },
+      () => c.removeRepo(req(), SANDBOX, 'orchard')
+    ],
     'GET /sandboxes/:id/sessions/:sid/scripts': [
       { min: 'viewer' },
       () => c.scripts(req(), SANDBOX, SID)
@@ -451,6 +455,7 @@ test('session controller routes declare the contract minimum role', async () => 
     'chats',
     'createChat',
     'deleteChat',
+    'removeRepo',
     'scripts',
     'run',
     'ports',
