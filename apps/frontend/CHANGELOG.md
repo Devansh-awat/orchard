@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.61.1](https://github.com/hackclub/orchard/compare/frontend/v1.61.0...frontend/v1.61.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **frontend:** cmd k opens search from inside the code editor ([175385f](https://github.com/hackclub/orchard/commit/175385f701f352a7b009b1b8e1be4eba6edd8c8a))
+* **frontend:** reopening a closing overlay fades its backdrop back in instead of leaving it invisible ([5d43a6c](https://github.com/hackclub/orchard/commit/5d43a6c5dfbff1b91efdae7f9568c57d791a8e31))
+
 ## [1.61.0](https://github.com/hackclub/orchard/compare/frontend/v1.60.0...frontend/v1.61.0) (2026-10-09)
 
 
