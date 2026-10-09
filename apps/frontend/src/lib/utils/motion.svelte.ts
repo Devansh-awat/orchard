@@ -612,26 +612,21 @@ export function motionPanel(isActive: () => boolean) {
 	};
 }
 
-const PIN_KEYS = ['position', 'left', 'top', 'right', 'bottom', 'margin', 'translate', 'width'];
-
 function pinInPlace(el: HTMLElement, rect: DOMRect | null): (() => void) | null {
 	if (!rect || rect.width === 0) return null;
-	const saved = PIN_KEYS.map((key) => el.style.getPropertyValue(key));
-	el.style.position = 'fixed';
-	el.style.margin = '0';
-	el.style.right = 'auto';
-	el.style.bottom = 'auto';
-	el.style.translate = 'none';
-	el.style.width = `${rect.width}px`;
-	el.style.left = '0px';
-	el.style.top = '0px';
+	el.style.setProperty('--pin-left', '0px');
+	el.style.setProperty('--pin-top', '0px');
+	el.style.setProperty('--pin-width', `${rect.width}px`);
+	el.classList.add('motion-pinned');
 	const origin = el.getBoundingClientRect();
-	el.style.left = `${rect.left - origin.left}px`;
-	el.style.top = `${rect.top - origin.top}px`;
-	return () =>
-		PIN_KEYS.forEach((key, i) =>
-			saved[i] ? el.style.setProperty(key, saved[i]) : el.style.removeProperty(key)
-		);
+	el.style.setProperty('--pin-left', `${rect.left - origin.left}px`);
+	el.style.setProperty('--pin-top', `${rect.top - origin.top}px`);
+	return () => {
+		el.classList.remove('motion-pinned');
+		el.style.removeProperty('--pin-left');
+		el.style.removeProperty('--pin-top');
+		el.style.removeProperty('--pin-width');
+	};
 }
 
 export function overlayMotion(isOpen: () => boolean, opts: { origin?: string } = {}) {

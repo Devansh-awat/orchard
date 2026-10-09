@@ -1032,6 +1032,14 @@ html {
 		ui-skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
+.motion-pinned {
+	position: fixed !important;
+	inset: var(--pin-top) auto auto var(--pin-left) !important;
+	margin: 0 !important;
+	translate: none !important;
+	width: var(--pin-width) !important;
+}
+
 @keyframes ui-skeleton-appear {
 	from {
 		opacity: 0;
