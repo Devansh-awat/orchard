@@ -6,6 +6,7 @@
 		Plus,
 		Search,
 		Settings,
+		LoaderCircle,
 		SmilePlus,
 		Trash2
 	} from 'lucide-svelte';
@@ -264,6 +265,15 @@
 							: 'Start the machine to see its repositories.'}
 					</p>
 				{/if}
+			{/each}
+
+			{#each [...ws.cloning].filter((name) => !ws.repos.some((r) => r.name === name)) as name (name)}
+				<div class="nav nav--quiet gh-row" role="status">
+					<span class="ico animate-spin" data-motion="progress"
+						><LoaderCircle size={16} strokeWidth={1.75} /></span
+					>
+					<span class="label">Cloning {name}…</span>
+				</div>
 			{/each}
 
 			<button

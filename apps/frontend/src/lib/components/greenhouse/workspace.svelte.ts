@@ -168,6 +168,7 @@ export class MachineWorkspace {
 	readonly #hiddenChats = new SvelteSet<string>();
 	pendingChat = $state<string | null>(null);
 	creatingChat = $state(false);
+	readonly cloning = new SvelteSet<string>();
 
 	readonly machine = $derived.by(() => this.host.machine());
 	readonly running = $derived(this.machine?.status === 'running');
@@ -832,6 +833,15 @@ export class MachineWorkspace {
 	}
 
 	async watchClone(name: string) {
+		this.cloning.add(name);
+		try {
+			await this.#awaitClone(name);
+		} finally {
+			this.cloning.delete(name);
+		}
+	}
+
+	async #awaitClone(name: string) {
 		const deadline = Date.now() + CLONE_WATCH_MS;
 		while (!this.#disposed && Date.now() < deadline) {
 			await this.refreshRepos();
