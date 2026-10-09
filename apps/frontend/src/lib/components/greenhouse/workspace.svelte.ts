@@ -55,6 +55,9 @@ export type SessionLaunch = {
 	at: number;
 };
 
+const CLONE_POLL_MS = 2000;
+const CLONE_WATCH_MS = 5 * 60_000;
+
 export function isPreparing(session: GhSession | null | undefined): boolean {
 	return !!session && (!!session.preparing || !!session.prepareError);
 }
@@ -817,6 +820,25 @@ export class MachineWorkspace {
 			});
 		}
 		void this.refreshRepos();
+	}
+
+	async watchClone(name: string) {
+		const deadline = Date.now() + CLONE_WATCH_MS;
+		while (!this.#disposed && Date.now() < deadline) {
+			await this.refreshRepos();
+			if (this.repos.some((r) => r.name === name)) {
+				toasts.add({ title: `Cloned ${name}`, color: 'success' });
+				void this.refreshSessions();
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, CLONE_POLL_MS));
+		}
+		if (this.#disposed) return;
+		toasts.add({
+			title: `${name} has not appeared yet`,
+			description: 'The clone may have failed. Check ~/.clone.log in a terminal.',
+			color: 'error'
+		});
 	}
 
 	async removeRepo(name: string): Promise<boolean> {

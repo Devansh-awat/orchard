@@ -161,7 +161,7 @@ export class SandboxesController {
   ) {
     const user = await this.resolveUser(req);
     const row = await requireSandboxAccess(this.access, id, user.id, 'owner');
-    return this.workspace.addRepo(row, body?.repoUrl || '');
+    return this.workspace.addRepo(row, body?.repoUrl || '', user.id);
   }
 
   @Post(':id/repos/init')

@@ -11,7 +11,7 @@ import {
 import type { Request, Response } from 'express';
 import type { SandboxConversation } from '@prisma/client';
 import { OPENCODE_RESPONSE_HEADERS, opencodeContentType } from './sandbox-opencode-policy';
-import { githubRepoOf, parseRepoUrl } from './sandbox-repo-url';
+import { cloneErrorMessage, githubRepoOf, parseRepoUrl } from './sandbox-repo-url';
 import { normalizeRepoIcon, storedRepoIcon } from './sandbox-repo-icon';
 import { OPENCODE_LOCAL_AUTH, OPENCODE_LOCAL_CURL_AUTH } from './runners/sandbox-init-files';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,6 +48,7 @@ import {
 } from './sandbox-git-identity';
 
 const OPENCODE_PORT = 4096;
+const CLONE_PREFLIGHT_SECONDS = 30;
 const PROXY_TIMEOUT_MS = 120000;
 
 export const OPENCODE_ROTATING = {
@@ -901,7 +902,11 @@ export class SandboxWorkspaceService {
     return { name, icon };
   }
 
-  async addRepo(sandbox: WorkspaceSandbox, repoUrl: string): Promise<{ name: string }> {
+  async addRepo(
+    sandbox: WorkspaceSandbox,
+    repoUrl: string,
+    actorUserId: string
+  ): Promise<{ name: string }> {
     this.requireRunning(sandbox);
     const parsed = parseRepoUrl(repoUrl);
     const name =
@@ -913,15 +918,39 @@ export class SandboxWorkspaceService {
     if (!REPO_RE.test(name)) {
       throw new BadRequestException('Could not derive a repo directory name from that URL');
     }
-    const target = `/persist/home/${name}`;
+    const actor = await this.actors().resolve(actorUserId);
+    const github = parsed.hostname === 'github.com';
+    const token = github ? actor.token : null;
+    const git = token ? `git ${gitAuthFlags()}` : 'git';
+    const url = shellQuote(parsed.href);
+    const target = shellQuote(`/persist/home/${name}`);
+    const staging = shellQuote(`/persist/home/.orchard/clones/${name}`);
     const script = [
-      `[ -e ${shellQuote(target)} ] && exit 4`,
-      `nohup git clone ${shellQuote(parsed.href)} ${shellQuote(target)} >> /persist/home/.clone.log 2>&1 &`,
+      gitExecPrelude(actor.identity, !!token),
+      `[ -e ${target} ] && exit 4`,
+      `[ -e ${staging} ] && exit 6`,
+      `out=$(timeout ${CLONE_PREFLIGHT_SECONDS} ${git} ls-remote --heads ${url} 2>&1 >/dev/null) || { printf '%s\\n' "$out" | tail -n 5; exit 5; }`,
+      `mkdir -p /persist/home/.orchard/clones`,
+      `( trap '' HUP; ${git} clone ${url} ${staging} && mv -T ${staging} ${target} || rm -rf -- ${staging} ) >> /persist/home/.clone.log 2>&1 < /dev/null &`,
       'exit 0'
     ].join('\n');
-    const result = await this.devExec(sandbox, script);
-    if (!result.ok) {
+    const result = await this.registry
+      .for(sandbox)
+      .exec(refOf(sandbox), ['su', '-l', 'dev', '-c', script], {
+        timeoutMs: (CLONE_PREFLIGHT_SECONDS + 15) * 1000,
+        ...(token ? { stdin: gitTokenStdin(token) } : {})
+      });
+    if (result.exitCode === 4) {
       throw new BadRequestException(`A directory named "${name}" already exists in the sandbox`);
+    }
+    if (result.exitCode === 6) {
+      throw new BadRequestException(`${name} is already being cloned`);
+    }
+    if (!result.ok) {
+      const label = parsed.pathname.replace(/^\/+/, '').replace(/\.git$/, '') || name;
+      throw new BadRequestException(
+        cloneErrorMessage(result.stdout, { label, github, withToken: !!token })
+      );
     }
     return { name };
   }

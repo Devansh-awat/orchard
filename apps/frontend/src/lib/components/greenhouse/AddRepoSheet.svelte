@@ -24,10 +24,10 @@
 		busy = true;
 		try {
 			const res = await api.addRepo(ws.sandboxId, picked.url);
-			toasts.add({ title: `Cloned ${res?.name ?? picked.fullName}`, color: 'success' });
+			const name = res?.name ?? picked.fullName;
+			toasts.add({ title: `Cloning ${name}…`, color: 'info' });
 			open = false;
-			await ws.refreshRepos();
-			await ws.refreshSessions();
+			void ws.watchClone(name);
 		} catch (e) {
 			toasts.add({
 				title: 'Clone failed',

@@ -57,6 +57,7 @@ import {
   inWorktree,
   buildRepoRemoveScript
 } from '../src/sandboxes/sandbox-session-commands';
+import { cloneErrorMessage } from '../src/sandboxes/sandbox-repo-url';
 import { parseSandboxTerminalQuery } from '../src/sandboxes/sandbox-terminal.gateway';
 import {
   activityFromStatus,
@@ -309,6 +310,27 @@ test('removing a repo deletes its clone and worktrees, quoted, and refuses unsaf
   for (const bad of ['..', '../etc', 'a/b', '', '.hidden', 'x;rm -rf /', 'a b']) {
     assert.throws(() => buildRepoRemoveScript(bad), /invalid repo/);
   }
+});
+
+test('clone failures say whether to link github or that the repo is out of reach', () => {
+  const repo = { label: 'hackclub/orchard', github: true, withToken: false };
+  assert.equal(
+    cloneErrorMessage("fatal: could not read Username for 'https://github.com'", repo),
+    'Link your GitHub account in Settings to clone hackclub/orchard'
+  );
+  assert.equal(
+    cloneErrorMessage('remote: Repository not found.', { ...repo, withToken: true }),
+    'hackclub/orchard was not found, or your GitHub account cannot read it'
+  );
+  assert.equal(
+    cloneErrorMessage('fatal: unable to access: Could not resolve host: gitlab.com', {
+      label: 'me/app',
+      github: false,
+      withToken: false
+    }),
+    'Could not reach me/app from this machine'
+  );
+  assert.equal(cloneErrorMessage('', repo), 'Could not clone hackclub/orchard');
 });
 
 test('.orchard/greenhouse.json parsing tolerates junk and bounds what it keeps', () => {

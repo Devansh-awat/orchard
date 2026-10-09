@@ -54,3 +54,25 @@ export function githubRepoOf(
   }
   return null;
 }
+
+export function cloneErrorMessage(
+  output: string,
+  repo: { label: string; github: boolean; withToken: boolean }
+): string {
+  const text = output.toLowerCase();
+  const denied =
+    text.includes('not found') ||
+    text.includes('authentication failed') ||
+    text.includes('could not read username') ||
+    text.includes('invalid username or token') ||
+    text.includes('permission denied') ||
+    text.includes('403');
+  if (denied && repo.github && !repo.withToken) {
+    return `Link your GitHub account in Settings to clone ${repo.label}`;
+  }
+  if (denied) return `${repo.label} was not found, or your GitHub account cannot read it`;
+  if (text.includes('could not resolve host') || text.includes('timed out')) {
+    return `Could not reach ${repo.label} from this machine`;
+  }
+  return `Could not clone ${repo.label}`;
+}
