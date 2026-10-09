@@ -1,4 +1,48 @@
 <script module lang="ts">
+	import { apiFetch } from '$lib/stores';
+
+	export interface GitHubRepoListing {
+		linked: boolean | null;
+		repositories: Array<{ id: number; full_name: string; private: boolean }>;
+		error: string | null;
+	}
+
+	const REPO_CACHE_MS = 5 * 60_000;
+	const LOAD_ERROR = 'Could not load your repositories.';
+	let repoCache: { at: number; listing: Promise<GitHubRepoListing> } | null = null;
+
+	export function loadGitHubRepos(): Promise<GitHubRepoListing> {
+		if (repoCache && Date.now() - repoCache.at < REPO_CACHE_MS) return repoCache.listing;
+		const listing = fetchGitHubRepos();
+		const entry = { at: Date.now(), listing };
+		repoCache = entry;
+		void listing.then((result) => {
+			if (result.error && repoCache === entry) repoCache = null;
+		});
+		return listing;
+	}
+
+	async function fetchGitHubRepos(): Promise<GitHubRepoListing> {
+		try {
+			const [statusRes, reposRes] = await Promise.all([
+				apiFetch('/apiv1/github/status'),
+				apiFetch('/apiv1/github/repositories')
+			]);
+			const status = statusRes.ok ? await statusRes.json() : null;
+			const linked = status ? !!status.linked : null;
+			if (linked === false) return { linked, repositories: [], error: null };
+			if (!reposRes.ok) {
+				const body = await reposRes.json().catch(() => null);
+				return { linked, repositories: [], error: body?.message || LOAD_ERROR };
+			}
+			const data = await reposRes.json();
+			const repositories = Array.isArray(data) ? data : (data?.repositories ?? []);
+			return { linked, repositories, error: null };
+		} catch {
+			return { linked: null, repositories: [], error: LOAD_ERROR };
+		}
+	}
+
 	export interface PickedRepo {
 		fullName: string;
 		url: string;
@@ -38,7 +82,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { ChevronDown, Github, Loader2, X } from 'lucide-svelte';
-	import { apiFetch } from '$lib/stores';
 	import { Badge, Input, PopoverPanel } from '$lib/components/ui';
 	import RepoAccountPicker from './RepoAccountPicker.svelte';
 
@@ -129,28 +172,16 @@
 			.then((res) => (res.ok ? res.json() : null))
 			.then((data) => (installUrl = data?.url ?? null))
 			.catch(() => (installUrl = null));
-		try {
-			const statusRes = await apiFetch('/apiv1/github/status');
-			const status = statusRes.ok ? await statusRes.json() : null;
-			linked = status ? !!status.linked : null;
-			if (linked === false) {
-				directLinkMode = true;
-				return;
-			}
-			const res = await apiFetch('/apiv1/github/repositories');
-			if (res.ok) {
-				const data = await res.json();
-				repositories = Array.isArray(data) ? data : (data?.repositories ?? []);
-				selectedAccount = selected?.split('/')[0] ?? accounts[0]?.login ?? null;
-			} else {
-				const body = await res.json().catch(() => null);
-				reposError = body?.message || 'Could not load your repositories.';
-			}
-		} catch {
-			reposError = 'Could not load your repositories.';
-		} finally {
-			loadingRepos = false;
+		const listing = await loadGitHubRepos();
+		linked = listing.linked;
+		loadingRepos = false;
+		if (linked === false) {
+			directLinkMode = true;
+			return;
 		}
+		repositories = listing.repositories;
+		reposError = listing.error;
+		selectedAccount = selected?.split('/')[0] ?? accounts[0]?.login ?? null;
 	}
 
 	function pick(repo: PickedRepo) {

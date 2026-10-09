@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button, Modal } from '$lib/components/ui';
 	import GitHubRepoPicker, {
+		loadGitHubRepos,
 		type PickedRepo
 	} from '$lib/components/deployment/GitHubRepoPicker.svelte';
 	import { toasts } from '$lib/stores';
@@ -17,6 +18,19 @@
 
 	$effect(() => {
 		if (!open) picked = null;
+	});
+
+	$effect(() => {
+		if (!ws?.isOwner || app.env.harness) return;
+		const warm = () => {
+			void loadGitHubRepos();
+		};
+		if ('requestIdleCallback' in window) {
+			const id = requestIdleCallback(warm, { timeout: 5000 });
+			return () => cancelIdleCallback(id);
+		}
+		const timer = setTimeout(warm, 2000);
+		return () => clearTimeout(timer);
 	});
 
 	async function clone() {
