@@ -540,6 +540,7 @@ export class SessionThread {
 	id: string;
 	entries = $state<ChatEntry[]>([]);
 	loading = $state(false);
+	failed = $state(false);
 	busy = $state(false);
 	stopping = $state(false);
 	ctxTokens = $state<OcTokens | null>(null);
@@ -577,6 +578,7 @@ export class ChatSessionStore {
 	settled = $state(false);
 	models = $state.raw<OcModel[]>([]);
 	modelsFailed = $state(false);
+	selecting = $state(false);
 	sessions = $state<ChatSession[]>([]);
 	activeId = $state<string | null>(null);
 	readonly threads = new SvelteMap<string, SessionThread>();
@@ -966,8 +968,22 @@ export class ChatSessionStore {
 		}
 	}
 
+	async retryHistory() {
+		const thread = this.active;
+		if (thread && !thread.loading) await this.#loadHistory(thread);
+	}
+
 	async selectSession(id: string) {
 		if (id === this.activeId) return;
+		this.selecting = true;
+		try {
+			await this.#select(id);
+		} finally {
+			this.selecting = false;
+		}
+	}
+
+	async #select(id: string) {
 		if (!id.startsWith(TEMP_PREFIX) && !(await this.#ensureListed(id))) return;
 		this.#savePrefs();
 		this.activeId = id;
@@ -1349,6 +1365,7 @@ export class ChatSessionStore {
 	async #loadHistory(thread: SessionThread) {
 		thread.reset();
 		thread.loading = true;
+		thread.failed = false;
 		let ok = false;
 		try {
 			const res = await apiFetch(
@@ -1369,6 +1386,7 @@ export class ChatSessionStore {
 		} finally {
 			thread.loading = false;
 			thread.loaded = ok;
+			thread.failed = !ok;
 		}
 		const state = this.activity.get(thread.id);
 		if ((state === 'busy' || state === 'retry') && !thread.busy) {
