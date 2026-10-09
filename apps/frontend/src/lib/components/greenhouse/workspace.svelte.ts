@@ -10,14 +10,14 @@ import type {
 	ChatSessionStore,
 	RemoteDraft
 } from '$lib/components/sandbox/chat';
+import type { RemoteCursor } from '$lib/components/sandbox/editor/collab';
+import { DiffComments } from '$lib/components/sandbox/editor/comments.svelte';
 import {
-	DiffComments,
 	EditorWorkspace,
 	baseName,
 	toFsPath,
-	type EditorFs,
-	type RemoteCursor
-} from '$lib/components/sandbox/editor';
+	type EditorFs
+} from '$lib/components/sandbox/editor/workspace.svelte';
 import type { Sandbox, SandboxStatus } from '$lib/types/sandbox';
 import * as api from './api';
 import { alertCopy, showAgentNotification } from './agent-alerts';

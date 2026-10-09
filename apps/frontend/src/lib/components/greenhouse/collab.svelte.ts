@@ -1,16 +1,26 @@
 import type * as Monaco from 'monaco-editor';
 import { SvelteMap } from 'svelte/reactivity';
-import {
-	TextBinding,
-	YjsRoom,
-	frameRoom,
-	type CollabBinding,
-	type CollabStatus,
-	type EditorWorkspace,
-	type RemoteCursor
-} from '$lib/components/sandbox/editor';
+import type { CollabBinding, RemoteCursor } from '$lib/components/sandbox/editor/collab';
+import { TextBinding } from '$lib/components/sandbox/editor/text-binding';
+import type { EditorWorkspace } from '$lib/components/sandbox/editor/workspace.svelte';
+import type { CollabStatus, YjsRoom } from '$lib/components/sandbox/editor/yjs-room';
 import { presenceColorVar } from './format';
 import type { LiveClient } from './live.svelte';
+
+type RoomModule = typeof import('$lib/components/sandbox/editor/yjs-room');
+
+let rooms: RoomModule | null = null;
+let roomsLoading: Promise<RoomModule> | null = null;
+
+export function loadCollabRooms(): Promise<RoomModule> {
+	roomsLoading ??= import('$lib/components/sandbox/editor/yjs-room')
+		.then((module) => (rooms = module))
+		.catch((error) => {
+			roomsLoading = null;
+			throw error;
+		});
+	return roomsLoading;
+}
 
 export const MAX_COLLAB_ROOMS = 6;
 const TICK_MS = 5000;
@@ -245,9 +255,13 @@ export class CollabFiles {
 		}
 		const target = this.#target(path);
 		if (!target || this.#editor.isDirty(path)) return null;
+		if (!rooms) {
+			loadCollabRooms().catch(() => null);
+			return null;
+		}
 		this.#evict();
-		const name = frameRoom(target.sid, target.rel);
-		const room = new YjsRoom(name, (frame) => this.#live.sendRoom(frame), {
+		const name = rooms.frameRoom(target.sid, target.rel);
+		const room = new rooms.YjsRoom(name, (frame) => this.#live.sendRoom(frame), {
 			canWrite: this.#canWrite(),
 			selfId: this.#selfId()
 		});

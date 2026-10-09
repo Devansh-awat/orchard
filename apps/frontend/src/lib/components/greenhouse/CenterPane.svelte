@@ -11,10 +11,14 @@
 	} from 'lucide-svelte';
 	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
 	import { Button, Modal } from '$lib/components/ui';
-	import { TabStrip, type StripTab } from '$lib/components/sandbox/editor';
+	import { untrack } from 'svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import TabStrip from '$lib/components/sandbox/editor/TabStrip.svelte';
+	import type { StripTab } from '$lib/components/sandbox/editor/types';
+	import { Lazy } from '$lib/utils/lazy.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import ChatView from './ChatView.svelte';
-	import EditorView from './EditorView.svelte';
+	import { loadCollabRooms } from './collab.svelte';
 	import PreviewView from './PreviewView.svelte';
 	import { VIEWER_ONLY, type MachineWorkspace } from './workspace.svelte';
 	import type { CenterTab } from './types';
@@ -23,6 +27,15 @@
 
 	const app = getGreenhouseApp();
 	const active = $derived(ws.activeTab);
+
+	const editor = new Lazy(() =>
+		Promise.all([import('./EditorView.svelte'), loadCollabRooms()]).then(([module]) => module)
+	);
+	const EditorView = $derived(editor.current);
+
+	$effect(() => {
+		if (isEditor(active)) untrack(() => editor.preload());
+	});
 
 	const ICONS = { chat: MessageSquare, file: FileCode, diff: GitCompare, preview: Globe } as const;
 
@@ -157,10 +170,15 @@
 		<div class="slot" data-align-skip>
 			<ChatView {ws} visible={active?.kind === 'chat' || !active} />
 		</div>
-		{#if isEditor(active)}
+		{#if isEditor(active) && EditorView}
 			{#key active.id}
 				<EditorView {ws} tab={active} />
 			{/key}
+		{:else if isEditor(active)}
+			<div class="loading">
+				<Skeleton height="0.75rem" width="40%" />
+				<Skeleton height="0.75rem" width="65%" />
+			</div>
 		{:else if active?.kind === 'preview'}
 			{#key active.id}
 				<PreviewView {ws} tab={active} />
@@ -205,6 +223,13 @@
 
 	.slot {
 		display: contents;
+	}
+
+	.loading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 3rem var(--gh-edge);
 	}
 
 	.add {
