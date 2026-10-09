@@ -561,6 +561,7 @@ export class ChatSessionStore {
 	readonly activity = new SvelteMap<string, SessionActivity>();
 	readonly waiting = new SvelteSet<string>();
 	readonly pending = new SvelteMap<string, PendingItem>();
+	readonly deleted = new SvelteSet<string>();
 
 	providerID = $state(OC_MODEL.providerID);
 	modelID = $state(OC_MODEL.modelID);
@@ -1923,6 +1924,7 @@ export class ChatSessionStore {
 			}
 			case 'session.deleted': {
 				const id = sessionID ?? (props.info as OcSession | undefined)?.id ?? null;
+				if (id) this.deleted.add(id);
 				if (!id || !this.sessions.some((s) => s.id === id)) return;
 				this.sessions = this.sessions.filter((s) => s.id !== id);
 				this.#dropThread(id);

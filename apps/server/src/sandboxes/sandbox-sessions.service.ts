@@ -1043,7 +1043,14 @@ export class SandboxSessionsService {
     const row = await this.activeRow(sandbox.id, sessionId);
     this.requireRunning(sandbox);
     const { chats } = await this.chats(sandbox, sessionId);
-    if (!chats.some((c) => c.id === chatId)) throw new NotFoundException('Chat not found');
+    if (!chats.some((c) => c.id === chatId)) {
+      if (row.opencodeSessionId === chatId) {
+        await this.prisma.sandboxConversation
+          .update({ where: { id: row.id }, data: { opencodeSessionId: chats[0]?.id ?? null } })
+          .catch(() => {});
+      }
+      return { success: true, remaining: chats.length };
+    }
     const res = await this.workspace.opencodeRequest(sandbox, 'DELETE', `/session/${chatId}`, {
       directory: row.worktreePath
     });

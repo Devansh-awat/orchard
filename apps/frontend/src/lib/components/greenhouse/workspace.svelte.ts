@@ -225,7 +225,8 @@ export class MachineWorkspace {
 	readonly chatList = $derived.by((): GhChat[] => {
 		const session = this.session;
 		if (!session) return [];
-		const known = (this.chats.get(session.id) ?? []).filter((c) => !this.#hiddenChats.has(c.id));
+		const gone = (id: string) => this.#hiddenChats.has(id) || this.store.deleted.has(id);
+		const known = (this.chats.get(session.id) ?? []).filter((c) => !gone(c.id));
 		const ids = new Set(known.map((c) => c.id));
 		const fromStore = this.store.sessions
 			.filter(
@@ -233,12 +234,12 @@ export class MachineWorkspace {
 					!s.pending &&
 					inWorktree(s.directory, session.worktreePath) &&
 					!ids.has(s.id) &&
-					!this.#hiddenChats.has(s.id)
+					!gone(s.id)
 			)
 			.map((s) => ({ id: s.id, title: s.title, createdAt: s.createdAt }))
 			.sort((a, b) => chatTime(a.createdAt) - chatTime(b.createdAt));
 		if (known.length + fromStore.length > 0) return [...known, ...fromStore];
-		if (session.opencodeSessionId) {
+		if (session.opencodeSessionId && !gone(session.opencodeSessionId)) {
 			return [
 				{ id: session.opencodeSessionId, title: session.title, createdAt: session.createdAt }
 			];
@@ -697,6 +698,7 @@ export class MachineWorkspace {
 			const res = await api.deleteChat(this.sandboxId, session.id, chatId);
 			if (res.remaining === 0) await this.newChat();
 		} catch (e) {
+			if (e instanceof api.GhApiError && e.status === 404) return;
 			this.chats.set(session.id, before);
 			this.#hiddenChats.delete(chatId);
 			toasts.add({
