@@ -117,54 +117,51 @@
 				disabled={readonly}
 				onclick={() => pick(oi)}
 			>
-				<span class="q-key" aria-hidden="true">{oi < 9 ? oi + 1 : ''}</span>
 				<span
 					class="q-mark"
 					class:q-mark--box={info.multiple}
 					class:q-mark--on={on}
 					aria-hidden="true"
 				>
-					{#if on}<Check size={12} strokeWidth={2.5} />{/if}
+					{#if on && info.multiple}<Check size={12} strokeWidth={2.5} />{:else if on}<span
+							class="q-dot"
+						></span>{/if}
 				</span>
-				<span class="q-label">{option.label}</span>
-				{#if option.description}<span class="q-desc">{option.description}</span>{/if}
+				<span class="q-body">
+					<span class="q-label">{option.label}</span>
+					{#if option.description}<span class="q-desc">{option.description}</span>{/if}
+				</span>
+				{#if oi < 9 && !readonly}<kbd class="q-key" aria-hidden="true">{oi + 1}</kbd>{/if}
 			</button>
 		{/each}
 		{#if info.custom && !readonly}
 			{@const on = (typed[at] ?? '').trim().length > 0}
 			<label class="q-option q-option--other" class:q-option--on={on}>
-				<span class="q-key" aria-hidden="true">{otherIndex < 9 ? otherIndex + 1 : ''}</span>
 				<span
 					class="q-mark"
 					class:q-mark--box={info.multiple}
 					class:q-mark--on={on}
 					aria-hidden="true"
 				>
-					{#if on}<Check size={12} strokeWidth={2.5} />{/if}
+					{#if on && info.multiple}<Check size={12} strokeWidth={2.5} />{:else if on}<span
+							class="q-dot"
+						></span>{/if}
 				</span>
 				<input
 					bind:this={otherEl}
 					class="q-other"
 					value={typed[at] ?? ''}
-					placeholder="Other…"
+					placeholder="Something else…"
 					aria-label="Another answer"
 					oninput={onTyped}
 				/>
+				{#if otherIndex < 9}<kbd class="q-key" aria-hidden="true">{otherIndex + 1}</kbd>{/if}
 			</label>
 		{/if}
 	</div>
 	{#snippet actions()}
-		<Button
-			size="sm"
-			variant="primary"
-			disabled={!ready}
-			title={last ? 'Submit (↵)' : 'Next (↵)'}
-			onclick={advance}
-		>
-			{last ? 'Submit' : 'Next'}
-		</Button>
 		{#if at > 0}
-			<Button size="sm" onclick={() => (step = at - 1)}>Back</Button>
+			<Button size="sm" variant="ghost" onclick={() => (step = at - 1)}>Back</Button>
 		{/if}
 		<span class="q-spacer"></span>
 		<Button
@@ -174,6 +171,15 @@
 			onclick={() => store.rejectQuestion(request.id)}
 		>
 			Skip
+		</Button>
+		<Button
+			size="sm"
+			variant="primary"
+			disabled={!ready}
+			title={last ? 'Submit (↵)' : 'Next (↵)'}
+			onclick={advance}
+		>
+			{last ? 'Submit' : 'Next'}
 		</Button>
 	{/snippet}
 </RequestCard>
@@ -219,19 +225,19 @@
 	.q-options {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
-		margin: 0 calc(-1 * var(--space-2));
+		overflow: hidden;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
 	}
 
 	.q-option {
 		display: grid;
-		grid-template-columns: 1rem 1rem auto 1fr;
+		grid-template-columns: 1rem minmax(0, 1fr) auto;
 		align-items: center;
-		column-gap: var(--space-2);
-		min-height: 2rem;
-		padding: var(--space-1) var(--space-2);
+		column-gap: var(--space-3);
+		min-height: 2.75rem;
+		padding: var(--space-2) var(--space-3);
 		border: none;
-		border-radius: var(--radius-xs);
 		background: none;
 		font-size: var(--text-footnote);
 		line-height: 1.25rem;
@@ -241,9 +247,17 @@
 		transition: background-color var(--dur-fast);
 	}
 
-	.q-option:hover:not(:disabled),
-	.q-option--on {
+	.q-option + .q-option {
+		border-top: 1px solid var(--border-default);
+	}
+
+	.q-option:hover:not(:disabled) {
 		background: var(--bg-hover);
+	}
+
+	.q-option--on,
+	.q-option--on:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--accent) 9%, transparent);
 	}
 
 	.q-option:disabled {
@@ -252,20 +266,49 @@
 
 	.q-option:focus-visible {
 		outline: none;
-		box-shadow: 0 0 0 2px var(--focus-ring);
+		box-shadow: inset 0 0 0 2px var(--focus-ring);
 	}
 
 	.q-option--other {
-		grid-template-columns: 1rem 1rem 1fr;
 		cursor: text;
 	}
 
+	.q-body {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.q-label {
+		font-weight: 500;
+		overflow-wrap: anywhere;
+	}
+
+	.q-desc {
+		font-size: var(--text-caption);
+		line-height: 1rem;
+		color: var(--text-muted);
+		overflow-wrap: anywhere;
+	}
+
 	.q-key {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.25rem;
+		border-radius: var(--radius-xs);
+		box-shadow: inset 0 0 0 1px var(--border-default);
+		font-family: inherit;
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		font-variant-numeric: tabular-nums;
 		color: var(--text-faint);
-		text-align: center;
+	}
+
+	.q-option--on .q-key {
+		color: var(--accent);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent);
 	}
 
 	.q-mark {
@@ -276,6 +319,16 @@
 		border-radius: var(--radius-pill);
 		box-shadow: inset 0 0 0 1.5px var(--border-strong);
 		color: var(--text-on-accent);
+		transition:
+			background-color var(--dur-fast),
+			box-shadow var(--dur-fast);
+	}
+
+	.q-dot {
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: var(--radius-pill);
+		background: var(--text-on-accent);
 	}
 
 	.q-mark--box {
@@ -287,20 +340,9 @@
 		box-shadow: none;
 	}
 
-	.q-label {
-		font-weight: 600;
-		overflow-wrap: anywhere;
-	}
-
-	.q-desc {
-		min-width: 0;
-		color: var(--text-muted);
-		overflow-wrap: anywhere;
-	}
-
 	.q-other {
 		min-width: 0;
-		height: 1.5rem;
+		height: 1.75rem;
 		padding: 0;
 		border: none;
 		background: none;
