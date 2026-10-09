@@ -17,6 +17,7 @@
     "test:rbac": "tsx --test test/rbac.e2e.ts",
     "test:auth-coverage": "tsx --test test/auth-coverage.test.ts",
     "test:analytics-flags": "tsx --test test/analytics-flags.test.ts",
+    "test:user-context": "tsx --test test/user-context.test.ts",
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:template-params": "tsx --test test/template-params.test.ts",

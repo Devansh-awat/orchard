@@ -8,6 +8,8 @@ import { AnalyticsModule } from '../analytics/analytics.module';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { SandboxesController } from './sandboxes.controller';
+import { UserContextController } from './context/user-context.controller';
+import { UserContextService } from './context/user-context.service';
 import { SandboxSessionsController } from './sandbox-sessions.controller';
 import { SandboxSessionsService } from './sandbox-sessions.service';
 import { SandboxAccessService } from './sandbox-access.service';
@@ -70,9 +72,11 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxForkController,
     SandboxShareLinksController,
     SandboxShareViewerController,
-    SandboxUsageController
+    SandboxUsageController,
+    UserContextController
   ],
   providers: [
+    UserContextService,
     SandboxesService,
     SandboxSecretsService,
     KubernetesSandboxRunner,

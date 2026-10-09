@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scryptSync } from 'crypto';
 
 /**
  * At-rest encryption for secret environment-variable values (AES-256-GCM),
@@ -13,6 +13,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
  * closed — we never silently store secrets in plaintext.
  */
 const PREFIX = 'enc:v1:';
+const USER_PREFIX = 'enc:u1:';
 
 @Injectable()
 export class SecretCryptoService {
@@ -71,6 +72,41 @@ export class SecretCryptoService {
   encryptIfSecret(value: string, secret: boolean | undefined | null): string {
     if (!secret || !this.key) return value;
     return this.encrypt(value);
+  }
+
+  encryptForUser(userId: string, plaintext: string): string {
+    const key = this.userKey(userId);
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    cipher.setAAD(Buffer.from(userId, 'utf8'));
+    const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `${USER_PREFIX}${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`;
+  }
+
+  decryptForUser(userId: string, value: string): string {
+    if (!value.startsWith(USER_PREFIX)) throw new Error('not a user-scoped ciphertext');
+    const [ivB64, tagB64, ctB64] = value.slice(USER_PREFIX.length).split(':');
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      this.userKey(userId),
+      Buffer.from(ivB64, 'base64')
+    );
+    decipher.setAAD(Buffer.from(userId, 'utf8'));
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ctB64, 'base64')),
+      decipher.final()
+    ]).toString('utf8');
+  }
+
+  private userKey(userId: string): Buffer {
+    if (!this.key) {
+      throw new Error('SECRETS_ENCRYPTION_KEY is not configured; refusing to store user context');
+    }
+    return Buffer.from(
+      hkdfSync('sha256', this.key, Buffer.from(userId, 'utf8'), 'orchard-user-context', 32)
+    );
   }
 
   /** Decrypt any ciphertext (idempotent on plaintext). */

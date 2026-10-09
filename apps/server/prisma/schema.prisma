@@ -86,6 +86,7 @@ model User {
   userIntegrations           UserIntegration[]
   sandboxShareLinks          SandboxShareLink[]       @relation("SandboxShareLinkCreator")
   sandboxProjectLinks        SandboxProjectLink[]
+  contextItems               UserContextItem[]
 
   @@map("users")
 }
@@ -2715,4 +2716,22 @@ model SlackThreadLink {
   @@index([completedAt, createdAt], map: "idx_slack_thread_links_pending")
   @@index([sessionId], map: "idx_slack_thread_links_session")
   @@map("slack_thread_links")
+}
+
+model UserContextItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  kind      String   @db.VarChar(20)
+  name      String   @db.VarChar(64)
+  payload   String   @db.Text
+  sizeBytes Int      @map("size_bytes")
+  enabled   Boolean  @default(true)
+  lock      String   @default("server") @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, name])
+  @@map("user_context_items")
 }
