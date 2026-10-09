@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.1](https://github.com/hackclub/orchard/compare/frontend/v1.56.0...frontend/v1.56.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* give the frontend image build a 4gb heap so the monaco bundle fits ([846bdcf](https://github.com/hackclub/orchard/commit/846bdcf291dae134fe984085e4d480f9b8853ba4))
+
 ## [1.56.0](https://github.com/hackclub/orchard/compare/frontend/v1.55.0...frontend/v1.56.0) (2026-10-08)
 
 
