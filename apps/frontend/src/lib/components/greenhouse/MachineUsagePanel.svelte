@@ -15,9 +15,12 @@
 	const view = $derived(poll.usage ? usageView(poll.usage, poll.now, owner) : null);
 	const waiting = $derived(PENDING.includes(machine.status));
 
+	const machineId = $derived(machine.id);
+	const machineStatus = $derived(machine.status);
+
 	$effect(() => {
-		const id = machine.id;
-		void machine.status;
+		const id = machineId;
+		void machineStatus;
 		return poll.watch(id);
 	});
 </script>

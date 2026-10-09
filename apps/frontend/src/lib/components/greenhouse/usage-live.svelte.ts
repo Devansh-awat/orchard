@@ -23,6 +23,7 @@ export class UsagePoll {
 	failed = $state(false);
 	#skew = $state(0);
 	#machine: string | null = null;
+	#inflight: string | null = null;
 
 	readonly now = $derived(clock.now + this.#skew);
 
@@ -32,14 +33,13 @@ export class UsagePoll {
 			this.usage = null;
 			this.failed = false;
 		}
-		let cancelled = false;
-		let inflight = false;
 		const load = async () => {
-			if (inflight || (typeof document !== 'undefined' && document.hidden)) return;
-			inflight = true;
+			if (this.#inflight === machineId) return;
+			if (typeof document !== 'undefined' && document.hidden) return;
+			this.#inflight = machineId;
 			const next = await fetchMachineUsage(machineId);
-			inflight = false;
-			if (cancelled) return;
+			if (this.#inflight === machineId) this.#inflight = null;
+			if (this.#machine !== machineId) return;
 			if (next) {
 				this.usage = next;
 				this.failed = false;
@@ -56,7 +56,6 @@ export class UsagePoll {
 		const timer = setInterval(load, USAGE_POLL_MS);
 		document.addEventListener('visibilitychange', onVisible);
 		return () => {
-			cancelled = true;
 			clearInterval(timer);
 			document.removeEventListener('visibilitychange', onVisible);
 		};

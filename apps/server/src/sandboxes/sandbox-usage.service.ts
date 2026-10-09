@@ -520,12 +520,16 @@ export class SandboxUsageService {
     const started = this.now();
     const early = block ? this.guestStats(row, HOME) : null;
     const [cpu, memory, volume] = await Promise.all([
-      this.metrics
-        .queryInstant(`sum(rate(container_cpu_usage_seconds_total{${selector}}[2m])) * 1000`)
-        .catch(() => null),
-      this.metrics
-        .queryInstant(`sum(container_memory_working_set_bytes{${selector}})`)
-        .catch(() => null),
+      withTimeout(
+        this.metrics.queryInstant(
+          `sum(rate(container_cpu_usage_seconds_total{${selector}}[2m])) * 1000`
+        ),
+        LOOKUP_TIMEOUT_MS
+      ).catch(() => null),
+      withTimeout(
+        this.metrics.queryInstant(`sum(container_memory_working_set_bytes{${selector}})`),
+        LOOKUP_TIMEOUT_MS
+      ).catch(() => null),
       block ? null : this.kubeletVolume(pod?.spec?.nodeName, namespace, pvcName)
     ]);
     const cpuUsed = finite(cpu);
@@ -580,12 +584,11 @@ export class SandboxUsageService {
   private async guestStats(row: UsageRow, path: string): Promise<GuestStats | null> {
     const runner = row.runner === 'vercel' ? this.vercelRunner : this.kubernetesRunner;
     try {
-      const result = await runner.exec(
-        refOf(row),
-        ['/bin/sh', '-c', GUEST_STATS_SCRIPT, 'sh', path],
-        {
+      const result = await withTimeout(
+        runner.exec(refOf(row), ['/bin/sh', '-c', GUEST_STATS_SCRIPT, 'sh', path], {
           timeoutMs: EXEC_TIMEOUT_MS
-        }
+        }),
+        EXEC_TIMEOUT_MS + 1_000
       );
       return result.ok ? parseGuestStats(result.stdout) : null;
     } catch (e: any) {
