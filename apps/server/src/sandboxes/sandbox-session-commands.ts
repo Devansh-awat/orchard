@@ -156,7 +156,7 @@ export function buildWorktreeAddScript(input: WorktreeAddInput): string {
       ? `base=${shellQuote(input.baseBranch)}`
       : `base=$(git -C ${repo} symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##'); [ -n "$base" ] || base=$(git -C ${repo} rev-parse --abbrev-ref HEAD 2>/dev/null)`,
     `[ -n "$base" ] && [ "$base" != HEAD ] || exit ${WORKTREE_EXIT.noBase}`,
-    `timeout 20 git -C ${repo} fetch --quiet origin "$base" >/dev/null 2>&1 || true`,
+    `GIT_TERMINAL_PROMPT=0 timeout 10 git -C ${repo} fetch --quiet origin "$base" >/dev/null 2>&1 || true`,
     `if git -C ${repo} rev-parse --verify --quiet "refs/remotes/origin/$base^{commit}" >/dev/null; then start="origin/$base"; elif git -C ${repo} rev-parse --verify --quiet "$base^{commit}" >/dev/null; then start="$base"; else exit ${WORKTREE_EXIT.noBase}; fi`,
     `mkdir -p ${parent} || exit ${WORKTREE_EXIT.addFailed}`,
     `git -C ${repo} worktree add --quiet --no-track -b ${branch} ${path} "$start" >&2 || exit ${WORKTREE_EXIT.addFailed}`,
@@ -501,8 +501,52 @@ export function buildPortsScript(): string {
     '[ -n "$pids" ] || exit 0',
     'for p in $pids; do find "$p/fd" -mindepth 1 -maxdepth 1 -lname "socket:*" -printf "%h %l\\n" 2>/dev/null; done',
     "echo '@@proc@@'",
-    'for p in $pids; do printf "%s %s %s\\n" "${p#/proc/}" "$(readlink "$p/cwd" 2>/dev/null | tr " " "?")" "$(head -c 64 "$p/comm" 2>/dev/null)"; done'
+    'for p in $pids; do printf "%s %s %s\\t%s\\n" "${p#/proc/}" "$(readlink "$p/cwd" 2>/dev/null | tr " " "?")" "$(head -c 64 "$p/comm" 2>/dev/null | tr "\\t" " ")" "$(head -c 512 "$p/cmdline" 2>/dev/null | tr "\\000\\t\\n" "   ")"; done'
   ].join('\n');
+}
+
+const INFRA_NAME_RE =
+  /^(?:opencode|sshd|tmux|orchard|gopls|rust-analyzer|clangd|zls|jdtls|sourcekit-lsp|omnisharp|solargraph|intelephense|svelteserver|tsserver(?:\.js)?|pyright[\w.-]*|[\w.-]*lang(?:uage)?[-_]?servers?[\w.-]*|[\w.-]+-lsp|[\w.-]+-ls)$/;
+const INFRA_PATH_RE =
+  /\/(?:\.cache\/opencode|\.local\/share\/opencode|\.opencode|node_modules\/opencode-ai|node_modules\/\.bin\/opencode)(?:\/|$)/;
+const INTERPRETERS = new Set([
+  'node',
+  'nodejs',
+  'bun',
+  'deno',
+  'python',
+  'python3',
+  'java',
+  'ruby'
+]);
+const LSP_SUBCOMMANDS = new Set(['lsp', 'lsp-proxy']);
+
+function baseNameOf(token: string): string {
+  return token.slice(token.lastIndexOf('/') + 1);
+}
+
+export function isInfrastructureProcess(comm: string | null, cmdline: string | null): boolean {
+  const name = (comm ?? '').trim().split(' ')[0].replace(/:$/, '');
+  if (name && INFRA_NAME_RE.test(name)) return true;
+  const argv = (cmdline ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!argv.length) return false;
+  if (argv.some((arg) => INFRA_PATH_RE.test(arg))) return true;
+  for (const arg of argv) {
+    for (const m of arg.matchAll(/node_modules\/(?:@[^/\s]+\/)?([^/\s]+)/g)) {
+      if (INFRA_NAME_RE.test(m[1])) return true;
+    }
+  }
+  const exe = baseNameOf(argv[0]).replace(/:$/, '');
+  if (INFRA_NAME_RE.test(exe)) return true;
+  const rest = argv.slice(1).filter((arg) => !arg.startsWith('-'));
+  if (
+    INTERPRETERS.has(exe.replace(/[\d.]+$/, '')) &&
+    rest[0] &&
+    INFRA_NAME_RE.test(baseNameOf(rest[0]))
+  ) {
+    return true;
+  }
+  return !!rest[0] && LSP_SUBCOMMANDS.has(rest[0]);
 }
 
 function hexAddrIsLoopback(addr: string): boolean {
@@ -546,13 +590,17 @@ export function parsePortsOutput(stdout: string, worktreePath: string | null): S
     const m = line.match(/^\/proc\/(\d+)\/fd socket:\[(\d+)\]$/);
     if (m) pidByInode.set(m[2], Number(m[1]));
   }
-  const procs = new Map<number, { cwd: string | null; comm: string | null }>();
+  const procs = new Map<
+    number,
+    { cwd: string | null; comm: string | null; cmdline: string | null }
+  >();
   for (const line of sections.proc) {
-    const m = line.match(/^(\d+) (\S*) ?(.*)$/);
+    const m = line.match(/^(\d+) (\S*) ?([^\t]*)(?:\t(.*))?$/);
     if (!m) continue;
     procs.set(Number(m[1]), {
       cwd: m[2] ? logicalHomePath(m[2].replace(/\?/g, ' '), sections.home[0]) : null,
-      comm: m[3] || null
+      comm: m[3].trim() || null,
+      cmdline: m[4]?.trim() || null
     });
   }
   const byPort = new Map<number, SandboxPort>();
@@ -561,6 +609,7 @@ export function parsePortsOutput(stdout: string, worktreePath: string | null): S
     if (pid === undefined) continue;
     if (IGNORED_PORTS.has(sock.port)) continue;
     const proc = procs.get(pid);
+    if (isInfrastructureProcess(proc?.comm ?? null, proc?.cmdline ?? null)) continue;
     const cwd = proc?.cwd ?? null;
     const inSession =
       !!worktreePath && !!cwd && (cwd === worktreePath || cwd.startsWith(`${worktreePath}/`));
@@ -713,6 +762,9 @@ export function terminalTmuxName(target: SessionTerminalTarget, engineSessionId:
   return `${base}-u${target.terminalUserId.replace(/-/g, '').toLowerCase()}`;
 }
 
+export const TMUX_TERMINAL =
+  "tmux -u set-option -gq mouse off \\; set-option -sq 'terminal-overrides[90]' 'xterm*:smcup@:rmcup@' \\;";
+
 const WAIT_FOR_DEV =
   'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
   'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
@@ -732,7 +784,7 @@ export function sandboxTerminalCommand(
   const prelude = `${env}cd ${shellQuote(dir)} 2>/dev/null || cd; `;
   let inner: string;
   if (target.mode === 'ro' || scripted) {
-    const attach = `exec tmux -u attach-session${target.mode === 'ro' ? ' -r' : ''} -t ${exact}`;
+    const attach = `exec ${TMUX_TERMINAL} attach-session${target.mode === 'ro' ? ' -r' : ''} -t ${exact}`;
     const log =
       scripted && target.sessionId
         ? `${sessionStateDir(target.sessionId)}/${target.index}.log`
@@ -755,16 +807,16 @@ export function sandboxTerminalCommand(
     inner =
       prelude +
       'if command -v tmux >/dev/null 2>&1; then ' +
-      `if tmux has-session -t ${exact} 2>/dev/null; then rm -f ${file}; exec tmux -u attach-session -t ${exact}; fi; ` +
+      `if tmux has-session -t ${exact} 2>/dev/null; then rm -f ${file}; exec ${TMUX_TERMINAL} attach-session -t ${exact}; fi; ` +
       `nohup sh -c ${shellQuote(`sleep 30; rm -f ${file}`)} >/dev/null 2>&1 & ` +
-      `exec tmux -u new-session -A -s ${shellQuote(name)} -c ${shellQuote(dir)} ${shellQuote(pane)}; ` +
+      `exec ${TMUX_TERMINAL} new-session -A -s ${shellQuote(name)} -c ${shellQuote(dir)} ${shellQuote(pane)}; ` +
       'fi; ' +
       load +
       'exec bash -l';
   } else {
     inner =
       prelude +
-      `if command -v tmux >/dev/null 2>&1; then exec tmux -u new-session -A -s ${shellQuote(name)} -c ${shellQuote(dir)}; fi; ` +
+      `if command -v tmux >/dev/null 2>&1; then exec ${TMUX_TERMINAL} new-session -A -s ${shellQuote(name)} -c ${shellQuote(dir)}; fi; ` +
       'exec bash -l';
   }
   return ['/bin/sh', '-c', `${WAIT_FOR_DEV}exec su -l dev -c ${shellQuote(inner)}`];

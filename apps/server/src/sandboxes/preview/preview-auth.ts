@@ -175,6 +175,15 @@ export function isPreviewPortAllowed(port: number, extra: readonly number[] = []
   return isDeclarablePreviewPort(port) && extra.includes(port);
 }
 
+export function previewablePorts(
+  previews: 'proxy' | 'public' | 'none',
+  declared: readonly number[] = []
+): number[] {
+  if (previews === 'none') return [];
+  const extra = previews === 'public' ? [] : declared.filter(isDeclarablePreviewPort);
+  return [...new Set([...PREVIEW_PORTS, ...extra])].sort((a, b) => a - b);
+}
+
 export function isPreviewPortCandidate(port: number): boolean {
   return PREVIEW_PORTS.includes(port) || isDeclarablePreviewPort(port);
 }

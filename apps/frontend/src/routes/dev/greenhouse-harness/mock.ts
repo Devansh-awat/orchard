@@ -261,12 +261,23 @@ export function installFetch(role: HarnessRole) {
 		[
 			/\/ports$/,
 			'GET',
-			() => ({
-				ports: [
-					{ port: 5173, process: 'node (vite)', previewUrl: null, public: false },
-					{ port: 3001, process: 'node (nest)', previewUrl: null, public: false }
-				]
-			})
+			() => {
+				const port = (n: number, process: string, exposable: boolean) => ({
+					port: n,
+					process,
+					previewUrl: null,
+					exposable,
+					public: false,
+					inSession: true,
+					loopbackOnly: false,
+					listening: true,
+					declared: false
+				});
+				return {
+					previewPorts: [3000, 3001, 4173, 5173, 8000, 8080, 8787],
+					ports: [port(3001, 'node', true), port(5173, 'node', true), port(9229, 'node', false)]
+				};
+			}
 		],
 		[
 			/\/scripts$/,

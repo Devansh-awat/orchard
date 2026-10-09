@@ -161,6 +161,10 @@ export function addRepo(sandboxId: string, repoUrl: string) {
 	return send<{ name: string }>(`${base(sandboxId)}/repos`, 'POST', { repoUrl });
 }
 
+export function initRepo(sandboxId: string, name: string) {
+	return send<{ name: string }>(`${base(sandboxId)}/repos/init`, 'POST', { name });
+}
+
 export function changes(sandboxId: string, scope: Scope) {
 	return get<GhChanges>(`${base(sandboxId)}/changes${qs(scoped(scope))}`);
 }
@@ -261,7 +265,9 @@ export function mergePr(sandboxId: string, sid: string) {
 }
 
 export function listPorts(sandboxId: string, sid: string) {
-	return get<{ ports: GhPort[] }>(`${base(sandboxId)}/sessions/${sid}/ports`);
+	return get<{ ports: GhPort[]; previewPorts: number[] }>(
+		`${base(sandboxId)}/sessions/${sid}/ports`
+	);
 }
 
 export function listChecks(sandboxId: string, sid: string) {

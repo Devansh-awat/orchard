@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { SANDBOX_PHASE_FILE } from '../src/sandboxes/sandbox-bootstrap';
+import { TMUX_TERMINAL } from '../src/sandboxes/sandbox-session-commands';
 import { renderEnvFile } from '../src/sandboxes/links/sandbox-env-files';
 import { KubernetesSandboxRunner } from '../src/sandboxes/runners/kubernetes.runner';
 import {
@@ -443,8 +444,9 @@ async function bootChecks(
     const expected = [
       `set -g default-terminal "${term}"`,
       'set -ga terminal-overrides ",xterm-256color:Tc"',
+      'set -ga terminal-overrides ",xterm*:smcup@:rmcup@"',
       'set -g history-limit 50000',
-      'set -g mouse on',
+      'set -g mouse off',
       'set -g status off',
       'set -sg escape-time 0'
     ].join('\n');
@@ -454,6 +456,17 @@ async function bootChecks(
       box.dev('tmux -f /etc/tmux.conf new-session -d -s smoke-conf true && tmux kill-server; true')
         .code === 0,
       'tmux'
+    );
+    assert(
+      box.dev(
+        [
+          "tmux -f /etc/tmux.conf new-session -d -s smoke-base 'sleep 30' \\; set-option -g mouse on",
+          `${TMUX_TERMINAL} new-session -d -s smoke-opts 'sleep 30'`,
+          'tmux show-options -gv mouse | grep -qx off',
+          "tmux show-options -sv 'terminal-overrides[90]' | grep -q 'smcup@'"
+        ].join(' && ') + '; c=$?; tmux kill-server; exit $c'
+      ).code === 0,
+      'terminal tmux clients turn mouse reporting and the alternate screen off'
     );
     return term;
   });

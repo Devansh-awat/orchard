@@ -25,6 +25,9 @@
 	const lead = $derived(activity ? 'row' : block.answer.length > 0 ? 'prose' : 'small');
 	const result = $derived(block.result?.entry.kind === 'result' ? block.result.entry : null);
 	const resultIndex = $derived(block.result?.index ?? 0);
+	const empty = $derived(
+		!!result && !live && !activity && block.answer.length === 0 && block.errors.length === 0
+	);
 </script>
 
 <div class="turn" class:turn--latest={latest} data-turn="agent">
@@ -45,9 +48,12 @@
 	{/each}
 	{#each block.errors as part (part.entry.key)}
 		{#if part.entry.kind === 'error'}
-			<ErrorPart detail={part.entry.detail} />
+			<ErrorPart detail={part.entry.detail} auth={part.entry.auth ?? false} />
 		{/if}
 	{/each}
+	{#if empty}
+		<p class="turn-empty" data-align="content">The agent returned no output</p>
+	{/if}
 	{#if result}
 		<div class="turn-foot">
 			<TurnFooter
@@ -107,6 +113,13 @@
 		display: inline-flex;
 		margin-top: 0.125rem;
 		animation: spin 1s linear infinite;
+	}
+
+	.turn-empty {
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
+		color: var(--text-muted);
 	}
 
 	.turn-foot {

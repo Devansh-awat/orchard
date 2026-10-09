@@ -165,6 +165,13 @@
 	function keydown(event: KeyboardEvent) {
 		const mod = event.metaKey || event.ctrlKey;
 		if (!mod) return;
+		if (
+			!event.metaKey &&
+			event.target instanceof Element &&
+			event.target.closest('.pod-terminal')
+		) {
+			return;
+		}
 		if (event.code === 'KeyB' && !event.shiftKey) {
 			event.preventDefault();
 			layout.toggle(event.altKey ? 'right' : 'left');

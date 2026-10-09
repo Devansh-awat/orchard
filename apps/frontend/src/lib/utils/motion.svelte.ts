@@ -992,14 +992,28 @@ export function pressSpringDelegate(root: HTMLElement, selector: string) {
  * pointer snaps from control to control, instead of every item cross-fading its
  * own background. Call from an attachment on the highlight element.
  */
-export function magneticHighlight(target: () => HTMLElement | null | undefined) {
+export function magneticHighlight(
+	target: () => HTMLElement | null | undefined,
+	opts: { span?: (target: HTMLElement) => HTMLElement | null } = {}
+) {
 	return (el: Element) => {
 		const pill = el as HTMLElement;
 		pill.style.position = 'absolute';
 		pill.style.left = '0';
 		pill.style.top = '0';
 		let placed = false;
+		let resized = $state(0);
 		$effect(() => {
+			const to = target();
+			if (!to || typeof ResizeObserver === 'undefined') return;
+			const observer = new ResizeObserver(() => (resized += 1));
+			observer.observe(to);
+			const inner = opts.span?.(to);
+			if (inner) observer.observe(inner);
+			return () => observer.disconnect();
+		});
+		$effect(() => {
+			void resized;
 			const to = target();
 			if (!to) {
 				pill.style.opacity = '0';
@@ -1009,11 +1023,12 @@ export function magneticHighlight(target: () => HTMLElement | null | undefined) 
 			const parent = pill.offsetParent as HTMLElement | null;
 			if (!parent) return;
 			const a = to.getBoundingClientRect();
+			const s = opts.span?.(to)?.getBoundingClientRect() ?? a;
 			const b = parent.getBoundingClientRect();
 			const next = {
-				x: a.left - b.left,
-				y: a.top - b.top,
-				width: `${a.width}px`,
+				x: s.left - b.left + parent.scrollLeft,
+				y: a.top - b.top + parent.scrollTop,
+				width: `${s.width}px`,
 				height: `${a.height}px`,
 				opacity: 1
 			};

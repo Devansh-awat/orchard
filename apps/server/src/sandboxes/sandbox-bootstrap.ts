@@ -216,8 +216,9 @@ fi
 cat > /etc/tmux.conf <<TMUXCONF
 set -g default-terminal "$tmux_term"
 set -ga terminal-overrides ",xterm-256color:Tc"
+set -ga terminal-overrides ",xterm*:smcup@:rmcup@"
 set -g history-limit 50000
-set -g mouse on
+set -g mouse off
 set -g status off
 set -sg escape-time 0
 TMUXCONF

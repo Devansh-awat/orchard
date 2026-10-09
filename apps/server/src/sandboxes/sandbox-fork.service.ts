@@ -133,7 +133,12 @@ export class SandboxForkService {
     const name = await this.pickName(userId, source.name, body?.name);
     const id = randomUUID();
     const sessions = await this.prisma.sandboxConversation.findMany({
-      where: { sandboxId: source.id, slug: { not: null }, archivedAt: null },
+      where: {
+        sandboxId: source.id,
+        slug: { not: null },
+        baseCommit: { not: null },
+        archivedAt: null
+      },
       select: {
         title: true,
         repo: true,

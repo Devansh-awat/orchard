@@ -39,6 +39,7 @@ import {
   normalizeRelativePath,
   parseDiffstatBatch,
   parseGreenhouseConfig,
+  isInfrastructureProcess,
   parsePortsOutput,
   parseScriptsProbe,
   parseShortstat,
@@ -57,7 +58,8 @@ import {
   excerptLog,
   parseGithubRemote,
   parseIssueRef,
-  parsePrUrl
+  parsePrUrl,
+  toSessionDto
 } from '../src/sandboxes/sandbox-sessions.service';
 import { SandboxSessionsService } from '../src/sandboxes/sandbox-sessions.service';
 import { SandboxWorkspaceService } from '../src/sandboxes/sandbox-workspace.service';
@@ -68,8 +70,10 @@ import {
   declaredPreviewPorts,
   isPreviewPortAllowed,
   isPreviewPortCandidate,
+  previewablePorts,
   mergeDeclaredPorts
 } from '../src/sandboxes/preview/preview-auth';
+import { VERCEL_PREVIEW_PORTS } from '../src/sandboxes/runners/vercel.runner';
 
 const SID = '3f2d7e6a-1b0c-4d5e-8f90-123456789abc';
 const SID2 = 'aaaaaaaa-1b0c-4d5e-8f90-123456789abc';
@@ -399,6 +403,67 @@ test('ports come from /proc, filtered to dev processes, matched to the session w
   ]);
 });
 
+test('ports skip the agent, tmux, ssh, the bridge and language servers', () => {
+  const out = [
+    '@@listen@@',
+    '00000000:83B9 101',
+    '00000000:9681 102',
+    '00000000:0BB8 103',
+    '0100007F:1F90 104',
+    '00000000:1B58 105',
+    '00000000:1388 106',
+    '00000000:1389 107',
+    '00000000:138A 108',
+    '00000000:1F40 109',
+    '@@sock@@',
+    '/proc/20/fd socket:[101]',
+    '/proc/21/fd socket:[102]',
+    '/proc/22/fd socket:[103]',
+    '/proc/23/fd socket:[104]',
+    '/proc/24/fd socket:[105]',
+    '/proc/25/fd socket:[106]',
+    '/proc/26/fd socket:[107]',
+    '/proc/27/fd socket:[108]',
+    '/proc/28/fd socket:[109]',
+    '@@proc@@',
+    '20 /persist/home opencode\t/usr/lib/node_modules/opencode-ai/bin/opencode serve --port 4096',
+    '21 /persist/home/.worktrees/app/fix node\tnode /persist/home/.cache/opencode/node_modules/typescript-language-server/lib/cli.mjs --stdio',
+    '22 /persist/home/.worktrees/app/fix node\tnode /persist/home/.worktrees/app/fix/node_modules/.bin/vite --port 3000',
+    '23 /persist/home/.worktrees/app/fix gopls\t/persist/home/go/bin/gopls -listen=127.0.0.1:8080',
+    '24 /persist/home tmux: server\ttmux -u new-session -A -s orchard-3f2d7e6a-0',
+    '25 /persist/home/.worktrees/app/fix python3\tpython3 -m http.server 5000',
+    '26 /persist/home/.worktrees/app/fix deno\tdeno lsp',
+    '27 /persist/home/.worktrees/app/fix node\tnode /usr/lib/node_modules/pyright/langserver.index.js --stdio',
+    '28 /persist/home/.worktrees/opencode/fix node\tnode /persist/home/.worktrees/opencode/fix/server.js'
+  ].join('\n');
+  assert.deepEqual(
+    parsePortsOutput(out, '/persist/home/.worktrees/app/fix').map((p) => [p.port, p.process]),
+    [
+      [3000, 'node'],
+      [5000, 'python3'],
+      [8000, 'node']
+    ]
+  );
+  assert.equal(isInfrastructureProcess('sshd', null), true);
+  assert.equal(isInfrastructureProcess('orchard', '/usr/local/bin/orchard sandbox bridge'), true);
+  assert.equal(isInfrastructureProcess('rust-analyzer', null), true);
+  assert.equal(isInfrastructureProcess('node', 'node /x/node_modules/.bin/next dev'), false);
+  assert.equal(isInfrastructureProcess('bun', 'bun run dev'), false);
+  assert.equal(isInfrastructureProcess(null, null), false);
+});
+
+test('preview ports follow the runner: vercel exposes its fixed list, kubernetes adds declared ports', () => {
+  assert.deepEqual(
+    previewablePorts('public', [9229]),
+    [...VERCEL_PREVIEW_PORTS].sort((a, b) => a - b)
+  );
+  assert.deepEqual(
+    previewablePorts('proxy', [9229, 4096, 22]),
+    [3000, 3001, 4173, 5173, 8000, 8080, 8787, 9229]
+  );
+  assert.deepEqual(previewablePorts('none', [9229]), []);
+});
+
 test('ports map a symlinked /persist back to the logical worktree path', () => {
   const out = [
     '@@home@@',
@@ -425,11 +490,13 @@ test('ports map a symlinked /persist back to the logical worktree path', () => {
 test('terminal commands attach to per-session tmux names and viewers are read-only', () => {
   const base = { sessionId: SID, worktreePath: '/persist/home/.worktrees/app/fix' };
   const rw = sandboxTerminalCommand({ ...base, index: '0', mode: 'rw' }, SID2).join(' ');
-  assert.match(rw, /tmux -u new-session -A -s '\\''orchard-3f2d7e6a-0'\\''/);
+  assert.match(rw, /new-session -A -s '\\''orchard-3f2d7e6a-0'\\''/);
+  assert.match(rw, /exec tmux -u set-option -gq mouse off \\; .*smcup@:rmcup@.* \\; new-session/);
   assert.match(rw, /exec su -l dev -c/);
   assert.doesNotMatch(rw, /attach-session -r/);
   const ro = sandboxTerminalCommand({ ...base, index: '1', mode: 'ro' }, SID2).join(' ');
   assert.match(ro, /attach-session -r -t '\\''=orchard-3f2d7e6a-1'\\''/);
+  assert.match(ro, /mouse off \\; .* \\; attach-session -r/);
   assert.doesNotMatch(ro, /new-session/);
   const setup = sandboxTerminalCommand({ ...base, index: 'setup', mode: 'ro' }, SID2).join(' ');
   assert.match(setup, /orchard-3f2d7e6a-setup/);
@@ -640,20 +707,47 @@ test('GET ports lists declared ports before anything listens and records them', 
     status: 'running',
     repoUrl: null
   };
-  const { ports } = await svc.ports(sandbox as never, SID2);
+  const { ports, previewPorts } = await svc.ports(sandbox as never, SID2);
   assert.deepEqual(
-    ports.map((p) => [p.port, p.listening, p.declared, p.process]),
+    ports.map((p) => [p.port, p.listening, p.declared, p.process, p.exposable, p.public]),
     [
-      [3000, true, true, 'node'],
-      [9229, false, true, null]
+      [3000, true, true, 'node', true, false],
+      [9229, false, true, null, true, false]
     ]
   );
+  assert.ok(previewPorts.includes(9229) && previewPorts.includes(5173));
   await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(state.declaredPorts, [9229]);
   assert.equal(state.secretHash, 'h');
   assert.deepEqual(policies, [[9229]]);
   await svc.recordDeclaredPorts(sandbox as never, [9229]);
   assert.equal(updates.length, 1);
+
+  const vercel = new SandboxSessionsService(
+    prisma as never,
+    { for: () => ({ ...runner, id: 'vercel', capabilities: { previews: 'public' } }) } as never,
+    {} as never,
+    {} as never
+  );
+  const onVercel = await vercel.ports({ ...sandbox, runner: 'vercel' } as never, SID2);
+  assert.deepEqual(
+    onVercel.ports.map((p) => [p.port, p.exposable, p.public]),
+    [
+      [3000, true, true],
+      [9229, false, false]
+    ]
+  );
+  assert.ok(!onVercel.previewPorts.includes(9229));
+
+  const bare = new SandboxSessionsService(
+    prisma as never,
+    { for: () => ({ ...runner, capabilities: { previews: 'none' } }) } as never,
+    {} as never,
+    {} as never
+  );
+  const noDomain = await bare.ports(sandbox as never, SID2);
+  assert.deepEqual(noDomain.previewPorts, []);
+  assert.ok(noDomain.ports.every((p) => !p.exposable && !p.public));
 });
 
 function hookRepo() {
@@ -860,6 +954,7 @@ test('the first prompt of a new session is attributed to its creator with a mess
   const prisma = {
     sandboxConversation: {
       create: async () => row,
+      findUniqueOrThrow: async () => ({ ...row, createdBy: null }),
       update: async (args: any) => ({ ...row, ...args.data, createdBy: null })
     }
   };
@@ -921,6 +1016,137 @@ test('the first prompt of a new session is attributed to its creator with a mess
     execs.some((script) => script.includes('core.hooksPath')),
     'co-author hook installed before the prompt'
   );
+});
+
+function preparingHarness(exec: (script: string) => Promise<any>) {
+  let state: any = {
+    id: SID,
+    sandboxId: 'box',
+    title: 'Fix login',
+    slug: 'fix-login-abc123',
+    repo: 'app',
+    branch: 'orchard/fix-login-abc123',
+    baseBranch: null,
+    baseCommit: null,
+    worktreePath: '/persist/home/.worktrees/app/fix-login-abc123',
+    opencodeSessionId: null,
+    prepareError: null,
+    createdById: SID2,
+    archivedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const prisma = {
+    sandboxConversation: {
+      create: async () => state,
+      findUniqueOrThrow: async () => ({ ...state, createdBy: null }),
+      update: async (args: any) => {
+        state = { ...state, ...args.data };
+        return { ...state, createdBy: null };
+      }
+    }
+  };
+  const registry = {
+    for: () => ({
+      exec: async (_ref: unknown, cmd: string[]) => exec(cmd[cmd.length - 1]),
+      writeFiles: async () => {}
+    })
+  };
+  const workspace = {
+    opencodeRequest: async (_s: unknown, _method: string, path: string) =>
+      path === '/session' ? { status: 200, body: { id: 'ses_first' } } : { status: 204, body: null }
+  };
+  const svc = new SandboxSessionsService(
+    prisma as never,
+    registry as never,
+    workspace as never,
+    {} as never
+  );
+  const emitted: any[] = [];
+  svc.onSessionChanged((_box, dto) => emitted.push(dto));
+  const sandbox = {
+    id: 'box',
+    userId: SID2,
+    runner: 'kubernetes',
+    podName: 'sbx-box',
+    namespace: null,
+    externalId: null,
+    runnerState: null,
+    status: 'running',
+    repoUrl: null
+  };
+  return { svc, sandbox, emitted };
+}
+
+async function until(check: () => boolean) {
+  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+  assert.ok(check(), 'condition never became true');
+}
+
+test('session create returns while the worktree is still being prepared', async () => {
+  let release: (v: any) => void = () => {};
+  const started: string[] = [];
+  const { svc, sandbox, emitted } = preparingHarness((script) => {
+    started.push(script);
+    if (!script.includes('worktree add')) {
+      return Promise.resolve({ ok: true, exitCode: 0, stderr: '', stdout: '' });
+    }
+    return new Promise((r) => {
+      release = r;
+    });
+  });
+  const dto = await svc.create(sandbox as never, SID2, { repo: 'app', prompt: 'Fix the login' });
+  assert.equal(dto.preparing, true);
+  assert.equal(dto.prepareError, null);
+  assert.equal(dto.baseCommit, null);
+  assert.equal(dto.activity, 'working');
+  assert.ok(
+    !emitted.some((d) => d.baseCommit),
+    'nothing reports a prepared worktree before the script finishes'
+  );
+  release({ ok: true, exitCode: 0, stderr: '', stdout: '@@base@@main\n@@commit@@abcdef1\n' });
+  await until(() => emitted.some((d) => d.baseCommit === 'abcdef1'));
+  const ready = emitted.find((d) => d.baseCommit === 'abcdef1');
+  assert.equal(ready.preparing, false);
+  assert.equal(ready.opencodeSessionId, 'ses_first');
+  assert.ok(started.some((s) => s.includes('worktree add')));
+});
+
+test('a failing worktree script surfaces as prepareError instead of a request error', async () => {
+  const { svc, sandbox, emitted } = preparingHarness(async () => ({
+    ok: false,
+    exitCode: 5,
+    stderr: '',
+    stdout: ''
+  }));
+  const dto = await svc.create(sandbox as never, SID2, { repo: 'app', prompt: 'Fix the login' });
+  assert.equal(dto.preparing, true);
+  await until(() => emitted.some((d) => d.prepareError));
+  const failed = emitted.find((d) => d.prepareError);
+  assert.equal(failed.prepareError, 'Could not find the base branch in that repository');
+  assert.equal(failed.preparing, false);
+});
+
+test('a session stuck preparing past the window reports an interrupted setup', () => {
+  const dto = toSessionDto({
+    id: SID,
+    sandboxId: 'box',
+    title: 't',
+    slug: 'fix',
+    repo: 'app',
+    branch: 'orchard/fix',
+    baseBranch: null,
+    baseCommit: null,
+    worktreePath: '/persist/home/.worktrees/app/fix',
+    opencodeSessionId: null,
+    prepareError: null,
+    archivedAt: null,
+    createdBy: null,
+    createdAt: new Date(Date.now() - 11 * 60_000),
+    updatedAt: new Date()
+  } as never);
+  assert.equal(dto.preparing, false);
+  assert.match(dto.prepareError ?? '', /interrupted/);
 });
 
 function realpathShim(dir: string): string {
@@ -1045,4 +1271,59 @@ test('GET file and diff run the confinement in the box and map its refusal', asy
   exitCode = READ_EXIT.outside;
   await assert.rejects(() => svc.diff(box as never, 'cfg/x', 'app'), /outside the workspace/);
   assert.match(execs.at(-1)!, /realpath -m -- "\$__root"\/'cfg\/x'/);
+});
+
+test('dotfiles in a session worktree can be read and written, but not .git or home dotfiles', async () => {
+  const writes: string[] = [];
+  const registry = {
+    for: () => ({
+      exec: async () => ({
+        ok: true,
+        exitCode: 0,
+        stdout: Buffer.from('{}').toString('base64'),
+        stderr: ''
+      }),
+      writeFiles: async (_ref: unknown, files: Array<{ path: string }>) => {
+        writes.push(...files.map((f) => f.path));
+      }
+    })
+  };
+  const prisma = {
+    sandboxConversation: {
+      findFirst: async () => ({
+        id: SID,
+        sandboxId: 'box',
+        slug: 'fix',
+        worktreePath: '/persist/home/.worktrees/app/fix',
+        archivedAt: null
+      })
+    }
+  };
+  const svc = new SandboxWorkspaceService(registry as never, {} as never, prisma as never);
+  const box = {
+    id: 'box',
+    userId: SID2,
+    runner: 'kubernetes',
+    podName: 'sbx-box',
+    namespace: null,
+    externalId: null,
+    runnerState: null,
+    status: 'running',
+    repoUrl: null
+  };
+  const session = { session: SID };
+  await svc.writeFile(box as never, session, '.orchard/greenhouse.json', '{}');
+  assert.deepEqual(writes, ['/persist/home/.worktrees/app/fix/.orchard/greenhouse.json']);
+  assert.equal(
+    (await svc.readFile(box as never, session, '.github/workflows/ci.yml')).content,
+    '{}'
+  );
+  for (const bad of ['.git/hooks/pre-commit', 'src/.git/config', './x', '../x', '.']) {
+    await assert.rejects(() => svc.writeFile(box as never, session, bad, 'x'), /Invalid file path/);
+  }
+  await assert.rejects(
+    () => svc.writeFile(box as never, 'app', '.bashrc', 'x'),
+    /Invalid file path/
+  );
+  await assert.rejects(() => svc.readFile(box as never, undefined, '.ssh/id'), /Invalid file path/);
 });

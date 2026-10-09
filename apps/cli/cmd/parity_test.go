@@ -506,6 +506,7 @@ var routeExclusions = map[string]string{
 	"GET /users/me/integrations":            "web user settings (linked accounts list); no CLI command yet",
 	"POST /integrations/slack/link":         "browser confirmation page for the one-time link from /greenhouse link in Slack",
 	"POST /integrations/slack/link/preview": "web-only: shows the Slack account on the link confirm page",
+	"POST /sandboxes/:id/repos/init":        "web-only: start a session from an empty repository",
 	"DELETE /users/me/integrations/slack":   "web user settings (unlink Slack); /greenhouse unlink in Slack does the same",
 
 	// server plumbing

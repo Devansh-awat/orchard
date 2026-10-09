@@ -505,6 +505,7 @@
   "POST /sandboxes/:id/links": "authenticated",
   "POST /sandboxes/:id/members": "authenticated",
   "POST /sandboxes/:id/repos": "authenticated",
+  "POST /sandboxes/:id/repos/init": "authenticated",
   "POST /sandboxes/:id/sessions": "authenticated",
   "POST /sandboxes/:id/sessions/:sid/chats": "authenticated",
   "POST /sandboxes/:id/sessions/:sid/comments": "authenticated",

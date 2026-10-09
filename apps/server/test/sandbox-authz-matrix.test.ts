@@ -108,6 +108,10 @@ function sandboxesRoutes(
     'GET /sandboxes/:id/diff': [{ min: 'viewer' }, () => c.diff(req(), SANDBOX)],
     'GET /sandboxes/:id/repos': [{ min: 'viewer' }, () => c.listRepos(req(), SANDBOX)],
     'POST /sandboxes/:id/repos': [{ min: 'owner' }, () => c.addRepo(req(), SANDBOX, {})],
+    'POST /sandboxes/:id/repos/init': [
+      { min: 'collaborator' },
+      () => c.initRepo(req(), SANDBOX, { name: 'scratch' })
+    ],
     'GET /sandboxes/:id/conversations': [
       { min: 'viewer' },
       () => c.listConversations(req(), SANDBOX)
@@ -373,6 +377,7 @@ test('sandboxes controller routes declare the contract minimum role', async () =
     'diff',
     'listRepos',
     'addRepo',
+    'initRepo',
     'listConversations',
     'createConversation',
     'updateConversation',

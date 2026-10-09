@@ -51,7 +51,7 @@ import {
   type SessionGitStats,
   type SetupState
 } from './sandbox-session-commands';
-import { declaredPreviewPorts, mergeDeclaredPorts } from './preview/preview-auth';
+import { declaredPreviewPorts, mergeDeclaredPorts, previewablePorts } from './preview/preview-auth';
 import { newOpencodeMessageId } from './sandbox-opencode-policy';
 import { buildCoauthorHookInstall, COAUTHOR_HOOK_SCRIPT } from './sandbox-coauthors';
 
@@ -91,6 +91,8 @@ export interface SessionDto {
   createdAt: Date;
   updatedAt: Date;
   archivedAt: Date | null;
+  preparing: boolean;
+  prepareError: string | null;
 }
 
 export interface SessionScriptsDto extends GreenhouseConfig {
@@ -140,6 +142,7 @@ const ACTIVITY_TIMEOUT_MS = 2500;
 const OPENCODE_CREATE_TIMEOUT_MS = 15_000;
 const DIFFSTAT_TIMEOUT_MS = 20_000;
 const WORKTREE_TIMEOUT_MS = 90_000;
+const PREPARE_STALE_MS = 10 * 60_000;
 const GITHUB_TIMEOUT_MS = 10_000;
 const MAX_FAILED_LOGS = 3;
 const LOG_EXCERPT_LINES = 60;
@@ -167,6 +170,8 @@ export function toSessionDto(
     row.prState === 'open' || row.prState === 'merged' || row.prState === 'closed'
       ? row.prState
       : null;
+  const pending = !!row.worktreePath && !row.baseCommit && !row.prepareError && !row.archivedAt;
+  const stale = pending && Date.now() - new Date(row.createdAt).getTime() > PREPARE_STALE_MS;
   return {
     id: row.id,
     sandboxId: row.sandboxId,
@@ -200,7 +205,10 @@ export function toSessionDto(
       : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    archivedAt: row.archivedAt
+    archivedAt: row.archivedAt,
+    preparing: pending && !stale,
+    prepareError:
+      row.prepareError ?? (stale ? 'Setup was interrupted before the session was ready' : null)
   };
 }
 
@@ -653,50 +661,130 @@ export class SandboxSessionsService {
     }
     if (!row || !row.slug) throw new ConflictException('Could not allocate a session name');
 
-    const result = await this.devExec(
-      sandbox,
-      buildWorktreeAddScript({ repo, slug: row.slug, baseBranch }),
-      WORKTREE_TIMEOUT_MS
-    ).catch((e) => {
-      if (e instanceof SandboxNotRunningError) throw e;
-      return { ok: false, exitCode: null, stdout: '', stderr: String(e?.message ?? '') };
-    });
-    if (!result.ok) {
-      await this.prisma.sandboxConversation.delete({ where: { id: row.id } }).catch(() => {});
-      throw new BadRequestException(this.worktreeError(result.exitCode, repo, result.stderr));
-    }
-    const added = parseWorktreeAddOutput(result.stdout);
-    const worktreePath = worktreePathFor(repo, row.slug);
-    const opencodeSessionId = await this.createOpencodeSession(sandbox, worktreePath, title);
-    const saved = await this.prisma.sandboxConversation.update({
+    const created = await this.prisma.sandboxConversation.findUniqueOrThrow({
       where: { id: row.id },
-      data: {
-        baseBranch: added.baseBranch,
-        baseCommit: added.baseCommit,
-        opencodeSessionId
-      },
       include: { createdBy: CREATOR_SELECT }
     });
-    const sessionId = saved.id;
-    void this.installCoauthorHook(sandbox, sessionId, worktreePath)
-      .then(() =>
-        opencodeSessionId && prompt
-          ? this.sendInitialPrompt(sandbox, actorUserId, opencodeSessionId, worktreePath, prompt)
-          : undefined
-      )
-      .catch((e) => this.logger.warn(`initial prompt failed for ${sessionId}: ${e?.message}`));
-    void this.startScript(sandbox, saved, 'setup', { onlyIfConfigured: true }).catch((e) =>
-      this.logger.warn(`setup script failed to launch for ${saved.id}: ${e?.message}`)
-    );
-    const dto = toSessionDto(saved, {
-      stats: {
-        diffstat: { files: 0, additions: 0, deletions: 0 },
-        aheadBehind: { ahead: 0, behind: 0 }
-      },
-      activity: prompt && opencodeSessionId ? 'working' : 'idle'
+    void this.prepare(sandbox, actorUserId, created, { repo, baseBranch, title, prompt });
+    const dto = toSessionDto(created, {
+      activity: prompt ? 'working' : 'idle'
     });
     this.emit(dto);
     return dto;
+  }
+
+  private async prepare(
+    sandbox: WorkspaceSandbox,
+    actorUserId: string,
+    row: SandboxConversation,
+    input: { repo: string; baseBranch: string | null; title: string; prompt: string }
+  ): Promise<void> {
+    const slug = row.slug as string;
+    const fail = async (message: string) => {
+      const failed = await this.prisma.sandboxConversation
+        .update({
+          where: { id: row.id },
+          data: { prepareError: message.slice(0, 2000) },
+          include: { createdBy: CREATOR_SELECT }
+        })
+        .catch(() => null);
+      if (failed) this.emit(toSessionDto(failed));
+    };
+    try {
+      const result = await this.devExec(
+        sandbox,
+        buildWorktreeAddScript({ repo: input.repo, slug, baseBranch: input.baseBranch }),
+        WORKTREE_TIMEOUT_MS
+      ).catch((e) => ({
+        ok: false,
+        exitCode: null,
+        stdout: '',
+        stderr: String(e?.message ?? '')
+      }));
+      if (!result.ok) {
+        await fail(this.worktreeError(result.exitCode, input.repo, result.stderr));
+        return;
+      }
+      const added = parseWorktreeAddOutput(result.stdout);
+      if (!added.baseCommit) {
+        await fail('Could not read the starting commit of the new worktree');
+        return;
+      }
+      const worktreePath = worktreePathFor(input.repo, slug);
+      const opencodeSessionId = await this.createOpencodeSession(
+        sandbox,
+        worktreePath,
+        input.title
+      );
+      if (!opencodeSessionId && input.prompt) {
+        await fail('The agent did not answer, so your prompt was not sent');
+        return;
+      }
+      const saved = await this.prisma.sandboxConversation
+        .update({
+          where: { id: row.id },
+          data: {
+            baseBranch: added.baseBranch,
+            baseCommit: added.baseCommit,
+            opencodeSessionId
+          },
+          include: { createdBy: CREATOR_SELECT }
+        })
+        .catch(async (e) => {
+          if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025')) throw e;
+          await this.devExec(
+            sandbox,
+            buildWorktreeRemoveScript(input.repo, slug, row.id, {
+              deleteBranch: true,
+              purgeState: true
+            }),
+            WORKTREE_TIMEOUT_MS
+          ).catch(() => null);
+          if (opencodeSessionId) {
+            await this.workspace
+              .opencodeRequest(
+                sandbox,
+                'DELETE',
+                `/session/${encodeURIComponent(opencodeSessionId)}`,
+                {
+                  directory: worktreePath,
+                  timeoutMs: ACTIVITY_TIMEOUT_MS
+                }
+              )
+              .catch(() => null);
+          }
+          return null;
+        });
+      if (!saved) return;
+      this.emit(
+        toSessionDto(saved, {
+          stats: {
+            diffstat: { files: 0, additions: 0, deletions: 0 },
+            aheadBehind: { ahead: 0, behind: 0 }
+          },
+          activity: input.prompt && opencodeSessionId ? 'working' : 'idle'
+        })
+      );
+      void this.installCoauthorHook(sandbox, saved.id, worktreePath)
+        .then(() =>
+          opencodeSessionId && input.prompt
+            ? this.sendInitialPrompt(
+                sandbox,
+                actorUserId,
+                opencodeSessionId,
+                worktreePath,
+                input.prompt
+              )
+            : undefined
+        )
+        .catch((e) => this.logger.warn(`initial prompt failed for ${saved.id}: ${e?.message}`));
+      void this.startScript(sandbox, saved, 'setup', { onlyIfConfigured: true }).catch((e) =>
+        this.logger.warn(`setup script failed to launch for ${saved.id}: ${e?.message}`)
+      );
+    } catch (e: any) {
+      this.logger.warn(`session prepare failed for ${row.id}: ${e?.message}`);
+      await fail(e?.message || 'Could not prepare the session');
+    }
   }
 
   async installCoauthorHook(
@@ -1066,10 +1154,12 @@ export class SandboxSessionsService {
     sandbox: WorkspaceSandbox,
     sessionId: string
   ): Promise<{
+    previewPorts: number[];
     ports: Array<{
       port: number;
       process: string | null;
       previewUrl: string | null;
+      exposable: boolean;
       public: boolean;
       inSession: boolean;
       loopbackOnly: boolean;
@@ -1089,12 +1179,20 @@ export class SandboxSessionsService {
         () => [] as number[]
       )
     ]);
-    const isPublic = runner.capabilities.previews === 'public';
+    const previews = runner.capabilities.previews;
+    const previewPorts = previewablePorts(
+      previews,
+      mergeDeclaredPorts(declaredPreviewPorts(sandbox.runnerState), declared)
+    );
+    const exposure = (port: number) => {
+      const exposable = previewPorts.includes(port);
+      return { exposable, public: exposable && previews === 'public' };
+    };
     const listening = parsePortsOutput(result.stdout, row.worktreePath).map((p) => ({
       port: p.port,
       process: p.process,
       previewUrl: null,
-      public: isPublic,
+      ...exposure(p.port),
       inSession: p.inSession,
       loopbackOnly: p.loopbackOnly,
       listening: true,
@@ -1107,13 +1205,16 @@ export class SandboxSessionsService {
         port,
         process: null,
         previewUrl: null,
-        public: isPublic,
+        ...exposure(port),
         inSession: false,
         loopbackOnly: false,
         listening: false,
         declared: true
       }));
-    return { ports: [...listening, ...waiting].sort((a, b) => a.port - b.port) };
+    return {
+      previewPorts,
+      ports: [...listening, ...waiting].sort((a, b) => a.port - b.port)
+    };
   }
 
   private async prTarget(

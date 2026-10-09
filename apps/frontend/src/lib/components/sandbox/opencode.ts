@@ -70,8 +70,11 @@ export type OcMessageInfo = {
 	variant?: string | null;
 	agent?: string;
 	tokens?: OcTokens | null;
+	error?: OcError | null;
 	time: { created: number; completed?: number };
 };
+
+export type OcError = { name?: string; data?: { message?: string } & Record<string, unknown> };
 
 export type OcModel = {
 	providerID: string;
@@ -328,6 +331,24 @@ export function ocPartAttachment(part: OcPart): OcAttachment | null {
 		dataUrl: part.url,
 		isImage: ocIsImageMime(mime)
 	};
+}
+
+const OC_AUTH_HINT =
+	/(api[ _-]?key|credential|unauthori[sz]ed|authenticat|oauth|401|403|not logged in|login|invalid x-api-key|token)/i;
+
+export function ocIsAborted(error: unknown): boolean {
+	return (
+		!!error &&
+		typeof error === 'object' &&
+		(error as { name?: string }).name === 'MessageAbortedError'
+	);
+}
+
+export function ocIsAuthError(error: unknown): boolean {
+	if (!error || typeof error !== 'object') return false;
+	const e = error as OcError;
+	if (e.name === 'ProviderAuthError') return true;
+	return OC_AUTH_HINT.test(`${e.name ?? ''} ${e.data?.message ?? ''}`);
 }
 
 export function ocErrorMessage(error: unknown): string {

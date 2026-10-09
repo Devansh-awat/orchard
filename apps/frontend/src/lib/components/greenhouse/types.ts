@@ -31,6 +31,8 @@ export interface GhSession {
 	createdAt: string;
 	updatedAt: string;
 	archivedAt: string | null;
+	preparing?: boolean;
+	prepareError?: string | null;
 }
 
 export interface GhChat {
@@ -72,7 +74,12 @@ export interface GhPort {
 	port: number;
 	process: string | null;
 	previewUrl: string | null;
+	exposable: boolean;
 	public: boolean;
+	inSession: boolean;
+	loopbackOnly: boolean;
+	listening: boolean;
+	declared: boolean;
 }
 
 export interface GhCheck {

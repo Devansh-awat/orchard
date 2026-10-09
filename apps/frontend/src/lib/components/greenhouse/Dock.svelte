@@ -10,9 +10,23 @@
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
+	import { loadTerminalTabs, saveTerminalTabs, terminalTabsKey } from '$lib/terminal/tabs-store';
 	import * as api from './api';
 	import { modKey } from './format';
-	import { VIEWER_ONLY, isLegacy, type MachineWorkspace } from './workspace.svelte';
+	import {
+		VIEWER_ONLY,
+		chatTabId,
+		isLegacy,
+		scopeOf,
+		type MachineWorkspace
+	} from './workspace.svelte';
+	import {
+		DOCK_TERMINALS_KIND,
+		decodeDockTerminals,
+		dockPaneId,
+		encodeDockTerminals,
+		type DockTerminals
+	} from './dock-terminals';
 	import type { DockTab, GhPort, GhSession } from './types';
 
 	let { ws, session }: { ws: MachineWorkspace; session: GhSession | null } = $props();
@@ -34,10 +48,23 @@
 	const active = new SvelteMap<string, DockTab>();
 	let scripts = $state.raw<Scripts | null>(null);
 	let ports = $state.raw<GhPort[] | null>(null);
+	let previewPorts = $state.raw<number[]>([]);
 	let runBusy = $state(false);
+	let writing = $state(false);
+	const persisted = new Map<string, DockTerminals>();
+
+	const CONFIG_PATH = '.orchard/greenhouse.json';
+	const CONFIG_TEMPLATE = '{\n  "setup": "",\n  "run": "",\n  "ports": []\n}\n';
 
 	const key = $derived(session?.id ?? '_machine');
-	const list = $derived(terminals.get(key) ?? ['1']);
+	const list = $derived(
+		terminals.get(key) ?? persistedFor(ws.sandboxId).terminals.get(key) ?? ['1']
+	);
+	const notExposed = $derived(
+		previewPorts.length > 0
+			? `Not reachable from outside the machine. Previews work on ports ${previewPorts.join(', ')}.`
+			: 'Previews are not available on this machine.'
+	);
 	const scripted = $derived(!!session && !isLegacy(session));
 	const tab = $derived<DockTab>(active.get(key) ?? (scripted ? 'setup' : 'term:1'));
 	const mode = $derived<'rw' | 'ro'>(ws.canEdit ? 'rw' : 'ro');
@@ -67,6 +94,41 @@
 
 	function endpoint(n: string, m: 'rw' | 'ro' = mode, user: string | null = null) {
 		return ws.env.terminalEndpoint(ws.sandboxId, session?.id ?? '', n, m, user);
+	}
+
+	function persistedFor(sandboxId: string): DockTerminals {
+		let state = persisted.get(sandboxId);
+		if (!state) {
+			state = decodeDockTerminals(
+				loadTerminalTabs(terminalTabsKey(DOCK_TERMINALS_KIND, sandboxId))
+			);
+			persisted.set(sandboxId, state);
+		}
+		return state;
+	}
+
+	function persist(scope: string) {
+		const state = persistedFor(ws.sandboxId);
+		state.terminals.set(scope, terminals.get(scope) ?? state.terminals.get(scope) ?? ['1']);
+		saveTerminalTabs(
+			terminalTabsKey(DOCK_TERMINALS_KIND, ws.sandboxId),
+			encodeDockTerminals(state, scope)
+		);
+	}
+
+	function handleFor(scope: string, pane: string): string | undefined {
+		return persistedFor(ws.sandboxId).handles.get(dockPaneId(scope, pane));
+	}
+
+	function rememberHandle(scope: string, pane: string, handle: string) {
+		const handles = persistedFor(ws.sandboxId).handles;
+		if (handles.get(dockPaneId(scope, pane)) === handle) return;
+		handles.set(dockPaneId(scope, pane), handle);
+		persist(scope);
+	}
+
+	function rememberScriptHandle(pane: 'setup' | 'run', handle: string) {
+		if (session) rememberHandle(session.id, pane, handle);
 	}
 
 	function firstName(name: string) {
@@ -103,6 +165,45 @@
 		if (!session || !scripted || !ws.running) return;
 		const res = await api.listPorts(ws.sandboxId, session.id);
 		ports = res.ok ? res.data.ports : [];
+		previewPorts = res.ok ? (res.data.previewPorts ?? []) : [];
+	}
+
+	function portHint(): string {
+		if (previewPorts.length === 0) return '';
+		return ` Previews can only reach ports ${previewPorts.join(', ')}, so have the dev server listen on one of them and bind it to 0.0.0.0.`;
+	}
+
+	function askAgent(kind: 'setup' | 'run') {
+		if (!session || !ws.canEdit) return;
+		const prompt =
+			kind === 'setup'
+				? `Create or update ${CONFIG_PATH} in the repository root with a "setup" command that installs this project's dependencies (detect the package manager and language), a "run" command that starts its dev server if it has one, and "ports" listing the port that server listens on. Keep every command non-interactive.${portHint()} Show me the file when you are done.`
+				: `Add a "run" command to ${CONFIG_PATH} in the repository root that starts this project's dev server in the foreground, keep any "setup" already there, and list the port it listens on in "ports". Keep the command non-interactive.${portHint()} Show me the file when you are done.`;
+		ws.pendingPrompts.set(session.id, prompt);
+		ws.host.openTab(ws.activeChatId ? chatTabId(ws.activeChatId) : null);
+	}
+
+	async function writeYourself() {
+		if (!session || !ws.canEdit || writing) return;
+		writing = true;
+		try {
+			const scope = scopeOf(session);
+			const exists = await api.readFile(ws.sandboxId, scope, CONFIG_PATH).then(
+				() => true,
+				() => false
+			);
+			const empty = !scripts?.setup && !scripts?.run && !scripts?.ports.length;
+			if (!exists && empty) await api.writeFile(ws.sandboxId, scope, CONFIG_PATH, CONFIG_TEMPLATE);
+			ws.openFile(CONFIG_PATH);
+		} catch (e) {
+			toasts.add({
+				title: `Could not create ${CONFIG_PATH}`,
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			writing = false;
+		}
 	}
 
 	$effect(() => {
@@ -129,20 +230,23 @@
 	}
 
 	function addTerminal() {
-		const current = terminals.get(key) ?? ['1'];
+		const current = list;
 		const used = new Set(current.map(Number));
 		let n = 1;
 		while (used.has(n)) n++;
 		const next = String(n);
 		terminals.set(key, [...current, next]);
+		persist(key);
 		select(`term:${next}`);
 	}
 
 	function closeTerminal(n: string) {
-		const current = terminals.get(key) ?? ['1'];
+		const current = list;
 		const index = current.indexOf(n);
 		const next = current.filter((t) => t !== n);
 		terminals.set(key, next);
+		persistedFor(ws.sandboxId).handles.delete(dockPaneId(key, `term:${n}`));
+		persist(key);
 		if (tab === `term:${n}`) {
 			const fallback = next[index] ?? next[index - 1];
 			active.set(key, fallback ? `term:${fallback}` : scripted ? 'setup' : 'ports');
@@ -175,6 +279,32 @@
 		addTerminal();
 	}
 </script>
+
+{#snippet missing(kind: 'setup' | 'run', line: string, action: string)}
+	<div class="empty">
+		<p class="empty-line">{line}</p>
+		<div class="empty-actions">
+			<button
+				type="button"
+				class="gh-btn gh-btn--primary"
+				disabled={!ws.canEdit}
+				title={ws.canEdit ? undefined : VIEWER_ONLY}
+				onclick={() => askAgent(kind)}
+			>
+				{action}
+			</button>
+			<button
+				type="button"
+				class="gh-btn gh-btn--ghost"
+				disabled={!ws.canEdit || writing}
+				title={ws.canEdit ? `Open ${CONFIG_PATH}` : VIEWER_ONLY}
+				onclick={writeYourself}
+			>
+				Write it yourself
+			</button>
+		</div>
+	</div>
+{/snippet}
 
 <section class="dock" aria-label="Terminal dock" data-align="dock">
 	<div class="gh-tabs tabs" data-align="tabstrip">
@@ -363,13 +493,14 @@
 							{#if scripts === null}
 								<p class="note">Checking for a setup script…</p>
 							{:else if !scripts.setup && scripts.setupState === 'none'}
-								<p class="note">
-									No setup script. Add <code class="gh-mono">"setup"</code> to
-									<code class="gh-mono">.orchard/greenhouse.json</code> to install dependencies in every
-									new session.
-								</p>
+								{@render missing('setup', 'No setup script yet.', 'Ask the agent to write it')}
 							{:else}
-								<PodTerminal endpoint={endpoint('setup', 'ro')} visible={tab === 'setup'} />
+								<PodTerminal
+									endpoint={endpoint('setup', 'ro')}
+									visible={tab === 'setup'}
+									sessionHandle={handleFor(session.id, 'setup')}
+									onSession={(h) => rememberScriptHandle('setup', h)}
+								/>
 							{/if}
 						</div>
 					{/key}
@@ -378,14 +509,21 @@
 							{#if scripts?.running || tab === 'run'}
 								{#if scripts === null}
 									<p class="note">Checking the run script…</p>
+								{:else if !scripts.running && !scripts.run}
+									{@render missing(
+										'run',
+										'No run script yet.',
+										'Ask the agent to write a run script'
+									)}
 								{:else if !scripts.running}
-									<p class="note">
-										{scripts.run
-											? 'The run script is stopped. Press Run to start it.'
-											: 'No run script. Add "run" to .orchard/greenhouse.json to start your dev server from here.'}
-									</p>
+									<p class="note">The run script is stopped. Press Run to start it.</p>
 								{:else}
-									<PodTerminal endpoint={endpoint('run', 'ro')} visible={tab === 'run'} />
+									<PodTerminal
+										endpoint={endpoint('run', 'ro')}
+										visible={tab === 'run'}
+										sessionHandle={handleFor(session.id, 'run')}
+										onSession={(h) => rememberScriptHandle('run', h)}
+									/>
 								{/if}
 							{/if}
 						</div>
@@ -395,29 +533,50 @@
 							<p class="note">Looking for listening ports…</p>
 						{:else if ports.length === 0}
 							<p class="note">
-								Nothing is listening yet. Start your dev server and it shows up here.
+								No app is listening yet. Start your dev server and its port shows up here.
 							</p>
 						{:else}
 							{#each ports as port (port.port)}
 								<div class="port" data-align="right-edge">
 									<Radio size={16} strokeWidth={1.75} />
 									<span class="gh-mono port-num">:{port.port}</span>
-									<span class="port-proc">{port.process ?? 'unknown process'}</span>
+									<span class="port-proc"
+										>{port.listening
+											? (port.process ?? 'unknown process')
+											: 'Not listening yet'}</span
+									>
 									{#if port.public}<span class="port-public"
 											><StatusDot meta={publicMeta} size={6} /> Public</span
 										>{/if}
 									<span class="grow"></span>
-									<button type="button" class="gh-btn" onclick={() => ws.openPreview(port.port)}>
-										<Globe size={14} strokeWidth={1.75} /> Preview
-									</button>
+									{#if port.exposable}
+										<button
+											type="button"
+											class="gh-btn"
+											title={port.loopbackOnly
+												? 'Bound to 127.0.0.1, so the preview may not reach it. Bind to 0.0.0.0.'
+												: undefined}
+											onclick={() => ws.openPreview(port.port)}
+										>
+											<Globe size={14} strokeWidth={1.75} /> Preview
+										</button>
+									{:else}
+										<span class="port-off" title={notExposed}>Not exposed</span>
+									{/if}
 								</div>
 							{/each}
 						{/if}
 					</div>
 				{/if}
 				{#each list as n (`${key}:${n}`)}
+					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `term:${n}`}>
-						<PodTerminal endpoint={endpoint(n)} visible={tab === `term:${n}`} />
+						<PodTerminal
+							endpoint={endpoint(n)}
+							visible={tab === `term:${n}`}
+							sessionHandle={handleFor(scope, `term:${n}`)}
+							onSession={(h) => rememberHandle(scope, `term:${n}`, h)}
+						/>
 						{#if mode === 'ro'}
 							<span class="ro"><Eye size={14} strokeWidth={1.75} /> Read only</span>
 						{:else if others.length > 0 && tab === `term:${n}`}
@@ -430,10 +589,13 @@
 					</div>
 				{/each}
 				{#each watched as user (`${key}:watch:${user.id}`)}
+					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `watch:${user.id}`}>
 						<PodTerminal
 							endpoint={endpoint('1', 'ro', user.id)}
 							visible={tab === `watch:${user.id}`}
+							sessionHandle={handleFor(scope, `watch:${user.id}`)}
+							onSession={(h) => rememberHandle(scope, `watch:${user.id}`, h)}
 						/>
 						<span class="ro"
 							><Eye size={14} strokeWidth={1.75} /> Watching {firstName(user.name)}, read only</span
@@ -576,11 +738,6 @@
 		padding-inline: 0;
 	}
 
-	.note code {
-		font-size: var(--gh-caption);
-		color: var(--gh-muted);
-	}
-
 	.ro {
 		position: absolute;
 		top: 0.5rem;
@@ -622,5 +779,33 @@
 		align-items: center;
 		gap: 0.25rem;
 		color: var(--gh-muted);
+	}
+
+	.port-off {
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+		cursor: help;
+	}
+
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: var(--gh-edge);
+	}
+
+	.empty-line {
+		margin: 0;
+		font-size: var(--gh-ui);
+		line-height: var(--gh-lh-ui);
+		color: var(--gh-muted);
+	}
+
+	.empty-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 </style>

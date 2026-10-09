@@ -47,5 +47,6 @@
 		flex-direction: column;
 		height: 100vh;
 		background: var(--bg-app);
+		container: chat-pane / inline-size;
 	}
 </style>

@@ -56,6 +56,7 @@ export const OPENCODE_ROTATING = {
 const MAX_FILE_BYTES = 512000;
 
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
+const HIDDEN_FILE_RE = /^\.[A-Za-z0-9._/ @-]+$/;
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const MAX_DIFF_BYTES = 200000;
@@ -221,12 +222,20 @@ export class SandboxWorkspaceService {
             return;
           }
           res.status(proxyRes.statusCode || 502);
-          res.setHeader('content-type', opencodeContentType(proxyRes.headers['content-type']));
+          const contentType = opencodeContentType(proxyRes.headers['content-type']);
+          res.setHeader('content-type', contentType);
           for (const [name, value] of Object.entries(OPENCODE_RESPONSE_HEADERS)) {
             res.setHeader(name, value);
           }
           const cacheControl = proxyRes.headers['cache-control'];
           if (cacheControl) res.setHeader('cache-control', cacheControl);
+          if (contentType === 'text/event-stream') {
+            proxyReq.setTimeout(0);
+            proxyRes.socket?.setNoDelay(true);
+            res.socket?.setNoDelay(true);
+            res.setHeader('cache-control', 'no-cache, no-transform');
+            res.setHeader('x-accel-buffering', 'no');
+          }
           res.flushHeaders?.();
           proxyRes.pipe(res);
           proxyRes.on('end', resolve);
@@ -353,8 +362,16 @@ export class SandboxWorkspaceService {
     return shellQuote(s);
   }
 
-  private validateFile(file: string): string {
-    if (typeof file !== 'string' || !FILE_RE.test(file) || file.includes('..')) {
+  private validateFile(file: string, selector?: WorkdirSelector | string | null): string {
+    if (typeof file !== 'string' || file.includes('..')) {
+      throw new BadRequestException('Invalid file path');
+    }
+    const parts = file.split('/');
+    const hidden =
+      !!selectorOf(selector).session &&
+      HIDDEN_FILE_RE.test(file) &&
+      !parts.some((part) => part === '' || part === '.');
+    if ((!FILE_RE.test(file) && !hidden) || parts.includes('.git')) {
       throw new BadRequestException('Invalid file path');
     }
     return file;
@@ -379,7 +396,7 @@ export class SandboxWorkspaceService {
       throw new BadRequestException('A commit message is required');
     }
     const stage = files?.length
-      ? files.map((f) => `git add -- ${this.q(this.validateFile(f))}`).join('\n')
+      ? files.map((f) => `git add -- ${this.q(this.validateFile(f, repo))}`).join('\n')
       : opts.trackedOnly
         ? 'git add -u'
         : 'git add -A';
@@ -618,7 +635,7 @@ export class SandboxWorkspaceService {
     file: string,
     ref?: string
   ): Promise<{ content: string; truncated: boolean; exists?: boolean }> {
-    this.validateFile(file);
+    this.validateFile(file, repo);
     this.requireRunning(sandbox);
     if (ref !== undefined && ref !== '') {
       if (ref !== 'HEAD') throw new BadRequestException('Only ref=HEAD is supported');
@@ -766,7 +783,7 @@ export class SandboxWorkspaceService {
     file: string,
     content: string
   ): Promise<{ ok: boolean }> {
-    this.validateFile(file);
+    this.validateFile(file, repo);
     if (typeof content !== 'string' || content.length > MAX_FILE_BYTES) {
       throw new BadRequestException('File content must be a string up to 500KB');
     }
@@ -863,6 +880,42 @@ export class SandboxWorkspaceService {
     return { name };
   }
 
+  async initRepo(
+    sandbox: WorkspaceSandbox,
+    rawName: string,
+    actorUserId: string
+  ): Promise<{ name: string }> {
+    this.requireRunning(sandbox);
+    const name = (rawName || '').trim();
+    if (!REPO_RE.test(name) || name.length > 63 || name.startsWith('.')) {
+      throw new BadRequestException(
+        'Use letters, numbers, dots, dashes or underscores for the repository name'
+      );
+    }
+    const target = `/persist/home/${name}`;
+    const made = await this.devExec(
+      sandbox,
+      `[ -e ${shellQuote(target)} ] && exit 4\nmkdir -p ${shellQuote(target)}`
+    );
+    if (!made.ok) {
+      throw new BadRequestException(`A directory named "${name}" already exists in the sandbox`);
+    }
+    const result = await this.runGit(
+      sandbox,
+      { repo: name },
+      actorUserId,
+      (git) =>
+        `${git} init -q -b main 2>&1 && ${git} commit -q --allow-empty -m 'Initial commit' 2>&1`
+    );
+    if (!result.ok) {
+      await this.devExec(sandbox, `rm -rf ${shellQuote(target)}`);
+      throw new BadRequestException(
+        `Could not create the repository: ${gitOutput(result.stdout).slice(0, 300)}`
+      );
+    }
+    return { name };
+  }
+
   private async proxyOpencodeViaExec(
     sandbox: WorkspaceSandbox,
     req: Request,
@@ -871,7 +924,9 @@ export class SandboxWorkspaceService {
     query: string,
     payload: string | null
   ): Promise<void> {
-    const isSse = String(req.headers.accept || '').includes('text/event-stream');
+    const isSse =
+      String(req.headers.accept || '').includes('text/event-stream') ||
+      /^(global\/)?event\/?$/.test(suffix);
     let curl = `${OPENCODE_LOCAL_AUTH}; curl -si -N --globoff ${OPENCODE_LOCAL_CURL_AUTH} -X ${req.method} ${shellQuote(`http://127.0.0.1:${OPENCODE_PORT}/${suffix}${query}`)} -H ${shellQuote(`accept: ${req.headers.accept || 'application/json'}`)}`;
     if (payload) curl += ` -H 'content-type: application/json' --data-binary @-`;
     if (!isSse) curl += ' -m 110';
@@ -977,9 +1032,7 @@ export class SandboxWorkspaceService {
   ): Promise<{ diff: string; truncated: boolean }> {
     let script: string;
     if (file) {
-      if (typeof file !== 'string' || !FILE_RE.test(file) || file.includes('..')) {
-        throw new BadRequestException('Invalid file path');
-      }
+      this.validateFile(file, repo);
       const { dir } = await this.resolveDir(sandbox, repo);
       let guard: string;
       try {

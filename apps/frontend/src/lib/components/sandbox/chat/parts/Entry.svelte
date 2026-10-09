@@ -44,7 +44,7 @@
 		{/each}
 	</SubagentPart>
 {:else if entry.kind === 'error'}
-	<ErrorPart detail={entry.detail} />
+	<ErrorPart detail={entry.detail} auth={entry.auth ?? false} />
 {/if}
 
 <style>

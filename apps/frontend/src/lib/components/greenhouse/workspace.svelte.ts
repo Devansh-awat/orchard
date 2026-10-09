@@ -34,6 +34,19 @@ export type SessionsMode = 'loading' | 'server' | 'legacy';
 
 export type Role = 'owner' | 'collaborator' | 'viewer' | 'admin';
 
+export type SessionLaunch = {
+	repo: string;
+	title?: string;
+	prompt?: string;
+	baseBranch?: string;
+	issue?: { provider: 'github' | 'linear'; ref: string };
+	at: number;
+};
+
+export function isPreparing(session: GhSession | null | undefined): boolean {
+	return !!session && (!!session.preparing || !!session.prepareError);
+}
+
 export interface WorkspaceHost {
 	machine(): Sandbox | null;
 	self(): PersonRef | null;
@@ -128,6 +141,7 @@ export class MachineWorkspace {
 	readonly drafts = new SvelteMap<string, boolean>();
 	readonly changes = new SvelteMap<string, GhChanges>();
 	readonly pendingPrompts = new SvelteMap<string, string>();
+	readonly launches = new SvelteMap<string, SessionLaunch>();
 
 	readonly machine = $derived.by(() => this.host.machine());
 	readonly running = $derived(this.machine?.status === 'running');
@@ -328,7 +342,11 @@ export class MachineWorkspace {
 			setInterval(() => {
 				if (typeof document !== 'undefined' && document.hidden) return;
 				void this.refreshSessions();
-			}, 15_000)
+			}, 15_000),
+			setInterval(() => {
+				if (!untrack(() => this.sessions).some((s) => s.preparing)) return;
+				void this.refreshSessions();
+			}, 2000)
 		);
 	}
 
@@ -396,7 +414,7 @@ export class MachineWorkspace {
 
 	async refreshChanges(sid: string) {
 		const session = this.sessions.find((s) => s.id === sid);
-		if (!session || !untrack(() => this.running)) return;
+		if (!session || isPreparing(session) || !untrack(() => this.running)) return;
 		const res = await api.changes(this.sandboxId, scopeOf(session));
 		if (this.#disposed || !res.ok) return;
 		this.changes.set(sid, res.data);
@@ -404,7 +422,7 @@ export class MachineWorkspace {
 
 	async loadChats(sid: string) {
 		const session = this.sessions.find((s) => s.id === sid);
-		if (!session || isLegacy(session)) return;
+		if (!session || isLegacy(session) || isPreparing(session)) return;
 		const res = await api.listChats(this.sandboxId, sid);
 		if (this.#disposed || !res.ok) return;
 		const chats = res.data.chats ?? [];
@@ -544,7 +562,7 @@ export class MachineWorkspace {
 
 	async newChat() {
 		const session = this.session;
-		if (!session || !this.canEdit) return;
+		if (!session || !this.canEdit || isPreparing(session)) return;
 		if (!isLegacy(session)) {
 			try {
 				const chat = await api.createChat(this.sandboxId, session.id);
@@ -579,7 +597,7 @@ export class MachineWorkspace {
 		try {
 			const session = await api.createSession(this.sandboxId, input);
 			this.upsert(session);
-			if (input.prompt?.trim()) this.pendingPrompts.set(session.id, input.prompt.trim());
+			this.launches.set(session.id, { ...input, at: Date.now() });
 			this.host.openSession(session.id, null);
 			return session;
 		} catch (e) {
@@ -649,12 +667,14 @@ export class MachineWorkspace {
 		}
 	}
 
-	async deleteSession(session: GhSession, deleteBranch: boolean) {
+	async deleteSession(session: GhSession, deleteBranch: boolean): Promise<boolean> {
 		const previous = this.sessions;
 		this.sessions = this.sessions.filter((s) => s.id !== session.id);
 		if (this.sessionId === session.id) this.host.openSession(null);
 		try {
 			await api.deleteSession(this.sandboxId, session.id, deleteBranch);
+			this.launches.delete(session.id);
+			return true;
 		} catch (e) {
 			this.sessions = previous;
 			toasts.add({
@@ -662,7 +682,24 @@ export class MachineWorkspace {
 				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
+			return false;
 		}
+	}
+
+	async retrySession(session: GhSession) {
+		if (!this.canEdit) return null;
+		const launch = this.launches.get(session.id);
+		const input = launch
+			? {
+					repo: launch.repo,
+					title: launch.title,
+					prompt: launch.prompt,
+					baseBranch: launch.baseBranch,
+					issue: launch.issue
+				}
+			: { repo: session.repo, title: session.title };
+		if (!(await this.deleteSession(session, true))) return null;
+		return this.createSession(input);
 	}
 
 	async forkSession(session: GhSession) {

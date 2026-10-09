@@ -553,17 +553,25 @@
 	.scroll {
 		flex: 1;
 		min-height: 0;
+		container: chat-pane / inline-size;
 	}
 
 	.column {
 		--chat-gutter: 2rem;
+		--chat-inset: 1rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
 		width: 100%;
-		max-width: calc(42.5rem + 2 * var(--chat-gutter));
+		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
-		padding: 2rem var(--chat-gutter) 4rem;
+		padding: 2rem calc(var(--chat-gutter) + var(--chat-inset)) 4rem;
+	}
+
+	@container chat-pane (min-width: 48rem) {
+		.column {
+			--chat-inset: 1.5rem;
+		}
 	}
 
 	.transcript {

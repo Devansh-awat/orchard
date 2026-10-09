@@ -81,7 +81,12 @@
 <div class="strip">
 	{@render leading?.()}
 	<div class="strip-tabs" role="tablist" aria-label={label}>
-		<span class="strip-underline" aria-hidden="true" {@attach magneticHighlight(() => activeNode)}
+		<span
+			class="strip-underline"
+			aria-hidden="true"
+			{@attach magneticHighlight(() => activeNode, {
+				span: (tab) => tab.querySelector<HTMLElement>('.strip-label')
+			})}
 		></span>
 		{#each tabs as tab, index (tab.id)}
 			{@const selected = active === tab.id}
@@ -110,10 +115,12 @@
 					onauxclick={(e) => onauxclick(e, tab)}
 					onkeydown={(e) => onkeydown(e, index)}
 				>
-					{#if tab.icon}
-						<span class="strip-icon"><tab.icon size={14} strokeWidth={1.75} /></span>
-					{/if}
-					<span class="strip-title">{tab.title}</span>
+					<span class="strip-label">
+						{#if tab.icon}
+							<span class="strip-icon"><tab.icon size={14} strokeWidth={1.75} /></span>
+						{/if}
+						<span class="strip-title">{tab.title}</span>
+					</span>
 				</button>
 				{@render accessory?.(tab)}
 				{#if closable(tab)}
@@ -179,7 +186,7 @@
 	}
 
 	.strip-tab:not(.strip-tab--closable):not(.strip-tab--dirty) {
-		padding-right: 0.75rem;
+		padding-right: 0.5rem;
 	}
 
 	.strip-tab:hover,
@@ -211,6 +218,13 @@
 
 	.strip-tab--active .strip-main {
 		font-weight: 500;
+	}
+
+	.strip-label {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
 	}
 
 	.strip-icon {

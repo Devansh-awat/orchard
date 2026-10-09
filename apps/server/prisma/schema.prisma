@@ -2512,6 +2512,7 @@ model SandboxConversation {
   previewEnvironmentId String?  @map("preview_environment_id") @db.Uuid
   createdById         String?   @map("created_by_id") @db.Uuid
   archivedAt          DateTime? @map("archived_at") @db.Timestamp(6)
+  prepareError        String?   @map("prepare_error") @db.Text
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 

@@ -452,6 +452,28 @@ test('alternate screen blocks prediction and flushes mid-burst', () => {
 	assert.equal(t.alt, true);
 });
 
+test('mouse reporting, which tmux turns on with mouse on, blocks every prediction', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	t.mouse = true;
+	type(p, 'A');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.overlay, null);
+});
+
+test('a tmux echo wrapped in cursor hide and sync markers still confirms', () => {
+	const { p, t, clock } = mk();
+	activate(p, t, clock);
+	type(p, 'A');
+	type(p, 'B');
+	clock.advance(150);
+	p.applyRemote('\x1b[?2026h\x1b[?25lA\x1b[?25h\x1b[?2026l');
+	p.applyRemote('\x1b[?25lB\x1b[?25h');
+	assert.equal(p.metrics.pending, 0);
+	assert.equal(t.row(), '$ abAB');
+	assert.equal(p.state, 'active');
+});
+
 test('the last column is never predicted into', () => {
 	const { p, t, clock } = mk();
 	activate(p, t, clock);

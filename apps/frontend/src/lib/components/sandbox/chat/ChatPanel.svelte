@@ -97,9 +97,16 @@
 
 	.chat-col {
 		--chat-gutter: 2rem;
+		--chat-inset: 1rem;
 		width: 100%;
-		max-width: calc(42.5rem + 2 * var(--chat-gutter));
+		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
-		padding: 0 var(--chat-gutter);
+		padding: 0 calc(var(--chat-gutter) + var(--chat-inset));
+	}
+
+	@container chat-pane (min-width: 48rem) {
+		.chat-col {
+			--chat-inset: 1.5rem;
+		}
 	}
 </style>

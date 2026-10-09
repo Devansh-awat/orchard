@@ -4,6 +4,7 @@
 		Check,
 		ChevronDown,
 		ClipboardList,
+		FilePlus,
 		GitBranch,
 		Monitor,
 		Play,
@@ -19,6 +20,7 @@
 	import type { Sandbox } from '$lib/types/sandbox';
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
+	import * as api from './api';
 	import ModelOptions from '$lib/components/sandbox/chat/ModelOptions.svelte';
 	import { ocShortModelName } from '$lib/components/sandbox/opencode';
 	import SessionGlyph from './SessionGlyph.svelte';
@@ -40,11 +42,12 @@
 	let repoOpen = $state(false);
 	let modelOpen = $state(false);
 	let launching = $state(false);
-	let queued = $state<{ repo: string; prompt: string } | null>(null);
+	let queued = $state<{ repo: string | null; prompt: string } | null>(null);
+	let blank = $state(false);
 	let box = $state<HTMLTextAreaElement | null>(null);
 
 	const repos = $derived(ws?.repos ?? []);
-	const chosen = $derived(repos.find((r) => r.name === repo) ?? repos[0] ?? null);
+	const chosen = $derived(blank ? null : (repos.find((r) => r.name === repo) ?? repos[0] ?? null));
 	const recent = $derived(
 		[...(ws?.active ?? [])]
 			.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
@@ -52,8 +55,38 @@
 	);
 	const stopped = $derived(machine?.status === 'stopped' || machine?.status === 'error');
 	const canLaunch = $derived(
-		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || (ws.running && !!chosen))
+		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || ws.running)
 	);
+
+	function blankName(text: string): string {
+		const base =
+			text
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, ' ')
+				.trim()
+				.split(' ')
+				.filter(Boolean)
+				.slice(0, 4)
+				.join('-')
+				.slice(0, 40)
+				.replace(/-+$/, '') || 'scratch';
+		const taken = new Set(repos.map((r) => r.name));
+		if (!taken.has(base)) return base;
+		for (let i = 2; i < 100; i++) if (!taken.has(`${base}-${i}`)) return `${base}-${i}`;
+		return `${base}-${Date.now().toString(36)}`;
+	}
+
+	async function ensureRepo(name: string | null, text: string): Promise<string | null> {
+		if (name || !ws) return name;
+		const fresh = blankName(text);
+		const res = await api.initRepo(ws.sandboxId, fresh);
+		if (!res.ok) {
+			toasts.add({ title: 'Could not create the repository', description: res.message, color: 'error' });
+			return null;
+		}
+		await ws.refreshRepos();
+		return res.data.name;
+	}
 	const models = $derived(ws?.store.models ?? []);
 	const modelGroups = $derived(ws?.store.modelGroups ?? []);
 	const model = $derived(ws?.store.model ?? null);
@@ -77,10 +110,12 @@
 		});
 	}
 
-	async function launchNow(name: string, text: string) {
+	async function launchNow(requested: string | null, text: string) {
 		if (!ws) return;
 		launching = true;
 		try {
+			const name = await ensureRepo(requested, text);
+			if (!name) return;
 			const session = await ws.createSession({
 				repo: name,
 				prompt: text,
@@ -89,6 +124,8 @@
 			if (session) {
 				prompt = '';
 				issue = null;
+				blank = false;
+				repo = name;
 			}
 		} finally {
 			launching = false;
@@ -100,17 +137,7 @@
 		const text = prompt.trim();
 		if (stopped) {
 			if (!ws.canStart) return;
-			const name = chosen?.name ?? repo;
-			if (!name) {
-				toasts.add({
-					title: 'Start the machine first',
-					description: 'Then pick a repository for the session.',
-					color: 'info'
-				});
-				await ws.lifecycle('start');
-				return;
-			}
-			queued = { repo: name, prompt: text };
+			queued = { repo: chosen?.name ?? null, prompt: text };
 			toasts.add({
 				title: `Starting ${machine?.name}`,
 				description: 'Your session opens as soon as it is up.',
@@ -119,8 +146,7 @@
 			await ws.lifecycle('start');
 			return;
 		}
-		if (!chosen) return;
-		await launchNow(chosen.name, text);
+		await launchNow(chosen?.name ?? null, text);
 	}
 
 	function key(event: KeyboardEvent) {
@@ -202,13 +228,18 @@
 								<span class="gh-mono branch">{chosen.branch}</span>
 							{:else}
 								<GitBranch size={14} strokeWidth={1.75} />
-								<span>{ws?.running ? 'Add a repository' : 'Repository'}</span>
+								<span>New empty repository</span>
 							{/if}
 							<ChevronDown size={14} strokeWidth={1.75} />
 						</button>
 					{/snippet}
 					{#each repos as r (r.name)}
-						<MenuItem onclick={() => (repo = r.name)}>
+						<MenuItem
+							onclick={() => {
+								repo = r.name;
+								blank = false;
+							}}
+						>
 							<span class="ravatar" style="--hue: var({repoHue(r.name)})"
 								>{repoInitial(r.name)}</span
 							>
@@ -218,6 +249,16 @@
 						</MenuItem>
 					{/each}
 					{#if repos.length > 0}<div class="gh-menu-sep"></div>{/if}
+					<MenuItem
+						onclick={() => {
+							repo = null;
+							blank = true;
+						}}
+						disabled={!ws?.canEdit}
+					>
+						<FilePlus size={14} /> New empty repository
+						{#if !chosen}<Check size={13} />{/if}
+					</MenuItem>
 					<MenuItem
 						onclick={() => (app.sheet = 'add-repo')}
 						disabled={!ws?.running || !ws.isOwner}

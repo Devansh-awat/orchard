@@ -152,7 +152,14 @@
 	}
 
 	.add {
-		margin-left: calc(0.25rem - var(--gh-ibtn-inset));
+		align-self: stretch;
+		height: auto;
+		margin-left: calc(0.75rem - var(--gh-ibtn-inset));
+		border-radius: 0;
+	}
+
+	.add:hover:not(:disabled) {
+		background: none;
 	}
 
 	.grow {

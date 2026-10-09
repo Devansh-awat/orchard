@@ -163,6 +163,18 @@ export class SandboxesController {
     return this.workspace.addRepo(row, body?.repoUrl || '');
   }
 
+  @Post(':id/repos/init')
+  @RequireScope('exec')
+  async initRepo(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { name?: string }
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await requireSandboxAccess(this.access, id, user.id, 'collaborator');
+    return this.workspace.initRepo(row, body?.name || '', user.id);
+  }
+
   @Get(':id/conversations')
   async listConversations(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);

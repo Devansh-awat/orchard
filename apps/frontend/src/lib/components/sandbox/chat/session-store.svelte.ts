@@ -9,6 +9,8 @@ import {
 	ocFilePart,
 	ocFmtBytes,
 	ocFmtTokens,
+	ocIsAborted,
+	ocIsAuthError,
 	ocModelGroups,
 	ocModels,
 	ocNormalizeTool,
@@ -116,7 +118,14 @@ export type ResultEntry = {
 	time?: number;
 };
 
-export type ErrorEntry = { kind: 'error'; key: string; detail: string; time?: number };
+export type ErrorEntry = {
+	kind: 'error';
+	key: string;
+	detail: string;
+	time?: number;
+	auth?: boolean;
+	messageID?: string;
+};
 
 export type ChatEntry =
 	| UserEntry
@@ -199,6 +208,8 @@ export type SessionStoreOptions = {
 const TEMP_PREFIX = 'pending-';
 const RETRY_PROBE_MS = 10_000;
 const RECONNECT_MS = 2000;
+const STATUS_POLL_MS = 5000;
+const STATUS_GRACE_MS = 4000;
 const OUTPUT_CAP = 4000;
 
 const SKIP_PARTS = new Set([
@@ -498,6 +509,8 @@ export class ChatSessionStore {
 	#connectedOnce = false;
 	#stream: AbortController | null = null;
 	#probeTimer: ReturnType<typeof setTimeout> | null = null;
+	#statusTimer: ReturnType<typeof setInterval> | null = null;
+	#syncing: Promise<void> | null = null;
 	#destroyed = false;
 
 	constructor(sandboxId: string, options: SessionStoreOptions = {}) {
@@ -661,6 +674,17 @@ export class ChatSessionStore {
 		this.#stream = null;
 		if (this.#probeTimer) clearTimeout(this.#probeTimer);
 		this.#probeTimer = null;
+		if (this.#statusTimer) clearInterval(this.#statusTimer);
+		this.#statusTimer = null;
+	}
+
+	#sessionDir(id: string): string | null {
+		return this.sessions.find((s) => s.id === id)?.directory ?? null;
+	}
+
+	#dir(id: string | null, join: '?' | '&' = '?'): string {
+		const dir = id ? this.#sessionDir(id) : this.directory;
+		return dir ? `${join}directory=${encodeURIComponent(dir)}` : '';
 	}
 
 	destroy() {
@@ -856,7 +880,7 @@ export class ChatSessionStore {
 		session.title = next;
 		if (session.pending) return;
 		try {
-			await apiFetch(`${ocBase(this.sandboxId)}/session/${id}`, {
+			await apiFetch(`${ocBase(this.sandboxId)}/session/${id}${this.#dir(id)}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ title: next })
@@ -884,8 +908,9 @@ export class ChatSessionStore {
 			return;
 		}
 
+		const query = target.directory ? `?directory=${encodeURIComponent(target.directory)}` : '';
 		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${id}`, {
+			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${id}${query}`, {
 				method: 'DELETE'
 			});
 			if (!res.ok) throw new Error('Failed to delete conversation');
@@ -920,11 +945,14 @@ export class ChatSessionStore {
 		if (!thread || this.revertBusy) return;
 		this.revertBusy = messageID;
 		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${thread.id}/fork`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ messageID })
-			});
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/fork${this.#dir(thread.id)}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ messageID })
+				}
+			);
 			if (!res.ok) throw await failure(res, 'Could not fork this session');
 			const session = (await res.json()) as OcSession;
 			if (!this.sessions.some((s) => s.id === session.id))
@@ -951,11 +979,14 @@ export class ChatSessionStore {
 		if (!thread || this.revertBusy) return;
 		this.revertBusy = messageID;
 		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${thread.id}/revert`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ messageID })
-			});
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/revert${this.#dir(thread.id)}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ messageID })
+				}
+			);
 			if (!res.ok) throw await failure(res, 'Could not revert to this point');
 			const session = (await res.json()) as OcSession;
 			await this.#loadHistory(thread);
@@ -977,9 +1008,10 @@ export class ChatSessionStore {
 		if (!thread || this.revertBusy) return;
 		this.revertBusy = 'undo';
 		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${thread.id}/unrevert`, {
-				method: 'POST'
-			});
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/unrevert${this.#dir(thread.id)}`,
+				{ method: 'POST' }
+			);
 			if (!res.ok) throw await failure(res, 'Could not undo the revert');
 			await this.#loadHistory(thread);
 			thread.revertedMessageID = null;
@@ -1000,7 +1032,12 @@ export class ChatSessionStore {
 		if (!thread || !thread.busy || thread.stopping || thread.id.startsWith(TEMP_PREFIX)) return;
 		thread.stopping = true;
 		try {
-			await apiFetch(`${ocBase(this.sandboxId)}/session/${thread.id}/abort`, { method: 'POST' });
+			await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}/abort${this.#dir(thread.id)}`,
+				{
+					method: 'POST'
+				}
+			);
 		} catch {
 			return;
 		} finally {
@@ -1014,12 +1051,14 @@ export class ChatSessionStore {
 		let ok = false;
 		try {
 			const res = await apiFetch(
-				`${ocBase(this.sandboxId)}/session/${thread.id}/message?limit=100`
+				`${ocBase(this.sandboxId)}/session/${thread.id}/message?limit=100${this.#dir(thread.id, '&')}`
 			);
 			if (!res.ok) return;
 			this.#hydrate(thread, (await res.json()) as OcMessage[]);
 			ok = true;
-			const sres = await apiFetch(`${ocBase(this.sandboxId)}/session/${thread.id}`);
+			const sres = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${thread.id}${this.#dir(thread.id)}`
+			);
 			if (sres.ok) {
 				const session = (await sres.json()) as OcSession;
 				thread.revertedMessageID = session.revert?.messageID ?? null;
@@ -1054,6 +1093,9 @@ export class ChatSessionStore {
 			if (runStart === null) runStart = info.time.created;
 			runCost += info.cost ?? 0;
 			for (const part of parts) this.#appendPart(thread, part, thread.entries, info.time.created);
+			if (info.error && !ocIsAborted(info.error)) {
+				this.#pushError(thread, info.error, info.id, info.time.completed ?? info.time.created);
+			}
 			const next = messages[i + 1];
 			if (info.time.completed && (!next || next.info.role === 'user')) {
 				thread.push({
@@ -1318,17 +1360,20 @@ export class ChatSessionStore {
 			this.activity.set(sessionId, 'busy');
 			const assigned = this.beforePrompt ? await this.beforePrompt(sessionId, text) : null;
 			if (assigned?.messageID) entry.messageID = assigned.messageID;
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/${sessionId}/prompt_async`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
-					model: { providerID: choice.providerID, modelID: choice.modelID },
-					...(choice.variant ? { variant: choice.variant } : {}),
-					agent: choice.plan ? 'plan' : 'build',
-					parts: [...files.map(ocFilePart), { type: 'text', text }]
-				})
-			});
+			const res = await apiFetch(
+				`${ocBase(this.sandboxId)}/session/${sessionId}/prompt_async${this.#dir(sessionId)}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
+						model: { providerID: choice.providerID, modelID: choice.modelID },
+						...(choice.variant ? { variant: choice.variant } : {}),
+						agent: choice.plan ? 'plan' : 'build',
+						parts: [...files.map(ocFilePart), { type: 'text', text }]
+					})
+				}
+			);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data?.message || 'Chat request failed');
@@ -1347,6 +1392,27 @@ export class ChatSessionStore {
 			this.onTurnDone?.();
 			return false;
 		}
+	}
+
+	#pushError(thread: SessionThread, error: unknown, messageID?: string, time = Date.now()) {
+		const detail = ocErrorMessage(error);
+		for (let i = thread.entries.length - 1; i >= 0; i -= 1) {
+			const entry = thread.entries[i];
+			if (entry.kind === 'user') break;
+			if (entry.kind !== 'error') continue;
+			if ((messageID && entry.messageID === messageID) || entry.detail === detail) {
+				if (messageID && !entry.messageID) entry.messageID = messageID;
+				return;
+			}
+		}
+		thread.push({
+			kind: 'error',
+			key: nextKey(),
+			time,
+			detail,
+			auth: ocIsAuthError(error),
+			...(messageID ? { messageID } : {})
+		});
 	}
 
 	#finishTurn(thread: SessionThread, drain: boolean) {
@@ -1414,10 +1480,14 @@ export class ChatSessionStore {
 		});
 	}
 
-	#handleEvent(event: OcEvent) {
+	#handleEvent(event: OcEvent, directory: string | null = null) {
 		const props = event.properties ?? {};
 		const sessionID = typeof props.sessionID === 'string' ? props.sessionID : null;
 		switch (event.type) {
+			case 'server.connected':
+			case 'server.heartbeat':
+			case 'sync':
+				return;
 			case 'session.updated':
 			case 'session.created': {
 				const info = props.info as OcSession | undefined;
@@ -1468,13 +1538,12 @@ export class ChatSessionStore {
 				return;
 			}
 			case 'session.error': {
-				const aborted =
-					props.error &&
-					typeof props.error === 'object' &&
-					(props.error as { name?: string }).name === 'MessageAbortedError';
+				const aborted = ocIsAborted(props.error);
+				const scoped =
+					!directory || !this.activeId || directory === this.#sessionDir(this.activeId);
 				const targets = sessionID
 					? [this.threads.get(sessionID)].filter((t): t is SessionThread => !!t)
-					: this.active
+					: this.active && scoped
 						? [this.active]
 						: [];
 				for (const thread of targets) {
@@ -1482,12 +1551,7 @@ export class ChatSessionStore {
 						if (thread.busy) this.#finishTurn(thread, false);
 						continue;
 					}
-					thread.push({
-						kind: 'error',
-						key: nextKey(),
-						time: Date.now(),
-						detail: ocErrorMessage(props.error)
-					});
+					this.#pushError(thread, props.error);
 					if (thread.busy) this.#endTurnQuietly(thread);
 				}
 				return;
@@ -1509,6 +1573,9 @@ export class ChatSessionStore {
 					return;
 				}
 				if (info.role !== 'assistant') return;
+				if (info.error && !ocIsAborted(info.error) && (thread.loaded || thread.loading)) {
+					this.#pushError(thread, info.error, info.id);
+				}
 				if (thread.busy && typeof info.cost === 'number') thread.turnCosts.set(info.id, info.cost);
 				if (info.tokens && (info.tokens.total ?? 0) > 0) thread.ctxTokens = info.tokens;
 				return;
@@ -1542,26 +1609,63 @@ export class ChatSessionStore {
 		}
 	}
 
-	async #syncStatus() {
-		try {
-			const res = await apiFetch(`${ocBase(this.sandboxId)}/session/status`);
-			if (!res.ok) return;
-			const status = (await res.json()) as Record<string, { type?: string }>;
-			for (const [id, value] of Object.entries(status)) {
-				if (value?.type === 'busy' || value?.type === 'retry') this.#markBusy(id, value.type);
-			}
-			for (const thread of this.threads.values()) {
-				const current = status[thread.id]?.type;
-				if (current === 'busy' || current === 'retry') continue;
-				this.activity.set(thread.id, 'idle');
-				if (!thread.busy || thread.id.startsWith(TEMP_PREFIX)) continue;
-				this.#endTurnQuietly(thread);
-				await this.#loadHistory(thread);
-				this.#drain(thread);
-			}
-		} catch {
-			return;
+	#syncStatus(): Promise<void> {
+		if (this.#syncing) return this.#syncing;
+		this.#syncing = this.#readStatus().finally(() => (this.#syncing = null));
+		return this.#syncing;
+	}
+
+	async #readStatus() {
+		const dirs = new Set<string | null>([null]);
+		if (this.directory) dirs.add(this.directory);
+		for (const thread of this.threads.values()) {
+			const dir = this.#sessionDir(thread.id);
+			if (dir) dirs.add(dir);
 		}
+		const status: Record<string, { type?: string }> = {};
+		const covered = new Set<string | null>();
+		await Promise.all(
+			[...dirs].map(async (dir) => {
+				try {
+					const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
+					const res = await apiFetch(`${ocBase(this.sandboxId)}/session/status${query}`);
+					if (!res.ok) return;
+					Object.assign(status, (await res.json()) as Record<string, { type?: string }>);
+					covered.add(dir);
+				} catch {
+					return;
+				}
+			})
+		);
+		if (covered.size === 0 || this.#destroyed) return;
+		for (const [id, value] of Object.entries(status)) {
+			if (value?.type === 'busy' || value?.type === 'retry') this.#markBusy(id, value.type);
+		}
+		const now = Date.now();
+		for (const thread of this.threads.values()) {
+			const current = status[thread.id]?.type;
+			if (current === 'busy' || current === 'retry') continue;
+			if (!covered.has(this.#sessionDir(thread.id))) continue;
+			if (thread.busy && thread.turnStart > 0 && now - thread.turnStart < STATUS_GRACE_MS) continue;
+			this.activity.set(thread.id, 'idle');
+			if (!thread.busy || thread.id.startsWith(TEMP_PREFIX)) continue;
+			this.#endTurnQuietly(thread);
+			await this.#loadHistory(thread);
+			this.#drain(thread);
+		}
+	}
+
+	#pollStatus() {
+		if (this.#statusTimer) return;
+		this.#statusTimer = setInterval(() => {
+			if (!this.#live || this.connection !== 'ready') return;
+			if (typeof document !== 'undefined' && document.hidden) return;
+			let busy = false;
+			for (const thread of this.threads.values()) {
+				if (thread.busy && !thread.id.startsWith(TEMP_PREFIX)) busy = true;
+			}
+			if (busy) void this.#syncStatus();
+		}, STATUS_POLL_MS);
 	}
 
 	#invalidateBackground() {
@@ -1576,13 +1680,23 @@ export class ChatSessionStore {
 		if (this.#stream || this.#destroyed || !this.#live) return;
 		const ctrl = new AbortController();
 		this.#stream = ctrl;
+		this.#pollStatus();
 		void this.#eventLoop(ctrl.signal);
 	}
 
 	async #eventLoop(signal: AbortSignal) {
+		let global = true;
 		for (;;) {
 			try {
-				const res = await apiFetch(`${ocBase(this.sandboxId)}/event`, { signal });
+				const path = global ? '/global/event' : `/event${this.#dir(null)}`;
+				const res = await apiFetch(`${ocBase(this.sandboxId)}${path}`, {
+					signal,
+					headers: { Accept: 'text/event-stream' }
+				});
+				if (global && (res.status === 404 || res.status === 403)) {
+					global = false;
+					continue;
+				}
 				if (!res.ok || !res.body) throw new Error('event stream unavailable');
 				if (this.#connectedOnce) this.#invalidateBackground();
 				this.#connectedOnce = true;
@@ -1617,7 +1731,10 @@ export class ChatSessionStore {
 			.join('');
 		if (!payload) return;
 		try {
-			this.#handleEvent(JSON.parse(payload) as OcEvent);
+			const parsed = JSON.parse(payload) as OcEvent & { payload?: OcEvent; directory?: unknown };
+			const wrapped = !!parsed.payload && typeof parsed.payload === 'object' && !parsed.type;
+			const directory = wrapped && typeof parsed.directory === 'string' ? parsed.directory : null;
+			this.#handleEvent(wrapped && parsed.payload ? parsed.payload : parsed, directory);
 		} catch {
 			return;
 		}

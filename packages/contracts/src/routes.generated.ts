@@ -440,6 +440,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/sandboxes/:id/preview-token', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/repos', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/repos', auth: 'authenticated' },
+  { method: 'POST', path: '/sandboxes/:id/repos/init', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/sessions', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/sessions', auth: 'authenticated' },
   { method: 'DELETE', path: '/sandboxes/:id/sessions/:sid', auth: 'authenticated' },

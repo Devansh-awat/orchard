@@ -16,6 +16,10 @@ const WIDTHS = [1100, 1512];
 const HEIGHT = 945;
 const TURN_GAP = 32;
 const TOLERANCE = 1;
+const GUTTER = 32;
+const MIN_INSET = 16;
+const WIDE_INSET = 24;
+const WIDE_PANE = 768;
 
 function measure() {
 	const pane = document.querySelector('[data-testid="chat-pane"]');
@@ -70,6 +74,14 @@ function measure() {
 	}
 	const col = pane.querySelector('.tx-col');
 	const dock = pane.querySelector('.chat-dock .chat-col');
+	const paneLeft = pane.getBoundingClientRect().left;
+	const glyphs = [...pane.querySelectorAll('.turn-mark > *, .hm-avatar, .prep-mark > *')]
+		.filter(shown)
+		.map((el) => ({
+			x: Math.round((el.getBoundingClientRect().left - paneLeft) * 10) / 10,
+			el: label(el)
+		}));
+	const chatPane = pane.querySelector('.chat') ?? pane;
 	return {
 		missing: false,
 		content: edges('[data-align="content"]', 'left'),
@@ -80,6 +92,11 @@ function measure() {
 		columns: {
 			transcript: col ? col.getBoundingClientRect().left : null,
 			dock: dock ? dock.getBoundingClientRect().left : null
+		},
+		inset: {
+			pad: col ? parseFloat(getComputedStyle(col).paddingLeft) : null,
+			paneWidth: chatPane.getBoundingClientRect().width,
+			glyphs
 		}
 	};
 }
@@ -166,6 +183,21 @@ async function main() {
 								`transcript column ${m.columns.transcript} vs composer column ${m.columns.dock}`
 							);
 						}
+					}
+					if (m.inset.pad !== null) {
+						const want = GUTTER + (m.inset.paneWidth >= WIDE_PANE ? WIDE_INSET : MIN_INSET);
+						if (Math.abs(m.inset.pad - want) > TOLERANCE) {
+							problems.push(`column inset ${m.inset.pad}px, expected ${want}px`);
+						}
+					}
+					const tight = m.inset.glyphs.filter((g) => g.x < MIN_INSET - TOLERANCE);
+					if (tight.length > 0) {
+						problems.push(
+							`gutter glyphs within ${MIN_INSET}px of the pane edge: ${tight
+								.slice(0, 3)
+								.map((g) => `${g.x}px ${g.el}`)
+								.join('; ')}`
+						);
 					}
 					const badGaps = m.gaps.filter((g) => Math.abs(g - TURN_GAP) > 0.5);
 					if (badGaps.length > 0) problems.push(`turn gaps ${m.gaps.join(', ')}`);

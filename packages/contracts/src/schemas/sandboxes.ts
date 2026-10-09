@@ -150,7 +150,14 @@ const sandboxSession = z.object({
   createdBy: sessionUser.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  archivedAt: z.string().nullable()
+  archivedAt: z.string().nullable(),
+  preparing: z
+    .boolean()
+    .describe('The worktree and agent session are still being set up in the background'),
+  prepareError: z
+    .string()
+    .nullable()
+    .describe('Why background setup failed; the session never became usable')
 });
 
 const sessionScripts = z.object({
@@ -594,6 +601,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ name: z.string() }),
     scope: 'deploy'
   },
+  'POST /sandboxes/:id/repos/init': {
+    summary: 'Create an empty git repository with an initial commit in the sandbox',
+    request: z.object({ name: z.string().max(63) }),
+    response: z.object({ name: z.string() }),
+    scope: 'exec'
+  },
   'GET /sandboxes/:id/changes': {
     summary: 'Git working-tree changes inside the sandbox workspace',
     response: z.object({
@@ -740,14 +753,20 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'GET /sandboxes/:id/sessions/:sid/ports': {
     summary:
-      'TCP ports the dev user is listening on, flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet',
+      'TCP ports the dev user is listening on (agent, ssh, tmux and language server processes excluded), flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet',
     response: z.object({
+      previewPorts: z
+        .array(z.number().int())
+        .describe('Ports this machine can route a preview to; empty when previews are unavailable'),
       ports: z.array(
         z.object({
           port: z.number().int(),
           process: z.string().nullable(),
           previewUrl: z.string().nullable(),
-          public: z.boolean(),
+          exposable: z.boolean().describe('The runner can route a preview to this port'),
+          public: z
+            .boolean()
+            .describe('Served on a public URL (Vercel), not behind the Orchard preview proxy'),
           inSession: z.boolean(),
           loopbackOnly: z
             .boolean()

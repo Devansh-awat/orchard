@@ -32779,6 +32779,46 @@
         ]
       }
     },
+    "/integrations/slack/link/preview": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /integrations/slack/link/preview",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
     "/invitations/{token}": {
       "get": {
         "description": "Auth: public",
@@ -51076,6 +51116,71 @@
         ]
       }
     },
+    "/sandboxes/{id}/repos/init": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "maxLength": 63,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Create an empty git repository with an initial commit in the sandbox",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/sessions": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -51220,6 +51325,17 @@
                               "null"
                             ]
                           },
+                          "prepareError": {
+                            "description": "Why background setup failed; the session never became usable",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "preparing": {
+                            "description": "The worktree and agent session are still being set up in the background",
+                            "type": "boolean"
+                          },
                           "previewDeploymentId": {
                             "format": "uuid",
                             "type": [
@@ -51330,7 +51446,9 @@
                           "createdBy",
                           "createdAt",
                           "updatedAt",
-                          "archivedAt"
+                          "archivedAt",
+                          "preparing",
+                          "prepareError"
                         ],
                         "type": "object"
                       },
@@ -51555,6 +51673,17 @@
                         "null"
                       ]
                     },
+                    "prepareError": {
+                      "description": "Why background setup failed; the session never became usable",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "preparing": {
+                      "description": "The worktree and agent session are still being set up in the background",
+                      "type": "boolean"
+                    },
                     "previewDeploymentId": {
                       "format": "uuid",
                       "type": [
@@ -51665,7 +51794,9 @@
                     "createdBy",
                     "createdAt",
                     "updatedAt",
-                    "archivedAt"
+                    "archivedAt",
+                    "preparing",
+                    "prepareError"
                   ],
                   "type": "object"
                 }
@@ -51890,6 +52021,17 @@
                         "null"
                       ]
                     },
+                    "prepareError": {
+                      "description": "Why background setup failed; the session never became usable",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "preparing": {
+                      "description": "The worktree and agent session are still being set up in the background",
+                      "type": "boolean"
+                    },
                     "previewDeploymentId": {
                       "format": "uuid",
                       "type": [
@@ -52000,7 +52142,9 @@
                     "createdBy",
                     "createdAt",
                     "updatedAt",
-                    "archivedAt"
+                    "archivedAt",
+                    "preparing",
+                    "prepareError"
                   ],
                   "type": "object"
                 }
@@ -52188,6 +52332,17 @@
                         "null"
                       ]
                     },
+                    "prepareError": {
+                      "description": "Why background setup failed; the session never became usable",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "preparing": {
+                      "description": "The worktree and agent session are still being set up in the background",
+                      "type": "boolean"
+                    },
                     "previewDeploymentId": {
                       "format": "uuid",
                       "type": [
@@ -52298,7 +52453,9 @@
                     "createdBy",
                     "createdAt",
                     "updatedAt",
-                    "archivedAt"
+                    "archivedAt",
+                    "preparing",
+                    "prepareError"
                   ],
                   "type": "object"
                 }
@@ -53043,6 +53200,10 @@
                             "description": "Listed in .orchard/greenhouse.json ports, which also allows previewing it",
                             "type": "boolean"
                           },
+                          "exposable": {
+                            "description": "The runner can route a preview to this port",
+                            "type": "boolean"
+                          },
                           "inSession": {
                             "type": "boolean"
                           },
@@ -53070,6 +53231,7 @@
                             ]
                           },
                           "public": {
+                            "description": "Served on a public URL (Vercel), not behind the Orchard preview proxy",
                             "type": "boolean"
                           }
                         },
@@ -53077,6 +53239,7 @@
                           "port",
                           "process",
                           "previewUrl",
+                          "exposable",
                           "public",
                           "inSession",
                           "loopbackOnly",
@@ -53086,9 +53249,17 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "previewPorts": {
+                      "description": "Ports this machine can route a preview to; empty when previews are unavailable",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
                     }
                   },
                   "required": [
+                    "previewPorts",
                     "ports"
                   ],
                   "type": "object"
@@ -53106,7 +53277,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "TCP ports the dev user is listening on, flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet",
+        "summary": "TCP ports the dev user is listening on (agent, ssh, tmux and language server processes excluded), flagged when started from this worktree, plus ports declared in .orchard/greenhouse.json that nothing listens on yet",
         "tags": [
           "sandboxes"
         ]
@@ -53266,6 +53437,17 @@
                             "null"
                           ]
                         },
+                        "prepareError": {
+                          "description": "Why background setup failed; the session never became usable",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "preparing": {
+                          "description": "The worktree and agent session are still being set up in the background",
+                          "type": "boolean"
+                        },
                         "previewDeploymentId": {
                           "format": "uuid",
                           "type": [
@@ -53376,7 +53558,9 @@
                         "createdBy",
                         "createdAt",
                         "updatedAt",
-                        "archivedAt"
+                        "archivedAt",
+                        "preparing",
+                        "prepareError"
                       ],
                       "type": "object"
                     }
@@ -53602,6 +53786,17 @@
                             "null"
                           ]
                         },
+                        "prepareError": {
+                          "description": "Why background setup failed; the session never became usable",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "preparing": {
+                          "description": "The worktree and agent session are still being set up in the background",
+                          "type": "boolean"
+                        },
                         "previewDeploymentId": {
                           "format": "uuid",
                           "type": [
@@ -53712,7 +53907,9 @@
                         "createdBy",
                         "createdAt",
                         "updatedAt",
-                        "archivedAt"
+                        "archivedAt",
+                        "preparing",
+                        "prepareError"
                       ],
                       "type": "object"
                     },

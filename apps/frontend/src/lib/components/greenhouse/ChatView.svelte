@@ -6,7 +6,8 @@
 	import SandboxBootProgress from '$lib/components/sandbox/SandboxBootProgress.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
-	import type { MachineWorkspace } from './workspace.svelte';
+	import SessionPreparing from './SessionPreparing.svelte';
+	import { isPreparing, type MachineWorkspace } from './workspace.svelte';
 
 	let { ws, visible = true }: { ws: MachineWorkspace; visible?: boolean } = $props();
 
@@ -64,14 +65,60 @@
 		});
 	});
 
+	const session = $derived(ws.session);
+	const staged = $derived(isPreparing(session));
+	const launch = $derived(session ? (ws.launches.get(session.id) ?? null) : null);
+	const launchPrompt = $derived(launch?.prompt?.trim() || null);
+	const landed = $derived.by(() => {
+		if (!launchPrompt) return true;
+		const chatId = ws.activeChatId;
+		const thread = store.active;
+		if (!chatId || store.activeId !== chatId || !thread?.loaded) return false;
+		return thread.entries.some((e) => e.kind === 'user');
+	});
+	const preparing = $derived(!!session && (staged || !landed));
+	let retrying = $state(false);
+
+	$effect(() => {
+		const sid = session?.id;
+		if (!sid || !launch || staged) return;
+		if (landed) {
+			untrack(() => ws.launches.delete(sid));
+			return;
+		}
+		const timer = setTimeout(() => ws.launches.delete(sid), 30_000);
+		return () => clearTimeout(timer);
+	});
+
+	async function retry() {
+		if (!session || retrying) return;
+		retrying = true;
+		try {
+			await ws.retrySession(session);
+		} finally {
+			retrying = false;
+		}
+	}
+
+	async function remove() {
+		if (!session || retrying) return;
+		retrying = true;
+		try {
+			await ws.deleteSession(session, true);
+		} finally {
+			retrying = false;
+		}
+	}
+
 	let loadedFor: string | null = null;
 	$effect(() => {
 		const sid = ws.sessionId;
-		const key = sid ? `${sid}:${ready}` : null;
+		const key = sid ? `${sid}:${ready}:${staged}` : null;
 		if (!sid || key === loadedFor) return;
 		const switched = !loadedFor?.startsWith(`${sid}:`);
 		loadedFor = key;
 		if (switched) selected = null;
+		if (staged) return;
 		untrack(() => {
 			void ws.loadChats(sid);
 			void ws.refreshChanges(sid);
@@ -124,6 +171,18 @@
 				</button>
 			{/if}
 		</div>
+	{:else if preparing}
+		<SessionPreparing
+			prompt={launchPrompt}
+			author={ws.host.self()}
+			time={launch?.at ?? null}
+			phase={session?.preparing ? 'worktree' : 'agent'}
+			error={session?.prepareError ?? null}
+			canEdit={ws.canEdit}
+			busy={retrying}
+			onretry={retry}
+			onremove={remove}
+		/>
 	{:else if ws.canEdit}
 		<ChatPanel {store} tabs={false} remoteDrafts={ws.remoteDrafts} {onComment} />
 	{:else}
@@ -141,11 +200,14 @@
 
 <style>
 	.chat {
+		--chat-gutter: 2rem;
+		--chat-inset: 1rem;
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
 		min-width: 0;
+		container: chat-pane / inline-size;
 	}
 
 	.chat--hidden {
@@ -166,9 +228,16 @@
 		align-items: stretch;
 		justify-content: flex-end;
 		width: 100%;
-		max-width: calc(42.5rem + 4rem);
+		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
-		padding: 2rem;
+		padding: 2rem calc(var(--chat-gutter) + var(--chat-inset));
+	}
+
+	@container chat-pane (min-width: 48rem) {
+		.gate--skeleton,
+		.viewer {
+			--chat-inset: 1.5rem;
+		}
 	}
 
 	.gate-title {
@@ -186,9 +255,9 @@
 	.viewer {
 		flex: none;
 		width: 100%;
-		max-width: calc(42.5rem + 4rem);
+		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
 		margin: 0 auto;
-		padding: 0 2rem 1rem;
+		padding: 0 calc(var(--chat-gutter) + var(--chat-inset)) 1rem;
 	}
 
 	.viewer-box {
