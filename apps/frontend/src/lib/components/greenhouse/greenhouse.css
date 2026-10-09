@@ -30,7 +30,7 @@
 	--gh-side-session: 2.5rem;
 	--gh-bar: 2.5rem;
 	--gh-titlebar: 2.75rem;
-	--gh-gutter: 0.5rem;
+	--gh-gutter: 0px;
 	--gh-tab: 2.25rem;
 	--gh-row: 2rem;
 	--gh-list-row: 1.75rem;
@@ -51,7 +51,6 @@
 	--gh-r-control: var(--radius-xs);
 	--gh-r-row: var(--radius-md);
 	--gh-r-sheet: var(--radius-lg);
-	--gh-r-panel: var(--radius-lg);
 	--gh-overlay-shadow:
 		0 1px 2px color-mix(in oklab, black 7%, transparent),
 		0 12px 32px -8px color-mix(in oklab, black 18%, transparent);

@@ -2,7 +2,7 @@ export const LEFT = { min: 220, max: 400, initial: 280 } as const;
 export const RIGHT = { min: 360, max: 760, initial: 520 } as const;
 export const DOCK = { min: 0.2, max: 0.8, initial: 0.55 } as const;
 export const CENTER_MIN = 480;
-export const GUTTER = 8;
+export const GUTTER = 0;
 
 type Saved = {
 	left?: number;

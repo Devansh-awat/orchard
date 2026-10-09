@@ -302,6 +302,7 @@
 		min-width: 0;
 		height: var(--gh-titlebar);
 		padding-right: calc(var(--gh-gutter) + var(--gh-edge) - var(--gh-ibtn-inset));
+		border-bottom: 1px solid var(--gh-line);
 		background: var(--gh-frame);
 	}
 

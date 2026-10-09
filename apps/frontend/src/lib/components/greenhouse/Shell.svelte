@@ -458,6 +458,14 @@
 		padding-left: 0;
 	}
 
+	.col--left {
+		border-right: 1px solid var(--gh-line);
+	}
+
+	.col--right {
+		border-left: 1px solid var(--gh-line);
+	}
+
 	.col {
 		position: relative;
 		display: flex;
@@ -472,8 +480,6 @@
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
-		border: 1px solid var(--gh-line);
-		border-radius: var(--gh-r-panel);
 		background: var(--gh-editor);
 		overflow: hidden;
 	}
