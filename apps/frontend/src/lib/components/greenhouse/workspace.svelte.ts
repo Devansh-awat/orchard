@@ -162,6 +162,7 @@ export class MachineWorkspace {
 	readonly pendingPrompts = new SvelteMap<string, string>();
 	readonly launches = new SvelteMap<string, SessionLaunch>();
 	readonly #hiddenChats = new SvelteSet<string>();
+	pendingChat = $state<string | null>(null);
 
 	readonly machine = $derived.by(() => this.host.machine());
 	readonly running = $derived(this.machine?.status === 'running');
@@ -681,6 +682,13 @@ export class MachineWorkspace {
 	async deleteChat(chatId: string) {
 		const session = this.session;
 		if (!session || !this.canEdit || isLegacy(session)) return;
+		if (!this.running) {
+			toasts.add({
+				title: `Start ${this.machine?.name ?? 'the machine'} to delete chats`,
+				color: 'info'
+			});
+			return;
+		}
 		const before = this.chats.get(session.id) ?? this.chatList;
 		const tabs = this.tabs;
 		const index = tabs.findIndex((t) => t.id === chatTabId(chatId));
@@ -712,6 +720,12 @@ export class MachineWorkspace {
 	async newChat() {
 		const session = this.session;
 		if (!session || !this.canEdit || isPreparing(session)) return;
+		if (!this.running) {
+			this.pendingChat = session.id;
+			const status = this.machine?.status;
+			if (status === 'stopped' || status === 'error') await this.lifecycle('start');
+			return;
+		}
 		if (!isLegacy(session)) {
 			try {
 				const chat = await api.createChat(this.sandboxId, session.id);

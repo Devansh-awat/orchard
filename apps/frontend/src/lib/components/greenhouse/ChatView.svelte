@@ -149,6 +149,15 @@
 		});
 	});
 
+	$effect(() => {
+		const sid = ws.sessionId;
+		if (!ready || staged || !sid || ws.pendingChat !== sid) return;
+		untrack(() => {
+			ws.pendingChat = null;
+			void ws.newChat();
+		});
+	});
+
 	let sending = false;
 	$effect(() => {
 		const sid = ws.sessionId;
