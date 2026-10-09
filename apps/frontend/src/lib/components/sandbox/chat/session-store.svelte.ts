@@ -1924,8 +1924,47 @@ export class ChatSessionStore {
 		return null;
 	}
 
+	#onUserFile(thread: SessionThread, part: OcPart) {
+		const attachment = ocPartAttachment(part);
+		if (!attachment) return;
+		const same = (list: OcAttachment[] | undefined) =>
+			!!list?.some((a) => a.id === attachment.id || a.dataUrl === attachment.dataUrl);
+		const entry = thread.entries.find(
+			(e): e is UserEntry => e.kind === 'user' && e.messageID === part.messageID
+		);
+		if (entry) {
+			if (!same(entry.attachments)) entry.attachments = [...(entry.attachments ?? []), attachment];
+			return;
+		}
+		if (thread.entries.some((e) => e.kind === 'user' && !e.messageID && same(e.attachments))) {
+			return;
+		}
+		const author = this.authorOf(part.messageID);
+		thread.push({
+			kind: 'user',
+			key: nextKey(),
+			text: '',
+			time: part.time?.start ?? Date.now(),
+			messageID: part.messageID,
+			attachments: [attachment],
+			...(author ? { author } : {})
+		});
+	}
+
 	#onUserPart(thread: SessionThread, part: OcPart) {
-		if (part.type !== 'text' || !part.text?.trim() || part.synthetic || part.ignored) return;
+		if (part.synthetic || part.ignored) return;
+		if (part.type === 'file') {
+			this.#onUserFile(thread, part);
+			return;
+		}
+		if (part.type !== 'text' || !part.text?.trim()) return;
+		const bare = thread.entries.find(
+			(e): e is UserEntry => e.kind === 'user' && e.messageID === part.messageID && !e.text
+		);
+		if (bare) {
+			bare.text = part.text;
+			return;
+		}
 		const author = this.authorOf(part.messageID);
 		const placement = placeUserPart(
 			thread.entries,
