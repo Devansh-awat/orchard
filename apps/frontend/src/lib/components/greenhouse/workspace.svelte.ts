@@ -167,6 +167,7 @@ export class MachineWorkspace {
 	readonly launches = new SvelteMap<string, SessionLaunch>();
 	readonly #hiddenChats = new SvelteSet<string>();
 	pendingChat = $state<string | null>(null);
+	creatingChat = $state(false);
 
 	readonly machine = $derived.by(() => this.host.machine());
 	readonly running = $derived(this.machine?.status === 'running');
@@ -735,6 +736,7 @@ export class MachineWorkspace {
 			return;
 		}
 		if (!isLegacy(session)) {
+			this.creatingChat = true;
 			try {
 				const chat = await api.createChat(this.sandboxId, session.id);
 				const list = this.chats.get(session.id) ?? this.chatList;
@@ -750,6 +752,8 @@ export class MachineWorkspace {
 					});
 					return;
 				}
+			} finally {
+				this.creatingChat = false;
 			}
 		}
 		await this.store.createSession(session.worktreePath);

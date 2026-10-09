@@ -12,6 +12,7 @@
 		Github,
 		Hammer,
 		ListChecks,
+		LoaderCircle,
 		MessageSquare,
 		Play,
 		Plus,
@@ -318,10 +319,17 @@
 						class="send"
 						aria-label={stopped ? 'Start the machine and launch' : 'Start session'}
 						title="{stopped ? 'Start the machine and launch' : 'Start session'} ({launchChord})"
+						aria-busy={launching || !!queued}
 						disabled={!canLaunch}
 						onclick={launch}
 					>
-						<ArrowUp size={16} strokeWidth={2} />
+						{#if launching || queued}
+							<span class="animate-spin inline-grid" data-motion="progress"
+								><LoaderCircle size={16} strokeWidth={2} /></span
+							>
+						{:else}
+							<ArrowUp size={16} strokeWidth={2} />
+						{/if}
 					</button>
 				</div>
 			</div>

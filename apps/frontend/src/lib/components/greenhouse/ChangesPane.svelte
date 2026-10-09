@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { ArrowDown, ArrowUp, ChevronDown, GitCommitHorizontal, RefreshCw } from 'lucide-svelte';
+	import {
+		ArrowDown,
+		ArrowUp,
+		ChevronDown,
+		GitCommitHorizontal,
+		LoaderCircle,
+		RefreshCw
+	} from 'lucide-svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -45,6 +52,22 @@
 
 	let message = $state('');
 	let busy = $state<string | null>(null);
+	let refreshing = $state(false);
+	const BUSY_VERB: Record<string, string> = {
+		Fetch: 'Fetching…',
+		Pull: 'Pulling…',
+		Push: 'Pushing…'
+	};
+
+	async function refresh() {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			await ws.refreshChanges(session.id);
+		} finally {
+			refreshing = false;
+		}
+	}
 	let menuOpen = $state(false);
 
 	function split(path: string) {
@@ -180,7 +203,9 @@
 				</Menu>
 			</div>
 			<span class="who">
-				{#if ws.canEdit && ws.githubLinked === false}
+				{#if busy && BUSY_VERB[busy]}
+					{BUSY_VERB[busy]}
+				{:else if ws.canEdit && ws.githubLinked === false}
 					<a class="link" href={api.LINK_GITHUB_HREF}>{LINK_GITHUB}</a>
 				{:else if ws.canPush && ws.pushAs}
 					You’ll push as @{ws.pushAs}
@@ -193,7 +218,13 @@
 				title={pushBlocked ?? `Pull ${behind} with rebase`}
 				onclick={() => run('Pull', () => api.gitPull(ws.sandboxId, scopeOf(session)))}
 			>
-				<ArrowDown size={14} strokeWidth={1.75} /><span class="gh-num">{behind}</span>
+				{#if busy === 'Pull'}
+					<span class="animate-spin inline-grid" data-motion="progress"
+						><LoaderCircle size={14} strokeWidth={1.75} /></span
+					>
+				{:else}
+					<ArrowDown size={14} strokeWidth={1.75} />
+				{/if}<span class="gh-num">{behind}</span>
 			</button>
 			<button
 				type="button"
@@ -202,16 +233,25 @@
 				title={pushBlocked ?? `Push ${ahead}`}
 				onclick={() => run('Push', () => api.gitPush(ws.sandboxId, scopeOf(session)))}
 			>
-				<ArrowUp size={14} strokeWidth={1.75} /><span class="gh-num">{ahead}</span>
+				{#if busy === 'Push'}
+					<span class="animate-spin inline-grid" data-motion="progress"
+						><LoaderCircle size={14} strokeWidth={1.75} /></span
+					>
+				{:else}
+					<ArrowUp size={14} strokeWidth={1.75} />
+				{/if}<span class="gh-num">{ahead}</span>
 			</button>
 			<button
 				type="button"
 				class="gh-ibtn"
 				aria-label="Refresh changes"
 				title="Refresh changes"
-				onclick={() => ws.refreshChanges(session.id)}
+				aria-busy={refreshing}
+				onclick={refresh}
 			>
-				<RefreshCw size={16} strokeWidth={1.75} />
+				<span class="inline-grid" class:animate-spin={refreshing} data-motion="progress"
+					><RefreshCw size={16} strokeWidth={1.75} /></span
+				>
 			</button>
 		</div>
 	</div>

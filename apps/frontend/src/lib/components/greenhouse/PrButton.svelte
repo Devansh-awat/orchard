@@ -6,6 +6,7 @@
 		GitPullRequest,
 		GitPullRequestDraft,
 		Link2,
+		LoaderCircle,
 		Rocket,
 		Upload
 	} from 'lucide-svelte';
@@ -37,6 +38,12 @@
 
 	let menuOpen = $state(false);
 	let busy = $state<string | null>(null);
+	const BUSY_LABEL: Record<string, string> = {
+		'Create PR': 'Creating…',
+		'Draft PR': 'Creating draft…',
+		Push: 'Pushing…',
+		Merge: 'Merging…'
+	};
 
 	async function run(label: string, fn: () => Promise<void>) {
 		if (busy) return;
@@ -103,7 +110,12 @@
 			title={!pr ? pushBlocked : undefined}
 			onclick={primary}
 		>
-			{#if merged}
+			{#if busy}
+				<span class="animate-spin inline-grid" data-motion="progress"
+					><LoaderCircle size={14} strokeWidth={1.75} /></span
+				>
+				<span data-align="title">{BUSY_LABEL[busy] ?? 'Working…'}</span>
+			{:else if merged}
 				<GitMerge size={14} strokeWidth={1.75} />
 				<span data-align="title">Merged #{pr?.prNumber}</span>
 			{:else if pr}
@@ -112,7 +124,7 @@
 				<ExternalLink size={12} strokeWidth={1.75} />
 			{:else}
 				<GitPullRequest size={14} strokeWidth={1.75} />
-				<span data-align="title">{busy === 'Create PR' ? 'Creating…' : 'Create PR'}</span>
+				<span data-align="title">Create PR</span>
 			{/if}
 		</button>
 		<Menu bind:open={menuOpen} placement="bottom-end">

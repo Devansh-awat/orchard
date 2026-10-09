@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { FileCode, GitCompare, Globe, History, MessageSquare, Plus, Undo2 } from 'lucide-svelte';
+	import {
+		FileCode,
+		GitCompare,
+		Globe,
+		History,
+		LoaderCircle,
+		MessageSquare,
+		Plus,
+		Undo2
+	} from 'lucide-svelte';
 	import PopoverPanel from '$lib/components/ui/PopoverPanel.svelte';
 	import { Button, Modal } from '$lib/components/ui';
 	import { TabStrip, type StripTab } from '$lib/components/sandbox/editor';
@@ -86,11 +95,22 @@
 				type="button"
 				class="gh-ibtn add"
 				aria-label="New chat"
-				title={ws.canEdit ? 'New chat' : VIEWER_ONLY}
-				disabled={!ws.canEdit || !ws.running}
+				title={!ws.canEdit
+					? VIEWER_ONLY
+					: ws.running
+						? 'New chat'
+						: `New chat, starts ${ws.machine?.name ?? 'the machine'}`}
+				aria-busy={ws.creatingChat || !!ws.pendingChat}
+				disabled={!ws.canEdit || ws.creatingChat}
 				onclick={() => ws.newChat()}
 			>
-				<Plus size={16} strokeWidth={1.75} />
+				{#if ws.creatingChat || ws.pendingChat}
+					<span class="animate-spin inline-grid" data-motion="progress"
+						><LoaderCircle size={16} strokeWidth={1.75} /></span
+					>
+				{:else}
+					<Plus size={16} strokeWidth={1.75} />
+				{/if}
 			</button>
 			<span class="grow"></span>
 			<PopoverPanel bind:open={historyOpen} placement="bottom-end">
