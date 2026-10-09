@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Unplug } from 'lucide-svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
@@ -18,7 +19,8 @@
 		onComment = undefined,
 		onTeamMessage = undefined,
 		onCommand = undefined,
-		options = undefined
+		options = undefined,
+		empty = undefined
 	}: {
 		store: ChatSessionStore;
 		tabs?: boolean;
@@ -32,6 +34,7 @@
 			alias: string | null
 		) => SlashNotice | null | void | Promise<SlashNotice | null | void>;
 		options?: (command: SlashCommand) => SlashOption[];
+		empty?: Snippet;
 	} = $props();
 
 	const comment = $derived(onComment ?? onTeamMessage);
@@ -59,7 +62,7 @@
 			<a href="/user/settings?tab=sandbox">Open user settings</a>
 		</div>
 	{/if}
-	<Transcript {store} />
+	<Transcript {store} {empty} />
 	{#if ready}
 		<div class="chat-dock">
 			<div class="chat-col chat-stack">

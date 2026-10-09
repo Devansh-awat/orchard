@@ -1,26 +1,27 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ChevronRight, CircleX } from 'lucide-svelte';
+	import { ChevronRight, CircleX, ListCollapse } from 'lucide-svelte';
 	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
-	import { slide } from '$lib/utils/transitions';
+	import { fade, slide } from '$lib/utils/transitions';
 	import type { ChatSessionStore } from '../session-store.svelte';
-	import { fmtWorked, liveStep, summarize, type AgentBlock } from '../turns';
+	import { liveWindow, summarize, workedLabel, type AgentBlock } from '../turns';
 	import Entry from './Entry.svelte';
+
+	const LIVE_WINDOW = 12;
 
 	let {
 		block,
 		store,
-		live = false,
-		status = null
+		live = false
 	}: {
 		block: AgentBlock;
 		store: ChatSessionStore;
 		live?: boolean;
-		status?: string | null;
 	} = $props();
 
 	let toggled = $state<boolean | null>(null);
+	let everything = $state(false);
 	let seen: boolean | undefined;
 	$effect(() => {
 		const next = greenhousePrefs.values.expandTools;
@@ -29,65 +30,75 @@
 	});
 
 	const open = $derived(toggled ?? greenhousePrefs.values.expandTools);
-	const shown = $derived(
+	const steps = $derived(
 		greenhousePrefs.values.showReasoning
 			? block.steps
 			: block.steps.filter((step) => step.entry.kind !== 'thinking')
 	);
+	const visible = $derived(
+		live && !everything ? liveWindow(steps, LIVE_WINDOW) : { hidden: 0, shown: steps }
+	);
 	const summary = $derived(summarize(block));
-	const expandable = $derived(shown.length > 0);
-	const label = $derived.by(() => {
-		if (live) return status ?? liveStep(block);
-		const verb = summary.thoughtOnly ? 'Thought' : 'Worked';
-		return summary.duration !== null ? `${verb} for ${fmtWorked(summary.duration)}` : verb;
-	});
-	const steps = $derived(
+	const expandable = $derived(steps.length > 0);
+	const count = $derived(
 		summary.steps > 0 ? `${summary.steps} ${summary.steps === 1 ? 'step' : 'steps'}` : ''
 	);
 	const lastStep = $derived(block.steps[block.steps.length - 1]?.entry ?? null);
 </script>
 
-<div class="act">
-	<button
-		type="button"
-		class="act-row"
-		class:act-row--live={live}
-		data-align="content"
-		aria-expanded={expandable ? open : undefined}
-		disabled={!expandable}
-		title={expandable ? (open ? 'Hide steps' : 'Show steps') : undefined}
-		onclick={() => (toggled = !open)}
-	>
-		<span class="act-label">{label}</span>
-		{#if steps}
-			<span class="act-sep" aria-hidden="true">·</span>
-			<span class="act-meta">{steps}</span>
-		{/if}
-		{#if summary.add > 0 || summary.del > 0}
-			<span class="act-sep" aria-hidden="true">·</span>
-			<span class="act-diff">
-				{#if summary.add > 0}<span class="diff-add">+{summary.add}</span>{/if}
-				{#if summary.del > 0}<span class="diff-del">−{summary.del}</span>{/if}
-			</span>
-		{/if}
-		{#if summary.failed > 0}
-			<span class="act-sep" aria-hidden="true">·</span>
-			<span class="act-failed">
-				<span class="act-failed-glyph" aria-hidden="true"
-					><CircleX size={16} strokeWidth={1.75} /></span
-				>
-				{summary.failed} failed
-			</span>
-		{/if}
-		{#if expandable}
+<div class="act" class:act--live={live}>
+	{#if !live && expandable}
+		<button
+			type="button"
+			class="act-row"
+			data-align="content"
+			aria-expanded={open}
+			title={open ? 'Hide steps' : 'Show steps'}
+			onclick={() => (toggled = !open)}
+			in:fade
+		>
+			<span class="act-label">{workedLabel(summary)}</span>
+			{#if count}
+				<span class="act-sep" aria-hidden="true">·</span>
+				<span class="act-meta">{count}</span>
+			{/if}
+			{#if summary.add > 0 || summary.del > 0}
+				<span class="act-sep" aria-hidden="true">·</span>
+				<span class="act-diff">
+					{#if summary.add > 0}<span class="diff-add">+{summary.add}</span>{/if}
+					{#if summary.del > 0}<span class="diff-del">−{summary.del}</span>{/if}
+				</span>
+			{/if}
+			{#if summary.failed > 0}
+				<span class="act-sep" aria-hidden="true">·</span>
+				<span class="act-failed">
+					<span class="act-failed-glyph" aria-hidden="true"
+						><CircleX size={16} strokeWidth={1.75} /></span
+					>
+					{summary.failed} failed
+				</span>
+			{/if}
 			<span class="act-chev" {@attach springRotate(() => open, { rest: 0, on: 90 })}>
 				<ChevronRight size={16} strokeWidth={1.75} />
 			</span>
-		{/if}
-	</button>
-	{#if open && expandable}
+		</button>
+	{/if}
+	{#if expandable && (live || open)}
 		<div class="act-steps" transition:slide>
-			{#each shown as step (step.entry.key)}
+			{#if visible.hidden > 0}
+				<button
+					type="button"
+					class="act-more"
+					data-align="step"
+					onclick={() => (everything = true)}
+				>
+					<span class="act-more-glyph" aria-hidden="true"
+						><ListCollapse size={16} strokeWidth={1.75} /></span
+					>
+					Show {visible.hidden} earlier {visible.hidden === 1 ? 'step' : 'steps'}
+				</button>
+			{/if}
+			{#each visible.shown as step (step.entry.key)}
 				<Entry
 					entry={step.entry}
 					{store}
@@ -116,7 +127,7 @@
 		min-width: 0;
 		max-width: 100%;
 		width: fit-content;
-		height: 1.75rem;
+		height: 2rem;
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-xs);
@@ -129,11 +140,7 @@
 		transition: color var(--dur-fast);
 	}
 
-	.act-row:disabled {
-		cursor: default;
-	}
-
-	.act-row:hover:not(:disabled) {
+	.act-row:hover {
 		color: var(--text-default);
 	}
 
@@ -193,6 +200,31 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		padding: var(--space-1) 0 var(--space-1) var(--space-4);
+	}
+
+	.act-more {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: fit-content;
+		min-height: 2rem;
+		padding: 0;
+		border: none;
+		background: none;
+		font-size: var(--text-footnote);
+		line-height: 1.25rem;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition: color var(--dur-fast);
+	}
+
+	.act-more:hover {
+		color: var(--text-default);
+	}
+
+	.act-more-glyph {
+		display: inline-flex;
+		width: 1rem;
+		height: 1rem;
 	}
 </style>

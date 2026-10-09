@@ -43,7 +43,7 @@
 	const showActions = $derived(!comment && actions && !!messageID && !!onfork && !!onrevert);
 	const clock = $derived(time !== null && Number.isFinite(time) ? fmtClock(time) : null);
 	const showMeta = $derived(!grouped && (!own || comment));
-	const align = $derived(own ? 'own' : 'content');
+	const align = $derived(own && comment ? 'own' : 'content');
 </script>
 
 <div
@@ -51,6 +51,7 @@
 	class:hm--own={own}
 	class:hm--other={!own}
 	class:hm--comment={comment}
+	class:hm--prompt={!comment}
 	class:hm--reverted={reverted}
 	data-human={comment ? 'comment' : 'prompt'}
 >
@@ -176,7 +177,7 @@
 		min-width: 0;
 	}
 
-	.hm--own .hm-line {
+	.hm--own.hm--comment .hm-line {
 		flex-direction: row-reverse;
 	}
 
@@ -187,6 +188,10 @@
 		display: flex;
 		justify-content: center;
 		width: var(--chat-gutter);
+	}
+
+	.hm--prompt {
+		align-items: stretch;
 	}
 
 	.hm-bubble {
@@ -210,6 +215,11 @@
 		border-color: var(--border-default);
 		background: none;
 		box-shadow: none;
+	}
+
+	.hm--prompt .hm-bubble {
+		flex: 1;
+		max-width: none;
 	}
 
 	.hm-text {
@@ -240,6 +250,16 @@
 		flex-shrink: 0;
 		opacity: 0;
 		transition: opacity var(--dur-fast);
+	}
+
+	.hm--prompt .hm-actions {
+		position: absolute;
+		top: var(--space-1);
+		right: var(--space-1);
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-xs);
+		background: var(--bg-surface);
+		box-shadow: var(--elev-1);
 	}
 
 	.hm:hover .hm-actions,

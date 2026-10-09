@@ -1,11 +1,12 @@
 import type { ChatEntry, FeedEntry, FeedItem } from './session-store.svelte';
-import { fmtDuration, toolVerb } from './format';
+import { doingLine, fmtDuration, isRunning, plainLine } from './steps';
 
 export type HumanRow = Extract<FeedItem, { type: 'prompt' | 'comment' }>;
 
 export type AgentBlock = {
 	type: 'agent';
 	key: string;
+	start: number | null;
 	steps: FeedEntry[];
 	answer: FeedEntry[];
 	errors: FeedEntry[];
@@ -26,16 +27,29 @@ export type ActivitySummary = {
 	thoughtOnly: boolean;
 };
 
+export type RailMark = {
+	key: string;
+	kind: 'prompt' | 'comment' | 'agent';
+	who: string;
+	preview: string;
+	live: boolean;
+};
+
 const PROCEDURAL = new Set<ChatEntry['kind']>(['thinking', 'tool', 'agent']);
 
-function toBlock(entries: FeedEntry[]): AgentBlock {
+function entryTime(entry: ChatEntry): number | null {
+	return typeof entry.time === 'number' && Number.isFinite(entry.time) ? entry.time : null;
+}
+
+function toBlock(key: string, start: number | null, entries: FeedEntry[]): AgentBlock {
 	let last = -1;
 	entries.forEach((item, i) => {
 		if (PROCEDURAL.has(item.entry.kind)) last = i;
 	});
 	const block: AgentBlock = {
 		type: 'agent',
-		key: `b:${entries[0]?.entry.key ?? 'pending'}`,
+		key,
+		start,
 		steps: [],
 		answer: [],
 		errors: [],
@@ -57,61 +71,80 @@ export function buildChunks(feed: FeedItem[], busy: boolean): Chunk[] {
 	const chunks: Chunk[] = [];
 	let chunk: Chunk | null = null;
 	let pending: FeedEntry[] = [];
+	let held: HumanRow[] = [];
+	let open = false;
+	let anchor: string | null = null;
+	let start: number | null = null;
 
-	const open = (key: string) => {
-		chunk = { key: `k:${key}`, rows: [] };
-		chunks.push(chunk);
-		return chunk;
+	const begin = (key: string): Chunk => {
+		const next: Chunk = { key: `k:${key}`, rows: [] };
+		chunks.push(next);
+		chunk = next;
+		return next;
 	};
-	const close = () => {
-		if (pending.length === 0) return;
-		const target: Chunk = chunk ?? open(pending[0].entry.key);
-		target.rows.push(toBlock(pending));
-		pending = [];
-	};
+	const current = (): Chunk | null => chunk;
 	const lastRow = (): ChunkRow | undefined => {
-		const current = chunk as Chunk | null;
-		return current?.rows[current.rows.length - 1];
+		const rows = current()?.rows;
+		return rows?.[rows.length - 1];
+	};
+	const hasAgent = (): boolean => current()?.rows.some((r) => r.type === 'agent') ?? false;
+	const release = () => {
+		if (held.length === 0) return;
+		const target = current() ?? begin(held[0].key);
+		target.rows.push(...held);
+		held = [];
+	};
+	const close = (force: boolean) => {
+		if (pending.length > 0 || (force && open)) {
+			const key = anchor ?? pending[0]?.entry.key ?? 'live';
+			const target = current() ?? begin(key);
+			target.rows.push(toBlock(`b:${key}`, start, pending));
+		}
+		pending = [];
+		open = false;
+		anchor = null;
+		start = null;
+		release();
 	};
 
 	for (const item of feed) {
-		if (item.type === 'prompt' || item.type === 'comment') {
-			close();
-			const current = chunk as Chunk | null;
-			const target: Chunk = !current || lastRow()?.type === 'agent' ? open(item.key) : current;
-			target.rows.push(item);
+		if (item.type === 'prompt') {
+			close(false);
+			if (!current() || hasAgent()) begin(item.key);
+			current()?.rows.push(item);
+			open = true;
+			anchor = item.key;
+			start = entryTime(item.entry);
+			continue;
+		}
+		if (item.type === 'comment') {
+			if (open) held.push(item);
+			else (current() ?? begin(item.key)).rows.push(item);
 			continue;
 		}
 		const entries: FeedEntry[] =
 			item.type === 'tools' ? item.items : [{ entry: item.entry, index: item.index }];
 		for (const entry of entries) {
-			if (pending.length === 0 && (!chunk || lastRow()?.type === 'agent')) {
-				open(entry.entry.key);
+			if (pending.length === 0 && !open) {
+				if (!current() || lastRow()?.type === 'agent') begin(entry.entry.key);
+				anchor = entry.entry.key;
 			}
+			if (!open) open = true;
+			if (start === null) start = entryTime(entry.entry);
 			pending.push(entry);
-			if (entry.entry.kind === 'result') close();
+			if (entry.entry.kind === 'result') close(false);
 		}
 	}
-	close();
 
-	const tail = chunks[chunks.length - 1];
-	const end = tail?.rows[tail.rows.length - 1];
-	if (busy && tail && end && end.type !== 'agent') {
-		tail.rows.push({
-			type: 'agent',
-			key: `b:after:${end.key}`,
-			steps: [],
-			answer: [],
-			errors: [],
-			notes: [],
-			result: null
-		});
+	if (busy && !open && pending.length === 0) {
+		const end = lastRow();
+		if (end && end.type !== 'agent') {
+			open = true;
+			anchor = `after:${end.key}`;
+		}
 	}
+	close(busy);
 	return chunks;
-}
-
-function entryTime(entry: ChatEntry): number | null {
-	return typeof entry.time === 'number' && Number.isFinite(entry.time) ? entry.time : null;
 }
 
 export function summarize(block: AgentBlock): ActivitySummary {
@@ -153,18 +186,82 @@ export function fmtWorked(ms: number): string {
 	return fmtDuration(ms);
 }
 
+export function workedLabel(summary: ActivitySummary): string {
+	const verb = summary.thoughtOnly ? 'Thought' : 'Worked';
+	return summary.duration !== null ? `${verb} for ${fmtWorked(summary.duration)}` : verb;
+}
+
 export function liveStep(block: AgentBlock): string {
 	for (let i = block.steps.length - 1; i >= 0; i -= 1) {
 		const entry = block.steps[i].entry;
-		if (entry.kind === 'tool' && (entry.status === 'running' || entry.status === 'pending')) {
-			const verb = toolVerb(entry.name, true).verb;
-			return entry.summary ? `${verb} ${entry.summary}` : verb;
-		}
-		if (entry.kind === 'agent' && (entry.status === 'running' || entry.status === 'pending')) {
+		if (entry.kind === 'tool' && isRunning(entry.status)) return doingLine(entry);
+		if (entry.kind === 'agent' && isRunning(entry.status)) {
 			return `Running the ${entry.agentType} agent`;
 		}
 		if (entry.kind === 'thinking' && !entry.done) return 'Thinking';
 	}
-	if (block.answer.length > 0) return 'Writing';
-	return 'Working';
+	if (block.answer.length > 0) return 'Writing the reply';
+	if (block.steps.length > 0) return 'Planning the next step';
+	return 'Starting';
+}
+
+export function liveWindow<T>(steps: T[], size: number): { hidden: number; shown: T[] } {
+	if (steps.length <= size) return { hidden: 0, shown: steps };
+	return { hidden: steps.length - size, shown: steps.slice(steps.length - size) };
+}
+
+function agentPreview(block: AgentBlock, live: boolean): string {
+	for (let i = block.answer.length - 1; i >= 0; i -= 1) {
+		const entry = block.answer[i].entry;
+		if (entry.kind === 'text') {
+			const line = plainLine(entry.text);
+			if (line) return line;
+		}
+	}
+	if (live) return liveStep(block);
+	const error = block.errors[0]?.entry;
+	if (error?.kind === 'error') return plainLine(error.detail);
+	const summary = summarize(block);
+	if (summary.steps === 0 && !summary.thoughtOnly) return 'No output';
+	const steps =
+		summary.steps > 0 ? ` · ${summary.steps} ${summary.steps === 1 ? 'step' : 'steps'}` : '';
+	return `${workedLabel(summary)}${steps}`;
+}
+
+export function railMarks(chunks: Chunk[], liveKey: string | null): RailMark[] {
+	const marks: RailMark[] = [];
+	for (const chunk of chunks) {
+		for (const row of chunk.rows) {
+			if (row.type === 'agent') {
+				const live = row.key === liveKey;
+				marks.push({
+					key: row.key,
+					kind: 'agent',
+					who: 'Agent',
+					preview: agentPreview(row, live),
+					live
+				});
+			} else if (row.type === 'prompt') {
+				const files = row.entry.attachments?.length ?? 0;
+				marks.push({
+					key: row.key,
+					kind: 'prompt',
+					who: row.own ? 'You' : (row.author?.name ?? 'Prompt'),
+					preview:
+						plainLine(row.entry.text) ||
+						(files > 0 ? `${files} ${files === 1 ? 'attachment' : 'attachments'}` : 'Prompt'),
+					live: false
+				});
+			} else {
+				marks.push({
+					key: row.key,
+					kind: 'comment',
+					who: row.own ? 'You' : row.comment.author.name,
+					preview: plainLine(row.comment.body) || 'Comment',
+					live: false
+				});
+			}
+		}
+	}
+	return marks;
 }

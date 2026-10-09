@@ -1,17 +1,22 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { ArrowDown } from 'lucide-svelte';
 	import { Skeleton } from '$lib/components/ui';
+	import { decorativeMotion } from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
 	import { commentTime, type ChatSessionStore } from './session-store.svelte';
-	import { buildChunks, type ChunkRow } from './turns';
+	import { buildChunks, railMarks, type ChunkRow } from './turns';
 	import AgentTurn from './parts/AgentTurn.svelte';
 	import HumanMessage from './parts/HumanMessage.svelte';
+	import MessageRail from './MessageRail.svelte';
 
-	let { store }: { store: ChatSessionStore } = $props();
+	let { store, empty = undefined }: { store: ChatSessionStore; empty?: Snippet } = $props();
 
 	let scrollEl = $state<HTMLDivElement | undefined>(undefined);
 	let atBottom = $state(true);
+	let inView = $state.raw<ReadonlySet<string>>(new Set());
 	let stick = true;
+	let measuring = 0;
 
 	const thread = $derived(store.active);
 	const loading = $derived(!store.settled || (thread?.loading ?? false));
@@ -50,6 +55,50 @@
 				: null
 	);
 
+	const marks = $derived(railMarks(chunks, liveKey));
+
+	function measure() {
+		measuring = 0;
+		if (!scrollEl) return;
+		const view = scrollEl.getBoundingClientRect();
+		const seen: string[] = [];
+		for (const el of scrollEl.querySelectorAll<HTMLElement>('[data-mark]')) {
+			const box = el.getBoundingClientRect();
+			if (box.bottom > view.top && box.top < view.bottom && el.dataset.mark) {
+				seen.push(el.dataset.mark);
+			}
+		}
+		if (seen.length === inView.size && seen.every((key) => inView.has(key))) return;
+		inView = new Set(seen);
+	}
+
+	function schedule() {
+		if (measuring) return;
+		measuring = requestAnimationFrame(measure);
+	}
+
+	function jumpTo(key: string) {
+		if (!scrollEl) return;
+		const el = scrollEl.querySelector<HTMLElement>(`[data-mark="${CSS.escape(key)}"]`);
+		if (!el) return;
+		const top =
+			el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+		stick = false;
+		scrollEl.scrollTo({
+			top: Math.max(0, top - 16),
+			behavior: decorativeMotion() ? 'smooth' : 'auto'
+		});
+	}
+
+	$effect(() => {
+		void marks;
+		schedule();
+		return () => {
+			if (measuring) cancelAnimationFrame(measuring);
+			measuring = 0;
+		};
+	});
+
 	function author(row: ChunkRow): string | null {
 		if (row.type === 'prompt') return row.author?.id ?? 'self';
 		if (row.type === 'comment') return row.comment.author.id;
@@ -71,6 +120,7 @@
 		if (!scrollEl) return;
 		stick = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 48;
 		atBottom = stick;
+		schedule();
 	}
 
 	function jump() {
@@ -82,6 +132,7 @@
 	function follow(el: HTMLElement) {
 		const ro = new ResizeObserver(() => {
 			if (stick) toBottom();
+			schedule();
 		});
 		ro.observe(el);
 		return () => ro.disconnect();
@@ -106,6 +157,8 @@
 					<Skeleton height="0.75rem" width="68%" />
 					<Skeleton height="0.75rem" width="34%" />
 				</div>
+			{:else if chunks.length === 0 && empty}
+				{@render empty()}
 			{:else if chunks.length === 0}
 				<div class="tx-empty" data-align="content">
 					<p class="tx-empty-title">Ask the agent to build something.</p>
@@ -118,7 +171,12 @@
 					<div class="chunk" data-chunk>
 						{#each chunk.rows as row, ri (row.key)}
 							{@const together = joined(chunk.rows, ri)}
-							<div class="row" class:row--first={ri === 0} class:row--joined={together}>
+							<div
+								class="row"
+								class:row--first={ri === 0}
+								class:row--joined={together}
+								data-mark={row.key}
+							>
 								{#if row.type === 'agent'}
 									<AgentTurn
 										block={row}
@@ -160,6 +218,9 @@
 			{/if}
 		</div>
 	</div>
+	{#if marks.length > 1 && !loading}
+		<MessageRail {marks} {inView} onjump={jumpTo} />
+	{/if}
 	{#if !atBottom}
 		<button type="button" class="tx-jump" transition:fade onclick={jump}>
 			<ArrowDown size={14} strokeWidth={1.75} /> Jump to latest

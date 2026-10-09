@@ -72,7 +72,7 @@
 		align-items: flex-start;
 		gap: var(--space-2);
 		min-width: 0;
-		padding: var(--space-1) 0;
+		padding: 0.375rem 0;
 	}
 
 	.note-glyph {

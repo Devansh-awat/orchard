@@ -5,8 +5,17 @@
 	import { Eye, Play } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { ChatPanel, PendingDock, Transcript } from '$lib/components/sandbox/chat';
+	import NewChat from '$lib/components/sandbox/chat/NewChat.svelte';
+	import {
+		chatTranscriptFile,
+		textFile,
+		type ContextChat,
+		type ContextPlan
+	} from '$lib/components/sandbox/chat/context-attach';
+	import { isPlanFile, planLabel } from '$lib/components/sandbox/chat/steps';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
+	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
 	import { GreenhouseCommands } from './chat-commands.svelte';
 	import SessionPreparing from './SessionPreparing.svelte';
@@ -156,6 +165,74 @@
 		});
 	});
 
+	const PLANS_DIR = '.opencode/plans';
+	const fresh = $derived(
+		store.settled && !!store.active && !store.active.loading && store.feed.length === 0
+	);
+
+	const contextChats = $derived.by((): ContextChat[] => {
+		if (!fresh) return [];
+		const active = store.activeId;
+		const worktree = session?.worktreePath ?? null;
+		const own: ContextChat[] = ws.chatList
+			.filter((chat) => chat.id !== active)
+			.map((chat) => ({
+				id: chat.id,
+				title: chat.title || 'Chat',
+				directory: worktree,
+				hint: 'This branch'
+			}));
+		const seen = new Set<string | null>([active, ...own.map((chat) => chat.id)]);
+		const recent: ContextChat[] = store.sessions
+			.filter((s) => !s.pending && !seen.has(s.id) && !/^new (session|chat)\b/i.test(s.title))
+			.sort((a, b) => b.updatedAt - a.updatedAt)
+			.map((s) => ({
+				id: s.id,
+				title: s.title || 'Chat',
+				directory: s.directory,
+				hint: s.repo ?? undefined
+			}));
+		return [...own, ...recent];
+	});
+
+	let plans = $state.raw<ContextPlan[]>([]);
+	let plansFor: string | null = null;
+	$effect(() => {
+		const current = session;
+		if (!current || !fresh || !ws.canEdit) return;
+		const key = `${current.id}:${store.activeId}`;
+		if (key === plansFor) return;
+		plansFor = key;
+		untrack(() => {
+			plans = [];
+			void loadPlans(current.worktreePath, key);
+		});
+	});
+
+	async function loadPlans(worktree: string, key: string) {
+		const nodes = await api.listDir(ws.sandboxId, worktree, PLANS_DIR);
+		if (plansFor !== key) return;
+		plans = nodes
+			.filter((node) => node.type === 'file' && isPlanFile(node.name))
+			.sort((a, b) => b.name.localeCompare(a.name))
+			.map((node) => ({
+				path: `${PLANS_DIR}/${node.name}`,
+				name: node.name,
+				label: planLabel(node.name)
+			}));
+	}
+
+	async function attachChat(chat: ContextChat) {
+		await store.addFiles([await chatTranscriptFile(ws.sandboxId, chat)]);
+	}
+
+	async function attachPlan(plan: ContextPlan) {
+		const current = session;
+		if (!current) return;
+		const content = await api.readFile(ws.sandboxId, { session: current.id }, plan.path);
+		await store.addFiles([textFile(plan.name, content)]);
+	}
+
 	function onComment(text: string) {
 		const chatId = ws.activeChatId;
 		if (chatId) return ws.sendComment(chatId, text);
@@ -207,7 +284,17 @@
 			commands={commands.list}
 			onCommand={(command, args, alias) => commands.run(command, args, alias)}
 			options={(command) => commands.options(command)}
-		/>
+		>
+			{#snippet empty()}
+				<NewChat
+					branch={session?.branch ?? null}
+					chats={contextChats}
+					{plans}
+					onchat={attachChat}
+					onplan={attachPlan}
+				/>
+			{/snippet}
+		</ChatPanel>
 	{:else}
 		<Transcript {store} />
 		<div class="viewer">

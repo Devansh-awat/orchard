@@ -1,14 +1,15 @@
 <script lang="ts">
-	import { LoaderCircle, Sprout } from 'lucide-svelte';
+	import { Sprout } from 'lucide-svelte';
 	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import type { ChatSessionStore } from '../session-store.svelte';
 	import { stripSycophancy } from '../sycophancy';
-	import type { AgentBlock } from '../turns';
+	import { liveStep, type AgentBlock } from '../turns';
 	import ActivityRow from './ActivityRow.svelte';
 	import ErrorPart from './ErrorPart.svelte';
 	import NoteLine from './NoteLine.svelte';
 	import TextPart from './TextPart.svelte';
 	import TurnFooter from './TurnFooter.svelte';
+	import WorkingLine from './WorkingLine.svelte';
 
 	let {
 		block,
@@ -25,8 +26,14 @@
 	} = $props();
 
 	const tidy = $derived(greenhousePrefs.values.notAbsolutelyRight);
-	const activity = $derived(live || block.steps.length > 0);
-	const lead = $derived(activity ? 'row' : block.answer.length > 0 ? 'prose' : 'small');
+	const activity = $derived(block.steps.length > 0);
+	const lead = $derived(
+		activity || (live && block.answer.length === 0)
+			? 'row'
+			: block.answer.length > 0
+				? 'prose'
+				: 'small'
+	);
 	const result = $derived(block.result?.entry.kind === 'result' ? block.result.entry : null);
 	const resultIndex = $derived(block.result?.index ?? 0);
 	const empty = $derived(
@@ -39,16 +46,17 @@
 	);
 </script>
 
-<div class="turn" class:turn--latest={latest} data-turn="agent">
+<div
+	class="turn"
+	class:turn--latest={latest}
+	data-turn="agent"
+	data-live={live ? 'true' : undefined}
+>
 	<span class="turn-mark turn-mark--{lead}" aria-hidden="true">
-		{#if live}
-			<span class="spin" data-motion="progress"><LoaderCircle size={16} strokeWidth={1.75} /></span>
-		{:else}
-			<span class="mark"><Sprout size={14} strokeWidth={1.75} /></span>
-		{/if}
+		<span class="mark"><Sprout size={14} strokeWidth={1.75} /></span>
 	</span>
 	{#if activity}
-		<ActivityRow {block} {store} {live} {status} />
+		<ActivityRow {block} {store} {live} />
 	{/if}
 	{#each block.notes as part (part.entry.key)}
 		{#if part.entry.kind === 'note'}
@@ -69,6 +77,9 @@
 			<ErrorPart detail={part.entry.detail} auth={part.entry.auth ?? false} />
 		{/if}
 	{/each}
+	{#if live}
+		<WorkingLine start={block.start} label={status ?? liveStep(block)} />
+	{/if}
 	{#if empty}
 		<p class="turn-empty" data-align="content">The agent returned no output</p>
 	{/if}
@@ -106,7 +117,7 @@
 	}
 
 	.turn-mark--row {
-		top: 0.25rem;
+		top: 0.375rem;
 	}
 
 	.turn-mark--prose {
@@ -125,12 +136,6 @@
 		border-radius: var(--radius-xs);
 		background: var(--fill-soft);
 		color: var(--text-muted);
-	}
-
-	.spin {
-		display: inline-flex;
-		margin-top: 0.125rem;
-		animation: spin 1s linear infinite;
 	}
 
 	.turn-empty {
@@ -157,11 +162,5 @@
 	.turn:hover .turn-foot,
 	.turn:focus-within .turn-foot {
 		opacity: 1;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 </style>
