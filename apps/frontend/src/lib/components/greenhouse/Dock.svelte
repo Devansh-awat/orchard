@@ -13,12 +13,13 @@
 		Wand2,
 		X
 	} from 'lucide-svelte';
-	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import Menu from '$lib/components/ui/Menu.svelte';
 	import MenuItem from '$lib/components/ui/MenuItem.svelte';
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import { statusMeta } from '$lib/components/ui/status';
 	import { springRotate } from '$lib/utils/motion.svelte';
+	import { whenIdle } from '$lib/utils/idle';
+	import { Lazy } from '$lib/utils/lazy.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { greenhousePrefs } from './prefs.svelte';
 	import { apiFetch, toasts } from '$lib/stores';
@@ -48,6 +49,11 @@
 
 	const app = getGreenhouseApp();
 	const mod = modKey();
+
+	const terminal = new Lazy(() => import('$lib/components/PodTerminal.svelte'));
+	const PodTerminal = $derived(terminal.current);
+
+	$effect(() => whenIdle(() => terminal.preload(), 1000));
 
 	type Scripts = {
 		setup: string | null;
@@ -291,10 +297,12 @@
 	}
 
 	export function focusTerminal() {
+		void terminal.preload();
 		select(`term:${list[0] ?? '1'}`);
 	}
 
 	export function newTerminal() {
+		void terminal.preload();
 		addTerminal();
 	}
 </script>
@@ -528,15 +536,17 @@
 							{:else if !scripts.setup && scripts.setupState === 'none'}
 								{@render missing('setup')}
 							{:else}
-								<PodTerminal
-									fontSize={greenhousePrefs.codeSize}
-									fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
-									onZoom={(s) => greenhousePrefs.stepCode(s)}
-									endpoint={endpoint('setup', 'ro')}
-									visible={tab === 'setup'}
-									sessionHandle={handleFor(session.id, 'setup')}
-									onSession={(h) => rememberScriptHandle('setup', h)}
-								/>
+								{#if PodTerminal}
+									<PodTerminal
+										fontSize={greenhousePrefs.codeSize}
+										fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
+										onZoom={(s) => greenhousePrefs.stepCode(s)}
+										endpoint={endpoint('setup', 'ro')}
+										visible={tab === 'setup'}
+										sessionHandle={handleFor(session.id, 'setup')}
+										onSession={(h) => rememberScriptHandle('setup', h)}
+									/>
+								{/if}
 							{/if}
 						</div>
 					{/key}
@@ -552,15 +562,17 @@
 								{:else if !scripts.running}
 									<p class="note">The run script is stopped. Press Run to start it.</p>
 								{:else}
-									<PodTerminal
-										fontSize={greenhousePrefs.codeSize}
-										fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
-										onZoom={(s) => greenhousePrefs.stepCode(s)}
-										endpoint={endpoint('run', 'ro')}
-										visible={tab === 'run'}
-										sessionHandle={handleFor(session.id, 'run')}
-										onSession={(h) => rememberScriptHandle('run', h)}
-									/>
+									{#if PodTerminal}
+										<PodTerminal
+											fontSize={greenhousePrefs.codeSize}
+											fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
+											onZoom={(s) => greenhousePrefs.stepCode(s)}
+											endpoint={endpoint('run', 'ro')}
+											visible={tab === 'run'}
+											sessionHandle={handleFor(session.id, 'run')}
+											onSession={(h) => rememberScriptHandle('run', h)}
+										/>
+									{/if}
 								{/if}
 							{/if}
 						</div>
@@ -608,15 +620,17 @@
 				{#each list as n (`${key}:${n}`)}
 					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `term:${n}`}>
-						<PodTerminal
-							fontSize={greenhousePrefs.codeSize}
-							fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
-							onZoom={(s) => greenhousePrefs.stepCode(s)}
-							endpoint={endpoint(n)}
-							visible={tab === `term:${n}`}
-							sessionHandle={handleFor(scope, `term:${n}`)}
-							onSession={(h) => rememberHandle(scope, `term:${n}`, h)}
-						/>
+						{#if PodTerminal}
+							<PodTerminal
+								fontSize={greenhousePrefs.codeSize}
+								fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
+								onZoom={(s) => greenhousePrefs.stepCode(s)}
+								endpoint={endpoint(n)}
+								visible={tab === `term:${n}`}
+								sessionHandle={handleFor(scope, `term:${n}`)}
+								onSession={(h) => rememberHandle(scope, `term:${n}`, h)}
+							/>
+						{/if}
 						{#if mode === 'ro'}
 							<span class="ro"><Eye size={14} strokeWidth={1.75} /> Read only</span>
 						{:else if others.length > 0 && tab === `term:${n}`}
@@ -631,15 +645,17 @@
 				{#each watched as user (`${key}:watch:${user.id}`)}
 					{@const scope = key}
 					<div class="pane" class:pane--on={tab === `watch:${user.id}`}>
-						<PodTerminal
-							fontSize={greenhousePrefs.codeSize}
-							fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
-							onZoom={(s) => greenhousePrefs.stepCode(s)}
-							endpoint={endpoint('1', 'ro', user.id)}
-							visible={tab === `watch:${user.id}`}
-							sessionHandle={handleFor(scope, `watch:${user.id}`)}
-							onSession={(h) => rememberHandle(scope, `watch:${user.id}`, h)}
-						/>
+						{#if PodTerminal}
+							<PodTerminal
+								fontSize={greenhousePrefs.codeSize}
+								fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
+								onZoom={(s) => greenhousePrefs.stepCode(s)}
+								endpoint={endpoint('1', 'ro', user.id)}
+								visible={tab === `watch:${user.id}`}
+								sessionHandle={handleFor(scope, `watch:${user.id}`)}
+								onSession={(h) => rememberHandle(scope, `watch:${user.id}`, h)}
+							/>
+						{/if}
 						<span class="ro"
 							><Eye size={14} strokeWidth={1.75} /> Watching {firstName(user.name)}, read only</span
 						>
