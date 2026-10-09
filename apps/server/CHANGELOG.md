@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.65.1](https://github.com/hackclub/orchard/compare/server/v2.65.0...server/v2.65.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* database volumes show capacity to a tenth of a GB so a 1Gi expand is visible, the data size stat says what it is, and a days old crash stops marking a db unhealthy ([b14df88](https://github.com/hackclub/orchard/commit/b14df889b4db79eba82375503dac6e5d02243590))
+* deleted greenhouse chats drop from every client ([e5de549](https://github.com/hackclub/orchard/commit/e5de54939aba322a62315808489a744ca9bfc0ed))
+* greenhouse chats match worktrees through the resolved home path ([a157579](https://github.com/hackclub/orchard/commit/a157579d0158f838113e7aa6c3325d855fe51072))
+
 ## [2.65.0](https://github.com/hackclub/orchard/compare/server/v2.64.0...server/v2.65.0) (2026-10-09)
 
 

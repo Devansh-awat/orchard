@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.58.1](https://github.com/hackclub/orchard/compare/frontend/v1.58.0...frontend/v1.58.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* ci db tests use the throwaway service postgres through TEST_DATABASE_URL, terminals show one status, context menus leave no focus ring ([a556e8f](https://github.com/hackclub/orchard/commit/a556e8f4819a22f4cc07468377976517a196ec3c))
+* database volumes show capacity to a tenth of a GB so a 1Gi expand is visible, the data size stat says what it is, and a days old crash stops marking a db unhealthy ([b14df88](https://github.com/hackclub/orchard/commit/b14df889b4db79eba82375503dac6e5d02243590))
+* deleted greenhouse chats drop from every client ([e5de549](https://github.com/hackclub/orchard/commit/e5de54939aba322a62315808489a744ca9bfc0ed))
+* greenhouse chats match worktrees through the resolved home path ([a157579](https://github.com/hackclub/orchard/commit/a157579d0158f838113e7aa6c3325d855fe51072))
+* new greenhouse chat starts a stopped machine ([9929690](https://github.com/hackclub/orchard/commit/9929690a71b27cc3f1ea3dc888ae244c728cc7d3))
+* transcript chips can be added again after removal ([4438bbd](https://github.com/hackclub/orchard/commit/4438bbd8d4cd09a1fd154e0f0bafec7340a88f42))
+
 ## [1.58.0](https://github.com/hackclub/orchard/compare/frontend/v1.57.0...frontend/v1.58.0) (2026-10-09)
 
 
