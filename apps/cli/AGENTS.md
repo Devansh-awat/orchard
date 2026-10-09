@@ -180,6 +180,18 @@ run_id=$(orchard job run <jobId> --wait --timeout 30m | jq -r .id)
 orchard job-run logs "$run_id"
 ```
 
+Import your Claude Code setup (CLAUDE.md, agents, commands, skills, MCP servers from
+`~/.claude` and `~/.claude.json`) into your account, encrypted at rest. Off a TTY it
+needs `--yes`; `--dry-run` lists what would be sent, including which MCP env/header keys
+carry values, without uploading:
+
+```sh
+orchard claude import --dry-run
+orchard claude import --yes --only agent,skill
+orchard claude list
+orchard claude remove command/git:commit --yes
+```
+
 Subscribe to org events (NDJSON, one event per line):
 
 ```sh

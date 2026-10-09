@@ -97,6 +97,7 @@ func rootCmd() *cobra.Command {
 		linkCmd(),
 		unlinkCmd(),
 		contextCmd(),
+		claudeCmd(),
 		apiCmd(),
 		orgCmd(),
 		projectCmd(),

@@ -113,6 +113,7 @@ orchard up          [dir]                              deploy the directory
 orchard import      <owner/repo[#branch]>              one-shot GitHub import
 orchard open        [deployment] [--dash]              open the app URL
 orchard context     show | clear
+orchard claude      import | list | remove             your Claude Code setup
 orchard events      tail                               live org events (SSE)
 orchard overview                                       org dashboard at a glance
 orchard invitation  list | accept | decline | accept-all
