@@ -291,6 +291,8 @@
 		height: var(--gh-row);
 		padding: 0 var(--row-pad);
 		border-radius: var(--gh-r-row);
+		border-block: 1px solid transparent;
+		background-clip: padding-box;
 		color: var(--gh-muted);
 		text-align: left;
 		transition:
@@ -385,6 +387,8 @@
 		height: var(--gh-row);
 		padding: 0 var(--row-pad);
 		border-radius: var(--gh-r-row);
+		border-block: 1px solid transparent;
+		background-clip: padding-box;
 		color: var(--gh-text);
 		font-weight: 600;
 		text-align: left;

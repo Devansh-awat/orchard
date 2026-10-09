@@ -188,6 +188,8 @@
 		height: var(--gh-session-row);
 		padding: 0 var(--row-pad, 0.5rem);
 		border-radius: var(--gh-r-row);
+		border-block: 1px solid transparent;
+		background-clip: padding-box;
 		color: var(--gh-muted);
 		text-align: left;
 		transition:
