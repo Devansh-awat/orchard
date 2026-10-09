@@ -239,17 +239,16 @@
 					{#if machine && !stopped}
 						<WakeUp status={machine.status} sandboxId={machine.id} />
 					{:else}
-						<span class="mark" aria-hidden="true"><Pip size={54} /></span>
+						<span class="mark" aria-hidden="true">
+							<Pip pose={machine ? 'sleep' : 'idle'} size={54} />
+						</span>
 						<h1 class="title" data-type="display">
-							{machine ? `${machine.name} is asleep` : 'Select and start your machine'}
-						</h1>
-						<p class="start-text">
 							{machine
-								? 'Start it to chat with the agent. Your repositories and sessions live on it.'
+								? `${machine.name} is asleep`
 								: app.machines.length > 0
-									? 'Greenhouse runs on your own computer in the cloud. Pick one below.'
-									: 'Greenhouse runs on your own computer in the cloud. Create one to start.'}
-						</p>
+									? 'Select and start your machine'
+									: 'Create your machine'}
+						</h1>
 						{#if machine}
 							<button
 								type="button"
@@ -591,14 +590,6 @@
 		gap: 0.75rem;
 		padding: 3rem 0 2rem;
 		text-align: center;
-	}
-
-	.start-text {
-		max-width: 26rem;
-		margin: 0;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--gh-faint);
 	}
 
 	.start-btn {

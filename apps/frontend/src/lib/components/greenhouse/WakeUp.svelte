@@ -57,14 +57,16 @@
 		untrack(() => localStorage.setItem(key, String(Date.now() - startedAt)));
 	});
 
-	const pose = $derived(!waking ? 'idle' : boot?.ready ? 'happy' : 'thinking');
+	const pose = $derived(
+		status === 'stopping' ? 'sleep' : !waking ? 'idle' : boot?.ready ? 'happy' : 'thinking'
+	);
 
 	const title = $derived(
 		status === 'stopping'
-			? 'Putting the sandbox to sleep'
+			? 'Putting the machine to sleep'
 			: status === 'deleting'
-				? 'Deleting the sandbox'
-				: 'Waking up the sandbox'
+				? 'Deleting the machine'
+				: 'Waking up the machine'
 	);
 
 	const detail = $derived(boot?.ready ? 'Almost there' : (boot?.label?.trim() ?? ''));

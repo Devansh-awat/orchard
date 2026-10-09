@@ -1,8 +1,8 @@
-export type PipPose = 'idle' | 'wave' | 'thinking' | 'happy';
+export type PipPose = 'idle' | 'wave' | 'thinking' | 'happy' | 'sleep';
 
 export const GRID = 18;
 
-type Eyes = 'open' | 'blink' | 'happy' | 'look';
+type Eyes = 'open' | 'blink' | 'shut' | 'happy' | 'look';
 type Arm = 'down' | 'up' | 'out' | 'both';
 
 export interface Frame {
@@ -11,6 +11,7 @@ export interface Frame {
 	arm: Arm;
 	spark: 0 | 1 | 2;
 	dots: 0 | 1 | 2 | 3;
+	z: 0 | 1 | 2 | 3;
 }
 
 export interface Run {
@@ -105,6 +106,9 @@ function pip(f: Frame): Run[] {
 	if (f.eyes === 'blink') {
 		c.art(ox + 4, ey + 1, ['E..E']);
 		c.art(ox + 3, ey + 2, ['C....C']);
+	} else if (f.eyes === 'shut') {
+		c.art(ox + 3, ey + 1, ['EE..EE']);
+		c.art(ox + 3, ey + 2, ['C....C']);
 	} else if (f.eyes === 'happy') {
 		c.art(ox + 3, ey, ['.E..E.', 'E....E', '..EE..']);
 	} else if (f.eyes === 'look') {
@@ -116,12 +120,13 @@ function pip(f: Frame): Run[] {
 	}
 
 	arms(c, f, ox - 1, ox + 12, oy + 6);
+	if (f.z > 0) c.art(14, 4 - f.z, ['LLLL', '..L.', '.L..', 'LLLL']);
 	if (f.dots > 0) thinkingDots(c, 13, 1, f.dots);
 	else sparkle(c, 16, 2, f.spark);
 	return c.runs();
 }
 
-const base: Frame = { bob: 0, eyes: 'open', arm: 'down', spark: 0, dots: 0 };
+const base: Frame = { bob: 0, eyes: 'open', arm: 'down', spark: 0, dots: 0, z: 0 };
 
 function seq(length: number, at: (i: number) => Partial<Frame>): Frame[] {
 	return Array.from({ length }, (_, i) => ({ ...base, ...at(i) }));
@@ -141,6 +146,11 @@ export const POSES: Record<PipPose, Frame[]> = {
 		dots: ((Math.floor(i / 2) % 4) as 0 | 1 | 2 | 3) || 0,
 		spark: Math.floor(i / 2) % 4 === 3 ? 2 : 0
 	})),
+	sleep: seq(24, (i) => ({
+		bob: (Math.floor(i / 6) % 2) as 0 | 1,
+		eyes: 'shut',
+		z: ((Math.floor(i / 4) % 3) + 1) as 1 | 2 | 3
+	})),
 	happy: seq(8, (i) => ({
 		bob: (i % 2) as 0 | 1,
 		eyes: 'happy',
@@ -153,7 +163,8 @@ export const REST: Record<PipPose, Frame> = {
 	idle: { ...base },
 	wave: { ...base, arm: 'up' },
 	thinking: { ...base, eyes: 'look', dots: 3 },
-	happy: { ...base, eyes: 'happy', arm: 'both', spark: 2 }
+	happy: { ...base, eyes: 'happy', arm: 'both', spark: 2 },
+	sleep: { ...base, eyes: 'shut', z: 2 }
 };
 
 export const TICK_MS = 200;
