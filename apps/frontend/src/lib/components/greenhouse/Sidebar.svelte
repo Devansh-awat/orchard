@@ -7,6 +7,7 @@
 		Search,
 		Settings,
 		LoaderCircle,
+		Play,
 		SmilePlus,
 		Trash2
 	} from 'lucide-svelte';
@@ -44,6 +45,8 @@
 		const timer = setInterval(() => (now = Date.now()), 60_000);
 		return () => clearInterval(timer);
 	});
+
+	const asleepStatus = $derived(ws?.machine?.status ?? 'stopped');
 
 	const cloneBlocked = $derived(
 		!ws?.isOwner
@@ -175,6 +178,27 @@
 	</div>
 
 	<div class="list gh-scroll" role="tree" aria-label="Sessions">
+		{#if ws && !ws.lifecycleOnly && !ws.running}
+			<div class="asleep" role="status">
+				<p class="asleep-title">
+					{asleepStatus === 'stopped' || asleepStatus === 'error'
+						? `${ws.machine?.name ?? 'This machine'} is asleep`
+						: `Starting ${ws.machine?.name ?? 'the machine'}…`}
+				</p>
+				<p class="asleep-text">Start it to see its repositories and sessions.</p>
+				{#if asleepStatus === 'stopped' || asleepStatus === 'error'}
+					<button
+						type="button"
+						class="gh-btn gh-btn--primary asleep-start"
+						disabled={!ws.canStart || !!ws.busy}
+						title={ws.canStart ? undefined : 'Read-only guests cannot start this machine'}
+						onclick={() => ws.lifecycle('start')}
+					>
+						<Play size={14} strokeWidth={1.75} /> Start machine
+					</button>
+				{/if}
+			</div>
+		{/if}
 		{#if ws?.lifecycleOnly}
 			<p class="hint">Only the host and people they invite can see what is on this machine.</p>
 		{:else if ws}
@@ -627,6 +651,35 @@
 
 	.sessions {
 		overflow: hidden;
+	}
+
+	.asleep {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin: 0.25rem 0.5rem 0.75rem;
+		padding: 0.75rem;
+		border: 1px solid var(--gh-line);
+		border-radius: var(--gh-r-card, 0.625rem);
+		background: var(--bg-raised);
+	}
+
+	.asleep-title {
+		margin: 0;
+		font-weight: 600;
+		color: var(--gh-text);
+	}
+
+	.asleep-text {
+		margin: 0;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-faint);
+	}
+
+	.asleep-start {
+		align-self: flex-start;
+		margin-top: 0.5rem;
 	}
 
 	.hint {
