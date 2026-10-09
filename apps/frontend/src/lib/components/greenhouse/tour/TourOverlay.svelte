@@ -32,7 +32,8 @@
 	let blurEl = $state<HTMLDivElement | null>(null);
 	let ringEl = $state<HTMLDivElement | null>(null);
 	let moving: { stop: () => void } | null = null;
-	let cardEl = $state<HTMLDialogElement | null>(null);
+	let layerEl = $state<HTMLDialogElement | null>(null);
+	let cardEl = $state<HTMLDivElement | null>(null);
 	let bodyEl = $state<HTMLDivElement | null>(null);
 	let session: string | null = null;
 	let run = 0;
@@ -80,7 +81,7 @@
 				closed = true;
 			}
 			const close = [...document.querySelectorAll('dialog[open]')]
-				.find((d) => d !== cardEl)
+				.find((d) => d !== layerEl)
 				?.querySelector<HTMLElement>('[aria-label="Close"]');
 			if (close) {
 				close.click();
@@ -187,13 +188,13 @@
 		});
 		if (!shown) paint(box);
 		await tick();
-		if (!cardEl) return;
-		const open = cardEl.open;
+		if (!cardEl || !layerEl) return;
+		const open = layerEl.open;
 		const fresh = !open || restack || !hole;
 		if (fresh) {
-			if (open) cardEl.close();
+			if (open) layerEl.close();
 			cardEl.style.opacity = '0';
-			cardEl.showModal();
+			layerEl.showModal();
 			const primary = cardEl.querySelector<HTMLButtonElement>('.gh-btn--primary');
 			primary?.blur();
 			primary?.focus({ preventScroll: true, focusVisible: false });
@@ -276,53 +277,64 @@
 	});
 </script>
 
-<div class="gh tour" role="presentation">
-	<div class="blur" bind:this={blurEl}></div>
-	<div class="ring" bind:this={ringEl}></div>
-</div>
-
 <dialog
-	class="gh card"
-	bind:this={cardEl}
+	class="gh tour"
+	bind:this={layerEl}
 	aria-labelledby="tour-title"
 	oncancel={(e) => e.preventDefault()}
 >
-	<span class="pip"><Pip pose={beat.pose} size={48} /></span>
-	<div class="body" bind:this={bodyEl}>
-		<p class="title" id="tour-title">{beat.title}</p>
-		<p class="text">{beat.text}</p>
-		{#if beat.id === 'ssh'}
-			<code class="cmd gh-mono">orchard sandbox ssh-config --install</code>
-		{:else if beat.id === 'context'}
-			<code class="cmd gh-mono">orchard claude import</code>
-		{/if}
-	</div>
-	<div class="foot">
-		<span class="dots" aria-label="Step {index + 1} of {TOUR_BEATS.length}">
-			{#each TOUR_BEATS as b, i (b.id)}
-				<span class="dot" class:dot--on={i === index} class:dot--seen={i < index}></span>
-			{/each}
-		</span>
-		{#if index > 0}
-			<button type="button" class="gh-ibtn" aria-label="Back" title="Back" onclick={() => go(-1)}>
-				<ArrowLeft size={16} strokeWidth={1.75} />
+	<div class="blur" bind:this={blurEl}></div>
+	<div class="ring" bind:this={ringEl}></div>
+	<div class="card" bind:this={cardEl}>
+		<span class="pip"><Pip pose={beat.pose} size={48} /></span>
+		<div class="body" bind:this={bodyEl}>
+			<p class="title" id="tour-title">{beat.title}</p>
+			<p class="text">{beat.text}</p>
+			{#if beat.id === 'ssh'}
+				<code class="cmd gh-mono">orchard sandbox ssh-config --install</code>
+			{:else if beat.id === 'context'}
+				<code class="cmd gh-mono">orchard claude import</code>
+			{/if}
+		</div>
+		<div class="foot">
+			<span class="dots" aria-label="Step {index + 1} of {TOUR_BEATS.length}">
+				{#each TOUR_BEATS as b, i (b.id)}
+					<span class="dot" class:dot--on={i === index} class:dot--seen={i < index}></span>
+				{/each}
+			</span>
+			{#if index > 0}
+				<button type="button" class="gh-ibtn" aria-label="Back" title="Back" onclick={() => go(-1)}>
+					<ArrowLeft size={16} strokeWidth={1.75} />
+				</button>
+			{/if}
+			<button type="button" class="gh-btn gh-btn--primary" onclick={() => go(1)}>
+				{last ? 'Start building' : index === 0 ? 'Show me' : 'Next'}
 			</button>
+		</div>
+		{#if !last}
+			<button type="button" class="skip" onclick={() => onfinish(false)}>Skip tour</button>
 		{/if}
-		<button type="button" class="gh-btn gh-btn--primary" onclick={() => go(1)}>
-			{last ? 'Start building' : index === 0 ? 'Show me' : 'Next'}
-		</button>
 	</div>
-	{#if !last}
-		<button type="button" class="skip" onclick={() => onfinish(false)}>Skip tour</button>
-	{/if}
 </dialog>
 
 <style>
 	.tour {
 		position: fixed;
 		inset: 0;
-		z-index: 2147483000;
-		pointer-events: auto;
+		width: 100vw;
+		height: 100vh;
+		max-width: none;
+		max-height: none;
+		margin: 0;
+		padding: 0;
+		overflow: visible;
+		border: none;
+		background: transparent;
+		color: var(--gh-text);
+	}
+
+	.tour::backdrop {
+		background: transparent;
 	}
 
 	.blur {
@@ -353,10 +365,6 @@
 		background: var(--bg-raised);
 		box-shadow: var(--elev-3, 0 12px 32px rgb(0 0 0 / 0.18));
 		color: var(--gh-text);
-	}
-
-	.card::backdrop {
-		background: transparent;
 	}
 
 	.pip {
