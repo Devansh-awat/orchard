@@ -1,8 +1,36 @@
 <script lang="ts">
-	import { SegmentedControl } from '$lib/components/ui';
-	import { CODE_MAX, CODE_MIN, ZOOM_STEPS, greenhousePrefs, type ChatSize } from '../prefs.svelte';
-	import Block from './Block.svelte';
+	import { Input, SegmentedControl, Select } from '$lib/components/ui';
+	import { themeStore } from '$lib/stores/theme';
+	import type { ThemeMode } from '$lib/theme/spec';
+	import {
+		CODE_MAX,
+		CODE_MIN,
+		PREF_DEFAULTS,
+		ZOOM_STEPS,
+		greenhousePrefs,
+		type ChatSize,
+		type PrefValues
+	} from '../prefs.svelte';
+	import Card from './Card.svelte';
+	import Row from './Row.svelte';
 
+	const MONO_FONTS = ['JetBrains Mono', 'Geist Mono', 'SF Mono', 'Fira Code', 'Menlo'] as const;
+	const CUSTOM = 'custom';
+	const LOOK_KEYS = [
+		'zoom',
+		'chatSize',
+		'codeSize',
+		'monoFont',
+		'ligatures',
+		'terminalFont',
+		'coloredDiffs'
+	] as const satisfies readonly (keyof PrefValues)[];
+
+	const themeOptions: { value: ThemeMode; label: string }[] = [
+		{ value: 'auto', label: 'System' },
+		{ value: 'light', label: 'Light' },
+		{ value: 'dark', label: 'Dark' }
+	];
 	const zoomOptions = ZOOM_STEPS.map((z) => ({
 		value: String(z),
 		label: `${Math.round(z * 100)}%`
@@ -16,97 +44,191 @@
 		const size = String(CODE_MIN + i);
 		return { value: size, label: size };
 	});
+
+	const prefs = $derived(greenhousePrefs.values);
+	const preset = (name: string) => name === '' || (MONO_FONTS as readonly string[]).includes(name);
+
+	let customMono = $state(!preset(greenhousePrefs.values.monoFont));
+
+	const monoChoice = $derived(customMono ? CUSTOM : prefs.monoFont);
+	const codeFont = $derived(greenhousePrefs.monoStack('var(--gh-mono)'));
+	const termFont = $derived(greenhousePrefs.terminalStack('var(--font-mono-terminal)'));
+	const features = $derived(prefs.ligatures ? "'calt' 1, 'liga' 1" : "'calt' 0, 'liga' 0");
+	const lookChanged = $derived(LOOK_KEYS.some((k) => prefs[k] !== PREF_DEFAULTS[k]));
+
+	function pickMono(value: string) {
+		if (value === CUSTOM) {
+			customMono = true;
+			if (preset(prefs.monoFont)) greenhousePrefs.set('monoFont', '');
+			return;
+		}
+		customMono = false;
+		greenhousePrefs.set('monoFont', value);
+	}
+
+	function resetLook() {
+		for (const key of LOOK_KEYS) greenhousePrefs.set(key, PREF_DEFAULTS[key]);
+		customMono = false;
+	}
 </script>
 
-<Block>
-	<div class="field">
-		<span class="label">Interface zoom</span>
-		<SegmentedControl
-			label="Interface zoom"
-			options={zoomOptions}
-			value={String(greenhousePrefs.zoom)}
-			onchange={(v) => (greenhousePrefs.zoom = Number(v))}
-		/>
-	</div>
-</Block>
+<Card>
+	<Row title="Theme" description="Shared with the rest of Orchard">
+		{#snippet control()}
+			<SegmentedControl
+				label="Theme"
+				options={themeOptions}
+				value={$themeStore.mode}
+				onchange={(v) => themeStore.setMode(v as ThemeMode)}
+			/>
+		{/snippet}
+	</Row>
+</Card>
 
-<Block columns={2}>
-	<div class="field">
-		<span class="label">Chat text</span>
-		<SegmentedControl
-			label="Chat text"
-			options={chatOptions}
-			value={greenhousePrefs.chatSize}
-			onchange={(v) => (greenhousePrefs.chatSize = v as ChatSize)}
-		/>
-	</div>
-	<div class="field">
-		<span class="label">Code size</span>
-		<SegmentedControl
-			label="Code font size"
-			options={codeOptions}
-			value={String(greenhousePrefs.codeSize)}
-			onchange={(v) => (greenhousePrefs.codeSize = Number(v))}
-		/>
-	</div>
-</Block>
+<Card title="Interface">
+	<Row title="Interface zoom" description="Scales all of Greenhouse">
+		{#snippet control()}
+			<SegmentedControl
+				label="Interface zoom"
+				options={zoomOptions}
+				value={String(greenhousePrefs.zoom)}
+				onchange={(v) => (greenhousePrefs.zoom = Number(v))}
+			/>
+		{/snippet}
+	</Row>
+	<Row title="Chat text size" description="Messages and agent replies">
+		{#snippet control()}
+			<SegmentedControl
+				label="Chat text size"
+				options={chatOptions}
+				value={greenhousePrefs.chatSize}
+				onchange={(v) => (greenhousePrefs.chatSize = v as ChatSize)}
+			/>
+		{/snippet}
+	</Row>
+	<Row
+		title="Colored sidebar diffs"
+		description="Green and red line counts on sessions"
+		checked={prefs.coloredDiffs}
+		ontoggle={(v) => greenhousePrefs.set('coloredDiffs', v)}
+	/>
+</Card>
 
-<Block>
-	<div class="preview" style={greenhousePrefs.style} aria-hidden="true">
-		<p class="prose">Fixed the flaky socket test, it now waits for the close frame.</p>
-		<pre class="code gh-mono">await socket.closed;</pre>
-	</div>
-	{#if !greenhousePrefs.isDefault}
-		<button type="button" class="link" onclick={() => greenhousePrefs.reset()}>Reset</button>
-	{/if}
-</Block>
+<Card title="Code">
+	<Row title="Code font size" description="Editor, diffs and terminals">
+		{#snippet control()}
+			<SegmentedControl
+				label="Code font size"
+				options={codeOptions}
+				value={String(greenhousePrefs.codeSize)}
+				onchange={(v) => (greenhousePrefs.codeSize = Number(v))}
+			/>
+		{/snippet}
+	</Row>
+	<Row title="Mono font" description="Must be installed on this device">
+		{#snippet control()}
+			<div class="pick">
+				<Select
+					value={monoChoice}
+					aria-label="Mono font"
+					onchange={(e: Event) => pickMono((e.currentTarget as HTMLSelectElement).value)}
+				>
+					<option value="">Default</option>
+					{#each MONO_FONTS as font (font)}
+						<option value={font}>{font}</option>
+					{/each}
+					<option value={CUSTOM}>Custom…</option>
+				</Select>
+			</div>
+		{/snippet}
+		{#if customMono}
+			<div class="field">
+				<Input
+					value={prefs.monoFont}
+					placeholder="Font family name"
+					aria-label="Custom mono font"
+					autocomplete="off"
+					spellcheck="false"
+					maxlength={80}
+					oninput={(e: Event) =>
+						greenhousePrefs.set('monoFont', (e.currentTarget as HTMLInputElement).value)}
+				/>
+			</div>
+		{/if}
+		<pre
+			class="sample"
+			aria-hidden="true"
+			style:font-family={codeFont}
+			style:font-size="{prefs.codeSize}px"
+			style:font-feature-settings={features}>const ready = jobs.filter((j) =&gt; j.state !== 'queued');
+if (ready.length &gt;= limit) return;</pre>
+	</Row>
+	<Row
+		title="Code ligatures"
+		description="Join symbols like => and !== when the font has them"
+		checked={prefs.ligatures}
+		ontoggle={(v) => greenhousePrefs.set('ligatures', v)}
+	/>
+</Card>
+
+<Card title="Terminal">
+	<Row title="Terminal font" description="Matches the code font size">
+		<div class="field">
+			<Input
+				value={prefs.terminalFont}
+				placeholder="Leave empty to match the mono font"
+				aria-label="Terminal font"
+				autocomplete="off"
+				spellcheck="false"
+				maxlength={80}
+				oninput={(e: Event) =>
+					greenhousePrefs.set('terminalFont', (e.currentTarget as HTMLInputElement).value)}
+			/>
+		</div>
+		<pre
+			class="sample sample--term"
+			aria-hidden="true"
+			style:font-family={termFont}
+			style:font-size="{prefs.codeSize}px">~/orchard $ pnpm test
+ ✓ 128 passed in 4.2s · {prefs.codeSize}px</pre>
+	</Row>
+</Card>
+
+{#if lookChanged}
+	<button type="button" class="reset" onclick={resetLook}>Reset appearance</button>
+{/if}
 
 <style>
+	.pick {
+		width: 11rem;
+	}
+
 	.field {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.5rem;
-		min-width: 0;
+		max-width: 22rem;
 	}
 
-	.label {
-		font-size: var(--gh-ui);
-		line-height: var(--gh-lh-ui);
-		font-weight: 600;
-		color: var(--gh-text);
-	}
-
-	.preview {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem;
-		border-radius: var(--gh-r-row);
+	.sample {
+		margin: 0;
+		padding: 0.75rem 1rem;
+		overflow: hidden;
+		border-radius: var(--gh-r-control);
 		border: 1px solid var(--gh-line-soft);
 		background: var(--gh-field);
-	}
-
-	.prose {
-		margin: 0;
-		max-width: 65ch;
-		font-size: var(--gh-reading);
-		line-height: var(--gh-lh-reading);
-		color: var(--gh-text);
-	}
-
-	.code {
-		margin: 0;
-		font-family: var(--gh-mono);
-		font-size: var(--gh-code-size);
-		line-height: 1.65;
 		color: var(--gh-muted-strong);
+		line-height: 1.65;
 		white-space: pre;
-		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	.link {
-		justify-self: start;
+	.sample--term {
+		background: var(--console-bg);
+		color: var(--console-text);
+		line-height: 1.25;
+	}
+
+	.reset {
+		align-self: flex-start;
+		margin-top: 1rem;
 		padding: 0;
 		border: none;
 		background: none;
@@ -118,11 +240,11 @@
 		cursor: pointer;
 	}
 
-	.link:hover {
+	.reset:hover {
 		color: var(--gh-text);
 	}
 
-	.link:focus-visible {
+	.reset:focus-visible {
 		outline: none;
 		border-radius: var(--gh-r-control);
 		box-shadow: 0 0 0 2px var(--focus-ring);

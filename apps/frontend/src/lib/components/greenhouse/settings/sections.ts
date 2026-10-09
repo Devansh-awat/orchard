@@ -7,8 +7,13 @@ export type SettingsSectionId =
 	| 'projects'
 	| 'usage'
 	| 'danger'
+	| 'preferences'
+	| 'sounds'
 	| 'appearance'
-	| 'integrations';
+	| 'git'
+	| 'agents'
+	| 'integrations'
+	| 'shortcuts';
 
 export const MACHINE_SECTIONS: readonly SettingsSectionId[] = [
 	'general',
@@ -18,7 +23,17 @@ export const MACHINE_SECTIONS: readonly SettingsSectionId[] = [
 	'danger'
 ];
 
-export const PERSONAL_SECTIONS: readonly SettingsSectionId[] = ['appearance', 'integrations'];
+export const PERSONAL_SECTIONS: readonly SettingsSectionId[] = [
+	'preferences',
+	'sounds',
+	'appearance',
+	'git',
+	'agents',
+	'integrations',
+	'shortcuts'
+];
+
+export const DEFAULT_SECTION: SettingsSectionId = 'preferences';
 
 export const SECTION_LABELS: Record<SettingsSectionId, string> = {
 	general: 'General',
@@ -26,12 +41,20 @@ export const SECTION_LABELS: Record<SettingsSectionId, string> = {
 	projects: 'Projects',
 	usage: 'Usage',
 	danger: 'Danger zone',
+	preferences: 'Preferences',
+	sounds: 'Sounds',
 	appearance: 'Appearance',
-	integrations: 'Integrations'
+	git: 'Git',
+	agents: 'Agents',
+	integrations: 'Integrations',
+	shortcuts: 'Shortcuts'
 };
 
 export function isSettingsSection(value: unknown): value is SettingsSectionId {
-	return typeof value === 'string' && value in SECTION_LABELS;
+	return (
+		typeof value === 'string' &&
+		[...MACHINE_SECTIONS, ...PERSONAL_SECTIONS].includes(value as SettingsSectionId)
+	);
 }
 
 export async function patchMachine(id: string, body: Record<string, unknown>) {

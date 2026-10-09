@@ -3,8 +3,9 @@
 		ArrowLeft,
 		Boxes,
 		Check,
-		ChevronsUpDown,
+		ChevronDown,
 		CircleAlert,
+		CircleHelp,
 		GitFork,
 		Play,
 		RotateCw,
@@ -18,6 +19,7 @@
 	import StatusDot from '$lib/components/ui/StatusDot.svelte';
 	import MachineUsage from './MachineUsage.svelte';
 	import { sandboxStatus } from '$lib/components/ui/status';
+	import { springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago, runnerLabel } from './format';
 	import { hostOnly } from './workspace.svelte';
@@ -73,13 +75,13 @@
 		>
 			<span class="tile" aria-hidden="true">
 				{#if machine?.runner === 'vercel'}
-					<svg class="vercel" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+					<svg class="vercel" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
 						<path d="M12 2.5 22 19.5H2Z" fill="currentColor" />
 					</svg>
 				{:else if machine}
-					<Boxes size={16} strokeWidth={1.75} />
+					<Boxes size={14} strokeWidth={1.75} />
 				{:else}
-					<Server size={16} strokeWidth={1.75} />
+					<Server size={14} strokeWidth={1.75} />
 				{/if}
 			</span>
 			<span class="text">
@@ -93,7 +95,9 @@
 					{/if}
 				</span>
 			</span>
-			<span class="chev"><ChevronsUpDown size={14} strokeWidth={1.75} /></span>
+			<span class="chev" {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}>
+				<ChevronDown size={14} strokeWidth={1.75} />
+			</span>
 		</button>
 	{/snippet}
 	{#if app.machines.length > 0}
@@ -164,6 +168,9 @@
 		<Plus size={14} /> New machine…
 	</MenuItem>
 	<div class="gh-menu-sep"></div>
+	<MenuItem href="https://orchard.my/docs/greenhouse" target="_blank" rel="noopener">
+		<CircleHelp size={14} /> Help
+	</MenuItem>
 	<MenuItem href="/"><ArrowLeft size={14} /> Back to Orchard</MenuItem>
 </Menu>
 
@@ -175,9 +182,8 @@
 		width: 100%;
 		min-width: 0;
 		height: var(--gh-session-row);
-		padding: 0 calc(var(--gh-side-edge) - 0.5rem) 0
-			calc(var(--gh-side-edge) - 0.5rem - (var(--gh-icon) - var(--gh-glyph)) / 2);
-		border-radius: var(--gh-r-row);
+		padding: 0 var(--gh-side-pad) 0 calc(var(--gh-side-pad) - 0.25rem);
+		border-radius: var(--gh-r-control);
 		color: var(--gh-text);
 		text-align: left;
 		transition: background-color var(--dur-fast) ease;
@@ -197,12 +203,15 @@
 		display: inline-grid;
 		place-items: center;
 		flex: none;
-		width: var(--gh-icon);
-		height: var(--gh-icon);
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--gh-line);
-		background: var(--gh-editor);
-		color: var(--gh-text);
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: var(--radius-xs);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--accent) 22%, transparent),
+			color-mix(in srgb, var(--accent) 8%, transparent)
+		);
+		color: var(--accent);
 	}
 
 	.vercel {
@@ -230,9 +239,6 @@
 		align-items: center;
 		gap: 0.375rem;
 		min-width: 0;
-		font-size: var(--gh-caption);
-		line-height: var(--gh-lh-caption);
-		color: var(--gh-muted);
 	}
 
 	.cap-text {
@@ -240,6 +246,9 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		font-size: var(--text-micro);
+		line-height: var(--gh-lh-caption);
+		color: var(--gh-muted);
 	}
 
 	.chev {

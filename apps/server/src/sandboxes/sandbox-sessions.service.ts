@@ -31,6 +31,7 @@ import {
   buildWorktreeRemoveScript,
   buildWorktreeRestoreScript,
   isUuid,
+  isValidBranchPrefix,
   isValidGitRef,
   isValidRepoName,
   isValidSlug,
@@ -42,6 +43,7 @@ import {
   parseWorktreeAddOutput,
   repoPathFor,
   scriptFiles,
+  SESSION_BRANCH_PREFIX,
   sessionBranch,
   setupStateOf,
   shellQuote,
@@ -247,6 +249,11 @@ export function parseIssueRef(
   const bare = trimmed.match(/^#?(\d+)$/);
   if (bare && fallback) return valid(fallback.owner, fallback.repo, bare[1]);
   return null;
+}
+
+export function branchOf(row: { slug: string | null; branch: string | null }): string | null {
+  if (row.branch && isValidGitRef(row.branch)) return row.branch;
+  return row.slug && isValidSlug(row.slug) ? sessionBranch(row.slug) : null;
 }
 
 export function activityFromStatus(body: unknown): SessionActivity {
@@ -610,6 +617,7 @@ export class SandboxSessionsService {
       title?: string;
       prompt?: string;
       issue?: { provider?: string; ref?: string };
+      branchPrefix?: string;
     },
     opts: { issue?: SessionIssueContext } = {}
   ): Promise<SessionDto> {
@@ -619,6 +627,12 @@ export class SandboxSessionsService {
     const baseBranch = body.baseBranch ? body.baseBranch : null;
     if (baseBranch !== null && !isValidGitRef(baseBranch)) {
       throw new BadRequestException('Invalid base branch');
+    }
+    const prefix = body.branchPrefix === undefined ? SESSION_BRANCH_PREFIX : body.branchPrefix;
+    if (!isValidBranchPrefix(prefix)) {
+      throw new BadRequestException(
+        'branchPrefix must be up to 40 letters, digits, dots, dashes, underscores or slashes, and a valid git ref'
+      );
     }
     if (body.prompt !== undefined && typeof body.prompt !== 'string') {
       throw new BadRequestException('prompt must be a string');
@@ -640,7 +654,8 @@ export class SandboxSessionsService {
     let row: SandboxConversation | null = null;
     for (let attempt = 0; attempt < 4 && !row; attempt++) {
       const slug = slugify(issue?.slugHint || title, randomBytes(3).toString('hex'));
-      if (!isValidSlug(slug)) continue;
+      const branch = sessionBranch(slug, prefix);
+      if (!isValidSlug(slug) || !isValidGitRef(branch)) continue;
       try {
         row = await this.prisma.sandboxConversation.create({
           data: {
@@ -648,7 +663,7 @@ export class SandboxSessionsService {
             title,
             repo,
             slug,
-            branch: sessionBranch(slug),
+            branch,
             worktreePath: worktreePathFor(repo, slug),
             agent: 'opencode',
             createdById: actorUserId
@@ -693,7 +708,12 @@ export class SandboxSessionsService {
     try {
       const result = await this.devExec(
         sandbox,
-        buildWorktreeAddScript({ repo: input.repo, slug, baseBranch: input.baseBranch }),
+        buildWorktreeAddScript({
+          repo: input.repo,
+          slug,
+          baseBranch: input.baseBranch,
+          branch: branchOf(row)
+        }),
         WORKTREE_TIMEOUT_MS
       ).catch((e) => ({
         ok: false,
@@ -736,7 +756,8 @@ export class SandboxSessionsService {
             sandbox,
             buildWorktreeRemoveScript(input.repo, slug, row.id, {
               deleteBranch: true,
-              purgeState: true
+              purgeState: true,
+              branch: branchOf(row)
             }),
             WORKTREE_TIMEOUT_MS
           ).catch(() => null);
@@ -883,8 +904,14 @@ export class SandboxSessionsService {
   async update(
     sandbox: WorkspaceSandbox,
     sessionId: string,
-    body: { title?: string; archived?: boolean }
+    body: { title?: string; archived?: boolean; deleteBranch?: boolean }
   ): Promise<SessionDto> {
+    if (body.deleteBranch !== undefined && typeof body.deleteBranch !== 'boolean') {
+      throw new BadRequestException('deleteBranch must be a boolean');
+    }
+    if (body.deleteBranch === true && body.archived !== true) {
+      throw new BadRequestException('deleteBranch only applies when archiving');
+    }
     const row = await this.row(sandbox.id, sessionId);
     const data: Prisma.SandboxConversationUpdateInput = {};
     if (body.title !== undefined) {
@@ -901,7 +928,10 @@ export class SandboxSessionsService {
         if (sandbox.status === 'running' && row.repo && row.slug) {
           await this.devExec(
             sandbox,
-            buildWorktreeRemoveScript(row.repo, row.slug, row.id),
+            buildWorktreeRemoveScript(row.repo, row.slug, row.id, {
+              deleteBranch: body.deleteBranch === true,
+              branch: branchOf(row)
+            }),
             WORKTREE_TIMEOUT_MS
           ).catch((e) => this.logger.warn(`worktree remove failed for ${row.id}: ${e?.message}`));
         }
@@ -911,7 +941,7 @@ export class SandboxSessionsService {
         if (!row.repo || !row.slug) throw new BadRequestException('This session has no worktree');
         const result = await this.devExec(
           sandbox,
-          buildWorktreeRestoreScript(row.repo, row.slug),
+          buildWorktreeRestoreScript(row.repo, row.slug, branchOf(row)),
           WORKTREE_TIMEOUT_MS
         );
         if (!result.ok) {
@@ -944,7 +974,8 @@ export class SandboxSessionsService {
       if (row.repo && row.slug) {
         const script = buildWorktreeRemoveScript(row.repo, row.slug, row.id, {
           deleteBranch: opts.deleteBranch,
-          purgeState: true
+          purgeState: true,
+          branch: branchOf(row)
         });
         await this.devExec(sandbox, script, WORKTREE_TIMEOUT_MS).catch((e) =>
           this.logger.warn(`worktree cleanup failed for ${row.id}: ${e?.message}`)

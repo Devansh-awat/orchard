@@ -15,6 +15,8 @@ export { default as Transcript } from './Transcript.svelte';
 export { ChatSessionStore, SessionThread, commentTime } from './session-store.svelte';
 export type {
 	AgentEntry,
+	AgentSignal,
+	AgentSignalKind,
 	ChatAuthor,
 	ChatEntry,
 	ChatSession,
@@ -22,6 +24,7 @@ export type {
 	ContextMeter,
 	FeedEntry,
 	FeedItem,
+	FollowUpMode,
 	ModelChoice,
 	QueuedPrompt,
 	RemoteDraft,

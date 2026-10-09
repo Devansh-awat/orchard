@@ -17,6 +17,7 @@
 	import type { GhSession, RosterUser } from './types';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago } from './format';
+	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY } from './workspace.svelte';
 
 	let {
@@ -42,6 +43,7 @@
 			? session.diffstat
 			: null
 	);
+	const tinted = $derived(selected || greenhousePrefs.values.coloredDiffs);
 	const when = $derived.by(() => {
 		void now;
 		return ago(archived ? (session.archivedAt ?? session.updatedAt) : session.updatedAt);
@@ -123,8 +125,8 @@
 		{#if stat}
 			<span class="dot" aria-hidden="true">·</span>
 			<span class="stat"
-				><span class="gh-add">+{stat.additions}</span>
-				<span class="gh-del">−{stat.deletions}</span></span
+				><span class:gh-add={tinted}>+{stat.additions}</span>
+				<span class:gh-del={tinted}>−{stat.deletions}</span></span
 			>
 		{:else if session.prNumber}
 			<span class="dot" aria-hidden="true">·</span><span class="stat">#{session.prNumber}</span>
@@ -254,9 +256,9 @@
 		align-items: center;
 		column-gap: 0.5rem;
 		width: 100%;
-		height: var(--gh-session-row);
-		padding: 0.25rem var(--row-pad, 0.5rem);
-		border-radius: var(--gh-r-row);
+		height: var(--gh-side-session);
+		padding: 0.125rem var(--row-pad, var(--gh-side-pad));
+		border-radius: var(--gh-r-control);
 		color: var(--gh-text);
 		text-align: left;
 		transition:
@@ -264,13 +266,16 @@
 			color var(--dur-fast) ease;
 	}
 
-	.row:hover button.main {
+	.row:hover button.main,
+	.row--menu .main {
 		background: var(--gh-hover);
 	}
 
 	.row--selected .main,
-	.row--selected:hover button.main {
-		background: var(--gh-selected);
+	.row--selected:hover button.main,
+	.row--menu.row--selected .main {
+		--gh-glyph-idle: var(--gh-side-on-icon);
+		background: var(--gh-side-on);
 	}
 
 	.ico {
@@ -341,7 +346,7 @@
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		right: calc(var(--row-pad, 0.5rem) - var(--gh-ibtn-inset));
+		right: calc(var(--row-pad, var(--gh-side-pad)) - var(--gh-ibtn-inset));
 		display: flex;
 		align-items: center;
 		opacity: 0;
@@ -359,21 +364,13 @@
 	.row:hover button.main,
 	.row:focus-within button.main,
 	.row--menu button.main {
-		padding-right: calc(var(--actions) + var(--row-pad, 0.5rem) - var(--gh-ibtn-inset));
+		padding-right: calc(var(--actions) + var(--row-pad, var(--gh-side-pad)) - var(--gh-ibtn-inset));
 	}
 
 	.row:hover .people,
 	.row:focus-within .people,
 	.row--menu .people {
 		display: none;
-	}
-
-	.row--menu .main {
-		background: var(--gh-hover);
-	}
-
-	.row--menu.row--selected .main {
-		background: var(--gh-selected);
 	}
 
 	.rename {
@@ -397,7 +394,9 @@
 		}
 
 		button.main {
-			padding-right: calc(var(--actions) + var(--row-pad, 0.5rem) - var(--gh-ibtn-inset));
+			padding-right: calc(
+				var(--actions) + var(--row-pad, var(--gh-side-pad)) - var(--gh-ibtn-inset)
+			);
 		}
 
 		.people {

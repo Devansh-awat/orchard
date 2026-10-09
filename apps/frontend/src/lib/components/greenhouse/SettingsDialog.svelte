@@ -1,28 +1,25 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import {
-		BookOpen,
-		FolderGit2,
-		Gauge,
-		Link2,
-		Palette,
-		Settings2,
-		SquareTerminal,
-		TriangleAlert,
-		X
-	} from 'lucide-svelte';
+	import { BookOpen, X } from 'lucide-svelte';
 	import { Avatar, Button, Select } from '$lib/components/ui';
-	import { motion, motionPopover } from '$lib/utils/motion.svelte';
+	import { iconAnimation, motion, motionPopover } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import { ago, runnerLabel } from './format';
 	import MachineUsagePanel from './MachineUsagePanel.svelte';
+	import AgentsSection from './settings/AgentsSection.svelte';
 	import AppearanceSection from './settings/AppearanceSection.svelte';
 	import DangerSection from './settings/DangerSection.svelte';
 	import GeneralSection from './settings/GeneralSection.svelte';
+	import GitSection from './settings/GitSection.svelte';
 	import IntegrationsSection from './settings/IntegrationsSection.svelte';
+	import PreferencesSection from './settings/PreferencesSection.svelte';
 	import ProjectsSection from './settings/ProjectsSection.svelte';
+	import SectionIcon from './settings/SectionIcon.svelte';
 	import SetupSection from './settings/SetupSection.svelte';
+	import ShortcutsSection from './settings/ShortcutsSection.svelte';
+	import SoundsSection from './settings/SoundsSection.svelte';
 	import {
+		DEFAULT_SECTION,
 		MACHINE_SECTIONS,
 		PERSONAL_SECTIONS,
 		SECTION_LABELS,
@@ -34,15 +31,6 @@
 
 	const DOCS = 'https://orchard.my/docs/greenhouse';
 	const ACCOUNT = '/user/settings?tab=profile';
-	const ICONS = {
-		general: Settings2,
-		setup: SquareTerminal,
-		projects: FolderGit2,
-		usage: Gauge,
-		danger: TriangleAlert,
-		appearance: Palette,
-		integrations: Link2
-	} as const;
 
 	const app = getGreenhouseApp();
 	const machine = $derived(app.machine);
@@ -64,7 +52,7 @@
 	]);
 	const ids = $derived(groups.flatMap((g) => g.ids));
 
-	let section = $state<SettingsSectionId>('general');
+	let section = $state<SettingsSectionId>(DEFAULT_SECTION);
 	const current = $derived(ids.includes(section) ? section : ids[0]);
 
 	const facts = $derived(
@@ -81,16 +69,26 @@
 	);
 
 	const subtitle = $derived(
-		{
-			general: facts,
-			setup: 'Runs once, on first boot',
-			projects: 'Variables from Orchard projects',
-			usage: machine?.name ?? '',
-			danger: machine?.name ?? '',
-			appearance: 'Saved on this device',
-			integrations: 'Start sessions from issues and chat'
-		}[current]
+		(
+			{
+				general: facts,
+				setup: 'Runs once, on first boot',
+				projects: 'Variables from Orchard projects',
+				usage: machine?.name ?? '',
+				danger: machine?.name ?? '',
+				preferences: 'Saved on this device',
+				sounds: '',
+				appearance: 'Saved on this device',
+				git: 'Saved on this device',
+				agents: hasMachine ? (machine?.name ?? '') : '',
+				integrations: 'Start sessions from issues and chat',
+				shortcuts: ''
+			} satisfies Record<SettingsSectionId, string>
+		)[current]
 	);
+
+	let hoverId = $state<SettingsSectionId | null>(null);
+	let headHover = $state(false);
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let panelEl = $state<HTMLElement | null>(null);
@@ -106,7 +104,7 @@
 		if (isOpen && (!wasOpen || want !== lastRequest)) {
 			untrack(() => {
 				moves = 0;
-				section = isSettingsSection(want) ? want : (ids[0] ?? 'appearance');
+				section = isSettingsSection(want) ? want : DEFAULT_SECTION;
 			});
 		}
 		wasOpen = isOpen;
@@ -176,6 +174,19 @@
 		tabEls[id]?.focus();
 	}
 
+	function hoverTo(set: (on: boolean) => void) {
+		return (node: HTMLElement) => {
+			const on = () => set(true);
+			const off = () => set(false);
+			node.addEventListener('mouseenter', on);
+			node.addEventListener('mouseleave', off);
+			return () => {
+				node.removeEventListener('mouseenter', on);
+				node.removeEventListener('mouseleave', off);
+			};
+		};
+	}
+
 	function navKeys(node: HTMLElement) {
 		node.addEventListener('keydown', onNavKey);
 		return () => node.removeEventListener('keydown', onNavKey);
@@ -215,7 +226,6 @@
 					<p class="group" id="gh-settings-group-{group.label}">{group.label}</p>
 					<ul class="list" aria-labelledby="gh-settings-group-{group.label}">
 						{#each group.ids as id (id)}
-							{@const Icon = ICONS[id]}
 							<li>
 								<button
 									type="button"
@@ -225,8 +235,10 @@
 									tabindex={id === current ? 0 : -1}
 									bind:this={tabEls[id]}
 									onclick={() => select(id)}
+									onmouseenter={() => (hoverId = id)}
+									onmouseleave={() => (hoverId = null)}
 								>
-									<Icon size={16} strokeWidth={1.75} />
+									<SectionIcon {id} animate={iconAnimation(hoverId === id)} />
 									<span class="tab-label">{SECTION_LABELS[id]}</span>
 								</button>
 							</li>
@@ -275,8 +287,15 @@
 						{/each}
 					</Select>
 				</div>
-				<h3 class="title">{SECTION_LABELS[current]}</h3>
-				{#if subtitle}<p class="subtitle" title={subtitle}>{subtitle}</p>{/if}
+				<div class="heading" {@attach hoverTo((on) => (headHover = on))}>
+					<span class="tile" class:tile--danger={current === 'danger'}>
+						<SectionIcon id={current} size={18} animate={iconAnimation(headHover)} />
+					</span>
+					<span class="heading-text">
+						<h3 class="title">{SECTION_LABELS[current]}</h3>
+						{#if subtitle}<p class="subtitle" title={subtitle}>{subtitle}</p>{/if}
+					</span>
+				</div>
 				<button
 					type="button"
 					class="gh-ibtn close"
@@ -291,10 +310,20 @@
 			<div class="body gh-scroll" tabindex="-1" bind:this={panelEl}>
 				{#key current}
 					<div class="section" {@attach enter}>
-						{#if current === 'appearance'}
+						{#if current === 'preferences'}
+							<PreferencesSection />
+						{:else if current === 'sounds'}
+							<SoundsSection />
+						{:else if current === 'appearance'}
 							<AppearanceSection />
+						{:else if current === 'git'}
+							<GitSection />
+						{:else if current === 'agents'}
+							<AgentsSection ws={hasMachine ? ws : null} />
 						{:else if current === 'integrations'}
 							<IntegrationsSection />
+						{:else if current === 'shortcuts'}
+							<ShortcutsSection />
 						{:else if machine && ws}
 							{#if current === 'general'}
 								<GeneralSection {machine} {ws} />
@@ -365,11 +394,16 @@
 	}
 
 	.group {
-		margin: 1rem 0 0.25rem;
+		display: flex;
+		align-items: center;
+		height: 1.75rem;
+		margin: 1rem 0 0;
 		padding: 0 0.5rem;
 		font-size: var(--gh-caption);
 		line-height: var(--gh-lh-caption);
-		color: var(--gh-faint);
+		font-weight: 600;
+		color: var(--text-faint);
+		user-select: none;
 	}
 
 	.group:first-child {
@@ -390,13 +424,15 @@
 		gap: 0.5rem;
 		width: 100%;
 		height: 2rem;
+		margin: 0.125rem 0;
 		padding: 0 0.5rem;
 		border: none;
-		border-radius: var(--gh-r-control);
+		border-radius: var(--radius-md);
 		background: transparent;
-		color: var(--gh-muted-strong);
+		color: var(--text-muted);
 		font-size: var(--gh-ui);
 		line-height: var(--gh-lh-ui);
+		font-weight: 600;
 		text-align: left;
 		text-decoration: none;
 		cursor: pointer;
@@ -406,15 +442,14 @@
 	}
 
 	.tab:hover {
-		background: var(--gh-hover);
-		color: var(--gh-text);
+		background: var(--fill-soft);
+		color: var(--text-default);
 	}
 
 	.tab--on,
 	.tab--on:hover {
-		background: var(--gh-selected);
-		color: var(--gh-text);
-		font-weight: 600;
+		background: var(--accent-subtle);
+		color: var(--accent);
 	}
 
 	.tab:focus-visible {
@@ -501,6 +536,36 @@
 	.pick {
 		display: none;
 		margin-bottom: 0.75rem;
+	}
+
+	.heading {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.tile {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: var(--radius-md);
+		background: var(--fill-soft);
+		color: var(--text-default);
+	}
+
+	.tile--danger {
+		background: color-mix(in srgb, var(--status-error) 10%, transparent);
+		color: var(--status-error);
+	}
+
+	.heading-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
 	}
 
 	.title {

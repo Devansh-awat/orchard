@@ -125,6 +125,7 @@ export function createSession(
 		title?: string;
 		prompt?: string;
 		issue?: { provider: 'github' | 'linear'; ref: string };
+		branchPrefix?: string;
 	}
 ) {
 	return send<GhSession>(`${base(sandboxId)}/sessions`, 'POST', body);
@@ -133,7 +134,7 @@ export function createSession(
 export function patchSession(
 	sandboxId: string,
 	sid: string,
-	body: { title?: string; archived?: boolean }
+	body: { title?: string; archived?: boolean; deleteBranch?: boolean }
 ) {
 	return send<GhSession>(`${base(sandboxId)}/sessions/${sid}`, 'PATCH', body);
 }

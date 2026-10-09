@@ -8,7 +8,8 @@ import {
 export const HOME_ROOT = '/persist/home';
 export const WORKTREES_ROOT = `${HOME_ROOT}/.worktrees`;
 export const SESSION_STATE_ROOT = `${HOME_ROOT}/.orchard/sessions`;
-export const SESSION_BRANCH_PREFIX = 'orchard/';
+export const SESSION_BRANCH_PREFIX = 'orchard';
+export const MAX_BRANCH_PREFIX = 40;
 export const GREENHOUSE_CONFIG_PATH = '.orchard/greenhouse.json';
 export const MAX_GREENHOUSE_CONFIG_BYTES = 65536;
 export const MAX_SCRIPT_LENGTH = 65536;
@@ -19,6 +20,7 @@ const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REF_CHAR_RE = /^[A-Za-z0-9._/+-]+$/;
+const PREFIX_CHAR_RE = /^[A-Za-z0-9._/-]+$/;
 const TERMINAL_INDEX_RE = /^(?:\d{1,2}|setup|run)$/;
 const SHORTSTAT_FILES_RE = /(\d+) files? changed/;
 const SHORTSTAT_ADD_RE = /(\d+) insertions?\(\+\)/;
@@ -59,6 +61,18 @@ export function isValidGitRef(value: unknown): value is string {
   return true;
 }
 
+export function isValidBranchPrefix(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value === '') return true;
+  if (value.length > MAX_BRANCH_PREFIX || !PREFIX_CHAR_RE.test(value)) return false;
+  if (value.startsWith('-') || value.endsWith('.')) return false;
+  if (value.includes('..') || value.includes('@{')) return false;
+  for (const part of value.split('/')) {
+    if (!part || part.startsWith('.') || part.endsWith('.lock')) return false;
+  }
+  return true;
+}
+
 export function slugify(title: string, suffix: string): string {
   const base = title
     .toLowerCase()
@@ -76,8 +90,14 @@ export function slugify(title: string, suffix: string): string {
   return slug.replace(/-{2,}/g, '-');
 }
 
-export function sessionBranch(slug: string): string {
-  return `${SESSION_BRANCH_PREFIX}${slug}`;
+export function sessionBranch(slug: string, prefix: string = SESSION_BRANCH_PREFIX): string {
+  return prefix ? `${prefix}/${slug}` : slug;
+}
+
+function checkedBranch(slug: string, branch: string | null | undefined): string {
+  const name = branch ?? sessionBranch(slug);
+  if (!isValidGitRef(name)) throw new Error('invalid branch');
+  return name;
 }
 
 export function worktreePathFor(repo: string, slug: string): string {
@@ -125,6 +145,7 @@ export interface WorktreeAddInput {
   repo: string;
   slug: string;
   baseBranch: string | null;
+  branch?: string | null;
 }
 
 export interface WorktreeAddResult {
@@ -148,7 +169,7 @@ export function buildWorktreeAddScript(input: WorktreeAddInput): string {
   const repo = shellQuote(repoPathFor(input.repo));
   const parent = shellQuote(`${WORKTREES_ROOT}/${input.repo}`);
   const path = shellQuote(worktreePathFor(input.repo, input.slug));
-  const branch = shellQuote(sessionBranch(input.slug));
+  const branch = shellQuote(checkedBranch(input.slug, input.branch));
   return [
     `git -C ${repo} rev-parse --git-dir >/dev/null 2>&1 || exit ${WORKTREE_EXIT.notRepo}`,
     `[ -e ${path} ] && exit ${WORKTREE_EXIT.exists}`,
@@ -171,8 +192,13 @@ export function parseWorktreeAddOutput(stdout: string): WorktreeAddResult {
   return { baseBranch: base, baseCommit: commit };
 }
 
-export function buildWorktreeRestoreScript(repo: string, slug: string): string {
+export function buildWorktreeRestoreScript(
+  repo: string,
+  slug: string,
+  branch: string | null = null
+): string {
   if (!isValidRepoName(repo) || !isValidSlug(slug)) throw new Error('invalid session');
+  const name = checkedBranch(slug, branch);
   const repoPath = shellQuote(repoPathFor(repo));
   const path = shellQuote(worktreePathFor(repo, slug));
   return [
@@ -180,7 +206,7 @@ export function buildWorktreeRestoreScript(repo: string, slug: string): string {
     `[ -e ${path} ] && exit 0`,
     `git -C ${repoPath} worktree prune >/dev/null 2>&1`,
     `mkdir -p ${shellQuote(`${WORKTREES_ROOT}/${repo}`)}`,
-    `git -C ${repoPath} worktree add --quiet ${path} ${shellQuote(sessionBranch(slug))} >&2 || exit ${WORKTREE_EXIT.addFailed}`
+    `git -C ${repoPath} worktree add --quiet ${path} ${shellQuote(name)} >&2 || exit ${WORKTREE_EXIT.addFailed}`
   ].join('\n');
 }
 
@@ -188,9 +214,10 @@ export function buildWorktreeRemoveScript(
   repo: string,
   slug: string,
   sessionId: string,
-  opts: { deleteBranch?: boolean; purgeState?: boolean } = {}
+  opts: { deleteBranch?: boolean; purgeState?: boolean; branch?: string | null } = {}
 ): string {
   if (!isValidRepoName(repo) || !isValidSlug(slug)) throw new Error('invalid session');
+  const branch = checkedBranch(slug, opts.branch);
   const repoPath = shellQuote(repoPathFor(repo));
   const path = shellQuote(worktreePathFor(repo, slug));
   const lines = [
@@ -199,9 +226,7 @@ export function buildWorktreeRemoveScript(
     `git -C ${repoPath} worktree prune >/dev/null 2>&1 || true`
   ];
   if (opts.deleteBranch) {
-    lines.push(
-      `git -C ${repoPath} branch -D ${shellQuote(sessionBranch(slug))} >&2 2>/dev/null || true`
-    );
+    lines.push(`git -C ${repoPath} branch -D ${shellQuote(branch)} >&2 2>/dev/null || true`);
   }
   if (opts.purgeState) lines.push(`rm -rf -- ${shellQuote(sessionStateDir(sessionId))}`);
   lines.push('exit 0');

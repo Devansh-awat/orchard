@@ -30,7 +30,7 @@
 		padding-bottom: 0;
 	}
 
-	.block + .block {
+	.block:not(:first-child) {
 		border-top: 1px dotted var(--settings-rule, var(--gh-line));
 	}
 

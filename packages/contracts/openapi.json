@@ -51671,6 +51671,12 @@
                       "null"
                     ]
                   },
+                  "branchPrefix": {
+                    "description": "Branch namespace, default orchard. Empty puts the branch at the slug alone. Git ref rules: no .., no leading or trailing slash, no .lock segment",
+                    "maxLength": 40,
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*)?$",
+                    "type": "string"
+                  },
                   "issue": {
                     "properties": {
                       "provider": {
@@ -51981,7 +51987,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Start a session: git worktree on orchard/<slug>, an opencode chat in it, and the repo setup script in the background",
+        "summary": "Start a session: git worktree on <branchPrefix>/<slug> (orchard/<slug> by default), an opencode chat in it, and the repo setup script in the background",
         "tags": [
           "sandboxes"
         ]
@@ -52362,6 +52368,10 @@
                   "archived": {
                     "type": "boolean"
                   },
+                  "deleteBranch": {
+                    "description": "With archived: true, also deletes the local session branch",
+                    "type": "boolean"
+                  },
                   "title": {
                     "maxLength": 120,
                     "type": "string"
@@ -52640,7 +52650,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Rename, archive (removes the worktree, keeps the branch) or restore a session",
+        "summary": "Rename, archive (removes the worktree, keeps the branch unless deleteBranch) or restore a session",
         "tags": [
           "sandboxes"
         ]

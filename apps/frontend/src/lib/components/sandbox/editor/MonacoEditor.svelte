@@ -5,11 +5,11 @@
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
 	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
-	import { ensureTerminalFont } from '$lib/terminal/font';
+	import { ensureTerminalFont, monoFontFor } from '$lib/terminal/font';
 	import { activeTarget, mayTakeFocus } from '$lib/utils/focus-routing';
 	import { RemoteCursorLayer, type CollabBinding, type RemoteCursor } from './collab';
 	import type { MonacoApi } from './load';
-	import { baseOptions, lookOptions } from './options';
+	import { baseOptions, lookOptions, settleFont } from './options';
 	import type { EditorSelectionRange } from './types';
 	import { useMonacoTheme } from './theme';
 	import { toDocumentUri, type EditorWorkspace } from './workspace.svelte';
@@ -48,6 +48,8 @@
 	let failed = $state<string | null>(null);
 	let cursors: RemoteCursorLayer | null = null;
 	let releaseTheme: (() => void) | null = null;
+	let monacoApi: MonacoApi | null = null;
+	let settledFont: string | null = null;
 	let disposed = false;
 	let focusedOnce = false;
 
@@ -60,9 +62,13 @@
 		untrack(() => workspace.open(target, { activate: false }));
 	});
 
+	const fontFamily = $derived(greenhousePrefs.monoStack(host ? monoFontFor(host) : ''));
+
 	function look() {
 		return lookOptions({
 			fontSize: size,
+			fontFamily: fontFamily || undefined,
+			ligatures: greenhousePrefs.values.ligatures,
 			motion: $effectiveAnimation,
 			cursorStyle: terminalDisplay.cursorStyle,
 			cursorBlink: terminalDisplay.cursorBlink
@@ -73,6 +79,7 @@
 		void (async () => {
 			try {
 				const monaco = await workspace.ready();
+				monacoApi = monaco;
 				await ensureTerminalFont(host, size);
 				if (disposed) return;
 				releaseTheme = useMonacoTheme(monaco, host);
@@ -142,6 +149,18 @@
 		if (!mayTakeFocus(activeTarget(), (el) => el instanceof Node && host.contains(el))) return;
 		instance.focus();
 	}
+
+	$effect(() => {
+		if (!editor || !monacoApi) return;
+		const family = fontFamily;
+		if (family === settledFont) return;
+		settledFont = family;
+		void settleFont(
+			monacoApi,
+			family,
+			untrack(() => size)
+		);
+	});
 
 	$effect(() => {
 		editor?.updateOptions({ ...look(), readOnly, minimap: { enabled: minimap } });

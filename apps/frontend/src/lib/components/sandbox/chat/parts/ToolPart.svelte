@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { ChevronRight, CircleX, LoaderCircle } from 'lucide-svelte';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import type { ToolEntry } from '../session-store.svelte';
@@ -7,11 +9,18 @@
 
 	let { entry, nested = false }: { entry: ToolEntry; nested?: boolean } = $props();
 
+	const open = $derived(entry.expanded ?? greenhousePrefs.values.expandTools);
+	let seen: boolean | undefined;
+	$effect(() => {
+		const next = greenhousePrefs.values.expandTools;
+		if (seen !== undefined && seen !== next) untrack(() => (entry.expanded = null));
+		seen = next;
+	});
 	const running = $derived(entry.status === 'running' || entry.status === 'pending');
 	const verb = $derived(toolVerb(entry.name, running));
 	const Icon = $derived(verb.icon);
 	const lines = $derived.by(() => {
-		if (!entry.expanded) return null;
+		if (!open) return null;
 		const input = (entry.input ?? {}) as Record<string, unknown>;
 		const split = (value: unknown, sign: '+' | '−') =>
 			typeof value === 'string' ? value.split('\n').map((text) => ({ sign, text })) : [];
@@ -24,7 +33,7 @@
 		return null;
 	});
 	const command = $derived.by(() => {
-		if (!entry.expanded || entry.name !== 'Bash') return null;
+		if (!open || entry.name !== 'Bash') return null;
 		const input = entry.input as { command?: unknown } | null;
 		return typeof input?.command === 'string' ? input.command : null;
 	});
@@ -35,9 +44,9 @@
 		type="button"
 		class="step"
 		data-align={nested ? undefined : 'step'}
-		aria-expanded={entry.expanded}
+		aria-expanded={open}
 		title={entry.title ?? undefined}
-		onclick={() => (entry.expanded = !entry.expanded)}
+		onclick={() => (entry.expanded = !open)}
 	>
 		<span class="step-glyph" class:step-glyph--failed={entry.failed} aria-hidden="true">
 			{#if running}
@@ -59,11 +68,11 @@
 			</span>
 		{/if}
 		{#if entry.failed}<span class="step-failed">Failed</span>{/if}
-		<span class="step-chev" {@attach springRotate(() => entry.expanded, { rest: 0, on: 90 })}>
+		<span class="step-chev" {@attach springRotate(() => open, { rest: 0, on: 90 })}>
 			<ChevronRight size={16} strokeWidth={1.75} />
 		</span>
 	</button>
-	{#if entry.expanded}
+	{#if open}
 		<div class="detail" transition:slide>
 			{#if command !== null}
 				<pre class="detail-pre detail-pre--cmd">$ {command}</pre>

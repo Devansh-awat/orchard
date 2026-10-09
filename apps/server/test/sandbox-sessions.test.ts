@@ -32,6 +32,7 @@ import {
   buildWorktreeAddScript,
   buildWorktreeRemoveScript,
   isTerminalIndex,
+  isValidBranchPrefix,
   isValidGitRef,
   isValidRepoName,
   isValidSlug,
@@ -45,7 +46,9 @@ import {
   parseShortstat,
   parseWorktreeAddOutput,
   sandboxTerminalCommand,
+  buildWorktreeRestoreScript,
   scriptFiles,
+  sessionBranch,
   sessionStateDir,
   setupStateOf,
   shellQuote,
@@ -55,6 +58,7 @@ import {
 import { parseSandboxTerminalQuery } from '../src/sandboxes/sandbox-terminal.gateway';
 import {
   activityFromStatus,
+  branchOf,
   excerptLog,
   parseGithubRemote,
   parseIssueRef,
@@ -172,6 +176,110 @@ test('worktree creation quotes every input and branches under orchard/', () => {
     baseCommit: '0123456789abcdef'
   });
   assert.deepEqual(parseWorktreeAddOutput(''), { baseBranch: null, baseCommit: null });
+});
+
+test('branch prefixes follow git ref rules, may be empty, and cap at 40 characters', () => {
+  for (const ok of [
+    '',
+    'orchard',
+    'leafd',
+    'seb/wip',
+    'feat_x',
+    'a.b',
+    'team-1/sub_2',
+    'x'.repeat(40)
+  ]) {
+    assert.equal(isValidBranchPrefix(ok), true, ok);
+  }
+  for (const bad of [
+    'x'.repeat(41),
+    '/orchard',
+    'orchard/',
+    'a//b',
+    'a..b',
+    '..',
+    'a/.hidden',
+    '.hidden',
+    'name.lock',
+    'a/b.lock',
+    'trailing.',
+    '-flag',
+    'a@{1}',
+    '@{',
+    'has space',
+    "quote'",
+    '$(id)',
+    '`id`',
+    'a;b',
+    'a\nb',
+    'tab\t',
+    'a~1',
+    'a^b',
+    'a:b',
+    'a?b',
+    'a*b',
+    'a[b',
+    'a\\b',
+    'plus+',
+    null,
+    undefined,
+    42,
+    ['orchard']
+  ]) {
+    assert.equal(isValidBranchPrefix(bad), false, String(bad));
+  }
+});
+
+test('session branches join the prefix and slug, or use the slug alone with no prefix', () => {
+  assert.equal(sessionBranch('fix-a1b2'), 'orchard/fix-a1b2');
+  assert.equal(sessionBranch('fix-a1b2', 'leafd'), 'leafd/fix-a1b2');
+  assert.equal(sessionBranch('fix-a1b2', 'seb/wip'), 'seb/wip/fix-a1b2');
+  assert.equal(sessionBranch('fix-a1b2', ''), 'fix-a1b2');
+  for (const prefix of ['', 'orchard', 'leafd', 'seb/wip', 'x'.repeat(40)]) {
+    assert.equal(isValidGitRef(sessionBranch('fix-a1b2', prefix)), true, prefix);
+  }
+  assert.equal(branchOf({ slug: 'fix-a1b2', branch: 'leafd/fix-a1b2' }), 'leafd/fix-a1b2');
+  assert.equal(branchOf({ slug: 'fix-a1b2', branch: null }), 'orchard/fix-a1b2');
+  assert.equal(branchOf({ slug: 'fix-a1b2', branch: '$(id)' }), 'orchard/fix-a1b2');
+  assert.equal(branchOf({ slug: null, branch: null }), null);
+});
+
+test('worktree scripts use the stored branch, quoted, and refuse an unsafe one', () => {
+  const add = buildWorktreeAddScript({
+    repo: 'app',
+    slug: 'fix-a1b2',
+    baseBranch: 'main',
+    branch: 'leafd/fix-a1b2'
+  });
+  assert.match(add, /worktree add --quiet --no-track -b 'leafd\/fix-a1b2' /);
+  const bare = buildWorktreeAddScript({
+    repo: 'app',
+    slug: 'fix-a1b2',
+    baseBranch: null,
+    branch: 'fix-a1b2'
+  });
+  assert.match(bare, /-b 'fix-a1b2' /);
+  assert.throws(() =>
+    buildWorktreeAddScript({ repo: 'app', slug: 'fix-a1b2', baseBranch: null, branch: "x';id;'" })
+  );
+  assert.throws(() =>
+    buildWorktreeAddScript({ repo: 'app', slug: 'fix-a1b2', baseBranch: null, branch: '-D' })
+  );
+  const restore = buildWorktreeRestoreScript('app', 'fix-a1b2', 'leafd/fix-a1b2');
+  assert.match(
+    restore,
+    /worktree add --quiet '\/persist\/home\/\.worktrees\/app\/fix-a1b2' 'leafd\/fix-a1b2'/
+  );
+  assert.match(buildWorktreeRestoreScript('app', 'fix-a1b2'), /'orchard\/fix-a1b2'/);
+  assert.throws(() => buildWorktreeRestoreScript('app', 'fix-a1b2', '$(id)'));
+  const remove = buildWorktreeRemoveScript('app', 'fix-a1b2', SID, {
+    deleteBranch: true,
+    branch: 'leafd/fix-a1b2'
+  });
+  assert.match(remove, /branch -D 'leafd\/fix-a1b2'/);
+  assert.throws(() =>
+    buildWorktreeRemoveScript('app', 'fix-a1b2', SID, { deleteBranch: true, branch: 'a b' })
+  );
 });
 
 test('archiving keeps the branch, deleting can remove it, and tmux sessions are scoped to the session', () => {
@@ -1038,7 +1146,11 @@ function preparingHarness(exec: (script: string) => Promise<any>) {
   };
   const prisma = {
     sandboxConversation: {
-      create: async () => state,
+      create: async (args: any) => {
+        state = { ...state, ...args.data };
+        return state;
+      },
+      findFirst: async () => ({ ...state, createdBy: null }),
       findUniqueOrThrow: async () => ({ ...state, createdBy: null }),
       update: async (args: any) => {
         state = { ...state, ...args.data };
@@ -1125,6 +1237,103 @@ test('a failing worktree script surfaces as prepareError instead of a request er
   const failed = emitted.find((d) => d.prepareError);
   assert.equal(failed.prepareError, 'Could not find the base branch in that repository');
   assert.equal(failed.preparing, false);
+});
+
+test('session create branches under the requested prefix, or bare with an empty one', async () => {
+  const scripts: string[] = [];
+  const ok = async (script: string) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '@@base@@main\n@@commit@@abcdef1\n' };
+  };
+  const named = preparingHarness(ok);
+  const dto = await named.svc.create(named.sandbox as never, SID2, {
+    repo: 'app',
+    title: 'Fix login',
+    branchPrefix: 'leafd'
+  });
+  assert.match(dto.branch ?? '', /^leafd\/fix-login-[a-f0-9]{6}$/);
+  await until(() => scripts.some((s) => s.includes('worktree add')));
+  assert.ok(scripts.some((s) => s.includes(`-b '${dto.branch}'`)));
+
+  const bare = preparingHarness(ok);
+  const plain = await bare.svc.create(bare.sandbox as never, SID2, {
+    repo: 'app',
+    title: 'Fix login',
+    branchPrefix: ''
+  });
+  assert.match(plain.branch ?? '', /^fix-login-[a-f0-9]{6}$/);
+
+  const fallback = preparingHarness(ok);
+  const standard = await fallback.svc.create(fallback.sandbox as never, SID2, {
+    repo: 'app',
+    title: 'Fix login'
+  });
+  assert.match(standard.branch ?? '', /^orchard\/fix-login-[a-f0-9]{6}$/);
+});
+
+test('session create refuses a branch prefix that is not a safe git ref', async () => {
+  const { svc, sandbox } = preparingHarness(async () => ({
+    ok: true,
+    exitCode: 0,
+    stderr: '',
+    stdout: ''
+  }));
+  for (const branchPrefix of [
+    "x';id;'",
+    'a..b',
+    '/lead',
+    'tail/',
+    'x.lock',
+    'a@{1}',
+    'x'.repeat(41)
+  ]) {
+    await assert.rejects(
+      svc.create(sandbox as never, SID2, { repo: 'app', branchPrefix }),
+      /branchPrefix/,
+      branchPrefix
+    );
+  }
+  await assert.rejects(
+    svc.create(sandbox as never, SID2, { repo: 'app', branchPrefix: 7 as never }),
+    /branchPrefix/
+  );
+});
+
+test('archiving deletes the stored branch only when asked', async () => {
+  const scripts: string[] = [];
+  const { svc, sandbox } = preparingHarness(async (script) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '' };
+  });
+  await svc.create(sandbox as never, SID2, {
+    repo: 'app',
+    title: 'Fix login',
+    branchPrefix: 'seb'
+  });
+  scripts.length = 0;
+  const archived = await svc.update(sandbox as never, SID, { archived: true, deleteBranch: true });
+  assert.equal(archived.status, 'archived');
+  const removal = scripts.find((s) => s.includes('worktree remove'));
+  assert.ok(removal);
+  assert.match(removal, new RegExp(`branch -D '${archived.branch?.replace(/\//g, '\\/')}'`));
+  assert.match(archived.branch ?? '', /^seb\//);
+
+  const kept = preparingHarness(async (script) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '' };
+  });
+  scripts.length = 0;
+  await kept.svc.update(kept.sandbox as never, SID, { archived: true });
+  assert.doesNotMatch(scripts.find((s) => s.includes('worktree remove')) ?? '', /branch -D/);
+
+  await assert.rejects(
+    kept.svc.update(kept.sandbox as never, SID, { archived: true, deleteBranch: 'yes' as never }),
+    /deleteBranch must be a boolean/
+  );
+  await assert.rejects(
+    kept.svc.update(kept.sandbox as never, SID, { title: 'x', deleteBranch: true }),
+    /only applies when archiving/
+  );
 });
 
 test('a session stuck preparing past the window reports an interrupted setup', () => {

@@ -51,7 +51,7 @@ panel toggle.
   it the branch, when it last changed, and the diffstat against the base branch
   (`+42 −7`). Hover a row to archive it or open its menu. Archived sessions
   collapse under **Archived**.
-- **Footer.** You, help, and **Settings** (**⌘,**).
+- **Footer.** You and **Settings** (**⌘,**). Help lives in the machine menu.
 
 A session's status glyph tells you whether the agent is **working**, **waiting
 for you**, idle, or whether the work is **done** (its pull request merged). A
@@ -65,18 +65,27 @@ its branch.
 
 **⌘,** or the gear in the sidebar footer opens settings.
 
-| Section          | What it holds                                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------------------------- |
-| **General**      | The machine's name, runner and size.                                                                  |
-| **Setup script** | The script that runs on every start. See [Machines](/greenhouse/machines/).                           |
-| **Projects**     | Orchard projects whose environment variables the machine gets. See [Projects](/greenhouse/projects/). |
-| **Usage**        | Live CPU, memory and disk against the machine's limits, uptime, idle sleep and network.               |
-| **Danger zone**  | Delete the machine. Host only.                                                                        |
-| **Appearance**   | Interface zoom, chat text size, and the code size for the editor and terminals.                       |
-| **Integrations** | Your GitHub, Linear and Slack links.                                                                  |
+| Section          | What it holds                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **General**      | The machine's name, runner and size.                                                                                      |
+| **Setup script** | The script that runs on every start. See [Machines](/greenhouse/machines/).                                               |
+| **Projects**     | Orchard projects whose environment variables the machine gets. See [Projects](/greenhouse/projects/).                     |
+| **Usage**        | Live CPU, memory and disk against the machine's limits, uptime, idle sleep and network.                                   |
+| **Danger zone**  | Delete the machine. Host only.                                                                                            |
+| **Preferences**  | Send with Enter or ⌘Enter, queue or steer follow-ups, notifications, context usage, MCP status, tool calls and reasoning. |
+| **Sounds**       | What plays when an agent finishes, needs you, or fails. Follows Orchard's sound setting.                                  |
+| **Appearance**   | Theme, zoom, chat text size, sidebar diff colours, mono font, ligatures, code size and terminal font.                     |
+| **Git**          | The prefix for new session branches, and whether archiving deletes the branch.                                            |
+| **Agents**       | The Claude account the machine's agent uses, its plan and its limits.                                                     |
+| **Integrations** | Your GitHub, Linear and Slack links.                                                                                      |
+| **Shortcuts**    | Every keyboard shortcut.                                                                                                  |
 
-Machine sections are read-only for guests. Appearance is yours alone and is kept
-in this browser.
+Machine sections are read-only for guests. Everything under **You** is yours
+alone and is kept in this browser.
+
+**I'm not absolutely right, thank you very much** strips "You're absolutely
+right!" from agent messages. It only changes what you see; the transcript is
+untouched.
 
 ## Centre
 
@@ -209,6 +218,7 @@ On Windows and Linux, use **Ctrl** for **⌘**.
 | **⌘`**             | Focus the terminal                                  |
 | **⌘⇧G**            | Open the Changes tab                                |
 | **⌘S**             | Save the open file                                  |
+| **⌃O**             | Expand or collapse tool calls                       |
 | **⌘,**             | Open settings                                       |
 | **⌘+** / **⌘−**    | Code size, in a terminal                            |
 | **Enter**          | Send the prompt                                     |

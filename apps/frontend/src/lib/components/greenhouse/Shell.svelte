@@ -229,6 +229,10 @@
 				event.preventDefault();
 				app.openSettings();
 				return;
+			case 'toggle-tools':
+				event.preventDefault();
+				greenhousePrefs.set('expandTools', !greenhousePrefs.values.expandTools);
+				return;
 		}
 	}
 

@@ -2,10 +2,13 @@ import type * as Monaco from 'monaco-editor';
 import type { EffectiveAnimationLevel } from '$lib/stores/preferences';
 import type { TerminalCursor } from '$lib/stores/terminal-display.svelte';
 import { monoFontFor } from '$lib/terminal/font';
+import type { MonacoApi } from './load';
 import { MONACO_THEME } from './theme';
 
 export interface LookOptions {
 	fontSize: number;
+	fontFamily?: string;
+	ligatures?: boolean;
 	motion: EffectiveAnimationLevel;
 	cursorStyle?: TerminalCursor;
 	cursorBlink?: boolean;
@@ -21,6 +24,8 @@ export function lookOptions(look: LookOptions): Monaco.editor.IEditorOptions {
 	const blink = look.cursorBlink !== false && look.motion !== 'off';
 	return {
 		fontSize: look.fontSize,
+		...(look.fontFamily ? { fontFamily: look.fontFamily } : {}),
+		fontLigatures: look.ligatures ?? false,
 		lineHeight: Math.round(look.fontSize * 1.65),
 		cursorSmoothCaretAnimation: 'off',
 		smoothScrolling: false,
@@ -65,4 +70,14 @@ export function baseOptions(host: HTMLElement): Monaco.editor.IEditorOptions & {
 			horizontalSliderSize: 6
 		}
 	};
+}
+
+export async function settleFont(monaco: MonacoApi, family: string, sizePx: number): Promise<void> {
+	const first = family.split(',')[0]?.trim();
+	if (first && typeof document !== 'undefined' && document.fonts?.load) {
+		try {
+			await document.fonts.load(`${sizePx}px ${first}`);
+		} catch {}
+	}
+	monaco.editor.remeasureFonts();
 }

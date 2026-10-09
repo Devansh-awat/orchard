@@ -43,6 +43,9 @@
 
 	let { ws, session }: { ws: MachineWorkspace; session: GhSession | null } = $props();
 
+	const TERMINAL_FONT =
+		"'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace";
+
 	const app = getGreenhouseApp();
 	const mod = modKey();
 
@@ -514,6 +517,7 @@
 							{:else}
 								<PodTerminal
 									fontSize={greenhousePrefs.codeSize}
+									fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
 									onZoom={(s) => greenhousePrefs.stepCode(s)}
 									endpoint={endpoint('setup', 'ro')}
 									visible={tab === 'setup'}
@@ -535,6 +539,7 @@
 								{:else}
 									<PodTerminal
 										fontSize={greenhousePrefs.codeSize}
+										fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
 										onZoom={(s) => greenhousePrefs.stepCode(s)}
 										endpoint={endpoint('run', 'ro')}
 										visible={tab === 'run'}
@@ -590,6 +595,7 @@
 					<div class="pane" class:pane--on={tab === `term:${n}`}>
 						<PodTerminal
 							fontSize={greenhousePrefs.codeSize}
+							fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
 							onZoom={(s) => greenhousePrefs.stepCode(s)}
 							endpoint={endpoint(n)}
 							visible={tab === `term:${n}`}
@@ -612,6 +618,7 @@
 					<div class="pane" class:pane--on={tab === `watch:${user.id}`}>
 						<PodTerminal
 							fontSize={greenhousePrefs.codeSize}
+							fontFamily={greenhousePrefs.terminalStack(TERMINAL_FONT)}
 							onZoom={(s) => greenhousePrefs.stepCode(s)}
 							endpoint={endpoint('1', 'ro', user.id)}
 							visible={tab === `watch:${user.id}`}

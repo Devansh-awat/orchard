@@ -124,7 +124,7 @@
 		width: var(--av);
 		height: var(--av);
 		border-radius: var(--radius-pill);
-		box-shadow: 0 0 0 1.5px var(--gh-editor, var(--bg-app));
+		box-shadow: 0 0 0 1.5px var(--stack-ring, var(--gh-editor, var(--bg-app)));
 		overflow: hidden;
 	}
 
@@ -140,7 +140,7 @@
 	button.face:hover .disc,
 	.face--following .disc {
 		box-shadow:
-			0 0 0 1.5px var(--gh-editor, var(--bg-app)),
+			0 0 0 1.5px var(--stack-ring, var(--gh-editor, var(--bg-app))),
 			0 0 0 3px var(--ring);
 	}
 
@@ -150,7 +150,7 @@
 
 	button.face:focus-visible .disc {
 		box-shadow:
-			0 0 0 1.5px var(--gh-editor, var(--bg-app)),
+			0 0 0 1.5px var(--stack-ring, var(--gh-editor, var(--bg-app))),
 			0 0 0 3px var(--focus-ring-color);
 	}
 
@@ -174,6 +174,6 @@
 		color: var(--gh-muted);
 		font-size: var(--text-micro);
 		line-height: 1rem;
-		box-shadow: 0 0 0 1.5px var(--gh-editor, var(--bg-app));
+		box-shadow: 0 0 0 1.5px var(--stack-ring, var(--gh-editor, var(--bg-app)));
 	}
 </style>

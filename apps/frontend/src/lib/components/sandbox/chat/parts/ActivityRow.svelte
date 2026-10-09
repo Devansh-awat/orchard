@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { ChevronRight, CircleX } from 'lucide-svelte';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
 	import type { ChatSessionStore } from '../session-store.svelte';
@@ -18,10 +20,22 @@
 		status?: string | null;
 	} = $props();
 
-	let open = $state(false);
+	let toggled = $state<boolean | null>(null);
+	let seen: boolean | undefined;
+	$effect(() => {
+		const next = greenhousePrefs.values.expandTools;
+		if (seen !== undefined && seen !== next) untrack(() => (toggled = null));
+		seen = next;
+	});
 
+	const open = $derived(toggled ?? greenhousePrefs.values.expandTools);
+	const shown = $derived(
+		greenhousePrefs.values.showReasoning
+			? block.steps
+			: block.steps.filter((step) => step.entry.kind !== 'thinking')
+	);
 	const summary = $derived(summarize(block));
-	const expandable = $derived(block.steps.length > 0);
+	const expandable = $derived(shown.length > 0);
 	const label = $derived.by(() => {
 		if (live) return status ?? liveStep(block);
 		const verb = summary.thoughtOnly ? 'Thought' : 'Worked';
@@ -42,7 +56,7 @@
 		aria-expanded={expandable ? open : undefined}
 		disabled={!expandable}
 		title={expandable ? (open ? 'Hide steps' : 'Show steps') : undefined}
-		onclick={() => (open = !open)}
+		onclick={() => (toggled = !open)}
 	>
 		<span class="act-label">{label}</span>
 		{#if steps}
@@ -71,9 +85,9 @@
 			</span>
 		{/if}
 	</button>
-	{#if open}
+	{#if open && expandable}
 		<div class="act-steps" transition:slide>
-			{#each block.steps as step (step.entry.key)}
+			{#each shown as step (step.entry.key)}
 				<Entry
 					entry={step.entry}
 					{store}

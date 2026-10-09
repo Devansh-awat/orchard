@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { LoaderCircle, Sprout } from 'lucide-svelte';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import type { ChatSessionStore } from '../session-store.svelte';
+	import { stripSycophancy } from '../sycophancy';
 	import type { AgentBlock } from '../turns';
 	import ActivityRow from './ActivityRow.svelte';
 	import ErrorPart from './ErrorPart.svelte';
@@ -21,6 +23,7 @@
 		status?: string | null;
 	} = $props();
 
+	const tidy = $derived(greenhousePrefs.values.notAbsolutelyRight);
 	const activity = $derived(live || block.steps.length > 0);
 	const lead = $derived(activity ? 'row' : block.answer.length > 0 ? 'prose' : 'small');
 	const result = $derived(block.result?.entry.kind === 'result' ? block.result.entry : null);
@@ -43,7 +46,7 @@
 	{/if}
 	{#each block.answer as part (part.entry.key)}
 		{#if part.entry.kind === 'text'}
-			<TextPart text={part.entry.text} align />
+			<TextPart text={tidy ? stripSycophancy(part.entry.text) : part.entry.text} align />
 		{/if}
 	{/each}
 	{#each block.errors as part (part.entry.key)}

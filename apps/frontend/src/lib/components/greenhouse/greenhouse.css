@@ -23,6 +23,11 @@
 	--gh-mod: var(--status-warning);
 	--gh-new: var(--status-success);
 	--gh-accent: var(--accent);
+	--gh-side-on: color-mix(in oklab, var(--accent) 10%, transparent);
+	--gh-side-on-icon: var(--accent);
+	--gh-side-gap: 0.125rem;
+	--gh-side-pad: 0.5rem;
+	--gh-side-session: 2.5rem;
 	--gh-bar: 2.5rem;
 	--gh-titlebar: 2.75rem;
 	--gh-gutter: 0.5rem;
@@ -247,7 +252,7 @@
 
 .gh-mono {
 	font-family: var(--gh-mono);
-	font-feature-settings: 'calt' 0;
+	font-feature-settings: var(--gh-mono-features, 'calt' 0);
 }
 
 .gh-add {

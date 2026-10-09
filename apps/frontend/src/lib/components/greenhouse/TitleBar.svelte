@@ -28,6 +28,7 @@
 	import OpenIn from './OpenIn.svelte';
 	import PrButton from './PrButton.svelte';
 	import { modKey } from './format';
+	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY, hostOnly, isLegacy } from './workspace.svelte';
 
 	let {
@@ -192,7 +193,10 @@
 					disabled={!ws.canEdit || isLegacy(session)}
 					title={ws.canEdit ? undefined : VIEWER_ONLY}
 				>
-					{#if archived}<ArchiveRestore size={14} /> Restore{:else}<Archive size={14} /> Archive{/if}
+					{#if archived}<ArchiveRestore size={14} /> Restore{:else}<Archive size={14} />
+						{greenhousePrefs.values.deleteBranchOnArchive
+							? 'Archive and delete the branch'
+							: 'Archive'}{/if}
 				</MenuItem>
 				{#if confirmDelete}
 					<MenuItem danger onclick={() => remove(false)}>

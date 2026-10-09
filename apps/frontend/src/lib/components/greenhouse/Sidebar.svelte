@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ChevronRight, CircleHelp, House, Plus, Search, Settings } from 'lucide-svelte';
+	import { ChevronRight, House, Plus, Search, Settings } from 'lucide-svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import { user } from '$lib/stores';
 	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 	import { getGreenhouseApp } from './app.svelte';
 	import MachineMenu from './MachineMenu.svelte';
@@ -17,6 +18,8 @@
 	const ws = $derived(app.ws);
 	const self = $derived(app.self);
 	const mod = modKey();
+	const handle = $derived($user?.username ? `@${$user.username}` : (self?.name ?? null));
+	const face = $derived($user ?? (self ? { id: self.id, imageUrl: self.avatarUrl } : null));
 
 	let collapsed = $state<Record<string, boolean>>({});
 	let archivedOpen = $state(false);
@@ -43,6 +46,11 @@
 <nav class="side" class:side--compact={compact} aria-label="Greenhouse">
 	<div class="top">
 		<MachineMenu />
+		<button type="button" class="search gh-row" onclick={search}>
+			<span class="ico"><Search size={16} strokeWidth={1.75} /></span>
+			<span class="search-label">Search</span>
+			<kbd class="kbd">{mod}K</kbd>
+		</button>
 		<div class="rows">
 			<button
 				type="button"
@@ -63,12 +71,7 @@
 			>
 				<span class="ico"><Plus size={16} strokeWidth={1.75} /></span>
 				<span class="label">New session</span>
-				<span class="gh-kbd">{mod}N</span>
-			</button>
-			<button type="button" class="nav gh-row" onclick={search}>
-				<span class="ico"><Search size={16} strokeWidth={1.75} /></span>
-				<span class="label">Search</span>
-				<span class="gh-kbd">{mod}K</span>
+				<kbd class="gh-kbd hover-kbd">{mod}N</kbd>
 			</button>
 		</div>
 	</div>
@@ -176,30 +179,15 @@
 	</div>
 
 	<div class="foot">
-		{#if self}
-			<span class="me">
-				<span class="ico"
-					><span class="gh-face face"
-						><Avatar
-							user={{ id: self.id, name: self.name, imageUrl: self.avatarUrl }}
-							size={20}
-						/></span
-					></span
-				>
-				<span class="label">{self.name}</span>
+		{#if face}
+			<span class="me" title={self?.name}>
+				<span class="gh-face me-face"><Avatar user={face} size={20} alive /></span>
+				{#if handle}<span class="me-name" class:me-name--mono={!!$user?.username}>{handle}</span
+					>{/if}
 			</span>
+		{:else}
+			<span class="grow"></span>
 		{/if}
-		<span class="grow"></span>
-		<a
-			class="gh-ibtn"
-			href="https://orchard.my/docs/greenhouse"
-			target="_blank"
-			rel="noopener"
-			aria-label="Help"
-			title="Help"
-		>
-			<CircleHelp size={16} strokeWidth={1.75} />
-		</a>
 		<button
 			type="button"
 			class="gh-ibtn"
@@ -214,12 +202,19 @@
 
 <style>
 	.side {
-		--row-pad: calc(var(--gh-side-edge) - 0.5rem);
+		--row-pad: var(--gh-side-pad);
+		--stack-ring: var(--gh-frame);
 		display: flex;
 		flex-direction: column;
-		height: 100%;
+		flex: 1;
 		min-height: 0;
+		min-width: 0;
 		background: var(--gh-frame);
+	}
+
+	.side--compact {
+		background: var(--gh-editor);
+		--stack-ring: var(--gh-editor);
 	}
 
 	.top {
@@ -234,10 +229,49 @@
 		padding-top: 0.5rem;
 	}
 
-	.rows {
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		height: var(--gh-list-row);
+		padding: 0 calc(var(--row-pad) - 0.25rem) 0 var(--row-pad);
+		border-radius: var(--gh-r-control);
+		box-shadow: inset 0 0 0 1px var(--gh-line-soft);
+		background: var(--gh-hover);
+		color: var(--gh-faint);
+		text-align: left;
+		transition:
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
+	}
+
+	.search:hover {
+		color: var(--gh-muted);
+		background: var(--gh-selected);
+	}
+
+	.search-label {
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
+	}
+
+	.kbd {
+		padding: 0 0.25rem;
+		border-radius: var(--radius-xs);
+		background: var(--gh-hover);
+		color: var(--gh-muted);
+		font-family: var(--font-sans);
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+	}
+
+	.rows,
+	.group,
+	.sessions {
 		display: flex;
 		flex-direction: column;
-		gap: var(--gh-row-gap);
+		gap: var(--gh-side-gap);
 	}
 
 	.nav {
@@ -245,9 +279,11 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex: none;
-		height: var(--gh-row);
+		width: 100%;
+		min-width: 0;
+		height: var(--gh-list-row);
 		padding: 0 var(--row-pad);
-		border-radius: var(--gh-r-row);
+		border-radius: var(--gh-r-control);
 		color: var(--gh-muted-strong);
 		text-align: left;
 		transition:
@@ -260,14 +296,14 @@
 		color: var(--gh-text);
 	}
 
-	.nav--on {
-		background: var(--gh-selected);
+	.nav--on,
+	.nav--on:hover:not(:disabled) {
+		background: var(--gh-side-on);
 		color: var(--gh-text);
-		font-weight: 600;
 	}
 
-	.nav--on:hover:not(:disabled) {
-		background: var(--gh-selected);
+	.nav--on .ico {
+		color: var(--gh-side-on-icon);
 	}
 
 	.nav:disabled {
@@ -295,6 +331,16 @@
 		text-overflow: ellipsis;
 	}
 
+	.hover-kbd {
+		opacity: 0;
+		transition: opacity var(--dur-fast) ease;
+	}
+
+	.nav:hover:not(:disabled) .hover-kbd,
+	.nav:focus-visible .hover-kbd {
+		opacity: 1;
+	}
+
 	.list {
 		display: flex;
 		flex-direction: column;
@@ -305,9 +351,6 @@
 	}
 
 	.group {
-		display: flex;
-		flex-direction: column;
-		gap: var(--gh-row-gap);
 		flex: none;
 	}
 
@@ -327,9 +370,11 @@
 		padding: 0 var(--row-pad);
 		border-radius: var(--gh-r-control);
 		color: var(--gh-muted);
-		font-size: var(--gh-caption);
+		font-size: var(--text-micro);
 		line-height: var(--gh-lh-caption);
+		font-weight: 600;
 		text-align: left;
+		user-select: none;
 		transition: color var(--dur-fast) ease;
 	}
 
@@ -342,12 +387,12 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-		font-weight: 600;
 	}
 
 	.head-count {
 		flex: none;
 		color: var(--gh-faint);
+		font-weight: 400;
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -381,9 +426,6 @@
 	}
 
 	.sessions {
-		display: flex;
-		flex-direction: column;
-		gap: var(--gh-row-gap);
 		overflow: hidden;
 	}
 
@@ -402,20 +444,34 @@
 		flex: none;
 		height: var(--gh-titlebar);
 		padding: 0 calc(var(--gh-side-edge) - var(--gh-ibtn-inset)) 0 0.5rem;
+		border-top: 1px solid var(--gh-line-soft);
 	}
 
 	.me {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		flex: 0 1 auto;
+		flex: 1;
 		min-width: 0;
-		padding: 0 var(--row-pad);
-		color: var(--gh-text);
+		padding: 0 var(--row-pad) 0 calc(var(--row-pad) - 0.125rem);
+		color: var(--gh-muted-strong);
 	}
 
-	.face {
+	.me-face {
 		--face: 1.25rem;
+	}
+
+	.me-name {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		font-size: var(--gh-caption);
+		line-height: var(--gh-lh-caption);
+	}
+
+	.me-name--mono {
+		font-family: var(--gh-mono);
 	}
 
 	.grow {

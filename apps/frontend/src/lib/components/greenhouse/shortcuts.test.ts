@@ -68,3 +68,16 @@ test('plain keys are never shortcuts', () => {
 	assert.equal(shellShortcut(key('KeyS'), anywhere), null);
 	assert.equal(shellShortcut(key('KeyB', { shiftKey: true }), anywhere), null);
 });
+
+test('ctrl o toggles expanded tool calls, but not cmd o and not inside a terminal', () => {
+	assert.equal(shellShortcut(key('KeyO', { ctrlKey: true }), anywhere), 'toggle-tools');
+	assert.equal(shellShortcut(key('KeyO', { metaKey: true }), anywhere), null);
+	assert.equal(shellShortcut(key('KeyO', { ctrlKey: true, metaKey: true }), anywhere), null);
+	assert.equal(shellShortcut(key('KeyO', { ctrlKey: true, shiftKey: true }), anywhere), null);
+	assert.equal(shellShortcut(key('KeyO', { ctrlKey: true, altKey: true }), anywhere), null);
+	assert.equal(shellShortcut(key('KeyO', { ctrlKey: true }), terminal), null);
+	assert.equal(
+		shellShortcut(key('KeyO', { ctrlKey: true, defaultPrevented: true }), anywhere),
+		null
+	);
+});

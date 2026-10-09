@@ -3,7 +3,12 @@ import { untrack } from 'svelte';
 import { toasts } from '$lib/stores';
 import { queryClient } from '$lib/query';
 import { optimisticSandboxStatus } from '$lib/queries/sandboxes';
-import type { ChatAuthor, ChatSessionStore, RemoteDraft } from '$lib/components/sandbox/chat';
+import type {
+	AgentSignal,
+	ChatAuthor,
+	ChatSessionStore,
+	RemoteDraft
+} from '$lib/components/sandbox/chat';
 import {
 	DiffComments,
 	EditorWorkspace,
@@ -15,7 +20,11 @@ import {
 } from '$lib/components/sandbox/editor';
 import type { Sandbox, SandboxStatus } from '$lib/types/sandbox';
 import * as api from './api';
+import { alertCopy, showAgentNotification } from './agent-alerts';
+import { DEFAULT_BRANCH_PREFIX, branchPrefixFor } from './branch-prefix';
 import type { GreenhouseEnv } from './env';
+import { greenhousePrefs } from './prefs.svelte';
+import { playGreenhouseSound } from './sounds';
 import type { LiveClient } from './live.svelte';
 import type {
 	CenterTab,
@@ -282,6 +291,7 @@ export class MachineWorkspace {
 				if (sid) void this.refreshChanges(sid);
 				void this.refreshSessions();
 			},
+			onSignal: (signal) => this.#alert(signal),
 			onDraftChange: (text) => {
 				const sid = untrack(() => this.sessionId);
 				if (!sid) return;
@@ -460,16 +470,74 @@ export class MachineWorkspace {
 			: [session, ...this.sessions];
 	}
 
-	activity(session: GhSession): SessionActivityState {
+	#chatIds(session: GhSession): Set<string> {
 		const ids = new Set<string>();
 		if (session.opencodeSessionId) ids.add(session.opencodeSessionId);
 		for (const chat of this.chats.get(session.id) ?? []) ids.add(chat.id);
 		for (const s of this.store.sessions) if (s.directory === session.worktreePath) ids.add(s.id);
+		return ids;
+	}
+
+	activity(session: GhSession): SessionActivityState {
+		const ids = this.#chatIds(session);
+		for (const id of ids) if (this.store.waiting.has(id)) return 'needs_input';
 		for (const id of ids) {
 			const state = this.store.activity.get(id);
 			if (state === 'busy' || state === 'retry') return 'working';
 		}
 		return session.activity;
+	}
+
+	sessionForChat(chatId: string): GhSession | null {
+		const sessions = untrack(() => this.sessions);
+		const direct = sessions.find(
+			(s) => s.opencodeSessionId === chatId || this.chats.get(s.id)?.some((c) => c.id === chatId)
+		);
+		if (direct) return direct;
+		const dir = this.store.sessions.find((s) => s.id === chatId)?.directory ?? null;
+		return dir ? (sessions.find((s) => s.worktreePath === dir) ?? null) : null;
+	}
+
+	#watching(chatId: string, session: GhSession | null): { open: boolean; watched: boolean } {
+		const openId = untrack(() => this.sessionId);
+		const open = session
+			? session.id === openId
+			: untrack(() => this.mode) === 'legacy' && this.store.activeId === chatId;
+		if (open) return { open, watched: true };
+		const selfId = this.host.self()?.id ?? null;
+		const last = this.store.lastPrompt(chatId);
+		if (last?.local) return { open, watched: true };
+		if (selfId && last?.authorId === selfId) return { open, watched: true };
+		const creator = session?.createdBy?.id ?? null;
+		return { open, watched: !!selfId && !last?.authorId && creator === selfId };
+	}
+
+	#alert(signal: AgentSignal) {
+		if (this.#disposed) return;
+		const session = this.sessionForChat(signal.sessionId);
+		const { open, watched } = this.#watching(signal.sessionId, session);
+		if (!watched) return;
+		playGreenhouseSound(signal.kind);
+		const prefs = greenhousePrefs.values;
+		if (!prefs.notifyAgent) return;
+		const hidden = typeof document !== 'undefined' && document.hidden;
+		if (open && !hidden) return;
+		const title =
+			session?.title ?? this.store.sessions.find((s) => s.id === signal.sessionId)?.title ?? '';
+		showAgentNotification(
+			alertCopy(signal.kind, title, signal.detail, prefs.notAbsolutelyRight),
+			`greenhouse:${signal.sessionId}:${signal.kind}`,
+			() => {
+				if (!session) return;
+				this.host.openSession(session.id, isLegacy(session) ? null : chatTabId(signal.sessionId));
+			}
+		);
+	}
+
+	branchPrefix(): string {
+		const prefs = greenhousePrefs.values;
+		const login = untrack(() => this.gitIdentity?.githubLogin ?? null);
+		return branchPrefixFor(prefs.branchPrefixMode, prefs.branchPrefixCustom, login);
 	}
 
 	hasDraft(sid: string): boolean {
@@ -596,7 +664,11 @@ export class MachineWorkspace {
 	}) {
 		if (!this.canEdit) return null;
 		try {
-			const session = await api.createSession(this.sandboxId, input);
+			const prefix = this.branchPrefix();
+			const session = await api.createSession(this.sandboxId, {
+				...input,
+				...(prefix === DEFAULT_BRANCH_PREFIX ? {} : { branchPrefix: prefix })
+			});
 			this.upsert(session);
 			this.launches.set(session.id, { ...input, at: Date.now() });
 			this.host.openSession(session.id, null);
@@ -648,7 +720,11 @@ export class MachineWorkspace {
 		}
 	}
 
-	async archiveSession(session: GhSession, archived = true) {
+	async archiveSession(
+		session: GhSession,
+		archived = true,
+		deleteBranch = archived && greenhousePrefs.values.deleteBranchOnArchive
+	) {
 		const previous = session;
 		this.upsert({
 			...session,
@@ -657,7 +733,12 @@ export class MachineWorkspace {
 		});
 		if (archived && this.sessionId === session.id) this.host.openSession(null);
 		try {
-			this.upsert(await api.patchSession(this.sandboxId, session.id, { archived }));
+			this.upsert(
+				await api.patchSession(this.sandboxId, session.id, {
+					archived,
+					...(archived && deleteBranch ? { deleteBranch: true } : {})
+				})
+			);
 		} catch (e) {
 			this.upsert(previous);
 			toasts.add({

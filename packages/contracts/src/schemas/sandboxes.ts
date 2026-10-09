@@ -783,7 +783,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   },
   'POST /sandboxes/:id/sessions': {
     summary:
-      'Start a session: git worktree on orchard/<slug>, an opencode chat in it, and the repo setup script in the background',
+      'Start a session: git worktree on <branchPrefix>/<slug> (orchard/<slug> by default), an opencode chat in it, and the repo setup script in the background',
     request: z.object({
       repo: z.string().max(120),
       baseBranch: z.string().max(200).nullable().optional().describe('Defaults to origin HEAD'),
@@ -791,7 +791,15 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       prompt: z.string().max(32768).optional().describe('Sent to the agent once the chat exists'),
       issue: z
         .object({ provider: z.enum(['github', 'linear']), ref: z.string().max(300) })
+        .optional(),
+      branchPrefix: z
+        .string()
+        .max(40)
+        .regex(/^(?:[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*)?$/)
         .optional()
+        .describe(
+          'Branch namespace, default orchard. Empty puts the branch at the slug alone. Git ref rules: no .., no leading or trailing slash, no .lock segment'
+        )
     }),
     response: sandboxSession,
     scope: 'exec'
@@ -802,10 +810,15 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     scope: 'read'
   },
   'PATCH /sandboxes/:id/sessions/:sid': {
-    summary: 'Rename, archive (removes the worktree, keeps the branch) or restore a session',
+    summary:
+      'Rename, archive (removes the worktree, keeps the branch unless deleteBranch) or restore a session',
     request: z.object({
       title: z.string().max(120).optional(),
-      archived: z.boolean().optional()
+      archived: z.boolean().optional(),
+      deleteBranch: z
+        .boolean()
+        .optional()
+        .describe('With archived: true, also deletes the local session branch')
     }),
     response: sandboxSession,
     scope: 'exec'

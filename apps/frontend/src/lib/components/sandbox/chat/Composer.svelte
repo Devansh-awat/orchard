@@ -11,8 +11,12 @@
 		X
 	} from 'lucide-svelte';
 	import { Avatar, Menu, MenuItem } from '$lib/components/ui';
+	import { askNotificationPermission } from '$lib/components/greenhouse/agent-alerts';
+	import { modKey } from '$lib/components/greenhouse/format';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import { fly, slide } from '$lib/utils/transitions';
 	import { OC_ATTACH_MAX_COUNT } from '../opencode';
+	import { alternateChord, followUpFor, sendChord, sendIntent } from './composer-keys';
 	import type { ChatSessionStore, RemoteDraft, SlashCommand } from './session-store.svelte';
 	import ContextRing from './ContextRing.svelte';
 	import McpServers from './McpServers.svelte';
@@ -64,6 +68,30 @@
 			? commentBody.length > 0
 			: store.draft.trim().length > 0 || store.attachments.length > 0
 	);
+	const prefs = $derived(greenhousePrefs.values);
+	const mod = modKey();
+	const chord = $derived(sendChord(prefs.sendWith, mod));
+	const altChord = $derived(alternateChord(prefs.sendWith, mod));
+	const steering = $derived(store.busy && prefs.followUp === 'steer');
+	const placeholder = $derived.by(() => {
+		if (commenting) return 'Write a comment';
+		if (!store.busy) return 'Ask to make changes, @mention files, run /commands';
+		return steering
+			? `Steer the agent, ${altChord} to queue instead`
+			: `Queue a follow up, ${altChord} to steer`;
+	});
+	const sendLabel = $derived(
+		commenting
+			? 'Send comment'
+			: !store.busy
+				? 'Send prompt'
+				: steering
+					? 'Steer now'
+					: 'Queue prompt'
+	);
+	const sendTitle = $derived(
+		`${commenting ? 'Comment' : !store.busy ? 'Send' : steering ? 'Steer' : 'Queue'} (${chord})`
+	);
 
 	function autosize() {
 		if (!inputEl) return;
@@ -77,7 +105,7 @@
 		inputEl?.focus();
 	}
 
-	async function submit() {
+	async function submit(alternate = false) {
 		if (matches.length > 0) {
 			complete(matches[active]);
 			return;
@@ -91,7 +119,8 @@
 			return;
 		}
 		if (!hasInput) return;
-		const pending = store.send();
+		if (prefs.notifyAgent) askNotificationPermission();
+		const pending = store.send(followUpFor(alternate ? 'alternate' : 'send', prefs.followUp));
 		requestAnimationFrame(autosize);
 		await pending;
 	}
@@ -105,7 +134,7 @@
 				pick = (active + step + matches.length) % matches.length;
 				return;
 			}
-			if (e.key === 'Tab') {
+			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.altKey)) {
 				e.preventDefault();
 				complete(matches[active]);
 				return;
@@ -116,9 +145,10 @@
 				return;
 			}
 		}
-		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+		const intent = sendIntent(e, prefs.sendWith);
+		if (intent) {
 			e.preventDefault();
-			void submit();
+			void submit(intent === 'alternate');
 		} else if (e.key === 'Escape' && store.busy) {
 			e.preventDefault();
 			void store.abort();
@@ -267,12 +297,12 @@
 							</button>
 						{/if}
 						<span class="queued-actions">
-							{#if !store.busy}
+							{#if !thread?.stopping}
 								<button
 									type="button"
 									class="icon"
-									aria-label="Send now"
-									title="Send now"
+									aria-label={store.busy ? 'Steer now' : 'Send now'}
+									title={store.busy ? 'Steer now, the agent reads it at its next step' : 'Send now'}
 									onclick={() => store.sendQueuedNow(item.id)}
 								>
 									<ArrowUp size={16} strokeWidth={1.75} />
@@ -312,11 +342,7 @@
 			bind:value={store.draft}
 			class="cmp-input"
 			rows="2"
-			placeholder={commenting
-				? 'Write a comment'
-				: store.busy
-					? 'Queue a follow up'
-					: 'Ask to make changes, @mention files, run /commands'}
+			{placeholder}
 			aria-label="Message"
 			aria-autocomplete="list"
 			data-align="content"
@@ -337,8 +363,14 @@
 				</button>
 			{/if}
 			<span class="bar-spacer"></span>
-			<ContextRing meter={store.context} sandboxId={store.sandboxId} />
-			<McpServers {store} />
+			<ContextRing
+				meter={store.context}
+				sandboxId={store.sandboxId}
+				always={prefs.alwaysShowContext}
+			/>
+			{#if prefs.showMcpStatus}
+				<McpServers {store} />
+			{/if}
 			<input
 				bind:this={fileInputEl}
 				class="file-input"
@@ -400,12 +432,12 @@
 				type="submit"
 				class="send"
 				disabled={!hasInput}
-				aria-label={commenting ? 'Send comment' : store.busy ? 'Queue prompt' : 'Send prompt'}
-				title={commenting ? 'Comment (↵)' : store.busy ? 'Queue (↵)' : 'Send (↵)'}
+				aria-label={sendLabel}
+				title={sendTitle}
 			>
 				{#if commenting}
 					<MessageCircle size={16} strokeWidth={2} />
-				{:else if store.busy}
+				{:else if store.busy && !steering}
 					<ListPlus size={16} strokeWidth={2} />
 				{:else}
 					<ArrowUp size={16} strokeWidth={2} />

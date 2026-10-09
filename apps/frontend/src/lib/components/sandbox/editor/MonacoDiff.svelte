@@ -6,7 +6,7 @@
 	import { effectiveAnimation } from '$lib/stores/preferences';
 	import { terminalDisplay } from '$lib/stores/terminal-display.svelte';
 	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
-	import { ensureTerminalFont } from '$lib/terminal/font';
+	import { ensureTerminalFont, monoFontFor } from '$lib/terminal/font';
 	import {
 		type DiffComments,
 		type CommentAuthor,
@@ -16,7 +16,7 @@
 		type RemoteDraftComment
 	} from './comments.svelte';
 	import type { MonacoApi } from './load';
-	import { baseOptions, lookOptions } from './options';
+	import { baseOptions, lookOptions, settleFont } from './options';
 	import { useMonacoTheme } from './theme';
 	import { DiffThreads, type ThreadState } from './threads.svelte';
 	import type { DiffLayout } from './types';
@@ -69,6 +69,8 @@
 	let stats = $state<{ added: number; removed: number } | null>(null);
 	let threads: Record<DiffSide, DiffThreads | null> = { original: null, modified: null };
 	let releaseTheme: (() => void) | null = null;
+	let monacoApi: MonacoApi | null = null;
+	let settledFont: string | null = null;
 	let disposed = false;
 	let sequence = 0;
 
@@ -82,9 +84,13 @@
 		untrack(() => workspace.open(target, { activate: false }));
 	});
 
+	const fontFamily = $derived(greenhousePrefs.monoStack(host ? monoFontFor(host) : ''));
+
 	function look() {
 		return lookOptions({
 			fontSize: size,
+			fontFamily: fontFamily || undefined,
+			ligatures: greenhousePrefs.values.ligatures,
 			motion: $effectiveAnimation,
 			cursorStyle: terminalDisplay.cursorStyle,
 			cursorBlink: terminalDisplay.cursorBlink
@@ -140,6 +146,7 @@
 		void (async () => {
 			try {
 				const monaco = await workspace.ready();
+				monacoApi = monaco;
 				await ensureTerminalFont(host, size);
 				if (disposed) return;
 				releaseTheme = useMonacoTheme(monaco, host);
@@ -210,6 +217,18 @@
 				attached = `${base}\u0000${target}`;
 			});
 		});
+	});
+
+	$effect(() => {
+		if (!diff || !monacoApi) return;
+		const family = fontFamily;
+		if (family === settledFont) return;
+		settledFont = family;
+		void settleFont(
+			monacoApi,
+			family,
+			untrack(() => size)
+		);
 	});
 
 	$effect(() => {

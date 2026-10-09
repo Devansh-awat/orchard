@@ -7,7 +7,8 @@ export type ShellAction =
 	| 'changes'
 	| 'save'
 	| 'find-file'
-	| 'settings';
+	| 'settings'
+	| 'toggle-tools';
 
 export interface ShellKey {
 	code: string;
@@ -27,6 +28,9 @@ export function shellShortcut(event: ShellKey, origin: KeyOrigin): ShellAction |
 	if (!event.metaKey && !event.ctrlKey) return null;
 	if (origin.terminal && !event.metaKey) return null;
 	const { code, altKey: alt, shiftKey: shift } = event;
+	if (code === 'KeyO') {
+		return event.ctrlKey && !event.metaKey && !alt && !shift ? 'toggle-tools' : null;
+	}
 	switch (code) {
 		case 'KeyS':
 			return alt || shift ? null : 'save';

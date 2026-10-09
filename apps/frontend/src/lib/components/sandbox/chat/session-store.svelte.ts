@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { apiFetch, toasts } from '$lib/stores';
 import {
 	OC_ATTACH_MAX_BYTES,
@@ -91,7 +91,7 @@ export type ToolEntry = {
 	diff: { add: number; del: number } | null;
 	status: ToolStatus | null;
 	failed: boolean;
-	expanded: boolean;
+	expanded: boolean | null;
 	time?: number;
 };
 
@@ -188,6 +188,12 @@ export type ChatSession = {
 
 export type ConnectionState = 'idle' | 'connecting' | 'ready' | 'unreachable';
 
+export type FollowUpMode = 'queue' | 'steer';
+
+export type AgentSignalKind = 'done' | 'attention' | 'error';
+
+export type AgentSignal = { kind: AgentSignalKind; sessionId: string; detail: string | null };
+
 export type SessionActivity = 'idle' | 'busy' | 'retry';
 
 export type ContextMeter = {
@@ -203,11 +209,14 @@ export type SessionStoreOptions = {
 	directory?: string | null;
 	self?: ChatAuthor | null;
 	onTurnDone?: () => void;
+	onSignal?: (signal: AgentSignal) => void;
 	onDraftChange?: (text: string) => void;
 	beforePrompt?: (sessionId: string, text: string) => Promise<{ messageID?: string }>;
 };
 
 const TEMP_PREFIX = 'pending-';
+const ASK_EVENTS = new Set(['permission.asked', 'permission.updated', 'question.asked']);
+const ANSWER_EVENTS = new Set(['permission.replied', 'question.replied', 'question.rejected']);
 const RETRY_PROBE_MS = 10_000;
 const RECONNECT_MS = 2000;
 const STATUS_POLL_MS = 5000;
@@ -342,7 +351,7 @@ function makeToolEntry(id: string | null, name: string, toolInput: unknown): Too
 		diff,
 		status: null,
 		failed: false,
-		expanded: false
+		expanded: null
 	};
 }
 
@@ -438,6 +447,18 @@ function userEntriesFrom(info: OcMessageInfo, parts: OcPart[]): UserEntry[] {
 	return out;
 }
 
+function askDetail(props: Record<string, unknown>): string | null {
+	if (typeof props.title === 'string' && props.title.trim()) return props.title;
+	const questions = props.questions;
+	if (Array.isArray(questions)) {
+		const first = questions[0] as { question?: unknown; header?: unknown } | undefined;
+		if (typeof first?.question === 'string') return first.question;
+		if (typeof first?.header === 'string') return first.header;
+	}
+	if (typeof props.permission === 'string') return `Permission to use ${props.permission}`;
+	return null;
+}
+
 export class SessionThread {
 	id: string;
 	entries = $state<ChatEntry[]>([]);
@@ -482,6 +503,7 @@ export class ChatSessionStore {
 	activeId = $state<string | null>(null);
 	readonly threads = new SvelteMap<string, SessionThread>();
 	readonly activity = new SvelteMap<string, SessionActivity>();
+	readonly waiting = new SvelteSet<string>();
 
 	providerID = $state(OC_MODEL.providerID);
 	modelID = $state(OC_MODEL.modelID);
@@ -500,12 +522,14 @@ export class ChatSessionStore {
 	beforePrompt: SessionStoreOptions['beforePrompt'] | null = null;
 	onDraftChange: ((text: string) => void) | null = null;
 	onTurnDone: (() => void) | null = null;
+	onSignal: ((signal: AgentSignal) => void) | null = null;
 
 	#draft = $state('');
 	#initialSessionId: string | null;
 	#prefs = new Map<string, ModelChoice>();
 	#roles = new Map<string, string>();
 	#children = new Map<string, { thread: SessionThread; agent: AgentEntry }>();
+	#asked = new Set<string>();
 	#createWork: Promise<void> | null = null;
 	#probing: Promise<void> | null = null;
 	#live = false;
@@ -522,6 +546,7 @@ export class ChatSessionStore {
 		this.directory = options.directory ?? null;
 		this.self = options.self ?? null;
 		this.onTurnDone = options.onTurnDone ?? null;
+		this.onSignal = options.onSignal ?? null;
 		this.onDraftChange = options.onDraftChange ?? null;
 		this.beforePrompt = options.beforePrompt ?? null;
 	}
@@ -1299,7 +1324,7 @@ export class ChatSessionStore {
 		this.attachments = this.attachments.filter((a) => a.id !== id);
 	}
 
-	async send(): Promise<boolean> {
+	async send(followUp: FollowUpMode = 'queue'): Promise<boolean> {
 		const text = this.draft.trim();
 		const files = [...this.attachments];
 		if (!text && files.length === 0) return false;
@@ -1309,6 +1334,9 @@ export class ChatSessionStore {
 		this.draft = '';
 		this.attachments = [];
 		const choice = this.choice();
+		if (followUp === 'steer' && this.#canSteer(thread)) {
+			return this.#steer(thread, text, files, choice);
+		}
 		if (thread.busy || thread.queue.length > 0) {
 			thread.queue.push({
 				id: crypto.randomUUID(),
@@ -1338,11 +1366,82 @@ export class ChatSessionStore {
 
 	sendQueuedNow(id: string) {
 		const thread = this.active;
-		if (!thread || thread.busy) return;
+		if (!thread) return;
+		if (thread.busy && !this.#canSteer(thread)) return;
 		const index = thread.queue.findIndex((q) => q.id === id);
 		if (index === -1) return;
 		const [item] = thread.queue.splice(index, 1);
-		void this.#dispatch(thread, item.text, item.attachments, item.choice);
+		if (thread.busy) void this.#steer(thread, item.text, item.attachments, item.choice);
+		else void this.#dispatch(thread, item.text, item.attachments, item.choice);
+	}
+
+	#canSteer(thread: SessionThread): boolean {
+		return thread.busy && !thread.stopping && !thread.id.startsWith(TEMP_PREFIX);
+	}
+
+	#localPrompt(text: string, files: OcAttachment[]): UserEntry {
+		return {
+			kind: 'user',
+			key: nextKey(),
+			text,
+			time: Date.now(),
+			author: this.self,
+			local: true,
+			...(files.length > 0 ? { attachments: files } : {})
+		};
+	}
+
+	async #postPrompt(
+		sessionId: string,
+		entry: UserEntry,
+		files: OcAttachment[],
+		choice: ModelChoice
+	): Promise<void> {
+		const assigned = this.beforePrompt ? await this.beforePrompt(sessionId, entry.text) : null;
+		if (assigned?.messageID) entry.messageID = assigned.messageID;
+		const res = await apiFetch(
+			`${ocBase(this.sandboxId)}/session/${sessionId}/prompt_async${this.#dir(sessionId)}`,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
+					model: { providerID: choice.providerID, modelID: choice.modelID },
+					...(choice.variant ? { variant: choice.variant } : {}),
+					agent: choice.plan ? 'plan' : 'build',
+					parts: [...files.map(ocFilePart), { type: 'text', text: entry.text }]
+				})
+			}
+		);
+		if (!res.ok) {
+			const data = await res.json().catch(() => ({}));
+			throw new Error(data?.message || 'Chat request failed');
+		}
+	}
+
+	async #steer(
+		thread: SessionThread,
+		text: string,
+		files: OcAttachment[],
+		choice: ModelChoice
+	): Promise<boolean> {
+		const entry = thread.push(this.#localPrompt(text, files));
+		if (thread.id === this.activeId) this.sentTick += 1;
+		try {
+			await this.#postPrompt(thread.id, entry, files, choice);
+			return true;
+		} catch {
+			thread.entries = thread.entries.filter((e) => e.key !== entry.key);
+			thread.queue.unshift({
+				id: crypto.randomUUID(),
+				text,
+				attachments: files,
+				choice,
+				createdAt: Date.now()
+			});
+			this.#drain(thread);
+			return true;
+		}
 	}
 
 	#drain(thread: SessionThread) {
@@ -1359,16 +1458,7 @@ export class ChatSessionStore {
 		files: OcAttachment[],
 		choice: ModelChoice
 	): Promise<boolean> {
-		const draft: UserEntry = {
-			kind: 'user',
-			key: nextKey(),
-			text,
-			time: Date.now(),
-			author: this.self,
-			local: true,
-			...(files.length > 0 ? { attachments: files } : {})
-		};
-		const entry = thread.push(draft);
+		const entry = thread.push(this.#localPrompt(text, files));
 		thread.busy = true;
 		thread.turnStart = Date.now();
 		thread.turnCosts.clear();
@@ -1380,26 +1470,7 @@ export class ChatSessionStore {
 			}
 			const sessionId = thread.id;
 			this.activity.set(sessionId, 'busy');
-			const assigned = this.beforePrompt ? await this.beforePrompt(sessionId, text) : null;
-			if (assigned?.messageID) entry.messageID = assigned.messageID;
-			const res = await apiFetch(
-				`${ocBase(this.sandboxId)}/session/${sessionId}/prompt_async${this.#dir(sessionId)}`,
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						...(assigned?.messageID ? { messageID: assigned.messageID } : {}),
-						model: { providerID: choice.providerID, modelID: choice.modelID },
-						...(choice.variant ? { variant: choice.variant } : {}),
-						agent: choice.plan ? 'plan' : 'build',
-						parts: [...files.map(ocFilePart), { type: 'text', text }]
-					})
-				}
-			);
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || 'Chat request failed');
-			}
+			await this.#postPrompt(sessionId, entry, files, choice);
 			return true;
 		} catch (err) {
 			thread.push({
@@ -1416,7 +1487,12 @@ export class ChatSessionStore {
 		}
 	}
 
-	#pushError(thread: SessionThread, error: unknown, messageID?: string, time = Date.now()) {
+	#pushError(
+		thread: SessionThread,
+		error: unknown,
+		messageID?: string,
+		time = Date.now()
+	): boolean {
 		const detail = ocErrorMessage(error);
 		for (let i = thread.entries.length - 1; i >= 0; i -= 1) {
 			const entry = thread.entries[i];
@@ -1424,7 +1500,7 @@ export class ChatSessionStore {
 			if (entry.kind !== 'error') continue;
 			if ((messageID && entry.messageID === messageID) || entry.detail === detail) {
 				if (messageID && !entry.messageID) entry.messageID = messageID;
-				return;
+				return false;
 			}
 		}
 		thread.push({
@@ -1435,6 +1511,52 @@ export class ChatSessionStore {
 			auth: ocIsAuthError(error),
 			...(messageID ? { messageID } : {})
 		});
+		return true;
+	}
+
+	#signal(kind: AgentSignalKind, sessionId: string, detail: string | null = null) {
+		try {
+			this.onSignal?.({ kind, sessionId, detail });
+		} catch {
+			return;
+		}
+	}
+
+	lastAnswer(sessionId: string): string | null {
+		const entries = this.threads.get(sessionId)?.entries ?? [];
+		for (let i = entries.length - 1; i >= 0; i -= 1) {
+			const entry = entries[i];
+			if (entry.kind === 'user') return null;
+			if (entry.kind === 'text' && entry.text.trim()) return entry.text;
+		}
+		return null;
+	}
+
+	lastPrompt(sessionId: string): { local: boolean; authorId: string | null } | null {
+		const entries = this.threads.get(sessionId)?.entries ?? [];
+		for (let i = entries.length - 1; i >= 0; i -= 1) {
+			const entry = entries[i];
+			if (entry.kind !== 'user') continue;
+			const author = (entry.messageID ? this.authorOf(entry.messageID) : null) ?? entry.author;
+			return { local: !!entry.local, authorId: author?.id ?? null };
+		}
+		return null;
+	}
+
+	#turnFailed(thread: SessionThread): boolean {
+		for (let i = thread.entries.length - 1; i >= 0; i -= 1) {
+			const entry = thread.entries[i];
+			if (entry.kind === 'user') return false;
+			if (entry.kind === 'error') return true;
+		}
+		return false;
+	}
+
+	#settle(thread: SessionThread) {
+		this.waiting.delete(thread.id);
+		const failed = this.#turnFailed(thread);
+		this.#finishTurn(thread, true);
+		if (!failed) this.#signal('done', thread.id, this.lastAnswer(thread.id));
 	}
 
 	#finishTurn(thread: SessionThread, drain: boolean) {
@@ -1461,6 +1583,7 @@ export class ChatSessionStore {
 	}
 
 	#endTurnQuietly(thread: SessionThread) {
+		this.waiting.delete(thread.id);
 		thread.busy = false;
 		thread.turnCosts.clear();
 		thread.turnStart = 0;
@@ -1546,7 +1669,7 @@ export class ChatSessionStore {
 				if (state === 'idle') {
 					this.activity.set(sessionID, 'idle');
 					const thread = this.threads.get(sessionID);
-					if (thread?.busy) this.#finishTurn(thread, true);
+					if (thread?.busy) this.#settle(thread);
 				} else {
 					this.#markBusy(sessionID, state);
 				}
@@ -1556,7 +1679,7 @@ export class ChatSessionStore {
 				if (!sessionID) return;
 				this.activity.set(sessionID, 'idle');
 				const thread = this.threads.get(sessionID);
-				if (thread?.busy) this.#finishTurn(thread, true);
+				if (thread?.busy) this.#settle(thread);
 				return;
 			}
 			case 'session.error': {
@@ -1570,12 +1693,37 @@ export class ChatSessionStore {
 						: [];
 				for (const thread of targets) {
 					if (aborted) {
+						this.waiting.delete(thread.id);
 						if (thread.busy) this.#finishTurn(thread, false);
 						continue;
 					}
-					this.#pushError(thread, props.error);
-					if (thread.busy) this.#endTurnQuietly(thread);
+					const fresh = this.#pushError(thread, props.error);
+					const working = thread.busy;
+					if (working) this.#endTurnQuietly(thread);
+					if (fresh && (working || thread.loaded)) {
+						this.#signal('error', thread.id, ocErrorMessage(props.error));
+					}
 				}
+				return;
+			}
+			case 'permission.asked':
+			case 'permission.updated':
+			case 'question.asked':
+			case 'permission.replied':
+			case 'question.replied':
+			case 'question.rejected': {
+				if (!sessionID) return;
+				const owner = this.#owner(sessionID)?.thread.id ?? sessionID;
+				if (ANSWER_EVENTS.has(event.type)) {
+					this.waiting.delete(owner);
+					return;
+				}
+				if (!ASK_EVENTS.has(event.type)) return;
+				const requestId = typeof props.id === 'string' ? props.id : null;
+				if (requestId && this.#asked.has(requestId)) return;
+				if (requestId) this.#asked.add(requestId);
+				this.waiting.add(owner);
+				this.#signal('attention', owner, askDetail(props));
 				return;
 			}
 			case 'message.updated': {
@@ -1596,7 +1744,9 @@ export class ChatSessionStore {
 				}
 				if (info.role !== 'assistant') return;
 				if (info.error && !ocIsAborted(info.error) && (thread.loaded || thread.loading)) {
-					this.#pushError(thread, info.error, info.id);
+					if (this.#pushError(thread, info.error, info.id) && thread.busy) {
+						this.#signal('error', thread.id, ocErrorMessage(info.error));
+					}
 				}
 				if (thread.busy && typeof info.cost === 'number') thread.turnCosts.set(info.id, info.cost);
 				if (info.tokens && (info.tokens.total ?? 0) > 0) thread.ctxTokens = info.tokens;
@@ -1673,6 +1823,7 @@ export class ChatSessionStore {
 			if (!thread.busy || thread.id.startsWith(TEMP_PREFIX)) continue;
 			this.#endTurnQuietly(thread);
 			await this.#loadHistory(thread);
+			if (!this.#turnFailed(thread)) this.#signal('done', thread.id, this.lastAnswer(thread.id));
 			this.#drain(thread);
 		}
 	}

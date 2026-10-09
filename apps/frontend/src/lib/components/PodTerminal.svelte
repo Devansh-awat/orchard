@@ -23,6 +23,7 @@
 		resizeFrozen?: boolean;
 		sessionHandle?: string;
 		fontSize?: number;
+		fontFamily?: string;
 		onZoom?: (step: 1 | -1 | 0) => void;
 		onTitle?: (title: string) => void;
 		onBell?: () => void;
@@ -39,6 +40,7 @@
 		resizeFrozen = false,
 		sessionHandle,
 		fontSize = undefined,
+		fontFamily = undefined,
 		onZoom = undefined,
 		onTitle,
 		onBell,
@@ -66,6 +68,7 @@
 	let retries = 0;
 	let disposed = false;
 	let appliedFontSize = 0;
+	let appliedFontFamily: string | undefined = undefined;
 	let currentHandle: string | null = null;
 	let wasReconnect = false;
 	let shownBefore: boolean | null = null;
@@ -149,6 +152,7 @@
 			}
 			handle = created;
 			appliedFontSize = textSize;
+			appliedFontFamily = fontFamily;
 			created.setPaused(!visible);
 			if (!visible) created.blur();
 
@@ -438,9 +442,11 @@
 	$effect(() => {
 		void ready;
 		const size = textSize;
+		const family = fontFamily;
 		const h = handle;
-		if (!h || size === appliedFontSize) return;
+		if (!h || (size === appliedFontSize && family === appliedFontFamily)) return;
 		appliedFontSize = size;
+		appliedFontFamily = family;
 		predictor?.flush('guard');
 		void h.setFontSize(size).then(() => {
 			if (!disposed) fitNow();
@@ -486,7 +492,11 @@
 	});
 </script>
 
-<div class="pod-terminal" class:pod-terminal--hidden={!visible}>
+<div
+	class="pod-terminal"
+	class:pod-terminal--hidden={!visible}
+	style:--pod-terminal-font={fontFamily}
+>
 	{#if error}
 		<div class="pod-terminal-status pod-terminal-error">
 			<span>{error}</span>
@@ -495,7 +505,11 @@
 	{:else if note}
 		<div class="pod-terminal-status pod-terminal-note">{note}</div>
 	{/if}
-	<div class="pod-terminal-canvas" bind:this={terminalRef}></div>
+	<div
+		class="pod-terminal-canvas"
+		style:--font-mono-terminal={fontFamily ? 'var(--pod-terminal-font)' : undefined}
+		bind:this={terminalRef}
+	></div>
 	{#if !connected && !error && mounted}
 		<div class="pod-terminal-status pod-terminal-connecting">Connecting...</div>
 	{/if}

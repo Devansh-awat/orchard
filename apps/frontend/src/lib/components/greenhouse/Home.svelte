@@ -31,12 +31,15 @@
 	import McpServers from '$lib/components/sandbox/chat/McpServers.svelte';
 	import ModelPicker from '$lib/components/sandbox/chat/ModelPicker.svelte';
 	import { agentUsageQueryOptions, fmtResetTime } from '$lib/components/sandbox/chat/agent-usage';
+	import { sendChord, sendIntent } from '$lib/components/sandbox/chat/composer-keys';
+	import { askNotificationPermission } from './agent-alerts';
 	import { getGreenhouseApp } from './app.svelte';
 	import IssuePicker from './IssuePicker.svelte';
 	import * as api from './api';
 	import { linearStatus, linkedIntegrations, type IntegrationProvider } from './integrations';
 	import SessionGlyph from './SessionGlyph.svelte';
-	import { ago, repoHue, repoInitial, runnerLabel } from './format';
+	import { ago, modKey, repoHue, repoInitial, runnerLabel } from './format';
+	import { greenhousePrefs } from './prefs.svelte';
 	import { VIEWER_ONLY, hostOnly } from './workspace.svelte';
 	import type { PickedIssue } from './types';
 
@@ -77,6 +80,7 @@
 		!!ws && ws.canEdit && !!prompt.trim() && !launching && (stopped || ws.running)
 	);
 	const models = $derived(ws?.store.models ?? []);
+	const launchChord = $derived(sendChord(greenhousePrefs.values.sendWith, modKey()));
 	const plan = $derived(ws?.store.plan ?? false);
 
 	const usageQuery = createQuery(() =>
@@ -105,9 +109,7 @@
 		if (connectDismissed) return;
 		void Promise.all([linkedIntegrations(), linearStatus().catch(() => null)])
 			.then(([list, linear]) => {
-				const set = new Set<IntegrationProvider>(
-					(list.integrations ?? []).map((i) => i.provider)
-				);
+				const set = new Set<IntegrationProvider>((list.integrations ?? []).map((i) => i.provider));
 				if (linear?.connected) set.add('linear');
 				linked = set;
 			})
@@ -148,7 +150,11 @@
 		const fresh = blankName(text);
 		const res = await api.initRepo(ws.sandboxId, fresh);
 		if (!res.ok) {
-			toasts.add({ title: 'Could not create the repository', description: res.message, color: 'error' });
+			toasts.add({
+				title: 'Could not create the repository',
+				description: res.message,
+				color: 'error'
+			});
 			return null;
 		}
 		await ws.refreshRepos();
@@ -198,6 +204,7 @@
 
 	async function launch() {
 		if (!canLaunch || !ws) return;
+		if (greenhousePrefs.values.notifyAgent) askNotificationPermission();
 		const text = prompt.trim();
 		if (stopped) {
 			if (!ws.canStart) return;
@@ -214,7 +221,7 @@
 	}
 
 	function key(event: KeyboardEvent) {
-		if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+		if (sendIntent(event, greenhousePrefs.values.sendWith)) {
 			event.preventDefault();
 			void launch();
 		}
@@ -305,7 +312,7 @@
 						type="button"
 						class="send"
 						aria-label={stopped ? 'Start the machine and launch' : 'Start session'}
-						title="{stopped ? 'Start the machine and launch' : 'Start session'} (↵)"
+						title="{stopped ? 'Start the machine and launch' : 'Start session'} ({launchChord})"
 						disabled={!canLaunch}
 						onclick={launch}
 					>
@@ -407,11 +414,7 @@
 					</div>
 					<div class="cards">
 						{#each missing as c (c.id)}
-							<button
-								type="button"
-								class="card"
-								onclick={() => app.openSettings('integrations')}
-							>
+							<button type="button" class="card" onclick={() => app.openSettings('integrations')}>
 								<span class="card-ico"><c.icon size={16} strokeWidth={1.75} /></span>
 								<span class="card-text">
 									<span class="card-name">{c.name}</span>

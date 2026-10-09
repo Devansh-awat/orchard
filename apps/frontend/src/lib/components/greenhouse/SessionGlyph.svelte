@@ -46,7 +46,7 @@
 		flex: none;
 		width: 1rem;
 		height: 1rem;
-		color: var(--gh-faint);
+		color: var(--gh-glyph-idle, var(--gh-faint));
 	}
 
 	.glyph--working {

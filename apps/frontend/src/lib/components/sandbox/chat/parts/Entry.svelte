@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { MessageSquareText } from 'lucide-svelte';
+	import { greenhousePrefs } from '$lib/components/greenhouse/prefs.svelte';
 	import type { ChatEntry, ChatSessionStore } from '../session-store.svelte';
+	import { stripSycophancy } from '../sycophancy';
 	import Entry from './Entry.svelte';
 	import ErrorPart from './ErrorPart.svelte';
 	import ReasoningPart from './ReasoningPart.svelte';
@@ -22,18 +24,26 @@
 	} = $props();
 
 	const nested = $derived(depth > 0);
+	const prefs = $derived(greenhousePrefs.values);
 </script>
 
 {#if entry.kind === 'user'}
 	<p class="sub-prompt">{entry.text}</p>
 {:else if entry.kind === 'thinking'}
-	<ReasoningPart {entry} {live} {nested} />
+	{#if prefs.showReasoning}
+		<ReasoningPart {entry} {live} {nested} />
+	{/if}
 {:else if entry.kind === 'text'}
 	<div class="note" data-align={nested ? undefined : 'step'}>
 		<span class="note-glyph" aria-hidden="true">
 			<MessageSquareText size={16} strokeWidth={1.75} />
 		</span>
-		<div class="note-text"><TextPart text={entry.text} compact /></div>
+		<div class="note-text">
+			<TextPart
+				text={prefs.notAbsolutelyRight ? stripSycophancy(entry.text) : entry.text}
+				compact
+			/>
+		</div>
 	</div>
 {:else if entry.kind === 'tool'}
 	<ToolPart {entry} {nested} />

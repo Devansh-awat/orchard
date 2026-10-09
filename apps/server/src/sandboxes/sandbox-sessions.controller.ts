@@ -87,6 +87,7 @@ export class SandboxSessionsController {
       title?: string;
       prompt?: string;
       issue?: { provider?: string; ref?: string };
+      branchPrefix?: string;
     }
   ) {
     const { user, row } = await this.access(req, id, 'collaborator');
@@ -110,7 +111,7 @@ export class SandboxSessionsController {
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('sid', ParseUUIDPipe) sid: string,
-    @Body() body: { title?: string; archived?: boolean }
+    @Body() body: { title?: string; archived?: boolean; deleteBranch?: boolean }
   ) {
     const { row } = await this.access(req, id, 'collaborator');
     return this.sessions.update(row, sid, body || {});

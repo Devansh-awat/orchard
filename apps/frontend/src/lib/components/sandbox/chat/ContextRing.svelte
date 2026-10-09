@@ -5,7 +5,13 @@
 	import type { ContextMeter } from './session-store.svelte';
 	import { agentUsageQueryOptions, fmtResetTime, usageUnavailableText } from './agent-usage';
 
-	let { meter, sandboxId = null }: { meter: ContextMeter; sandboxId?: string | null } = $props();
+	let {
+		meter,
+		sandboxId = null,
+		always = true
+	}: { meter: ContextMeter; sandboxId?: string | null; always?: boolean } = $props();
+
+	const NOTICE_PCT = 50;
 
 	let open = $state(false);
 
@@ -104,7 +110,9 @@
 					stroke-dashoffset={C * (1 - meter.pct / 100)}
 				/>
 			</svg>
-			<span class="ctx-label">{label}</span>
+			{#if always || meter.pct >= NOTICE_PCT}
+				<span class="ctx-label">{label}</span>
+			{/if}
 		</button>
 	{/snippet}
 	{#snippet children()}
