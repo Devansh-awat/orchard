@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.62.0](https://github.com/hackclub/orchard/compare/frontend/v1.61.2...frontend/v1.62.0) (2026-10-09)
+
+
+### Features
+
+* **frontend:** pip falls asleep with the machine and the asleep screen drops the filler copy ([7d78ee1](https://github.com/hackclub/orchard/commit/7d78ee13294571935dbcfedf831b4061615e9c13))
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse chat stays pinned to the bottom when the composer dock grows ([71ff04f](https://github.com/hackclub/orchard/commit/71ff04f691947c251d413e3fcc7e8f5858abf6e7))
+* **frontend:** greenhouse chat working line, typing row and composer text sit on the same grid as the transcript ([fc2fe10](https://github.com/hackclub/orchard/commit/fc2fe10bdd47e0a4076d72ed27ce120d38552495))
+* **frontend:** greenhouse side panels give way so the chat stays readable on narrow windows ([03f1c88](https://github.com/hackclub/orchard/commit/03f1c8831641efa9b42d0b85252afe55e24d7b03))
+* **frontend:** greenhouse tour blocks hover and scroll on the app behind it so the blur stops flickering ([d8d76f0](https://github.com/hackclub/orchard/commit/d8d76f0c6389429575803d5710261ae34a2d06c1))
+* **frontend:** greenhouse tour card changes with the spotlight instead of before it ([04d3b04](https://github.com/hackclub/orchard/commit/04d3b04aedb7f7012e91fdb1eea23727669aad7b))
+* **frontend:** greenhouse tour moves instantly, keeps pip on screen, shows real ports and never gets stuck at the end ([ced99fd](https://github.com/hackclub/orchard/commit/ced99fdc9a6a3db516e97f646603e92671a82922))
+* **frontend:** greenhouse tour stays clickable over settings, fits narrow windows and shows live times ([21e650e](https://github.com/hackclub/orchard/commit/21e650e225d9cb612843e5241b64affa1300da1b))
+
 ## [1.61.2](https://github.com/hackclub/orchard/compare/frontend/v1.61.1...frontend/v1.61.2) (2026-10-09)
 
 
