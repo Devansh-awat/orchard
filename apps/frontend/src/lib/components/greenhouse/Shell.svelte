@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiFetch } from '$lib/stores';
 	import './greenhouse.css';
 	import { tick, untrack } from 'svelte';
 	import { MessageSquare, GitCompare, PanelsTopLeft } from 'lucide-svelte';
@@ -64,6 +65,20 @@
 		untrack(() => {
 			void current.refreshRepos();
 		});
+	});
+
+	let contextSynced: string | null = null;
+	$effect(() => {
+		const current = ws;
+		if (!current?.running) {
+			contextSynced = null;
+			return;
+		}
+		if (!current.isOwner || contextSynced === current.sandboxId) return;
+		contextSynced = current.sandboxId;
+		void apiFetch(`/apiv1/sandboxes/${current.sandboxId}/context/sync`, { method: 'POST' }).catch(
+			() => null
+		);
 	});
 
 	let width = $state(0);

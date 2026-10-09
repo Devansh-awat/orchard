@@ -7,6 +7,7 @@
 	import { ago, runnerLabel } from './format';
 	import MachineUsagePanel from './MachineUsagePanel.svelte';
 	import AgentsSection from './settings/AgentsSection.svelte';
+	import ContextSection from './settings/ContextSection.svelte';
 	import AppearanceSection from './settings/AppearanceSection.svelte';
 	import DangerSection from './settings/DangerSection.svelte';
 	import GeneralSection from './settings/GeneralSection.svelte';
@@ -321,6 +322,8 @@
 							<GitSection />
 						{:else if current === 'agents'}
 							<AgentsSection ws={hasMachine ? ws : null} />
+						{:else if current === 'context'}
+							<ContextSection />
 						{:else if current === 'integrations'}
 							<IntegrationsSection />
 						{:else if current === 'shortcuts'}

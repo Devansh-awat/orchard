@@ -2,6 +2,7 @@
 	import {
 		AudioLines,
 		Bot,
+		BrainCog,
 		FolderCog,
 		Gauge,
 		Keyboard,
@@ -30,6 +31,7 @@
 		sounds: AudioLines,
 		appearance: Paintbrush,
 		agents: Bot,
+		context: BrainCog,
 		shortcuts: Keyboard
 	} as const;
 

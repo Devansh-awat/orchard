@@ -307,6 +307,64 @@ export function installFetch(role: HarnessRole) {
 		[/\/authors$/, 'GET', () => ({ authors: { msg_u3: data.ALEX } })],
 		[/\/boot$/, 'GET', () => ({ phase: 'ready', ready: true, label: 'Ready' })],
 		[
+			/\/me\/context$/,
+			'GET',
+			() => ({
+				items: [
+					{
+						id: 'ctx-1',
+						kind: 'instructions',
+						name: 'CLAUDE.md',
+						enabled: true,
+						sizeBytes: 1200,
+						secretKeys: []
+					},
+					{
+						id: 'ctx-2',
+						kind: 'agent',
+						name: 'reviewer',
+						enabled: true,
+						sizeBytes: 900,
+						secretKeys: []
+					},
+					{
+						id: 'ctx-3',
+						kind: 'command',
+						name: 'git:ship',
+						enabled: true,
+						sizeBytes: 300,
+						secretKeys: []
+					},
+					{
+						id: 'ctx-4',
+						kind: 'skill',
+						name: 'frontend-design',
+						enabled: false,
+						sizeBytes: 18000,
+						secretKeys: []
+					},
+					{
+						id: 'ctx-5',
+						kind: 'mcp',
+						name: 'posthog',
+						enabled: true,
+						sizeBytes: 200,
+						secretKeys: ['POSTHOG_API_KEY']
+					}
+				]
+			})
+		],
+		[
+			/\/me\/context\/ctx-1$/,
+			'GET',
+			() => ({
+				files: {
+					'CLAUDE.md':
+						'# How I work\n\n- use pnpm, never npm\n- no comments in code\n- commit messages are one lowercase line\n'
+				}
+			})
+		],
+		[
 			/\/organizations\/[^/]+\/members$/,
 			'GET',
 			() => [

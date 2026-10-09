@@ -12,6 +12,7 @@ export type SettingsSectionId =
 	| 'appearance'
 	| 'git'
 	| 'agents'
+	| 'context'
 	| 'integrations'
 	| 'shortcuts';
 
@@ -33,6 +34,7 @@ export const PERSONAL_SECTIONS: readonly SettingsSectionId[] = [
 	'appearance',
 	'git',
 	'agents',
+	'context',
 	'integrations',
 	'shortcuts'
 ];
@@ -50,6 +52,7 @@ export const SECTION_LABELS: Record<SettingsSectionId, string> = {
 	appearance: 'Appearance',
 	git: 'Git',
 	agents: 'Agents',
+	context: 'Context',
 	integrations: 'Integrations',
 	shortcuts: 'Shortcuts'
 };
