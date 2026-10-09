@@ -88,46 +88,48 @@
 				? `flex: 0 0 ${(1 - app.layout.dock) * 100}%`
 				: 'flex: 1 1 auto'}
 		>
-			<div class="gh-tabs" role="tablist" aria-label="Session panel" data-align="tabstrip">
-				<button
-					type="button"
-					role="tab"
-					class="gh-tab"
-					aria-selected={tab === 'files'}
-					onclick={() => pick('files')}
-				>
-					<span class="gh-tl" data-label="All files" data-align="right-edge">All files</span>
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="gh-tab"
-					aria-selected={tab === 'changes'}
-					onclick={() => pick('changes')}
-				>
-					<span class="gh-tl" data-label="Changes" data-align="tab-label">Changes</span>
-					{#if changeCount > 0}<span class="gh-num count">{changeCount}</span>{/if}
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="gh-tab"
-					aria-selected={tab === 'checks'}
-					onclick={() => pick('checks')}
-				>
-					<span class="gh-tl" data-label="Checks" data-align="tab-label">Checks</span>
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="gh-tab"
-					aria-selected={tab === 'review'}
-					title="Diff comments to send to the agent"
-					onclick={() => pick('review')}
-				>
-					<span class="gh-tl" data-label="Review" data-align="tab-label">Review</span>
-					{#if reviewCount > 0}<span class="gh-num count">{reviewCount}</span>{/if}
-				</button>
+			<div class="gh-tabs" data-align="tabstrip">
+				<div class="tab-list" role="tablist" aria-label="Session panel">
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						aria-selected={tab === 'files'}
+						onclick={() => pick('files')}
+					>
+						<span class="gh-tl" data-label="All files" data-align="right-edge">All files</span>
+					</button>
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						aria-selected={tab === 'changes'}
+						onclick={() => pick('changes')}
+					>
+						<span class="gh-tl" data-label="Changes" data-align="tab-label">Changes</span>
+						{#if changeCount > 0}<span class="gh-num count">{changeCount}</span>{/if}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						aria-selected={tab === 'checks'}
+						onclick={() => pick('checks')}
+					>
+						<span class="gh-tl" data-label="Checks" data-align="tab-label">Checks</span>
+					</button>
+					<button
+						type="button"
+						role="tab"
+						class="gh-tab"
+						aria-selected={tab === 'review'}
+						title="Diff comments to send to the agent"
+						onclick={() => pick('review')}
+					>
+						<span class="gh-tl" data-label="Review" data-align="tab-label">Review</span>
+						{#if reviewCount > 0}<span class="gh-num count">{reviewCount}</span>{/if}
+					</button>
+				</div>
 				<span class="grow"></span>
 				{#if tab === 'files'}
 					<button
@@ -261,6 +263,19 @@
 
 	.grow {
 		flex: 1;
+	}
+
+	.tab-list {
+		display: flex;
+		align-items: stretch;
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.tab-list::-webkit-scrollbar {
+		display: none;
 	}
 
 	.stack {
