@@ -81,7 +81,8 @@ export function formatDbSize(bytes: bigint | number | null | undefined): string 
     n /= 1024;
     i += 1;
   }
-  return i === 0 ? `${Math.round(n)} ${units[i]}` : `${Math.round(n)} ${units[i]}`;
+  if (i < 3) return `${Math.round(n)} ${units[i]}`;
+  return `${Number(n.toFixed(1))} ${units[i]}`;
 }
 
 export function foldPods(pods: MirroredDbPod[], now = Date.now()) {
@@ -106,7 +107,7 @@ export function foldPods(pods: MirroredDbPod[], now = Date.now()) {
     else if (p.status === 'crashing') currentWaitingReason = 'CrashLoopBackOff';
     if (p.ready) {
       currentReady = true;
-      const t = (p.runningSince ?? p.updatedAt).getTime();
+      const t = (p.runningSince ?? p.lastTerminatedAt ?? p.updatedAt).getTime();
       if (currentRunningSinceMs === undefined || t > currentRunningSinceMs) {
         currentRunningSinceMs = t;
       }

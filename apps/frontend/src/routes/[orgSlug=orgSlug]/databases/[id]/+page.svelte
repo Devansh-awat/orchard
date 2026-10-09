@@ -1467,7 +1467,7 @@
 						class:db-stat--stale={statsStale}
 						title={statsAgo ? `As of ${statsAgo}` : ''}
 					>
-						<span class="db-stat-label">Size</span>
+						<span class="db-stat-label">Data size</span>
 						<span class="db-stat-value">{database.liveStatus.size ?? '—'}</span>
 					</div>
 					<div

@@ -105,6 +105,33 @@ test('a fresh OOM is surfaced, a stale one after ten clean minutes is not', () =
   );
 });
 
+test('a mirrored row with no running time goes stale from its last termination, not its last rewrite', () => {
+  const daysOld = foldPods(
+    [
+      pod({
+        lastTerminationReason: 'Error',
+        lastExitCode: 4,
+        lastTerminatedAt: new Date(NOW - 5 * 24 * 60 * 60_000),
+        updatedAt: new Date(NOW - 30_000)
+      })
+    ],
+    NOW
+  );
+  assert.equal(daysOld.message, undefined);
+  assert.equal(daysOld.lastTerminationReason, 'Error');
+  const justNow = foldPods(
+    [
+      pod({
+        lastTerminationReason: 'Error',
+        lastTerminatedAt: new Date(NOW - 2 * 60_000),
+        updatedAt: new Date(NOW - 30_000)
+      })
+    ],
+    NOW
+  );
+  assert.equal(justNow.message, 'Error');
+});
+
 test('a hibernated cluster reads as stopped and a deleted one as absent', () => {
   assert.equal(
     buildCnpgLiveStatus({ ...cluster, hibernated: true }, [pod()], {
@@ -124,11 +151,13 @@ test('a hibernated cluster reads as stopped and a deleted one as absent', () => 
   );
 });
 
-test('sizes format the way pg_size_pretty did', () => {
+test('sizes format the way pg_size_pretty did, with a decimal from GB up', () => {
   assert.equal(formatDbSize(0), '0 bytes');
   assert.equal(formatDbSize(900), '900 bytes');
   assert.equal(formatDbSize(8 * 1024), '8 kB');
   assert.equal(formatDbSize(1024 * 1024 * 1024 * 3), '3 GB');
+  assert.equal(formatDbSize(29479792640), '27.5 GB');
+  assert.equal(formatDbSize(24128050879), '22.5 GB');
   assert.equal(formatDbSize(null), undefined);
 });
 
