@@ -378,6 +378,19 @@ export function installFetch(role: HarnessRole) {
 			() => ({
 				identities: [{ id: 'id1', name: 'laptop', publicKey: 'ssh-ed25519 AAAA', createdAt: '' }]
 			})
+		],
+		[/\/github\/status$/, 'GET', () => ({ linked: true })],
+		[
+			/\/github\/repositories$/,
+			'GET',
+			() => ({
+				repositories: [
+					{ id: 1, full_name: 'hackclub/orchard', private: true },
+					{ id: 2, full_name: 'hackclub/orchard-docs', private: false },
+					{ id: 3, full_name: 'leafd/dotfiles', private: false },
+					{ id: 4, full_name: 'leafd/pip', private: true }
+				]
+			})
 		]
 	];
 	const forbidden: string[] = [];
