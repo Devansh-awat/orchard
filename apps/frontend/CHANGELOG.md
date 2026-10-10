@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.1](https://github.com/hackclub/orchard/compare/frontend/v1.62.0...frontend/v1.62.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse remove repository actually removes it and new empty repository stops reporting a fake failure ([d31a034](https://github.com/hackclub/orchard/commit/d31a03408f1d25869feb0cd7ddb8c6979020230f))
+
 ## [1.62.0](https://github.com/hackclub/orchard/compare/frontend/v1.61.2...frontend/v1.62.0) (2026-10-09)
 
 
