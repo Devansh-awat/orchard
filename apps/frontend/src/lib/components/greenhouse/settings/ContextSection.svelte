@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Copy, Trash2 } from 'lucide-svelte';
+	import { Copy, Eye, EyeOff, Trash2 } from 'lucide-svelte';
 	import { Button, Skeleton } from '$lib/components/ui';
 	import { apiFetch, toasts } from '$lib/stores';
+	import { formatBytes } from '../machine-usage';
 	import Block from './Block.svelte';
 	import Card from './Card.svelte';
 	import Row from './Row.svelte';
@@ -31,6 +32,8 @@
 	let instructions = $state('');
 	let saved = $state('');
 	let saving = $state(false);
+	let shown = $state(false);
+	let revealing = $state(false);
 	let busy = $state<string | null>(null);
 
 	const instructionsItem = $derived(items?.find((item) => item.kind === 'instructions') ?? null);
@@ -48,19 +51,34 @@
 		try {
 			const list = await json<{ items: Item[] }>('/apiv1/me/context');
 			items = list.items;
-			const own = list.items.find((item) => item.kind === 'instructions');
-			if (own) {
-				const detail = await json<{ files?: Record<string, string> }>(
-					`/apiv1/me/context/${own.id}`
-				);
-				instructions = detail.files?.['CLAUDE.md'] ?? '';
-			} else {
-				instructions = '';
-			}
-			saved = instructions;
 		} catch (e) {
 			failed = errorText(e) ?? 'Could not load your context';
 		}
+	}
+
+	async function reveal() {
+		if (revealing) return;
+		const own = instructionsItem;
+		if (!own) {
+			instructions = saved = '';
+			shown = true;
+			return;
+		}
+		revealing = true;
+		try {
+			const detail = await json<{ files?: Record<string, string> }>(`/apiv1/me/context/${own.id}`);
+			instructions = saved = detail.files?.['CLAUDE.md'] ?? '';
+			shown = true;
+		} catch (e) {
+			toasts.add({ title: 'Could not open CLAUDE.md', description: errorText(e), color: 'error' });
+		} finally {
+			revealing = false;
+		}
+	}
+
+	function conceal() {
+		shown = false;
+		instructions = saved = '';
 	}
 
 	onMount(() => {
@@ -163,24 +181,52 @@
 {:else}
 	<Block>
 		<Card title="CLAUDE.md">
-			<div class="editor">
-				<textarea
-					class="code gh-mono"
-					spellcheck="false"
-					placeholder="How you like to work: conventions, tools, things the agent should always or never do."
-					aria-label="CLAUDE.md"
-					bind:value={instructions}></textarea>
-				<div class="actions">
-					<span class="meta">Every agent on your machines reads this first.</span>
-					<Button
-						variant="primary"
-						size="sm"
-						loading={saving}
-						disabled={!dirty}
-						onclick={saveInstructions}>Save</Button
-					>
+			{#if shown}
+				<div class="editor ph-no-capture">
+					<textarea
+						class="code gh-mono"
+						spellcheck="false"
+						autocomplete="off"
+						placeholder="How you like to work: conventions, tools, things the agent should always or never do."
+						aria-label="CLAUDE.md"
+						bind:value={instructions}></textarea>
+					<div class="actions">
+						<span class="meta">Every agent on your machines reads this first.</span>
+						<span class="buttons">
+							<Button
+								variant="secondary"
+								size="sm"
+								disabled={dirty || saving}
+								title={dirty ? 'Save or undo your changes first' : undefined}
+								onclick={conceal}
+							>
+								<EyeOff size={14} strokeWidth={1.75} /> Hide
+							</Button>
+							<Button
+								variant="primary"
+								size="sm"
+								loading={saving}
+								disabled={!dirty}
+								onclick={saveInstructions}>Save</Button
+							>
+						</span>
+					</div>
 				</div>
-			</div>
+			{:else}
+				<Row
+					title={instructionsItem ? 'Hidden' : 'Not written yet'}
+					description={instructionsItem
+						? `${formatBytes(instructionsItem.sizeBytes)}, private to you. Every agent on your machines reads it first.`
+						: 'Every agent on your machines reads this first.'}
+				>
+					{#snippet control()}
+						<Button variant="secondary" size="sm" loading={revealing} onclick={reveal}>
+							<Eye size={14} strokeWidth={1.75} />
+							{instructionsItem ? 'Show' : 'Write'}
+						</Button>
+					{/snippet}
+				</Row>
+			{/if}
 		</Card>
 	</Block>
 
@@ -277,6 +323,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.buttons {
+		display: flex;
+		align-items: center;
 		gap: 0.5rem;
 	}
 

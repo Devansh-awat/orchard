@@ -45,11 +45,14 @@ function start(posthog: PostHog, key: string) {
 							)
 						)
 					: request.requestHeaders;
+				const personal = request.name.includes('/me/context');
 				return {
 					...request,
 					name: scrubUrlSecrets(request.name),
 					requestHeaders: headers,
-					requestBody: request.requestBody?.includes('token') ? null : request.requestBody
+					requestBody:
+						personal || request.requestBody?.includes('token') ? null : request.requestBody,
+					responseBody: personal ? null : request.responseBody
 				};
 			}
 		}
