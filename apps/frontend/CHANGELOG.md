@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.62.2](https://github.com/hackclub/orchard/compare/frontend/v1.62.1...frontend/v1.62.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse sidebar hides repos and sessions while the machine is asleep ([5cc21d3](https://github.com/hackclub/orchard/commit/5cc21d3ad8d0a66860ed9da27505b1df76364c7b))
+* **frontend:** greenhouse working line shows one pip and says thinking instead of starting ([0e9cf3c](https://github.com/hackclub/orchard/commit/0e9cf3c247dd20304e17615db353d7e4cb096381))
+
 ## [1.62.1](https://github.com/hackclub/orchard/compare/frontend/v1.62.0...frontend/v1.62.1) (2026-10-10)
 
 
