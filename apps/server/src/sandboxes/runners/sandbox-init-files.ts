@@ -25,7 +25,7 @@ export function opencodeAuthJson(claudeToken: string | null): string {
   });
 }
 
-export const OPENCODE_AUTH_PLUGIN = '@cortexkit/opencode-anthropic-auth@1.22.0';
+export const OPENCODE_AUTH_PLUGIN = '@cortexkit/opencode-anthropic-auth@1.23.0';
 
 export function opencodeConfigJson(
   mcpToken: string | null,
