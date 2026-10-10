@@ -202,7 +202,7 @@ export function liveStep(block: AgentBlock): string {
 	}
 	if (block.answer.length > 0) return 'Writing the reply';
 	if (block.steps.length > 0) return 'Planning the next step';
-	return 'Starting';
+	return 'Thinking';
 }
 
 export function liveWindow<T>(steps: T[], size: number): { hidden: number; shown: T[] } {

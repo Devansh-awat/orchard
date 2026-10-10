@@ -146,7 +146,7 @@ test('liveStep names what the turn is doing right now', () => {
 	const chunks = buildChunks([prompt('go', 1), tool('t', 'running', 2)], true);
 	assert.equal(liveStep(chunks[0].rows[1] as AgentBlock), 'Running pnpm test');
 	const idle = buildChunks([prompt('go', 1)], true);
-	assert.equal(liveStep(idle[0].rows[1] as AgentBlock), 'Starting');
+	assert.equal(liveStep(idle[0].rows[1] as AgentBlock), 'Thinking');
 	const between = buildChunks([prompt('go', 1), tool('t', 'completed', 2)], true);
 	assert.equal(liveStep(between[0].rows[1] as AgentBlock), 'Planning the next step');
 });

@@ -34,6 +34,13 @@
 				? 'prose'
 				: 'small'
 	);
+	const workingOnly = $derived(
+		live &&
+			!activity &&
+			block.answer.length === 0 &&
+			block.errors.length === 0 &&
+			block.notes.length === 0
+	);
 	const result = $derived(block.result?.entry.kind === 'result' ? block.result.entry : null);
 	const resultIndex = $derived(block.result?.index ?? 0);
 	const empty = $derived(
@@ -52,9 +59,11 @@
 	data-turn="agent"
 	data-live={live ? 'true' : undefined}
 >
-	<span class="turn-mark turn-mark--{lead}" aria-hidden="true">
-		<span class="mark"><Pip size={18} playing={false} /></span>
-	</span>
+	{#if !workingOnly}
+		<span class="turn-mark turn-mark--{lead}" aria-hidden="true">
+			<span class="mark"><Pip size={18} playing={false} /></span>
+		</span>
+	{/if}
 	{#if activity}
 		<ActivityRow {block} {store} {live} />
 	{/if}
