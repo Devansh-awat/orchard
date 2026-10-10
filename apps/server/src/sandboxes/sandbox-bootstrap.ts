@@ -210,6 +210,9 @@ if have npm; then
   have codex || npm install -g @openai/codex >/dev/null 2>&1
   have opencode || npm install -g opencode-ai >/dev/null 2>&1
 fi
+if have npm && have claude && ! pgrep -f '[o]rchard-claude-update' >/dev/null 2>&1; then
+  nohup sh -c 'while :; do npm install -g @anthropic-ai/claude-code@latest; sleep 21600; done' orchard-claude-update >> /var/log/orchard-claude-update.log 2>&1 &
+fi
 
 tmux_term=tmux-256color
 if have infocmp && ! infocmp tmux-256color >/dev/null 2>&1; then
