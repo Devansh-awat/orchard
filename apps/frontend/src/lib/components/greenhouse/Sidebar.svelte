@@ -48,13 +48,7 @@
 
 	const asleepStatus = $derived(ws?.machine?.status ?? 'stopped');
 
-	const cloneBlocked = $derived(
-		!ws?.isOwner
-			? hostOnly('clone repositories')
-			: !ws.running
-				? 'Start the machine to clone a repository'
-				: undefined
-	);
+	const cloneBlocked = $derived(ws?.isOwner ? undefined : hostOnly('clone repositories'));
 
 	function search() {
 		window.dispatchEvent(new Event('open-quick-search'));
@@ -180,29 +174,30 @@
 	</div>
 
 	<div class="list gh-scroll" role="tree" aria-label="Sessions" data-tour="repos">
-		{#if ws && !ws.lifecycleOnly && !ws.running && !app.home}
-			<div class="asleep" role="status">
-				<p class="asleep-title">
-					{asleepStatus === 'stopped' || asleepStatus === 'error'
-						? `${ws.machine?.name ?? 'This machine'} is asleep`
-						: `Starting ${ws.machine?.name ?? 'the machine'}…`}
-				</p>
-				<p class="asleep-text">Start it to see its repositories and sessions.</p>
-				{#if asleepStatus === 'stopped' || asleepStatus === 'error'}
-					<button
-						type="button"
-						class="gh-btn gh-btn--primary asleep-start"
-						disabled={!ws.canStart || !!ws.busy}
-						title={ws.canStart ? undefined : 'Read-only guests cannot start this machine'}
-						onclick={() => ws.lifecycle('start')}
-					>
-						<Play size={14} strokeWidth={1.75} /> Start machine
-					</button>
-				{/if}
-			</div>
-		{/if}
 		{#if ws?.lifecycleOnly}
 			<p class="hint">Only the host and people they invite can see what is on this machine.</p>
+		{:else if ws && !ws.running}
+			{#if !app.home}
+				<div class="asleep" role="status">
+					<p class="asleep-title">
+						{asleepStatus === 'stopped' || asleepStatus === 'error'
+							? `${ws.machine?.name ?? 'This machine'} is asleep`
+							: `Starting ${ws.machine?.name ?? 'the machine'}…`}
+					</p>
+					<p class="asleep-text">Start it to see its repositories and sessions.</p>
+					{#if asleepStatus === 'stopped' || asleepStatus === 'error'}
+						<button
+							type="button"
+							class="gh-btn gh-btn--primary asleep-start"
+							disabled={!ws.canStart || !!ws.busy}
+							title={ws.canStart ? undefined : 'Read-only guests cannot start this machine'}
+							onclick={() => ws.lifecycle('start')}
+						>
+							<Play size={14} strokeWidth={1.75} /> Start machine
+						</button>
+					{/if}
+				</div>
+			{/if}
 		{:else if ws}
 			{#each ws.groups as group (group.name)}
 				{@const closed = collapsed[group.name] ?? false}
@@ -285,11 +280,7 @@
 				</div>
 			{:else}
 				{#if ws.reposLoaded && ws.mode !== 'loading'}
-					<p class="hint">
-						{ws.running
-							? 'Clone a repository to start a session.'
-							: 'Start the machine to see its repositories.'}
-					</p>
+					<p class="hint">Clone a repository to start a session.</p>
 				{/if}
 			{/each}
 
