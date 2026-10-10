@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.63.0](https://github.com/hackclub/orchard/compare/frontend/v1.62.2...frontend/v1.63.0) (2026-10-10)
+
+
+### Features
+
+* **frontend:** greenhouse new machine is a three step setup with runner cards ([f16d125](https://github.com/hackclub/orchard/commit/f16d12516b3c708a276ccad43b06b16021c887b5))
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse keeps your CLAUDE.md hidden until you ask to see it ([ac89ea3](https://github.com/hackclub/orchard/commit/ac89ea3b463f1f23e21acef38f1edc1e6b3716ae))
+* **frontend:** greenhouse new machine uses a plain runner switch and the github repo picker ([b672bff](https://github.com/hackclub/orchard/commit/b672bff3dbfd2b43f55b46bb21a32adabad17d67))
+
 ## [1.62.2](https://github.com/hackclub/orchard/compare/frontend/v1.62.1...frontend/v1.62.2) (2026-10-10)
 
 

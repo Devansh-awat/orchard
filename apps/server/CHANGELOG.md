@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.67.2](https://github.com/hackclub/orchard/compare/server/v2.67.1...server/v2.67.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **server:** greenhouse agents speak a new enough claude code to use the latest models ([30a4e38](https://github.com/hackclub/orchard/commit/30a4e3887453c2e4d0a21203b9d844d17068abc0))
+* **server:** greenhouse machines keep claude code on the latest version ([2ea097d](https://github.com/hackclub/orchard/commit/2ea097d081836c65aec487410410c064440438f9))
+
 ## [2.67.1](https://github.com/hackclub/orchard/compare/server/v2.67.0...server/v2.67.1) (2026-10-09)
 
 
