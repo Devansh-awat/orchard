@@ -121,16 +121,18 @@
 				: undefined
 	);
 
+	let removeOpen = $state(false);
+
 	function askRemove() {
 		const name = menuRepo;
 		menuOpen = false;
-		if (name) doomedRepo = name;
+		if (!name) return;
+		doomedRepo = name;
+		removeOpen = true;
 	}
 
 	function confirmRemove() {
-		const name = doomedRepo;
-		doomedRepo = null;
-		if (name) void ws?.removeRepo(name);
+		if (doomedRepo) void ws?.removeRepo(doomedRepo);
 	}
 
 	function changeIcon() {
@@ -350,7 +352,7 @@
 			</MenuItem>
 		</ContextMenu>
 		<ConfirmModal
-			bind:open={() => !!doomedRepo, (v) => !v && (doomedRepo = null)}
+			bind:open={removeOpen}
 			title="Remove {doomedRepo}?"
 			description={doomedSessions > 0
 				? `Deletes the clone and its ${doomedSessions} ${doomedSessions === 1 ? 'session' : 'sessions'} from this machine. Anything not pushed is lost.`
@@ -358,7 +360,7 @@
 			confirmLabel="Remove"
 			danger
 			onconfirm={confirmRemove}
-			oncancel={() => (doomedRepo = null)}
+			oncancel={() => {}}
 		/>
 		{#if picking}
 			<RepoIconPicker

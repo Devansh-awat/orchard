@@ -150,17 +150,18 @@
 	async function ensureRepo(name: string | null, text: string): Promise<string | null> {
 		if (name || !ws) return name;
 		const fresh = blankName(text);
-		const res = await api.initRepo(ws.sandboxId, fresh);
-		if (!res.ok) {
+		try {
+			const res = await api.initRepo(ws.sandboxId, fresh);
+			await ws.refreshRepos();
+			return res.name;
+		} catch (e) {
 			toasts.add({
 				title: 'Could not create the repository',
-				description: res.message,
+				description: e instanceof Error ? e.message : undefined,
 				color: 'error'
 			});
 			return null;
 		}
-		await ws.refreshRepos();
-		return res.data.name;
 	}
 
 	$effect(() => {
