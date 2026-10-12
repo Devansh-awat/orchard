@@ -49,6 +49,7 @@ import { CoordinationModule } from './coordination/coordination.module';
 import { MirrorModule } from './mirror/mirror.module';
 import { ApplyModule } from './apply/apply.module';
 import { GraftsModule } from './grafts/grafts.module';
+import { GraftDoorsModule } from './grafts/grafts-doors.module';
 import type { GraftRecord } from './grafts/graft-registry';
 import { graftImports } from './grafts/boot';
 
@@ -105,7 +106,8 @@ import { graftImports } from './grafts/boot';
     SandboxIntegrationsModule,
     SshIdentitiesModule,
     MirrorModule,
-    GraftsModule
+    GraftsModule,
+    GraftDoorsModule
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }]
 })

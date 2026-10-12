@@ -1,0 +1,118 @@
+{
+  "doors": {
+    "audit@1": {
+      "status": "stable",
+      "capability": "audit",
+      "methods": {
+        "log": 1
+      },
+      "properties": []
+    },
+    "auth@1": {
+      "status": "stable",
+      "capability": null,
+      "methods": {
+        "can": 2,
+        "getOrgAccess": 2,
+        "getProjectAccess": 2,
+        "isSuperAdmin": 1,
+        "listVisibleProjectIds": 2,
+        "require": 2,
+        "requireOrgAdmin": 2,
+        "requireOrgMember": 2,
+        "requireOrgOwner": 2,
+        "requireProjectEdit": 2,
+        "requireProjectView": 2
+      },
+      "properties": []
+    },
+    "context@1": {
+      "status": "stable",
+      "capability": null,
+      "methods": {},
+      "properties": [
+        "apiBase",
+        "id",
+        "manifest",
+        "role",
+        "schema",
+        "version"
+      ]
+    },
+    "db@1": {
+      "status": "stable",
+      "capability": "db",
+      "methods": {
+        "pool": 0,
+        "query": 2
+      },
+      "properties": [
+        "role",
+        "schema"
+      ]
+    },
+    "events@1": {
+      "status": "stable",
+      "capability": "events",
+      "methods": {
+        "emitOrg": 2,
+        "stream": 0
+      },
+      "properties": []
+    },
+    "flags@1": {
+      "status": "stable",
+      "capability": "flags",
+      "methods": {
+        "isEnabled": 2
+      },
+      "properties": [
+        "configured"
+      ]
+    },
+    "http@1": {
+      "status": "stable",
+      "capability": "http.upgrade",
+      "methods": {
+        "hostRouter": 1,
+        "upgrade": 2
+      },
+      "properties": []
+    },
+    "secrets@1": {
+      "status": "stable",
+      "capability": "secrets",
+      "methods": {
+        "decrypt": 1,
+        "decryptForUser": 2,
+        "encrypt": 1,
+        "encryptForUser": 2,
+        "isEncrypted": 1
+      },
+      "properties": []
+    },
+    "settings@1": {
+      "status": "stable",
+      "capability": "settings",
+      "methods": {
+        "all": 1,
+        "flag": 2,
+        "isConfigured": 1,
+        "value": 2
+      },
+      "properties": [
+        "generation"
+      ]
+    },
+    "users@1": {
+      "status": "stable",
+      "capability": "users.read",
+      "methods": {
+        "findByUsername": 1,
+        "get": 1,
+        "getMany": 1
+      },
+      "properties": []
+    }
+  }
+}

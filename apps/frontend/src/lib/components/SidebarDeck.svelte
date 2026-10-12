@@ -8,6 +8,8 @@
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { greenhouseFlag, sandboxEnvOverride, sandboxesOn } from '$lib/flags';
 	import { instanceFeatures } from '$lib/stores/instance-features';
+	import GraftIcon from '$lib/grafts/GraftIcon.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
 		Leaf,
 		Zap,
@@ -92,8 +94,9 @@
 		id: string;
 		label: string;
 		href: string;
-		icon: typeof Leaf;
+		icon: typeof Leaf | null;
 		active: boolean;
+		graftIcon?: { icon?: string; assetBase: string };
 	};
 
 	const nav: NavEntry[] = $derived([
@@ -141,7 +144,18 @@
 						active: $page.url.pathname.startsWith('/grove')
 					}
 				]
-			: [])
+			: []),
+		...graftHost.slot('nav.primary').map(({ graftId, host, item }) => {
+			const href = item.href.replaceAll('{org}', orgSlug ?? '');
+			return {
+				id: `graft:${graftId}:${item.id}`,
+				label: item.label,
+				href,
+				icon: null,
+				active: $page.url.pathname === href || $page.url.pathname.startsWith(`${href}/`),
+				graftIcon: { icon: item.icon, assetBase: host.graft.assetBase }
+			};
+		})
 	]);
 
 	const overviewQuery = createQuery(() => ({
@@ -503,7 +517,11 @@
 						{@attach navStagger(i)}
 					>
 						<span class="deck-tile" class:deck-tile--active={item.active}>
-							<item.icon size={15} />
+							{#if item.icon}
+								<item.icon size={15} />
+							{:else if item.graftIcon}
+								<GraftIcon icon={item.graftIcon.icon} assetBase={item.graftIcon.assetBase} />
+							{/if}
 						</span>
 						{#if !railed}
 							<span class="deck-row-label">{item.label}</span>

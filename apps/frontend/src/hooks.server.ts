@@ -1,6 +1,8 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
 import sansFont from '$lib/assets/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.woff2';
+import { loadGraftRegistry } from '$lib/server/grafts';
+import { setGraftRegistry } from '$lib/grafts/registry';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 
@@ -39,8 +41,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	const grafts = loadGraftRegistry();
+	setGraftRegistry(grafts);
+	const graftScript = `<script>window.__ORCHARD_GRAFTS__=${JSON.stringify(grafts).replace(/</g, '\\u003c')}</script>`;
 	return resolve(event, {
-		transformPageChunk: ({ html }) => html.replace('%orchard.font.sans%', sansFont)
+		transformPageChunk: ({ html }) =>
+			html.replace('%orchard.font.sans%', sansFont).replace('%orchard.grafts%', graftScript)
 	});
 };
 

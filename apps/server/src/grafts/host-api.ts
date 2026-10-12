@@ -7,6 +7,19 @@ export type DoorStatus = { version: number; status: 'stable' | 'deprecated'; rem
 
 export const GRAFT_DOORS: Record<string, DoorStatus[]> = {};
 
+export function registerDoors(
+  doors: { name: string; version: number; status: DoorStatus['status']; removeIn?: string }[]
+): void {
+  for (const key of Object.keys(GRAFT_DOORS)) delete GRAFT_DOORS[key];
+  for (const door of doors) {
+    (GRAFT_DOORS[door.name] ??= []).push({
+      version: door.version,
+      status: door.status,
+      removeIn: door.removeIn
+    });
+  }
+}
+
 export function platformVersion(): string {
   return (
     JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8')) as {

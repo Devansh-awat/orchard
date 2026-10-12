@@ -82,7 +82,10 @@
 	} from '@jis3r/icons';
 	import { scale, fade, slide } from '$lib/utils/transitions';
 	import { animate } from 'motion';
-	import { MemoryStick } from 'lucide-svelte';
+	import { MemoryStick, Puzzle } from 'lucide-svelte';
+	import GraftMount from '$lib/grafts/GraftMount.svelte';
+	import GraftCards from '$lib/grafts/GraftCards.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import Anomalies from '$lib/components/anomalies/Anomalies.svelte';
@@ -227,10 +230,37 @@
 		{ id: 'settings', label: 'Settings', icon: SlidersHorizontal }
 	] as const;
 
-	type TabId = (typeof tabSections)[number]['id'];
+	type TabId = (typeof tabSections)[number]['id'] | `graft-${string}`;
 
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
-	const visibleTabs = tabSections;
+	const graftProps = $derived(
+		deployment?.project && $selectedOrganization
+			? {
+					orgId: $selectedOrganization.id,
+					orgSlug,
+					projectId: deployment.project.id,
+					projectSlug: deployment.project.slug,
+					deploymentId
+				}
+			: null
+	);
+	const graftTabs = $derived(
+		graftProps
+			? graftHost.slot('deployment.tabs', graftProps).map(({ graftId, host, item }) => ({
+					id: `graft-${graftId}-${item.id}` as TabId,
+					label: item.label,
+					icon: null,
+					graftId,
+					host,
+					mount: item.mount
+				}))
+			: []
+	);
+	const visibleTabs: {
+		id: TabId;
+		label: string;
+		icon: (typeof tabSections)[number]['icon'] | null;
+	}[] = $derived([...tabSections, ...graftTabs]);
 
 	const LEGACY_TAB_SECTIONS: Record<string, string> = {
 		resources: 'resources',
@@ -3126,7 +3156,11 @@
 							{@attach motionStagger({ index: _ti, from: { y: -6 } })}
 							onmouseenter={() => triggerTabIconAnim(tab.id)}
 						>
-							<Icon class="dep-toolbar-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
+							{#if Icon}
+								<Icon class="dep-toolbar-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
+							{:else}
+								<Puzzle class="dep-toolbar-icon" size={14} />
+							{/if}
 							<span>{tab.label}</span>
 						</button>
 					{/each}
@@ -3246,6 +3280,9 @@
 								/>
 							{/snippet}
 						</OverviewTab>
+						{#if graftProps}
+							<GraftCards slot="deployment.overview.cards" props={graftProps} />
+						{/if}
 					{:else if tab.id === 'variables'}
 						<EnvironmentTab
 							bind:envVars
@@ -3430,6 +3467,16 @@
 							{deleting}
 							onShowDeleteModal={() => (showDeleteModal = true)}
 						/>
+					{:else if graftProps}
+						{@const graftTab = graftTabs.find((t) => t.id === tab.id)}
+						{#if graftTab && tabs.value === tab.id}
+							<GraftMount
+								graftId={graftTab.graftId}
+								mount={graftTab.mount}
+								props={graftProps}
+								host={graftTab.host}
+							/>
+						{/if}
 					{/if}
 				</section>
 			{/each}

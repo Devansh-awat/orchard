@@ -29,10 +29,32 @@ export type GraftRecord = {
   dbRole?: string | null;
   warnings: string[];
   module?: Type<unknown> | DynamicModule;
+  ownedModules?: Type<unknown>[];
+  ownedClassNames?: string[];
   uiDigest?: string;
 };
 
 const records: GraftRecord[] = [];
+const classOwners = new WeakMap<object, string>();
+
+export function registerOwnedClasses(graftId: string, classes: Iterable<unknown>): void {
+  for (const cls of classes) {
+    if (typeof cls === 'function') classOwners.set(cls, graftId);
+  }
+}
+
+export function ownerOf(target: unknown): GraftRecord | undefined {
+  const cls =
+    typeof target === 'function' ? target : (target as { constructor?: unknown })?.constructor;
+  if (!cls || typeof cls !== 'function') return undefined;
+  let current: unknown = cls;
+  while (typeof current === 'function' && current !== Function.prototype) {
+    const id = classOwners.get(current);
+    if (id) return records.find((r) => r.id === id);
+    current = Object.getPrototypeOf(current);
+  }
+  return undefined;
+}
 
 export function setGraftRecords(next: GraftRecord[]): void {
   records.splice(0, records.length, ...next);

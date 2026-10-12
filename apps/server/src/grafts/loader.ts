@@ -6,8 +6,21 @@ import { join, resolve, sep } from 'node:path';
 import { Client } from 'pg';
 import { classifyController, isController, type ClassifiedRoute } from '../auth/route-classifier';
 import { resolveClaims } from './claims';
-import { failGraft, setGraftRecords, type GraftRecord } from './graft-registry';
-import { GRAFT_SDK_VERSION, deprecatedDoors, missingDoors, platformVersion } from './host-api';
+import {
+  failGraft,
+  registerOwnedClasses,
+  setGraftRecords,
+  type GraftRecord
+} from './graft-registry';
+import { DOOR_CLASSES } from './doors';
+import {
+  GRAFT_SDK_VERSION,
+  deprecatedDoors,
+  missingDoors,
+  platformVersion,
+  registerDoors
+} from './host-api';
+import { registerGraftSettings } from './settings';
 import {
   listFiles,
   publisherKeysFromEnv,
@@ -22,16 +35,12 @@ import { readSyncFailures } from './sync';
 
 const logger = new Logger('Grafts');
 
-const SHARED_PACKAGES = [
-  /^@nestjs\//,
-  /^rxjs(\/|$)/,
-  /^reflect-metadata$/,
-  /^@orchard\/graft-sdk(\/|$)/
-];
+const SHARED_PACKAGES = [/^@nestjs\//, /^rxjs(\/|$)/, /^reflect-metadata$/];
 
 export type LoadOptions = {
   dir?: string;
   migrate?: boolean;
+  server?: boolean;
   databaseUrl?: string;
   env?: NodeJS.ProcessEnv;
 };
@@ -88,14 +97,21 @@ function installResolutionHook(roots: string[]): void {
   };
 }
 
-function graftClasses(dir: string): Set<unknown> {
-  const root = resolve(dir) + sep;
+function hostClasses(graftRoots: string[]): Set<unknown> {
+  const roots = graftRoots.map((r) => resolve(r) + sep);
   const classes = new Set<unknown>();
   for (const [file, cached] of Object.entries(require.cache)) {
-    if (!file.startsWith(root) || !cached?.exports) continue;
-    const exports = cached.exports as Record<string, unknown>;
-    for (const value of [exports, ...Object.values(exports)]) {
-      if (typeof value === 'function') classes.add(value);
+    if (!cached?.exports || roots.some((root) => file.startsWith(root))) continue;
+    const exported = cached.exports as unknown;
+    if (typeof exported === 'function') classes.add(exported);
+    if (!exported || typeof exported !== 'object') continue;
+    for (const key of Object.keys(exported)) {
+      try {
+        const value = (exported as Record<string, unknown>)[key];
+        if (typeof value === 'function') classes.add(value);
+      } catch {
+        continue;
+      }
     }
   }
   return classes;
@@ -105,29 +121,47 @@ function moduleClass(mod: Type<unknown> | DynamicModule): Type<unknown> {
   return typeof mod === 'function' ? mod : mod.module;
 }
 
-function collectRoutes(
-  entry: Type<unknown> | DynamicModule,
-  owned: Set<unknown>,
-  prefix: string
-): ClassifiedRoute[] {
-  const routes: ClassifiedRoute[] = [];
+type GraftGraph = { routes: ClassifiedRoute[]; modules: Type<unknown>[]; classes: Set<unknown> };
+
+function providerClass(provider: unknown): unknown {
+  if (typeof provider === 'function') return provider;
+  if (provider && typeof provider === 'object' && 'useClass' in provider) {
+    return (provider as { useClass: unknown }).useClass;
+  }
+  return undefined;
+}
+
+function collectGraph(entry: Type<unknown> | DynamicModule, host: Set<unknown>): GraftGraph {
+  const graph: GraftGraph = { routes: [], modules: [], classes: new Set() };
   const seen = new Set<unknown>();
   const visit = (mod: Type<unknown> | DynamicModule) => {
     const cls = moduleClass(mod);
-    if (seen.has(cls)) return;
+    if (!cls || seen.has(cls)) return;
     seen.add(cls);
-    const isDynamic = typeof mod !== 'function';
-    if (!owned.has(cls) && !isDynamic) return;
+    if (host.has(cls)) return;
+    const dynamic = typeof mod === 'function' ? undefined : mod;
+    graph.modules.push(cls);
+    graph.classes.add(cls);
     const controllers = [
       ...((Reflect.getMetadata('controllers', cls) as unknown[]) ?? []),
-      ...(isDynamic ? (mod.controllers ?? []) : [])
+      ...(dynamic?.controllers ?? [])
     ];
     for (const ctrl of controllers) {
-      if (isController(ctrl)) routes.push(...classifyController(ctrl, prefix));
+      if (host.has(ctrl)) continue;
+      graph.classes.add(ctrl);
+      if (isController(ctrl)) graph.routes.push(...classifyController(ctrl, ''));
+    }
+    const providers = [
+      ...((Reflect.getMetadata('providers', cls) as unknown[]) ?? []),
+      ...(dynamic?.providers ?? [])
+    ];
+    for (const provider of providers) {
+      const pc = providerClass(provider);
+      if (pc && !host.has(pc)) graph.classes.add(pc);
     }
     const imports = [
       ...((Reflect.getMetadata('imports', cls) as unknown[]) ?? []),
-      ...(isDynamic ? (mod.imports ?? []) : [])
+      ...(dynamic?.imports ?? [])
     ];
     for (const imp of imports) {
       if (typeof imp === 'function' || (imp && typeof imp === 'object' && 'module' in imp)) {
@@ -136,7 +170,7 @@ function collectRoutes(
     }
   };
   visit(entry);
-  return routes;
+  return graph;
 }
 
 function verifyRoutes(record: GraftRecord, dev: boolean): void {
@@ -217,6 +251,7 @@ function uiDigest(dir: string): string | undefined {
 }
 
 export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord[]> {
+  registerDoors(DOOR_CLASSES.map((cls) => cls.meta));
   const env = options.env ?? process.env;
   const root = options.dir ?? graftsDir(env);
   if (truthy(env.ORCHARD_GRAFTS_SAFE_MODE)) {
@@ -334,7 +369,7 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
     if (record.status === 'failed') continue;
     const entry = record.manifest!.entries.server;
     record.uiDigest = record.manifest!.entries.ui ? uiDigest(record.dir) : undefined;
-    if (!entry) continue;
+    if (!entry || options.server === false) continue;
     try {
       const exported = require(join(record.dir, entry)) as Record<string, unknown>;
       const mod = (exported.default ?? exported.GraftModule) as
@@ -345,16 +380,30 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
         throw new Error(`${entry} must export a Nest module as default or GraftModule`);
       }
       record.module = mod;
-      record.routes = collectRoutes(mod, graftClasses(record.dir), '');
     } catch (err) {
       failGraft(record, 'load', (err as Error).message);
-      continue;
     }
+  }
+
+  const host = hostClasses(live.map((r) => r.dir));
+  for (const record of live) {
+    if (record.status === 'failed' || !record.module) continue;
     try {
+      const graph = collectGraph(record.module, host);
+      registerOwnedClasses(record.id, graph.classes);
+      record.ownedModules = graph.modules;
+      record.ownedClassNames = [...graph.classes]
+        .map((c) => (typeof c === 'function' ? c.name : ''))
+        .filter((n) => n.length > 3);
+      record.routes = graph.routes;
       verifyRoutes(record, dev);
     } catch (err) {
       failGraft(record, 'routes', (err as Error).message);
     }
+  }
+
+  for (const record of records) {
+    if (record.status === 'loaded') registerGraftSettings(record);
   }
 
   for (const failure of syncFailures) {

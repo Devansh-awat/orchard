@@ -6,25 +6,12 @@ import { failGraft, loadedGrafts, type GraftRecord } from './graft-registry';
 
 const logger = new Logger('Grafts');
 
-function graftClassNames(record: GraftRecord): string[] {
-  const root = resolve(record.dir) + sep;
-  const names = new Set<string>();
-  for (const [file, cached] of Object.entries(require.cache)) {
-    if (!file.startsWith(root) || !cached?.exports) continue;
-    const exports = cached.exports as Record<string, unknown>;
-    for (const value of [exports, ...Object.values(exports)]) {
-      if (typeof value === 'function' && value.name && value.name.length > 3) names.add(value.name);
-    }
-  }
-  return [...names];
-}
-
 function blame(err: unknown, candidates: GraftRecord[]): GraftRecord[] {
   const text = `${(err as Error)?.message ?? ''}\n${(err as Error)?.stack ?? ''}`;
   const byFile = candidates.filter((r) => text.includes(resolve(r.dir) + sep));
   if (byFile.length) return byFile;
   return candidates.filter((r) =>
-    graftClassNames(r).some((name) => new RegExp(`\\b${name}\\b`).test(text))
+    (r.ownedClassNames ?? []).some((name) => new RegExp(`\\b${name}\\b`).test(text))
   );
 }
 
@@ -95,6 +82,14 @@ export function graftImports(grafts: GraftRecord[]): (Type<unknown> | DynamicMod
     typeof g.module === 'function' ? g.module : (g.module as DynamicModule).module;
   return [
     ...mounted.map((g) => g.module as Type<unknown> | DynamicModule),
-    RouterModule.register(mounted.map((g) => ({ path: g.id, module: moduleOf(g) })))
+    RouterModule.register(
+      mounted.map((g) => ({
+        path: g.id,
+        module: moduleOf(g),
+        children: (g.ownedModules ?? [])
+          .filter((m) => m !== moduleOf(g))
+          .map((m) => ({ path: '/', module: m }))
+      }))
+    )
   ];
 }

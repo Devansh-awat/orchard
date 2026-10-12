@@ -26,6 +26,7 @@ import { ProtectionService } from './auth/protection.service';
 import { requestAuthStorage } from './auth/request-context';
 import { loadGrafts } from './grafts/loader';
 import { createWithGrafts, installApiAliases } from './grafts/boot';
+import { GraftHttpRegistry } from './grafts/http-registry';
 
 // dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
 // telemetry MUST run before Nest is imported so OTel instrumentation hooks
@@ -64,6 +65,15 @@ async function bootstrap() {
 
   const protectionService = app.get(ProtectionService);
   const previewService = app.get(SandboxPreviewService);
+  const graftHttp = app.get(GraftHttpRegistry);
+  app.use(async (req, res, next) => {
+    try {
+      const handled = await graftHttp.handleRequest(req, res);
+      if (!handled) return next();
+    } catch {
+      if (!res.headersSent) res.status(502).end();
+    }
+  });
   app.use(async (req, res, next) => {
     try {
       const handled = await previewService.handleRequest(req, res);
@@ -188,16 +198,19 @@ async function bootstrap() {
   // Attach WebSocket terminal handler to the underlying HTTP server
   const httpServer = app.getHttpServer();
   httpServer.on('upgrade', (req, socket, head) => {
-    previewService
+    graftHttp
       .handleUpgrade(req, socket, head)
+      .then((handled) => (handled ? true : previewService.handleUpgrade(req, socket, head)))
       .then((handled) => {
         if (handled) return;
         return protectionService.handleUpgrade(req, socket, head).then(() => undefined);
       })
       .catch(() => socket.destroy());
   });
-  const isPreviewUpgrade = (req: { headers: { host?: string } }) =>
-    previewService.isPreviewHost(req.headers.host);
+  const isPreviewUpgrade = (req: { url?: string; headers: { host?: string } }) =>
+    previewService.isPreviewHost(req.headers.host) ||
+    graftHttp.isHostRouted(req.headers.host) ||
+    graftHttp.claimsUpgradePath(req.url);
   execSessionEngine(httpServer, app, { skipUpgrade: isPreviewUpgrade });
   attachTerminalWebSocket(httpServer, app);
   attachSandboxSshWebSocket(httpServer, app, isPreviewUpgrade);

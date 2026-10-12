@@ -3,12 +3,14 @@ import { NestFactory } from '@nestjs/core';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
 import { McpModule } from './mcp.module';
+import { loadMcpGrafts } from '../grafts/mcp';
 
 dotenv.config();
 dotenv.config({ path: resolve(process.cwd(), '..', '.env'), override: false });
 dotenv.config({ path: resolve(__dirname, '../../.env'), override: false });
 
 async function bootstrap() {
+  await loadMcpGrafts();
   const app = await NestFactory.create(McpModule);
 
   app.enableCors();

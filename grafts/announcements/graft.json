@@ -1,0 +1,15 @@
+{
+  "id": "announcements",
+  "name": "Announcements",
+  "version": "0.1.0",
+  "publisher": "orchard",
+  "description": "Post instance-wide notices that show up on every project and app page.",
+  "engines": { "platform": ">=2.67.0 <3", "sdk": "^1.0.0" },
+  "capabilities": ["db", "audit"],
+  "database": { "coreReads": { "users": ["id", "username"] } },
+  "ui": {
+    "screens": [
+      { "id": "manage", "path": "/announcements", "layout": "shell", "title": "Announcements" }
+    ]
+  }
+}

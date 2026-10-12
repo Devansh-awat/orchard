@@ -1,0 +1,27 @@
+{
+  "name": "@orchard/graft-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "svelte": "./src/index.ts",
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "sync": "node scripts/sync.mjs"
+  },
+  "dependencies": {
+    "lucide-svelte": "^0.510.0",
+    "melt": "^0.42.0",
+    "@blobatar/svelte": "^2.7.0",
+    "blobatar": "^2.7.0",
+    "motion": "^12.38.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

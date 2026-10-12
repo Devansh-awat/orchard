@@ -19,6 +19,9 @@
 		X,
 		Sprout
 	} from 'lucide-svelte';
+	import { Puzzle } from 'lucide-svelte';
+	import GraftMount from '$lib/grafts/GraftMount.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
 	import { greenhouseFlag, sandboxesOn } from '$lib/flags';
 	import { SandboxUsageTab } from '$lib/components/sandbox';
@@ -133,7 +136,20 @@
 	const orgSlug = $derived(data.orgSlug);
 	const range = $derived(data.range);
 
-	type Tab = 'overview' | 'me' | 'members' | 'provisioning' | 'sandbox';
+	type Tab = 'overview' | 'me' | 'members' | 'provisioning' | 'sandbox' | `graft-${string}`;
+
+	const graftTabs = $derived(
+		orgId
+			? graftHost.slot('org.usage.tabs', { orgId, orgSlug }).map(({ graftId, host, item }) => ({
+					key: `graft-${graftId}-${item.id}` as Tab,
+					graftId,
+					host,
+					label: item.label,
+					mount: item.mount
+				}))
+			: []
+	);
+	const activeGraftTab = $derived(graftTabs.find((t) => t.key === activeTab));
 
 	const availableTabs = $derived.by<Array<{ id: Tab; label: string; icon: any }>>(() => {
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
@@ -147,6 +163,7 @@
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
 			tabs.push({ id: 'provisioning', label: 'Right-sizing', icon: BarChart3 });
 		}
+		for (const t of graftTabs) tabs.push({ id: t.key, label: t.label, icon: Puzzle });
 		return tabs;
 	});
 
@@ -1154,6 +1171,13 @@
 							</DataGrid>
 						</SectionCard>
 					{/if}
+				{:else if activeGraftTab && orgId}
+					<GraftMount
+						graftId={activeGraftTab.graftId}
+						mount={activeGraftTab.mount}
+						props={{ orgId, orgSlug }}
+						host={activeGraftTab.host}
+					/>
 				{/if}
 			</div>
 		{/key}

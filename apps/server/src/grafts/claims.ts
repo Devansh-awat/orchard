@@ -11,7 +11,8 @@ export type ClaimKind =
   | 'settingKeys'
   | 'rateLimitBuckets'
   | 'mcpTools'
-  | 'sseEvents';
+  | 'sseEvents'
+  | 'auditActions';
 
 export const CLAIM_KINDS: ClaimKind[] = [
   'apiAliases',
@@ -24,8 +25,11 @@ export const CLAIM_KINDS: ClaimKind[] = [
   'settingKeys',
   'rateLimitBuckets',
   'mcpTools',
-  'sseEvents'
+  'sseEvents',
+  'auditActions'
 ];
+
+const PATH_KINDS: ClaimKind[] = ['apiAliases', 'uiAliases', 'wsAliases'];
 
 export type ClaimState = 'own' | 'alias' | 'shadowed';
 
@@ -42,7 +46,8 @@ export function ownsName(graftId: string, value: string): boolean {
     value.startsWith(`${graftId}.`) ||
     value.startsWith(`${graftId}-`) ||
     value.startsWith(`${graftId}/`) ||
-    value.startsWith(`${graftId}:`)
+    value.startsWith(`${graftId}:`) ||
+    value.startsWith(`${graftId.replace(/-/g, '_')}_`)
   );
 }
 
@@ -51,10 +56,8 @@ function firstSegment(value: string): string {
 }
 
 function overlaps(kind: ClaimKind, a: string, b: string): boolean {
-  if (kind === 'apiAliases' || kind === 'uiAliases' || kind === 'wsAliases') {
-    return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
-  }
-  return a === b;
+  const sep = PATH_KINDS.includes(kind) ? '/' : '.';
+  return a === b || a.startsWith(`${b}${sep}`) || b.startsWith(`${a}${sep}`);
 }
 
 export function resolveClaims(
@@ -110,5 +113,8 @@ export function canUseName(
   name: string
 ): boolean {
   if (ownsName(graftId, name)) return true;
-  return activeClaims(resolved, kind).includes(name);
+  const sep = PATH_KINDS.includes(kind) ? '/' : '.';
+  return activeClaims(resolved, kind).some(
+    (claim) => name === claim || name.startsWith(`${claim}${sep}`)
+  );
 }

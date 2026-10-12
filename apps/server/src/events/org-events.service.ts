@@ -65,6 +65,10 @@ export class OrgEventsService implements OnModuleInit {
     }
   }
 
+  all(): Observable<OrgEvent> {
+    return this.subject.asObservable().pipe(map((d) => d.event));
+  }
+
   emitLocal(ev: Omit<OrgEvent, 'ts'>) {
     this.subject.next({ event: { ...ev, ts: Date.now() } });
   }

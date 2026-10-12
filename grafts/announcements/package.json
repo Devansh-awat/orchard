@@ -1,0 +1,22 @@
+{
+  "name": "@grafts/announcements",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "graft build",
+    "pack": "graft pack",
+    "dev": "graft dev"
+  },
+  "dependencies": {
+    "@orchard/graft-sdk": "workspace:*",
+    "@orchard/graft-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.2.3",
+    "@nestjs/core": "^11.2.3",
+    "reflect-metadata": "^0.2.1",
+    "rxjs": "^7.8.1",
+    "svelte": "^5.57.0"
+  }
+}

@@ -596,3 +596,194 @@ describe('sync', () => {
     rmSync(work, { recursive: true, force: true });
   });
 });
+
+describe('doors', () => {
+  test('doors know which graft injected them and enforce capabilities and claims', async () => {
+    const { Global, Module, Scope } = await import('@nestjs/common');
+    const { NestFactory } = await import('@nestjs/core');
+    const { createWithGrafts, graftImports } = await import('../src/grafts/boot');
+    const { graftRecords } = await import('../src/grafts/graft-registry');
+    const { AuditService } = await import('../src/audit/audit.service');
+    const { ContextDoorV1 } = await import('../src/grafts/doors/context.door');
+    const { AuditDoorV1 } = await import('../src/grafts/doors/audit.door');
+    const { doorToken } = await import('../src/grafts/doors/door');
+
+    const logged: { action: string; metadata?: unknown }[] = [];
+    class TestDoors {}
+    Reflect.decorate(
+      [
+        Global(),
+        Module({
+          providers: [
+            {
+              provide: AuditService,
+              useValue: { log: async (input: { action: string }) => void logged.push(input) }
+            },
+            { provide: doorToken('context', 1), useClass: ContextDoorV1, scope: Scope.TRANSIENT },
+            { provide: doorToken('audit', 1), useClass: AuditDoorV1, scope: Scope.TRANSIENT }
+          ],
+          exports: [doorToken('context', 1), doorToken('audit', 1)]
+        })
+      ],
+      TestDoors
+    );
+
+    const graftSource = (cls: string) => `
+const { Module, Injectable, Inject } = require('@nestjs/common');
+class ${cls} {
+  constructor(ctx, audit) { this.ctx = ctx; this.audit = audit; globalThis.__doorUsers = (globalThis.__doorUsers || []).concat(this); }
+}
+Reflect.decorate([Injectable()], ${cls});
+Inject(Symbol.for('orchard.graft.door.context@1'))(${cls}, undefined, 0);
+Inject(Symbol.for('orchard.graft.door.audit@1'))(${cls}, undefined, 1);
+class Sub {}
+Reflect.decorate([Module({ providers: [${cls}] })], Sub);
+class Root {}
+Reflect.decorate([Module({ imports: [Sub] })], Root);
+module.exports = { default: Root };`;
+
+    const root = tmp('graft-doors');
+    writeGraft(
+      root,
+      'notes',
+      { 'server/index.js': graftSource('NotesService') },
+      baseManifest('notes', {
+        entries: { server: 'server/index.js' },
+        capabilities: ['audit'],
+        claims: { auditActions: ['note'] }
+      })
+    );
+    writeGraft(
+      root,
+      'sneaky',
+      { 'server/index.js': graftSource('SneakyService') },
+      baseManifest('sneaky', {
+        entries: { server: 'server/index.js' }
+      })
+    );
+    await loadGrafts({
+      dir: root,
+      env: { ORCHARD_GRAFTS_DEV: '1' } as NodeJS.ProcessEnv,
+      migrate: false
+    });
+
+    class Core {}
+    Reflect.decorate([Module({ imports: [TestDoors] })], Core);
+    (globalThis as { __doorUsers?: unknown[] }).__doorUsers = [];
+    const app = await createWithGrafts((grafts) =>
+      NestFactory.create(
+        { module: Core, imports: graftImports(grafts) },
+        { logger: false, abortOnError: false }
+      )
+    );
+    try {
+      const sneaky = graftRecords().find((r) => r.id === 'sneaky')!;
+      assert.equal(sneaky.status, 'failed');
+      assert.match(sneaky.reason!, /does not declare the "audit" capability/);
+      const users = (
+        globalThis as {
+          __doorUsers: { ctx: { id: string }; audit: { log: (i: unknown) => Promise<void> } }[];
+        }
+      ).__doorUsers;
+      const notes = users.find((u) => u.ctx.id === 'notes')!;
+      assert.ok(notes);
+      await notes.audit.log({ action: 'notes.created' });
+      await notes.audit.log({ action: 'note.legacy' });
+      await assert.rejects(
+        async () => notes.audit.log({ action: 'deployment.deleted' }),
+        /neither under "notes."/
+      );
+      assert.deepEqual(
+        logged.map((l) => l.action),
+        ['notes.created', 'note.legacy']
+      );
+      assert.deepEqual(logged[0].metadata, { graft: 'notes' });
+    } finally {
+      await app.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('graft-api.json matches the snapshot', async () => {
+    const { describeDoors } = await import('../src/grafts/doors');
+    const snapshotPath = join(__dirname, 'graft-api.snapshot.json');
+    const current = { doors: describeDoors() };
+    if (process.env.UPDATE_SNAPSHOT === '1' || !existsSync(snapshotPath)) {
+      writeFileSync(snapshotPath, JSON.stringify(current, null, 2) + '\n');
+      return;
+    }
+    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+    for (const [door, desc] of Object.entries(
+      snapshot.doors as Record<
+        string,
+        { status: string; methods: Record<string, number>; properties: string[] }
+      >
+    )) {
+      const now = current.doors[door];
+      assert.ok(
+        now,
+        `door ${door} was removed; keep it until its removeIn release or add a new version`
+      );
+      if (desc.status !== 'stable') continue;
+      for (const [method, arity] of Object.entries(desc.methods)) {
+        assert.equal(
+          now.methods[method],
+          arity,
+          `stable door ${door} changed method ${method}; add ${door.split('@')[0]}@${Number(door.split('@')[1]) + 1} instead`
+        );
+      }
+      for (const prop of desc.properties)
+        assert.ok(now.properties.includes(prop), `stable door ${door} lost property ${prop}`);
+    }
+    const added = Object.keys(current.doors).filter((d) => !(d in snapshot.doors));
+    assert.deepEqual(
+      added,
+      [],
+      `new doors ${added.join(', ')}: run UPDATE_SNAPSHOT=1 pnpm test:grafts to record them`
+    );
+  });
+});
+
+describe('mcp', () => {
+  test('graft MCP tools register inside their namespace or claims only', async () => {
+    const { loadMcpGrafts, registerGraftMcpTools } = await import('../src/grafts/mcp');
+    const root = tmp('graft-mcp');
+    const mcp = `module.exports = { register(server, client, ctx) {
+      server.registerTool('notes_list', {}, () => ctx.apiBase);
+      server.registerTool('list_sandboxes', {}, () => 1);
+      server.registerTool('delete_everything', {}, () => 1);
+    } };`;
+    writeGraft(
+      root,
+      'notes',
+      { 'mcp/index.js': mcp },
+      baseManifest('notes', {
+        entries: { mcp: 'mcp/index.js' },
+        capabilities: ['mcp'],
+        claims: { mcpTools: ['list_sandboxes'] }
+      })
+    );
+    writeGraft(
+      root,
+      'nocap',
+      { 'mcp/index.js': mcp },
+      baseManifest('nocap', { entries: { mcp: 'mcp/index.js' } })
+    );
+    const prev = { dir: process.env.ORCHARD_GRAFTS_DIR, dev: process.env.ORCHARD_GRAFTS_DEV };
+    process.env.ORCHARD_GRAFTS_DIR = root;
+    process.env.ORCHARD_GRAFTS_DEV = '1';
+    try {
+      await loadMcpGrafts();
+      const registered: string[] = [];
+      const server = { registerTool: (name: string) => void registered.push(name), name: 'fake' };
+      registerGraftMcpTools(server, {});
+      assert.deepEqual(registered, ['notes_list', 'list_sandboxes']);
+    } finally {
+      process.env.ORCHARD_GRAFTS_DIR = prev.dir;
+      process.env.ORCHARD_GRAFTS_DEV = prev.dev;
+      if (prev.dir === undefined) delete process.env.ORCHARD_GRAFTS_DIR;
+      if (prev.dev === undefined) delete process.env.ORCHARD_GRAFTS_DEV;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

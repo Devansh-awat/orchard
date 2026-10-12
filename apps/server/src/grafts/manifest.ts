@@ -163,7 +163,8 @@ export const graftManifestSchema = z
         settingKeys: z.array(z.string()).default([]),
         rateLimitBuckets: z.array(z.string()).default([]),
         mcpTools: z.array(z.string()).default([]),
-        sseEvents: z.array(z.string()).default([])
+        sseEvents: z.array(z.string()).default([]),
+        auditActions: z.array(z.string()).default([])
       })
       .default({}),
     database: z

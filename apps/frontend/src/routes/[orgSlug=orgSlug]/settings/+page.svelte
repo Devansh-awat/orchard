@@ -4,6 +4,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
+	import GraftMount from '$lib/grafts/GraftMount.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 	import { env } from '$env/dynamic/public';
 	import { Loader2, ArrowLeft } from 'lucide-svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
@@ -162,6 +164,22 @@
 		}
 	}
 
+	const graftProps = $derived(
+		organization ? { orgId: organization.id, orgSlug: organizationSlug } : null
+	);
+	const graftTabs = $derived(
+		graftProps
+			? graftHost.slot('org.settings.tabs', graftProps).map(({ graftId, host, item }) => ({
+					key: `graft-${graftId}-${item.id}`,
+					graftId,
+					host,
+					label: item.label,
+					mount: item.mount
+				}))
+			: []
+	);
+	const activeGraftTab = $derived(graftTabs.find((t) => t.key === activeTab));
+
 	const SETTINGS_RAIL = $derived(
 		[
 			{
@@ -199,6 +217,14 @@
 						? [{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }]
 						: [])
 				]
+			},
+			{
+				label: 'Grafts',
+				items: graftTabs.map((t) => ({
+					id: t.key,
+					label: t.label,
+					href: `/${organizationSlug}/settings?tab=${t.key}`
+				}))
 			},
 			{
 				label: 'Activity',
@@ -932,6 +958,16 @@
 				label="Organization settings sections"
 			/>
 			<div class="osp-stack">
+				{#if activeGraftTab && graftProps}
+					{#key activeGraftTab.key}
+						<GraftMount
+							graftId={activeGraftTab.graftId}
+							mount={activeGraftTab.mount}
+							props={graftProps}
+							host={activeGraftTab.host}
+						/>
+					{/key}
+				{/if}
 				{#if activeTab === 'audit'}
 					<AuditLogList scope={{ organizationId: organization.id }} />
 				{/if}

@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onDestroy, onMount, tick, untrack } from 'svelte';
+	import GraftCards from '$lib/grafts/GraftCards.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
 	import { springPop, motionEnabled, transition } from '$lib/utils/motion.svelte';
@@ -858,6 +859,17 @@
 						onNewResource={() => (showNewResourceModal = true)}
 						onOpenDeployment={openDeployment}
 					/>
+					{#if orgId}
+						<GraftCards
+							slot="project.overview.cards"
+							props={{
+								orgId,
+								orgSlug: orgSlug ?? '',
+								projectId: project.id,
+								projectSlug: project.slug
+							}}
+						/>
+					{/if}
 				</div>
 			{/if}
 

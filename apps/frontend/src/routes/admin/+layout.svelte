@@ -18,8 +18,11 @@
 		KeyRound,
 		Activity,
 		Gauge,
-		ScrollText
+		ScrollText,
+		Puzzle
 	} from 'lucide-svelte';
+	import GraftIcon from '$lib/grafts/GraftIcon.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 
 	let { children } = $props();
 
@@ -31,7 +34,29 @@
 		if ($isSuperAdmin) instanceChecklist.load();
 	});
 
-	const groups = [
+	$effect(() => {
+		if ($isSuperAdmin) void graftHost.load();
+	});
+
+	type AdminItem = {
+		href: string;
+		label: string;
+		icon: typeof Users | null;
+		exact: boolean;
+		graftIcon?: { icon?: string; assetBase: string };
+	};
+
+	const graftItems: AdminItem[] = $derived(
+		graftHost.slot('admin.nav').map(({ host, item }) => ({
+			href: item.href,
+			label: item.label,
+			icon: null,
+			exact: false,
+			graftIcon: { icon: item.icon, assetBase: host.graft.assetBase }
+		}))
+	);
+
+	const groups: { label: string; items: AdminItem[] }[] = $derived([
 		{
 			label: 'Instance',
 			items: [
@@ -39,7 +64,8 @@
 				{ href: '/admin/instance', label: 'Configuration', icon: SlidersHorizontal, exact: false },
 				{ href: '/admin/networking', label: 'Networking', icon: Globe, exact: false },
 				{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
-				{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false }
+				{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false },
+				{ href: '/admin/grafts', label: 'Grafts', icon: Puzzle, exact: false }
 			]
 		},
 		{
@@ -56,8 +82,9 @@
 				{ href: '/admin/audit-logs', label: 'Audit log', icon: ScrollText, exact: false },
 				{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false }
 			]
-		}
-	];
+		},
+		...(graftItems.length ? [{ label: 'Grafts', items: graftItems }] : [])
+	]);
 
 	function isActive(href: string, exact: boolean) {
 		if (exact) return $page.url.pathname === href;
@@ -77,14 +104,17 @@
 				<div class="admin-group" {@attach motionStagger({ index: g })}>
 					<p class="admin-group-label">{group.label}</p>
 					{#each group.items as item (item.href)}
-						{@const Icon = item.icon}
 						<a
 							href={item.href}
 							class="admin-link"
 							class:admin-link--active={isActive(item.href, item.exact)}
 							aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
 						>
-							<Icon size={15} />
+							{#if item.icon}
+								<item.icon size={15} />
+							{:else if item.graftIcon}
+								<GraftIcon icon={item.graftIcon.icon} assetBase={item.graftIcon.assetBase} />
+							{/if}
 							<span>{item.label}</span>
 							{#if item.href === '/admin' && $instanceChecklistOutstanding.length > 0}
 								<span class="admin-count">{$instanceChecklistOutstanding.length}</span>

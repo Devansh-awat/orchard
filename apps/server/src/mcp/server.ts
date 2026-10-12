@@ -9,6 +9,7 @@ import { registerJobTools } from './tools/jobs';
 import { registerEnvironmentTools } from './tools/environments';
 import { registerDangerousTools } from './tools/dangerous';
 import { registerSandboxTools } from './tools/sandboxes';
+import { registerGraftMcpTools } from '../grafts/mcp';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
   const server = new McpServer(
@@ -46,6 +47,8 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
   registerEnvironmentTools(server, client);
 
   registerSandboxTools(server, client);
+
+  registerGraftMcpTools(server, client);
 
   // Destructive operations (all deletes)
   registerDangerousTools(server, client);

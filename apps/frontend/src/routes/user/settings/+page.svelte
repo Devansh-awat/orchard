@@ -14,6 +14,8 @@
 	import { ArrowLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { SettingsRail } from '$lib/components/ui';
+	import GraftMount from '$lib/grafts/GraftMount.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
 		loadEarlyAccessFeatures,
 		setEarlyAccessFeatureEnrollment,
@@ -147,6 +149,17 @@
 		const t = $page.url.searchParams.get('tab');
 		return !t || t === 'profile' ? 'connections' : t;
 	});
+	const graftTabs = $derived(
+		graftHost.slot('user.settings.tabs', {}).map(({ graftId, host, item }) => ({
+			key: `graft-${graftId}-${item.id}`,
+			graftId,
+			host,
+			label: item.label,
+			mount: item.mount
+		}))
+	);
+	const activeGraftTab = $derived(graftTabs.find((t) => t.key === activeTab));
+
 	const RAIL_GROUPS = $derived(
 		[
 			{
@@ -166,6 +179,14 @@
 						{
 							label: 'Greenhouse',
 							items: [{ id: 'sandbox', label: 'Sandbox' }]
+						}
+					]
+				: []),
+			...(graftTabs.length
+				? [
+						{
+							label: 'Grafts',
+							items: graftTabs.map((t) => ({ id: t.key, label: t.label }))
 						}
 					]
 				: []),
@@ -897,6 +918,16 @@
 				<UserLogs index={0} />
 			{/if}
 
+			{#if activeGraftTab}
+				{#key activeGraftTab.key}
+					<GraftMount
+						graftId={activeGraftTab.graftId}
+						mount={activeGraftTab.mount}
+						props={{}}
+						host={activeGraftTab.host}
+					/>
+				{/key}
+			{/if}
 			{#if activeTab === 'early-access'}
 				<UserEarlyAccess
 					index={0}

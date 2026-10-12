@@ -30,6 +30,9 @@
 	import { registerShortcut } from '$lib/utils/shortcuts';
 	import { whenIdle } from '$lib/utils/idle';
 	import { Lazy } from '$lib/utils/lazy.svelte';
+	import GraftConfirmHost from '$lib/grafts/GraftConfirmHost.svelte';
+	import { graftHost } from '$lib/grafts/host.svelte';
+	import { isFullscreenGraftPath } from '$lib/grafts/registry';
 
 	let { children } = $props();
 
@@ -248,6 +251,16 @@
 			loading = false;
 		}
 	});
+
+	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect', '/sandboxes', '/share/sandbox', '/tour/'];
+	const fullscreenPath = $derived(
+		FULLSCREEN_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)) ||
+			isFullscreenGraftPath($page.url.pathname)
+	);
+
+	$effect(() => {
+		if ($isSignedIn) void graftHost.load();
+	});
 </script>
 
 <svelte:head>
@@ -267,7 +280,7 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect') || $page.url.pathname.startsWith('/sandboxes') || $page.url.pathname.startsWith('/share/sandbox') || $page.url.pathname.startsWith('/tour/') || $page.route.id?.startsWith('/status'))}
+	{:else if $isSignedIn && (fullscreenPath || $page.route.id?.startsWith('/status'))}
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="app-shell">
@@ -297,6 +310,7 @@
 		<QuickSearch bind:this={quickSearchRef} />
 	{/if}
 	<LogTimestampTooltip />
+	<GraftConfirmHost />
 </QueryClientProvider>
 
 <style>
