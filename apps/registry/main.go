@@ -71,6 +71,8 @@ func usage() {
   registry serve                       serve the bucket over http (default)
   registry publish [flags]             validate templates and sync them to the bucket
   registry validate [flags]            validate templates without touching the bucket
+  registry publish-grafts [flags]      publish packed .graft files to the Extension Marketplace
+  registry validate-grafts [flags]     check packed .graft files without touching the bucket
 
 publish and validate flags:
   -templates DIR   directory of <name>.yaml templates (repeatable)
@@ -144,6 +146,46 @@ func main() {
 		for _, t := range cat.Templates {
 			log.Printf("published %-24s %-10s %s", t.Name, t.Version, t.Yaml)
 		}
+	case "publish-grafts", "validate-grafts":
+		fs := flag.NewFlagSet(command, flag.ExitOnError)
+		var dirs multiFlag
+		fs.Var(&dirs, "grafts", "directory of packed <id>-<version>.graft files (repeatable)")
+		publicBase := fs.String("public", "https://assets.orchard.my/registry", "public url the bucket is served from, recorded in each version's url")
+		revoked := fs.String("revoked", "", "file of revoked artifact digests, one per line")
+		requireSigned := fs.Bool("require-signed", true, "refuse to publish unsigned grafts")
+		fs.Parse(args)
+		if len(dirs) == 0 {
+			log.Fatal("at least one -grafts directory is required")
+		}
+		if command == "validate-grafts" {
+			if err := validateGrafts(dirs); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+		if *requireSigned {
+			artifacts, err := loadGraftArtifacts(dirs)
+			if err != nil {
+				log.Fatal(err)
+			}
+			for _, a := range artifacts {
+				if !a.signed {
+					log.Fatalf("%s %s is unsigned; sign it with graft pack --key or pass -require-signed=false", a.doc.ID, a.doc.Version)
+				}
+			}
+		}
+		bucket, err := bucketFromEnv()
+		if err != nil {
+			log.Fatal(err)
+		}
+		p := &publisher{bucket: bucket, prefix: keyPrefix(), now: time.Now, log: log.Default()}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		cat, err := p.runGrafts(ctx, dirs, *publicBase, *revoked)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("extension marketplace has %d grafts", len(cat.Grafts))
 	case "version":
 		fmt.Println(Version)
 	case "help", "-h", "--help":

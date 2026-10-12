@@ -26,7 +26,7 @@ const (
 
 var (
 	templateNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
-	versionedRe    = regexp.MustCompile(`^templates/[a-z0-9-]+/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/`)
+	versionedRe    = regexp.MustCompile(`^(?:templates|grafts)/[a-z0-9-]+/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/`)
 	nameIndexRe    = regexp.MustCompile(`^templates/([a-z0-9-]+)/?$`)
 	latestRe       = regexp.MustCompile(`^templates/([a-z0-9-]+)/latest/(.+)$`)
 )
@@ -116,6 +116,8 @@ func (s *server) resolve(p string) (key string, redirect string, ok bool) {
 	switch {
 	case trimmed == "" || trimmed == "templates":
 		return rootIndexKey, "", true
+	case trimmed == "grafts":
+		return graftCatalogKey, "", true
 	case nameIndexRe.MatchString(trimmed):
 		return "templates/" + nameIndexRe.FindStringSubmatch(trimmed)[1] + "/index.json", "", true
 	case latestRe.MatchString(key):
