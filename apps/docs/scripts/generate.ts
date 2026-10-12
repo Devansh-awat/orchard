@@ -354,6 +354,101 @@ function generateOpenApi() {
   return after;
 }
 
+/* --------------------------------------------------------------- Grafts --- */
+
+type DoorDescription = {
+  status: 'stable' | 'deprecated';
+  removeIn?: string;
+  capability: string | null;
+  methods: Record<string, number>;
+  properties: string[];
+};
+
+function generateGrafts() {
+  const snapshot = JSON.parse(
+    readFileSync(resolve(repoRoot, 'apps/server/test/graft-api.snapshot.json'), 'utf8')
+  ) as { doors: Record<string, DoorDescription> };
+  const doors = Object.entries(snapshot.doors);
+  const rows = doors.map(([key, d]) => {
+    const [name, version] = key.split('@');
+    const members = [
+      ...d.properties.map((p) => `\`${p}\``),
+      ...Object.keys(d.methods).map((m) => `\`${m}()\``)
+    ].join(', ');
+    const status =
+      d.status === 'stable' ? 'stable' : `deprecated, removed in ${d.removeIn ?? 'a future major'}`;
+    return `| \`Doors.${name}\` | ${version} | ${d.capability ? `\`${d.capability}\`` : 'none'} | ${status} | ${members || 'none'} |`;
+  });
+  write(
+    'graft-api.mdx',
+    `---
+title: Graft API versions
+description: Every door a graft can use, its version and the capability it needs, generated from graft-api.json.
+sidebar:
+  order: 4
+---
+
+${BANNER}Grafts reach Orchard through doors. Each door has a version, and a stable door
+never changes shape: a change ships as a new version next to the old one, which
+stays for at least one major release. \`graft pack\` records which doors a graft
+uses, and \`orchardctl graft add\` refuses a graft that needs a door this Orchard
+does not have. Inject a door with \`@Inject(Doors.<name>)\` from
+\`@orchard/graft-sdk/server\`.
+
+${doors.length} doors are available.
+
+| Door | Version | Capability | Status | Members |
+| --- | --- | --- | --- | --- |
+${rows.join('\n')}
+`
+  );
+
+  const types = readFileSync(resolve(repoRoot, 'apps/frontend/src/lib/grafts/types.ts'), 'utf8');
+  const slotBlock = /export interface SlotMap \{([\s\S]*?)\n\}/.exec(types)?.[1] ?? '';
+  const slots = [...slotBlock.matchAll(/'([a-z.]+)':\s*([^;]+);/g)].map((m) => ({
+    name: m[1],
+    type: m[2].trim()
+  }));
+  const describe = (type: string) => {
+    if (type.startsWith('NavItem'))
+      return 'Navigation links: `{ id, label, href, icon?, order?, visible? }`';
+    const props = /<([A-Za-z]+|Record<string, never>)>/.exec(type)?.[1] ?? '';
+    const shape =
+      props === 'DeploymentProps'
+        ? '`{ orgId, orgSlug, projectId, projectSlug, deploymentId }`'
+        : props === 'ProjectProps'
+          ? '`{ orgId, orgSlug, projectId, projectSlug }`'
+          : props === 'OrgProps'
+            ? '`{ orgId, orgSlug }`'
+            : 'no props';
+    return type.startsWith('TabContribution')
+      ? `Tabs: \`{ id, label, mount, order?, visible? }\`, mounted with ${shape}`
+      : `Cards: \`{ id, mount, order?, visible? }\`, mounted with ${shape}`;
+  };
+  write(
+    'graft-slots.mdx',
+    `---
+title: Graft UI slots
+description: Every place in the Orchard UI a graft can add to, generated from the frontend's slot map.
+sidebar:
+  order: 5
+---
+
+${BANNER}A graft's UI module default-exports \`defineGraft({ slots, screens })\`. Each slot
+takes a list. Mount functions get an empty element, the slot's props and the
+\`host\` object, and return a cleanup function. \`{org}\` in a navigation href is
+replaced with the current organization's slug.
+
+${slots.length} slots are available.
+
+| Slot | Contributes |
+| --- | --- |
+${slots.map((s) => `| \`${s.name}\` | ${describe(s.type)} |`).join('\n')}
+`
+  );
+  return doors.length + slots.length;
+}
+
 /* ----------------------------------------------------------------- main --- */
 
 console.log('generating reference docs...');
@@ -361,6 +456,7 @@ const mcpCount = await generateMcp();
 const cliPages = generateCli();
 const envCount = generateConfig();
 const apiPaths = generateOpenApi();
+const graftEntries = generateGrafts();
 console.log(
-  `done: ${mcpCount} MCP tools, ${cliPages} CLI commands, ${envCount} config variables, ${apiPaths} API paths`
+  `done: ${mcpCount} MCP tools, ${cliPages} CLI commands, ${envCount} config variables, ${apiPaths} API paths, ${graftEntries} graft doors and slots`
 );

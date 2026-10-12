@@ -34,6 +34,7 @@
 		routes: Route[];
 		migrationsApplied: string[];
 		dbRole: string | null;
+		dbPool: { total: number; idle: number; waiting: number; max: number } | null;
 		settings: { id: string; title: string }[];
 	};
 	type Overview = {
@@ -220,6 +221,9 @@
 									<p class="graft-mono">schema ext_{g.id.replaceAll('-', '_')}</p>
 									<p class="graft-faint">
 										{g.dbRole ? `runs as ${g.dbRole}` : 'shares the main database user'} ·
+										{g.dbPool
+											? `${g.dbPool.total - g.dbPool.idle} of ${g.dbPool.max} connections busy on this pod`
+											: 'no connections open on this pod'} ·
 										{g.migrationsApplied.length} new migrations this boot
 									</p>
 								</div>

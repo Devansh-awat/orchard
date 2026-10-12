@@ -1,14 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { joinRoutePath } from '../auth/route-classifier';
 import { graftRecords, loadedGrafts } from './graft-registry';
 import { GRAFT_DOORS, GRAFT_SDK_VERSION, platformVersion } from './host-api';
+import { GraftDbPools } from './db-pools';
 import { trustPolicyFromEnv } from './integrity';
 
 @Controller()
 export class GraftsController {
+  constructor(@Inject(GraftDbPools) private readonly pools: GraftDbPools) {}
+
   @Get('admin/grafts')
   list() {
+    const pools = this.pools.usage();
     return {
       platform: platformVersion(),
       sdk: GRAFT_SDK_VERSION,
@@ -38,6 +42,7 @@ export class GraftsController {
         })),
         migrationsApplied: r.migrationsApplied ?? [],
         dbRole: r.dbRole ?? null,
+        dbPool: pools[r.id] ?? null,
         settings: r.manifest?.settings ?? []
       }))
     };

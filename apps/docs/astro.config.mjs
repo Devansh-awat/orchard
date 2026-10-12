@@ -110,6 +110,23 @@ export default defineConfig({
           ]
         },
         {
+          label: 'Grafts (extensions)',
+          items: [
+            { label: 'Overview', slug: 'grafts/overview' },
+            { label: 'Install grafts', slug: 'grafts/install' },
+            { label: 'Upgrades and rollback', slug: 'grafts/upgrades' },
+            { label: 'Troubleshooting', slug: 'grafts/troubleshooting' },
+            { label: 'Build a graft', slug: 'grafts/build/quickstart' },
+            { label: 'graft.json', slug: 'grafts/build/manifest' },
+            { label: 'Server code and doors', slug: 'grafts/build/server' },
+            { label: 'UI islands and slots', slug: 'grafts/build/ui' },
+            { label: 'Database', slug: 'grafts/build/database' },
+            { label: 'Publishing', slug: 'grafts/build/publishing' },
+            { label: 'Graft API versions', slug: 'reference/graft-api' },
+            { label: 'Graft UI slots', slug: 'reference/graft-slots' }
+          ]
+        },
+        {
           label: 'Your account',
           items: [
             { label: 'Profile', slug: 'account/profile' },

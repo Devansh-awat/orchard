@@ -136,6 +136,7 @@ func Graft() *cli.Command {
   orchardctl graft list                      what is installed and how it is doing
   orchardctl graft add <id>[@version]        install from the Extension Marketplace
   orchardctl graft add ./x.graft             install a file (works offline)
+  orchardctl graft add https://.../x.graft   install from any https address, pinned by digest
   orchardctl graft upgrade [id]              move to the newest compatible version
   orchardctl graft remove <id> [--purge]     uninstall; --purge also deletes its data
   orchardctl graft rollback <id>             go back to the previous version and data
@@ -177,7 +178,7 @@ func runGraft(c *cli.Context, args []string) error {
 		return graftList(c)
 	case "add":
 		if len(positional) != 1 {
-			return errors.New("usage: orchardctl graft add <id>[@version] | <file.graft>")
+			return errors.New("usage: orchardctl graft add <id>[@version] | <file.graft> | <https url>")
 		}
 		return graftAdd(c, positional[0], flags, apply)
 	case "upgrade":
@@ -623,6 +624,17 @@ func sha256Digest(b []byte) string {
 }
 
 func resolveSpec(c *cli.Context, values *cli.Values, arg string) (graftSpec, []byte, error) {
+	if strings.HasPrefix(arg, "https://") {
+		archive, err := download(arg)
+		if err != nil {
+			return graftSpec{}, nil, err
+		}
+		manifest, _, err := readLocalManifest(archive)
+		if err != nil {
+			return graftSpec{}, nil, err
+		}
+		return graftSpec{ID: manifest.ID, Version: manifest.Version, Digest: sha256Digest(archive), Source: arg}, archive, nil
+	}
 	if strings.HasSuffix(arg, ".graft") || strings.ContainsAny(arg, "/\\") {
 		archive, err := os.ReadFile(arg)
 		if err != nil {

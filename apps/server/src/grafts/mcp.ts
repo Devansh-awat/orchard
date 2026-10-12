@@ -24,7 +24,8 @@ export async function loadMcpGrafts(): Promise<void> {
         throw new Error('graft.json has an mcp entry but does not declare the "mcp" capability');
       }
       const exported = require(join(record.dir, entry)) as Record<string, unknown>;
-      const register = (exported.default ?? exported.register) as Registrar | undefined;
+      const candidate = (exported.default ?? exported) as Registrar | { register?: Registrar };
+      const register = typeof candidate === 'function' ? candidate : candidate?.register;
       if (typeof register !== 'function')
         throw new Error(`${entry} must export register(server, client)`);
       registrars.push({ record, register });
