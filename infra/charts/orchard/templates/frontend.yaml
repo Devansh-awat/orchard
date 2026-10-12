@@ -18,8 +18,10 @@ spec:
     metadata:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "frontend") | nindent 8 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftAnnotations" . }}{{- end }}
     spec:
       {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftInit" . }}{{- end }}
       containers:
         - name: frontend
           image: {{ include "orchard.image" (list . .Values.frontend.image.name .Values.frontend.image.tag) }}
@@ -40,6 +42,7 @@ spec:
             {{- with (include "orchard.appDomain" .) }}
             - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
+            {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
             {{- with .Values.frontend.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -54,6 +57,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+          {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftMount" . }}{{- end }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftVolume" . }}{{- end }}
 ---
 apiVersion: v1
 kind: Service

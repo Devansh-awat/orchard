@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, type DynamicModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -48,6 +48,9 @@ import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
 import { CoordinationModule } from './coordination/coordination.module';
 import { MirrorModule } from './mirror/mirror.module';
 import { ApplyModule } from './apply/apply.module';
+import { GraftsModule } from './grafts/grafts.module';
+import type { GraftRecord } from './grafts/graft-registry';
+import { graftImports } from './grafts/boot';
 
 @Module({
   imports: [
@@ -101,8 +104,13 @@ import { ApplyModule } from './apply/apply.module';
     SandboxesModule,
     SandboxIntegrationsModule,
     SshIdentitiesModule,
-    MirrorModule
+    MirrorModule,
+    GraftsModule
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }]
 })
-export class AppModule {}
+export class AppModule {
+  static withGrafts(grafts: GraftRecord[]): DynamicModule {
+    return { module: AppModule, imports: graftImports(grafts) };
+  }
+}

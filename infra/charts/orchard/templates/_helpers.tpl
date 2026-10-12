@@ -433,3 +433,56 @@ random one that every template in this render sees.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "orchard.graftsOn" -}}
+{{- if gt (len (default (list) .Values.grafts)) 0 }}true{{- end }}
+{{- end }}
+
+{{- define "orchard.graftEnv" }}
+            - { name: ORCHARD_GRAFTS_DIR, value: /app/grafts }
+            - { name: ORCHARD_GRAFTS, value: {{ toJson (default (list) .Values.grafts) | quote }} }
+            - { name: ORCHARD_GRAFT_TRUST, value: {{ .Values.graftSettings.trust | default "signed" | quote }} }
+            {{- with .Values.graftSettings.keys }}
+            - { name: ORCHARD_GRAFT_KEYS, value: {{ join "," . | quote }} }
+            {{- end }}
+            {{- with .Values.graftSettings.marketplaceUrl }}
+            - { name: ORCHARD_GRAFT_MARKETPLACE_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- if .Values.graftSettings.strict }}
+            - { name: ORCHARD_GRAFTS_STRICT, value: "true" }
+            {{- end }}
+            {{- if .Values.graftSettings.safeMode }}
+            - { name: ORCHARD_GRAFTS_SAFE_MODE, value: "true" }
+            {{- end }}
+{{- end }}
+
+{{- define "orchard.graftAnnotations" }}
+      annotations:
+        orchard.my/grafts: {{ toJson (list (default (list) .Values.grafts) .Values.graftSettings) | sha256sum | quote }}
+{{- end }}
+
+{{- define "orchard.graftInit" }}
+      initContainers:
+        - name: graft-sync
+          image: {{ include "orchard.image" (list . .Values.server.image.name .Values.server.image.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app/apps/server
+          command: ["node", "dist/scripts/graft-sync.js"]
+          env:{{ include "orchard.graftEnv" . }}
+          volumeMounts:
+            - { name: grafts, mountPath: /app/grafts }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+{{- end }}
+
+{{- define "orchard.graftMount" }}
+          volumeMounts:
+            - { name: grafts, mountPath: /app/grafts, readOnly: true }
+{{- end }}
+
+{{- define "orchard.graftVolume" }}
+      volumes:
+        - name: grafts
+          emptyDir: { sizeLimit: 2Gi }
+{{- end }}

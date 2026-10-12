@@ -2279,6 +2279,16 @@ model InstanceSetting {
   @@map("instance_settings")
 }
 
+model GraftMigration {
+  graftId   String   @map("graft_id") @db.VarChar(48)
+  name      String   @db.VarChar(255)
+  checksum  String   @db.Char(64)
+  appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  @@id([graftId, name])
+  @@map("graft_migrations")
+}
+
 model McpOauthClient {
   id           String   @id @db.VarChar(64)
   clientSecret String?  @map("client_secret") @db.VarChar(128)

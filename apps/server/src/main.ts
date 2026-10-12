@@ -24,6 +24,8 @@ import { AnalyticsExceptionFilter } from './analytics/exception.filter';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { ProtectionService } from './auth/protection.service';
 import { requestAuthStorage } from './auth/request-context';
+import { loadGrafts } from './grafts/loader';
+import { createWithGrafts, installApiAliases } from './grafts/boot';
 
 // dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
 // telemetry MUST run before Nest is imported so OTel instrumentation hooks
@@ -48,11 +50,15 @@ BigInt.prototype.toJSON = function () {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    rawBody: true,
-    bodyParser: false,
-    logger: new OtelConsoleLogger()
-  });
+  await loadGrafts();
+  const app = await createWithGrafts((grafts) =>
+    NestFactory.create<NestExpressApplication>(AppModule.withGrafts(grafts), {
+      rawBody: true,
+      bodyParser: false,
+      abortOnError: false,
+      logger: new OtelConsoleLogger()
+    })
+  );
 
   app.enableShutdownHooks();
 
@@ -115,6 +121,7 @@ async function bootstrap() {
   }
 
   app.use(cookieParser());
+  installApiAliases(app);
 
   // Own the request's auth context from the very first middleware frame.
   //

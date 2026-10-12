@@ -112,7 +112,8 @@
     "test:sandbox-forks": "tsx --test test/sandbox-forks-shares.test.ts test/mcp-sandbox-tools.test.ts",
     "test:sandbox-integrations": "tsx --test test/sandbox-integrations.test.ts",
     "smoke:sandbox-bootstrap": "tsx scripts/sandbox-bootstrap-smoke.ts",
-    "live:sandbox-vercel": "tsx scripts/sandbox-vercel-live.ts"
+    "live:sandbox-vercel": "tsx scripts/sandbox-vercel-live.ts",
+    "test:grafts": "tsx --test test/grafts.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -711,3 +711,12 @@ publicTls:
     sourceNamespace: ""   # empty → certificates.namespace
     sourceSecret: ""      # empty → certificates.wildcards.db.secretName
     localSecret: wildcard-db-tls
+
+grafts: []
+
+graftSettings:
+  trust: signed
+  keys: []
+  marketplaceUrl: ""
+  strict: false
+  safeMode: false

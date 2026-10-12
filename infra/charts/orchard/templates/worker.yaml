@@ -18,9 +18,11 @@ spec:
     metadata:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 8 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftAnnotations" . }}{{- end }}
     spec:
       serviceAccountName: orchard-server
       {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftInit" . }}{{- end }}
       containers:
         - name: server-worker
           image: {{ include "orchard.image" (list . .Values.server.image.name .Values.server.image.tag) }}
@@ -29,6 +31,7 @@ spec:
             - name: http
               containerPort: 3001
           env:{{ include "orchard.serverEnv" . }}
+            {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
           {{- with .Values.server.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}
@@ -44,6 +47,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.server.workers.resources | nindent 12 }}
+          {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftMount" . }}{{- end }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftVolume" . }}{{- end }}
 {{- $workerFloor := ternary (int .Values.server.workers.autoscaling.minReplicas) (int .Values.server.workers.replicas) .Values.server.workers.autoscaling.enabled }}
 {{- if gt $workerFloor 1 }}
 ---

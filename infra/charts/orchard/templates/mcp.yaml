@@ -18,8 +18,10 @@ spec:
     metadata:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "mcp") | nindent 8 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftAnnotations" . }}{{- end }}
     spec:
       {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftInit" . }}{{- end }}
       containers:
         - name: mcp
           image: {{ include "orchard.image" (list . .Values.mcp.image.name .Values.mcp.image.tag .Values.mcp.image.repository) }}
@@ -67,6 +69,7 @@ spec:
             - name: ORCHARD_API_URL
               value: {{ printf "http://server.%s.svc.cluster.local:%v" .Values.namespace .Values.server.service.port | quote }}
             {{- end }}
+            {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
             {{- with .Values.mcp.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -85,6 +88,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.mcp.resources | nindent 12 }}
+          {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftMount" . }}{{- end }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftVolume" . }}{{- end }}
 ---
 apiVersion: v1
 kind: Service

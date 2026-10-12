@@ -18,9 +18,11 @@ spec:
     metadata:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 8 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftAnnotations" . }}{{- end }}
     spec:
       serviceAccountName: orchard-server
       {{- include "orchard.pullSecrets" . | nindent 6 }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftInit" . }}{{- end }}
       containers:
         - name: server
           image: {{ include "orchard.image" (list . .Values.server.image.name .Values.server.image.tag) }}
@@ -29,6 +31,7 @@ spec:
             - name: http
               containerPort: 3001
           env:{{ include "orchard.serverEnv" . }}
+            {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftEnv" . }}{{- end }}
             {{- if .Values.server.workers.enabled }}
             - { name: BUILD_WORKER_DISABLED, value: "true" }
             - { name: APPLY_WORKER_DISABLED, value: "true" }
@@ -48,6 +51,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
+          {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftMount" . }}{{- end }}
+      {{- if include "orchard.graftsOn" . }}{{- include "orchard.graftVolume" . }}{{- end }}
 ---
 apiVersion: v1
 kind: Service

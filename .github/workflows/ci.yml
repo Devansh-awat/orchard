@@ -224,6 +224,10 @@ jobs:
         run: pnpm --filter server build
       - name: Auth-coverage snapshot test
         run: pnpm --filter server test:auth-coverage
+      - name: Grafts test
+        run: |
+          export PATH="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1):$PATH"
+          pnpm --filter server test:grafts
       - name: Exec session protocol tests
         run: pnpm --filter server test:exec
       - name: SCIM protocol test

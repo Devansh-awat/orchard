@@ -27,32 +27,16 @@ import assert from 'node:assert/strict';
 import { readdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-
-// These string constants are the metadata keys NestJS uses. Hardcoded so the
-// test doesn't depend on any private API surface from @nestjs/common.
-const PATH_METADATA = 'path';
-const METHOD_METADATA = 'method';
-const IS_PUBLIC_KEY = 'isPublic';
-const REQUIRES_AUTH_KEY = 'requiresAuth';
-const REQUIRES_SUPERADMIN_KEY = 'requires_superadmin';
-
-// Mirrors RequestMethod in @nestjs/common (verified at write-time against
-// node_modules/@nestjs/common/enums/request-method.enum.js).
-const HTTP_METHODS = [
-  'GET',
-  'POST',
-  'PUT',
-  'DELETE',
-  'PATCH',
-  'ALL',
-  'OPTIONS',
-  'HEAD',
-  'SEARCH'
-] as const;
-
-type Classification = 'public' | 'authenticated' | 'superadmin';
+import {
+  classifyController,
+  isController,
+  routeTable,
+  type ClassifiedRoute,
+  type RouteClassification
+} from '../src/auth/route-classifier';
 
 const SRC_ROOT = path.resolve(__dirname, '../src');
+const GRAFTS_ROOT = path.resolve(__dirname, '../../../grafts');
 const SNAPSHOT_PATH = path.join(__dirname, 'auth-coverage.snapshot.json');
 
 function findControllerFiles(root: string): string[] {
@@ -72,94 +56,35 @@ function findControllerFiles(root: string): string[] {
   return results;
 }
 
-function classify(
-  handlerMeta: { isPublic?: boolean; requiresAuth?: boolean; requiresSuperadmin?: boolean },
-  classMeta: { isPublic?: boolean; requiresAuth?: boolean; requiresSuperadmin?: boolean }
-): Classification {
-  if (handlerMeta.requiresSuperadmin || classMeta.requiresSuperadmin) return 'superadmin';
-  // Resolution order mirrors SuperAdminGuard.canActivate exactly:
-  //   1. Handler-level @Public()             → public (short-circuit)
-  //   2. @Auth() at handler OR class         → authenticated
-  //   3. @Public() at class (no handler tag) → public
-  //   4. Nothing                              → superadmin (default)
-  // Notably a handler-level @Auth() OVERRIDES a class-level @Public(), which
-  // is why we can't just use ?? — the auth check has to come before the
-  // class-level public check.
-  if (handlerMeta.isPublic) return 'public';
-  const requiresAuth = handlerMeta.requiresAuth || classMeta.requiresAuth;
-  if (requiresAuth) return 'authenticated';
-  if (classMeta.isPublic) return 'public';
-  return 'superadmin';
+function controllerRoots(): { root: string; prefix: string }[] {
+  const roots = [{ root: SRC_ROOT, prefix: '' }];
+  if (!existsSync(GRAFTS_ROOT)) return roots;
+  for (const entry of readdirSync(GRAFTS_ROOT, { withFileTypes: true })) {
+    const serverSrc = path.join(GRAFTS_ROOT, entry.name, 'server', 'src');
+    if (entry.isDirectory() && existsSync(serverSrc))
+      roots.push({ root: serverSrc, prefix: entry.name });
+  }
+  return roots;
 }
 
 test('every endpoint matches the auth-coverage snapshot', async () => {
-  const files = findControllerFiles(SRC_ROOT);
-  const endpoints: Record<string, Classification> = {};
   const conflicts: string[] = [];
+  const routes: ClassifiedRoute[] = [];
 
-  for (const file of files) {
-    const mod = await import(pathToFileURL(file).href);
-    for (const exportName of Object.keys(mod)) {
-      const cls = mod[exportName];
-      if (typeof cls !== 'function') continue;
-      const controllerPath = Reflect.getMetadata(PATH_METADATA, cls);
-      // Only classes that carry @Controller() get a path metadata entry.
-      if (controllerPath === undefined) continue;
-
-      const classMeta = {
-        isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, cls) as boolean | undefined,
-        requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, cls) as boolean | undefined,
-        requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, cls) as boolean | undefined
-      };
-
-      const proto = cls.prototype;
-      for (const methodName of Object.getOwnPropertyNames(proto)) {
-        if (methodName === 'constructor') continue;
-        const handler = proto[methodName];
-        if (typeof handler !== 'function') continue;
-
-        const httpMethod = Reflect.getMetadata(METHOD_METADATA, handler) as number | undefined;
-        if (httpMethod === undefined) continue;
-
-        const routePath =
-          (Reflect.getMetadata(PATH_METADATA, handler) as string | string[] | undefined) ?? '';
-        const handlerMeta = {
-          isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, handler) as boolean | undefined,
-          requiresAuth: Reflect.getMetadata(REQUIRES_AUTH_KEY, handler) as boolean | undefined,
-          requiresSuperadmin: Reflect.getMetadata(REQUIRES_SUPERADMIN_KEY, handler) as
-            | boolean
-            | undefined
-        };
-
-        // Catch self-contradictory decorators (would be a bug).
-        if (handlerMeta.isPublic && handlerMeta.requiresAuth) {
-          conflicts.push(`${exportName}.${methodName} has BOTH @Auth() and @Public()`);
-        }
-
-        const classification = classify(handlerMeta, classMeta);
-        const httpMethodName = HTTP_METHODS[httpMethod] ?? `UNKNOWN(${httpMethod})`;
-        const paths = Array.isArray(routePath) ? routePath : [routePath];
-
-        for (const sub of paths) {
-          const joined = `/${controllerPath}/${sub}`.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
-          const key = `${httpMethodName} ${joined}`;
-          if (key in endpoints && endpoints[key] !== classification) {
-            conflicts.push(
-              `${key} declared with conflicting classifications (${endpoints[key]} vs ${classification})`
-            );
-          }
-          endpoints[key] = classification;
-        }
+  for (const { root, prefix } of controllerRoots()) {
+    for (const file of findControllerFiles(root)) {
+      const mod = await import(pathToFileURL(file).href);
+      for (const exportName of Object.keys(mod)) {
+        const cls = mod[exportName];
+        if (!isController(cls)) continue;
+        routes.push(...classifyController(cls, prefix, conflicts));
       }
     }
   }
 
-  assert.equal(conflicts.length, 0, `Decorator conflicts:\n  ${conflicts.join('\n  ')}`);
+  const current = routeTable(routes, conflicts);
 
-  // Stable ordering for diff readability.
-  const current: Record<string, Classification> = Object.fromEntries(
-    Object.entries(endpoints).sort(([a], [b]) => a.localeCompare(b))
-  );
+  assert.equal(conflicts.length, 0, `Decorator conflicts:\n  ${conflicts.join('\n  ')}`);
 
   const writeSnapshot = process.env.UPDATE_SNAPSHOT === '1' || !existsSync(SNAPSHOT_PATH);
   if (writeSnapshot) {
@@ -172,7 +97,7 @@ test('every endpoint matches the auth-coverage snapshot', async () => {
 
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')) as Record<
     string,
-    Classification
+    RouteClassification
   >;
   const added: string[] = [];
   const removed: string[] = [];
@@ -204,7 +129,7 @@ test('no endpoint mixes @Auth() with @Public() at the handler level', () => {
 test('every route in the snapshot has a recognised classification', () => {
   if (!existsSync(SNAPSHOT_PATH)) return; // first run handled by the snapshot test
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')) as Record<string, string>;
-  const allowed: Classification[] = ['public', 'authenticated', 'superadmin'];
+  const allowed: RouteClassification[] = ['public', 'authenticated', 'superadmin'];
   for (const [key, value] of Object.entries(snapshot)) {
     assert.ok(
       (allowed as readonly string[]).includes(value),
