@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { Client } from 'pg';
 import { z } from 'zod';
 import { publisherKeysFromEnv, trustPolicyFromEnv, verifyGraftDir } from './integrity';
 import { parseManifest } from './manifest';
@@ -52,7 +53,30 @@ function normaliseDigest(digest: string): string {
   return digest.replace(/^sha256:/, '').toLowerCase();
 }
 
-async function fetchArtifact(url: string, allowHttp: boolean): Promise<Buffer> {
+async function fetchStored(digest: string, databaseUrl: string | undefined): Promise<Buffer> {
+  if (!databaseUrl)
+    throw new Error('orchard:// sources need DATABASE_URL in the graft-sync environment');
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ content: Buffer }>(
+      'SELECT content FROM graft_artifacts WHERE digest = $1',
+      [digest]
+    );
+    if (!rows[0])
+      throw new Error(`no stored artifact ${digest}; upload it again with orchardctl graft add`);
+    return rows[0].content;
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
+export async function fetchArtifact(
+  url: string,
+  allowHttp: boolean,
+  databaseUrl?: string
+): Promise<Buffer> {
+  if (url.startsWith('orchard://')) return fetchStored(url.slice('orchard://'.length), databaseUrl);
   if (url.startsWith('file://')) return readFileSync(new URL(url));
   if (url.startsWith('/')) return readFileSync(url);
   if (url.startsWith('oci://'))
@@ -84,7 +108,7 @@ export async function syncGrafts(env: NodeJS.ProcessEnv = process.env): Promise<
     try {
       if (!spec.digest && !dev) throw new Error('digest is required (sha256 of the .graft file)');
       const url = artifactUrl(spec, marketplace);
-      const archive = await fetchArtifact(url, allowHttp);
+      const archive = await fetchArtifact(url, allowHttp, env.DATABASE_URL);
       const actual = createHash('sha256').update(archive).digest('hex');
       if (spec.digest && normaliseDigest(spec.digest) !== actual) {
         throw new Error(

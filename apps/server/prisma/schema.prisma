@@ -2289,6 +2289,18 @@ model GraftMigration {
   @@map("graft_migrations")
 }
 
+model GraftArtifact {
+  digest    String   @id @db.VarChar(80)
+  graftId   String   @map("graft_id") @db.VarChar(48)
+  version   String   @db.VarChar(64)
+  size      Int
+  content   Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([graftId])
+  @@map("graft_artifacts")
+}
+
 model McpOauthClient {
   id           String   @id @db.VarChar(64)
   clientSecret String?  @map("client_secret") @db.VarChar(128)

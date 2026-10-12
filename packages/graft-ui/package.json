@@ -12,7 +12,8 @@
     "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
-    "sync": "node scripts/sync.mjs"
+    "sync": "node scripts/sync.mjs",
+    "prepare": "node scripts/sync.mjs"
   },
   "dependencies": {
     "lucide-svelte": "^0.510.0",

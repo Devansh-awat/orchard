@@ -469,6 +469,19 @@ random one that every template in this render sees.
           workingDir: /app/apps/server
           command: ["node", "dist/scripts/graft-sync.js"]
           env:{{ include "orchard.graftEnv" . }}
+            {{- if .Values.postgres.enabled }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.name }}-app
+                  key: uri
+            {{- else if (include "orchard.serverEnvHas" (dict "root" . "key" "DATABASE_URL")) }}
+            {{- range .Values.server.env }}
+            {{- if eq .name "DATABASE_URL" }}
+            - {{ toJson . }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
           volumeMounts:
             - { name: grafts, mountPath: /app/grafts }
           resources:
