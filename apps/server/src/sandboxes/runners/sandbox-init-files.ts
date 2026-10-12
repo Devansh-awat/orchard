@@ -21,7 +21,12 @@ export function opencodeBasicAuth(password: string): string {
 export function opencodeAuthJson(claudeToken: string | null): string {
   if (!claudeToken) return '{}';
   return JSON.stringify({
-    anthropic: { type: 'oauth', refresh: '', access: claudeToken, expires: 99999999999999 }
+    anthropic: {
+      type: 'oauth',
+      refresh: 'orchard-long-lived-token',
+      access: claudeToken,
+      expires: 99999999999999
+    }
   });
 }
 

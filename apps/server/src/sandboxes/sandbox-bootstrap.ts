@@ -396,6 +396,7 @@ fi
 mkdir -p /persist/home/.config/opencode /persist/home/.local/share/opencode
 ln -sfn /orchard-init/opencode-config.json /persist/home/.config/opencode/opencode.json
 ln -sfn /orchard-init/opencode-auth.json /persist/home/.local/share/opencode/auth.json
+[ -e /persist/home/.config/opencode/anthropic-auth.json ] || echo '{}' > /persist/home/.config/opencode/anthropic-auth.json
 chown dev:dev /persist/home/.config /persist/home/.local /persist/home/.local/share
 chown -R dev:dev /persist/home/.config/opencode /persist/home/.local/share/opencode
 
