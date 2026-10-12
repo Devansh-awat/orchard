@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.67.3](https://github.com/hackclub/orchard/compare/server/v2.67.2...server/v2.67.3) (2026-10-12)
+
+
+### Bug Fixes
+
+* **server:** greenhouse agents stop failing closed on the anthropic auth plugin custody check ([bdb2713](https://github.com/hackclub/orchard/commit/bdb2713fc93a901e0eb4be1b8815673975de99b1))
+
 ## [2.67.2](https://github.com/hackclub/orchard/compare/server/v2.67.1...server/v2.67.2) (2026-10-10)
 
 
