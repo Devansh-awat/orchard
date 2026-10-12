@@ -22,7 +22,27 @@
 		lockedFields: string[];
 		secretFields: string[];
 		boolFields: string[];
+		graft?: {
+			id: string;
+			title: string;
+			description?: string;
+			fields: Record<string, { label: string; help?: string }>;
+		};
 	};
+
+	function metaFor(section: Section) {
+		if (META[section.id]) return META[section.id];
+		const g = section.graft!;
+		return {
+			title: g.title,
+			description: `${g.description ? `${g.description} ` : ''}Added by the ${g.id} graft.`,
+			fields: Object.fromEntries(Object.entries(g.fields).map(([name, f]) => [name, f.label]))
+		};
+	}
+
+	function hintFor(section: Section, name: string) {
+		return HINTS[name] ?? section.graft?.fields[name]?.help;
+	}
 
 	// A section with no entry here is not rendered. The Cloudflare tunnel is the
 	// deliberate case: its credentials only make sense next to the routes they
@@ -198,7 +218,7 @@
 		const response = await apiFetch('/apiv1/admin/instance-config');
 		if (!response.ok) return;
 		const all: Section[] = await response.json();
-		sections = all.filter((s) => s.id in META);
+		sections = all.filter((s) => s.id in META || !!s.graft);
 		seed(sections);
 	}
 
@@ -223,7 +243,7 @@
 			sections = sections.map((s) => (s.id === updated.id ? updated : s));
 			seed(sections);
 			await instanceChecklist.load(true);
-			toasts.add({ title: `${META[section.id].title} saved`, color: 'success' });
+			toasts.add({ title: `${metaFor(section).title} saved`, color: 'success' });
 		} catch (e) {
 			toasts.add({
 				title: e instanceof Error ? e.message : 'Could not save',
@@ -244,7 +264,7 @@
 	<Skeleton class="h-96 w-full" />
 {:else}
 	{#each sections as section, i (section.id)}
-		{@const meta = META[section.id]}
+		{@const meta = metaFor(section)}
 		{@const allLocked = section.lockedFields.length === Object.keys(meta.fields).length}
 		{#if section.id === 'sandbox-runners'}
 			<div {@attach motionStagger({ index: i })}>
@@ -268,7 +288,7 @@
 							<Field
 								{label}
 								for="{section.id}-{name}"
-								hint={locked ? 'Set by the environment' : HINTS[name]}
+								hint={locked ? 'Set by the environment' : hintFor(section, name)}
 							>
 								<Input
 									id="{section.id}-{name}"
@@ -288,7 +308,7 @@
 							{@const locked = section.lockedFields.includes(name)}
 							<ToggleRow
 								label={meta.fields[name] ?? name}
-								hint={locked ? 'Set by the environment' : HINTS[name]}
+								hint={locked ? 'Set by the environment' : hintFor(section, name)}
 								disabled={locked}
 								checked={drafts[section.id][name] === 'true'}
 								onchange={() => toggleFlag(section, name)}

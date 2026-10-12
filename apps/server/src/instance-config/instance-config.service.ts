@@ -23,6 +23,12 @@ export interface SectionState {
   lockedFields: string[];
   secretFields: string[];
   boolFields: string[];
+  graft?: {
+    id: string;
+    title: string;
+    description?: string;
+    fields: Record<string, { label: string; help?: string }>;
+  };
 }
 
 /**
@@ -183,13 +189,34 @@ export class InstanceConfigService implements OnModuleInit, OnModuleDestroy {
     for (const name of boolFields) {
       values[name] = String(this.flag(section, name));
     }
+    const graftSection = section as ConfigSection & {
+      graft?: string;
+      title?: string;
+      description?: string;
+      fieldMeta?: Record<string, { label: string; help?: string }>;
+    };
     return {
       id: section.id,
       configured: this.isConfigured(section),
       values,
       lockedFields: this.lockedFields(section),
       secretFields,
-      boolFields
+      boolFields,
+      ...(graftSection.graft
+        ? {
+            graft: {
+              id: graftSection.graft,
+              title: graftSection.title ?? section.id,
+              description: graftSection.description,
+              fields: Object.fromEntries(
+                Object.entries(graftSection.fieldMeta ?? {}).map(([name, f]) => [
+                  name,
+                  { label: f.label, help: f.help }
+                ])
+              )
+            }
+          }
+        : {})
     };
   }
 

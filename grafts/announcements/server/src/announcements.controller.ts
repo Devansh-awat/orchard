@@ -8,7 +8,14 @@ import {
   Param,
   Post
 } from '@nestjs/common';
-import { Auth, Doors, GraftUserId, type AuditDoor, type DbDoor } from '@orchard/graft-sdk/server';
+import {
+  Auth,
+  Doors,
+  GraftUserId,
+  type AuditDoor,
+  type DbDoor,
+  type SettingsDoor
+} from '@orchard/graft-sdk/server';
 
 type Announcement = {
   id: string;
@@ -25,8 +32,14 @@ const TONES = new Set(['info', 'success', 'warning']);
 export class AnnouncementsController {
   constructor(
     @Inject(Doors.db) private readonly db: DbDoor,
-    @Inject(Doors.audit) private readonly audit: AuditDoor
+    @Inject(Doors.audit) private readonly audit: AuditDoor,
+    @Inject(Doors.settings) private readonly settings: SettingsDoor
   ) {}
+
+  private limit(): number {
+    const raw = Number(this.settings.value('display', 'maxShown') ?? 3);
+    return Number.isFinite(raw) ? Math.min(10, Math.max(1, Math.floor(raw))) : 3;
+  }
 
   @Get()
   @Auth()
@@ -36,8 +49,9 @@ export class AnnouncementsController {
          FROM announcements a
          LEFT JOIN public.users u ON u.id = a.created_by
         WHERE a.expires_at IS NULL OR a.expires_at > now()
-        ORDER BY a.created_at DESC
-        LIMIT 20`
+        ORDER BY a.pinned DESC, a.created_at DESC
+        LIMIT $1`,
+      [this.limit()]
     );
     return rows;
   }

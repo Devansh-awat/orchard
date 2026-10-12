@@ -1,15 +1,43 @@
 {
   "id": "announcements",
   "name": "Announcements",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "orchard",
   "description": "Post instance-wide notices that show up on every project and app page.",
-  "engines": { "platform": ">=2.67.0 <3", "sdk": "^1.0.0" },
-  "capabilities": ["db", "audit"],
-  "database": { "coreReads": { "users": ["id", "username"] } },
+  "engines": {
+    "platform": ">=2.67.0 <3",
+    "sdk": "^1.0.0"
+  },
+  "capabilities": ["db", "audit", "settings"],
+  "database": {
+    "coreReads": {
+      "users": ["id", "username"]
+    }
+  },
   "ui": {
     "screens": [
-      { "id": "manage", "path": "/announcements", "layout": "shell", "title": "Announcements" }
+      {
+        "id": "manage",
+        "path": "/announcements",
+        "layout": "shell",
+        "title": "Announcements"
+      }
     ]
-  }
+  },
+  "settings": [
+    {
+      "id": "display",
+      "title": "Announcements",
+      "description": "How notices show up across Orchard.",
+      "fields": [
+        {
+          "key": "maxShown",
+          "type": "number",
+          "label": "Shown on overview pages",
+          "help": "How many active announcements a project or app page shows, 1 to 10.",
+          "default": 3
+        }
+      ]
+    }
+  ]
 }
