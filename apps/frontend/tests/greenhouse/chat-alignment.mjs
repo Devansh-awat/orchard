@@ -35,9 +35,17 @@ function measure() {
 		const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
 		return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''} "${text}"`;
 	};
+	const textStart = (el, side) => {
+		const edge = el.getBoundingClientRect()[side];
+		if (!el.matches('textarea, input')) return edge;
+		const cs = getComputedStyle(el);
+		return side === 'left'
+			? edge + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)
+			: edge - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+	};
 	const edges = (selector, side) =>
 		[...pane.querySelectorAll(selector)].filter(shown).map((el) => ({
-			x: Math.round(el.getBoundingClientRect()[side] * 10) / 10,
+			x: Math.round(textStart(el, side) * 10) / 10,
 			el: label(el)
 		}));
 	const typeIssues = [];

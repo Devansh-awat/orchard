@@ -882,11 +882,12 @@
 	}
 
 	.cmp-input {
+		--caret-room: 3px;
 		display: block;
-		width: 100%;
+		width: calc(100% + 2 * var(--caret-room));
 		min-height: calc(2 * var(--gh-lh-reading, 1.5rem));
-		margin: 0;
-		padding: 0;
+		margin: 0 calc(-1 * var(--caret-room));
+		padding: 0 var(--caret-room);
 		border: none;
 		background: none;
 		resize: none;
