@@ -177,3 +177,49 @@ export async function templatePage(fetch: Fetch, name: string): Promise<Template
 		return { index, latest, template, yaml, readme };
 	});
 }
+
+export type GraftVersion = {
+	version: string;
+	digest: string;
+	url: string;
+	size: number;
+	signed: boolean;
+	engines: Record<string, string>;
+	capabilities: string[];
+	manifest: string;
+	readme?: string;
+	publishedAt: string;
+};
+
+export type GraftEntry = {
+	id: string;
+	name: string;
+	description: string;
+	publisher: string;
+	homepage?: string;
+	icon?: string;
+	latest: string;
+	versions: GraftVersion[];
+};
+
+type GraftCatalog = { generatedAt: string; grafts: GraftEntry[]; revoked: string[] };
+
+export async function graftCatalog(
+	fetch: Fetch
+): Promise<{ grafts: GraftEntry[]; error: boolean }> {
+	try {
+		const grafts = await remember('grafts', async () => {
+			const response = await fetchRegistry(fetch, 'grafts/index.json');
+			if (!response) return [];
+			const body = (await response.json()) as GraftCatalog;
+			const revoked = new Set(body.revoked ?? []);
+			return (Array.isArray(body.grafts) ? body.grafts : []).map((g) => ({
+				...g,
+				versions: g.versions.filter((v) => !revoked.has(v.digest))
+			}));
+		});
+		return { grafts: grafts.filter((g) => g.versions.length), error: false };
+	} catch {
+		return { grafts: [], error: true };
+	}
+}
