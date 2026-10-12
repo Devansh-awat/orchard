@@ -106,8 +106,8 @@
 		gap: var(--space-2);
 		max-height: 55vh;
 		overflow-y: auto;
-		margin: calc(-1 * var(--space-1)) 0 0;
-		padding: var(--space-1) 0;
+		margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) calc(-1 * var(--space-1));
+		padding: var(--space-2) var(--space-2) var(--space-1);
 	}
 
 	.pending-item {

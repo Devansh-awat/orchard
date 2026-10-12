@@ -46,12 +46,12 @@
 	onkeydown={onkey}
 	{@attach claimFocus}
 >
-	<div class="ask-head" data-align="content">{@render header()}</div>
+	<div class="ask-head" data-align="inset">{@render header()}</div>
 	{@render children?.()}
 	{#if readonly}
-		<p class="ask-wait" data-align="content">Waiting for someone who can prompt the agent</p>
+		<p class="ask-wait" data-align="inset">Waiting for someone who can prompt the agent</p>
 	{:else if actions}
-		<div class="ask-actions" data-align="content">{@render actions()}</div>
+		<div class="ask-actions" data-align="inset">{@render actions()}</div>
 	{/if}
 </div>
 
@@ -61,9 +61,8 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		min-width: 0;
-		margin: 0 calc(-1 * var(--space-4));
-		padding: var(--space-3) var(--space-4);
-		border-radius: var(--radius-md);
+		padding: var(--space-3) calc(var(--space-4) + 1px);
+		border-radius: var(--radius-lg);
 		background: var(--bg-raised);
 		box-shadow:
 			0 0 0 1px var(--border-default),

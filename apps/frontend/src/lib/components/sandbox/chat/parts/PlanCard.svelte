@@ -65,7 +65,7 @@
 		{#if path}<span class="plan-path" title={handoff.path}>{path}</span>{/if}
 	{/snippet}
 	{#if summary}
-		<div class="plan-summary" data-align="content">
+		<div class="plan-summary" data-align="inset">
 			<TextPart text={summary} compact />
 		</div>
 	{/if}

@@ -122,12 +122,12 @@
 		{/if}
 	{/snippet}
 	{#if view.detail}
-		<pre class="perm-code" data-align="content">{view.detail}</pre>
+		<pre class="perm-code" data-align="inset">{view.detail}</pre>
 	{/if}
 	{#if view.diff && showDiff}
 		<pre
 			class="perm-code perm-diff"
-			data-align="content"
+			data-align="inset"
 			transition:slide>{#each view.diff as line, li (li)}<span
 					class="perm-line"
 					class:diff-add={line.sign === '+'}

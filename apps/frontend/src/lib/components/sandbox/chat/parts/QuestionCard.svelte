@@ -99,12 +99,12 @@
 		{#if info.header}<span class="q-chip">{info.header}</span>{/if}
 		{#if count > 1}<span class="q-step">{at + 1} of {count}</span>{/if}
 	{/snippet}
-	<p class="q-text" data-align="content">{info.question}</p>
+	<p class="q-text" data-align="inset">{info.question}</p>
 	<div
 		class="q-options"
 		role={info.multiple ? 'group' : 'radiogroup'}
 		aria-label={info.question}
-		data-align="content"
+		data-align="inset"
 	>
 		{#each info.options as option, oi (option.label)}
 			{@const on = chosen.includes(option.label)}
