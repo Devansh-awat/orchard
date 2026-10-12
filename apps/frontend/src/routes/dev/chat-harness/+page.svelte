@@ -25,6 +25,25 @@
 		seedRequests(store, view === 'plan-ready' ? 'plan' : 'ask');
 	}
 	if (view === 'ask-viewer') store.canAnswer = () => false;
+	if (view === 'plan-ready') {
+		store.readFile = async () =>
+			[
+				'# Fix the login redirect loop',
+				'',
+				'The session cookie is scoped to the request host, so `app.orchard.my` never sees it.',
+				'',
+				'## Steps',
+				'',
+				'1. Read `COOKIE_DOMAIN` in `auth.controller.ts` and set it on the session cookie.',
+				'2. Carry `returnTo` through the OAuth callback.',
+				'3. Add `COOKIE_DOMAIN=orchard.my` to `.env.example`.',
+				'',
+				'## Verify',
+				'',
+				'- `pnpm --filter server test`',
+				'- Log in on staging and land back on the page you started from.'
+			].join('\n');
+	}
 
 	const remoteDrafts: RemoteDraft[] =
 		view === 'busy'

@@ -25,9 +25,25 @@
 	} = $props();
 
 	let feedback = $state('');
+	let plan = $state<string | null>(null);
 
 	const path = $derived(handoff.path ? relativePath(handoff.path, directory) : null);
 	const steering = $derived(feedback.trim().length > 0);
+	const body = $derived(plan?.trim() ? plan : summary);
+
+	$effect(() => {
+		const file = path;
+		const dir = directory;
+		plan = null;
+		if (!file) return;
+		let live = true;
+		void store.readFile(file, dir).then((text) => {
+			if (live) plan = text;
+		});
+		return () => {
+			live = false;
+		};
+	});
 
 	function build() {
 		if (!readonly) void store.answerPlan(request.id, true);
@@ -64,9 +80,9 @@
 		<span class="plan-title">Plan ready</span>
 		{#if path}<span class="plan-path" title={handoff.path}>{path}</span>{/if}
 	{/snippet}
-	{#if summary}
+	{#if body}
 		<div class="plan-summary" data-align="inset">
-			<TextPart text={summary} compact />
+			<TextPart text={body} compact />
 		</div>
 	{/if}
 	{#snippet actions()}
@@ -107,7 +123,7 @@
 	}
 
 	.plan-summary {
-		max-height: 14rem;
+		max-height: min(24rem, 40vh);
 		overflow-y: auto;
 		padding-right: var(--space-2);
 	}

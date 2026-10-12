@@ -1263,6 +1263,19 @@ export class ChatSessionStore {
 		}
 	}
 
+	async readFile(path: string, directory: string | null): Promise<string | null> {
+		const query = new URLSearchParams({ path });
+		if (directory) query.set('directory', directory);
+		try {
+			const res = await apiFetch(`${ocBase(this.sandboxId)}/file/content?${query}`);
+			if (!res.ok) return null;
+			const body = (await res.json()) as { type?: string; content?: unknown };
+			return body.type === 'text' && typeof body.content === 'string' ? body.content : null;
+		} catch {
+			return null;
+		}
+	}
+
 	#idle(): SessionThread | null {
 		const thread = this.active;
 		if (!thread || thread.busy || thread.id.startsWith(TEMP_PREFIX)) return null;
