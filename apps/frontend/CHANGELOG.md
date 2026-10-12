@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.63.2](https://github.com/hackclub/orchard/compare/frontend/v1.63.1...frontend/v1.63.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse plan ready card shows the plan itself ([c36b27a](https://github.com/hackclub/orchard/commit/c36b27a446032cd63a80af3ee478bcf30bdc00db))
+* **frontend:** greenhouse question and permission cards stop getting clipped and match the composer ([5d735b5](https://github.com/hackclub/orchard/commit/5d735b561658159303d6455d8e0c75c1c4ef4495))
+
 ## [1.63.1](https://github.com/hackclub/orchard/compare/frontend/v1.63.0...frontend/v1.63.1) (2026-10-12)
 
 
