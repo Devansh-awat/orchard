@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.63.1](https://github.com/hackclub/orchard/compare/frontend/v1.63.0...frontend/v1.63.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **frontend:** greenhouse composer stops clipping the left half of the caret ([ba20d8f](https://github.com/hackclub/orchard/commit/ba20d8f102c65c3833571f6e5fc31e4b884b8be0))
+
 ## [1.63.0](https://github.com/hackclub/orchard/compare/frontend/v1.62.2...frontend/v1.63.0) (2026-10-10)
 
 
