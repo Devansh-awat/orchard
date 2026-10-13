@@ -2,7 +2,7 @@ import { createHash, createPublicKey, verify } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, lstatSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-export const OFFICIAL_GRAFT_KEYS: string[] = [];
+export const OFFICIAL_GRAFT_KEYS: string[] = ['b5IPbzjTG0mMm/fikc3WGi/PQhuC8cEOlt4WHodoihI='];
 
 export type GraftTrustPolicy = 'official' | 'signed' | 'any';
 
