@@ -19,7 +19,7 @@ import {
   ApiTokenScopeName
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
-import { sandboxMcpOrgScope } from './sandbox-mcp-scope';
+import { ORG_SCOPED_DENY, deviceOrgScope } from './org-scoped-devices';
 import { requestAuthStorage, RequestAuthContext } from './request-context';
 
 /**
@@ -34,20 +34,7 @@ import { requestAuthStorage, RequestAuthContext } from './request-context';
  *
  * Read-only self-identity stays reachable so the app can render.
  */
-const ORG_SCOPED_DENY = [
-  'auth/',
-  'ssh-identities',
-  'invitations',
-  'users/',
-  'setup',
-  'admin/',
-  'github/link',
-  'github/unlink',
-  'git/oauth/',
-  'tailscale/link',
-  'tailscale/unlink',
-  'sandboxes/credentials'
-];
+
 // Method-qualified: reading your own identity is fine, editing it is not.
 const ORG_SCOPED_ALLOW = ['GET auth/me', 'POST auth/logout'];
 
@@ -216,9 +203,9 @@ export class SuperAdminGuard implements CanActivate {
       if (!actingSession || actingSession.userId !== dbUserId) {
         throw new UnauthorizedException('Acting user does not own that session');
       }
-      const gatewayOrgScope = sandboxMcpOrgScope(actingSession.deviceName);
+      const gatewayOrgScope = deviceOrgScope(actingSession.deviceName);
       if (gatewayOrgScope && deniedToOrgScopedSession(request.method, request.path)) {
-        throw new ForbiddenException('This sandbox MCP token is scoped to a single organization');
+        throw new ForbiddenException('This token is scoped to a single organization');
       }
       request['auth'] = {
         userId: dbUserId,

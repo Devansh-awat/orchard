@@ -1,8 +1,9 @@
-export type UrlSecretKind = 'share' | 'slack-link';
+export type UrlSecretKind = `share:${string}` | `link:${string}`;
 
 const PREFIX = 'orchard:url-secret:';
 const RETURN_KEY = 'inviteRedirect';
-const memory = new Map<UrlSecretKind, string>();
+const SHARE_ROUTE = /^\/share\/([a-z0-9][a-z0-9-]*)(?:\/|$)/;
+const LINK_ROUTE = /^\/integrations\/([a-z0-9][a-z0-9-]*)\/link(?:\/|$)/;
 
 function session(): Storage | null {
 	try {
@@ -21,39 +22,21 @@ function decode(value: string): string {
 }
 
 export function secretRoute(pathname: string): UrlSecretKind | null {
-	if (pathname === '/share/sandbox' || pathname.startsWith('/share/sandbox/')) return 'share';
-	if (pathname === '/integrations/slack/link' || pathname.startsWith('/integrations/slack/link/'))
-		return 'slack-link';
+	const share = SHARE_ROUTE.exec(pathname);
+	if (share) return `share:${share[1]}`;
+	const link = LINK_ROUTE.exec(pathname);
+	if (link) return `link:${link[1]}`;
 	return null;
 }
 
-function remember(kind: UrlSecretKind, value: string) {
-	memory.set(kind, value);
+function remember(kind: UrlSecretKind, value: string): boolean {
 	try {
-		session()?.setItem(PREFIX + kind, value);
+		const store = session();
+		if (!store) return false;
+		store.setItem(PREFIX + kind, value);
+		return true;
 	} catch {
-		return;
-	}
-}
-
-export function urlSecret(kind: UrlSecretKind): string | null {
-	const known = memory.get(kind);
-	if (known) return known;
-	try {
-		const saved = session()?.getItem(PREFIX + kind) ?? null;
-		if (saved) memory.set(kind, saved);
-		return saved;
-	} catch {
-		return null;
-	}
-}
-
-export function forgetUrlSecret(kind: UrlSecretKind) {
-	memory.delete(kind);
-	try {
-		session()?.removeItem(PREFIX + kind);
-	} catch {
-		return;
+		return false;
 	}
 }
 
@@ -62,16 +45,11 @@ export function captureUrlSecrets(): UrlSecretKind | null {
 	const kind = secretRoute(location.pathname);
 	if (!kind) return null;
 	const url = new URL(location.href);
-	let value = '';
-	if (kind === 'share') {
-		value = decode(url.hash.replace(/^#/, ''));
-		url.hash = '';
-	} else {
-		value = decode(url.searchParams.get('token') ?? '');
-		url.searchParams.delete('token');
-	}
-	if (!value) return kind;
-	remember(kind, value);
+	const share = kind.startsWith('share:');
+	const value = decode(share ? url.hash.replace(/^#/, '') : (url.searchParams.get('token') ?? ''));
+	if (!value || !remember(kind, value)) return kind;
+	if (share) url.hash = '';
+	else url.searchParams.delete('token');
 	history.replaceState(history.state, '', `${url.pathname}${url.search}`);
 	return kind;
 }
@@ -98,14 +76,16 @@ export function takeReturnTo(): string | null {
 }
 
 const TOKEN_PARAM = /([?&#](?:token|share_token|shareToken)=)[^&#\s"'<>]+/gi;
-const SHARE_PATH_TOKEN = /\/share\/sandbox\/[A-Za-z0-9_~.%-]{16,}/g;
-const SHARE_FRAGMENT = /(\/share\/sandbox[^\s"'<>#]*)#[^\s"'<>]*/g;
+const SHARE_PATH_TOKEN = /(\/share\/[a-z0-9][a-z0-9-]*\/)[A-Za-z0-9_~.%-]{16,}/g;
+const LINK_PATH_TOKEN = /(\/integrations\/[a-z0-9][a-z0-9-]*\/link\/)[A-Za-z0-9_~.%-]{16,}/g;
+const SHARE_FRAGMENT = /(\/share\/[a-z0-9][a-z0-9-]*[^\s"'<>#]*)#[^\s"'<>]*/g;
 
 export function scrubUrlSecrets(text: string): string {
-	if (!text.includes('token') && !text.includes('/share/sandbox')) return text;
+	if (!text.includes('token') && !text.includes('/share/') && !text.includes('/link/')) return text;
 	return text
 		.replace(TOKEN_PARAM, '$1redacted')
-		.replace(SHARE_PATH_TOKEN, '/share/sandbox/redacted')
+		.replace(SHARE_PATH_TOKEN, '$1redacted')
+		.replace(LINK_PATH_TOKEN, '$1redacted')
 		.replace(SHARE_FRAGMENT, '$1');
 }
 

@@ -29,14 +29,4 @@ export class InstanceSettingsController {
     return this.settings.getMcpState();
   }
 
-  @Get('sandboxes')
-  async getSandboxes() {
-    return this.settings.getSandboxesState();
-  }
-
-  @Patch('sandboxes')
-  async setSandboxes(@Body() body: { enabled?: boolean }) {
-    await this.settings.setSandboxes(Boolean(body?.enabled));
-    return this.settings.getSandboxesState();
-  }
 }

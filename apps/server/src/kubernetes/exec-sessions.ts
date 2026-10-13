@@ -5,7 +5,7 @@ import type WebSocket from 'ws';
 import { PassThrough, type Writable } from 'stream';
 import type { SessionScreen } from './exec-screen';
 import type { Proto } from './exec-protocol';
-import type { PtyHandle } from '../sandboxes/runners/sandbox-runner';
+import type { PtyHandle } from './pty';
 
 export const DETACH_GRACE_MS = Number(process.env.EXEC_DETACH_GRACE_MS ?? 10 * 60 * 1000);
 export const MAX_SESSIONS_PER_USER = 8;
@@ -53,24 +53,23 @@ export interface PodExecTarget {
   organizationId: string;
 }
 
-export interface SandboxExecTarget {
-  kind: 'sandbox';
-  sandboxId: string;
-  sessionId: string | null;
-  index: string;
-  mode: 'rw' | 'ro';
-  worktreePath: string | null;
-  terminalUserId?: string | null;
+export interface ExtensionExecTarget {
+  kind: string;
+  key: string;
+  [field: string]: unknown;
 }
 
-export type ExecTarget = PodExecTarget | SandboxExecTarget;
+export type ExecTarget = PodExecTarget | ExtensionExecTarget;
+
+export function isPodTarget(target: ExecTarget): target is PodExecTarget {
+  return target.kind === 'pod' && 'podName' in target;
+}
 
 export function targetKey(target: ExecTarget): string {
-  if (target.kind === 'pod') {
+  if (isPodTarget(target)) {
     return `pod:${target.namespace}/${target.podName}/${target.container}`;
   }
-  const base = `sandbox:${target.sandboxId}/${target.sessionId ?? '-'}/${target.index}/${target.mode}`;
-  return target.terminalUserId ? `${base}/${target.terminalUserId}` : base;
+  return (target as ExtensionExecTarget).key;
 }
 
 export function clampTerminalSize(
@@ -208,7 +207,7 @@ export function directoryEntry(
   target: ExecTarget
 ): DirectoryEntry {
   const entry: DirectoryEntry = { replica, addr, ownerUserId, targetKey: targetKey(target) };
-  if (target.kind === 'pod') {
+  if (isPodTarget(target)) {
     entry.namespace = target.namespace;
     entry.podName = target.podName;
     entry.container = target.container;

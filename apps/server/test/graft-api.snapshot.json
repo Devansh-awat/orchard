@@ -1,5 +1,17 @@
 {
   "doors": {
+    "apply@1": {
+      "status": "stable",
+      "capability": "kube.apply",
+      "methods": {
+        "enqueue": 1,
+        "hasOpenItem": 1,
+        "registerHandler": 2,
+        "retryForSubject": 1,
+        "serverSideApply": 1
+      },
+      "properties": []
+    },
     "audit@1": {
       "status": "stable",
       "capability": "audit",
@@ -12,17 +24,29 @@
       "status": "stable",
       "capability": null,
       "methods": {
+        "authenticateTerminalUpgrade": 1,
+        "authenticateUpgrade": 2,
         "can": 2,
+        "deviceName": 3,
         "getOrgAccess": 2,
         "getProjectAccess": 2,
         "isSuperAdmin": 1,
         "listVisibleProjectIds": 2,
+        "mintDeviceToken": 1,
+        "originAllowed": 2,
+        "registerOrgScopedDevice": 1,
+        "rejectUpgrade": 3,
+        "requestContext": 0,
         "require": 2,
         "requireOrgAdmin": 2,
+        "requireOrgCanCreateProjects": 2,
         "requireOrgMember": 2,
         "requireOrgOwner": 2,
         "requireProjectEdit": 2,
-        "requireProjectView": 2
+        "requireProjectView": 2,
+        "revokeDeviceSessions": 2,
+        "runWithContext": 2,
+        "validateSession": 1
       },
       "properties": []
     },
@@ -60,6 +84,14 @@
       },
       "properties": []
     },
+    "exec@1": {
+      "status": "stable",
+      "capability": "kube.exec",
+      "methods": {
+        "register": 1
+      },
+      "properties": []
+    },
     "flags@1": {
       "status": "stable",
       "capability": "flags",
@@ -70,14 +102,93 @@
         "configured"
       ]
     },
+    "github@1": {
+      "status": "stable",
+      "capability": "github",
+      "methods": {
+        "installationToken": 1,
+        "onIssueComment": 1,
+        "repoToken": 3,
+        "userToken": 1
+      },
+      "properties": [
+        "github"
+      ]
+    },
     "http@1": {
       "status": "stable",
       "capability": "http.upgrade",
       "methods": {
         "hostRouter": 1,
+        "onListen": 1,
         "upgrade": 2
       },
       "properties": []
+    },
+    "kube@1": {
+      "status": "stable",
+      "capability": "kube.read",
+      "methods": {
+        "databaseTlsHostname": 2,
+        "isLeader": 0,
+        "onLeaderAcquired": 1,
+        "registerMirrorShard": 1
+      },
+      "properties": [
+        "kc",
+        "kubernetes"
+      ]
+    },
+    "metrics@1": {
+      "status": "stable",
+      "capability": "metrics",
+      "methods": {
+        "escapeLabel": 1,
+        "queryInstant": 1
+      },
+      "properties": [
+        "configured",
+        "vm"
+      ]
+    },
+    "notifications@1": {
+      "status": "stable",
+      "capability": "notifications",
+      "methods": {
+        "notifyAccount": 3,
+        "registerEvent": 1
+      },
+      "properties": []
+    },
+    "projects@1": {
+      "status": "stable",
+      "capability": "projects.read",
+      "methods": {
+        "createDeploymentFromGitHub": 0,
+        "createEnvironment": 0,
+        "deleteEnvironment": 0,
+        "deleteEnvironmentFromCluster": 0,
+        "deployments": 0,
+        "environments": 0,
+        "onEnvironmentEnvChanged": 1,
+        "rebuildDeployment": 0,
+        "requireWrite": 0,
+        "setDeploymentBranch": 2
+      },
+      "properties": []
+    },
+    "rateLimit@1": {
+      "status": "stable",
+      "capability": "rateLimit",
+      "methods": {
+        "check": 3,
+        "consume": 2,
+        "define": 3
+      },
+      "properties": [
+        "limits",
+        "throttle"
+      ]
     },
     "secrets@1": {
       "status": "stable",
@@ -87,9 +198,14 @@
         "decryptForUser": 2,
         "encrypt": 1,
         "encryptForUser": 2,
-        "isEncrypted": 1
+        "isEncrypted": 1,
+        "maybeDecrypt": 1,
+        "open": 1,
+        "seal": 1
       },
-      "properties": []
+      "properties": [
+        "enabled"
+      ]
     },
     "settings@1": {
       "status": "stable",
@@ -98,6 +214,10 @@
         "all": 1,
         "flag": 2,
         "isConfigured": 1,
+        "store": 2,
+        "storeIfAbsent": 2,
+        "stored": 1,
+        "validate": 2,
         "value": 2
       },
       "properties": [
@@ -110,7 +230,8 @@
       "methods": {
         "findByUsername": 1,
         "get": 1,
-        "getMany": 1
+        "getMany": 1,
+        "resolve": 2
       },
       "properties": []
     }

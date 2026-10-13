@@ -26,10 +26,11 @@ var sandboxIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func sandboxCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:     "sandbox",
-		GroupID: groupResources,
-		Aliases: []string{"sb"},
-		Short:   "Manage isolated cloud dev sandboxes",
+		Use:               "sandbox",
+		GroupID:           groupResources,
+		Aliases:           []string{"sb"},
+		Short:             "Manage Greenhouse cloud dev sandboxes",
+		PersistentPreRunE: requireGreenhouse,
 	}
 	c.AddCommand(
 		sandboxCreateCmd(),
@@ -46,10 +47,10 @@ func sandboxCmd() *cobra.Command {
 		sandboxRepoCmd(),
 		sandboxConversationsCmd(),
 		sandboxSessionCmd(),
-		sandboxProxyCmd(),
+		skipGreenhouse(sandboxProxyCmd()),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
-		sandboxBridgeCmd(),
+		skipGreenhouse(sandboxBridgeCmd()),
 		sandboxForkCmd(),
 		sandboxShareCmd(),
 		sandboxLinkCmd(),
@@ -66,12 +67,12 @@ func sandboxPath(id string, rest ...string) string {
 	return p
 }
 
-// sandboxFeatureError turns the 404 that gated /sandboxes routes return when
-// the feature flag is off into an actionable message.
+// sandboxFeatureError turns the 404 that /sandboxes routes return when
+// Greenhouse is not installed into an actionable message.
 func sandboxFeatureError(err error) error {
 	var apiErr *api.APIError
-	if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
-		return errors.New("the sandbox feature is not enabled on this server (ask an admin to enable sandbox.enabled)")
+	if !greenhouseConfirmed && errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+		return errGreenhouseMissing
 	}
 	return err
 }

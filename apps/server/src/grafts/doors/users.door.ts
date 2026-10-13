@@ -1,6 +1,7 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UsersService } from '../../users/users.service';
 import { bindGraft, type DoorMeta } from './door';
 
 const PUBLIC_USER = {
@@ -25,7 +26,8 @@ export class UsersDoorV1 {
 
   constructor(
     @Inject(INQUIRER) parent: unknown,
-    @Inject(PrismaService) private readonly prisma: PrismaService
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(UsersService) private readonly users: UsersService
   ) {
     bindGraft(parent, UsersDoorV1.meta);
   }
@@ -39,6 +41,10 @@ export class UsersDoorV1 {
       where: { id: { in: [...new Set(ids)] } },
       select: PUBLIC_USER
     });
+  }
+
+  resolve(identifier: string, profile?: Parameters<UsersService['findOrCreateByClerkId']>[1]) {
+    return this.users.findOrCreateByClerkId(identifier, profile);
   }
 
   findByUsername(username: string) {

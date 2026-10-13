@@ -1,0 +1,502 @@
+{
+  "id": "greenhouse",
+  "name": "Greenhouse",
+  "version": "1.0.0",
+  "publisher": "orchard",
+  "description": "Cloud dev sandboxes with coding agents, live editing, previews and share links.",
+  "homepage": "https://orchard.my/docs/greenhouse",
+  "engines": {
+    "platform": ">=2.67.0 <3",
+    "sdk": "^1.0.0"
+  },
+  "requires": {
+    "kubernetes": {
+      "crds": [
+        "sandboxes.agents.x-k8s.io"
+      ],
+      "verbs": [
+        {
+          "group": "agents.x-k8s.io",
+          "resource": "sandboxes",
+          "verb": "create"
+        },
+        {
+          "group": "",
+          "resource": "pods/exec",
+          "verb": "create"
+        }
+      ]
+    }
+  },
+  "capabilities": [
+    "db",
+    "users.read",
+    "projects.read",
+    "projects.write",
+    "kube.read",
+    "kube.apply",
+    "kube.informers",
+    "kube.exec",
+    "http.upgrade",
+    "http.hostRouting",
+    "github",
+    "notifications",
+    "audit",
+    "events",
+    "secrets",
+    "settings",
+    "rateLimit",
+    "flags",
+    "metrics",
+    "mcp"
+  ],
+  "claims": {
+    "apiAliases": [
+      "sandboxes",
+      "share/sandbox",
+      "ssh-identities",
+      "integrations",
+      "me/context",
+      "users/me/integrations"
+    ],
+    "uiAliases": [
+      "sandboxes",
+      "share/sandbox",
+      "integrations/slack",
+      "tour/greenhouse"
+    ],
+    "wsAliases": [
+      "sandboxes"
+    ],
+    "hostRouting": [
+      "sandbox-previews"
+    ],
+    "notificationEvents": [
+      "sandbox"
+    ],
+    "notificationCategories": [
+      "agents"
+    ],
+    "configSections": [
+      "sandbox-runners",
+      "slack-app",
+      "linear"
+    ],
+    "settingKeys": [
+      "sandbox_runners",
+      "slack_app",
+      "linear_integration",
+      "sandbox_instance_id",
+      "sandboxes:ns",
+      "sandboxes:netpol"
+    ],
+    "rateLimitBuckets": [
+      "sandbox_share",
+      "sandbox_prompt",
+      "sandbox_session",
+      "greenhouse_kickoff"
+    ],
+    "mcpTools": [
+      "list_sandboxes",
+      "get_sandbox",
+      "start_sandbox",
+      "stop_sandbox",
+      "list_sandbox_sessions",
+      "create_sandbox_session",
+      "prompt_sandbox_session",
+      "get_sandbox_session_diff",
+      "get_sandbox_session_transcript",
+      "create_sandbox_session_pr"
+    ],
+    "sseEvents": [
+      "sandbox"
+    ],
+    "auditActions": [
+      "sandbox"
+    ],
+    "applyOps": [
+      "sandbox",
+      "vercel"
+    ],
+    "deviceNames": [
+      "sandbox-mcp"
+    ],
+    "mirrorShards": [
+      "sandboxes"
+    ]
+  },
+  "database": {
+    "coreReads": {
+      "users": [
+        "id",
+        "email",
+        "username",
+        "first_name",
+        "last_name",
+        "image_url",
+        "github_id",
+        "github_username"
+      ],
+      "organizations": [
+        "id"
+      ],
+      "organization_members": [
+        "id",
+        "organization_id",
+        "user_id",
+        "role",
+        "added_at"
+      ],
+      "projects": [
+        "id",
+        "organization_id",
+        "name",
+        "slug"
+      ],
+      "environments": [
+        "id",
+        "project_id",
+        "name",
+        "slug",
+        "namespace",
+        "is_default",
+        "is_production"
+      ],
+      "environment_shared_vars": [
+        "id",
+        "environment_id",
+        "key",
+        "value",
+        "secret"
+      ],
+      "deployments": [
+        "id",
+        "project_id",
+        "environment_id",
+        "name",
+        "status",
+        "build_status",
+        "apply_status",
+        "stopped",
+        "build_type",
+        "github_repo",
+        "github_branch",
+        "dockerfile_path",
+        "dockerfile_target",
+        "build_from_root",
+        "root_directory",
+        "framework",
+        "install_command",
+        "build_command",
+        "start_command",
+        "output_directory",
+        "cpu_request_milli",
+        "memory_request_bytes",
+        "git_connection_id",
+        "external_repo_id",
+        "template_instance_id",
+        "compose_stack_id",
+        "created_at"
+      ],
+      "deployment_env_vars": [
+        "id",
+        "deployment_id",
+        "key",
+        "value",
+        "secret"
+      ],
+      "deployment_volumes": [
+        "id",
+        "deployment_id",
+        "name",
+        "type",
+        "mount_path",
+        "pvc_name",
+        "storage_size",
+        "read_only"
+      ],
+      "services": [
+        "id",
+        "deployment_id",
+        "created_at"
+      ],
+      "service_ports": [
+        "id",
+        "service_id",
+        "name",
+        "port",
+        "target_port",
+        "protocol"
+      ],
+      "ingresses": [
+        "id",
+        "deployment_id",
+        "host",
+        "path",
+        "tls_secret_name",
+        "entrypoints",
+        "created_at"
+      ],
+      "databases": [
+        "id",
+        "project_id",
+        "environment_id",
+        "name",
+        "db_name",
+        "db_user",
+        "db_password",
+        "mode",
+        "namespace",
+        "cluster_name",
+        "public_enabled",
+        "public_ip",
+        "public_port",
+        "created_at"
+      ],
+      "k8s_objects": [
+        "uid",
+        "api_version",
+        "kind",
+        "namespace",
+        "name",
+        "shard",
+        "manifest"
+      ],
+      "k8s_apply_queue": [
+        "id",
+        "status",
+        "last_error",
+        "sandbox_id",
+        "updated_at"
+      ],
+      "k8s_mirror_heartbeats": [
+        "shard",
+        "holder",
+        "last_list_at",
+        "healthy",
+        "updated_at"
+      ]
+    }
+  },
+  "permissions": {
+    "use": {
+      "label": "Use Greenhouse",
+      "description": "Create and open sandboxes.",
+      "defaultGrants": [
+        "org:owner",
+        "org:admin",
+        "org:member"
+      ]
+    }
+  },
+  "settings": [
+    {
+      "id": "sandbox-runners",
+      "title": "Greenhouse runners",
+      "description": "Where sandboxes run and how they are reached.",
+      "storageKey": "sandbox_runners",
+      "fields": [
+        {
+          "key": "kubernetesEnabled",
+          "type": "boolean",
+          "label": "Kubernetes runner",
+          "env": "SANDBOX_RUNNER_KUBERNETES_ENABLED",
+          "default": true
+        },
+        {
+          "key": "vercelEnabled",
+          "type": "boolean",
+          "label": "Vercel runner",
+          "env": "SANDBOX_RUNNER_VERCEL_ENABLED",
+          "default": false
+        },
+        {
+          "key": "defaultRunner",
+          "type": "select",
+          "label": "Default runner",
+          "options": [
+            "kubernetes",
+            "vercel"
+          ],
+          "env": "SANDBOX_DEFAULT_RUNNER"
+        },
+        {
+          "key": "vercelToken",
+          "type": "secret",
+          "label": "Vercel token",
+          "env": "SANDBOX_VERCEL_TOKEN"
+        },
+        {
+          "key": "vercelTeamId",
+          "type": "string",
+          "label": "Vercel team id",
+          "env": "SANDBOX_VERCEL_TEAM_ID"
+        },
+        {
+          "key": "vercelProjectId",
+          "type": "string",
+          "label": "Vercel project id",
+          "env": "SANDBOX_VERCEL_PROJECT_ID"
+        },
+        {
+          "key": "vercelImage",
+          "type": "string",
+          "label": "Vercel image",
+          "env": "SANDBOX_VERCEL_IMAGE"
+        },
+        {
+          "key": "vercelVcpus",
+          "type": "number",
+          "label": "Vercel vCPUs",
+          "help": "1 to 8.",
+          "env": "SANDBOX_VERCEL_VCPUS"
+        },
+        {
+          "key": "vercelTimeoutMinutes",
+          "type": "number",
+          "label": "Vercel timeout in minutes",
+          "env": "SANDBOX_VERCEL_TIMEOUT_MINUTES"
+        },
+        {
+          "key": "vercelDriveGiB",
+          "type": "number",
+          "label": "Vercel drive size in GiB",
+          "env": "SANDBOX_VERCEL_DRIVE_GIB"
+        },
+        {
+          "key": "bridgeBinaryUrl",
+          "type": "string",
+          "label": "Bridge binary URL",
+          "env": "SANDBOX_BRIDGE_BINARY_URL"
+        },
+        {
+          "key": "bridgeBinarySha256",
+          "type": "string",
+          "label": "Bridge binary SHA-256",
+          "env": "SANDBOX_BRIDGE_BINARY_SHA256"
+        },
+        {
+          "key": "previewDomain",
+          "type": "string",
+          "label": "Preview domain",
+          "help": "A bare domain such as preview.example.com.",
+          "env": "SANDBOX_PREVIEW_DOMAIN"
+        }
+      ]
+    },
+    {
+      "id": "slack-app",
+      "title": "Slack app",
+      "description": "Start Greenhouse sessions from Slack.",
+      "storageKey": "slack_app",
+      "required": [
+        "signingSecret",
+        "botToken"
+      ],
+      "fields": [
+        {
+          "key": "signingSecret",
+          "type": "secret",
+          "label": "Signing secret",
+          "env": "SLACK_SIGNING_SECRET"
+        },
+        {
+          "key": "botToken",
+          "type": "secret",
+          "label": "Bot token",
+          "env": "SLACK_BOT_TOKEN"
+        },
+        {
+          "key": "appId",
+          "type": "string",
+          "label": "App id",
+          "env": "SLACK_APP_ID"
+        }
+      ]
+    },
+    {
+      "id": "linear",
+      "title": "Linear",
+      "description": "Start Greenhouse sessions from Linear issues.",
+      "storageKey": "linear_integration",
+      "required": [
+        "webhookSecret"
+      ],
+      "fields": [
+        {
+          "key": "webhookSecret",
+          "type": "secret",
+          "label": "Webhook secret",
+          "env": "LINEAR_WEBHOOK_SECRET"
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "screens": [
+      {
+        "id": "sandboxes",
+        "path": "/sandboxes",
+        "layout": "fullscreen",
+        "title": "Greenhouse"
+      },
+      {
+        "id": "sandbox",
+        "path": "/sandboxes/:id",
+        "layout": "fullscreen",
+        "title": "Greenhouse"
+      },
+      {
+        "id": "share",
+        "path": "/share/sandbox",
+        "layout": "fullscreen",
+        "title": "Shared sandbox",
+        "og": {
+          "title": "A Greenhouse session",
+          "description": "Someone shared a Greenhouse sandbox with you."
+        }
+      },
+      {
+        "id": "share-token",
+        "path": "/share/sandbox/*",
+        "layout": "fullscreen",
+        "title": "Shared sandbox",
+        "og": {
+          "title": "A Greenhouse session",
+          "description": "Someone shared a Greenhouse sandbox with you."
+        }
+      },
+      {
+        "id": "slack-link",
+        "path": "/integrations/slack/link",
+        "layout": "shell",
+        "title": "Link Slack"
+      },
+      {
+        "id": "slack-link-token",
+        "path": "/integrations/slack/link/*",
+        "layout": "shell",
+        "title": "Link Slack"
+      },
+      {
+        "id": "admin",
+        "path": "/greenhouse/admin",
+        "layout": "shell",
+        "title": "Greenhouse"
+      },
+      {
+        "id": "tour",
+        "path": "/tour/greenhouse",
+        "layout": "fullscreen",
+        "title": "Greenhouse tour"
+      }
+    ]
+  },
+  "public": {
+    "routes": [
+      "POST /integrations/linear/webhook",
+      "POST /integrations/slack/commands",
+      "POST /integrations/slack/events"
+    ]
+  }
+}

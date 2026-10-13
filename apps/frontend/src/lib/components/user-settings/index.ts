@@ -15,6 +15,4 @@ export { default as UserApiTokens } from './UserApiTokens.svelte';
 export { default as UserMcp } from './UserMcp.svelte';
 export { default as UserAppearance } from './UserAppearance.svelte';
 export { default as UserNotifications } from './UserNotifications.svelte';
-export { default as UserSshIdentities } from './UserSshIdentities.svelte';
 export { default as UserLogs } from './UserLogs.svelte';
-export { default as UserGreenhouseAccounts } from './UserGreenhouseAccounts.svelte';

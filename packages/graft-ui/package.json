@@ -9,7 +9,10 @@
       "svelte": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./components/*": "./src/components/*",
+    "./utils/*": "./src/utils/*.ts",
+    "./stores/*": "./src/stores/*.ts"
   },
   "scripts": {
     "sync": "node scripts/sync.mjs",

@@ -2,15 +2,6 @@ import * as k8s from '@kubernetes/client-node';
 import { LABEL_JOB_ID } from '../jobs/jobs-orchestrator.service';
 import { BUILDER_NAMESPACE } from '../docker/builder-namespace';
 import {
-  CRD_API_VERSION,
-  CRD_GROUP,
-  CRD_KIND,
-  CRD_PLURAL,
-  CRD_VERSION,
-  INSTANCE_LABEL,
-  SANDBOX_SHARD
-} from '../sandboxes/sandbox-cr';
-import {
   MirrorListOptions,
   MirrorListPage,
   MirrorRefs,
@@ -20,7 +11,6 @@ import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
-import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
 import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
 import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
@@ -42,7 +32,6 @@ export interface MirrorShardDeps {
   cnpg: CnpgMirrorConsumer;
   jobs: JobMirrorConsumer;
   workloads: WorkloadMirrorConsumer;
-  sandboxes: SandboxMirrorConsumer;
   ingresses: IngressMirrorConsumer;
   storage: StorageMirrorConsumer;
   services: ServiceMirrorConsumer;
@@ -51,11 +40,6 @@ export interface MirrorShardDeps {
   // does not serve fails the informer forever, so the resource is only built
   // when the definition exists.
   certManager: boolean;
-  // Null when this install runs no sandboxes, or could not work out which
-  // sandboxes are its own. The shard is then not built at all: there is no
-  // useful half-scoped version of a watch whose whole job is to see exactly
-  // this install's resources and nothing else.
-  sandboxScope: { namespace: string; instanceId: string } | null;
   namespaceRefs: (namespace: string) => Promise<MirrorRefs>;
 }
 
@@ -75,13 +59,25 @@ export function stripSecretData(obj: any): any {
   return obj;
 }
 
-function toListResult(res: K8sListBody): MirrorListPage {
+export function toListResult(res: K8sListBody): MirrorListPage {
   const meta = res.body.metadata ?? {};
   return {
     items: res.body.items ?? [],
     resourceVersion: meta.resourceVersion ?? '',
     continueToken: meta._continue ?? meta.continue ?? null
   };
+}
+
+export type MirrorShardBuilder = () => Promise<MirrorShardDef | null>;
+
+const extensionShards: MirrorShardBuilder[] = [];
+
+export function registerMirrorShard(build: MirrorShardBuilder): void {
+  extensionShards.push(build);
+}
+
+export function registeredMirrorShards(): readonly MirrorShardBuilder[] {
+  return extensionShards;
 }
 
 export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
@@ -376,106 +372,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
     }
   ];
 
-  if (deps.sandboxScope) {
-    const { namespace, instanceId } = deps.sandboxScope;
-    // Everything in this shard is selected by the instance label, so a second
-    // Orchard server sharing the namespace is invisible to it rather than
-    // merely ignored by it. That is what makes the orphan sweep at the end of a
-    // list pass safe to act on.
-    const ownSelector = `${INSTANCE_LABEL}=${instanceId}`;
-    shards.push({
-      name: SANDBOX_SHARD,
-      lease: 'orchard-mirror-sandboxes',
-      resources: [
-        {
-          kind: CRD_KIND,
-          apiVersion: CRD_API_VERSION,
-          watchPath: `/apis/${CRD_GROUP}/${CRD_VERSION}/namespaces/${namespace}/${CRD_PLURAL}`,
-          labelSelector: ownSelector,
-          list: async (kc, opts) =>
-            toListResult(
-              (await kc
-                .makeApiClient(k8s.CustomObjectsApi)
-                .listNamespacedCustomObject(
-                  CRD_GROUP,
-                  CRD_VERSION,
-                  namespace,
-                  CRD_PLURAL,
-                  undefined,
-                  undefined,
-                  opts.continueToken,
-                  undefined,
-                  ownSelector,
-                  opts.limit
-                )) as K8sListBody
-            ),
-          onEvent: (type, obj) => deps.sandboxes.onEvent(type, obj),
-          onListComplete: (seen) => deps.sandboxes.onListComplete(seen)
-        },
-        {
-          // Held for lookups, not for derived state: exec, the SSH tunnel and
-          // the git panel each need the running pod's name and IP, and they
-          // used to pay a LIST to the apiserver for it on every request.
-          kind: 'Pod',
-          apiVersion: 'v1',
-          watchPath: `/api/v1/namespaces/${namespace}/pods`,
-          labelSelector: ownSelector,
-          list: async (kc, opts) =>
-            toListResult(
-              await core(kc).listNamespacedPod(
-                namespace,
-                undefined,
-                undefined,
-                opts.continueToken,
-                undefined,
-                ownSelector,
-                opts.limit
-              )
-            )
-        },
-        {
-          kind: 'PersistentVolumeClaim',
-          apiVersion: 'v1',
-          watchPath: `/api/v1/namespaces/${namespace}/persistentvolumeclaims`,
-          labelSelector: ownSelector,
-          onEvent: (type, obj) => deps.sandboxes.onClaimEvent(type, obj),
-          list: async (kc, opts) =>
-            toListResult(
-              await core(kc).listNamespacedPersistentVolumeClaim(
-                namespace,
-                undefined,
-                undefined,
-                opts.continueToken,
-                undefined,
-                ownSelector,
-                opts.limit
-              )
-            )
-        },
-        {
-          kind: 'Secret',
-          apiVersion: 'v1',
-          watchPath: `/api/v1/namespaces/${namespace}/secrets`,
-          labelSelector: ownSelector,
-          sanitize: stripSecretData,
-          list: async (kc, opts) => {
-            const page = toListResult(
-              await core(kc).listNamespacedSecret(
-                namespace,
-                undefined,
-                undefined,
-                opts.continueToken,
-                undefined,
-                ownSelector,
-                opts.limit
-              )
-            );
-            return { ...page, items: page.items.map(stripSecretData) };
-          }
-        }
-      ]
-    });
-  }
+
 
   return shards;
 }

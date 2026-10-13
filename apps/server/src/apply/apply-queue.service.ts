@@ -20,7 +20,7 @@ interface ClaimedItem {
   generation: number;
   attempts: number;
   deploymentId: string | null;
-  sandboxId: string | null;
+  subjectId: string | null;
 }
 
 export interface EnqueueInput {
@@ -28,7 +28,7 @@ export interface EnqueueInput {
   opType: string;
   manifest?: unknown;
   deploymentId?: string;
-  sandboxId?: string;
+  subjectId?: string;
   requestedById?: string;
 }
 
@@ -90,7 +90,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         opType: input.opType,
         manifest: manifest ?? undefined,
         deploymentId: input.deploymentId ?? null,
-        sandboxId: input.sandboxId ?? null,
+        subjectId: input.subjectId ?? null,
         requestedById: input.requestedById ?? null
       },
       update: {
@@ -100,7 +100,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
         attempts: 0,
         notBefore: new Date(),
         lastError: null,
-        sandboxId: input.sandboxId ?? null,
+        subjectId: input.subjectId ?? null,
         requestedById: input.requestedById ?? null
       }
     });
@@ -138,9 +138,9 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
     return result.count;
   }
 
-  async retryForSandbox(sandboxId: string): Promise<number> {
+  async retryForSubject(subjectId: string): Promise<number> {
     const result = await this.prisma.k8sApplyItem.updateMany({
-      where: { sandboxId, status: 'failed' },
+      where: { subjectId, status: 'failed' },
       data: {
         status: 'pending',
         attempts: 0,
@@ -198,7 +198,7 @@ export class ApplyQueueService implements OnModuleInit, OnModuleDestroy {
       )
       RETURNING "id", "dedupe_key" AS "dedupeKey", "op_type" AS "opType", "manifest",
                 "generation", "attempts", "deployment_id" AS "deploymentId",
-                "sandbox_id" AS "sandboxId"
+                "sandbox_id" AS "subjectId"
     `;
   }
 

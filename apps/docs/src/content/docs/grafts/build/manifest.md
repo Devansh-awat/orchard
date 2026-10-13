@@ -66,6 +66,9 @@ install:
 | `mcpTools` | MCP tool names |
 | `sseEvents` | Live event types |
 | `rateLimitBuckets` | Rate limit names |
+| `applyOps` | Apply queue operation names the graft handles |
+| `deviceNames` | Session device name prefixes for org-scoped tokens the graft mints |
+| `mirrorShards` | Cluster mirror shard names the graft registers |
 
 Core Orchard always wins. A claim on something core already uses, or starts
 using later, is marked **taken** and skipped; the graft keeps working under its

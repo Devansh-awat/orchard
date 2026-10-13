@@ -66,7 +66,15 @@ every door and member.
 | `audit` | Write audit log entries, under the graft's own action names |
 | `events` | Send live events to an organization's open pages, and listen to Orchard's |
 | `flags` | Feature flags |
-| `http` | Websocket endpoints, and serving whole hostnames for preview domains |
+| `http` | Websocket endpoints, raw access to the HTTP server once it listens, and serving whole hostnames for preview domains |
+| `kube` | The cluster client, leader election and registering a mirror shard so resources are watched into Postgres |
+| `apply` | Queue cluster changes on Orchard's retrying apply queue and handle the graft's own operations |
+| `exec` | Terminals into the graft's own workloads through Orchard's session engine, with reattach and replica hand-off |
+| `projects` | Create and rebuild deployments and environments as a user, and hear when an environment's variables change |
+| `notifications` | Register notification events and categories, and notify a person |
+| `rateLimit` | Rate limit buckets shared across replicas |
+| `metrics` | Instant queries against the metrics store |
+| `github` | GitHub tokens for a user, a repository or an app installation, and issue comment webhooks |
 
 Grafts bundle their own dependencies. `@nestjs/*`, `rxjs` and `reflect-metadata`
 come from Orchard so there is one Nest; list anything else that must not be

@@ -6,8 +6,6 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { greenhouseFlag, sandboxEnvOverride, sandboxesOn } from '$lib/flags';
-	import { instanceFeatures } from '$lib/stores/instance-features';
 	import GraftIcon from '$lib/grafts/GraftIcon.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import {
@@ -25,7 +23,6 @@
 		TriangleAlert,
 		Search,
 		Activity,
-		Sprout,
 		Settings,
 		Shield,
 		LogOut,
@@ -123,17 +120,6 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
-		...($sandboxesOn && $greenhouseFlag
-			? [
-					{
-						id: 'sandboxes',
-						label: 'Greenhouse',
-						href: '/sandboxes',
-						icon: Sprout,
-						active: $page.url.pathname.startsWith('/sandboxes')
-					}
-				]
-			: []),
 		...(publicEnv.PUBLIC_GROVE_ENABLED === 'true'
 			? [
 					{
@@ -322,10 +308,6 @@
 
 	$effect(() => {
 		if ($isSuperAdmin) instanceChecklist.load();
-	});
-
-	$effect(() => {
-		if (browser && sandboxEnvOverride() === null) void instanceFeatures.load();
 	});
 </script>
 

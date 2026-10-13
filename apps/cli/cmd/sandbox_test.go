@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -13,6 +15,29 @@ import (
 )
 
 func sandboxTestRoot(t *testing.T, srvURL string) *cobra.Command {
+	t.Helper()
+	return greenhouseTestRoot(t, withGreenhouse(t, srvURL))
+}
+
+func withGreenhouse(t *testing.T, srvURL string) string {
+	t.Helper()
+	upstream, err := url.Parse(srvURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(upstream)
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/instance/features" {
+			io.WriteString(w, `{"mcp":true,"grafts":["greenhouse"],"sandboxes":true}`)
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(front.Close)
+	return front.URL
+}
+
+func greenhouseTestRoot(t *testing.T, srvURL string) *cobra.Command {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ORCHARD_API_URL", srvURL)
@@ -269,11 +294,90 @@ func TestSandboxDisabledFriendlyError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	root := sandboxTestRoot(t, srv.URL)
+	root := greenhouseTestRoot(t, srv.URL)
 	root.SetArgs([]string{"sandbox", "list"})
 	err := root.Execute()
-	if err == nil || !strings.Contains(err.Error(), "not enabled on this server") || !strings.Contains(err.Error(), "sandbox.enabled") {
-		t.Fatalf("want the feature-disabled hint, got %v", err)
+	if err == nil || err.Error() != errGreenhouseMissing.Error() {
+		t.Fatalf("want the Greenhouse missing error, got %v", err)
+	}
+}
+
+func TestSandboxRefusedWithoutGreenhouseGraft(t *testing.T) {
+	var listed int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/instance/features" {
+			io.WriteString(w, `{"mcp":true,"grafts":["announcements"],"sandboxes":true}`)
+			return
+		}
+		listed++
+		io.WriteString(w, sandboxListJSON)
+	}))
+	defer srv.Close()
+
+	for _, args := range [][]string{{"sandbox", "list"}, {"ssh-identity", "list"}} {
+		root := greenhouseTestRoot(t, srv.URL)
+		root.SetArgs(args)
+		err := root.Execute()
+		if err == nil || err.Error() != errGreenhouseMissing.Error() {
+			t.Fatalf("%v: want the Greenhouse missing error, got %v", args, err)
+		}
+	}
+	if listed != 0 {
+		t.Errorf("server saw %d sandbox requests, want 0", listed)
+	}
+}
+
+func TestSandboxFallsBackToSandboxesFlag(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/instance/features" {
+			io.WriteString(w, `{"mcp":true,"sandboxes":false}`)
+			return
+		}
+		io.WriteString(w, sandboxListJSON)
+	}))
+	defer srv.Close()
+
+	root := greenhouseTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "list"})
+	if err := root.Execute(); err == nil || err.Error() != errGreenhouseMissing.Error() {
+		t.Fatalf("want the Greenhouse missing error, got %v", err)
+	}
+}
+
+func TestSandboxNotFoundPassesThroughOnceGreenhouseConfirmed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/instance/features" {
+			io.WriteString(w, `{"mcp":true,"grafts":["greenhouse"],"sandboxes":true}`)
+			return
+		}
+		w.WriteHeader(404)
+		io.WriteString(w, `{"message":"Sandbox not found"}`)
+	}))
+	defer srv.Close()
+
+	root := greenhouseTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "list"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "Sandbox not found") {
+		t.Fatalf("want the server's not-found message, got %v", err)
+	}
+}
+
+func TestSandboxProxySkipsGreenhouseProbe(t *testing.T) {
+	var probed int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/instance/features" {
+			probed++
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	root := greenhouseTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "proxy", "box"})
+	_ = root.Execute()
+	if probed != 0 {
+		t.Errorf("proxy probed instance features %d times, want 0", probed)
 	}
 }
 

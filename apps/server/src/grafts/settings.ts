@@ -3,7 +3,7 @@ import {
   type ConfigField,
   type ConfigSection
 } from '../instance-config/instance-config.sections';
-import { ownsName } from './claims';
+import { canUseName, ownsName } from './claims';
 import type { GraftRecord } from './graft-registry';
 
 export type GraftConfigSection = ConfigSection & {
@@ -41,17 +41,25 @@ export function registerGraftSettings(record: GraftRecord): void {
       record.warnings.push(`settings section ${id} is already registered; skipped`);
       continue;
     }
+    if (section.storageKey && !canUseName(record.id, record.claims, 'settingKeys', section.storageKey)) {
+      record.warnings.push(`settings section ${section.id}: storageKey ${section.storageKey} is not claimed in settingKeys; using the graft's own key`);
+    }
+    const storageKey =
+      section.storageKey && canUseName(record.id, record.claims, 'settingKeys', section.storageKey)
+        ? section.storageKey
+        : `graft:${record.id}:${section.id}`;
     const fields: ConfigField[] = section.fields.map((f) => ({
       name: f.key,
       env: f.env ?? envName(record.id, section.id, f.key),
       secret: f.type === 'secret' || undefined,
-      bool: f.type === 'boolean' || undefined
+      bool: f.type === 'boolean' || undefined,
+      fallback: f.type === 'boolean' && typeof f.default === 'boolean' ? f.default : undefined
     }));
     const registered: GraftConfigSection = {
       id,
-      key: `graft:${record.id}:${section.id}`,
+      key: storageKey,
       fields,
-      required: [],
+      required: section.required,
       graft: record.id,
       title: section.title,
       description: section.description,

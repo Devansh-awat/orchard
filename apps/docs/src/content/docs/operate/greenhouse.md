@@ -14,37 +14,47 @@ The internal design, with the data model and the apply operations, is in
 
 ## Turning it on
 
-Greenhouse is a switch at **Instance admin → Configuration**, stored in the
-database like the MCP switch.
+Greenhouse is a [graft](/grafts/overview/), one of Orchard's extensions. It is
+published to the Extension Marketplace from the Orchard repository and installed
+like any other graft:
 
-| `SANDBOX_ENABLED` | Effect                                                                           |
-| ----------------- | -------------------------------------------------------------------------------- |
-| unset             | The admin switch decides. It starts **off** in production and on in development. |
-| `true`            | On, and the switch is locked on.                                                 |
-| `false`           | Off, and the switch is locked off.                                               |
+```sh
+sudo orchardctl graft add greenhouse --apply
+```
 
-`SANDBOX_ENABLED_DEFAULT` (`true` or `false`) changes where the switch starts
-without locking it: admins can still flip it, and their choice wins from then on.
+or, for GitOps, in the Orchard chart values:
 
-In the chart, installing Greenhouse and switching it on are separate:
+```yaml
+grafts:
+  - id: greenhouse
+    version: 1.0.0
+    digest: sha256:...
+```
 
-| Value                 | Default           | What it does                                                                                                                                       |
-| --------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sandbox.install`     | follows `enabled` | Renders the namespace, quota, NetworkPolicy, RBAC and `SANDBOX_*` settings the Kubernetes runner needs.                                            |
-| `sandbox.enabled`     | `false`           | Starts the admin switch on (`SANDBOX_ENABLED_DEFAULT=true`) and, unless `install` is set, installs everything above. Admins can still turn it off. |
-| `sandbox.lockEnabled` | `null`            | `true` or `false` pins the switch (`SANDBOX_ENABLED`, and `PUBLIC_SANDBOX_ENABLED` for the dashboard). `null` leaves it to the admin.              |
+The [marketplace page](https://orchard.my/extensions/greenhouse) shows the exact
+snippet with the digest. Installing it rolls Orchard out the same way an upgrade
+does, with no downtime. Removing the entry turns Greenhouse off; its data stays in
+the database until you run `orchardctl graft remove greenhouse --purge`.
 
-To ship the plumbing and let an admin turn Greenhouse on later, set
-`sandbox.install: true` and leave `enabled` false. With nothing installed only
-`sandbox.runners` is passed through, which suits a Vercel-only setup.
+Installed means on: the old admin switch and `SANDBOX_ENABLED` /
+`SANDBOX_ENABLED_DEFAULT` no longer exist and are ignored if still set. The
+chart's `sandbox.install` still renders the namespace, quota, NetworkPolicy,
+RBAC and `SANDBOX_*` settings the Kubernetes runner needs; leave it on where
+Greenhouse is installed.
 
-Charts before this change locked the switch on whenever `sandbox.enabled` was
-true. After upgrading, the switch starts on but is editable; set
-`sandbox.lockEnabled: true` to keep the old behaviour.
+### Upgrading from an Orchard that had Greenhouse built in
 
-Off means the API, terminals, SSH, live connections and previews all answer 404,
-and the integrations refuse to start sessions. Machines that exist are left
-alone, not stopped.
+Earlier releases shipped Greenhouse inside Orchard. When the graft first starts it
+moves Greenhouse's tables from the `public` schema into its own `ext_greenhouse`
+schema, in one transaction, without copying or deleting anything, and leaves
+views with the old names in `public` so pods still running the previous release
+keep working during the rollout. Per-person machine limits move from the old
+`users.max_sandboxes` column into `ext_greenhouse.user_limits`. Install the graft
+in the same change that upgrades Orchard, or Greenhouse is unavailable until you
+do (nothing is lost in between).
+
+Machine limits per person are now set on **Instance admin → Greenhouse** instead
+of the Users page.
 
 When the instance has PostHog configured (`POSTHOG_API_KEY`), Greenhouse is also
 gated per person by the `greenhouse` feature flag, which lets you roll it out to

@@ -4,7 +4,7 @@ export const TELEMETRY_PITCH =
 export const TELEMETRY_SENT: string[] = [
 	'Which versions of Orchard and Node.js are running, on which CPU architecture.',
 	'How many users there are, and how many were active in the last day, week and month.',
-	'How many organizations, projects, deployments, databases, jobs, sandboxes and nodes exist.',
+	'How many organizations, projects, deployments, databases, jobs and nodes exist, plus similar counts from installed grafts.',
 	'How many builds succeeded and failed in the last 24 hours.',
 	'Whether GitHub, email, backups, SSO, MCP and node scheduling are turned on.',
 	'For an unexpected server error, its type, the route pattern, and the file, function and line in Orchard where it happened.'

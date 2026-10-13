@@ -15,15 +15,12 @@ export class GraftDbPools implements OnModuleDestroy {
     if (!connectionString) throw new Error('DATABASE_URL is not set');
     const max = Number(process.env.ORCHARD_GRAFT_DB_POOL ?? 3) || 3;
     const schema = graftSchema(record.id);
-    const pool = new Pool({ connectionString, max, options: `-c search_path=${schema},public` });
-    if (record.dbRole) {
-      const role = record.dbRole;
-      pool.on('connect', (client) => {
-        client.query(`SET ROLE "${role}"`).catch((err: Error) => {
-          this.logger.error(`${record.id}: SET ROLE ${role} failed: ${err.message}`);
-        });
-      });
-    }
+    const role = record.dbRole ? ` -c role=${record.dbRole}` : '';
+    const pool = new Pool({
+      connectionString,
+      max,
+      options: `-c search_path=${schema},public${role}`
+    });
     pool.on('error', (err) =>
       this.logger.error(`${record.id}: database pool error: ${err.message}`)
     );

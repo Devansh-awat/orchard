@@ -10,8 +10,8 @@ delete process.env.REDIS_URL;
 delete process.env.POD_IP;
 
 import { ExecSessionEngine, type ExecRouteHooks } from '../src/kubernetes/exec-session-engine';
-import { sessions, sessionsByUser, type SandboxExecTarget } from '../src/kubernetes/exec-sessions';
-import type { PtyHandle } from '../src/sandboxes/runners/sandbox-runner';
+import { sessions, sessionsByUser, type ExtensionExecTarget } from '../src/kubernetes/exec-sessions';
+import type { PtyHandle } from '../src/kubernetes/pty';
 
 const SANDBOX = '3f2d7e6a-1b0c-4d5e-8f90-123456789abc';
 
@@ -88,13 +88,12 @@ async function setup() {
       isProxyHop: false
     }),
     async resolveTarget(match, url) {
-      const target: SandboxExecTarget = {
+      const index = url.searchParams.get('n') || '0';
+      const target: ExtensionExecTarget = {
         kind: 'sandbox',
+        key: `sandbox:${match[1]}/-/${index}/rw`,
         sandboxId: match[1],
-        sessionId: null,
-        index: url.searchParams.get('n') || '0',
-        mode: 'rw',
-        worktreePath: null
+        index
       };
       return { target, recheckAuth: async () => true, logAudit: () => {} };
     },

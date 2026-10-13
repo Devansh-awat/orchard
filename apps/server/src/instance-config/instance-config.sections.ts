@@ -1,4 +1,3 @@
-import { previewDomainConflict } from '../sandboxes/preview/preview-auth';
 
 export interface ConfigField {
   name: string;
@@ -162,111 +161,6 @@ export const GIT_BITBUCKET = section(
   ['key', 'secret']
 );
 
-const SANDBOX_RUNNER_NAMES = ['kubernetes', 'vercel'];
-const HOSTNAME =
-  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
-
-const positiveInt = (value: string | null, name: string, max: number) => {
-  const raw = (value || '').trim();
-  if (!raw) return;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1 || n > max) {
-    throw new Error(`${name} must be a whole number between 1 and ${max}`);
-  }
-};
-
-export const SANDBOX_RUNNERS = section(
-  'sandbox-runners',
-  'sandbox_runners',
-  [
-    {
-      name: 'kubernetesEnabled',
-      env: 'SANDBOX_RUNNER_KUBERNETES_ENABLED',
-      bool: true,
-      fallback: true
-    },
-    { name: 'vercelEnabled', env: 'SANDBOX_RUNNER_VERCEL_ENABLED', bool: true, fallback: false },
-    { name: 'defaultRunner', env: 'SANDBOX_DEFAULT_RUNNER' },
-    { name: 'vercelToken', env: 'SANDBOX_VERCEL_TOKEN', secret: true },
-    { name: 'vercelTeamId', env: 'SANDBOX_VERCEL_TEAM_ID' },
-    { name: 'vercelProjectId', env: 'SANDBOX_VERCEL_PROJECT_ID' },
-    { name: 'vercelImage', env: 'SANDBOX_VERCEL_IMAGE' },
-    { name: 'vercelVcpus', env: 'SANDBOX_VERCEL_VCPUS' },
-    { name: 'vercelTimeoutMinutes', env: 'SANDBOX_VERCEL_TIMEOUT_MINUTES' },
-    { name: 'vercelDriveGiB', env: 'SANDBOX_VERCEL_DRIVE_GIB' },
-    { name: 'bridgeBinaryUrl', env: 'SANDBOX_BRIDGE_BINARY_URL' },
-    { name: 'bridgeBinarySha256', env: 'SANDBOX_BRIDGE_BINARY_SHA256' },
-    { name: 'previewDomain', env: 'SANDBOX_PREVIEW_DOMAIN' }
-  ],
-  [],
-  (values) => {
-    const runner = (values.defaultRunner || '').trim();
-    if (runner && !SANDBOX_RUNNER_NAMES.includes(runner)) {
-      throw new Error(`defaultRunner must be one of ${SANDBOX_RUNNER_NAMES.join(', ')}`);
-    }
-    positiveInt(values.vercelVcpus, 'vercelVcpus', 8);
-    positiveInt(values.vercelTimeoutMinutes, 'vercelTimeoutMinutes', 1440);
-    const drive = (values.vercelDriveGiB || '').trim();
-    if (drive) {
-      const gib = Number(drive);
-      if (!Number.isInteger(gib) || gib < 0 || gib > 16384) {
-        throw new Error('vercelDriveGiB must be a whole number between 0 and 16384');
-      }
-    }
-    const bridge = (values.bridgeBinaryUrl || '').trim();
-    if (bridge && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(bridge)) {
-      throw new Error('bridgeBinaryUrl must be a plain https:// address');
-    }
-    const sha = (values.bridgeBinarySha256 || '').trim();
-    if (sha && !/^[0-9a-fA-F]{64}$/.test(sha)) {
-      throw new Error('bridgeBinarySha256 must be the 64 character hex SHA-256 of the tarball');
-    }
-    const preview = (values.previewDomain || '').trim();
-    if (preview && !HOSTNAME.test(preview)) {
-      throw new Error('previewDomain must be a bare domain name such as preview.example.com');
-    }
-    if (preview) {
-      const conflict = previewDomainConflict(preview, {
-        cookieDomain: process.env.COOKIE_DOMAIN,
-        frontendUrl: process.env.FRONTEND_URL,
-        apiUrl: process.env.API_URL,
-        platformOrigins: process.env.PLATFORM_ORIGINS
-      });
-      if (conflict) throw new Error(conflict);
-    }
-  }
-);
-
-const SLACK_APP_ID = /^[A-Z0-9]{6,32}$/;
-
-export const SLACK_APP = section(
-  'slack-app',
-  'slack_app',
-  [
-    { name: 'signingSecret', env: 'SLACK_SIGNING_SECRET', secret: true },
-    { name: 'botToken', env: 'SLACK_BOT_TOKEN', secret: true },
-    { name: 'appId', env: 'SLACK_APP_ID' }
-  ],
-  ['signingSecret', 'botToken'],
-  (values) => {
-    const token = (values.botToken || '').trim();
-    if (token && !token.startsWith('xoxb-')) {
-      throw new Error('botToken must be a bot token starting with xoxb-');
-    }
-    const appId = (values.appId || '').trim();
-    if (appId && !SLACK_APP_ID.test(appId)) {
-      throw new Error('appId must look like A0123456789');
-    }
-  }
-);
-
-export const LINEAR = section(
-  'linear',
-  'linear_integration',
-  [{ name: 'webhookSecret', env: 'LINEAR_WEBHOOK_SECRET', secret: true }],
-  ['webhookSecret']
-);
-
 export const SECTIONS: ConfigSection[] = [
   STORAGE,
   EMAIL,
@@ -276,10 +170,7 @@ export const SECTIONS: ConfigSection[] = [
   TUNNEL,
   TURNSTILE,
   GIT_GITLAB,
-  GIT_BITBUCKET,
-  SANDBOX_RUNNERS,
-  SLACK_APP,
-  LINEAR
+  GIT_BITBUCKET
 ];
 
 export const sectionById = (id: string): ConfigSection | undefined =>

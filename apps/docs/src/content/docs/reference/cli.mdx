@@ -15,7 +15,7 @@ brew install --cask leafdtk/tap/orchard-cli
 ```
 
 Every command accepts `-o json` for machine-readable output, and `--org` / `--env` to
-override the saved context. **369 commands** are available.
+override the saved context. **373 commands** are available.
 
 ## alert
 
@@ -270,6 +270,51 @@ orchard revoke <tokenId>
 ```
 
 Aliases: `delete`, `rm`
+
+## claude
+
+### `orchard claude`
+
+Import your Claude Code setup into Orchard (CLAUDE.md, agents, commands, skills, MCP servers)
+
+```bash
+orchard claude
+```
+
+### `orchard claude import`
+
+Import your Claude Code setup (CLAUDE.md, agents, commands, skills, MCP servers)
+
+```bash
+orchard import
+```
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--dir` | string |  | Claude Code config directory (default ~/.claude) |
+| `--dry-run` | bool | `false` | show what would be uploaded and exit |
+| `--from` | string | `claude` | source to import from (only "claude") |
+| `--only` | stringSlice | `[]` | kinds to import: instructions,agent,command,skill,mcp |
+
+### `orchard claude list`
+
+List the Claude Code setup imported into your account
+
+```bash
+orchard list
+```
+
+Aliases: `ls`
+
+### `orchard claude remove`
+
+Remove one imported item from your account
+
+```bash
+orchard remove <kind>/<name>
+```
+
+Aliases: `rm`
 
 ## commands
 
@@ -3007,7 +3052,7 @@ orchard show
 
 ### `orchard sandbox`
 
-Manage isolated cloud dev sandboxes
+Manage Greenhouse cloud dev sandboxes
 
 ```bash
 orchard sandbox
@@ -3578,7 +3623,7 @@ orchard update <service-id>
 
 ### `orchard ssh-identity`
 
-Manage the ssh identities your sandboxes accept
+Manage the ssh identities your Greenhouse sandboxes accept
 
 ```bash
 orchard ssh-identity

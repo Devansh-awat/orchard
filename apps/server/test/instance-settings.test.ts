@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   InstanceSettingsService,
   MCP_ENABLED_KEY,
-  SANDBOXES_ENABLED_KEY,
   SSO_ENFORCED_KEY
 } from '../src/instance-settings/instance-settings.service';
 
@@ -116,51 +115,4 @@ test('single sign-on is optional until an administrator requires it', async () =
     assert.equal(await settings.isSsoEnforced(), false);
     await assert.rejects(() => settings.setSsoEnforced(true), /SSO_ENFORCED/);
   });
-});
-
-test('sandboxes default on in development and off in production', async () => {
-  const { settings } = build();
-  await withEnv({ SANDBOX_ENABLED: undefined, NODE_ENV: 'development' }, async () => {
-    assert.equal(await settings.isSandboxesEnabled(), true);
-  });
-  await withEnv({ SANDBOX_ENABLED: undefined, NODE_ENV: 'production' }, async () => {
-    assert.equal(await settings.isSandboxesEnabled(), false);
-    assert.deepEqual(await settings.getSandboxesState(), {
-      enabled: false,
-      dbValue: false,
-      envOverride: null
-    });
-  });
-});
-
-test('an administrator can turn sandboxes on for a production instance', async () => {
-  const { prisma, settings } = build();
-  await withEnv({ SANDBOX_ENABLED: undefined, NODE_ENV: 'production' }, async () => {
-    await settings.setSandboxes(true);
-    assert.equal(prisma.rows.get(SANDBOXES_ENABLED_KEY), 'true');
-    assert.equal(await settings.isSandboxesEnabled(), true);
-  });
-});
-
-test('SANDBOX_ENABLED pins the sandboxes toggle', async () => {
-  const { settings } = build();
-  await withEnv({ SANDBOX_ENABLED: 'false', NODE_ENV: 'development' }, async () => {
-    assert.equal(await settings.isSandboxesEnabled(), false);
-    assert.equal((await settings.getSandboxesState()).envOverride, false);
-    await assert.rejects(() => settings.setSandboxes(true), /SANDBOX_ENABLED/);
-  });
-});
-
-test('SANDBOX_ENABLED_DEFAULT starts the sandboxes toggle without locking it', async () => {
-  const { prisma, settings } = build();
-  await withEnv(
-    { SANDBOX_ENABLED: undefined, SANDBOX_ENABLED_DEFAULT: 'true', NODE_ENV: 'production' },
-    async () => {
-      assert.equal(await settings.isSandboxesEnabled(), true);
-      assert.equal((await settings.getSandboxesState()).envOverride, null);
-      await settings.setSandboxes(false);
-      assert.equal(prisma.rows.get(SANDBOXES_ENABLED_KEY), 'false');
-      assert.equal(await settings.isSandboxesEnabled(), false);
-    }
-  );
 });

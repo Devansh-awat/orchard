@@ -31,6 +31,22 @@ export class SecretsDoorV1 {
     return this.crypto.isEncrypted(value);
   }
 
+  get enabled(): boolean {
+    return this.crypto.enabled;
+  }
+
+  seal<T extends string | null | undefined>(value: T): T {
+    return this.crypto.seal(value);
+  }
+
+  open<T extends string | null | undefined>(value: T): T {
+    return this.crypto.open(value);
+  }
+
+  maybeDecrypt<T extends { value: string }>(row: T): T {
+    return this.crypto.maybeDecrypt(row);
+  }
+
   encryptForUser(userId: string, plaintext: string) {
     return this.crypto.encryptForUser(userId, plaintext);
   }

@@ -22,20 +22,18 @@
 		settingLabel,
 		type NotificationCategory,
 		type SettingValue,
+		CORE_CATEGORIES,
+		registerExtensionCategories,
 		type UserDestination,
 		type UserSettings
 	} from '$lib/components/notifications/types';
 
 	let { index = 0 }: { index?: number } = $props();
 
-	const CATEGORIES: NotificationCategory[] = [
-		'deploys',
-		'health',
-		'jobs',
-		'data',
-		'security',
-		'agents'
-	];
+	const CATEGORIES: NotificationCategory[] = $derived([
+		...CORE_CATEGORIES,
+		...registerExtensionCategories(settings?.extensionCategories)
+	]);
 
 	const DEST_META: Record<string, { label: string; icon: typeof Webhook; hue: string }> = {
 		email: { label: 'Email', icon: Mail, hue: 'var(--hue-amber)' },

@@ -7,6 +7,7 @@ import {
   CATEGORY_DEFAULT_VALUE,
   DEFAULT_SETTING_VALUE,
   GLOBAL_SCOPE_ID,
+  EXTENSION_CATEGORIES,
   NOTIFICATION_CATEGORIES,
   NotificationCategory,
   NotificationMessage,
@@ -70,7 +71,8 @@ export class UserNotificationsService {
     return {
       global,
       defaultValue: DEFAULT_SETTING_VALUE,
-      overrides: await this.labelOverrides([...overrides.values()])
+      overrides: await this.labelOverrides([...overrides.values()]),
+      extensionCategories: EXTENSION_CATEGORIES
     };
   }
 

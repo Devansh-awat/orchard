@@ -6,8 +6,8 @@ import { loadAll } from 'js-yaml';
 import {
   KubernetesSandboxRunner,
   SANDBOX_INGRESS_PORTS
-} from '../src/sandboxes/runners/kubernetes.runner';
-import { PREVIEW_PORTS } from '../src/sandboxes/preview/preview-auth';
+} from '../../../grafts/greenhouse/server/src/sandboxes/runners/kubernetes.runner';
+import { PREVIEW_PORTS } from '../../../grafts/greenhouse/server/src/sandboxes/preview/preview-auth';
 
 const chart = resolve(__dirname, '../../../infra/charts/orchard');
 

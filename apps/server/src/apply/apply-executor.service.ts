@@ -7,7 +7,7 @@ export interface ApplyItemInput {
   opType: string;
   manifest: unknown;
   deploymentId: string | null;
-  sandboxId?: string | null;
+  subjectId?: string | null;
 }
 
 export type ApplyHandler = (item: ApplyItemInput) => Promise<void>;

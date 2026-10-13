@@ -16,10 +16,11 @@ import (
 
 func sshIdentityCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:     "ssh-identity",
-		GroupID: groupResources,
-		Aliases: []string{"ssh-key", "identity"},
-		Short:   "Manage the ssh identities your sandboxes accept",
+		Use:               "ssh-identity",
+		GroupID:           groupResources,
+		Aliases:           []string{"ssh-key", "identity"},
+		Short:             "Manage the ssh identities your Greenhouse sandboxes accept",
+		PersistentPreRunE: requireGreenhouse,
 	}
 	c.AddCommand(
 		sshIdentityListCmd(),

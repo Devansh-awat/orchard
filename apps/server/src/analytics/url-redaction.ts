@@ -1,9 +1,9 @@
-const SHARE_TOKEN_PATH_RE = /(\/share\/sandbox\/)(?!sessions(?:[/?#]|$))[^/?#]+/g;
+const SHARE_TOKEN_PATH_RE = /(\/share\/[a-z][a-z0-9-]*\/)(?!sessions(?:[/?#]|$))[^/?#]+/g;
 
 export const REDACTED_SEGMENT = '[redacted]';
 
 export function redactSensitivePath(url: string): string {
-  if (typeof url !== 'string' || !url.includes('/share/sandbox/')) return url;
+  if (typeof url !== 'string' || !url.includes('/share/')) return url;
   return url.replace(SHARE_TOKEN_PATH_RE, `$1${REDACTED_SEGMENT}`);
 }
 

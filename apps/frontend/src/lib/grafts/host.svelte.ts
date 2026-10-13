@@ -74,6 +74,8 @@ function toRequest(init: ApiInit = {}): RequestInit {
 	};
 }
 
+const slotVersion = $state({ value: 0 });
+
 function createHostApi(graft: GraftUiEntry): HostApi {
 	const request = (path: string, init?: ApiInit) =>
 		apiFetch(resolvePath(graft, path), toRequest(init));
@@ -98,10 +100,22 @@ function createHostApi(graft: GraftUiEntry): HostApi {
 			return body as T;
 		},
 		navigate(href, options) {
-			void goto(href, { replaceState: options?.replace ?? false });
+			void goto(href, {
+				replaceState: options?.replace ?? false,
+				keepFocus: options?.keepFocus ?? false,
+				noScroll: options?.noScroll ?? false
+			});
 		},
-		toast(message, tone = 'info') {
-			toasts.add({ title: message, color: tone });
+		toast(message, tone = 'info', options) {
+			toasts.add({
+				title: message,
+				color: tone,
+				description: options?.description,
+				action: options?.action
+			});
+		},
+		refreshSlots() {
+			slotVersion.value++;
 		},
 		confirm(options) {
 			return graftConfirms.ask(options);
@@ -190,7 +204,12 @@ class GraftHost {
 		return this.loaded.find((g) => g.graft.id === id);
 	}
 
+	refreshSlots(): void {
+		slotVersion.value++;
+	}
+
 	slot<K extends SlotName>(name: K, props?: unknown): SlotEntry<K>[] {
+		void slotVersion.value;
 		const out: SlotEntry<K>[] = [];
 		for (const { graft, client, host } of this.loaded) {
 			const items = (client.slots?.[name] ?? []) as SlotMap[K];

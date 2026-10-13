@@ -12,7 +12,10 @@ export type ClaimKind =
   | 'rateLimitBuckets'
   | 'mcpTools'
   | 'sseEvents'
-  | 'auditActions';
+  | 'auditActions'
+  | 'applyOps'
+  | 'deviceNames'
+  | 'mirrorShards';
 
 export const CLAIM_KINDS: ClaimKind[] = [
   'apiAliases',
@@ -26,7 +29,10 @@ export const CLAIM_KINDS: ClaimKind[] = [
   'rateLimitBuckets',
   'mcpTools',
   'sseEvents',
-  'auditActions'
+  'auditActions',
+  'applyOps',
+  'deviceNames',
+  'mirrorShards'
 ];
 
 const PATH_KINDS: ClaimKind[] = ['apiAliases', 'uiAliases', 'wsAliases'];

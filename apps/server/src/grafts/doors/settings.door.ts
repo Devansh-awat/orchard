@@ -4,7 +4,8 @@ import { InstanceConfigService } from '../../instance-config/instance-config.ser
 import { sectionById } from '../../instance-config/instance-config.sections';
 import type { GraftRecord } from '../graft-registry';
 import { graftSectionId } from '../settings';
-import { bindGraft, type DoorMeta } from './door';
+import { assertClaimed, bindGraft, type DoorMeta } from './door';
+import { InstanceSettingsService } from '../../instance-settings/instance-settings.service';
 
 function resolveSection(graft: GraftRecord, sectionId: string) {
   const declared = graft.manifest!.settings.find((s) => s.id === sectionId);
@@ -29,7 +30,8 @@ export class SettingsDoorV1 {
 
   constructor(
     @Inject(INQUIRER) parent: unknown,
-    @Inject(InstanceConfigService) private readonly config: InstanceConfigService
+    @Inject(InstanceConfigService) private readonly config: InstanceConfigService,
+    @Inject(InstanceSettingsService) private readonly instanceSettings: InstanceSettingsService
   ) {
     this.graft = bindGraft(parent, SettingsDoorV1.meta);
   }
@@ -52,5 +54,24 @@ export class SettingsDoorV1 {
 
   get generation(): number {
     return this.config.generation;
+  }
+
+  validate(sectionId: string, check: (values: Record<string, string | null>) => void): void {
+    resolveSection(this.graft, sectionId).validate = check;
+  }
+
+  async stored(key: string): Promise<string | null> {
+    assertClaimed(this.graft, 'settingKeys', key, 'setting key');
+    return this.instanceSettings.get(key);
+  }
+
+  async storeIfAbsent(key: string, value: string): Promise<boolean> {
+    assertClaimed(this.graft, 'settingKeys', key, 'setting key');
+    return this.instanceSettings.createIfAbsent(key, value);
+  }
+
+  async store(key: string, value: string): Promise<void> {
+    assertClaimed(this.graft, 'settingKeys', key, 'setting key');
+    await this.instanceSettings.set(key, value);
   }
 }

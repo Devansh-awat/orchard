@@ -24,10 +24,8 @@
 		type EarlyAccessFeature
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
-	import { sandboxesOn } from '$lib/flags';
 	import { registerPasskey as createPasskey, passkeyErrorMessage } from '$lib/utils/passkey';
 	import { scrollFade } from '$lib/utils/scroll-fade';
-	import { SandboxCredentialsPanel } from '$lib/components/sandbox';
 	import {
 		UserIdentityHero,
 		UserInvitations,
@@ -42,8 +40,6 @@
 		UserMcp,
 		UserAppearance,
 		UserNotifications,
-		UserSshIdentities,
-		UserGreenhouseAccounts,
 		UserLogs
 	} from '$lib/components/user-settings';
 
@@ -145,20 +141,16 @@
 		void checkTailscaleStatus();
 	});
 
-	const activeTab = $derived.by(() => {
-		const t = $page.url.searchParams.get('tab');
-		return !t || t === 'profile' ? 'connections' : t;
-	});
 	const graftTabs = $derived(
 		graftHost.slot('user.settings.tabs', {}).map(({ graftId, host, item }) => ({
 			key: `graft-${graftId}-${item.id}`,
+			id: item.id,
 			graftId,
 			host,
 			label: item.label,
 			mount: item.mount
 		}))
 	);
-	const activeGraftTab = $derived(graftTabs.find((t) => t.key === activeTab));
 
 	const RAIL_GROUPS = $derived(
 		[
@@ -174,14 +166,6 @@
 				label: 'Security',
 				items: [{ id: 'security', label: 'Passkeys and devices' }]
 			},
-			...($sandboxesOn
-				? [
-						{
-							label: 'Greenhouse',
-							items: [{ id: 'sandbox', label: 'Sandbox' }]
-						}
-					]
-				: []),
 			...(graftTabs.length
 				? [
 						{
@@ -205,6 +189,14 @@
 			items: group.items.map((item) => ({ ...item, href: `/user/settings?tab=${item.id}` }))
 		}))
 	);
+
+	const activeTab = $derived.by(() => {
+		const t = $page.url.searchParams.get('tab');
+		if (!t || t === 'profile') return 'connections';
+		if (RAIL_GROUPS.some((g) => g.items.some((i) => i.id === t))) return t;
+		return graftTabs.find((g) => g.id === t)?.key ?? t;
+	});
+	const activeGraftTab = $derived(graftTabs.find((t) => t.key === activeTab));
 
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');
@@ -894,12 +886,6 @@
 					onConfirmRevokeSession={confirmRevokeSession}
 					onShowRevokeAll={() => (showRevokeAllModal = true)}
 				/>
-			{/if}
-
-			{#if activeTab === 'sandbox' && $sandboxesOn}
-				<UserGreenhouseAccounts index={0} />
-				<UserSshIdentities index={1} />
-				<SandboxCredentialsPanel index={2} />
 			{/if}
 
 			{#if activeTab === 'notifications' && $notificationsEnabled}

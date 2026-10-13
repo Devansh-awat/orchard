@@ -21,7 +21,6 @@
 		lastName?: string;
 		imageUrl?: string;
 		isSuperAdmin: boolean;
-		maxSandboxes: number | null;
 		createdAt: string;
 		_count: {
 			organizationMembers: number;
@@ -42,15 +41,7 @@
 	let editFirstName = $state('');
 	let editLastName = $state('');
 	let editIsSuperAdmin = $state(false);
-	let editMaxSandboxes = $state('');
 	let saving = $state(false);
-
-	function parseIntOrNull(v: string | number | null | undefined): number | null {
-		const t = String(v ?? '').trim();
-		if (!t) return null;
-		const n = parseInt(t, 10);
-		return Number.isFinite(n) && n >= 0 ? n : null;
-	}
 
 	// Delete confirmation
 	let deletingUser = $state<UserItem | null>(null);
@@ -91,7 +82,6 @@
 		editFirstName = user.firstName || '';
 		editLastName = user.lastName || '';
 		editIsSuperAdmin = user.isSuperAdmin;
-		editMaxSandboxes = user.maxSandboxes === null ? '' : String(user.maxSandboxes);
 	}
 
 	function closeEdit() {
@@ -108,8 +98,7 @@
 				body: JSON.stringify({
 					firstName: editFirstName,
 					lastName: editLastName,
-					isSuperAdmin: editIsSuperAdmin,
-					maxSandboxes: parseIntOrNull(editMaxSandboxes)
+					isSuperAdmin: editIsSuperAdmin
 				})
 			});
 			if (!response.ok) {
@@ -201,7 +190,6 @@
 						<th class="px-4 py-3 text-left font-medium">Role</th>
 						<th class="px-4 py-3 text-left font-medium">Orgs</th>
 						<th class="px-4 py-3 text-left font-medium">Workspaces</th>
-						<th class="px-4 py-3 text-left font-medium">Sandboxes</th>
 						<th class="px-4 py-3 text-left font-medium">Created</th>
 						<th class="px-4 py-3 text-right font-medium">Actions</th>
 					</tr>
@@ -241,7 +229,6 @@
 							</td>
 							<td class="px-4 py-3">{user._count.organizationMembers}</td>
 							<td class="px-4 py-3">{user._count.workspaceMembers}</td>
-							<td class="px-4 py-3">{user.maxSandboxes ?? '—'}</td>
 							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
 								{new Date(user.createdAt).toLocaleDateString()}
 							</td>
@@ -321,21 +308,6 @@
 					<Input id="edit-user-last-name" bind:value={editLastName} class="w-full" />
 				</Field>
 			</div>
-			<Field
-				label="Max sandboxes"
-				hint="Empty uses the server default"
-				for="edit-user-max-sandboxes"
-			>
-				<Input
-					id="edit-user-max-sandboxes"
-					type="number"
-					min="0"
-					max="100"
-					bind:value={editMaxSandboxes}
-					class="w-full"
-					placeholder="Default"
-				/>
-			</Field>
 			<div class="flex items-center gap-3">
 				<button
 					type="button"

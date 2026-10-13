@@ -1,10 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
 import { Auth } from '../auth/decorators';
+import { loadedGrafts } from '../grafts/graft-registry';
 import { InstanceSettingsService } from './instance-settings.service';
 
-// What this instance offers, for a signed-in browser deciding what to render.
-// Separate from admin/instance-settings because that surface is superadmin-only
-// and this is the opposite: every user needs it, none of them may change it.
 @Controller('instance')
 export class InstanceFeaturesController {
   constructor(private readonly settings: InstanceSettingsService) {}
@@ -12,10 +10,11 @@ export class InstanceFeaturesController {
   @Auth()
   @Get('features')
   async features() {
-    const [mcp, sandboxes] = await Promise.all([
-      this.settings.isMcpEnabled(),
-      this.settings.isSandboxesEnabled()
-    ]);
-    return { mcp, sandboxes };
+    const grafts = loadedGrafts().map((g) => g.id);
+    return {
+      mcp: await this.settings.isMcpEnabled(),
+      grafts,
+      sandboxes: grafts.includes('greenhouse')
+    };
   }
 }

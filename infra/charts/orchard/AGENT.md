@@ -249,9 +249,9 @@ AI dev machines. Off by default. Full operator guide:
 
 | Key | Default | Description |
 |---|---|---|
-| `sandbox.enabled` | `false` | Starts the admin switch on without locking it (`SANDBOX_ENABLED_DEFAULT=true`) and, unless `install` is set, installs the plumbing below. |
-| `sandbox.install` | `null` | Renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. `null` follows `enabled`. Needed for the kubernetes runner; `install: true` with `enabled: false` ships it switched off. |
-| `sandbox.lockEnabled` | `null` | `true`/`false` pins the admin switch (`SANDBOX_ENABLED`, `PUBLIC_SANDBOX_ENABLED`). `null` leaves it to the admin. Set `true` to keep the pre-split behaviour of `enabled`. |
+| `sandbox.enabled` | `false` | Installs the plumbing below unless `install` is set. Greenhouse itself is the `greenhouse` graft: add it to `grafts:` to turn it on. |
+| `sandbox.install` | `null` | Renders the machine namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC and the `SANDBOX_*` settings below. `null` follows `enabled`. Needed for the kubernetes runner of the `greenhouse` graft. |
+| `sandbox.lockEnabled` | `null` | Retired: the admin switch no longer exists, installing the `greenhouse` graft turns Greenhouse on. Still rendered as `SANDBOX_ENABLED` for servers older than the graft. |
 | `sandbox.namespace` | `orchard-sandboxes` | Namespace for kubernetes machines. |
 | `sandbox.image` | `debian:bookworm` | Base image. A bootstrap script installs sshd, git, tmux, Node.js, Claude Code, Codex and opencode on first boot. |
 | `sandbox.runtimeClassName` | `kata` | RuntimeClass for machines. Empty runs them on runc, unprivileged, with a Filesystem home PVC. |

@@ -51,16 +51,3 @@ test('resolveIssuerUrl still trims trailing slashes and strips the scheme', () =
     'https://acme.com/x'
   );
 });
-
-test('a repo or file name arriving as an array is rejected, not coerced', async () => {
-  const { SandboxWorkspaceService } = await import('../src/sandboxes/sandbox-workspace.service');
-  const svc = new SandboxWorkspaceService(null as never, null as never);
-
-  // Array.prototype.includes('..') is an exact-element match, so the traversal
-  // guard used to pass for a single-element array whose content held '..'.
-  assert.throws(
-    () => svc.resolveWorkdir({ repoUrl: null }, ['a/../../etc'] as never),
-    /Invalid repo name/
-  );
-  assert.equal(svc.resolveWorkdir({ repoUrl: null }, 'myrepo'), '/persist/home/myrepo');
-});

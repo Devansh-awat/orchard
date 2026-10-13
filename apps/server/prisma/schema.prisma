@@ -75,18 +75,6 @@ model User {
   notificationDestinations   UserNotificationDestination[]
   createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
   createdChannels            NotificationChannel[]    @relation("NotificationChannelCreator")
-  sandboxes                  Sandbox[]
-  sandboxCredential          SandboxCredential?
-  createdSandboxSessions     SandboxConversation[]    @relation("SandboxSessionCreator")
-  sshIdentities              SshIdentity[]
-  sandboxMemberships         SandboxMember[]          @relation("SandboxMemberUser")
-  sandboxMemberInvites       SandboxMember[]          @relation("SandboxMemberInviter")
-  sandboxPromptAuthors       SandboxPromptAuthor[]
-  sandboxSessionMessages     SandboxSessionMessage[]
-  userIntegrations           UserIntegration[]
-  sandboxShareLinks          SandboxShareLink[]       @relation("SandboxShareLinkCreator")
-  sandboxProjectLinks        SandboxProjectLink[]
-  contextItems               UserContextItem[]
 
   @@map("users")
 }
@@ -326,7 +314,6 @@ model Organization {
   notificationEvents   NotificationEvent[]
   metricAlertRules     MetricAlertRule[]
   statusPages          StatusPage[]
-  sandboxes            Sandbox[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
@@ -470,7 +457,6 @@ model Project {
   jobs              Job[]
   environments      Environment[]
   registryCredentials RegistryCredential[]
-  sandboxLinks        SandboxProjectLink[]
 
   @@unique([organizationId, slug])
   @@index([organizationId], map: "idx_projects_organization")
@@ -522,7 +508,6 @@ model Environment {
   jobs          Job[]
   sharedVars    EnvironmentSharedVar[]
   composeStacks ComposeStack[]
-  sandboxLinks  SandboxProjectLink[]
 
   @@unique([projectId, slug])
   @@index([projectId], map: "idx_environments_project")
@@ -1218,14 +1203,14 @@ model K8sApplyItem {
   claimedAt     DateTime? @map("claimed_at") @db.Timestamp(6)
   lastError     String?   @map("last_error") @db.Text
   deploymentId  String?   @map("deployment_id") @db.Uuid
-  sandboxId     String?   @map("sandbox_id") @db.Uuid
+  subjectId     String?   @map("sandbox_id") @db.Uuid
   requestedById String?   @map("requested_by_id") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@index([status, notBefore], map: "idx_k8s_apply_queue_status_not_before")
   @@index([deploymentId], map: "idx_k8s_apply_queue_deployment")
-  @@index([sandboxId], map: "idx_k8s_apply_queue_sandbox")
+  @@index([subjectId], map: "idx_k8s_apply_queue_sandbox")
   @@map("k8s_apply_queue")
 }
 
@@ -2450,310 +2435,3 @@ model ErrorOccurrence {
   @@map("error_occurrences")
 }
 
-enum SandboxStatus {
-  creating
-  starting
-  running
-  stopping
-  stopped
-  deleting
-  error
-}
-
-enum SandboxRunnerKind {
-  kubernetes
-  vercel
-}
-
-enum SandboxDesiredState {
-  running
-  stopped
-  deleted
-}
-
-model Sandbox {
-  id             String       @id @default(uuid()) @db.Uuid
-  userId         String       @map("user_id") @db.Uuid
-  organizationId String?      @map("organization_id") @db.Uuid
-  name          String        @db.VarChar(63)
-  status        SandboxStatus @default(creating)
-  statusMessage String?       @map("status_message") @db.Text
-  podName       String        @unique @map("pod_name") @db.VarChar(253)
-  namespace     String?       @db.VarChar(253)
-  runner        SandboxRunnerKind   @default(kubernetes)
-  desiredState  SandboxDesiredState @default(running) @map("desired_state")
-  externalId    String?       @map("external_id") @db.VarChar(255)
-  runnerState   Json?         @map("runner_state") @db.JsonB
-  secretEpoch   Int           @default(0) @map("secret_epoch")
-  image         String        @db.VarChar(500)
-  repoUrl       String?       @map("repo_url") @db.VarChar(500)
-  sshIdentityId String?       @map("ssh_identity_id") @db.Uuid
-  setupScript   String?       @map("setup_script") @db.Text
-  cpuLimit      String        @map("cpu_limit") @db.VarChar(20)
-  memoryLimit   String        @map("memory_limit") @db.VarChar(20)
-  diskSize      String        @map("disk_size") @db.VarChar(20)
-  lastActiveAt  DateTime      @default(now()) @map("last_active_at") @db.Timestamp(6)
-  startedAt     DateTime?     @map("started_at") @db.Timestamp(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization  Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sshIdentity   SshIdentity?          @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
-  conversations SandboxConversation[]
-  members         SandboxMember[]
-  promptAuthors   SandboxPromptAuthor[]
-  sessionMessages SandboxSessionMessage[]
-  shareLinks      SandboxShareLink[]
-  projectLinks    SandboxProjectLink[]
-
-  @@unique([userId, name])
-  @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
-  @@index([organizationId], map: "idx_sandboxes_organization")
-  @@index([runner, status], map: "idx_sandboxes_runner_status")
-  @@map("sandboxes")
-}
-
-model SandboxConversation {
-  id                  String    @id @default(uuid()) @db.Uuid
-  sandboxId           String    @map("sandbox_id") @db.Uuid
-  title               String    @db.VarChar(120)
-  repo                String?   @db.VarChar(120)
-  claudeSessionId     String?   @map("claude_session_id") @db.VarChar(255)
-  slug                String?   @db.VarChar(64)
-  branch              String?   @db.VarChar(255)
-  baseBranch          String?   @map("base_branch") @db.VarChar(255)
-  baseCommit          String?   @map("base_commit") @db.VarChar(64)
-  worktreePath        String?   @map("worktree_path") @db.VarChar(500)
-  agent               String    @default("opencode") @db.VarChar(32)
-  opencodeSessionId   String?   @map("opencode_session_id") @db.VarChar(255)
-  prUrl               String?   @map("pr_url") @db.VarChar(500)
-  prNumber            Int?      @map("pr_number")
-  prState             String?   @map("pr_state") @db.VarChar(16)
-  previewDeploymentId String?   @map("preview_deployment_id") @db.Uuid
-  previewUrl          String?   @map("preview_url") @db.VarChar(500)
-  previewEnvironmentId String?  @map("preview_environment_id") @db.Uuid
-  createdById         String?   @map("created_by_id") @db.Uuid
-  archivedAt          DateTime? @map("archived_at") @db.Timestamp(6)
-  prepareError        String?   @map("prepare_error") @db.Text
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  sandbox   Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation("SandboxSessionCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  comments   SandboxSessionMessage[]
-  slackThreadLinks SlackThreadLink[]
-  shareLinks SandboxShareLink[]
-
-  @@unique([sandboxId, slug], map: "uq_sandbox_conversations_sandbox_slug")
-  @@index([sandboxId], map: "idx_sandbox_conversations_sandbox")
-  @@index([sandboxId, archivedAt], map: "idx_sandbox_conversations_sandbox_archived")
-  @@map("sandbox_conversations")
-}
-
-model SshIdentity {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  name      String   @db.VarChar(100)
-  publicKey String   @map("public_key") @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sandboxes Sandbox[]
-
-  @@unique([userId, name])
-  @@map("ssh_identities")
-}
-
-model SandboxCredential {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @map("user_id") @db.Uuid
-  claudeToken String?  @map("claude_token") @db.Text
-  openaiToken String?  @map("openai_token") @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sandbox_credentials")
-}
-
-enum SandboxMemberRole {
-  viewer
-  collaborator
-}
-
-model SandboxMember {
-  id          String            @id @default(uuid()) @db.Uuid
-  sandboxId   String            @map("sandbox_id") @db.Uuid
-  userId      String            @map("user_id") @db.Uuid
-  role        SandboxMemberRole
-  invitedById String?           @map("invited_by_id") @db.Uuid
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  sandbox   Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  user      User    @relation("SandboxMemberUser", fields: [userId], references: [id], onDelete: Cascade)
-  invitedBy User?   @relation("SandboxMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
-
-  @@unique([sandboxId, userId], map: "uq_sandbox_members_sandbox_user")
-  @@index([userId], map: "idx_sandbox_members_user")
-  @@map("sandbox_members")
-}
-
-model SandboxPromptAuthor {
-  id                String   @id @default(uuid()) @db.Uuid
-  sandboxId         String   @map("sandbox_id") @db.Uuid
-  sessionKey        String?  @map("session_id") @db.Uuid
-  opencodeSessionId String   @map("opencode_session_id") @db.VarChar(64)
-  messageId         String   @map("message_id") @db.VarChar(64)
-  userId            String   @map("user_id") @db.Uuid
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  sandbox Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([sandboxId, messageId], map: "uq_sandbox_prompt_authors_message")
-  @@index([sandboxId, opencodeSessionId], map: "idx_sandbox_prompt_authors_chat")
-  @@index([sessionKey], map: "idx_sandbox_prompt_authors_session")
-  @@map("sandbox_prompt_authors")
-}
-
-model SandboxSessionMessage {
-  id         String   @id @default(uuid()) @db.Uuid
-  sandboxId  String   @map("sandbox_id") @db.Uuid
-  sessionKey String   @map("session_id") @db.Uuid
-  chatId     String   @map("chat_id") @db.VarChar(64)
-  userId     String   @map("user_id") @db.Uuid
-  body       String   @db.Text
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  sandbox Sandbox             @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  session SandboxConversation @relation(fields: [sessionKey], references: [id], onDelete: Cascade)
-  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([sessionKey, createdAt], map: "idx_sandbox_session_messages_session")
-  @@index([sandboxId], map: "idx_sandbox_session_messages_sandbox")
-  @@map("sandbox_session_messages")
-}
-
-model SandboxProjectLink {
-  id            String   @id @default(uuid()) @db.Uuid
-  sandboxId     String   @map("sandbox_id") @db.Uuid
-  projectId     String   @map("project_id") @db.Uuid
-  environmentId String   @map("environment_id") @db.Uuid
-  createdById   String   @map("created_by_id") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  sandbox     Sandbox     @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
-  createdBy   User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@unique([sandboxId, projectId], map: "uq_sandbox_project_links_sandbox_project")
-  @@index([environmentId], map: "idx_sandbox_project_links_environment")
-  @@index([projectId], map: "idx_sandbox_project_links_project")
-  @@map("sandbox_project_links")
-}
-
-model SandboxShareLink {
-  id          String    @id @default(uuid()) @db.Uuid
-  sandboxId   String    @map("sandbox_id") @db.Uuid
-  sessionId   String?   @map("session_id") @db.Uuid
-  createdById String    @map("created_by_id") @db.Uuid
-  tokenHash   String    @unique(map: "uq_sandbox_share_links_token_hash") @map("token_hash") @db.VarChar(64)
-  expiresAt   DateTime? @map("expires_at") @db.Timestamp(6)
-  revokedAt   DateTime? @map("revoked_at") @db.Timestamp(6)
-  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamp(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  sandbox   Sandbox              @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
-  session   SandboxConversation? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  createdBy User                 @relation("SandboxShareLinkCreator", fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([sandboxId], map: "idx_sandbox_share_links_sandbox")
-  @@index([sessionId], map: "idx_sandbox_share_links_session")
-  @@map("sandbox_share_links")
-}
-
-model UserIntegration {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
-  provider      String   @db.VarChar(32)
-  secret        String?  @db.Text
-  externalId    String?  @map("external_id") @db.VarChar(255)
-  workspaceName String?  @map("workspace_name") @db.VarChar(255)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, provider], map: "uq_user_integrations_user_provider")
-  @@unique([provider, externalId], map: "uq_user_integrations_provider_external")
-  @@map("user_integrations")
-}
-
-model SlackLinkToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  tokenHash   String    @unique(map: "uq_slack_link_tokens_hash") @map("token_hash") @db.VarChar(64)
-  teamId      String    @map("team_id") @db.VarChar(32)
-  slackUserId String    @map("slack_user_id") @db.VarChar(32)
-  slackUserName String? @map("slack_user_name") @db.VarChar(80)
-  teamDomain  String?   @map("team_domain") @db.VarChar(80)
-  expiresAt   DateTime  @map("expires_at") @db.Timestamp(6)
-  usedAt      DateTime? @map("used_at") @db.Timestamp(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  @@index([teamId, slackUserId], map: "idx_slack_link_tokens_identity")
-  @@index([expiresAt], map: "idx_slack_link_tokens_expires")
-  @@map("slack_link_tokens")
-}
-
-model SandboxIntegrationDelivery {
-  id         String   @id @default(uuid()) @db.Uuid
-  provider   String   @db.VarChar(32)
-  deliveryId String   @map("delivery_id") @db.VarChar(255)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  @@unique([provider, deliveryId], map: "uq_sandbox_integration_deliveries")
-  @@index([createdAt], map: "idx_sandbox_integration_deliveries_created")
-  @@map("sandbox_integration_deliveries")
-}
-
-model SlackThreadLink {
-  id          String    @id @default(uuid()) @db.Uuid
-  sessionId   String    @map("session_id") @db.Uuid
-  sandboxId   String    @map("sandbox_id") @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  channel     String    @db.VarChar(64)
-  threadTs    String    @map("thread_ts") @db.VarChar(64)
-  sawWorking  Boolean   @default(false) @map("saw_working")
-  completedAt DateTime? @map("completed_at") @db.Timestamp(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  session SandboxConversation @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([completedAt, createdAt], map: "idx_slack_thread_links_pending")
-  @@index([sessionId], map: "idx_slack_thread_links_session")
-  @@map("slack_thread_links")
-}
-
-model UserContextItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  kind      String   @db.VarChar(20)
-  name      String   @db.VarChar(64)
-  payload   String   @db.Text
-  sizeBytes Int      @map("size_bytes")
-  enabled   Boolean  @default(true)
-  lock      String   @default("server") @db.VarChar(16)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, kind, name])
-  @@map("user_context_items")
-}

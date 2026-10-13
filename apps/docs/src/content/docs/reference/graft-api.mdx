@@ -14,17 +14,25 @@ uses, and `orchardctl graft add` refuses a graft that needs a door this Orchard
 does not have. Inject a door with `@Inject(Doors.<name>)` from
 `@orchard/graft-sdk/server`.
 
-10 doors are available.
+18 doors are available.
 
 | Door | Version | Capability | Status | Members |
 | --- | --- | --- | --- | --- |
+| `Doors.apply` | 1 | `kube.apply` | stable | `enqueue()`, `hasOpenItem()`, `registerHandler()`, `retryForSubject()`, `serverSideApply()` |
 | `Doors.audit` | 1 | `audit` | stable | `log()` |
-| `Doors.auth` | 1 | none | stable | `can()`, `getOrgAccess()`, `getProjectAccess()`, `isSuperAdmin()`, `listVisibleProjectIds()`, `require()`, `requireOrgAdmin()`, `requireOrgMember()`, `requireOrgOwner()`, `requireProjectEdit()`, `requireProjectView()` |
+| `Doors.auth` | 1 | none | stable | `authenticateTerminalUpgrade()`, `authenticateUpgrade()`, `can()`, `deviceName()`, `getOrgAccess()`, `getProjectAccess()`, `isSuperAdmin()`, `listVisibleProjectIds()`, `mintDeviceToken()`, `originAllowed()`, `registerOrgScopedDevice()`, `rejectUpgrade()`, `requestContext()`, `require()`, `requireOrgAdmin()`, `requireOrgCanCreateProjects()`, `requireOrgMember()`, `requireOrgOwner()`, `requireProjectEdit()`, `requireProjectView()`, `revokeDeviceSessions()`, `runWithContext()`, `validateSession()` |
 | `Doors.context` | 1 | none | stable | `apiBase`, `id`, `manifest`, `role`, `schema`, `version` |
 | `Doors.db` | 1 | `db` | stable | `role`, `schema`, `pool()`, `query()` |
 | `Doors.events` | 1 | `events` | stable | `emitOrg()`, `stream()` |
+| `Doors.exec` | 1 | `kube.exec` | stable | `register()` |
 | `Doors.flags` | 1 | `flags` | stable | `configured`, `isEnabled()` |
-| `Doors.http` | 1 | `http.upgrade` | stable | `hostRouter()`, `upgrade()` |
-| `Doors.secrets` | 1 | `secrets` | stable | `decrypt()`, `decryptForUser()`, `encrypt()`, `encryptForUser()`, `isEncrypted()` |
-| `Doors.settings` | 1 | `settings` | stable | `generation`, `all()`, `flag()`, `isConfigured()`, `value()` |
-| `Doors.users` | 1 | `users.read` | stable | `findByUsername()`, `get()`, `getMany()` |
+| `Doors.github` | 1 | `github` | stable | `github`, `installationToken()`, `onIssueComment()`, `repoToken()`, `userToken()` |
+| `Doors.http` | 1 | `http.upgrade` | stable | `hostRouter()`, `onListen()`, `upgrade()` |
+| `Doors.kube` | 1 | `kube.read` | stable | `kc`, `kubernetes`, `databaseTlsHostname()`, `isLeader()`, `onLeaderAcquired()`, `registerMirrorShard()` |
+| `Doors.metrics` | 1 | `metrics` | stable | `configured`, `vm`, `escapeLabel()`, `queryInstant()` |
+| `Doors.notifications` | 1 | `notifications` | stable | `notifyAccount()`, `registerEvent()` |
+| `Doors.projects` | 1 | `projects.read` | stable | `createDeploymentFromGitHub()`, `createEnvironment()`, `deleteEnvironment()`, `deleteEnvironmentFromCluster()`, `deployments()`, `environments()`, `onEnvironmentEnvChanged()`, `rebuildDeployment()`, `requireWrite()`, `setDeploymentBranch()` |
+| `Doors.rateLimit` | 1 | `rateLimit` | stable | `limits`, `throttle`, `check()`, `consume()`, `define()` |
+| `Doors.secrets` | 1 | `secrets` | stable | `enabled`, `decrypt()`, `decryptForUser()`, `encrypt()`, `encryptForUser()`, `isEncrypted()`, `maybeDecrypt()`, `open()`, `seal()` |
+| `Doors.settings` | 1 | `settings` | stable | `generation`, `all()`, `flag()`, `isConfigured()`, `store()`, `storeIfAbsent()`, `stored()`, `validate()`, `value()` |
+| `Doors.users` | 1 | `users.read` | stable | `findByUsername()`, `get()`, `getMany()`, `resolve()` |

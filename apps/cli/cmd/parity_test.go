@@ -199,6 +199,7 @@ var routeCoverage = map[string]string{
 	"POST /pods/:podName/exec": "pod exec",
 
 	// sandboxes
+	"GET /instance/features":                             "sandbox / ssh-identity (Greenhouse install check)",
 	"GET /sandboxes":                                     "sandbox list",
 	"POST /sandboxes":                                    "sandbox create",
 	"GET /sandboxes/:id":                                 "sandbox get",
@@ -623,9 +624,8 @@ var routeExclusions = map[string]string{
 	"GET /projects/:id/transfer-org/preview":   "no CLI command yet: move a project between orgs",
 	"POST /projects/:id/transfer-org":          "no CLI command yet: move a project between orgs",
 
-	// capability probe: booleans a signed-in browser reads to decide what to
-	// render, and the CLI asks the routes themselves instead
-	"GET /instance/features": "web UI capability probe",
+	"GET /grafts":                      "web UI graft bootstrap: which installed grafts the browser should load",
+	"GET /announcements/announcements": "announcements graft banner, web UI only",
 }
 
 func loadAuthSnapshot(t *testing.T) map[string]string {

@@ -1,0 +1,275 @@
+import type { TerminalAuth, Rejection } from '@orchard/graft-sdk/server';
+import { PrismaService } from '../prisma.service';
+import { SessionsService } from '../core/sessions.service';
+import { AuditService } from '../core/audit.service';
+import { AnalyticsService } from '../core/analytics.service';
+import { InstanceSettingsService } from '../core/instance-settings.service';
+import { isSandboxTarget, sandboxExecTarget, type SandboxExecTarget } from '../core/exec-sessions';
+import type { PtyHandle } from '../core/pty';
+import { SandboxRunnerRegistry } from './runners/sandbox-runner.registry';
+import { SANDBOX_REF_SELECT, refOf } from './runners/sandbox-runner';
+import { SandboxAccessService } from './sandbox-access.service';
+import { sandboxTerminalMode } from './sandbox-role-gate';
+import {
+  isScriptedTerminal,
+  isTerminalIndex,
+  isUuid,
+  isWorktreePath,
+  sandboxTerminalCommand,
+  type TerminalShellEnv
+} from './sandbox-session-commands';
+import {
+  SandboxGitActorService,
+  terminalEnvFile,
+  terminalEnvPath,
+  terminalTmuxEnvScript,
+  writeTerminalEnvScript
+} from './sandbox-git-identity';
+
+const ROUTE_RE = /^\/apiv1\/(?:greenhouse\/)?sandboxes\/([0-9a-f-]{36})\/terminal$/;
+
+export interface SandboxResolvedTarget {
+  target: SandboxExecTarget;
+  recheckAuth: () => Promise<boolean>;
+  logAudit: (action: string, metadata?: Record<string, unknown>) => void;
+}
+
+export interface SandboxExecRouteHooks {
+  route: RegExp;
+  validate(match: RegExpMatchArray, url: URL): Rejection | null;
+  preflight(): Promise<Rejection | null>;
+  resolveTarget(
+    match: RegExpMatchArray,
+    url: URL,
+    auth: TerminalAuth
+  ): Promise<SandboxResolvedTarget | Rejection>;
+  open(
+    target: { kind: string },
+    sessionId: string,
+    size: { cols: number; rows: number }
+  ): Promise<PtyHandle>;
+  proxyPath(target: { kind: string }): { path: string; params: Record<string, string> };
+  onActivity(target: { kind: string }): void;
+  audit: { open: string; reattach: string; denied: string };
+  describeFailure(message: string): string;
+}
+
+export interface SandboxTerminalDeps {
+  prisma: PrismaService;
+  sessions: SessionsService;
+  audit: AuditService;
+  analytics: AnalyticsService;
+  settings: InstanceSettingsService;
+  registry: SandboxRunnerRegistry;
+  accessService: SandboxAccessService;
+  gitActors: SandboxGitActorService;
+}
+
+export interface SandboxTerminalQuery {
+  sessionId: string | null;
+  index: string;
+  mode: 'rw' | 'ro';
+  user?: string;
+}
+
+export function parseSandboxTerminalQuery(params: URLSearchParams): SandboxTerminalQuery | null {
+  const sid = params.get('sid');
+  const n = params.get('n') || '0';
+  const mode = params.get('mode');
+  const user = params.get('user');
+  if (sid && !isUuid(sid)) return null;
+  if (!isTerminalIndex(n)) return null;
+  if (mode && mode !== 'rw' && mode !== 'ro') return null;
+  if (!sid && n !== '0') return null;
+  if (user && (!sid || !isUuid(user))) return null;
+  const scripted = n === 'setup' || n === 'run';
+  return {
+    sessionId: sid ? sid.toLowerCase() : null,
+    index: n,
+    mode: mode === 'rw' || mode === 'ro' ? mode : scripted ? 'ro' : 'rw',
+    ...(user ? { user: user.toLowerCase() } : {})
+  };
+}
+
+export function sandboxTerminalOwner(input: {
+  query: SandboxTerminalQuery;
+  grantedMode: 'rw' | 'ro';
+  principal: string;
+  hostUserId: string;
+}): { mode: 'rw' | 'ro'; terminalUserId: string | null } {
+  const { query, grantedMode, principal, hostUserId } = input;
+  if (query.sessionId && isScriptedTerminal(query)) {
+    return { mode: grantedMode, terminalUserId: null };
+  }
+  const owner = (query.user ?? (grantedMode === 'rw' ? principal : hostUserId)).toLowerCase();
+  const mode = owner === principal.toLowerCase() ? grantedMode : 'ro';
+  return { mode, terminalUserId: owner === hostUserId.toLowerCase() ? null : owner };
+}
+
+export function sandboxTerminalHooks(deps: SandboxTerminalDeps): SandboxExecRouteHooks {
+  const {
+    prisma,
+    sessions: sessionsService,
+    audit,
+    analytics,
+    settings,
+    registry,
+    accessService,
+    gitActors
+  } = deps;
+
+  const loadSession = async (sandboxId: string, sessionId: string) =>
+    prisma.sandboxConversation.findFirst({
+      where: { id: sessionId, sandboxId, archivedAt: null },
+      select: { id: true, worktreePath: true }
+    });
+
+  return {
+    route: ROUTE_RE,
+    validate: (_match, url) =>
+      parseSandboxTerminalQuery(url.searchParams) ? null : { reject: 400, message: 'Bad Request' },
+    async preflight() {
+      const enabled = await settings.isSandboxesEnabled().catch(() => false);
+      return enabled ? null : { reject: 404, message: 'Not Found' };
+    },
+    async resolveTarget(match, url, auth) {
+      const sandboxId = match[1].toLowerCase();
+      const query = parseSandboxTerminalQuery(url.searchParams);
+      if (!query || !isUuid(sandboxId)) return { reject: 400, message: 'Bad Request' };
+      if (analytics.configured && !(await analytics.isFeatureEnabled('greenhouse', auth.userId))) {
+        return { reject: 404, message: 'Not Found' };
+      }
+      const scope = {
+        sessionOrgId: auth.sessionOrgScope ?? null,
+        tokenProjectIds: auth.tokenAuthCtx?.tokenProjectIds ?? null
+      };
+      const access = await sandboxTerminalMode(
+        accessService,
+        sandboxId,
+        auth.userId,
+        query.mode,
+        scope
+      );
+      if (!access) return { reject: 404, message: 'Not Found' };
+      if (!query.sessionId && access.mode !== 'rw') return { reject: 403, message: 'Forbidden' };
+      if (access.row.status !== 'running') return { reject: 404, message: 'Not Found' };
+      const owned = sandboxTerminalOwner({
+        query,
+        grantedMode: access.mode,
+        principal: auth.userId,
+        hostUserId: access.row.userId
+      });
+      const mode = owned.mode;
+      let worktreePath: string | null = null;
+      if (query.sessionId) {
+        const session = await loadSession(sandboxId, query.sessionId);
+        if (!session || !isWorktreePath(session.worktreePath)) {
+          return { reject: 404, message: 'Not Found' };
+        }
+        worktreePath = session.worktreePath;
+      }
+      const target = sandboxExecTarget({
+        sandboxId,
+        sessionId: query.sessionId,
+        index: query.index,
+        mode,
+        worktreePath,
+        terminalUserId: owned.terminalUserId
+      });
+      const principal = auth.userId;
+      return {
+        target,
+        logAudit: (action, metadata = {}) => {
+          audit
+            .log({
+              action,
+              actorUserId: principal,
+              actorEmail: auth.actorEmail ?? null,
+              organizationId: access.row.organizationId ?? undefined,
+              targetType: 'sandbox',
+              targetId: sandboxId,
+              targetLabel: access.row.name,
+              metadata: {
+                runner: access.row.runner,
+                sessionId: query.sessionId,
+                index: query.index,
+                mode,
+                terminalUserId: owned.terminalUserId,
+                ...metadata
+              }
+            })
+            .catch(() => {});
+        },
+        recheckAuth: async () => {
+          try {
+            if (auth.browserSessionId) {
+              const valid = await sessionsService.validateSession(auth.browserSessionId);
+              if (!valid) return false;
+            }
+            const again = await sandboxTerminalMode(
+              accessService,
+              sandboxId,
+              principal,
+              mode,
+              scope
+            );
+            if (!again || again.mode !== mode) return false;
+            if (again.row.status !== 'running') return false;
+            if (query.sessionId && !(await loadSession(sandboxId, query.sessionId))) return false;
+            return true;
+          } catch {
+            return false;
+          }
+        }
+      };
+    },
+    async open(target, sessionId, size) {
+      if (!isSandboxTarget(target)) throw new Error('not a sandbox target');
+      const row = await prisma.sandbox.findUnique({
+        where: { id: target.sandboxId },
+        select: SANDBOX_REF_SELECT
+      });
+      if (!row) throw new Error('sandbox not found');
+      const ref = refOf(row);
+      const runner = registry.for(ref);
+      let shellEnv: TerminalShellEnv | null = null;
+      const guest = target.terminalUserId && target.terminalUserId !== row.userId;
+      if (guest && target.mode === 'rw' && !isScriptedTerminal(target)) {
+        const actor = await gitActors.resolve(target.terminalUserId!);
+        const envFile = terminalEnvPath(sessionId);
+        const written = await runner
+          .exec(ref, ['su', '-l', 'dev', '-c', writeTerminalEnvScript(envFile)], {
+            stdin: Buffer.from(terminalEnvFile(actor), 'utf8'),
+            timeoutMs: 20_000
+          })
+          .catch(() => null);
+        if (!written?.ok) throw new Error('could not set up your git identity in the sandbox');
+        shellEnv = { envFile, tmuxEnv: terminalTmuxEnvScript(actor.identity, !!actor.token) };
+      }
+      return runner.openPty(ref, {
+        command: sandboxTerminalCommand(target, sessionId, shellEnv),
+        cols: size.cols,
+        rows: size.rows
+      });
+    },
+    proxyPath(target) {
+      if (!isSandboxTarget(target)) throw new Error('not a sandbox target');
+      const params: Record<string, string> = { n: target.index, mode: target.mode };
+      if (target.sessionId) params.sid = target.sessionId;
+      if (target.sessionId && target.terminalUserId) params.user = target.terminalUserId;
+      return { path: `/apiv1/sandboxes/${target.sandboxId}/terminal`, params };
+    },
+    onActivity(target) {
+      if (!isSandboxTarget(target)) return;
+      prisma.sandbox
+        .update({ where: { id: target.sandboxId }, data: { lastActiveAt: new Date() } })
+        .catch(() => {});
+    },
+    audit: {
+      open: 'sandbox.terminal.open',
+      reattach: 'sandbox.terminal.reattach',
+      denied: 'sandbox.terminal.denied'
+    },
+    describeFailure: (message) => `Could not open a terminal in the sandbox: ${message}`
+  };
+}

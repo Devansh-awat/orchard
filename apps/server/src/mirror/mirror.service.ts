@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,16 +7,12 @@ import { GLOBAL_LEADER_LEASE, LeaseService } from '../coordination/lease.service
 import { OrgEventsService } from '../events/org-events.service';
 import { Elector } from '../coordination/lease-elector';
 import { Failure, lastingFailures, shardIsStale, UNHEALTHY_GRACE_MS } from './mirror-health';
-import { KubernetesSandboxRunner } from '../sandboxes/runners/kubernetes.runner';
-import { SandboxRunnerRegistry } from '../sandboxes/runners/sandbox-runner.registry';
-import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { MirrorInformer, MirrorRefs } from './mirror-informer';
-import { MirrorShardDef, buildMirrorShards } from './mirror-shards';
+import { MirrorShardDef, buildMirrorShards, registeredMirrorShards } from './mirror-shards';
 import { PodMirrorConsumer } from './consumers/pod-mirror.consumer';
 import { CnpgMirrorConsumer } from './consumers/cnpg-mirror.consumer';
 import { JobMirrorConsumer } from './consumers/job-mirror.consumer';
 import { WorkloadMirrorConsumer } from './consumers/workload-mirror.consumer';
-import { SandboxMirrorConsumer } from './consumers/sandbox-mirror.consumer';
 import { IngressMirrorConsumer } from './consumers/ingress-mirror.consumer';
 import { StorageMirrorConsumer } from './consumers/storage-mirror.consumer';
 import { ServiceMirrorConsumer } from './consumers/service-mirror.consumer';
@@ -65,7 +61,7 @@ export interface ShardHealth {
 }
 
 @Injectable()
-export class MirrorService implements OnModuleInit, OnModuleDestroy {
+export class MirrorService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(MirrorService.name);
 
   private readonly shards = new Map<string, ShardRuntime>();
@@ -89,17 +85,13 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
     private readonly cnpgConsumer: CnpgMirrorConsumer,
     private readonly jobConsumer: JobMirrorConsumer,
     private readonly workloadConsumer: WorkloadMirrorConsumer,
-    private readonly sandboxConsumer: SandboxMirrorConsumer,
     private readonly ingressConsumer: IngressMirrorConsumer,
     private readonly storageConsumer: StorageMirrorConsumer,
     private readonly serviceConsumer: ServiceMirrorConsumer,
-    private readonly namespaceConsumer: NamespaceMirrorConsumer,
-    private readonly sandboxRunner: KubernetesSandboxRunner,
-    private readonly sandboxRegistry: SandboxRunnerRegistry,
-    private readonly settings: InstanceSettingsService
+    private readonly namespaceConsumer: NamespaceMirrorConsumer
   ) {}
 
-  async onModuleInit() {
+  async onApplicationBootstrap() {
     if (process.env.MIRROR_DISABLED === 'true') {
       this.logger.warn('MIRROR_DISABLED=true — legacy informers stay active, mirror is off');
       return;
@@ -125,15 +117,21 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       cnpg: this.cnpgConsumer,
       jobs: this.jobConsumer,
       workloads: this.workloadConsumer,
-      sandboxes: this.sandboxConsumer,
       ingresses: this.ingressConsumer,
       storage: this.storageConsumer,
       services: this.serviceConsumer,
       namespaces: this.namespaceConsumer,
       certManager: await this.certManagerInstalled(),
-      sandboxScope: await this.resolveSandboxScope(),
       namespaceRefs: (ns) => this.resolveNamespaceRefs(ns)
     });
+    for (const build of registeredMirrorShards()) {
+      try {
+        const def = await build();
+        if (def) defs.push(def);
+      } catch (e: any) {
+        this.logger.warn(`extension mirror shard skipped: ${e?.message}`);
+      }
+    }
 
     for (const def of defs) {
       const runtime: ShardRuntime = {
@@ -507,10 +505,6 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
       .catch(() => {});
   }
 
-  // Which sandboxes are this install's. Left null on failure rather than
-  // guessed at: a shard that watched the wrong set would be worse than no shard
-  // at all, and everything that reads the sandbox mirror already refuses to act
-  // on a shard that is not reporting.
   private async certManagerInstalled(): Promise<boolean> {
     try {
       await this.kubernetes
@@ -525,23 +519,6 @@ export class MirrorService implements OnModuleInit, OnModuleDestroy {
         );
       }
       return false;
-    }
-  }
-
-  private async resolveSandboxScope(): Promise<{ namespace: string; instanceId: string } | null> {
-    try {
-      if (!(await this.settings.isSandboxesEnabled())) return null;
-      if (!this.sandboxRegistry.enabled('kubernetes')) {
-        const existing = await this.prisma.sandbox.count({ where: { runner: 'kubernetes' } });
-        if (existing === 0) return null;
-      }
-      return {
-        namespace: this.sandboxRunner.namespace,
-        instanceId: await this.sandboxRunner.instanceId()
-      };
-    } catch (e: any) {
-      this.logger.warn(`sandbox mirror shard disabled: ${e?.message}`);
-      return null;
     }
   }
 

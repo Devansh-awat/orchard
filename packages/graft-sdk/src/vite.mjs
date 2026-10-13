@@ -9,7 +9,8 @@ export async function graftUi(options) {
       }),
       ...(options.plugins ?? [])
     ],
-    resolve: { conditions: ['svelte', 'browser'] },
+    resolve: { conditions: ['svelte', 'browser', 'production'] },
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: {
       outDir: options.outDir ?? 'dist/ui',
       emptyOutDir: true,

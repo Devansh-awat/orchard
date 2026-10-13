@@ -1,6 +1,10 @@
 export type NotificationScopeType = 'org' | 'project' | 'deployment' | 'database' | 'job';
 
-export type NotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 'security' | 'agents';
+export type CoreNotificationCategory = 'deploys' | 'health' | 'jobs' | 'data' | 'security';
+
+export type NotificationCategory = CoreNotificationCategory | (string & {});
+
+export const CORE_CATEGORIES: CoreNotificationCategory[] = ['deploys', 'health', 'jobs', 'data', 'security'];
 
 export type SettingValue = 'always' | 'subscribed' | 'never';
 
@@ -98,10 +102,18 @@ export interface UserSettingsOverride {
 	missing: boolean;
 }
 
+export interface ExtensionCategory {
+	id: string;
+	label: string;
+	options: SettingValue[];
+	copy: Partial<Record<SettingValue, { label: string; hint: string }>>;
+}
+
 export interface UserSettings {
 	global: Record<NotificationCategory, SettingValue>;
 	defaultValue: SettingValue;
 	overrides: UserSettingsOverride[];
+	extensionCategories?: ExtensionCategory[];
 }
 
 export interface ScopeSettings {
@@ -158,13 +170,12 @@ export const EVENT_GROUPS: {
 	}
 ];
 
-export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
 	deploys: 'Deploys',
 	health: 'App and database health',
 	jobs: 'Jobs',
 	data: 'Backups and archiving',
-	security: 'Security',
-	agents: 'Greenhouse sessions'
+	security: 'Security'
 };
 
 export const SETTING_LABELS: Record<SettingValue, { label: string; hint: string }> = {
@@ -177,14 +188,24 @@ export const SETTING_LABELS: Record<SettingValue, { label: string; hint: string 
 // deployed, so "Mine only" has nothing to mean: a sign-in is always yours. Two
 // states, and the copy says what they do instead of how much of someone else's
 // work you hear about.
-export const CATEGORY_OPTIONS: Record<NotificationCategory, SettingValue[]> = {
+export const CATEGORY_OPTIONS: Record<string, SettingValue[]> = {
 	deploys: ['always', 'subscribed', 'never'],
 	health: ['always', 'subscribed', 'never'],
 	jobs: ['always', 'subscribed', 'never'],
 	data: ['always', 'subscribed', 'never'],
-	security: ['always', 'never'],
-	agents: ['always', 'never']
+	security: ['always', 'never']
 };
+
+const EXTENSION_COPY: Record<string, ExtensionCategory['copy']> = {};
+
+export function registerExtensionCategories(categories: ExtensionCategory[] | undefined): string[] {
+	for (const c of categories ?? []) {
+		CATEGORY_LABELS[c.id] = c.label;
+		CATEGORY_OPTIONS[c.id] = c.options;
+		EXTENSION_COPY[c.id] = c.copy;
+	}
+	return (categories ?? []).map((c) => c.id);
+}
 
 const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
 	always: {
@@ -194,17 +215,13 @@ const SECURITY_LABELS: Partial<Record<SettingValue, { label: string; hint: strin
 	never: { label: 'Off', hint: 'No alerts when something signs in to your account' }
 };
 
-const AGENT_LABELS: Partial<Record<SettingValue, { label: string; hint: string }>> = {
-	always: { label: 'On', hint: 'Told when an agent session is waiting for you' },
-	never: { label: 'Off', hint: 'No alerts when an agent session is waiting for you' }
-};
 
 export function settingLabel(
 	category: NotificationCategory,
 	value: SettingValue
 ): { label: string; hint: string } {
 	if (category === 'security') return SECURITY_LABELS[value] ?? SETTING_LABELS[value];
-	if (category === 'agents') return AGENT_LABELS[value] ?? SETTING_LABELS[value];
+	if (EXTENSION_COPY[category]) return EXTENSION_COPY[category][value] ?? SETTING_LABELS[value];
 	return SETTING_LABELS[value];
 }
 

@@ -1,13 +1,21 @@
 import type { Provider, Type } from '@nestjs/common';
 import { Scope } from '@nestjs/common';
+import { ApplyDoorV1 } from './apply.door';
 import { AuditDoorV1 } from './audit.door';
 import { AuthDoorV1 } from './auth.door';
 import { ContextDoorV1 } from './context.door';
 import { DbDoorV1 } from './db.door';
 import { doorToken, type DoorMeta } from './door';
 import { EventsDoorV1 } from './events.door';
+import { ExecDoorV1 } from './exec.door';
 import { FlagsDoorV1 } from './flags.door';
+import { GitHubDoorV1 } from './github.door';
 import { HttpDoorV1 } from './http.door';
+import { KubeDoorV1 } from './kube.door';
+import { MetricsDoorV1 } from './metrics.door';
+import { NotificationsDoorV1 } from './notifications.door';
+import { ProjectsDoorV1 } from './projects.door';
+import { RateLimitDoorV1 } from './rate-limit.door';
 import { SecretsDoorV1 } from './secrets.door';
 import { SettingsDoorV1 } from './settings.door';
 import { UsersDoorV1 } from './users.door';
@@ -24,7 +32,15 @@ export const DOOR_CLASSES: DoorClass[] = [
   SettingsDoorV1,
   EventsDoorV1,
   DbDoorV1,
-  HttpDoorV1
+  HttpDoorV1,
+  KubeDoorV1,
+  ApplyDoorV1,
+  ExecDoorV1,
+  ProjectsDoorV1,
+  NotificationsDoorV1,
+  RateLimitDoorV1,
+  MetricsDoorV1,
+  GitHubDoorV1
 ];
 
 export function doorProviders(): Provider[] {

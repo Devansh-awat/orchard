@@ -115,8 +115,7 @@
 		'/mcp',
 		'/cli',
 		'/auth/protect',
-		'/setup/claim',
-		'/tour/'
+		'/setup/claim'
 	];
 
 	// /<org>/login is the org's own SSO entry point and is meant to be reached
@@ -125,10 +124,7 @@
 	// definition, and a tenant's branded login screen should not open on the
 	// app's boot spinner.
 	const isOrgLoginRoute = $derived($page.route.id === '/[orgSlug=orgSlug]/login');
-	const isDevHarness = $derived(
-		(dev && ($page.route.id?.startsWith('/dev/') ?? false)) ||
-			($page.route.id?.startsWith('/tour/') ?? false)
-	);
+	const isDevHarness = $derived(dev && ($page.route.id?.startsWith('/dev/') ?? false));
 
 	function isPublicPath(pathname: string) {
 		if (dev && pathname.startsWith('/dev/')) return true;
@@ -252,7 +248,7 @@
 		}
 	});
 
-	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect', '/sandboxes', '/share/sandbox', '/tour/'];
+	const FULLSCREEN_PREFIXES = ['/setup', '/auth/protect'];
 	const fullscreenPath = $derived(
 		FULLSCREEN_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)) ||
 			isFullscreenGraftPath($page.url.pathname)
@@ -265,6 +261,7 @@
 
 <svelte:head>
 	<title>Orchard Dashboard</title>
+	{#if secretRoute($page.url.pathname)}<meta name="referrer" content="no-referrer" />{/if}
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>

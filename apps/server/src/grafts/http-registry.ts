@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 export type UpgradeHandler = (
@@ -14,6 +14,8 @@ export type HostRouter = {
   handleUpgrade?(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<boolean>;
 };
 
+export type ListenHandler = (server: Server) => void | Promise<void>;
+
 type Upgrade = { graft: string; prefix: string; handler: UpgradeHandler };
 
 @Injectable()
@@ -21,10 +23,30 @@ export class GraftHttpRegistry {
   private readonly logger = new Logger('Grafts');
   private readonly upgrades: Upgrade[] = [];
   private readonly routers: { graft: string; router: HostRouter }[] = [];
+  private readonly listeners: { graft: string; handler: ListenHandler }[] = [];
+  private server: Server | null = null;
 
   addUpgrade(graft: string, prefix: string, handler: UpgradeHandler): void {
     this.upgrades.push({ graft, prefix: prefix.replace(/\/+$/, ''), handler });
     this.upgrades.sort((a, b) => b.prefix.length - a.prefix.length);
+  }
+
+  addListener(graft: string, handler: ListenHandler): void {
+    this.listeners.push({ graft, handler });
+    if (this.server) void this.runListener(graft, handler, this.server);
+  }
+
+  async listening(server: Server): Promise<void> {
+    this.server = server;
+    for (const { graft, handler } of this.listeners) await this.runListener(graft, handler, server);
+  }
+
+  private async runListener(graft: string, handler: ListenHandler, server: Server): Promise<void> {
+    try {
+      await handler(server);
+    } catch (err) {
+      this.logger.error(`${graft}: listen handler failed: ${(err as Error).message}`);
+    }
   }
 
   addHostRouter(graft: string, router: HostRouter): void {

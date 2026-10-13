@@ -9,8 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../auth/sessions.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { assertBrowserSession } from '../auth/session-jwt';
-import { originAllowed, platformOrigins } from '../sandboxes/live/live-auth';
-import type { PtyHandle } from '../sandboxes/runners/sandbox-runner';
+import { originAllowed, platformOrigins } from '../auth/upgrade-auth';
+import type { PtyHandle } from './pty';
 import {
   DETACH_GRACE_MS,
   ExecSessionDirectory,
@@ -934,14 +934,21 @@ export class ExecSessionEngine {
   }
 }
 
-const engines = new WeakMap<http.Server, ExecSessionEngine>();
+const engines = new Set<ExecSessionEngine>();
+const engineByServer = new WeakMap<http.Server, ExecSessionEngine>();
+const extensionRoutes: ExecRouteHooks[] = [];
+
+export function registerExecRoute(hooks: ExecRouteHooks): void {
+  extensionRoutes.push(hooks);
+  for (const engine of engines) engine.register(hooks);
+}
 
 export function execSessionEngine(
   server: http.Server,
   app: INestApplication,
   opts: { skipUpgrade?: UpgradeSkip } = {}
 ): ExecSessionEngine {
-  let engine = engines.get(server);
+  let engine = engineByServer.get(server);
   if (!engine) {
     engine = new ExecSessionEngine(server, {
       prisma: app.get(PrismaService),
@@ -949,7 +956,9 @@ export function execSessionEngine(
       jwtSecret: new TextEncoder().encode(process.env.JWT_SECRET || ''),
       skipUpgrade: opts.skipUpgrade
     });
-    engines.set(server, engine);
+    engineByServer.set(server, engine);
+    engines.add(engine);
+    for (const hooks of extensionRoutes) engine.register(hooks);
   } else if (opts.skipUpgrade) {
     engine.setSkipUpgrade(opts.skipUpgrade);
   }

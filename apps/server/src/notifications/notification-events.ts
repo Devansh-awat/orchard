@@ -1,4 +1,4 @@
-export const NOTIFICATION_EVENTS = [
+const CORE_NOTIFICATION_EVENTS = [
   'deploy.succeeded',
   'deploy.failed',
   'pod.crashing',
@@ -18,11 +18,12 @@ export const NOTIFICATION_EVENTS = [
   'job.succeeded',
   'job.failed',
   'security.signed_in',
-  'security.app_authorized',
-  'sandbox.session.needs_input'
+  'security.app_authorized'
 ] as const;
 
-export type NotificationEventName = (typeof NOTIFICATION_EVENTS)[number];
+export type NotificationEventName = (typeof CORE_NOTIFICATION_EVENTS)[number] | `${string}.${string}`;
+
+export const NOTIFICATION_EVENTS: NotificationEventName[] = [...CORE_NOTIFICATION_EVENTS];
 
 export const NOTIFICATION_CHANNEL_TYPES = ['discord', 'slack', 'webhook', 'email'] as const;
 
@@ -38,18 +39,13 @@ export type UserDestinationType = (typeof USER_DESTINATION_TYPES)[number];
 // the one addition that earns its place: it is the only category about the
 // account rather than about something the account deployed, and an alert nobody
 // asked for is the entire point of it.
-export const NOTIFICATION_CATEGORIES = [
-  'deploys',
-  'health',
-  'jobs',
-  'data',
-  'security',
-  'agents'
-] as const;
+const CORE_NOTIFICATION_CATEGORIES = ['deploys', 'health', 'jobs', 'data', 'security'] as const;
 
-export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+export type NotificationCategory = (typeof CORE_NOTIFICATION_CATEGORIES)[number] | (string & {});
 
-export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory> = {
+export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [...CORE_NOTIFICATION_CATEGORIES];
+
+export const EVENT_CATEGORY: Record<string, NotificationCategory> = {
   'deploy.succeeded': 'deploys',
   'deploy.failed': 'deploys',
   'pod.crashing': 'health',
@@ -69,17 +65,15 @@ export const EVENT_CATEGORY: Record<NotificationEventName, NotificationCategory>
   'job.succeeded': 'jobs',
   'job.failed': 'jobs',
   'security.signed_in': 'security',
-  'security.app_authorized': 'security',
-  'sandbox.session.needs_input': 'agents'
+  'security.app_authorized': 'security'
 };
 
-export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   deploys: 'Deploys',
   health: 'App and database health',
   jobs: 'Jobs',
   data: 'Backups and archiving',
-  security: 'Security',
-  agents: 'Greenhouse sessions'
+  security: 'Security'
 };
 
 // Scopes a rule or a personal setting can attach to. 'global' is personal-only
@@ -94,7 +88,7 @@ export type SettingScopeType = (typeof SETTING_SCOPE_TYPES)[number];
 
 export type ResourceScopeType = 'deployment' | 'database' | 'job' | 'user';
 
-export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeType> = {
+export const EVENT_RESOURCE_SCOPE: Record<string, ResourceScopeType> = {
   'deploy.succeeded': 'deployment',
   'deploy.failed': 'deployment',
   'pod.crashing': 'deployment',
@@ -114,20 +108,19 @@ export const EVENT_RESOURCE_SCOPE: Record<NotificationEventName, ResourceScopeTy
   'job.succeeded': 'job',
   'job.failed': 'job',
   'security.signed_in': 'user',
-  'security.app_authorized': 'user',
-  'sandbox.session.needs_input': 'user'
+  'security.app_authorized': 'user'
 };
 
 // A security event is about one person's account and never belongs on a shared
 // channel, so it is not offerable to a rule at any scope. Team rules address
 // org resources; this one addresses you.
-export const TEAM_ROUTABLE_EVENTS = NOTIFICATION_EVENTS.filter(
-  (e) => EVENT_RESOURCE_SCOPE[e] !== 'user'
-);
+export function teamRoutableEvents(): NotificationEventName[] {
+  return NOTIFICATION_EVENTS.filter((e) => EVENT_RESOURCE_SCOPE[e] !== 'user');
+}
 
 export function eventsForScopeType(scopeType: RuleScopeType): NotificationEventName[] {
-  if (scopeType === 'org' || scopeType === 'project') return [...TEAM_ROUTABLE_EVENTS];
-  return TEAM_ROUTABLE_EVENTS.filter((e) => EVENT_RESOURCE_SCOPE[e] === scopeType);
+  if (scopeType === 'org' || scopeType === 'project') return teamRoutableEvents();
+  return teamRoutableEvents().filter((e) => EVENT_RESOURCE_SCOPE[e] === scopeType);
 }
 
 // always: everything in this category. subscribed: only what I'm involved in
@@ -143,13 +136,12 @@ export const DEFAULT_SETTING_VALUE: SettingValue = 'subscribed';
 // involved in your own sign-in, but it would read as "Mine only" in the UI and
 // a sign-in cannot be anything else. The alert nobody asked for is the point of
 // the category, so the default says so out loud.
-export const CATEGORY_DEFAULT_VALUE: Record<NotificationCategory, SettingValue> = {
+export const CATEGORY_DEFAULT_VALUE: Record<string, SettingValue> = {
   deploys: DEFAULT_SETTING_VALUE,
   health: DEFAULT_SETTING_VALUE,
   jobs: DEFAULT_SETTING_VALUE,
   data: DEFAULT_SETTING_VALUE,
-  security: 'always',
-  agents: 'always'
+  security: 'always'
 };
 
 // The scope_id stored for an account-wide preference. A real id is never this
@@ -170,7 +162,7 @@ export interface NotificationMessage {
 
 export type EventTone = 'success' | 'failure' | 'notice';
 
-export const EVENT_TONE: Record<NotificationEventName, EventTone> = {
+export const EVENT_TONE: Record<string, EventTone> = {
   'deploy.succeeded': 'success',
   'deploy.failed': 'failure',
   'pod.crashing': 'failure',
@@ -193,8 +185,7 @@ export const EVENT_TONE: Record<NotificationEventName, EventTone> = {
   // painting it green says "all good" about the one message whose whole job is
   // to make you look twice.
   'security.signed_in': 'notice',
-  'security.app_authorized': 'notice',
-  'sandbox.session.needs_input': 'notice'
+  'security.app_authorized': 'notice'
 };
 
 export const TONE_COLORS: Record<EventTone, number> = {
@@ -205,4 +196,44 @@ export const TONE_COLORS: Record<EventTone, number> = {
 
 export function isNotificationEvent(value: unknown): value is NotificationEventName {
   return typeof value === 'string' && (NOTIFICATION_EVENTS as readonly string[]).includes(value);
+}
+
+export type CategoryChoiceCopy = Partial<Record<SettingValue, { label: string; hint: string }>>;
+
+export type ExtensionCategory = {
+  id: string;
+  label: string;
+  options: SettingValue[];
+  copy: CategoryChoiceCopy;
+};
+
+export const EXTENSION_CATEGORIES: ExtensionCategory[] = [];
+
+export type NotificationEventDefinition = {
+  event: `${string}.${string}`;
+  category: string;
+  categoryLabel?: string;
+  categoryDefault?: SettingValue;
+  categoryOptions?: SettingValue[];
+  categoryCopy?: CategoryChoiceCopy;
+  scope: ResourceScopeType;
+  tone: EventTone;
+};
+
+export function registerNotificationEvent(def: NotificationEventDefinition): void {
+  if (!NOTIFICATION_EVENTS.includes(def.event)) NOTIFICATION_EVENTS.push(def.event);
+  EVENT_CATEGORY[def.event] = def.category;
+  EVENT_RESOURCE_SCOPE[def.event] = def.scope;
+  EVENT_TONE[def.event] = def.tone;
+  if (!NOTIFICATION_CATEGORIES.includes(def.category)) {
+    NOTIFICATION_CATEGORIES.push(def.category);
+    CATEGORY_LABELS[def.category] = def.categoryLabel ?? def.category;
+    CATEGORY_DEFAULT_VALUE[def.category] = def.categoryDefault ?? DEFAULT_SETTING_VALUE;
+    EXTENSION_CATEGORIES.push({
+      id: def.category,
+      label: def.categoryLabel ?? def.category,
+      options: def.categoryOptions ?? [...SETTING_VALUES],
+      copy: def.categoryCopy ?? {}
+    });
+  }
 }

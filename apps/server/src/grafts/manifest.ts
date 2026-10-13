@@ -85,6 +85,11 @@ const settingsSection = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   title: z.string(),
   description: z.string().optional(),
+  storageKey: z
+    .string()
+    .regex(/^[a-z][a-z0-9_:-]*$/)
+    .optional(),
+  required: z.array(z.string()).default([]),
   fields: z.array(settingField)
 });
 
@@ -164,7 +169,10 @@ export const graftManifestSchema = z
         rateLimitBuckets: z.array(z.string()).default([]),
         mcpTools: z.array(z.string()).default([]),
         sseEvents: z.array(z.string()).default([]),
-        auditActions: z.array(z.string()).default([])
+        auditActions: z.array(z.string()).default([]),
+        applyOps: z.array(z.string()).default([]),
+        deviceNames: z.array(z.string()).default([]),
+        mirrorShards: z.array(z.string()).default([])
       })
       .default({}),
     database: z

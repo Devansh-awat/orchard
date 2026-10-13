@@ -5,8 +5,7 @@ import {
   STORAGE,
   EMAIL,
   NETWORK,
-  WILDCARD,
-  SANDBOX_RUNNERS
+  WILDCARD
 } from '../src/instance-config/instance-config.sections';
 import { objectStorage } from '../src/instance-config/object-storage';
 
@@ -294,99 +293,4 @@ test('a reload picks up a value another replica saved', async () => {
     assert.equal(reader.value(EMAIL, 'host'), 'elsewhere.example.com');
     assert.ok(reader.generation > before);
   });
-});
-
-test('the kubernetes runner ships on and vercel ships off', async () => {
-  const { service } = build();
-  await withEnv(
-    { SANDBOX_RUNNER_KUBERNETES_ENABLED: undefined, SANDBOX_RUNNER_VERCEL_ENABLED: undefined },
-    () => {
-      assert.equal(service.flag(SANDBOX_RUNNERS, 'kubernetesEnabled'), true);
-      assert.equal(service.flag(SANDBOX_RUNNERS, 'vercelEnabled'), false);
-    }
-  );
-});
-
-test('the vercel token is a secret and the runner toggles are locked by the environment', async () => {
-  const { service, settings } = build();
-  await withEnv(
-    {
-      SANDBOX_VERCEL_TOKEN: undefined,
-      SANDBOX_RUNNER_VERCEL_ENABLED: 'true',
-      SANDBOX_RUNNER_KUBERNETES_ENABLED: undefined
-    },
-    async () => {
-      await service.save(SANDBOX_RUNNERS, { vercelToken: 'vcl_secret', vercelEnabled: 'true' });
-      const raw = JSON.parse(settings.rows.get(SANDBOX_RUNNERS.key)!);
-      assert.equal(raw.vercelToken, 'enc:vcl_secret');
-      const state = service.state(SANDBOX_RUNNERS);
-      assert.equal(state.values.vercelToken, '');
-      assert.ok(state.lockedFields.includes('vercelEnabled'));
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { vercelEnabled: 'false' }),
-        /SANDBOX_RUNNER_VERCEL_ENABLED/
-      );
-    }
-  );
-});
-
-test('sandbox runner settings refuse values the runners could not use', async () => {
-  const { service } = build();
-  await withEnv(
-    {
-      SANDBOX_DEFAULT_RUNNER: undefined,
-      SANDBOX_VERCEL_VCPUS: undefined,
-      SANDBOX_VERCEL_TIMEOUT_MINUTES: undefined,
-      SANDBOX_VERCEL_DRIVE_GIB: undefined,
-      SANDBOX_BRIDGE_BINARY_URL: undefined,
-      SANDBOX_BRIDGE_BINARY_SHA256: undefined,
-      SANDBOX_PREVIEW_DOMAIN: undefined
-    },
-    async () => {
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { defaultRunner: 'docker' }),
-        /defaultRunner/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { vercelVcpus: '0' }),
-        /vercelVcpus/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { vercelTimeoutMinutes: 'soon' }),
-        /vercelTimeoutMinutes/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { vercelDriveGiB: '20000' }),
-        /vercelDriveGiB/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { vercelDriveGiB: '1.5' }),
-        /vercelDriveGiB/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { bridgeBinaryUrl: 'http://insecure.example.com/b' }),
-        /bridgeBinaryUrl/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { previewDomain: 'https://preview.example.com' }),
-        /previewDomain/
-      );
-      await assert.rejects(
-        () => service.save(SANDBOX_RUNNERS, { bridgeBinarySha256: 'abc123' }),
-        /bridgeBinarySha256/
-      );
-      await service.save(SANDBOX_RUNNERS, {
-        defaultRunner: 'vercel',
-        vercelVcpus: '4',
-        vercelTimeoutMinutes: '45',
-        vercelDriveGiB: '100',
-        bridgeBinaryUrl: 'https://assets.example.com/bridge',
-        bridgeBinarySha256: 'ab'.repeat(32),
-        previewDomain: 'preview.example.com'
-      });
-      assert.equal(service.value(SANDBOX_RUNNERS, 'defaultRunner'), 'vercel');
-      assert.equal(service.value(SANDBOX_RUNNERS, 'vercelDriveGiB'), '100');
-      assert.equal(service.value(SANDBOX_RUNNERS, 'bridgeBinarySha256'), 'ab'.repeat(32));
-    }
-  );
 });

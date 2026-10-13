@@ -7,9 +7,11 @@ sidebar:
 
 ## Greenhouse is missing or says it is not enabled
 
-`Sandbox feature is not enabled on this server` means Greenhouse is switched off
-for the whole instance. An admin turns it on under **Instance admin →
-Configuration** (see [Running Greenhouse](/operate/greenhouse/#turning-it-on)).
+If Greenhouse is missing from the sidebar and `/sandboxes` shows a not found page,
+the Greenhouse graft is not installed on this instance. An operator installs it
+with `orchardctl graft add greenhouse` (see
+[Running Greenhouse](/operate/greenhouse/#turning-it-on)). **Instance admin →
+Grafts** shows whether it loaded and why not if it failed.
 
 `Sandbox feature is not enabled for your account` means the instance gates
 Greenhouse per person with a product analytics feature flag, and you are not in

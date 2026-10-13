@@ -14,6 +14,7 @@ for dir in grafts/*/; do
     echo "$id $version is already published; bump its version to publish changes"
     continue
   fi
+  pnpm --dir "$dir" run --if-present prebuild
   node packages/graft-sdk/bin/graft.mjs doctor "$dir"
   node packages/graft-sdk/bin/graft.mjs pack "$dir" --output "$out/$id-$version.graft"
 done

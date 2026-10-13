@@ -44,6 +44,11 @@ export interface ApiInit extends Omit<RequestInit, 'body'> {
 	json?: unknown;
 }
 
+export interface ToastOptions {
+	description?: string;
+	action?: { label: string; onClick: () => void };
+}
+
 export interface HostApi {
 	readonly graft: { id: string; version: string; apiBase: string; assetBase: string };
 	readonly stores: {
@@ -54,8 +59,12 @@ export interface HostApi {
 	};
 	api<T = unknown>(path: string, init?: ApiInit): Promise<T>;
 	fetch(path: string, init?: ApiInit): Promise<Response>;
-	navigate(href: string, options?: { replace?: boolean }): void;
-	toast(message: string, tone?: 'info' | 'success' | 'error'): void;
+	navigate(
+		href: string,
+		options?: { replace?: boolean; keepFocus?: boolean; noScroll?: boolean }
+	): void;
+	toast(message: string, tone?: 'info' | 'success' | 'error', options?: ToastOptions): void;
+	refreshSlots(): void;
 	confirm(options: ConfirmOptions): Promise<boolean>;
 	onOrgEvent(handler: (event: HostOrgEvent) => void): () => void;
 }

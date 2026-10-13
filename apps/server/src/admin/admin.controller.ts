@@ -39,7 +39,6 @@ export class AdminController {
       firstName?: string;
       lastName?: string;
       isSuperAdmin?: boolean;
-      maxSandboxes?: number | null;
     },
     @Req() req: any
   ) {

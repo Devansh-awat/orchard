@@ -2,7 +2,7 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { INQUIRER } from '@nestjs/core';
 import { activeClaims } from '../claims';
 import type { GraftRecord } from '../graft-registry';
-import { GraftHttpRegistry, type HostRouter, type UpgradeHandler } from '../http-registry';
+import { GraftHttpRegistry, type HostRouter, type ListenHandler, type UpgradeHandler } from '../http-registry';
 import { bindGraft, type DoorMeta } from './door';
 
 @Injectable({ scope: Scope.TRANSIENT })
@@ -34,6 +34,10 @@ export class HttpDoorV1 {
       );
     }
     this.registry.addUpgrade(this.graft.id, `/apiv1${clean}`, handler);
+  }
+
+  onListen(handler: ListenHandler): void {
+    this.registry.addListener(this.graft.id, handler);
   }
 
   hostRouter(router: HostRouter): void {

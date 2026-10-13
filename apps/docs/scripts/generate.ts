@@ -106,6 +106,26 @@ async function generateMcp() {
     }
   }
 
+  const graftsDir = resolve(repoRoot, 'grafts');
+  for (const id of readdirSync(graftsDir).sort()) {
+    const mcpDir = join(graftsDir, id, 'mcp/src');
+    let entries: string[];
+    try {
+      entries = readdirSync(mcpDir).filter((f) => f.endsWith('.ts') && f !== 'index.ts');
+    } catch {
+      continue;
+    }
+    group = `${id} (graft)`;
+    for (const file of entries.sort()) {
+      const mod = await import(join(mcpDir, file));
+      for (const [key, fn] of Object.entries(mod)) {
+        if (typeof fn === 'function' && /^register.*Tools$/.test(key)) {
+          (fn as Function)(server, client);
+        }
+      }
+    }
+  }
+
   collected.sort((a, b) => a.name.localeCompare(b.name));
 
   const groups = [...new Set(collected.map((t) => t.group))].sort();

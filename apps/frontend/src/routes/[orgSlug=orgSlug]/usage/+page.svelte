@@ -8,23 +8,11 @@
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import { BudgetMeter, UsageBreakdown, DataGrid } from '$lib/components/usage';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
-	import {
-		Loader2,
-		Activity,
-		Gauge,
-		Users,
-		BarChart3,
-		Pencil,
-		Check,
-		X,
-		Sprout
-	} from 'lucide-svelte';
+	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X } from 'lucide-svelte';
 	import { Puzzle } from 'lucide-svelte';
 	import GraftMount from '$lib/grafts/GraftMount.svelte';
 	import { graftHost } from '$lib/grafts/host.svelte';
 	import { TabBar, SectionCard, EmptyState, Alert, PageHeader, Button } from '$lib/components/ui';
-	import { greenhouseFlag, sandboxesOn } from '$lib/flags';
-	import { SandboxUsageTab } from '$lib/components/sandbox';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -136,12 +124,13 @@
 	const orgSlug = $derived(data.orgSlug);
 	const range = $derived(data.range);
 
-	type Tab = 'overview' | 'me' | 'members' | 'provisioning' | 'sandbox' | `graft-${string}`;
+	type Tab = 'overview' | 'me' | 'members' | 'provisioning' | `graft-${string}`;
 
 	const graftTabs = $derived(
 		orgId
 			? graftHost.slot('org.usage.tabs', { orgId, orgSlug }).map(({ graftId, host, item }) => ({
 					key: `graft-${graftId}-${item.id}` as Tab,
+					id: item.id,
 					graftId,
 					host,
 					label: item.label,
@@ -155,9 +144,6 @@
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
 			{ id: 'me', label: 'Yours', icon: Gauge }
 		];
-		if ($sandboxesOn && $greenhouseFlag) {
-			tabs.push({ id: 'sandbox', label: 'Sandboxes', icon: Sprout });
-		}
 		if (isAdmin) {
 			tabs.splice(1, 0, { id: 'overview', label: 'Organization', icon: Activity });
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
@@ -170,6 +156,8 @@
 	const urlTab = $derived(($page.url.searchParams.get('tab') as Tab | null) ?? null);
 	const activeTab = $derived.by<Tab>(() => {
 		if (urlTab && availableTabs.find((t) => t.id === urlTab)) return urlTab;
+		const aliased = graftTabs.find((t) => t.id === urlTab);
+		if (aliased) return aliased.key;
 		return isAdmin ? 'overview' : 'me';
 	});
 
@@ -658,8 +646,6 @@
 							<UsageBreakdown items={myUsage.usage.breakdown} {orgSlug} />
 						</SectionCard>
 					{/if}
-				{:else if activeTab === 'sandbox'}
-					<SandboxUsageTab />
 				{:else if activeTab === 'members' && isAdmin && membersData}
 					<SectionCard
 						title="Allowance committed"

@@ -10,9 +10,9 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { requestAuthStorage } from '../auth/request-context';
 import { resolveNamespaceScope } from '../projects/namespace-scope';
-import type { PtyHandle } from '../sandboxes/runners/sandbox-runner';
+import type { PtyHandle } from './pty';
 import { loadKubeConfigFromPathOrBase64 } from './kubeconfig';
-import { ResizableOutput, type PodExecTarget } from './exec-sessions';
+import { ResizableOutput, isPodTarget, type PodExecTarget } from './exec-sessions';
 import { execSessionEngine, type ExecRouteHooks } from './exec-session-engine';
 
 function describeExecFailure(message: string): string {
@@ -200,11 +200,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       };
     },
     open(target, sessionId, size) {
-      if (target.kind !== 'pod') throw new Error('not a pod target');
+      if (!isPodTarget(target)) throw new Error('not a pod target');
       return podPty(kc, target, shellCommand(sessionId), size);
     },
     proxyPath(target) {
-      if (target.kind !== 'pod') throw new Error('not a pod target');
+      if (!isPodTarget(target)) throw new Error('not a pod target');
       return {
         path: `/apiv1/pods/${encodeURIComponent(target.podName)}/exec`,
         params: { namespace: target.namespace, container: target.container }

@@ -94,7 +94,7 @@ test('the PTY size stream dedupes unchanged sizes and clamps the rest', () => {
   assert.equal(events, 2);
 });
 
-test('target keys separate pods, sandboxes, sessions, terminal indexes and modes', () => {
+test('pod targets key on namespace, pod and container; extension targets bring their own key', () => {
   const pod = {
     kind: 'pod' as const,
     namespace: 'ns',
@@ -105,22 +105,9 @@ test('target keys separate pods, sandboxes, sessions, terminal indexes and modes
   };
   assert.equal(targetKey(pod), 'pod:ns/web-1/app');
   assert.equal(targetKey({ ...pod, organizationId: 'other' }), targetKey(pod));
-  const box = {
-    kind: 'sandbox' as const,
-    sandboxId: '3f2d7e6a-1b0c-4d5e-8f90-123456789abc',
-    sessionId: 'aaaaaaaa-1b0c-4d5e-8f90-123456789abc',
-    index: '0',
-    mode: 'rw' as const,
-    worktreePath: '/persist/home/.worktrees/app/fix'
-  };
-  assert.equal(
-    targetKey(box),
-    'sandbox:3f2d7e6a-1b0c-4d5e-8f90-123456789abc/aaaaaaaa-1b0c-4d5e-8f90-123456789abc/0/rw'
-  );
-  assert.notEqual(targetKey(box), targetKey({ ...box, index: '1' }));
-  assert.notEqual(targetKey(box), targetKey({ ...box, mode: 'ro' }));
-  assert.notEqual(targetKey(box), targetKey({ ...box, sessionId: null }));
-  assert.equal(targetKey({ ...box, worktreePath: null }), targetKey(box));
+  const ext = { kind: 'greenhouse', key: 'greenhouse:box/0' };
+  assert.equal(targetKey(ext), 'greenhouse:box/0');
+  assert.notEqual(targetKey(ext), targetKey(pod));
 });
 
 test('directory entries carry the target key, plus the legacy pod fields old replicas read', () => {
@@ -141,20 +128,15 @@ test('directory entries carry the target key, plus the legacy pod fields old rep
     podName: 'web-1',
     container: 'app'
   });
-  const box = {
-    kind: 'sandbox' as const,
-    sandboxId: 's',
-    sessionId: null,
-    index: '0',
-    mode: 'rw' as const,
-    worktreePath: null
-  };
-  assert.deepEqual(directoryEntry('replica-a', '10.0.0.1:3001', 'u1', box), {
-    replica: 'replica-a',
-    addr: '10.0.0.1:3001',
-    ownerUserId: 'u1',
-    targetKey: 'sandbox:s/-/0/rw'
-  });
+  assert.deepEqual(
+    directoryEntry('replica-a', '10.0.0.1:3001', 'u1', { kind: 'greenhouse', key: 'sandbox:s/-/0/rw' }),
+    {
+      replica: 'replica-a',
+      addr: '10.0.0.1:3001',
+      ownerUserId: 'u1',
+      targetKey: 'sandbox:s/-/0/rw'
+    }
+  );
 });
 
 test('entries written by an older replica still match the pod they describe', () => {

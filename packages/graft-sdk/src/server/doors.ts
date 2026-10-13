@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 export const door = (name: string, version: number): symbol =>
@@ -14,10 +14,18 @@ export const Doors = {
   settings: door('settings', 1),
   events: door('events', 1),
   db: door('db', 1),
-  http: door('http', 1)
+  http: door('http', 1),
+  kube: door('kube', 1),
+  apply: door('apply', 1),
+  exec: door('exec', 1),
+  projects: door('projects', 1),
+  notifications: door('notifications', 1),
+  rateLimit: door('rateLimit', 1),
+  metrics: door('metrics', 1),
+  github: door('github', 1)
 } as const;
 
-export type OrgRole = 'owner' | 'admin' | 'member';
+export type OrgRole = 'owner' | 'admin' | 'member' | 'guest';
 export type ProjectRole = 'admin' | 'member' | 'viewer';
 
 export interface OrgAccess {
@@ -67,6 +75,23 @@ export interface AuthDoor {
   requireProjectView(projectId: string, userId: string): Promise<ProjectAccess>;
   requireProjectEdit(projectId: string, userId: string): Promise<ProjectAccess>;
   listVisibleProjectIds(organizationId: string, userId: string): Promise<string[] | null>;
+  requireOrgCanCreateProjects(organizationId: string, userId: string): Promise<OrgAccess>;
+  validateSession(sessionId: string): Promise<boolean>;
+  requestContext(): RequestAuthContext | undefined;
+  runWithContext<T>(ctx: RequestAuthContext, fn: () => T): T;
+  authenticateUpgrade(req: IncomingMessage, requiredScope: string): Promise<UpgradeIdentity | null>;
+  authenticateTerminalUpgrade(req: IncomingMessage): Promise<TerminalAuth | Rejection>;
+  originAllowed(origin: string | undefined, via: 'cookie' | 'bearer'): boolean;
+  rejectUpgrade(socket: Duplex, status: number, message: string): void;
+  registerOrgScopedDevice(prefix: string, denyPaths?: string[]): void;
+  deviceName(prefix: string, organizationId: string | null | undefined, subject: string): string;
+  revokeDeviceSessions(userId: string, deviceNames: string[]): Promise<number>;
+  mintDeviceToken(input: {
+    userId: string;
+    deviceName: string;
+    ttlDays: number;
+    reuseIfValidForDays?: number;
+  }): Promise<string | null>;
   can(
     userId: string,
     permission: string,
@@ -78,6 +103,38 @@ export interface AuthDoor {
     scope?: { organizationId?: string; projectId?: string }
   ): Promise<void>;
 }
+
+export interface RequestAuthContext {
+  apiTokenId?: string;
+  tokenScopes?: string[];
+  tokenProjectIds?: string[];
+  sessionOrgId?: string;
+}
+
+export interface UpgradeIdentity {
+  userId: string;
+  email: string | null;
+  sessionId: string | null;
+  orgScope: string | null;
+  via: 'cookie' | 'bearer' | 'api-token';
+}
+
+export interface TokenAuthContext {
+  apiTokenId: string;
+  tokenScopes: string[];
+  tokenProjectIds: string[];
+}
+
+export interface TerminalAuth {
+  userId: string;
+  actorEmail: string | null;
+  browserSessionId: string | undefined;
+  sessionOrgScope: string | undefined;
+  tokenAuthCtx: TokenAuthContext | null;
+  isProxyHop: boolean;
+}
+
+export type Rejection = { reject: number; message: string };
 
 export interface GraftUser {
   id: string;
@@ -94,6 +151,16 @@ export interface UsersDoor {
   get(id: string): Promise<GraftUser | null>;
   getMany(ids: string[]): Promise<GraftUser[]>;
   findByUsername(username: string): Promise<GraftUser | null>;
+  resolve(
+    identifier: string,
+    profile?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ): Promise<GraftUser & Record<string, unknown>>;
 }
 
 export type AuditMetadataValue = string | number | boolean | null | readonly unknown[];
@@ -119,6 +186,10 @@ export interface SecretsDoor {
   encrypt(plaintext: string): string;
   decrypt(value: string): string;
   isEncrypted(value: string | null | undefined): boolean;
+  readonly enabled: boolean;
+  seal<T extends string | null | undefined>(value: T): T;
+  open<T extends string | null | undefined>(value: T): T;
+  maybeDecrypt<T extends { value: string }>(row: T): T;
   encryptForUser(userId: string, plaintext: string): string;
   decryptForUser(userId: string, value: string): string;
 }
@@ -134,6 +205,10 @@ export interface SettingsDoor {
   value(sectionId: string, key: string): string | null;
   flag(sectionId: string, key: string): boolean;
   isConfigured(sectionId: string): boolean;
+  validate(sectionId: string, check: (values: Record<string, string | null>) => void): void;
+  stored(key: string): Promise<string | null>;
+  storeIfAbsent(key: string, value: string): Promise<boolean>;
+  store(key: string, value: string): Promise<void>;
 }
 
 export interface OrgEvent {
@@ -189,5 +264,145 @@ export interface HostRouter {
 
 export interface HttpDoor {
   upgrade(path: string, handler: UpgradeHandler): void;
+  onListen(handler: (server: Server) => void | Promise<void>): void;
   hostRouter(router: HostRouter): void;
+}
+
+export interface KubeConfigLike {
+  makeApiClient<T>(apiClientType: new (server: string) => T): T;
+  getCurrentCluster(): { server: string } | null;
+  [key: string]: unknown;
+}
+
+export interface MirrorListPage {
+  items: unknown[];
+  resourceVersion: string;
+  continueToken: string | null;
+}
+
+export interface MirrorResource {
+  kind: string;
+  apiVersion: string;
+  watchPath: string;
+  labelSelector?: string;
+  fieldSelector?: string;
+  list(kc: never, opts: { continueToken?: string; limit?: number }): Promise<MirrorListPage>;
+  sanitize?(obj: unknown): unknown;
+  onEvent?(type: string, obj: unknown): unknown;
+  onListComplete?(seen: unknown): unknown;
+}
+
+export interface MirrorShard {
+  name: string;
+  lease: string;
+  resources: MirrorResource[];
+}
+
+export interface KubeDoor {
+  readonly kc: KubeConfigLike | null;
+  isLeader(): boolean;
+  onLeaderAcquired(listener: () => void): void;
+  registerMirrorShard(build: () => Promise<MirrorShard | null>): void;
+  databaseTlsHostname(namespace: string, clusterName: string): string | null;
+}
+
+export interface ApplyItem {
+  dedupeKey: string;
+  opType: string;
+  manifest: unknown;
+  deploymentId: string | null;
+  subjectId?: string | null;
+}
+
+export interface ApplyDoor {
+  registerHandler(opType: string, handler: (item: ApplyItem) => Promise<void>): void;
+  enqueue(input: {
+    dedupeKey: string;
+    opType: string;
+    manifest?: unknown;
+    deploymentId?: string;
+    subjectId?: string;
+    requestedById?: string;
+  }): Promise<void>;
+  hasOpenItem(dedupeKey: string): Promise<boolean>;
+  retryForSubject(subjectId: string): Promise<number>;
+  serverSideApply<T extends { apiVersion?: string; kind?: string }>(manifest: T): Promise<T>;
+}
+
+export interface ExecDoor {
+  register(hooks: Record<string, unknown> & { route: RegExp }): void;
+}
+
+export interface ProjectsDoor {
+  onEnvironmentEnvChanged(listener: (change: { environmentId: string; [key: string]: unknown }) => void): () => void;
+  createDeploymentFromGitHub(projectId: string, data: Record<string, unknown>, ...rest: unknown[]): Promise<any>;
+  rebuildDeployment(deploymentId: string, clerkId: string, userData?: Record<string, unknown>): Promise<any>;
+  createAutoIngressForDeployment(deploymentId: string, clerkId: string, userData?: Record<string, unknown>): Promise<any>;
+  setDeploymentBranch(deploymentId: string, branch: string): Promise<void>;
+  createEnvironment(projectId: string, input: { name: string; slug?: string }, userId: string): Promise<any>;
+  deleteEnvironment(environmentId: string, actor: { userId: string; email?: string }, confirmName: unknown): Promise<any>;
+  deleteEnvironmentFromCluster(
+    environmentId: string,
+    cause: { reason: string; source: string; namespace: string }
+  ): Promise<any>;
+}
+
+export type NotificationSettingValue = 'off' | 'inbox' | 'email' | string;
+
+export interface NotificationsDoor {
+  registerEvent(def: {
+    event: `${string}.${string}`;
+    category: string;
+    categoryLabel?: string;
+    categoryDefault?: NotificationSettingValue;
+    categoryOptions?: NotificationSettingValue[];
+    categoryCopy?: Record<string, { label: string; hint: string }>;
+    scope: string;
+    tone: 'success' | 'failure' | 'notice';
+  }): void;
+  notifyAccount(
+    userId: string,
+    message: {
+      event: string;
+      title: string;
+      body: string;
+      url?: string;
+      projectId?: string;
+      projectName?: string;
+      targetId?: string;
+      targetName?: string;
+      fields?: { name: string; value: string }[];
+    },
+    dedupeKey: string
+  ): Promise<unknown>;
+}
+
+export type RateLimitIdentifier = 'email' | 'ip' | 'ingress' | 'org' | 'user';
+
+export interface RateLimitDoor {
+  define(
+    action: string,
+    type: RateLimitIdentifier,
+    config: { maxAttempts: number; windowMs: number; blockDurationMs: number }
+  ): void;
+  check(identifier: string, type: RateLimitIdentifier, action: string): Promise<void>;
+  consume(
+    key: string,
+    window: { maxAttempts: number; windowMs: number; blockDurationMs: number }
+  ): Promise<number | null>;
+}
+
+export interface MetricsDoor {
+  readonly configured: boolean;
+  queryInstant(promql: string): Promise<number | null>;
+  escapeLabel(value: string): string;
+}
+
+export interface GitHubDoor {
+  userToken(userId: string): Promise<string | null>;
+  repoToken(userId: string, owner: string, repo: string): Promise<string | null>;
+  installationToken(installationId: bigint): Promise<string>;
+  onIssueComment(
+    handler: ((deliveryId: string | undefined, body: unknown) => Promise<Record<string, unknown>>) | null
+  ): void;
 }

@@ -14,10 +14,6 @@ import { startTelemetry } from './analytics/telemetry';
 import { AppModule } from './app.module';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
 import { execSessionEngine } from './kubernetes/exec-session-engine';
-import { attachSandboxSshWebSocket } from './sandboxes/sandbox-ssh.gateway';
-import { attachSandboxTerminalWebSocket } from './sandboxes/sandbox-terminal.gateway';
-import { attachSandboxLiveWebSocket } from './sandboxes/live/sandbox-live.gateway';
-import { SandboxPreviewService } from './sandboxes/preview/sandbox-preview.service';
 import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
@@ -64,19 +60,10 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const protectionService = app.get(ProtectionService);
-  const previewService = app.get(SandboxPreviewService);
   const graftHttp = app.get(GraftHttpRegistry);
   app.use(async (req, res, next) => {
     try {
       const handled = await graftHttp.handleRequest(req, res);
-      if (!handled) return next();
-    } catch {
-      if (!res.headersSent) res.status(502).end();
-    }
-  });
-  app.use(async (req, res, next) => {
-    try {
-      const handled = await previewService.handleRequest(req, res);
       if (!handled) return next();
     } catch {
       if (!res.headersSent) res.status(502).end();
@@ -200,22 +187,18 @@ async function bootstrap() {
   httpServer.on('upgrade', (req, socket, head) => {
     graftHttp
       .handleUpgrade(req, socket, head)
-      .then((handled) => (handled ? true : previewService.handleUpgrade(req, socket, head)))
       .then((handled) => {
         if (handled) return;
         return protectionService.handleUpgrade(req, socket, head).then(() => undefined);
       })
       .catch(() => socket.destroy());
   });
-  const isPreviewUpgrade = (req: { url?: string; headers: { host?: string } }) =>
-    previewService.isPreviewHost(req.headers.host) ||
+  const isGraftUpgrade = (req: { url?: string; headers: { host?: string } }) =>
     graftHttp.isHostRouted(req.headers.host) ||
     graftHttp.claimsUpgradePath(req.url);
-  execSessionEngine(httpServer, app, { skipUpgrade: isPreviewUpgrade });
+  execSessionEngine(httpServer, app, { skipUpgrade: isGraftUpgrade });
   attachTerminalWebSocket(httpServer, app);
-  attachSandboxSshWebSocket(httpServer, app, isPreviewUpgrade);
-  attachSandboxTerminalWebSocket(httpServer, app);
-  attachSandboxLiveWebSocket(httpServer, app);
+  await graftHttp.listening(httpServer);
 
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);

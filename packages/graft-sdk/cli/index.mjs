@@ -193,7 +193,15 @@ const DOOR_CAPABILITY = {
   settings: 'settings',
   events: 'events',
   db: 'db',
-  http: 'http.upgrade'
+  http: 'http.upgrade',
+  kube: 'kube.read',
+  apply: 'kube.apply',
+  exec: 'kube.exec',
+  projects: 'projects.read',
+  notifications: 'notifications',
+  rateLimit: 'rateLimit',
+  metrics: 'metrics',
+  github: 'github'
 };
 
 function signingKey(options) {

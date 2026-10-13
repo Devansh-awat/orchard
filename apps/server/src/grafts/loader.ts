@@ -35,7 +35,7 @@ import { readSyncFailures } from './sync';
 
 const logger = new Logger('Grafts');
 
-const SHARED_PACKAGES = [/^@nestjs\//, /^rxjs(\/|$)/, /^reflect-metadata$/];
+const SHARED_PACKAGES = [/^@nestjs\//, /^rxjs(\/|$)/, /^reflect-metadata$/, /^pg$/];
 
 export type LoadOptions = {
   dir?: string;

@@ -105,14 +105,6 @@
     "test:sse-limits": "tsx --test test/sse-stream-limiter.test.ts",
     "test:env-bounds": "tsx --test test/env-value-bounds.test.ts",
     "test:exec": "tsx --test test/exec-protocol.test.ts test/exec-sessions.test.ts test/exec-screen.test.ts test/exec-session-engine.test.ts",
-    "test:sandbox-sessions": "tsx --test test/sandbox-sessions.test.ts",
-    "test:sandbox-multiplayer": "tsx --test test/sandbox-authz-matrix.test.ts test/sandbox-live.test.ts test/sandbox-git-identity.test.ts test/sandbox-security.test.ts test/sandbox-agent-usage.test.ts",
-    "test:sandbox-runners": "tsx --test test/sandbox-runners.test.ts test/sandbox-vercel.test.ts test/sandbox-usage.test.ts",
-    "test:sandbox-links": "tsx --test test/sandbox-project-links.test.ts",
-    "test:sandbox-forks": "tsx --test test/sandbox-forks-shares.test.ts test/mcp-sandbox-tools.test.ts",
-    "test:sandbox-integrations": "tsx --test test/sandbox-integrations.test.ts",
-    "smoke:sandbox-bootstrap": "tsx scripts/sandbox-bootstrap-smoke.ts",
-    "live:sandbox-vercel": "tsx scripts/sandbox-vercel-live.ts",
     "test:grafts": "tsx --test test/grafts.test.ts"
   },
   "prisma": {

@@ -12,6 +12,21 @@ import { GithubAppConfigService } from '../github/github-app-config.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { TelemetryProps, scrubException } from './telemetry-payload';
 
+type TelemetryCounter = () => Promise<number>;
+
+const extensionCounters = new Map<string, TelemetryCounter>();
+
+export function registerTelemetryCounter(name: string, count: TelemetryCounter): void {
+  extensionCounters.set(name, count);
+}
+
+async function extensionTelemetry(): Promise<Record<string, number>> {
+  const entries = await Promise.all(
+    [...extensionCounters].map(async ([name, count]) => [name, await count().catch(() => 0)] as const)
+  );
+  return Object.fromEntries(entries);
+}
+
 export const TELEMETRY_CONSENT_KEY = 'telemetry_consent';
 export const TELEMETRY_INSTANCE_ID_KEY = 'telemetry_instance_id';
 export const TELEMETRY_LAST_SENT_KEY = 'telemetry_last_sent';
@@ -163,7 +178,6 @@ export class TelemetryService implements OnModuleDestroy {
       deploymentsRunning,
       databases,
       jobs,
-      sandboxes,
       nodes,
       buildsSucceeded,
       buildsFailed,
@@ -181,7 +195,6 @@ export class TelemetryService implements OnModuleDestroy {
       this.prisma.deployment.count({ where: { stopped: false } }),
       this.prisma.database.count(),
       this.prisma.job.count(),
-      this.prisma.sandbox.count(),
       this.prisma.node.count(),
       this.prisma.buildRun.count({ where: { status: 'succeeded', finishedAt: { gte: dayAgo } } }),
       this.prisma.buildRun.count({ where: { status: 'failed', finishedAt: { gte: dayAgo } } }),
@@ -204,7 +217,7 @@ export class TelemetryService implements OnModuleDestroy {
       deployments_running: deploymentsRunning,
       databases,
       jobs,
-      sandboxes,
+      ...(await extensionTelemetry()),
       nodes,
       builds_succeeded_24h: buildsSucceeded,
       builds_failed_24h: buildsFailed,
