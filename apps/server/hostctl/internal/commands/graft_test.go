@@ -128,3 +128,33 @@ func TestGraftSpecsRoundTripThroughValues(t *testing.T) {
 		t.Fatal("unrelated values were lost")
 	}
 }
+
+func TestGraftPoolWritesAndClearsTheOverride(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "values.yaml")
+	if err := os.WriteFile(path, []byte("grafts:\n  - id: greenhouse\n    version: 1.0.0\n    digest: sha256:aa\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &cli.Context{Env: cli.Env{Values: path, Namespace: "orchard"}, Stdout: discard(t), Stderr: discard(t)}
+	if err := Graft().Run(ctx, []string{"pool", "greenhouse", "12"}); err != nil {
+		t.Fatal(err)
+	}
+	values, _ := cli.LoadValues(path)
+	if got := values.Get("graftSettings.pools.greenhouse"); got != 12 {
+		t.Fatalf("expected 12, got %#v", got)
+	}
+	for _, bad := range []string{"0", "51", "lots"} {
+		if err := Graft().Run(ctx, []string{"pool", "greenhouse", bad}); err == nil {
+			t.Fatalf("pool %s should be refused", bad)
+		}
+	}
+	if err := Graft().Run(ctx, []string{"pool", "notes", "4"}); err == nil {
+		t.Fatal("a graft that is not installed should be refused")
+	}
+	if err := Graft().Run(ctx, []string{"pool", "greenhouse", "default"}); err != nil {
+		t.Fatal(err)
+	}
+	values, _ = cli.LoadValues(path)
+	if values.Get("graftSettings.pools.greenhouse") != nil {
+		t.Fatal("default should remove the override")
+	}
+}

@@ -48,18 +48,13 @@
 		"blobatar": "^2.7.0",
 		"chart.js": "^4.5.1",
 		"cuelume": "0.2.2",
-		"dompurify": "^3.4.14",
-		"lib0": "^0.2.119",
 		"lucide-svelte": "^0.510.0",
 		"marked": "^18.0.4",
 		"melt": "^0.42.0",
-		"monaco-editor": "^0.57.0",
 		"motion": "^12.38.0",
 		"pixi-filters": "^6.1.5",
 		"pixi.js": "^8.19.0",
 		"posthog-js": "^1.423.2",
-		"svelte5-chartjs": "^1.0.0",
-		"y-protocols": "^1.0.7",
-		"yjs": "^13.6.33"
+		"svelte5-chartjs": "^1.0.0"
 	}
 }

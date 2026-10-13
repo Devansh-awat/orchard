@@ -176,7 +176,10 @@ export const graftManifestSchema = z
       })
       .default({}),
     database: z
-      .object({ coreReads: z.record(z.string(), z.array(z.string())).default({}) })
+      .object({
+        coreReads: z.record(z.string(), z.array(z.string())).default({}),
+        pool: z.number().int().min(1).max(50).optional()
+      })
       .default({}),
     permissions: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), permission).default({}),
     settings: z.array(settingsSection).default([]),

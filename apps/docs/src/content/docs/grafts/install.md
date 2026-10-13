@@ -115,8 +115,24 @@ added them.
 | `graftSettings.marketplaceUrl` | `ORCHARD_GRAFT_MARKETPLACE_URL` | `https://assets.orchard.my/registry` |
 | `graftSettings.strict` | `ORCHARD_GRAFTS_STRICT` | `false`. When true, a graft that fails stops the pod instead of being skipped, so a rollout halts and the previous pods keep serving |
 | `graftSettings.safeMode` | `ORCHARD_GRAFTS_SAFE_MODE` | `false`. When true, no grafts load at all. Use it to recover from a graft that misbehaves at runtime |
-| | `ORCHARD_GRAFT_DB_POOL` | `3` database connections per graft per pod |
+| `graftSettings.pools` | `ORCHARD_GRAFT_POOLS` | none. Database connections per pod by graft id, e.g. `{ greenhouse: 15 }` |
+| | `ORCHARD_GRAFT_DB_POOL` | `3` database connections per pod for grafts that ask for no size |
 
-Each graft opens its own small pool of database connections. Many grafts on a
-small database can use up its connection limit; Admin → Grafts shows what each
-graft holds.
+## Database connections
+
+Each graft opens its own pool of database connections on every server and
+worker pod, next to Orchard's own. A graft asks for a size in its
+`graft.json` (Greenhouse asks for 10), and you can change it:
+
+```sh
+sudo orchardctl graft pool greenhouse 15 --apply   # or: default
+```
+
+Connections are opened only when needed and closed after about ten seconds
+idle, so a quiet graft costs almost nothing. The risk is a busy moment: every
+pod could open its whole pool at once, and during an update the old and new
+server pods run side by side. Orchard adds that up against the database's
+`max_connections` at boot and on **Admin → Grafts**. Past 80% it warns; past
+100% it says so in red, and with `graftSettings.strict` the new pods refuse to
+start so the rollout halts. When the database does run out, new requests fail
+until connections free up, so either lower a pool or raise `max_connections`.

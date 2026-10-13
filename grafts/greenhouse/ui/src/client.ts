@@ -86,7 +86,7 @@ export default defineGraft({
         visible: allowed
       }
     ],
-    'admin.nav': [{ id: 'admin', label: 'Greenhouse', href: '/greenhouse/admin', icon: SPROUT }],
+    'admin.nav': [{ id: 'admin', label: 'Greenhouse', href: '/admin/greenhouse', icon: SPROUT }],
     'user.settings.tabs': [
       {
         id: 'sandbox',

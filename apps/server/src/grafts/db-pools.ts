@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { GraftRecord } from './graft-registry';
+import { graftPoolSize } from './db-budget';
 import { graftSchema } from './migrations';
 
 @Injectable()
@@ -13,7 +14,7 @@ export class GraftDbPools implements OnModuleDestroy {
     if (existing) return existing;
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error('DATABASE_URL is not set');
-    const max = Number(process.env.ORCHARD_GRAFT_DB_POOL ?? 3) || 3;
+    const max = graftPoolSize(record).size;
     const schema = graftSchema(record.id);
     const role = record.dbRole ? ` -c role=${record.dbRole}` : '';
     const pool = new Pool({

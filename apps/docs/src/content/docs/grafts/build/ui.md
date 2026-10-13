@@ -41,7 +41,9 @@ export default defineGraft({
 
 Screens are listed in `graft.json` under `ui.screens` with their path and
 layout: `shell` draws inside Orchard's sidebar and header, `fullscreen` takes
-the whole window. Every place a graft can add to is in the
+the whole window. A screen at `/admin/<graft id>` (or below it) renders inside
+the instance admin area, next to Orchard's own admin pages, and only
+superadmins reach it; pair it with an `admin.nav` entry. Every place a graft can add to is in the
 [slot reference](/reference/graft-slots/).
 
 ## The host object

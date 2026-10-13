@@ -268,11 +268,6 @@ true
             {{- end }}
             {{- end }}
             {{- with .Values.sandbox }}
-            {{- if not (kindIs "invalid" .lockEnabled) }}
-            - { name: SANDBOX_ENABLED, value: {{ .lockEnabled | toString | quote }} }
-            {{- else if .enabled }}
-            - { name: SANDBOX_ENABLED_DEFAULT, value: "true" }
-            {{- end }}
             {{- if include "orchard.sandboxInstalled" $ }}
             - { name: ORCHARD_SERVER_NAMESPACE, value: {{ $.Values.namespace | quote }} }
             {{- with (include "orchard.mcpUrl" $) }}
@@ -453,6 +448,13 @@ random one that every template in this render sees.
             {{- end }}
             {{- if .Values.graftSettings.safeMode }}
             - { name: ORCHARD_GRAFTS_SAFE_MODE, value: "true" }
+            {{- end }}
+            {{- with .Values.graftSettings.pools }}
+            - { name: ORCHARD_GRAFT_POOLS, value: {{ toJson . | quote }} }
+            {{- end }}
+            - { name: ORCHARD_DB_SERVER_PODS, value: {{ ternary .Values.server.autoscaling.maxReplicas .Values.server.replicas .Values.server.autoscaling.enabled | toString | quote }} }
+            {{- if .Values.server.workers.enabled }}
+            - { name: ORCHARD_DB_WORKER_PODS, value: {{ ternary .Values.server.workers.autoscaling.maxReplicas .Values.server.workers.replicas .Values.server.workers.autoscaling.enabled | toString | quote }} }
             {{- end }}
 {{- end }}
 

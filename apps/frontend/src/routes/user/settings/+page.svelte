@@ -169,7 +169,7 @@
 			...(graftTabs.length
 				? [
 						{
-							label: 'Grafts',
+							label: 'Extensions',
 							items: graftTabs.map((t) => ({ id: t.key, label: t.label }))
 						}
 					]

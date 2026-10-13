@@ -787,3 +787,56 @@ describe('mcp', () => {
     }
   });
 });
+
+describe('database connection budget', () => {
+  const record = (id: string, extra: Record<string, unknown> = {}) =>
+    ({
+      id,
+      dir: '/tmp',
+      status: 'loaded',
+      warnings: [],
+      manifest: { capabilities: ['db'], database: { coreReads: {}, ...extra } }
+    }) as never;
+
+  test('values beat the graft, the graft beats the default', async () => {
+    const { graftPoolSize } = await import('../src/grafts/db-budget');
+    assert.deepEqual(graftPoolSize(record('a'), {}), { size: 3, source: 'default' });
+    assert.deepEqual(graftPoolSize(record('a', { pool: 10 }), {}), { size: 10, source: 'graft' });
+    assert.deepEqual(
+      graftPoolSize(record('a', { pool: 10 }), { ORCHARD_GRAFT_POOLS: '{"a":15}' }),
+      { size: 15, source: 'values' }
+    );
+    assert.deepEqual(graftPoolSize(record('a'), { ORCHARD_GRAFT_POOLS: 'not json' }), {
+      size: 3,
+      source: 'default'
+    });
+  });
+
+  test('peak counts every pod, and an update doubles the server pods', async () => {
+    const { planDbBudget } = await import('../src/grafts/db-budget');
+    const budget = planDbBudget(
+      { maxConnections: 100, reserved: 3, inUse: 20 },
+      [record('greenhouse', { pool: 10 }), record('notes')],
+      { ORCHARD_DB_SERVER_PODS: '2', ORCHARD_DB_WORKER_PODS: '1', DATABASE_CONNECTION_LIMIT: '10' }
+    );
+    assert.equal(budget.perPod, 23);
+    assert.equal(budget.steadyPeak, 69);
+    assert.equal(budget.rolloutPeak, 115);
+    assert.equal(budget.usable, 97);
+    assert.equal(budget.level, 'over');
+  });
+
+  test('grafts without the db capability open no pool', async () => {
+    const { planDbBudget } = await import('../src/grafts/db-budget');
+    const noDb = {
+      id: 'ui-only',
+      dir: '/tmp',
+      status: 'loaded',
+      warnings: [],
+      manifest: { capabilities: [], database: { coreReads: {} } }
+    } as never;
+    const budget = planDbBudget({ maxConnections: 200, reserved: 3, inUse: 0 }, [noDb], {});
+    assert.equal(budget.grafts.length, 0);
+    assert.equal(budget.level, 'ok');
+  });
+});

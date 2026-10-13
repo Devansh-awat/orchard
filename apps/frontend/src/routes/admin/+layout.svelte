@@ -83,7 +83,7 @@
 				{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false }
 			]
 		},
-		...(graftItems.length ? [{ label: 'Grafts', items: graftItems }] : [])
+		...(graftItems.length ? [{ label: 'Extensions', items: graftItems }] : [])
 	]);
 
 	function isActive(href: string, exact: boolean) {

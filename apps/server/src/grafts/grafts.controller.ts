@@ -3,18 +3,28 @@ import { Auth } from '../auth/decorators';
 import { joinRoutePath } from '../auth/route-classifier';
 import { graftRecords, loadedGrafts } from './graft-registry';
 import { GRAFT_DOORS, GRAFT_SDK_VERSION, platformVersion } from './host-api';
+import { PrismaService } from '../prisma/prisma.service';
+import { graftPoolSize, measureDbBudget } from './db-budget';
 import { GraftDbPools } from './db-pools';
 import { trustPolicyFromEnv } from './integrity';
 
 @Controller()
 export class GraftsController {
-  constructor(@Inject(GraftDbPools) private readonly pools: GraftDbPools) {}
+  constructor(
+    @Inject(GraftDbPools) private readonly pools: GraftDbPools,
+    @Inject(PrismaService) private readonly prisma: PrismaService
+  ) {}
 
   @Get('admin/grafts')
-  list() {
+  async list() {
     const pools = this.pools.usage();
+    const database = await measureDbBudget(
+      async (sql) => ({ rows: await this.prisma.$queryRawUnsafe<Record<string, unknown>[]>(sql) }),
+      graftRecords()
+    ).catch(() => null);
     return {
       platform: platformVersion(),
+      database,
       sdk: GRAFT_SDK_VERSION,
       trust: trustPolicyFromEnv(),
       doors: GRAFT_DOORS,
@@ -43,6 +53,7 @@ export class GraftsController {
         migrationsApplied: r.migrationsApplied ?? [],
         dbRole: r.dbRole ?? null,
         dbPool: pools[r.id] ?? null,
+        dbPoolSize: r.manifest?.capabilities.includes('db') ? graftPoolSize(r) : null,
         settings: r.manifest?.settings ?? []
       }))
     };

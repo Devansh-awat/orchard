@@ -30,6 +30,10 @@ export function graftRoots(): Set<string> {
 	return new Set(graftRegistry().flatMap((g) => g.roots));
 }
 
+export function isAdminScreenOf(graftId: string, path: string): boolean {
+	return path === `/admin/${graftId}` || path.startsWith(`/admin/${graftId}/`);
+}
+
 export function screenRoot(path: string): string {
 	return path.replace(/^\/+/, '').split('/')[0] ?? '';
 }
@@ -56,6 +60,7 @@ export function findScreen(
 ): { graft: GraftUiEntry; screen: GraftScreen; params: Record<string, string> } | null {
 	for (const graft of graftRegistry()) {
 		for (const screen of graft.screens) {
+			if (screen.path.startsWith('/admin/') && !isAdminScreenOf(graft.id, screen.path)) continue;
 			const params = matchScreenPath(screen.path, path);
 			if (params) return { graft, screen, params };
 		}

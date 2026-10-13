@@ -592,17 +592,12 @@ builderSandbox:
 # Kata VMs when runtimeClassName is set) and "vercel" (Vercel Sandbox microVMs).
 # Operator guide: apps/docs/src/content/docs/operate/greenhouse.md.
 #
-# Installed and enabled are separate:
+# Greenhouse itself is the `greenhouse` graft: add it to `grafts` to turn it on.
+# These values are the cluster plumbing and settings it reads:
 #   - install renders the namespace, quota, NetworkPolicy, RBAC and SANDBOX_*
 #     settings the kubernetes runner needs. null follows `enabled`.
-#   - enabled=true starts the admin switch (Instance admin -> Configuration) on
-#     without locking it (SANDBOX_ENABLED_DEFAULT=true), so admins can still
-#     turn Greenhouse off and on. With enabled=false the switch starts off in
-#     production.
-#   - lockEnabled true/false pins the switch with SANDBOX_ENABLED (and the
-#     frontend's PUBLIC_SANDBOX_ENABLED); null leaves it to the admin.
-# `runners` is rendered either way. To ship the plumbing but let admins turn
-# Greenhouse on later: install=true, enabled=false.
+#   - enabled=true is shorthand for install=true.
+# `runners` is rendered either way.
 #
 # REQUIREMENTS for the kubernetes runner:
 #   1. agent-sandbox controller + CRDs installed in the cluster (pinned
@@ -619,7 +614,6 @@ builderSandbox:
 sandbox:
   enabled: false
   install: null
-  lockEnabled: null
   namespace: orchard-sandboxes
   image: debian:bookworm
   runtimeClassName: kata
@@ -720,3 +714,7 @@ graftSettings:
   marketplaceUrl: ""
   strict: false
   safeMode: false
+  # Database connections each graft may open per pod, by graft id. Overrides
+  # what the graft asks for in graft.json (database.pool, default 3). The admin
+  # Grafts page shows how close all pods together come to Postgres's limit.
+  pools: {}

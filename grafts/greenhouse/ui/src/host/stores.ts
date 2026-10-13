@@ -60,15 +60,12 @@ export interface ToastInput {
   action?: { label: string; onClick: () => void };
 }
 
-function toastText(toast: ToastInput): string {
-  if (!toast.description) return toast.title;
-  const title = toast.title.trimEnd();
-  return /[.!?:]$/.test(title) ? `${title} ${toast.description}` : `${title}. ${toast.description}`;
-}
-
 export const toasts = {
   add(toast: ToastInput): string {
-    useHost().toast(toastText(toast), toast.color === 'warning' ? 'info' : toast.color);
+    useHost().toast(toast.title, toast.color === 'warning' ? 'info' : toast.color, {
+      description: toast.description,
+      action: toast.action
+    });
     return Math.random().toString(36).slice(2, 9);
   }
 };

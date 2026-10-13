@@ -35,14 +35,34 @@
 		migrationsApplied: string[];
 		dbRole: string | null;
 		dbPool: { total: number; idle: number; waiting: number; max: number } | null;
+		dbPoolSize: { size: number; source: 'values' | 'graft' | 'default' } | null;
 		settings: { id: string; title: string }[];
+	};
+	type DbBudget = {
+		usable: number;
+		inUse: number;
+		perPod: number;
+		steadyPeak: number;
+		rolloutPeak: number;
+		level: 'ok' | 'tight' | 'over';
+		summary: string;
 	};
 	type Overview = {
 		platform: string;
 		sdk: string;
 		trust: 'official' | 'signed' | 'any';
+		database: DbBudget | null;
 		grafts: Graft[];
 	};
+
+	const POOL_SOURCE = {
+		values: 'set in your values',
+		graft: 'what the graft asks for',
+		default: 'the default'
+	} as const;
+
+	const budgetShare = (b: DbBudget) =>
+		b.usable > 0 ? Math.min(100, Math.round((b.rolloutPeak / b.usable) * 100)) : 100;
 
 	let overview = $state<Overview | null>(null);
 	let loadError = $state<string | null>(null);
@@ -131,6 +151,35 @@
 			{overview.grafts.length === 1 ? 'graft' : 'grafts'} on Orchard {overview.platform}, graft SDK
 			{overview.sdk}. {TRUST_COPY[overview.trust]}
 		</p>
+		{#if overview.database}
+			{@const db = overview.database}
+			{#if db.level === 'ok'}
+				<div class="grafts-budget">
+					<p class="grafts-meta">{db.summary} {db.inUse} are open right now.</p>
+					<div
+						class="grafts-budget-track"
+						role="meter"
+						aria-label="Database connections at peak"
+						aria-valuenow={db.rolloutPeak}
+						aria-valuemin={0}
+						aria-valuemax={db.usable}
+					>
+						<div class="grafts-budget-fill" style="width: {budgetShare(db)}%"></div>
+					</div>
+				</div>
+			{:else}
+				<Alert
+					tone={db.level === 'over' ? 'error' : 'warning'}
+					title={db.level === 'over'
+						? 'Grafts could run the database out of connections'
+						: 'Database connections are getting tight'}
+				>
+					{db.summary} When the database runs out, new requests fail until connections free up. Lower
+					a graft's pool with <code>orchardctl graft pool &lt;id&gt; &lt;n&gt;</code>, or raise
+					<code>max_connections</code> on the database.
+				</Alert>
+			{/if}
+		{/if}
 		<ul class="grafts-list">
 			{#each overview.grafts as g, i (g.id)}
 				{@const sig = signatureLabel(g)}
@@ -221,6 +270,11 @@
 									<p class="graft-mono">schema ext_{g.id.replaceAll('-', '_')}</p>
 									<p class="graft-faint">
 										{g.dbRole ? `runs as ${g.dbRole}` : 'shares the main database user'} ·
+										{#if g.dbPoolSize}
+											up to {g.dbPoolSize.size} connections per pod, {POOL_SOURCE[
+												g.dbPoolSize.source
+											]} ·
+										{/if}
 										{g.dbPool
 											? `${g.dbPool.total - g.dbPool.idle} of ${g.dbPool.max} connections busy on this pod`
 											: 'no connections open on this pod'} ·
@@ -534,5 +588,21 @@
 
 	.graft-route-auth--public {
 		color: var(--status-warning);
+	}
+	.grafts-budget {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.grafts-budget-track {
+		height: 0.375rem;
+		border-radius: 999px;
+		background: var(--bg-raised);
+		overflow: hidden;
+	}
+	.grafts-budget-fill {
+		height: 100%;
+		border-radius: inherit;
+		background: color-mix(in oklab, var(--text-default) 35%, transparent);
 	}
 </style>

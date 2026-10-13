@@ -40,6 +40,7 @@ fields are refused, so a typo fails loudly at `graft pack`.
 | `requires.kubernetes.crds` | CRDs that must exist. `orchardctl` checks before installing |
 | `capabilities` | What the graft asks for. Each door needs its capability; see the [graft API reference](/reference/graft-api/) |
 | `database.coreReads` | Core tables and columns the graft may read, for joins. Shown before install |
+| `database.pool` | Database connections the graft may open per pod, 1 to 50, default 3. Operators can override it |
 | `permissions` | Permissions the graft checks, with default grants by role, e.g. `{ "use": { "label": "Use it", "defaultGrants": ["org:member"] } }` |
 | `settings` | Sections for Admin → Configuration. Fields are `string`, `text`, `number`, `boolean`, `select` or `secret`, and can name an `env` variable that overrides them |
 | `ui.screens` | Pages the graft owns: `id`, `path` (with `:param` and a trailing `*`), `layout` (`shell` or `fullscreen`), `title` |

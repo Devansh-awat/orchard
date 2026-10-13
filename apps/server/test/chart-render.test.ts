@@ -267,7 +267,7 @@ function serverEnv(out: string): string {
   return docs(out).find((d) => /kind: Deployment/.test(d) && /name: server\n/.test(d)) ?? '';
 }
 
-test('sandboxes are neither installed nor switched by default', { skip: !helmAvailable() }, () => {
+test('sandboxes are not installed by default', { skip: !helmAvailable() }, () => {
   const out = render([]);
   assert.doesNotMatch(out, /SANDBOX_ENABLED/);
   assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
@@ -278,13 +278,12 @@ test('sandboxes are neither installed nor switched by default', { skip: !helmAva
 });
 
 test(
-  'sandbox.enabled installs everything and starts the switch on without locking it',
+  'sandbox.enabled installs the runner plumbing and no longer renders the retired switch',
   { skip: !helmAvailable() },
   () => {
     const out = render(['sandbox.enabled=true']);
     const server = serverEnv(out);
-    assert.match(server, /SANDBOX_ENABLED_DEFAULT, value: "true"/);
-    assert.doesNotMatch(server, /name: SANDBOX_ENABLED,/);
+    assert.doesNotMatch(server, /SANDBOX_ENABLED/);
     assert.match(server, /SANDBOX_NAMESPACE, value: "orchard-sandboxes"/);
     assert.match(server, /ORCHARD_SERVER_NAMESPACE, value: "orchard"/);
     assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
@@ -298,40 +297,23 @@ test(
   }
 );
 
-test(
-  'sandbox.install renders the runner plumbing with the switch left to admins',
-  { skip: !helmAvailable() },
-  () => {
-    const out = render(['sandbox.install=true']);
-    const server = serverEnv(out);
-    assert.doesNotMatch(server, /SANDBOX_ENABLED/);
-    assert.match(server, /SANDBOX_NAMESPACE, value: "orchard-sandboxes"/);
-    assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
-    const objects = parsed(out);
-    assert.ok(
-      objects.some((d) => d.kind === 'NetworkPolicy' && d.metadata?.name === 'sandbox-isolation')
-    );
-    assert.ok(
-      objects.some(
-        (d) => d.kind === 'RoleBinding' && d.metadata?.name === 'orchard-sandbox-manager'
-      )
-    );
-  }
-);
+test('sandbox.install renders the runner plumbing', { skip: !helmAvailable() }, () => {
+  const out = render(['sandbox.install=true']);
+  const server = serverEnv(out);
+  assert.doesNotMatch(server, /SANDBOX_ENABLED/);
+  assert.match(server, /SANDBOX_NAMESPACE, value: "orchard-sandboxes"/);
+  assert.doesNotMatch(out, /PUBLIC_SANDBOX_ENABLED/);
+  const objects = parsed(out);
+  assert.ok(
+    objects.some((d) => d.kind === 'NetworkPolicy' && d.metadata?.name === 'sandbox-isolation')
+  );
+  assert.ok(
+    objects.some((d) => d.kind === 'RoleBinding' && d.metadata?.name === 'orchard-sandbox-manager')
+  );
+});
 
 test('sandbox.install=false wins over sandbox.enabled', { skip: !helmAvailable() }, () => {
   const out = render(['sandbox.enabled=true', 'sandbox.install=false']);
-  assert.match(serverEnv(out), /SANDBOX_ENABLED_DEFAULT, value: "true"/);
   assert.doesNotMatch(out, /SANDBOX_NAMESPACE/);
   assert.ok(!parsed(out).some((d) => d.metadata?.name === 'sandbox-isolation'));
-});
-
-test('sandbox.lockEnabled pins the switch both ways', { skip: !helmAvailable() }, () => {
-  const on = render(['sandbox.enabled=true', 'sandbox.lockEnabled=true']);
-  assert.match(serverEnv(on), /name: SANDBOX_ENABLED, value: "true"/);
-  assert.doesNotMatch(serverEnv(on), /SANDBOX_ENABLED_DEFAULT/);
-  assert.match(on, /PUBLIC_SANDBOX_ENABLED, value: "true"/);
-  const off = render(['sandbox.install=true', 'sandbox.lockEnabled=false']);
-  assert.match(serverEnv(off), /name: SANDBOX_ENABLED, value: "false"/);
-  assert.match(off, /PUBLIC_SANDBOX_ENABLED, value: "false"/);
 });

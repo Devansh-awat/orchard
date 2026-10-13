@@ -140,6 +140,7 @@ func Graft() *cli.Command {
   orchardctl graft upgrade [id]              move to the newest compatible version
   orchardctl graft remove <id> [--purge]     uninstall; --purge also deletes its data
   orchardctl graft rollback <id>             go back to the previous version and data
+  orchardctl graft pool <id> [n|default]     database connections the graft may open per pod
 
 Flags for add and upgrade:
   --yes        skip the confirmation prompt
@@ -188,6 +189,11 @@ func runGraft(c *cli.Context, args []string) error {
 			return errors.New("usage: orchardctl graft remove <id> [--purge] [--apply]")
 		}
 		return graftRemove(c, positional[0], flags["purge"], apply)
+	case "pool":
+		if len(positional) < 1 || len(positional) > 2 {
+			return errors.New("usage: orchardctl graft pool <id> [n|default] [--apply]")
+		}
+		return graftPool(c, positional, apply)
 	case "rollback":
 		if len(positional) != 1 {
 			return errors.New("usage: orchardctl graft rollback <id> [--apply]")
@@ -1135,6 +1141,49 @@ func graftRemove(c *cli.Context, id string, purge, apply bool) error {
 	}
 	c.Printf("purged %s's data\n", id)
 	return nil
+}
+
+func graftPool(c *cli.Context, args []string, apply bool) error {
+	values, err := cli.LoadValues(c.Env.Values)
+	if err != nil {
+		return err
+	}
+	id := args[0]
+	path := graftSettingsPath + ".pools." + id
+	if len(args) == 1 {
+		if n := values.Get(path); n != nil {
+			c.Printf("%s may open %v database connections per pod (set in your values)\n", id, n)
+		} else {
+			c.Printf("%s uses the pool size it asks for in graft.json (3 when it asks for nothing)\n", id)
+		}
+		return nil
+	}
+	installed := false
+	for _, s := range readGraftSpecs(values) {
+		if s.ID == id {
+			installed = true
+		}
+	}
+	if !installed {
+		return fmt.Errorf("%s is not installed", id)
+	}
+	if args[1] == "default" {
+		values.Unset(path)
+		c.Printf("%s goes back to the pool size it asks for\n", id)
+	} else {
+		n, err := strconv.Atoi(args[1])
+		if err != nil || n < 1 || n > 50 {
+			return errors.New("the pool size is a whole number from 1 to 50, or default")
+		}
+		if err := values.Set(path, args[1]); err != nil {
+			return err
+		}
+		c.Printf("%s may now open %d database connections per pod; Admin -> Grafts shows how that adds up across pods\n", id, n)
+	}
+	if err := values.Save(); err != nil {
+		return err
+	}
+	return maybeApply(c, apply)
 }
 
 func graftRollback(c *cli.Context, id string, flags map[string]bool, apply bool) error {

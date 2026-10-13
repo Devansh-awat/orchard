@@ -276,7 +276,8 @@
         "healthy",
         "updated_at"
       ]
-    }
+    },
+    "pool": 10
   },
   "permissions": {
     "use": {
@@ -480,7 +481,7 @@
       },
       {
         "id": "admin",
-        "path": "/greenhouse/admin",
+        "path": "/admin/greenhouse",
         "layout": "shell",
         "title": "Greenhouse"
       },

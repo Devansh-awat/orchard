@@ -29,6 +29,7 @@ import {
   verifyGraftDir
 } from './integrity';
 import { parseManifest } from './manifest';
+import { measureDbBudget, poolOverrides, type DbBudget } from './db-budget';
 import { applyMigrations, ensureGraftRole, readMigrations } from './migrations';
 import { satisfies } from './semver';
 import { readSyncFailures } from './sync';
@@ -426,6 +427,21 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
       );
   }
 
+  if (env.ORCHARD_GRAFT_POOLS?.trim() && !Object.keys(poolOverrides(env)).length) {
+    logger.warn(
+      'ORCHARD_GRAFT_POOLS is set but is not a JSON object of graft id to pool size; ignoring it'
+    );
+  }
+  if (options.migrate !== false && databaseUrl) {
+    const budget = await checkDbBudget(databaseUrl, records, env);
+    if (budget && budget.level !== 'ok') {
+      logger.warn(`database connections ${budget.level}: ${budget.summary}`);
+      if (budget.level === 'over' && truthy(env.ORCHARD_GRAFTS_STRICT)) {
+        throw new Error(`ORCHARD_GRAFTS_STRICT: ${budget.summary}`);
+      }
+    }
+  }
+
   const failed = records.filter((r) => r.status === 'failed');
   if (failed.length && truthy(env.ORCHARD_GRAFTS_STRICT)) {
     throw new Error(
@@ -434,4 +450,22 @@ export async function loadGrafts(options: LoadOptions = {}): Promise<GraftRecord
   }
   setGraftRecords(records);
   return records;
+}
+
+async function checkDbBudget(
+  databaseUrl: string,
+  records: readonly GraftRecord[],
+  env: NodeJS.ProcessEnv
+): Promise<DbBudget | null> {
+  if (!records.some((r) => r.status === 'loaded')) return null;
+  const client = new Client({ connectionString: databaseUrl });
+  try {
+    await client.connect();
+    return await measureDbBudget((sql) => client.query(sql), records, env);
+  } catch (err) {
+    logger.warn(`could not check the database connection budget: ${(err as Error).message}`);
+    return null;
+  } finally {
+    await client.end().catch(() => undefined);
+  }
 }

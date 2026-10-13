@@ -73,7 +73,9 @@ function scan(): { entries: GraftUiEntry[]; dirs: Map<string, string> } {
 			const roots = [
 				id,
 				...(manifest.claims?.uiAliases ?? []).map((a) => a.split('/')[0]),
-				...screens.map((s) => s.path.replace(/^\/+/, '').split('/')[0])
+				...screens
+					.filter((s) => !s.path.startsWith('/admin/'))
+					.map((s) => s.path.replace(/^\/+/, '').split('/')[0])
 			].filter(Boolean);
 			entries.push({
 				id,

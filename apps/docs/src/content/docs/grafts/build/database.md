@@ -69,5 +69,13 @@ const { rows } = await this.db.query('SELECT * FROM notes WHERE id = $1', [id]);
 ```
 
 Any query builder or ORM that accepts a `pg` pool works with `this.db.pool()`.
-The pool holds 3 connections per pod unless the instance changes
-`ORCHARD_GRAFT_DB_POOL`, so keep transactions short.
+The pool holds 3 connections per pod unless you ask for more in `graft.json`:
+
+```json
+"database": { "pool": 10 }
+```
+
+Ask for what the graft needs under load, up to 50; operators can override it
+with `orchardctl graft pool`, and Orchard checks every pod's pools together
+against the database's limit (see [Database connections](/grafts/install/#database-connections)).
+Keep transactions short either way.

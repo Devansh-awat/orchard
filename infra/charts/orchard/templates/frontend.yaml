@@ -36,9 +36,6 @@ spec:
             {{- with (include "orchard.mcpUrl" .) }}
             - { name: PUBLIC_MCP_URL, value: {{ . | quote }} }
             {{- end }}
-            {{- if not (kindIs "invalid" .Values.sandbox.lockEnabled) }}
-            - { name: PUBLIC_SANDBOX_ENABLED, value: {{ .Values.sandbox.lockEnabled | toString | quote }} }
-            {{- end }}
             {{- with (include "orchard.appDomain" .) }}
             - { name: PUBLIC_APP_DOMAIN, value: {{ . | quote }} }
             {{- end }}
