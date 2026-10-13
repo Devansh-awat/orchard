@@ -1,0 +1,196 @@
+name: installer-e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - install/install.sh
+      - infra/charts/orchard/**
+      - apps/server/Dockerfile
+      - apps/frontend/Dockerfile
+      - apps/server/src/docker/**
+      - apps/server/src/kubernetes/k8s-workload.service.ts
+      - install/e2e/**
+      - .github/workflows/installer-e2e.yml
+
+concurrency:
+  group: installer-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: install (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            uname: x86_64
+            node: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            uname: aarch64
+            node: arm64
+            runner: ubuntu-24.04-arm
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      DOCKERFILE_REPO: https://github.com/${{ github.repository }}
+      DOCKERFILE_BRANCH: ${{ github.head_ref || github.ref_name }}
+      RAILPACK_REPO: https://github.com/heroku/node-js-getting-started
+      RAILPACK_BRANCH: main
+      KUBECTL: sudo k3s kubectl
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Free disk for the installer's 20G floor
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /var/lib
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build server image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          load: true
+          provenance: false
+          build-args: VERSION=0.0.0-e2e
+          tags: ghcr.io/hackclub/orchard/server:e2e
+          cache-from: type=gha,scope=e2e-server-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=e2e-server-${{ matrix.arch }}
+
+      - name: Build frontend image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          load: true
+          provenance: false
+          build-args: VERSION=0.0.0-e2e
+          tags: ghcr.io/hackclub/orchard/frontend:e2e
+          cache-from: type=gha,scope=e2e-frontend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=e2e-frontend-${{ matrix.arch }}
+
+      - name: Preload the images into k3s
+        run: |
+          for svc in server frontend; do
+            docker image inspect "ghcr.io/hackclub/orchard/$svc:e2e" --format "$svc {{.Os}}/{{.Architecture}}"
+            test "$(docker image inspect "ghcr.io/hackclub/orchard/$svc:e2e" --format '{{.Architecture}}')" = "${{ matrix.arch }}"
+          done
+          sudo mkdir -p /var/lib/rancher/k3s/agent/images
+          docker save ghcr.io/hackclub/orchard/server:e2e ghcr.io/hackclub/orchard/frontend:e2e \
+            | sudo tee /var/lib/rancher/k3s/agent/images/orchard-e2e.tar >/dev/null
+          docker system prune -af >/dev/null
+          sudo systemctl stop docker.socket docker
+          sudo iptables -P FORWARD ACCEPT
+
+      - name: Run the installer
+        run: |
+          sudo apt-get install -y -qq apache2-utils jq >/dev/null
+          sudo ORCHARD_ASSUME_YES=true ORCHARD_NO_PACING=1 NO_COLOR=1 bash install/install.sh \
+            --mode lan \
+            --mcp false \
+            --metrics false \
+            --chart ./infra/charts/orchard \
+            --image-tag e2e \
+            --image-pull-policy IfNotPresent
+
+      - name: The install targets this machine's architecture
+        run: |
+          sudo grep -x "  platform: linux/${{ matrix.arch }}" /etc/orchard/values.yaml
+          $KUBECTL -n orchard get deploy server -o json \
+            | jq -e --arg want "linux/${{ matrix.arch }}" \
+              '[.spec.template.spec.containers[0].env[] | select(.name == "BUILD_PLATFORM") | .value] == [$want]'
+          $KUBECTL get nodes -L kubernetes.io/arch
+
+      - name: Claim the instance and get an API token
+        run: |
+          IP=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+          echo "BASE=http://$IP/apiv1" >> "$GITHUB_ENV"
+          CLAIM=$($KUBECTL -n orchard exec deploy/server -- node dist/scripts/mint-claim-link.js \
+            | grep -o 'token=[A-Za-z0-9_-]*' | cut -d= -f2)
+          test -n "$CLAIM"
+          curl -fsS -c "$RUNNER_TEMP/jar" -H 'content-type: application/json' \
+            -d "{\"token\":\"$CLAIM\",\"email\":\"ci@example.com\"}" "http://$IP/apiv1/setup/bootstrap" >/dev/null
+          TOKEN=$(curl -fsS -b "$RUNNER_TEMP/jar" -H 'content-type: application/json' \
+            -d '{"name":"e2e","scopes":["exec"]}' "http://$IP/apiv1/auth/tokens" | jq -r .token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Create a project with a Dockerfile app and a Railpack app
+        run: |
+          api() { curl -fsS -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' "$@"; }
+          ORG=$(api "$BASE/organizations/user" | jq -r '.[0].id')
+          PROJECT=$(api -d "{\"organizationId\":\"$ORG\",\"name\":\"e2e\"}" "$BASE/projects" | jq -r .id)
+          DOCKERFILE_ID=$(api -d "$(jq -n --arg repo "$DOCKERFILE_REPO" --arg branch "$DOCKERFILE_BRANCH" \
+            '{name:"e2e-dockerfile",repoUrl:$repo,branch:$branch,buildType:"dockerfile",dockerfilePath:"install/e2e/dockerfile/Dockerfile",port:8080,autoUrl:false}')" \
+            "$BASE/projects/$PROJECT/deployments/from-github" | jq -r .id)
+          RAILPACK_ID=$(api -d "$(jq -n --arg repo "$RAILPACK_REPO" --arg branch "$RAILPACK_BRANCH" \
+            '{name:"e2e-railpack",repoUrl:$repo,branch:$branch,buildType:"railpack",port:8080,autoUrl:false}')" \
+            "$BASE/projects/$PROJECT/deployments/from-github" | jq -r .id)
+          echo "DOCKERFILE_ID=$DOCKERFILE_ID" >> "$GITHUB_ENV"
+          echo "RAILPACK_ID=$RAILPACK_ID" >> "$GITHUB_ENV"
+
+      - name: Both apps build in-cluster
+        timeout-minutes: 30
+        run: |
+          api() { curl -fsS -H "authorization: Bearer $TOKEN" "$@"; }
+          for id in "$DOCKERFILE_ID" "$RAILPACK_ID"; do
+            while :; do
+              status=$(api "$BASE/deployments/$id" | jq -r .buildStatus)
+              echo "$id: $status"
+              case "$status" in
+                succeeded) break ;;
+                failed) api "$BASE/deployments/$id/logs" | jq -r '.buildError, .logs' | tail -c 20000; exit 1 ;;
+              esac
+              sleep 15
+            done
+          done
+
+      - name: Builders ran on this architecture
+        run: |
+          $KUBECTL -n orchard-builders get jobs -o json \
+            | jq -e --arg arch "${{ matrix.arch }}" \
+              '.items | length > 0 and all(.spec.template.spec.nodeSelector["kubernetes.io/arch"] == $arch)'
+
+      - name: Apps run, are pinned to this architecture, and report it
+        run: |
+          api() { curl -fsS -H "authorization: Bearer $TOKEN" "$@"; }
+          check() {
+            local dep ns name
+            dep=$(api "$BASE/deployments/$1")
+            ns=$(jq -r .namespace <<<"$dep")
+            name=$(jq -r .name <<<"$dep")
+            $KUBECTL -n "$ns" rollout status "deploy/$name" --timeout=5m
+            $KUBECTL -n "$ns" get deploy "$name" -o json \
+              | jq -e --arg arch "${{ matrix.arch }}" \
+                '.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms
+                 | all(.matchExpressions | any(.key == "kubernetes.io/arch" and .values == [$arch]))'
+            got=$($KUBECTL -n "$ns" exec "deploy/$name" -- sh -c "$2")
+            echo "$name reports $got"
+            test "$got" = "$3"
+          }
+          check "$DOCKERFILE_ID" 'cat /www/arch' "${{ matrix.uname }}"
+          check "$RAILPACK_ID" 'node -p process.arch' "${{ matrix.node }}"
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          $KUBECTL get nodes -o wide || true
+          $KUBECTL get pods -A -o wide || true
+          $KUBECTL get events -A --sort-by=.lastTimestamp | tail -80 || true
+          $KUBECTL -n orchard logs deploy/server --tail=300 || true
+          $KUBECTL -n orchard-builders get jobs,pods -o wide || true
+          for pod in $($KUBECTL -n orchard-builders get pods -o name 2>/dev/null); do
+            $KUBECTL -n orchard-builders logs "$pod" --all-containers --tail=150 || true
+          done
+          for id in "${DOCKERFILE_ID:-}" "${RAILPACK_ID:-}"; do
+            [ -n "$id" ] && curl -fsS -H "authorization: Bearer $TOKEN" "$BASE/deployments/$id/logs" | jq -r '.buildError, .logs' | tail -c 20000 || true
+          done

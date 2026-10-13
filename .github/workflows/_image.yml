@@ -23,7 +23,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -33,17 +41,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        id: build
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
-          push: true
+          platforms: linux/${{ matrix.arch }}
           provenance: false
           build-args: |
             VERSION=${{ inputs.version }}
             BUILDKIT_INLINE_CACHE=1
-          tags: |
-            ghcr.io/hackclub/orchard/${{ inputs.service }}:${{ inputs.version }}
-            ghcr.io/hackclub/orchard/${{ inputs.service }}:latest
-            ghcr.io/hackclub/orchard/${{ inputs.service }}:sha-${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
+          outputs: type=image,name=ghcr.io/hackclub/orchard/${{ inputs.service }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=ghcr.io/hackclub/orchard/${{ inputs.service }}:buildcache-${{ matrix.arch }},mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
+      - run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-${{ inputs.service }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ inputs.service }}-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - working-directory: /tmp/digests
+        env:
+          IMAGE: ghcr.io/hackclub/orchard/${{ inputs.service }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:$VERSION" \
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:sha-$SHA" \
+            $(printf "$IMAGE@sha256:%s " *)
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
