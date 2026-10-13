@@ -148,23 +148,35 @@ jobs:
         timeout-minutes: 30
         run: |
           api() { curl -sS --fail-with-body -H "authorization: Bearer $TOKEN" "$@"; }
-          for id in "$DOCKERFILE_ID" "$RAILPACK_ID"; do
-            while :; do
+          seen="$RUNNER_TEMP/builders.jsonl"
+          : > "$seen"
+          pending=("$DOCKERFILE_ID" "$RAILPACK_ID")
+          while [ "${#pending[@]}" -gt 0 ]; do
+            $KUBECTL -n orchard-builders get jobs -o json \
+              | jq -c '.items[] | {deployment: .spec.template.metadata.labels["orchard.my/deployment-id"], arch: .spec.template.spec.nodeSelector["kubernetes.io/arch"]}' \
+              >> "$seen" || true
+            still=()
+            for id in "${pending[@]}"; do
               status=$(api "$BASE/deployments/$id" | jq -r .buildStatus)
               echo "$id: $status"
               case "$status" in
-                succeeded) break ;;
+                succeeded) ;;
                 failed) api "$BASE/deployments/$id/logs" | jq -r '.buildError, .logs' | tail -c 20000; exit 1 ;;
+                *) still+=("$id") ;;
               esac
-              sleep 15
             done
+            pending=("${still[@]}")
+            [ "${#pending[@]}" -gt 0 ] && sleep 5
           done
 
-      - name: Builders ran on this architecture
+      - name: Both builds ran on this architecture
         run: |
-          $KUBECTL -n orchard-builders get jobs -o json \
-            | jq -e --arg arch "${{ matrix.arch }}" \
-              '.items | length > 0 and all(.spec.template.spec.nodeSelector["kubernetes.io/arch"] == $arch)'
+          sort -u "$RUNNER_TEMP/builders.jsonl"
+          jq -se --arg arch "${{ matrix.arch }}" --arg a "$DOCKERFILE_ID" --arg b "$RAILPACK_ID" '
+            (map(select(.deployment == $a or .deployment == $b)) | unique) as $jobs
+            | ($jobs | map(.deployment) | unique | sort) == ([$a, $b] | sort)
+              and ($jobs | all(.arch == $arch))
+          ' "$RUNNER_TEMP/builders.jsonl"
 
       - name: Apps run, are pinned to this architecture, and report it
         run: |
