@@ -22,6 +22,7 @@ import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runti
 import { decodeStepsSnapshot, encodeStepsSnapshot } from './steps-snapshot';
 import { RegistryCredentialsService } from '../projects/registry-credentials.service';
 import { pullSecretsForImage } from '../projects/registry-credentials';
+import { pinToBuildArch } from '../docker/build-platform';
 import { ResourceBindingsService } from '../projects/resource-bindings.service';
 import { resolveEnvVars, EnvVar, ResourceValues } from '../env/env-resolver';
 
@@ -337,7 +338,7 @@ export class JobsOrchestratorService {
             restartPolicy: 'Never',
             automountServiceAccountToken: false,
             runtimeClassName: trusted ? undefined : process.env.TENANT_RUNTIME_CLASS || undefined,
-            affinity: ctx.placement?.affinity,
+            affinity: pinToBuildArch(ctx.placement?.affinity, step.image),
             tolerations: ctx.placement?.tolerations,
             imagePullSecrets: pullSecrets.length ? pullSecrets : undefined,
             containers: [

@@ -315,6 +315,12 @@ builders:
   #   kubectl taint node <name> orchard-builder=true:NoSchedule   # optional
   dedicatedNode:
     enabled: false
+  # Architecture user images are built for: linux/amd64 or linux/arm64. Build
+  # pods are pinned to nodes of that architecture so builds run natively, and
+  # when this is set, apps built by Orchard are pinned there too so a mixed
+  # amd64/arm64 cluster never schedules an image onto a node that cannot run
+  # it. Empty builds linux/amd64 and leaves app placement alone.
+  platform: ""
   localCache:
     enabled: true
     size: 100Gi

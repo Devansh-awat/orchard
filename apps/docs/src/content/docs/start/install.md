@@ -40,8 +40,9 @@ sudo bash orchard-install.sh
 `/etc/orchard/values.yaml`; edit that file and run `orchard-update` to apply
 changes.
 
-**amd64 only.** Image builds target `linux/amd64`, so the installer refuses to
-run on other architectures rather than leaving you with apps that cannot start.
+**amd64 or arm64.** The installer detects the architecture and builds apps for
+it, so an arm64 box (a Graviton or Ampere VM, a Raspberry Pi 5) builds arm64
+images. Anything else is refused.
 
 **Run it on a real machine or VM,** not inside a Docker container: k3s cannot
 nest its overlayfs snapshotter there, and under CPU emulation seccomp is
@@ -258,8 +259,8 @@ asked:
 Three things to make sure it gets right, because each fails in a way that is
 quiet rather than loud:
 
-- **amd64 and a real machine.** The installer refuses other architectures, and
-  k3s cannot nest inside a Docker container. An agent that decides to "try it
+- **amd64 or arm64, on a real machine.** The installer refuses other
+  architectures, and k3s cannot nest inside a Docker container. An agent that decides to "try it
   in a container anyway" produces a cluster whose kubelet never starts a pod.
 - **DNS first.** In `public` mode the certificates are issued over HTTP-01, so
   a record that does not exist yet means a certificate that never arrives. The

@@ -442,7 +442,8 @@ preflight() {
 
   case "$(uname -m)" in
     x86_64|amd64) ARCH=amd64 ;;
-    *) die "amd64 only for now: image builds target linux/amd64, so apps built on a $(uname -m) box would not run on it" ;;
+    aarch64|arm64) ARCH=arm64 ;;
+    *) die "amd64 or arm64 only; this is $(uname -m)" ;;
   esac
   info "architecture: $ARCH"
 
@@ -1402,6 +1403,7 @@ redis:
 
 builders:
   enabled: true
+  platform: linux/$ARCH
   harbor:
     username: $REGISTRY_USER
     password: "$REGISTRY_PASSWORD"

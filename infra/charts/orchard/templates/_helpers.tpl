@@ -190,6 +190,9 @@ true
             {{- if and .Values.builders.enabled .Values.builders.dedicatedNode.enabled }}
             - { name: BUILDER_DEDICATED_NODE, value: "true" }
             {{- end }}
+            {{- with .Values.builders.platform }}
+            - { name: BUILD_PLATFORM, value: {{ . | quote }} }
+            {{- end }}
             {{- if .Values.protection.orchardLogin }}
             - { name: PROTECTION_ORCHARD_LOGIN, value: "true" }
             {{- end }}

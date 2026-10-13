@@ -3,6 +3,8 @@ import * as k8s from '@kubernetes/client-node';
 import { truncateK8sName } from '../projects/projects.utils';
 import { loadKubeConfigFromPathOrBase64 } from '../kubernetes/kubeconfig';
 import { BUILDER_NAMESPACE } from './builder-namespace';
+import { buildArchNodeSelector } from './build-platform';
+import { BUILDKIT_IMAGE } from './buildkit-image';
 
 interface DaemonInfo {
   podName: string;
@@ -209,9 +211,12 @@ export class BuildKitPoolService {
         restartPolicy: 'Always',
         automountServiceAccountToken: false,
         ...(this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
+        nodeSelector: {
+          ...buildArchNodeSelector(),
+          ...(this.dedicatedNodeEnabled ? { 'orchard-builder': 'true' } : {})
+        },
         ...(this.dedicatedNodeEnabled
           ? {
-              nodeSelector: { 'orchard-builder': 'true' },
               tolerations: [
                 {
                   key: 'orchard-builder',
@@ -224,7 +229,7 @@ export class BuildKitPoolService {
         containers: [
           {
             name: 'buildkitd',
-            image: 'moby/buildkit:latest',
+            image: BUILDKIT_IMAGE,
             args: ['--addr', 'tcp://0.0.0.0:1234', '--addr', 'unix:///run/buildkit/buildkitd.sock'],
             securityContext: { privileged: true },
             ports: [{ containerPort: 1234, name: 'buildkit', protocol: 'TCP' }],

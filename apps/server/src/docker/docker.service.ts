@@ -17,6 +17,7 @@ import {
   RAILPACK_INFO_MARKER
 } from './build-config';
 import { ImageBuilderService } from './image-builder.service';
+import { BUILD_PLATFORM } from './build-platform';
 import {
   hasRegistryAuths,
   isPullAuthEnvKey,
@@ -557,7 +558,7 @@ export class DockerService {
     const targetMsg = target ? ` (target: ${target})` : '';
     await this.appendLog(
       deploymentId,
-      `Building image ${fullImageName} for linux/amd64 using Docker${targetMsg}...`
+      `Building image ${fullImageName} for ${BUILD_PLATFORM} using Docker${targetMsg}...`
     );
 
     return new Promise((resolve, reject) => {
@@ -570,7 +571,7 @@ export class DockerService {
         'build',
         '--progress=plain',
         '--platform',
-        'linux/amd64',
+        BUILD_PLATFORM,
         '-t',
         fullImageName,
         '-f',
@@ -829,7 +830,7 @@ export class DockerService {
         'build',
         '--progress=plain',
         '--platform',
-        'linux/amd64',
+        BUILD_PLATFORM,
         '-t',
         fullImageName,
         '-f',
@@ -928,7 +929,7 @@ export class DockerService {
     await this.setBuildStep(deploymentId, 'building');
     await this.appendLog(
       deploymentId,
-      `Building image ${fullImageName} for linux/amd64 using Railpack...`
+      `Building image ${fullImageName} for ${BUILD_PLATFORM} using Railpack...`
     );
 
     const planPath = path.join(buildDir, 'railpack-plan.json');
@@ -1019,7 +1020,7 @@ export class DockerService {
         'build',
         '--progress=plain',
         '--platform',
-        'linux/amd64',
+        BUILD_PLATFORM,
         '-t',
         fullImageName,
         '--build-arg',

@@ -48,6 +48,7 @@ import {
 } from './rollout-strategy';
 import { k8sErrorMessage, k8sHttpException } from './k8s-error';
 import { livenessProbe, probesFor, readinessProbe, startupProbe } from './probes';
+import { pinToBuildArch } from '../docker/build-platform';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -899,7 +900,7 @@ export class K8sWorkloadService {
         pool: options.pool,
         override: options.placementOverride
       });
-      const affinity = placement.affinity ?? null;
+      const affinity = pinToBuildArch(placement.affinity, cleanImage) ?? null;
 
       // PVC volumes can't be held by two pods at once on most CSI drivers
       // (ReadWriteOnce), so a rolling cutover would deadlock waiting for the

@@ -19,6 +19,8 @@ import { parseRepoUrl, withCloneCredentials } from './repo-url';
 import { redactUrlUserinfo } from '../git/clone-credential';
 import { injectBuildArgsScript } from './build-args';
 import { BUILDER_NAMESPACE } from './builder-namespace';
+import { BUILD_PLATFORM, buildArchNodeSelector } from './build-platform';
+import { BUILDKIT_IMAGE } from './buildkit-image';
 import { BUILDER_ROLE_RULES } from './builder-rbac';
 import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { isSandboxStartFault } from './build-faults';
@@ -204,7 +206,7 @@ export class ImageBuilderService {
   // path inside the build pod (optionally backed by a PVC for persistence).
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
 
-  private readonly buildkitImage = process.env.BUILDKIT_IMAGE || 'moby/buildkit:v0.31.1';
+  private readonly buildkitImage = BUILDKIT_IMAGE;
 
   // rawjson landed in BuildKit v0.15. The escape hatch is for anyone pinning
   // BUILDKIT_IMAGE to something older, where buildctl rejects the mode
@@ -1063,7 +1065,7 @@ echo "=== Building with Super Builds ==="
 echo 0 > /tmp/build_rc
 { depot build \\
   --progress plain \\
-  --platform linux/amd64 \\
+  --platform ${BUILD_PLATFORM} \\
   -f "${dockerfileFlag}" \\
   -t "${depotImageName}" \\
   --push \\
@@ -2146,9 +2148,12 @@ exit $rc`
             // Daemon-client mode doesn't need Kata — it's just a gRPC client,
             // the daemon pod itself runs with the runtime class.
             ...(!daemonIp && podRuntimeClass ? { runtimeClassName: podRuntimeClass } : {}),
+            nodeSelector: {
+              ...buildArchNodeSelector(),
+              ...(this.dedicatedNodeEnabled ? { 'orchard-builder': 'true' } : {})
+            },
             ...(this.dedicatedNodeEnabled
               ? {
-                  nodeSelector: { 'orchard-builder': 'true' },
                   tolerations: [
                     {
                       key: 'orchard-builder',
@@ -2420,7 +2425,7 @@ exit $rc`
       '--opt',
       `filename=${dockerfileName}`,
       '--opt',
-      'platform=linux/amd64'
+      `platform=${BUILD_PLATFORM}`
     ];
 
     // Add target if specified

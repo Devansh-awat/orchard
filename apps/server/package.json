@@ -20,6 +20,7 @@
     "test:user-context": "tsx --test test/user-context.test.ts",
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
+    "test:build-platform": "tsx --test test/build-platform.test.ts",
     "test:template-params": "tsx --test test/template-params.test.ts",
     "test:template-registry": "tsx --test test/template-registry.test.ts",
     "test:namespace-scope": "tsx --test test/namespace-scope.test.ts",

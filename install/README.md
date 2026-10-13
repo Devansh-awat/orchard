@@ -55,8 +55,8 @@ simply where it is served, and 443 carries deployed apps on self-signed
 certificates. The installer reports what holds them during its first step and
 stops only if the mode you choose needs them.
 
-amd64 only for now. Image builds target `linux/amd64`, so the installer refuses
-to run on anything else rather than leave you with apps that cannot start.
+amd64 or arm64. Apps are built for whichever the machine is, and anything else
+is refused.
 
 Run it on a real machine or VM. Inside a Docker container k3s cannot nest its
 overlayfs snapshotter, and under CPU emulation seccomp is unavailable, so the
