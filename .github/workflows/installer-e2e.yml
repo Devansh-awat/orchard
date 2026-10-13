@@ -10,7 +10,6 @@ on:
       - apps/frontend/Dockerfile
       - apps/server/src/docker/**
       - apps/server/src/kubernetes/k8s-workload.service.ts
-      - install/e2e/**
       - .github/workflows/installer-e2e.yml
 
 concurrency:
@@ -19,6 +18,10 @@ concurrency:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   install:
@@ -35,12 +38,11 @@ jobs:
             uname: aarch64
             node: arm64
             runner: ubuntu-24.04-arm
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
-      DOCKERFILE_REPO: https://github.com/${{ github.repository }}
-      DOCKERFILE_BRANCH: ${{ github.head_ref || github.ref_name }}
+      DOCKERFILE_REPO: https://github.com/docker/welcome-to-docker
+      DOCKERFILE_BRANCH: main
       RAILPACK_REPO: https://github.com/heroku/node-js-getting-started
       RAILPACK_BRANCH: main
       KUBECTL: sudo k3s kubectl
@@ -121,27 +123,31 @@ jobs:
             -d "{\"token\":\"$CLAIM\",\"email\":\"ci@example.com\"}" "http://$IP/apiv1/setup/bootstrap" >/dev/null
           TOKEN=$(curl -fsS -b "$RUNNER_TEMP/jar" -H 'content-type: application/json' \
             -d '{"name":"e2e","scopes":["exec"]}' "http://$IP/apiv1/auth/tokens" | jq -r .token)
+          [[ "$TOKEN" == orch_* ]] || { echo "no API token in the response"; exit 1; }
           echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Create a project with a Dockerfile app and a Railpack app
         run: |
-          api() { curl -fsS -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' "$@"; }
+          api() { curl -sS --fail-with-body -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' "$@"; }
           ORG=$(api "$BASE/organizations/user" | jq -r '.[0].id')
           PROJECT=$(api -d "{\"organizationId\":\"$ORG\",\"name\":\"e2e\"}" "$BASE/projects" | jq -r .id)
           DOCKERFILE_ID=$(api -d "$(jq -n --arg repo "$DOCKERFILE_REPO" --arg branch "$DOCKERFILE_BRANCH" \
-            '{name:"e2e-dockerfile",repoUrl:$repo,branch:$branch,buildType:"dockerfile",dockerfilePath:"install/e2e/dockerfile/Dockerfile",port:8080,autoUrl:false}')" \
+            '{name:"e2e-dockerfile",repoUrl:$repo,branch:$branch,buildType:"dockerfile",dockerfilePath:"Dockerfile",port:3000,autoUrl:false}')" \
             "$BASE/projects/$PROJECT/deployments/from-github" | jq -r .id)
           RAILPACK_ID=$(api -d "$(jq -n --arg repo "$RAILPACK_REPO" --arg branch "$RAILPACK_BRANCH" \
             '{name:"e2e-railpack",repoUrl:$repo,branch:$branch,buildType:"railpack",port:8080,autoUrl:false}')" \
             "$BASE/projects/$PROJECT/deployments/from-github" | jq -r .id)
+          for id in "$ORG" "$PROJECT" "$DOCKERFILE_ID" "$RAILPACK_ID"; do
+            [[ "$id" =~ ^[0-9a-f-]{36}$ ]] || { echo "expected an id, got '$id'"; exit 1; }
+          done
           echo "DOCKERFILE_ID=$DOCKERFILE_ID" >> "$GITHUB_ENV"
           echo "RAILPACK_ID=$RAILPACK_ID" >> "$GITHUB_ENV"
 
       - name: Both apps build in-cluster
         timeout-minutes: 30
         run: |
-          api() { curl -fsS -H "authorization: Bearer $TOKEN" "$@"; }
+          api() { curl -sS --fail-with-body -H "authorization: Bearer $TOKEN" "$@"; }
           for id in "$DOCKERFILE_ID" "$RAILPACK_ID"; do
             while :; do
               status=$(api "$BASE/deployments/$id" | jq -r .buildStatus)
@@ -162,7 +168,7 @@ jobs:
 
       - name: Apps run, are pinned to this architecture, and report it
         run: |
-          api() { curl -fsS -H "authorization: Bearer $TOKEN" "$@"; }
+          api() { curl -sS --fail-with-body -H "authorization: Bearer $TOKEN" "$@"; }
           check() {
             local dep ns name
             dep=$(api "$BASE/deployments/$1")
@@ -177,7 +183,7 @@ jobs:
             echo "$name reports $got"
             test "$got" = "$3"
           }
-          check "$DOCKERFILE_ID" 'cat /www/arch' "${{ matrix.uname }}"
+          check "$DOCKERFILE_ID" 'uname -m' "${{ matrix.uname }}"
           check "$RAILPACK_ID" 'node -p process.arch' "${{ matrix.node }}"
 
       - name: Diagnostics
