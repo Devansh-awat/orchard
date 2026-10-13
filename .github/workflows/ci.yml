@@ -18,10 +18,12 @@ jobs:
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       server: ${{ steps.filter.outputs.server }}
+      hostctl: ${{ steps.filter.outputs.hostctl }}
       gateway: ${{ steps.filter.outputs.gateway }}
       cli: ${{ steps.filter.outputs.cli }}
       contracts: ${{ steps.filter.outputs.contracts }}
       r2_proxy: ${{ steps.filter.outputs.r2_proxy }}
+      registry: ${{ steps.filter.outputs.registry }}
       chart: ${{ steps.filter.outputs.chart }}
       docs: ${{ steps.filter.outputs.docs }}
       landing: ${{ steps.filter.outputs.landing }}
