@@ -8,6 +8,7 @@
 		{ href: links.readme, label: 'About' },
 		{ href: links.license, label: 'License' },
 		{ href: links.templates, label: 'Templates' },
+		{ href: links.extensions, label: 'Extensions' },
 		{ href: links.credits, label: 'Credits' },
 		{ href: links.docs, label: 'Resource Center' }
 	];

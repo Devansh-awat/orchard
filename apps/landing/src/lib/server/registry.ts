@@ -223,3 +223,51 @@ export async function graftCatalog(
 		return { grafts: [], error: true };
 	}
 }
+
+export type GraftManifestView = {
+	id: string;
+	name: string;
+	version: string;
+	publisher: string;
+	description?: string;
+	homepage?: string;
+	capabilities?: string[];
+	engines?: Record<string, string>;
+	database?: { coreReads?: Record<string, string[]> };
+	ui?: { screens?: { id: string; path: string; title?: string }[] };
+	public?: { routes?: string[] };
+	claims?: Record<string, string[]>;
+	settings?: { id: string; title: string }[];
+	requires?: { grafts?: Record<string, string> };
+};
+
+export type GraftPage = {
+	index: GraftEntry;
+	latest: GraftVersion;
+	manifest: GraftManifestView;
+	readme: string | null;
+	revoked: boolean;
+};
+
+const GRAFT_ID = /^[a-z][a-z0-9-]{1,47}$/;
+
+export async function graftPage(fetch: Fetch, id: string): Promise<GraftPage | null> {
+	if (!GRAFT_ID.test(id)) return null;
+	return remember(`graft:${id}`, async () => {
+		const response = await fetchRegistry(fetch, `grafts/${id}/index.json`);
+		if (!response) return null;
+		const index = (await response.json()) as GraftEntry;
+		const latest = index.versions.find((v) => v.version === index.latest) ?? index.versions[0];
+		if (!latest) return null;
+		const [manifest, readme] = await Promise.all([
+			fetchRegistry(fetch, latest.manifest).then((r) =>
+				r ? (r.json() as Promise<GraftManifestView>) : null
+			),
+			latest.readme
+				? fetchRegistry(fetch, latest.readme).then((r) => (r ? r.text() : null))
+				: Promise.resolve(null)
+		]);
+		if (!manifest) return null;
+		return { index, latest, manifest, readme, revoked: false };
+	});
+}

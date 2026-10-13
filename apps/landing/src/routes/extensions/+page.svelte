@@ -4,7 +4,7 @@
 	import WaveEdge from '$lib/components/WaveEdge.svelte';
 	import Closing from '$lib/components/Closing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-	import GraftPreview from '$lib/components/GraftPreview.svelte';
+	import TemplatePreview from '$lib/components/TemplatePreview.svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
 	import { links } from '$lib/links';
 	import { hover, reveal } from '$lib/motion.svelte';
@@ -21,9 +21,6 @@
 			`${g.id} ${g.name} ${g.description} ${g.publisher}`.toLowerCase().includes(q)
 		);
 	});
-
-	const latest = (g: (typeof data.grafts)[number]) =>
-		g.versions.find((v) => v.version === g.latest) ?? g.versions[0];
 
 	const example = $derived(data.grafts[0]?.id ?? 'announcements');
 
@@ -153,18 +150,20 @@
 		{:else}
 			<ul class="gallery mt-8">
 				{#each shown as g (g.id)}
-					{@const v = latest(g)}
-					<li {@attach hover()}>
-						<GraftPreview
-							id={g.id}
-							name={g.name}
-							version={g.latest}
-							description={g.description}
-							publisher={g.publisher}
-							signed={v?.signed ?? false}
-							capabilities={v?.capabilities ?? []}
-							icon={g.icon ? `${data.registry}/${g.icon}` : undefined}
-						/>
+					<li>
+						<a href="/extensions/{g.id}" {@attach hover()} class="card">
+							<TemplatePreview
+								name={g.id}
+								displayName={g.name}
+								author={g.publisher}
+								version={g.latest}
+								resources={[]}
+								description={g.description}
+								icon={g.icon ? `${data.registry}/${g.icon}` : undefined}
+								href="/extensions/{g.id}"
+								summary
+							/>
+						</a>
 					</li>
 				{/each}
 			</ul>
@@ -339,8 +338,19 @@
 
 	.gallery {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 		gap: 1rem;
+	}
+
+	.card {
+		display: block;
+		height: 100%;
+		border-radius: 14px;
+	}
+
+	.card:focus-visible {
+		outline: 2px solid var(--color-crimson-deep);
+		outline-offset: 4px;
 	}
 
 	.h2 {
@@ -377,11 +387,5 @@
 
 	.textlink:hover {
 		text-decoration-color: var(--color-crimson-deep);
-	}
-
-	:global(.chip-white) {
-		background: #fff;
-		color: var(--color-crimson-deep);
-		box-shadow: 0 0 0 1px rgb(249 68 90 / 0.15);
 	}
 </style>
