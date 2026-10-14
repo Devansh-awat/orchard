@@ -138,7 +138,7 @@ true
 {{- end }}
 
 {{- define "orchard.sandboxIngressPorts" -}}
-{{- list 22 4096 3000 3001 4173 5173 8000 8080 8787 | toJson -}}
+{{- list 22 4096 4097 3000 3001 4173 5173 8000 8080 8787 | toJson -}}
 {{- end }}
 
 {{- define "orchard.ingressTlsSecret" -}}

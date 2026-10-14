@@ -82,6 +82,7 @@ export class SandboxSessionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body()
     body: {
+      id?: string;
       repo?: string;
       baseBranch?: string | null;
       title?: string;

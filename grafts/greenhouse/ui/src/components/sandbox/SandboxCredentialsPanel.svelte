@@ -14,6 +14,7 @@
 
 	let claudeInput = $state('');
 	let openaiInput = $state('');
+	let gatewayInput = $state('');
 	let saving = $state<string | null>(null);
 
 	async function put(body: Record<string, string | null>, action: string) {
@@ -30,6 +31,7 @@
 			}
 			claudeInput = '';
 			openaiInput = '';
+			gatewayInput = '';
 			queryClient.invalidateQueries({ queryKey: ['sandbox-credentials'] });
 			toasts.add({ title: 'Credentials updated', color: 'success' });
 		} catch (e) {
@@ -125,6 +127,45 @@
 						variant="ghost"
 						loading={saving === 'openai-clear'}
 						onclick={() => put({ openaiToken: null }, 'openai-clear')}
+					>
+						Clear
+					</Button>
+				{/if}
+			</div>
+		</div>
+		<div class="cred-row">
+			<div class="cred-head">
+				<span class="cred-name">Vercel AI Gateway / fx</span>
+				{#if credentials?.aiGateway}
+					<StatusBadge meta={statusMeta('success', 'Configured')} variant="plain" />
+				{:else}
+					<StatusBadge meta={statusMeta('neutral', 'Not set')} variant="plain" />
+				{/if}
+			</div>
+			<p class="cred-hint">An AI Gateway API key, exported for fx inside the sandbox.</p>
+			<div class="cred-controls">
+				<Input
+					type="password"
+					bind:value={gatewayInput}
+					placeholder="Paste key"
+					autocomplete="off"
+					aria-label="AI Gateway key"
+				/>
+				<Button
+					size="sm"
+					variant="primary"
+					disabled={!gatewayInput.trim()}
+					loading={saving === 'gateway-save'}
+					onclick={() => put({ aiGatewayToken: gatewayInput.trim() }, 'gateway-save')}
+				>
+					Save
+				</Button>
+				{#if credentials?.aiGateway}
+					<Button
+						size="sm"
+						variant="ghost"
+						loading={saving === 'gateway-clear'}
+						onclick={() => put({ aiGatewayToken: null }, 'gateway-clear')}
 					>
 						Clear
 					</Button>

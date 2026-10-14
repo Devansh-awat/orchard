@@ -63,7 +63,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'list_sandbox_sessions',
     {
-      description: `List the agent sessions on a Greenhouse machine. Each session is a git worktree on its own branch (orchard/<slug>) with an opencode agent chat, plus its diffstat, ahead/behind, activity (idle, working, needs_input, done) and pull request.`,
+      description: `List the agent sessions on a Greenhouse machine. Each session is a git worktree on its own branch (orchard/<slug>) with an agent chat (opencode, Claude Code, fx or Codex), plus its agent, diffstat, ahead/behind, activity (idle, working, needs_input, done) and pull request.`,
       annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: {
         sandboxId,
@@ -81,7 +81,7 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'create_sandbox_session',
     {
-      description: `Start a new agent session on a running Greenhouse machine: creates a git worktree for \`repo\` on a fresh branch and an opencode chat in it. When \`prompt\` is given it is sent as your first prompt (attributed to you, like prompt_sandbox_session) and the agent starts working right away. Requires guest access or higher.`,
+      description: `Start a new agent session on a running Greenhouse machine: creates a git worktree for \`repo\` on a fresh branch and an agent chat in it. Pass \`agent\` to pick the coding agent: "opencode" (the default), or "acp:claude", "acp:opencode", "acp:fx", "acp:codex" for agents driven over the Agent Client Protocol. When \`prompt\` is given it is sent as your first prompt (attributed to you, like prompt_sandbox_session) and the agent starts working right away. Requires guest access or higher.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         sandboxId,
@@ -95,17 +95,15 @@ export function registerSandboxTools(server: McpServer, client: OrchardClient) {
           .optional()
           .describe("Branch to start from (defaults to the repo's default branch)"),
         title: z.string().max(120).optional().describe('Session title'),
-        prompt: z.string().max(32768).optional().describe('First instruction for the agent')
+        prompt: z.string().max(32768).optional().describe('First instruction for the agent'),
+        agent: z
+          .string()
+          .regex(/^(opencode|acp:[A-Za-z0-9_-]{1,28})$/)
+          .optional()
+          .describe('Coding agent: opencode, acp:claude, acp:opencode, acp:fx or acp:codex')
       }
     },
-    async ({ sandboxId: id, prompt, ...body }) => {
-      const session = await client.post<any>(sandboxPath(id, 'sessions'), body);
-      if (!prompt || typeof session?.id !== 'string') return json(session);
-      const sent = await client.post(sandboxPath(id, 'sessions', session.id, 'prompt'), {
-        text: prompt
-      });
-      return json({ ...session, activity: 'working', prompt: sent });
-    }
+    async ({ sandboxId: id, ...body }) => json(await client.post(sandboxPath(id, 'sessions'), body))
   );
 
   server.registerTool(

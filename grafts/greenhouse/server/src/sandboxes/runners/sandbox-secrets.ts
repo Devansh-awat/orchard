@@ -12,7 +12,11 @@ import { SANDBOX_MCP_DEVICE, sandboxMcpDevice } from '../sandbox-mcp-scope';
 const MCP_TOKEN_TTL_DAYS = 60;
 const MCP_TOKEN_REUSE_DAYS = 7;
 
-export type SandboxSecretPurpose = 'opencode-password' | 'bridge-token' | 'spec-hash';
+export type SandboxSecretPurpose =
+  | 'opencode-password'
+  | 'bridge-token'
+  | 'agentd-token'
+  | 'spec-hash';
 
 function secretsKey(): string | null {
   const key = process.env.SECRETS_ENCRYPTION_KEY || process.env.SSO_ENCRYPTION_KEY;
@@ -123,10 +127,14 @@ export class SandboxSecretsService {
       githubToken: githubToken || null,
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
+      aiGatewayToken: credential?.aiGatewayToken
+        ? this.crypto.decrypt(credential.aiGatewayToken)
+        : null,
       setupScript: row.setupScript,
       mcpToken,
       opencodePassword: deriveBoxSecret('opencode-password', row.id, epoch),
       bridgeToken: deriveBoxSecret('bridge-token', row.id, epoch),
+      agentdToken: deriveBoxSecret('agentd-token', row.id, epoch),
       attachedEnv,
       gitIdentity: user ? gitIdentity(user) : null
     };

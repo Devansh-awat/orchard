@@ -117,10 +117,59 @@ seconds.
    VolumeSnapshotClass whose driver matches that StorageClass's provisioner;
    without one, forking is simply not offered on Kubernetes.
 
-The server needs no image of your own. Machines start from `debian:bookworm` (or
-the image you set) and a bootstrap script installs `sshd`, `git`, `tmux`,
-Node.js 22, Claude Code, Codex and opencode on first boot. It handles apt and
-dnf based images.
+Machines start from `ghcr.io/hackclub/orchard/sandbox:latest`, built from
+`infra/images/sandbox`. It ships `sshd`, `git`, `tmux`, Node.js 22, every
+supported agent (Claude Code, opencode, fx, Codex and their ACP adapters) and
+the `orchard` binary that runs the in-machine daemon, so a machine boots in
+seconds. Any other image works: the bootstrap installs whatever is missing on
+first boot (apt and dnf based images), which takes a few minutes, and the
+Kubernetes root filesystem is not kept across a stop, so that cost repeats on
+every start.
+
+A machine only reports `running` once its bootstrap has finished. On Kubernetes
+the container has a readiness probe on the boot phase file; on Vercel the
+runner waits for the bootstrap to report `ready` (up to a minute) before it
+flips the status.
+
+### The machine daemon
+
+Every machine runs `orchard sandbox agentd` on port 4097, started by the
+bootstrap as root and running everything else as `dev`. The server keeps one
+websocket per machine to it, authenticated with a per-machine bearer token
+derived like the agent password (`agentd-token` in the init secret, rotated with
+it). Through it the server runs the shell scripts that used to be one `kubectl
+exec` each, drives the coding agents, and keeps a warm pool of worktrees. When
+the daemon is not reachable (an older image, or `SANDBOX_TUNNEL_MODE=portforward`)
+the server falls back to exec for everything, so nothing breaks while machines
+roll over.
+
+### Agents
+
+A session runs its chat on the built-in opencode server (`opencode`, the
+default) or on any agent that speaks the
+[Agent Client Protocol](https://agentclientprotocol.com): `acp:claude` (Claude
+Code through `claude-agent-acp`), `acp:opencode`, `acp:fx` and `acp:codex`.
+People pick one in the model picker. The daemon starts one agent process per
+chat in the session's worktree, keeps every event in
+`~/.orchard/chats/<chat>/events.jsonl` on the machine's disk, and replays it to
+anyone who opens the chat, so reconnecting never loses a turn. It snapshots the
+worktree into `refs/orchard/checkpoints/` before each turn, which is what
+"revert to here" restores. fx needs a Vercel AI Gateway key, which people add next
+to their Claude and OpenAI tokens.
+
+Add or override agents on a machine with `~/.config/orchard/agents.json`: a list
+of `{ "id", "label", "command" }`. An entry with an empty `command` hides a
+built-in agent.
+
+### The warm pool
+
+For the three repositories used most recently on a machine, the daemon keeps a
+spare worktree on the default branch with the repository's `setup` script
+already run and the last-used agent already started. Creating a session claims
+the spare, so the create request returns a ready session and the prompt reaches
+the agent without waiting for a checkout, an install or an agent start. The pool
+refetches every two minutes, refills in the background, and stops filling when
+the home disk is less than 20% free.
 
 ### What it creates
 
@@ -422,24 +471,27 @@ runner keep working, so you can retire a runner without stranding anyone.
 
 ### Environment only
 
-| Variable                       | Default                   | What it does                                                                                       |
-| ------------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `SANDBOX_ENABLED`              |                           | Pins the Greenhouse switch, see [Turning it on](#turning-it-on).                                   |
-| `SANDBOX_ENABLED_DEFAULT`      |                           | Where the switch starts when it is not pinned and no admin has set it. Does not lock it.           |
-| `SANDBOX_NAMESPACE`            | `orchard-sandboxes`       | Namespace for Kubernetes machines.                                                                 |
-| `SANDBOX_IMAGE`                | `debian:bookworm`         | Image for new Kubernetes machines.                                                                 |
-| `SANDBOX_RUNTIME_CLASS`        |                           | RuntimeClass, usually `kata`. Empty runs on the default runtime.                                   |
-| `SANDBOX_HOME_MODE`            | `auto`                    | `block`, `filesystem`, or `auto` (block when a RuntimeClass is set).                               |
-| `SANDBOX_STORAGE_CLASS`        | cluster default           | StorageClass for home volumes.                                                                     |
-| `SANDBOX_DISK_SIZE`            | `10Gi`                    | Home volume size for new machines.                                                                 |
-| `SANDBOX_CPU_LIMIT`            | `2`                       | CPU limit per Kubernetes machine.                                                                  |
-| `SANDBOX_MEMORY_LIMIT`         | `4Gi`                     | Memory limit per Kubernetes machine. Keep at least `1Gi` under Kata.                               |
-| `SANDBOX_TUNNEL_MODE`          |                           | `portforward` for servers outside the cluster.                                                     |
-| `SANDBOX_MAX_PER_USER`         | `1`                       | Default machine cap per person. Admins override it per user; superadmins are uncapped.             |
-| `SANDBOX_IDLE_TIMEOUT_MINUTES` | `60`                      | Stop running machines idle this long. `0` never.                                                   |
-| `SANDBOX_MAX_LIFETIME_HOURS`   | `168`                     | Stop machines running this long since their last start. `0` never.                                 |
-| `SANDBOX_MCP_URL`              | derived from the MCP host | The MCP endpoint configured into each machine's agent. Vercel machines only use an `https://` URL. |
-| `ORCHARD_SERVER_NAMESPACE`     | `orchard`                 | The server's namespace, used in the NetworkPolicy.                                                 |
+| Variable                       | Default                                   | What it does                                                                                       |
+| ------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `SANDBOX_ENABLED`              |                                           | Pins the Greenhouse switch, see [Turning it on](#turning-it-on).                                   |
+| `SANDBOX_ENABLED_DEFAULT`      |                                           | Where the switch starts when it is not pinned and no admin has set it. Does not lock it.           |
+| `SANDBOX_NAMESPACE`            | `orchard-sandboxes`                       | Namespace for Kubernetes machines.                                                                 |
+| `SANDBOX_IMAGE`                | `ghcr.io/hackclub/orchard/sandbox:latest` | Image for new Kubernetes machines.                                                                 |
+| `SANDBOX_DEFAULT_AGENT`        | `opencode`                                | Agent new sessions use when nobody picks one, for example `acp:claude`.                            |
+| `SANDBOX_DAEMON`               |                                           | `off` stops the server talking to the machine daemon and uses exec for everything.                 |
+| `SANDBOX_WARM_POOL`            |                                           | `off` stops the server asking machines to keep spare worktrees.                                    |
+| `SANDBOX_RUNTIME_CLASS`        |                                           | RuntimeClass, usually `kata`. Empty runs on the default runtime.                                   |
+| `SANDBOX_HOME_MODE`            | `auto`                                    | `block`, `filesystem`, or `auto` (block when a RuntimeClass is set).                               |
+| `SANDBOX_STORAGE_CLASS`        | cluster default                           | StorageClass for home volumes.                                                                     |
+| `SANDBOX_DISK_SIZE`            | `10Gi`                                    | Home volume size for new machines.                                                                 |
+| `SANDBOX_CPU_LIMIT`            | `2`                                       | CPU limit per Kubernetes machine.                                                                  |
+| `SANDBOX_MEMORY_LIMIT`         | `4Gi`                                     | Memory limit per Kubernetes machine. Keep at least `1Gi` under Kata.                               |
+| `SANDBOX_TUNNEL_MODE`          |                                           | `portforward` for servers outside the cluster.                                                     |
+| `SANDBOX_MAX_PER_USER`         | `1`                                       | Default machine cap per person. Admins override it per user; superadmins are uncapped.             |
+| `SANDBOX_IDLE_TIMEOUT_MINUTES` | `60`                                      | Stop running machines idle this long. `0` never.                                                   |
+| `SANDBOX_MAX_LIFETIME_HOURS`   | `168`                                     | Stop machines running this long since their last start. `0` never.                                 |
+| `SANDBOX_MCP_URL`              | derived from the MCP host                 | The MCP endpoint configured into each machine's agent. Vercel machines only use an `https://` URL. |
+| `ORCHARD_SERVER_NAMESPACE`     | `orchard`                                 | The server's namespace, used in the NetworkPolicy.                                                 |
 
 Everything here is also in the generated [configuration reference](/reference/configuration/).
 

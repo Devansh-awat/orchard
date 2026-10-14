@@ -174,7 +174,10 @@
 		const current = ws;
 		const session = current?.session ?? null;
 		if (!current) return;
-		const sid = session && !isLegacy(session) && !current.lifecycleOnly ? session.id : null;
+		const sid =
+			session && !isLegacy(session) && !current.lifecycleOnly && !current.isOptimistic(session.id)
+				? session.id
+				: null;
 		untrack(() => current.live.join(sid));
 	});
 
@@ -183,6 +186,7 @@
 		const current = ws;
 		const session = current?.session;
 		if (!current || !session || isLegacy(session) || seeded === session.id) return;
+		if (current.isOptimistic(session.id)) return;
 		seeded = session.id;
 		untrack(() => {
 			void api.listComments(current.sandboxId, session.id).then((res) => {

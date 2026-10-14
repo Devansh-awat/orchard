@@ -429,6 +429,7 @@ model SandboxConversation {
   comments   SandboxSessionMessage[]
   slackThreadLinks SlackThreadLink[]
   shareLinks SandboxShareLink[]
+  agentChats SandboxChat[]
 
   @@unique([sandboxId, slug], map: "uq_sandbox_conversations_sandbox_slug")
   @@index([sandboxId], map: "idx_sandbox_conversations_sandbox")
@@ -453,11 +454,31 @@ model SshIdentity {
   @@schema("ext_greenhouse")
 }
 
+model SandboxChat {
+  id             String    @id @db.VarChar(64)
+  sandboxId      String    @map("sandbox_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  agent          String    @db.VarChar(32)
+  title          String    @default("New chat") @db.VarChar(200)
+  createdById    String?   @map("created_by_id") @db.Uuid
+  archivedAt     DateTime? @map("archived_at") @db.Timestamp(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  conversation SandboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId], map: "idx_sandbox_chats_conversation")
+  @@index([sandboxId], map: "idx_sandbox_chats_sandbox")
+  @@map("sandbox_chats")
+  @@schema("ext_greenhouse")
+}
+
 model SandboxCredential {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @unique @map("user_id") @db.Uuid
   claudeToken String?  @map("claude_token") @db.Text
   openaiToken String?  @map("openai_token") @db.Text
+  aiGatewayToken String? @map("ai_gateway_token") @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 

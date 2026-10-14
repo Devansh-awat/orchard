@@ -1,4 +1,5 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { isAcpChat } from '../sandbox/chat/acp-chat.svelte';
 import { untrack } from 'svelte';
 import { goto } from '../../host/navigation';
 import { toasts } from '../../host/stores';
@@ -41,6 +42,8 @@ export type SessionsMode = 'loading' | 'server' | 'legacy';
 
 export type Role = 'owner' | 'collaborator' | 'viewer' | 'admin';
 
+const PREPARING_POLL_MS = 4000;
+
 export type SessionLaunch = {
   repo: string;
   title?: string;
@@ -78,6 +81,57 @@ function relativeTo(root: string, path: string): string | null {
   const clean = toFsPath(path);
   const prefix = root.endsWith('/') ? root : `${root}/`;
   return clean.startsWith(prefix) ? clean.slice(prefix.length) : null;
+}
+
+function newSessionId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  const hex = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16));
+  hex[12] = '4';
+  hex[16] = ((parseInt(hex[16], 16) & 3) | 8).toString(16);
+  const h = hex.join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+export function placeholderSession(
+  sandboxId: string,
+  id: string,
+  input: { repo: string; title?: string; prompt?: string; baseBranch?: string; agent?: string },
+  createdBy: PersonRef | null
+): GhSession {
+  const now = new Date().toISOString();
+  const title = (input.title?.trim() || input.prompt?.trim().split('\n')[0] || 'New session').slice(
+    0,
+    120
+  );
+  return {
+    id,
+    sandboxId,
+    title,
+    slug: '',
+    repo: input.repo,
+    branch: '',
+    baseBranch: input.baseBranch ?? null,
+    baseCommit: null,
+    worktreePath: `${api.GH_HOME}/.worktrees/${input.repo}/.pending-${id}`,
+    agent: input.agent ?? 'opencode',
+    agentChatId: null,
+    opencodeSessionId: null,
+    status: 'active',
+    activity: input.prompt?.trim() ? 'working' : 'idle',
+    diffstat: null,
+    aheadBehind: null,
+    prUrl: null,
+    prNumber: null,
+    prState: null,
+    previewDeploymentId: null,
+    previewUrl: null,
+    createdBy,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+    preparing: true,
+    prepareError: null
+  };
 }
 
 function legacySession(sandboxId: string, repo: GhRepo): GhSession {
@@ -160,6 +214,8 @@ export class MachineWorkspace {
   readonly changesError = new SvelteMap<string, string>();
   readonly pendingPrompts = new SvelteMap<string, string>();
   readonly launches = new SvelteMap<string, SessionLaunch>();
+  readonly #optimistic = new SvelteSet<string>();
+  retryLaunch = $state.raw<SessionLaunch | null>(null);
   readonly #hiddenChats = new SvelteSet<string>();
   pendingChat = $state<string | null>(null);
   creatingChat = $state(false);
@@ -342,6 +398,31 @@ export class MachineWorkspace {
     };
     this.live.selfId = host.self()?.id ?? null;
     this.live.onSession = (session) => this.upsert(session);
+    this.live.onSessionDeleted = (id) => this.#forget(id);
+    this.live.onAgentActivity = (chatId, activity) => {
+      if (this.store.acpChats.get(chatId)?.connected) return;
+      this.store.activity.set(chatId, activity === 'idle' ? 'idle' : 'busy');
+      if (activity === 'needs_input') this.store.waiting.add(chatId);
+      else this.store.waiting.delete(chatId);
+    };
+    this.live.onAgentCatalog = () => {
+      void this.refreshAgents();
+    };
+    this.store.onAgentPick = (agent, model) => {
+      const session = untrack(() => this.session);
+      if (!session || isLegacy(session) || isPreparing(session)) return;
+      void this.createAgentChat(session, agent, model ? { model } : {});
+    };
+    this.store.onNativePick = () => {
+      const session = untrack(() => this.session);
+      if (!session || isLegacy(session) || isPreparing(session)) return;
+      const native = untrack(() => this.chatList).find((c) => !isAcpChat(c.id));
+      if (native) this.host.openTab(chatTabId(native.id));
+      else void this.#firstChat(session);
+    };
+    this.live.onOpen = () => {
+      if (untrack(() => this.sessions).some((s) => s.preparing)) void this.refreshSessions();
+    };
     this.live.onPrompt = (user, chatId, messageId) => {
       if (user.id === host.self()?.id) this.store.claimPrompt(chatId, messageId);
     };
@@ -402,9 +483,11 @@ export class MachineWorkspace {
         void this.refreshSessions();
       }, 15_000),
       setInterval(() => {
-        if (!untrack(() => this.sessions).some((s) => s.preparing)) return;
+        if (untrack(() => this.live.state) === 'open') return;
+        const sessions = untrack(() => this.sessions);
+        if (!sessions.some((s) => s.preparing && !this.#optimistic.has(s.id))) return;
         void this.refreshSessions();
-      }, 2000)
+      }, PREPARING_POLL_MS)
     );
   }
 
@@ -421,7 +504,8 @@ export class MachineWorkspace {
       this.refreshMembers(),
       this.refreshConnect(),
       this.refreshIdentity(),
-      this.refreshSessions(repos)
+      this.refreshSessions(repos),
+      this.refreshAgents()
     ]);
   }
 
@@ -439,7 +523,12 @@ export class MachineWorkspace {
     if (this.#disposed) return;
     if (res.ok) {
       this.mode = 'server';
-      this.sessions = res.data.sessions ?? [];
+      const fresh = res.data.sessions ?? [];
+      const ids = new Set(fresh.map((s) => s.id));
+      const kept = untrack(() => this.sessions).filter(
+        (s) => this.#optimistic.has(s.id) && !ids.has(s.id)
+      );
+      this.sessions = [...kept, ...fresh];
       return;
     }
     if (res.status === 404 || res.status === 405 || res.status === 0) {
@@ -486,11 +575,35 @@ export class MachineWorkspace {
   async loadChats(sid: string) {
     const session = this.sessions.find((s) => s.id === sid);
     if (!session || isLegacy(session) || isPreparing(session)) return;
-    const res = await api.listChats(this.sandboxId, sid);
-    if (this.#disposed || !res.ok) return;
+    const acp = session.agent?.startsWith('acp:') ?? false;
+    const [res, agentRes] = await Promise.all([
+      acp ? Promise.resolve(null) : api.listChats(this.sandboxId, sid),
+      api.listAgentChats(this.sandboxId, sid)
+    ]);
+    if (this.#disposed) return;
+    const agentChats = agentRes.ok ? (agentRes.data.chats ?? []) : [];
+    this.store.registerAcpChats(
+      agentChats.map((c) => ({
+        id: c.id,
+        sessionId: sid,
+        agent: c.agent,
+        title: c.title,
+        cwd: session.worktreePath,
+        createdAt: new Date(c.createdAt).getTime()
+      }))
+    );
+    if (acp) {
+      if (agentChats.length === 0 && !session.agentChatId && agentRes.ok) {
+        await this.createAgentChat(session, session.agent.slice(4));
+      }
+      return;
+    }
+    if (!res || !res.ok) return;
     const chats = res.data.chats ?? [];
     this.chats.set(sid, chats);
-    if (chats.length === 0 && !session.opencodeSessionId) await this.#firstChat(session);
+    if (chats.length === 0 && agentChats.length === 0 && !session.opencodeSessionId) {
+      await this.#firstChat(session);
+    }
   }
 
   #creatingChat = new Set<string>();
@@ -515,7 +628,77 @@ export class MachineWorkspace {
     }
   }
 
+  #forget(id: string) {
+    if (!untrack(() => this.sessions).some((s) => s.id === id)) return;
+    this.sessions = untrack(() => this.sessions).filter((s) => s.id !== id);
+    this.launches.delete(id);
+    this.chats.delete(id);
+    this.changes.delete(id);
+    if (untrack(() => this.sessionId) === id) this.host.openSession(null, null);
+  }
+
+  isOptimistic(id: string): boolean {
+    return this.#optimistic.has(id);
+  }
+
+  #registerAgentChat(session: GhSession) {
+    if (!session.agentChatId || !session.agent?.startsWith('acp:')) return;
+    this.store.registerAcpChats([
+      {
+        id: session.agentChatId,
+        sessionId: session.id,
+        agent: session.agent.slice(4),
+        title: session.title,
+        cwd: session.worktreePath,
+        createdAt: new Date(session.createdAt).getTime()
+      }
+    ]);
+  }
+
+  async refreshAgents(refresh = false) {
+    if (!untrack(() => this.running) || untrack(() => this.lifecycleOnly)) return;
+    const res = await api.agentCatalog(this.sandboxId, refresh);
+    if (this.#disposed || !res.ok) return;
+    this.store.acpCatalog = res.data.available ? res.data.agents : [];
+  }
+
+  async createAgentChat(
+    session: GhSession,
+    agent: string,
+    config: Record<string, string | boolean> = {}
+  ): Promise<string | null> {
+    if (!this.canEdit) return null;
+    try {
+      const chat = await api.createAgentChat(this.sandboxId, session.id, {
+        agent,
+        title: session.title,
+        ...(Object.keys(config).length ? { config } : {})
+      });
+      if (this.#disposed) return null;
+      this.store.registerAcpChats([
+        {
+          id: chat.id,
+          sessionId: session.id,
+          agent: chat.agent,
+          title: chat.title,
+          cwd: session.worktreePath,
+          createdAt: new Date(chat.createdAt).getTime()
+        }
+      ]);
+      if (untrack(() => this.sessionId) === session.id) this.host.openTab(chatTabId(chat.id));
+      return chat.id;
+    } catch (e) {
+      toasts.add({
+        title: 'Could not start that agent',
+        description: e instanceof Error ? e.message : undefined,
+        color: 'error'
+      });
+      return null;
+    }
+  }
+
   upsert(session: GhSession) {
+    this.#registerAgentChat(session);
     const exists = this.sessions.some((s) => s.id === session.id);
     this.sessions = exists
       ? this.sessions.map((s) => (s.id === session.id ? session : s))
@@ -760,25 +943,56 @@ export class MachineWorkspace {
     if (id) this.host.openTab(chatTabId(id));
   }
 
-  async createSession(input: {
+  async createSession(requested: {
     repo: string;
     title?: string;
     prompt?: string;
     baseBranch?: string;
     issue?: { provider: 'github' | 'linear'; ref: string };
+    agent?: string;
   }) {
     if (!this.canEdit) return null;
+    const id = newSessionId();
+    const choice = untrack(() => this.store.acpChoice);
+    const input =
+      !requested.agent && choice ? { ...requested, agent: `acp:${choice.agent}` } : requested;
+    const launch: SessionLaunch = { ...input, at: Date.now() };
+    const legacyMode = untrack(() => this.mode) === 'legacy';
+    if (!legacyMode) {
+      this.#optimistic.add(id);
+      this.upsert(placeholderSession(this.sandboxId, id, input, this.host.self()));
+      this.launches.set(id, launch);
+      this.host.openSession(id, null);
+    }
+    const rollback = () => {
+      this.#optimistic.delete(id);
+      if (!untrack(() => this.sessions).some((s) => s.id === id)) return false;
+      this.sessions = untrack(() => this.sessions).filter((s) => s.id !== id);
+      this.launches.delete(id);
+      return untrack(() => this.sessionId) === id;
+    };
     try {
       const prefix = this.branchPrefix();
       const session = await api.createSession(this.sandboxId, {
         ...input,
+        id,
         ...(prefix === DEFAULT_BRANCH_PREFIX ? {} : { branchPrefix: prefix })
       });
-      this.upsert(session);
-      this.launches.set(session.id, { ...input, at: Date.now() });
-      this.host.openSession(session.id, null);
+      if (this.#disposed) return session;
+      const current = untrack(() => this.sessions).find((s) => s.id === session.id);
+      if (
+        !current ||
+        current.slug === '' ||
+        new Date(current.updatedAt) <= new Date(session.updatedAt)
+      ) {
+        this.upsert(session);
+      }
+      this.#optimistic.delete(id);
+      if (!this.launches.has(session.id)) this.launches.set(session.id, launch);
+      if (legacyMode) this.host.openSession(session.id, null);
       return session;
     } catch (e) {
+      const wasOpen = rollback();
       if (e instanceof api.GhApiError && e.status === 404) {
         const repo = this.repos.find((r) => r.name === input.repo);
         if (repo) {
@@ -790,6 +1004,10 @@ export class MachineWorkspace {
           this.host.openSession(legacy.id, null);
           return legacy;
         }
+      }
+      if (wasOpen) {
+        this.retryLaunch = launch;
+        this.host.openSession(null, null);
       }
       if (input.issue && e instanceof api.GhApiError && e.status === 403) {
         toasts.add({

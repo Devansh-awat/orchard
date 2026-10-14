@@ -15,7 +15,8 @@ export interface GhSession {
   baseBranch: string | null;
   baseCommit: string | null;
   worktreePath: string;
-  agent: 'opencode';
+  agent: string;
+  agentChatId?: string | null;
   opencodeSessionId: string | null;
   status: 'active' | 'archived';
   activity: SessionActivityState;

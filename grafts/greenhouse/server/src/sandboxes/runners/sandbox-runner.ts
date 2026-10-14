@@ -48,10 +48,12 @@ export interface SandboxSecrets {
   githubToken: string | null;
   claudeToken: string | null;
   openaiToken: string | null;
+  aiGatewayToken?: string | null;
   setupScript: string | null;
   mcpToken: string | null;
   opencodePassword: string | null;
   bridgeToken: string | null;
+  agentdToken?: string | null;
   attachedEnv?: Record<string, string>;
   gitIdentity?: { name: string; email: string } | null;
 }

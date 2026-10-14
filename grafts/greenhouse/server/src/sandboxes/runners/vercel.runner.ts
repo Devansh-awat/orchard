@@ -50,6 +50,7 @@ export const vercelDestroyKey = (id: string) => `sandbox:${id}:vercel.destroy`;
 
 export const VERCEL_OPENCODE_PORT = 4096;
 export const VERCEL_BRIDGE_PORT = 2222;
+export const VERCEL_AGENTD_PORT = 4097;
 export const VERCEL_PREVIEW_PORTS: readonly number[] = [3000, 3001, 4173, 5173, 8000, 8080, 8787];
 export const VERCEL_MAX_PORTS = 15;
 export const VERCEL_INIT_STAGE = '/tmp/orchard-init';
@@ -345,7 +346,9 @@ export function vercelPorts(previewPorts: readonly number[] = VERCEL_PREVIEW_POR
   for (const port of previewPorts) {
     if (!allowed.has(port)) throw new Error(`port ${port} is not an allowed preview port`);
   }
-  const ports = [...new Set([VERCEL_OPENCODE_PORT, VERCEL_BRIDGE_PORT, ...previewPorts])];
+  const ports = [
+    ...new Set([VERCEL_OPENCODE_PORT, VERCEL_BRIDGE_PORT, VERCEL_AGENTD_PORT, ...previewPorts])
+  ];
   if (ports.length > VERCEL_MAX_PORTS) {
     throw new Error(`a Vercel sandbox can expose at most ${VERCEL_MAX_PORTS} ports`);
   }
@@ -356,6 +359,7 @@ export function exposedPort(port: number): boolean {
   return (
     port === VERCEL_OPENCODE_PORT ||
     port === VERCEL_BRIDGE_PORT ||
+    port === VERCEL_AGENTD_PORT ||
     VERCEL_PREVIEW_PORTS.includes(port)
   );
 }
@@ -716,6 +720,8 @@ export class VercelSandboxRunner implements SandboxRunner {
   bootPollMs = 2000;
 
   driveDeletePollMs = 3000;
+  readyWaitMs = 60_000;
+  readyPollMs = 750;
 
   drivePrefix = 'orchard-';
 
@@ -1229,6 +1235,7 @@ export class VercelSandboxRunner implements SandboxRunner {
     sandbox = await this.waitRunning(sandbox, row.podName, credentials);
     this.live.set(row.id, { sandbox, at: Date.now() });
     await this.pushInit(sandbox.currentSession(), row, secrets);
+    await this.waitBooted(sandbox.currentSession());
     const expiresAt = expiresAtOf(sandbox);
     await this.mergeRunnerState(row.id, {
       ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
@@ -1238,6 +1245,21 @@ export class VercelSandboxRunner implements SandboxRunner {
       where: { id: row.id, desiredState: 'running', status: { in: ['creating', 'starting'] } },
       data: { status: 'running', statusMessage: null, externalId: row.podName }
     });
+  }
+
+  private async waitBooted(session: VercelSessionLike): Promise<void> {
+    const deadline = Date.now() + this.readyWaitMs;
+    while (Date.now() < deadline) {
+      const phase = await session
+        .readFileToBuffer(
+          { path: SANDBOX_PHASE_FILE },
+          { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
+        )
+        .then((buf) => (buf ? buf.toString('utf8').trim() : null))
+        .catch(() => null);
+      if (phase === null || phase === 'ready') return;
+      await new Promise((resolve) => setTimeout(resolve, this.readyPollMs));
+    }
   }
 
   private async prepareExisting(
@@ -1399,6 +1421,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       SANDBOX_REPO_URL: row.repoUrl || '',
       CLAUDE_CODE_OAUTH_TOKEN: secrets.claudeToken || '',
       OPENAI_API_KEY: secrets.openaiToken || '',
+      AI_GATEWAY_API_KEY: secrets.aiGatewayToken || '',
       GIT_TOKEN: secrets.githubToken ? VERCEL_HOST_GIT_PLACEHOLDER : '',
       ORCHARD_BRIDGE_URL: this.settings().bridgeUrl,
       ...(bridgeSha256 ? { ORCHARD_BRIDGE_SHA256: bridgeSha256 } : {}),

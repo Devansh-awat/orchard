@@ -8,40 +8,40 @@ other's prompts, drafts, cursors and terminals live.
 
 The product name is Greenhouse. Routes, the CLI, MCP tools, tables and code stay
 neutral: `/sandboxes`, `orchard sandbox`, `list_sandboxes`, `sandboxes`,
-`apps/server/src/sandboxes`.
+`grafts/greenhouse/server/src/sandboxes`.
 
 User docs: `apps/docs/src/content/docs/greenhouse/`. Operator docs:
 `apps/docs/src/content/docs/operate/greenhouse.md`. This file is the design.
 
 ## Code map
 
-| Area                                | Where                                                                                                 |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Runner interface, registry          | `sandboxes/runners/sandbox-runner.ts`, `sandbox-runner.registry.ts`                                   |
-| Kubernetes runner                   | `sandboxes/runners/kubernetes.runner.ts`, `sandboxes/sandbox-cr.ts`                                   |
-| Vercel runner                       | `sandboxes/runners/vercel.runner.ts`                                                                  |
-| Desired to observed status          | `sandboxes/runners/sandbox-status.ts`                                                                 |
-| Secrets, init files                 | `sandboxes/runners/sandbox-secrets.ts`, `sandbox-init-files.ts`                                       |
-| Bootstrap script                    | `sandboxes/sandbox-bootstrap.ts`                                                                      |
-| Machine lifecycle and API           | `sandboxes/sandboxes.service.ts`, `sandboxes.controller.ts`                                           |
-| Access model                        | `sandboxes/sandbox-access.service.ts`, `sandbox-role-gate.ts`, `sandbox-opencode-policy.ts`           |
-| Sessions, scripts, ports            | `sandboxes/sandbox-sessions.service.ts`, `sandbox-session-commands.ts`                                |
-| Workspace (files, git, agent proxy) | `sandboxes/sandbox-workspace.service.ts`                                                              |
-| Git identity per person             | `sandboxes/sandbox-git-identity.ts`                                                                   |
-| Terminals                           | `sandboxes/sandbox-terminal.gateway.ts`, `kubernetes/exec-session-engine.ts`                          |
-| SSH tunnel                          | `sandboxes/sandbox-ssh.gateway.ts`, `sandbox-connect.service.ts`                                      |
-| Live gateway, Yjs                   | `sandboxes/live/*`                                                                                    |
-| Previews                            | `sandboxes/preview/*`                                                                                 |
-| Members, comments, prompts          | `sandboxes/sandbox-members.*`, `sandbox-agent.*`                                                      |
-| Attention notifications             | `sandboxes/sandbox-attention.service.ts`                                                              |
-| Project links, preview deploys      | `sandboxes/links/*`                                                                                   |
-| Forks, share links                  | `sandboxes/sandbox-fork.*`, `sandbox-share-links.*`                                                   |
-| Integrations                        | `sandboxes/integrations/*`                                                                            |
-| Reaper                              | `sandboxes/sandbox-reaper.service.ts`                                                                 |
-| Mirror consumer                     | `mirror/consumers/sandbox-mirror.consumer.ts`, shard in `mirror/mirror-shards.ts`                     |
-| MCP tools                           | `mcp/tools/sandboxes.ts`                                                                              |
-| CLI                                 | `apps/cli/cmd/sandbox*.go`, `internal/sshproxy`                                                       |
-| Frontend                            | `apps/frontend/src/lib/components/greenhouse`, `components/sandbox/{chat,editor}`, `routes/sandboxes` |
+| Area                                | Where                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Runner interface, registry          | `sandboxes/runners/sandbox-runner.ts`, `sandbox-runner.registry.ts`                                      |
+| Kubernetes runner                   | `sandboxes/runners/kubernetes.runner.ts`, `sandboxes/sandbox-cr.ts`                                      |
+| Vercel runner                       | `sandboxes/runners/vercel.runner.ts`                                                                     |
+| Desired to observed status          | `sandboxes/runners/sandbox-status.ts`                                                                    |
+| Secrets, init files                 | `sandboxes/runners/sandbox-secrets.ts`, `sandbox-init-files.ts`                                          |
+| Bootstrap script                    | `sandboxes/sandbox-bootstrap.ts`                                                                         |
+| Machine lifecycle and API           | `sandboxes/sandboxes.service.ts`, `sandboxes.controller.ts`                                              |
+| Access model                        | `sandboxes/sandbox-access.service.ts`, `sandbox-role-gate.ts`, `sandbox-opencode-policy.ts`              |
+| Sessions, scripts, ports            | `sandboxes/sandbox-sessions.service.ts`, `sandbox-session-commands.ts`                                   |
+| Workspace (files, git, agent proxy) | `sandboxes/sandbox-workspace.service.ts`                                                                 |
+| Git identity per person             | `sandboxes/sandbox-git-identity.ts`                                                                      |
+| Terminals                           | `sandboxes/sandbox-terminal.gateway.ts`, `kubernetes/exec-session-engine.ts`                             |
+| SSH tunnel                          | `sandboxes/sandbox-ssh.gateway.ts`, `sandbox-connect.service.ts`                                         |
+| Live gateway, Yjs                   | `sandboxes/live/*`                                                                                       |
+| Previews                            | `sandboxes/preview/*`                                                                                    |
+| Members, comments, prompts          | `sandboxes/sandbox-members.*`, `sandbox-agent.*`                                                         |
+| Attention notifications             | `sandboxes/sandbox-attention.service.ts`                                                                 |
+| Project links, preview deploys      | `sandboxes/links/*`                                                                                      |
+| Forks, share links                  | `sandboxes/sandbox-fork.*`, `sandbox-share-links.*`                                                      |
+| Integrations                        | `sandboxes/integrations/*`                                                                               |
+| Reaper                              | `sandboxes/sandbox-reaper.service.ts`                                                                    |
+| Mirror consumer                     | `mirror/consumers/sandbox-mirror.consumer.ts`, shard in `mirror/mirror-shards.ts`                        |
+| MCP tools                           | `mcp/tools/sandboxes.ts`                                                                                 |
+| CLI                                 | `apps/cli/cmd/sandbox*.go`, `internal/sshproxy`                                                          |
+| Frontend                            | `grafts/greenhouse/ui/src/components/greenhouse`, `components/sandbox/{chat,editor}`, `routes/sandboxes` |
 
 All paths above are under `apps/server/src` unless they say otherwise.
 

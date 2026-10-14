@@ -1,5 +1,6 @@
 import './support';
 import test from 'node:test';
+import { execFileSync } from 'child_process';
 import assert from 'node:assert/strict';
 import { stripSecretData } from '../server/src/core/mirror';
 import { sandboxMirrorShard } from '../server/src/sandboxes/sandbox-mirror.shard';
@@ -778,4 +779,18 @@ test('in-box calls to opencode read the server password before curling', () => {
   assert.match(OPENCODE_LOCAL_CURL_AUTH, /-u/);
   assert.ok(BUSY_SCRIPT.includes(OPENCODE_LOCAL_AUTH));
   assert.ok(BUSY_SCRIPT.includes(OPENCODE_LOCAL_CURL_AUTH));
+});
+
+test('warm ACP adapters and the daemon never count as a busy agent', async () => {
+  const { BUSY_IGNORE } = await import('../server/src/sandboxes/runners/sandbox-probes.service');
+  const out = execFileSync('sh', ['-c', `grep -vE '${BUSY_IGNORE}' || true`], {
+    input: [
+      '101 node /usr/local/bin/claude-agent-acp',
+      '102 node /usr/local/lib/node_modules/@zed-industries/codex-acp/bin/codex-acp.js',
+      '103 /usr/local/bin/orchard sandbox agentd --listen 0.0.0.0:4097',
+      '104 claude -p fix the tests',
+      '105 codex exec go'
+    ].join('\n')
+  }).toString();
+  assert.deepEqual(out.trim().split('\n'), ['104 claude -p fix the tests', '105 codex exec go']);
 });

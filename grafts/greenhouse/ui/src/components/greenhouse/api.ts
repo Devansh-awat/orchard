@@ -1,3 +1,4 @@
+import type { AcpCatalogEntry } from '../sandbox/chat/session-store.svelte';
 import { apiFetch } from '../../host/stores';
 import type {
   GhChanges,
@@ -120,12 +121,14 @@ export function listSessions(sandboxId: string, includeArchived = true) {
 export function createSession(
   sandboxId: string,
   body: {
+    id?: string;
     repo: string;
     baseBranch?: string;
     title?: string;
     prompt?: string;
     issue?: { provider: 'github' | 'linear'; ref: string };
     branchPrefix?: string;
+    agent?: string;
   }
 ) {
   return send<GhSession>(`${base(sandboxId)}/sessions`, 'POST', body);
@@ -152,6 +155,48 @@ export function listChats(sandboxId: string, sid: string) {
 
 export function createChat(sandboxId: string, sid: string) {
   return send<GhChat>(`${base(sandboxId)}/sessions/${sid}/chats`, 'POST', {});
+}
+
+export type GhAgentChat = {
+  id: string;
+  sessionId: string;
+  agent: string;
+  title: string;
+  createdAt: string;
+  activity: 'idle' | 'working' | 'needs_input';
+  lastSeq: number;
+};
+
+export type GhAgentCatalog = {
+  available: boolean;
+  probing: boolean;
+  agents: AcpCatalogEntry[];
+};
+
+export function agentCatalog(sandboxId: string, refresh = false) {
+  return get<GhAgentCatalog>(`${base(sandboxId)}/agents${refresh ? '?refresh=1' : ''}`);
+}
+
+export function listAgentChats(sandboxId: string, sid: string) {
+  return get<{ chats: GhAgentChat[] }>(`${base(sandboxId)}/sessions/${sid}/agent-chats`);
+}
+
+export function createAgentChat(
+  sandboxId: string,
+  sid: string,
+  body: {
+    id?: string;
+    agent: string;
+    title?: string;
+    config?: Record<string, string | boolean>;
+    prompt?: string;
+  }
+) {
+  return send<GhAgentChat>(`${base(sandboxId)}/sessions/${sid}/agent-chats`, 'POST', body);
+}
+
+export function deleteAgentChat(sandboxId: string, sid: string, cid: string) {
+  return send<{ ok: boolean }>(`${base(sandboxId)}/sessions/${sid}/agent-chats/${cid}`, 'DELETE');
 }
 
 export function deleteChat(sandboxId: string, sid: string, chatId: string) {

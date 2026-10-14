@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
 export const PREVIEW_PORTS: readonly number[] = [3000, 3001, 4173, 5173, 8000, 8080, 8787];
-export const RESERVED_SANDBOX_PORTS: readonly number[] = [22, 2222, 4096];
+export const RESERVED_SANDBOX_PORTS: readonly number[] = [22, 2222, 4096, 4097];
 export const MIN_DECLARED_PREVIEW_PORT = 1024;
 export const MAX_DECLARED_PREVIEW_PORTS = 10;
 export const PREVIEW_COOKIE = 'orchard_preview';

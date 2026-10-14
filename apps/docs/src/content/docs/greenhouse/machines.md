@@ -83,12 +83,11 @@ operator's Vercel account.
 
 ## Image and tools
 
-A new machine starts from a plain Linux image (`debian:bookworm` on Kubernetes,
-Vercel's universal image on Vercel, unless your operator picked another). On first
-boot Orchard installs what it needs and leaves the rest alone: `sshd`, `git`,
-`curl`, `tmux`, `ripgrep`, Node.js 22, Claude Code, Codex and opencode. Vercel's
-universal image (Ubuntu with Node.js 24) already has all of them, so nothing is
-installed there. The `dev` user has passwordless `sudo`, so install anything else
+A new machine starts from Orchard's machine image on Kubernetes and Vercel's
+universal image on Vercel, unless your operator picked another. The Orchard image
+already has `sshd`, `git`, `tmux`, `ripgrep`, Node.js 22 and every agent: Claude
+Code, opencode, fx and Codex. On any other image Orchard installs whatever is
+missing on first boot and leaves the rest alone. The `dev` user has passwordless `sudo`, so install anything else
 you need.
 
 ## Repositories

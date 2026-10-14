@@ -8,7 +8,8 @@ import {
 import type { SandboxConversation } from '../generated/prisma/client';
 import { PrismaService } from '../prisma.service';
 import { SandboxWorkspaceService, type WorkspaceSandbox } from './sandbox-workspace.service';
-import { SandboxSessionsService } from './sandbox-sessions.service';
+import { SandboxSessionsService, acpAgentOf, isPreparing } from './sandbox-sessions.service';
+import { SandboxAgentHostService } from './daemon/sandbox-agent-host.service';
 import {
   PUBLIC_USER_SELECT,
   SandboxMembersService,
@@ -90,7 +91,8 @@ export class SandboxAgentService {
     private readonly prisma: PrismaService,
     private readonly workspace: SandboxWorkspaceService,
     private readonly members: SandboxMembersService,
-    @Optional() sessions?: SandboxSessionsService
+    @Optional() sessions?: SandboxSessionsService,
+    @Optional() private readonly host?: SandboxAgentHostService
   ) {
     sessions?.setPromptRecorder((input) => this.members.recordPrompt(input));
   }
@@ -101,6 +103,9 @@ export class SandboxAgentService {
         throw new BadGatewayException('This session has an unexpected agent chat id');
       }
       return session.opencodeSessionId;
+    }
+    if (isPreparing(session)) {
+      throw new ConflictException('This session is still being prepared, try again in a moment');
     }
     const res = await this.workspace.opencodeRequest(sandbox, 'POST', '/session', {
       directory: session.worktreePath,
@@ -139,6 +144,14 @@ export class SandboxAgentService {
     if (!isWorktreePath(session.worktreePath)) {
       throw new BadRequestException('This session has no worktree');
     }
+    if (acpAgentOf(session.agent) && this.host) {
+      const acpChat = await this.host.primaryChat(session.id);
+      if (!acpChat) {
+        throw new ConflictException('This session is still being prepared, try again in a moment');
+      }
+      const sent = await this.host.prompt(sandbox, session.id, acpChat, userId, { text });
+      return { messageId: sent.messageId, chatId: acpChat, sessionId: session.id };
+    }
     const chatId = await this.chatFor(sandbox, session);
     const messageId = newOpencodeMessageId();
     const recorded = await this.members.recordPrompt({
@@ -171,6 +184,18 @@ export class SandboxAgentService {
     opts: { limit?: unknown } = {}
   ): Promise<SessionTranscript> {
     const session = await this.workspace.sessionRow(sandbox.id, sessionId);
+    if (acpAgentOf(session.agent) && this.host) {
+      const acpChat = await this.host.primaryChat(session.id);
+      if (!acpChat)
+        return { sessionId: session.id, chatId: null, title: session.title, messages: [] };
+      const messages = await this.host.transcript(
+        sandbox as WorkspaceSandbox & { status: string },
+        session.id,
+        acpChat,
+        transcriptLimit(opts.limit)
+      );
+      return { sessionId: session.id, chatId: acpChat, title: session.title, messages };
+    }
     const chatId = session.opencodeSessionId;
     if (!chatId) return { sessionId: session.id, chatId: null, title: session.title, messages: [] };
     if (!CHAT_ID_RE.test(chatId)) {

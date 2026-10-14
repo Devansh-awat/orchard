@@ -16,6 +16,7 @@ import { SandboxSessionsController } from '../server/src/sandboxes/sandbox-sessi
 import { SandboxMembersController } from '../server/src/sandboxes/sandbox-members.controller';
 import { SandboxAgentController } from '../server/src/sandboxes/sandbox-agent.controller';
 import { SandboxUsageController } from '../server/src/sandboxes/sandbox-usage.controller';
+import { SandboxAgentChatsController } from '../server/src/sandboxes/daemon/sandbox-agent-chats.controller';
 import {
   LIVE_MESSAGE_ROLE,
   LIVE_MESSAGE_TYPES,
@@ -899,5 +900,88 @@ test('machine usage is lifecycle-level, like the machine itself', async () => {
   const covered = new Set(['constructor', 'usage']);
   for (const name of Object.getOwnPropertyNames(SandboxUsageController.prototype)) {
     assert.ok(covered.has(name), `SandboxUsageController.${name} is missing from the authz matrix`);
+  }
+});
+
+test('agent chat routes declare the contract minimum role', async () => {
+  const r = recorder();
+  const c = new SandboxAgentChatsController(
+    r.access as any,
+    any,
+    r.users as any,
+    r.analytics as any,
+    any
+  );
+  const CID = 'acp_000000000000000000000000';
+  const routes: Record<string, [Gate | null, () => Promise<unknown>]> = {
+    'GET /sandboxes/:id/agents': [{ min: 'viewer' }, () => c.catalog(req(), SANDBOX)],
+    'GET /sandboxes/:id/sessions/:sid/agent-chats': [
+      { min: 'viewer' },
+      () => c.list(req(), SANDBOX, SID)
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats': [
+      { min: 'collaborator' },
+      () => c.create(req(), SANDBOX, SID, {})
+    ],
+    'GET /sandboxes/:id/sessions/:sid/agent-chats/:cid/events': [
+      { min: 'viewer' },
+      () => c.events(req(), SANDBOX, SID, CID)
+    ],
+    'GET /sandboxes/:id/sessions/:sid/agent-chats/:cid/stream': [
+      { min: 'viewer' },
+      () => c.stream(req(), any, SANDBOX, SID, CID)
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/prompt': [
+      { min: 'collaborator' },
+      () => c.prompt(req(), SANDBOX, SID, CID, {})
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/cancel': [
+      { min: 'collaborator' },
+      () => c.cancel(req(), SANDBOX, SID, CID)
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/permission': [
+      { min: 'collaborator' },
+      () => c.permission(req(), SANDBOX, SID, CID, {})
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/config': [
+      { min: 'collaborator' },
+      () => c.config(req(), SANDBOX, SID, CID, {})
+    ],
+    'POST /sandboxes/:id/sessions/:sid/agent-chats/:cid/revert': [
+      { min: 'collaborator' },
+      () => c.revert(req(), SANDBOX, SID, CID, {})
+    ],
+    'PATCH /sandboxes/:id/sessions/:sid/agent-chats/:cid': [
+      { min: 'collaborator' },
+      () => c.rename(req(), SANDBOX, SID, CID, {})
+    ],
+    'DELETE /sandboxes/:id/sessions/:sid/agent-chats/:cid': [
+      { min: 'collaborator' },
+      () => c.remove(req(), SANDBOX, SID, CID)
+    ]
+  };
+  await checkRoutes(
+    routes,
+    r.calls,
+    Object.getOwnPropertyNames(SandboxAgentChatsController.prototype)
+  );
+  const covered = new Set([
+    'constructor',
+    'access',
+    'catalog',
+    'list',
+    'create',
+    'events',
+    'stream',
+    'prompt',
+    'cancel',
+    'permission',
+    'config',
+    'revert',
+    'rename',
+    'remove'
+  ]);
+  for (const name of Object.getOwnPropertyNames(SandboxAgentChatsController.prototype)) {
+    assert.ok(covered.has(name), `SandboxAgentChatsController.${name} is missing from the matrix`);
   }
 });

@@ -44,6 +44,9 @@ import { SANDBOX_RUNNER_PROVIDERS, SandboxRunnerRegistry } from './runners/sandb
 import { SandboxRunner } from './runners/sandbox-runner';
 import { SandboxUsageService } from './sandbox-usage.service';
 import { SandboxUsageController } from './sandbox-usage.controller';
+import { SandboxAgentChatsController } from './daemon/sandbox-agent-chats.controller';
+import { SandboxDaemonService } from './daemon/sandbox-daemon.service';
+import { SandboxAgentHostService } from './daemon/sandbox-agent-host.service';
 import { SandboxMirrorConsumer } from './sandbox-mirror.consumer';
 import { GreenhouseWiring } from './greenhouse-wiring.service';
 
@@ -61,6 +64,7 @@ const REAPER_INTERVAL_MS = 60_000;
     SandboxShareLinksController,
     SandboxShareViewerController,
     SandboxUsageController,
+    SandboxAgentChatsController,
     UserContextController
   ],
   providers: [
@@ -78,6 +82,8 @@ const REAPER_INTERVAL_MS = 60_000;
       inject: [KubernetesSandboxRunner, VercelSandboxRunner]
     },
     SandboxRunnerRegistry,
+    SandboxDaemonService,
+    SandboxAgentHostService,
     SandboxProbesService,
     SandboxChatService,
     SandboxWorkspaceService,
@@ -106,6 +112,8 @@ const REAPER_INTERVAL_MS = 60_000;
   ],
   exports: [
     SandboxesService,
+    SandboxDaemonService,
+    SandboxAgentHostService,
     SandboxWorkspaceService,
     SandboxRunnerRegistry,
     KubernetesSandboxRunner,

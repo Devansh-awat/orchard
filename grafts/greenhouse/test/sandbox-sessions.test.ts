@@ -16,6 +16,7 @@ import { join } from 'path';
 import {
   COAUTHOR_HOOK_NAMES,
   COAUTHOR_HOOK_SCRIPT,
+  buildCoauthorHookInlineInstall,
   buildCoauthorHookInstall,
   buildCoauthorUpdate,
   coauthorLine
@@ -177,9 +178,44 @@ test('worktree creation quotes every input and branches under orchard/', () => {
   assert.throws(() => buildWorktreeAddScript({ repo: 'app', slug: 'a', baseBranch: '$(id)' }));
   assert.deepEqual(parseWorktreeAddOutput('noise\n@@base@@main\n@@commit@@0123456789abcdef\n'), {
     baseBranch: 'main',
-    baseCommit: '0123456789abcdef'
+    baseCommit: '0123456789abcdef',
+    hookInstalled: false
   });
-  assert.deepEqual(parseWorktreeAddOutput(''), { baseBranch: null, baseCommit: null });
+  assert.deepEqual(parseWorktreeAddOutput(''), {
+    baseBranch: null,
+    baseCommit: null,
+    hookInstalled: false
+  });
+  assert.equal(parseWorktreeAddOutput('@@commit@@0123456\n@@hook@@ok\n').hookInstalled, true);
+  assert.equal(parseWorktreeAddOutput('@@commit@@0123456\n@@hook@@fail\n').hookInstalled, false);
+});
+
+test('worktree creation only blocks on fetch when the remote ref is missing', () => {
+  const script = buildWorktreeAddScript({ repo: 'app', slug: 'fix-a1b2', baseBranch: 'main' });
+  const lines = script.split('\n');
+  const blocking = lines.findIndex((l) => l.startsWith('if ! git') && l.includes('fetch'));
+  const add = lines.findIndex((l) => l.includes('worktree add'));
+  const background = lines.findIndex((l) => l.includes('nohup') && l.includes('fetch'));
+  assert.ok(blocking >= 0 && blocking < add);
+  assert.ok(background > add);
+  assert.match(lines[background], /^\[ -n "\$fetched" \] \|\| \(.*&\)$/);
+  assert.equal(lines.at(-1), 'exit 0');
+});
+
+test('inline co-author hook install embeds the hook verbatim and reports its outcome', () => {
+  const inline = buildCoauthorHookInlineInstall(SID, '/persist/home/.worktrees/app/fix-a1b2');
+  assert.ok(inline.includes(COAUTHOR_HOOK_SCRIPT.replace(/\n$/, '')));
+  assert.match(inline, /<<'ORCHARD_COAUTHOR_HOOK_EOF' \|\| exit 1\n/);
+  assert.match(inline, /echo '@@hook@@ok'; else echo '@@hook@@fail'; fi$/);
+  assert.ok(inline.includes('[ -n "$1" ] && [ -f "$1" ] || exit 0'));
+  const script = buildWorktreeAddScript({
+    repo: 'app',
+    slug: 'fix-a1b2',
+    baseBranch: null,
+    extra: inline
+  });
+  assert.ok(script.indexOf('@@commit@@') < script.indexOf('ORCHARD_COAUTHOR_HOOK_EOF'));
+  assert.throws(() => buildCoauthorHookInlineInstall('nope', '/persist/home/.worktrees/app/x'));
 });
 
 test('branch prefixes follow git ref rules, may be empty, and cap at 40 characters', () => {
@@ -1187,8 +1223,8 @@ test('the first prompt of a new session is attributed to its creator with a mess
   assert.equal(sent[0].path, '/session/ses_first/prompt_async');
   assert.equal(sent[0].opts.body.messageID, recorded[0].messageId);
   assert.ok(
-    execs.some((script) => script.includes('core.hooksPath')),
-    'co-author hook installed before the prompt'
+    execs.some((script) => script.includes('worktree add') && script.includes('core.hooksPath')),
+    'co-author hook installed by the worktree script itself, before the prompt'
   );
 });
 
@@ -1288,6 +1324,42 @@ test('session create returns while the worktree is still being prepared', async 
   assert.equal(ready.preparing, false);
   assert.equal(ready.opencodeSessionId, 'ses_first');
   assert.ok(started.some((s) => s.includes('worktree add')));
+});
+
+test('a client-chosen session id is used, and a retry with it returns the same session', async () => {
+  const CLIENT = '0b9f4c1e-6a43-4d6e-9c8a-2f1d3e4b5a69';
+  const scripts: string[] = [];
+  const h = preparingHarness(async (script) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '@@base@@main\n@@commit@@abcdef1\n' };
+  });
+  const rows = new Map<string, any>();
+  const prisma = (h.svc as any).prisma.sandboxConversation;
+  const create = prisma.create;
+  prisma.create = async (args: any) => {
+    const row = await create(args);
+    rows.set(args.data.id, { ...row, createdBy: null });
+    return row;
+  };
+  prisma.findUnique = async (args: any) => rows.get(args.where.id) ?? null;
+  const first = await h.svc.create(h.sandbox as never, SID2, { id: CLIENT, repo: 'app' });
+  assert.equal(first.id, CLIENT);
+  const again = await h.svc.create(h.sandbox as never, SID2, {
+    id: CLIENT.toUpperCase(),
+    repo: 'app'
+  });
+  assert.equal(again.id, CLIENT);
+  assert.equal(rows.size, 1);
+  await assert.rejects(
+    h.svc.create(h.sandbox as never, SID, { id: CLIENT, repo: 'app' }),
+    /already in use/
+  );
+  await assert.rejects(
+    h.svc.create(h.sandbox as never, SID2, { id: 'nope', repo: 'app' }),
+    /must be a UUID/
+  );
+  await until(() => scripts.length > 0);
+  assert.equal(scripts.filter((s) => s.includes('worktree add')).length, 1);
 });
 
 test('a failing worktree script surfaces as prepareError instead of a request error', async () => {
@@ -1601,4 +1673,125 @@ test('dotfiles in a session worktree can be read and written, but not .git or ho
     /Invalid file path/
   );
   await assert.rejects(() => svc.readFile(box as never, undefined, '.ssh/id'), /Invalid file path/);
+});
+
+function fakeAgentHost(claim: any) {
+  const calls: { method: string; args: any[] }[] = [];
+  const host = {
+    claim: async (...args: any[]) => {
+      calls.push({ method: 'claim', args });
+      return claim;
+    },
+    ensurePool: async (...args: any[]) => {
+      calls.push({ method: 'ensurePool', args });
+    },
+    startChat: async (...args: any[]) => {
+      calls.push({ method: 'startChat', args });
+      return {};
+    },
+    adoptChat: async (...args: any[]) => {
+      calls.push({ method: 'adoptChat', args });
+    },
+    primaryChats: async () => new Map<string, string>()
+  };
+  return { host, calls };
+}
+
+test('a warm spare from the pool makes a session ready in the create response', async () => {
+  const scripts: string[] = [];
+  const h = preparingHarness(async (script) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '' };
+  });
+  const { host, calls } = fakeAgentHost({
+    claimed: true,
+    path: '/persist/home/.worktrees/app/pool-1a2b3c4d',
+    base: 'main',
+    commit: 'abcdef1234567',
+    setup: 'done',
+    chat: null
+  });
+  h.svc.setAgentHost(host as never);
+  const dto = await h.svc.create(h.sandbox as never, SID2, {
+    repo: 'app',
+    prompt: 'Fix the login',
+    agent: 'acp:claude'
+  });
+  assert.equal(dto.preparing, false);
+  assert.equal(dto.baseCommit, 'abcdef1234567');
+  assert.equal(dto.worktreePath, '/persist/home/.worktrees/app/pool-1a2b3c4d');
+  assert.equal(dto.slug, 'pool-1a2b3c4d');
+  assert.match(dto.branch!, /^orchard\/fix-the-login-[0-9a-f]{6}$/);
+  assert.equal(dto.agent, 'acp:claude');
+  assert.match(dto.agentChatId!, /^acp_[0-9a-f]{24}$/);
+  const claim = calls.find((c) => c.method === 'claim')!.args[1];
+  assert.equal(claim.agent, 'claude');
+  assert.equal(claim.chatId, dto.agentChatId);
+  assert.equal(claim.branch, dto.branch);
+  await until(() => calls.some((c) => c.method === 'startChat'));
+  const started = calls.find((c) => c.method === 'startChat')!.args[3];
+  assert.equal(started.id, dto.agentChatId);
+  assert.equal(started.prompt, 'Fix the login');
+  assert.ok(!scripts.some((s) => s.includes('worktree add')), 'no cold worktree was made');
+});
+
+test('a claimed chat that already holds the prompt is recorded, not started twice', async () => {
+  const h = preparingHarness(async () => ({ ok: true, exitCode: 0, stderr: '', stdout: '' }));
+  let chatId = '';
+  const { host, calls } = fakeAgentHost(null);
+  host.claim = async (_s: any, input: any) => {
+    chatId = input.chatId;
+    calls.push({ method: 'claim', args: [_s, input] });
+    return {
+      claimed: true,
+      path: '/persist/home/.worktrees/app/pool-9f8e7d6c',
+      base: 'main',
+      commit: 'abcdef1234567',
+      setup: 'none',
+      chat: { id: input.chatId, agent: 'claude', activity: 'working' },
+      warm: true
+    };
+  };
+  h.svc.setAgentHost(host as never);
+  const dto = await h.svc.create(h.sandbox as never, SID2, {
+    repo: 'app',
+    prompt: 'go',
+    agent: 'acp:claude'
+  });
+  assert.equal(dto.agentChatId, chatId);
+  assert.ok(calls.some((c) => c.method === 'adoptChat'));
+  assert.ok(!calls.some((c) => c.method === 'startChat'));
+});
+
+test('without a spare the cold path runs, starts the agent chat and refills the pool', async () => {
+  const scripts: string[] = [];
+  const h = preparingHarness(async (script) => {
+    scripts.push(script);
+    return { ok: true, exitCode: 0, stderr: '', stdout: '@@base@@main\n@@commit@@abcdef1\n' };
+  });
+  const { host, calls } = fakeAgentHost({ claimed: false });
+  h.svc.setAgentHost(host as never);
+  const dto = await h.svc.create(h.sandbox as never, SID2, {
+    repo: 'app',
+    prompt: 'go',
+    agent: 'acp:fx'
+  });
+  assert.equal(dto.preparing, true);
+  await until(() => calls.some((c) => c.method === 'startChat'));
+  assert.ok(scripts.some((s) => s.includes('worktree add')));
+  const started = calls.find((c) => c.method === 'startChat')!.args[3];
+  assert.equal(started.agent, 'fx');
+  assert.equal(started.id, dto.agentChatId);
+  assert.ok(calls.filter((c) => c.method === 'ensurePool').length >= 1);
+});
+
+test('agent names are checked and default to the native opencode chat', async () => {
+  const { sessionAgentFor, acpAgentOf } =
+    await import('../server/src/sandboxes/sandbox-sessions.service');
+  assert.equal(sessionAgentFor(undefined), 'opencode');
+  assert.equal(sessionAgentFor('acp:claude'), 'acp:claude');
+  assert.throws(() => sessionAgentFor('acp:../x'));
+  assert.throws(() => sessionAgentFor('claude'));
+  assert.equal(acpAgentOf('acp:codex'), 'codex');
+  assert.equal(acpAgentOf('opencode'), null);
 });

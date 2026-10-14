@@ -609,13 +609,15 @@ builderSandbox:
 #      home PVC (slower, no block-device fast path).
 #   3. For forking: a VolumeSnapshotClass whose driver matches the home
 #      volume StorageClass. Without one, forking is not offered.
-# No custom image is needed: a bootstrap script installs sshd, git, tmux,
-# Node.js, Claude Code, Codex and opencode into `image` on first boot.
+# The default image ships sshd, git, tmux, Node.js, every supported agent
+# (Claude Code, opencode, fx, Codex and their ACP adapters) and the orchard
+# daemon, so a machine boots in seconds. Any other image works too: the
+# bootstrap installs whatever is missing on first boot, which is slow.
 sandbox:
   enabled: false
   install: null
   namespace: orchard-sandboxes
-  image: debian:bookworm
+  image: ghcr.io/hackclub/orchard/sandbox:latest
   runtimeClassName: kata
   # Running machines are stopped after this many minutes with no terminal or
   # SSH activity (0 = never). A working agent counts as activity.

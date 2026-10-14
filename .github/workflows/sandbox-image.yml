@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "infra/images/sandbox/**"
+      - "apps/cli/**"
       - ".github/workflows/sandbox-image.yml"
   workflow_dispatch:
 
@@ -22,5 +23,5 @@ jobs:
     with:
       service: sandbox
       dockerfile: infra/images/sandbox/Dockerfile
-      context: infra/images/sandbox
+      context: .
       version: 1.0.${{ github.run_number }}

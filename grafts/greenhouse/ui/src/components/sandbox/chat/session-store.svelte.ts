@@ -56,6 +56,8 @@ import {
 } from './pending';
 import { parseTodos, undoTarget, type TodoItem } from './slash-commands';
 import { claimForMessage, claimOwnPrompt, placeUserPart } from './prompt-claims';
+import { AcpChat, isAcpChat, newAcpMessageId, type AcpChatInfo } from './acp-chat.svelte';
+import type { AcpConfigOption } from './acp-reducer';
 
 export type ChatAuthor = { id: string; name: string; avatarUrl?: string | null };
 
@@ -218,6 +220,18 @@ export type QueuedPrompt = {
   choice: ModelChoice;
   createdAt: number;
 };
+
+export type AcpCatalogEntry = {
+  id: string;
+  label: string;
+  installed: boolean;
+  available: boolean;
+  error?: string;
+  version?: string;
+  configOptions?: AcpConfigOption[] | null;
+};
+
+export type AcpChoice = { agent: string; model: string | null };
 
 export type ChatSession = {
   id: string;
@@ -586,6 +600,12 @@ export class ChatSessionStore {
   readonly waiting = new SvelteSet<string>();
   readonly pending = new SvelteMap<string, PendingItem>();
   readonly deleted = new SvelteSet<string>();
+  readonly acpChats = new SvelteMap<string, AcpChat>();
+  acpCatalog = $state.raw<AcpCatalogEntry[]>([]);
+  acpChoice = $state.raw<AcpChoice | null>(null);
+  onAgentPick: ((agent: string, model: string | null) => void) | null = null;
+  onNativePick: (() => void) | null = null;
+  #acpBusy = new Map<string, boolean>();
 
   providerID = $state(OC_MODEL.providerID);
   modelID = $state(OC_MODEL.modelID);
@@ -660,6 +680,127 @@ export class ChatSessionStore {
   readonly active = $derived(this.activeId ? (this.threads.get(this.activeId) ?? null) : null);
 
   readonly activeSession = $derived(this.sessions.find((s) => s.id === this.activeId) ?? null);
+
+  readonly activeAcp = $derived(this.activeId ? (this.acpChats.get(this.activeId) ?? null) : null);
+
+  registerAcpChats(chats: AcpChatInfo[]) {
+    for (const info of chats) {
+      if (this.acpChats.has(info.id)) continue;
+      const thread = this.#thread(info.id);
+      const chat = new AcpChat(this.sandboxId, info, thread, (c) => this.#syncAcp(c));
+      this.acpChats.set(info.id, chat);
+      if (!this.sessions.some((s) => s.id === info.id)) {
+        this.sessions = [
+          ...this.sessions,
+          {
+            id: info.id,
+            title: info.title,
+            directory: info.cwd,
+            repo: info.cwd ? ocRepo(info.cwd) : null,
+            pending: false,
+            createdAt: info.createdAt,
+            updatedAt: info.createdAt
+          }
+        ];
+      }
+      if (this.activeId === info.id) chat.connect();
+    }
+  }
+
+  forgetAcpChat(id: string) {
+    this.acpChats.get(id)?.close();
+    this.acpChats.delete(id);
+    this.threads.delete(id);
+    this.activity.delete(id);
+    this.waiting.delete(id);
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    for (const [key, item] of this.pending) {
+      if (item.request.sessionID === id) this.pending.delete(key);
+    }
+    if (this.activeId === id) this.activeId = null;
+  }
+
+  #syncAcp(chat: AcpChat) {
+    const id = chat.info.id;
+    const r = chat.reducer;
+    const busy = r.busy;
+    this.activity.set(id, busy ? 'busy' : 'idle');
+    if (r.activity === 'needs_input') this.waiting.add(id);
+    else this.waiting.delete(id);
+    for (const [requestId, pending] of r.permissions) {
+      if (this.pending.has(requestId)) continue;
+      this.pending.set(requestId, {
+        request: pending.request,
+        dir: chat.info.cwd,
+        state: 'open',
+        seen: pending.seen
+      });
+      if (this.autoAccept() && this.canAnswer()) void this.replyPermission(requestId, 'once');
+    }
+    for (const [requestId, item] of this.pending) {
+      if (item.request.sessionID === id && !r.permissions.has(requestId))
+        this.pending.delete(requestId);
+    }
+    const title = chat.title;
+    const listed = this.sessions.find((s) => s.id === id);
+    if (listed && title && listed.title !== title) {
+      this.sessions = this.sessions.map((s) =>
+        s.id === id ? { ...s, title, updatedAt: Date.now() } : s
+      );
+    }
+    const was = this.#acpBusy.get(id) ?? false;
+    this.#acpBusy.set(id, busy);
+    if (was && !busy) {
+      this.onTurnDone?.();
+      this.onSignal?.({ kind: 'done', sessionId: id, detail: null });
+    } else if (r.activity === 'needs_input') {
+      this.onSignal?.({ kind: 'attention', sessionId: id, detail: null });
+    }
+  }
+
+  async #deliverAcp(thread: SessionThread, text: string): Promise<boolean> {
+    const chat = this.acpChats.get(thread.id);
+    if (!chat) return false;
+    const messageID = newAcpMessageId();
+    const local = thread.push<UserEntry>({
+      kind: 'user',
+      key: nextKey(),
+      text,
+      time: Date.now(),
+      messageID,
+      author: this.self,
+      local: true
+    });
+    this.sentTick += 1;
+    try {
+      await chat.prompt(text, messageID);
+      return true;
+    } catch (e) {
+      thread.entries = thread.entries.filter((entry) => entry !== local);
+      toasts.add({
+        title: 'Could not send',
+        description: e instanceof Error ? e.message : undefined,
+        color: 'error'
+      });
+      return false;
+    }
+  }
+
+  async setAcpConfig(configId: string, value: string | boolean): Promise<boolean> {
+    const chat = this.activeAcp;
+    if (!chat) return false;
+    try {
+      await chat.setConfig(configId, value);
+      return true;
+    } catch (e) {
+      toasts.add({
+        title: 'Could not change that setting',
+        description: e instanceof Error ? e.message : undefined,
+        color: 'error'
+      });
+      return false;
+    }
+  }
 
   readonly busy = $derived(this.active?.busy ?? false);
 
@@ -984,6 +1125,13 @@ export class ChatSessionStore {
   }
 
   async #select(id: string) {
+    if (isAcpChat(id)) {
+      this.#savePrefs();
+      this.activeId = id;
+      this.#thread(id);
+      this.acpChats.get(id)?.connect();
+      return;
+    }
     if (!id.startsWith(TEMP_PREFIX) && !(await this.#ensureListed(id))) return;
     this.#savePrefs();
     this.activeId = id;
@@ -1166,6 +1314,24 @@ export class ChatSessionStore {
   async revert(messageID: string): Promise<boolean> {
     const thread = this.active;
     if (!thread || this.revertBusy) return false;
+    const acp = this.acpChats.get(thread.id);
+    if (acp) {
+      this.revertBusy = messageID;
+      try {
+        await acp.revert(messageID);
+        this.onTurnDone?.();
+        return true;
+      } catch (e) {
+        toasts.add({
+          title: 'Revert failed',
+          description: e instanceof Error ? e.message : 'Could not restore the files',
+          color: 'error'
+        });
+        return false;
+      } finally {
+        this.revertBusy = null;
+      }
+    }
     this.revertBusy = messageID;
     try {
       const res = await apiFetch(
@@ -1221,6 +1387,22 @@ export class ChatSessionStore {
   async abort() {
     const thread = this.active;
     if (!thread || !thread.busy || thread.stopping || thread.id.startsWith(TEMP_PREFIX)) return;
+    const acp = this.acpChats.get(thread.id);
+    if (acp) {
+      thread.stopping = true;
+      try {
+        await acp.cancel();
+      } catch (e) {
+        toasts.add({
+          title: 'Could not stop the agent',
+          description: e instanceof Error ? e.message : undefined,
+          color: 'error'
+        });
+      } finally {
+        thread.stopping = false;
+      }
+      return;
+    }
     thread.stopping = true;
     try {
       await apiFetch(
@@ -1664,6 +1846,7 @@ export class ChatSessionStore {
     files: OcAttachment[],
     followUp: FollowUpMode
   ): Promise<boolean> {
+    if (isAcpChat(thread.id)) return this.#deliverAcp(thread, text);
     const choice = this.choice();
     if (followUp === 'steer' && this.#canSteer(thread)) {
       return this.#steer(thread, text, files, choice);
@@ -2439,6 +2622,18 @@ export class ChatSessionStore {
     const item = this.pending.get(id);
     if (!item || item.request.kind !== 'permission' || item.state !== 'open') return false;
     if (!this.canAnswer()) return false;
+    const acp = this.acpChats.get(item.request.sessionID);
+    if (acp) {
+      this.#setState(id, 'sending');
+      this.#answeredHere.add(id);
+      try {
+        await acp.answer(id, reply);
+        return true;
+      } catch (e) {
+        this.#replyFailed(id, e instanceof Error ? e.message : 'The agent did not take the answer');
+        return false;
+      }
+    }
     const request = item.request;
     const text = reply === 'reject' ? message?.trim() || undefined : undefined;
     this.#setState(id, 'sending');

@@ -146,11 +146,13 @@ export interface WorktreeAddInput {
   slug: string;
   baseBranch: string | null;
   branch?: string | null;
+  extra?: string;
 }
 
 export interface WorktreeAddResult {
   baseBranch: string | null;
   baseCommit: string | null;
+  hookInstalled: boolean;
 }
 
 export const WORKTREE_EXIT = {
@@ -177,19 +179,22 @@ export function buildWorktreeAddScript(input: WorktreeAddInput): string {
       ? `base=${shellQuote(input.baseBranch)}`
       : `base=$(git -C ${repo} symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##'); [ -n "$base" ] || base=$(git -C ${repo} rev-parse --abbrev-ref HEAD 2>/dev/null)`,
     `[ -n "$base" ] && [ "$base" != HEAD ] || exit ${WORKTREE_EXIT.noBase}`,
-    `GIT_TERMINAL_PROMPT=0 timeout 10 git -C ${repo} fetch --quiet origin "$base" >/dev/null 2>&1 || true`,
+    `if ! git -C ${repo} rev-parse --verify --quiet "refs/remotes/origin/$base^{commit}" >/dev/null; then GIT_TERMINAL_PROMPT=0 timeout 10 git -C ${repo} fetch --quiet origin "$base" >/dev/null 2>&1 || true; fetched=1; fi`,
     `if git -C ${repo} rev-parse --verify --quiet "refs/remotes/origin/$base^{commit}" >/dev/null; then start="origin/$base"; elif git -C ${repo} rev-parse --verify --quiet "$base^{commit}" >/dev/null; then start="$base"; else exit ${WORKTREE_EXIT.noBase}; fi`,
     `mkdir -p ${parent} || exit ${WORKTREE_EXIT.addFailed}`,
     `git -C ${repo} worktree add --quiet --no-track -b ${branch} ${path} "$start" >&2 || exit ${WORKTREE_EXIT.addFailed}`,
     `printf '@@base@@%s\\n' "$base"`,
-    `printf '@@commit@@%s\\n' "$(git -C ${path} rev-parse HEAD)"`
+    `printf '@@commit@@%s\\n' "$(git -C ${path} rev-parse HEAD)"`,
+    ...(input.extra ? [input.extra] : []),
+    `[ -n "$fetched" ] || (GIT_TERMINAL_PROMPT=0 $(command -v setsid) nohup timeout 60 git -C ${repo} fetch --quiet origin "$base" </dev/null >/dev/null 2>&1 &)`,
+    'exit 0'
   ].join('\n');
 }
 
 export function parseWorktreeAddOutput(stdout: string): WorktreeAddResult {
   const base = stdout.match(/@@base@@(.*)/)?.[1]?.trim() || null;
   const commit = stdout.match(/@@commit@@([0-9a-f]{7,64})/)?.[1] ?? null;
-  return { baseBranch: base, baseCommit: commit };
+  return { baseBranch: base, baseCommit: commit, hookInstalled: stdout.includes('@@hook@@ok') };
 }
 
 export function buildWorktreeRestoreScript(

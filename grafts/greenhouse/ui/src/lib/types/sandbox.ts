@@ -71,6 +71,7 @@ export interface SandboxListResponse {
 export interface SandboxCredentials {
   claude: boolean;
   openai: boolean;
+  aiGateway?: boolean;
 }
 
 export interface SandboxOwnerRef {

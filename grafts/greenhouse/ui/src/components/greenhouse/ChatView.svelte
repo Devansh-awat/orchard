@@ -13,7 +13,7 @@
 		type ContextPlan
 	} from '../sandbox/chat/context-attach';
 	import { isPlanFile, planLabel } from '../sandbox/chat/steps';
-	import Skeleton from '@orchardlabs/graft-ui/components/ui/Skeleton.svelte';
+	import { isAcpChat } from '../sandbox/chat/acp-chat.svelte';
 	import { sandboxBootQueryOptions } from '../../lib/queries/sandboxes';
 	import * as api from './api';
 	import { getGreenhouseApp } from './app.svelte';
@@ -36,13 +36,11 @@
 			!harness && ws.isOwner && !!machine && status !== 'stopped' && status !== 'error'
 		)
 	);
-	const bootSettled = $derived(harness || bootQuery.isFetched || !ws.isOwner);
 	const ready = $derived(
 		status === 'running' &&
-			(harness || !ws.isOwner || bootQuery.isError || bootQuery.data?.ready === true)
+			(harness || !ws.isOwner || bootQuery.isError || bootQuery.data?.ready !== false)
 	);
 	const booting = $derived(!ready && status !== 'stopped' && status !== 'error');
-	const pending = $derived(status === 'running' && !bootSettled);
 
 	$effect(() => {
 		if (!ready) return;
@@ -82,7 +80,7 @@
 	$effect(() => {
 		const chatId = ws.activeChatId;
 		if (!chatId || chatId === selected) return;
-		if (store.connection !== 'ready' || !store.settled) return;
+		if (!isAcpChat(chatId) && (store.connection !== 'ready' || !store.settled)) return;
 		selected = chatId;
 		untrack(() => {
 			void store.selectSession(chatId);
@@ -249,13 +247,7 @@
 </script>
 
 <div class="chat" class:chat--hidden={!visible}>
-	{#if pending}
-		<div class="gate gate--skeleton" aria-hidden="true">
-			<Skeleton height="0.75rem" width="45%" />
-			<Skeleton height="0.75rem" width="82%" />
-			<Skeleton height="0.75rem" width="68%" />
-		</div>
-	{:else if !ready}
+	{#if !ready}
 		<div class="gate">
 			{#if booting}
 				<WakeUp boot={bootQuery.data ?? null} {status} sandboxId={ws.sandboxId} />
@@ -355,17 +347,7 @@
 		padding: 2.5rem 1rem;
 	}
 
-	.gate--skeleton {
-		align-items: stretch;
-		justify-content: flex-end;
-		width: 100%;
-		max-width: calc(42.5rem + 2 * (var(--chat-gutter) + var(--chat-inset)));
-		margin: 0 auto;
-		padding: 2rem calc(var(--chat-gutter) + var(--chat-inset));
-	}
-
 	@container chat-pane (min-width: 48rem) {
-		.gate--skeleton,
 		.viewer {
 			--chat-inset: 1.5rem;
 		}

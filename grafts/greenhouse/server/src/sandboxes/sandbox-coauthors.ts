@@ -75,6 +75,18 @@ export function buildCoauthorHookInstall(sessionId: string, worktreePath: string
   ].join('\n');
 }
 
+const HOOK_HEREDOC = 'ORCHARD_COAUTHOR_HOOK_EOF';
+
+export function buildCoauthorHookInlineInstall(sessionId: string, worktreePath: string): string {
+  if (COAUTHOR_HOOK_SCRIPT.split('\n').includes(HOOK_HEREDOC)) throw new Error('bad heredoc');
+  const install = buildCoauthorHookInstall(sessionId, worktreePath).replace(
+    /^(cat > \S+) \|\| exit 1$/m,
+    (_, cat: string) =>
+      `${cat} <<'${HOOK_HEREDOC}' || exit 1\n${COAUTHOR_HOOK_SCRIPT.replace(/\n$/, '')}\n${HOOK_HEREDOC}`
+  );
+  return `if (\n${install}\n) >&2; then echo '@@hook@@ok'; else echo '@@hook@@fail'; fi`;
+}
+
 export function coauthorLine(identity: { name: string; email: string }): string | null {
   const name = identity.name.replace(/\s+/g, ' ').trim();
   const email = identity.email.trim();

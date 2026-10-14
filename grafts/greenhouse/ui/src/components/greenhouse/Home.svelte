@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import {
 		ArrowUp,
@@ -166,6 +166,17 @@
 
 	$effect(() => {
 		if (initialRepo) repo = initialRepo;
+	});
+
+	$effect(() => {
+		const current = ws;
+		const failed = current?.retryLaunch;
+		if (!current || !failed) return;
+		untrack(() => {
+			repo = failed.repo;
+			if (failed.prompt && !prompt.trim()) prompt = failed.prompt;
+			current.retryLaunch = null;
+		});
 	});
 
 	function meta(m: Sandbox) {

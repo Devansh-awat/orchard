@@ -19,7 +19,7 @@ import { SandboxRunnerId, refOf } from './runners/sandbox-runner';
 import { SandboxAccessService, SandboxRole } from './sandbox-access.service';
 import { ApplyQueueService } from '../core/apply.service';
 
-const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
+const DEFAULT_SANDBOX_IMAGE = 'ghcr.io/hackclub/orchard/sandbox:latest';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const MAX_SETUP_SCRIPT_LENGTH = 65536;
 
@@ -605,31 +605,51 @@ export class SandboxesService {
       .catch(() => {});
   }
 
-  async getCredentialPresence(userId: string): Promise<{ claude: boolean; openai: boolean }> {
+  async getCredentialPresence(
+    userId: string
+  ): Promise<{ claude: boolean; openai: boolean; aiGateway: boolean }> {
     const credential = await this.prisma.sandboxCredential.findUnique({ where: { userId } });
-    return { claude: !!credential?.claudeToken, openai: !!credential?.openaiToken };
+    return {
+      claude: !!credential?.claudeToken,
+      openai: !!credential?.openaiToken,
+      aiGateway: !!credential?.aiGatewayToken
+    };
   }
 
   async setCredentials(
     userId: string,
     actorEmail: string | null,
-    body: { claudeToken?: string | null; openaiToken?: string | null }
-  ): Promise<{ claude: boolean; openai: boolean }> {
+    body: {
+      claudeToken?: string | null;
+      openaiToken?: string | null;
+      aiGatewayToken?: string | null;
+    }
+  ): Promise<{ claude: boolean; openai: boolean; aiGateway: boolean }> {
     const wantsWrite =
       (typeof body.claudeToken === 'string' && body.claudeToken.length > 0) ||
-      (typeof body.openaiToken === 'string' && body.openaiToken.length > 0);
+      (typeof body.openaiToken === 'string' && body.openaiToken.length > 0) ||
+      (typeof body.aiGatewayToken === 'string' && body.aiGatewayToken.length > 0);
     if (wantsWrite && !this.crypto.enabled) {
       throw new ServiceUnavailableException(
         'SECRETS_ENCRYPTION_KEY is not configured; refusing to store agent tokens in plaintext'
       );
     }
     const clean = (v: string) => v.replace(/\s+/g, '');
-    const data: { claudeToken?: string | null; openaiToken?: string | null } = {};
+    const data: {
+      claudeToken?: string | null;
+      openaiToken?: string | null;
+      aiGatewayToken?: string | null;
+    } = {};
     if (body.claudeToken !== undefined) {
       data.claudeToken = body.claudeToken ? this.crypto.encrypt(clean(body.claudeToken)) : null;
     }
     if (body.openaiToken !== undefined) {
       data.openaiToken = body.openaiToken ? this.crypto.encrypt(clean(body.openaiToken)) : null;
+    }
+    if (body.aiGatewayToken !== undefined) {
+      data.aiGatewayToken = body.aiGatewayToken
+        ? this.crypto.encrypt(clean(body.aiGatewayToken))
+        : null;
     }
     await this.prisma.sandboxCredential.upsert({
       where: { userId },
@@ -657,7 +677,13 @@ export class SandboxesService {
           claude:
             body.claudeToken === undefined ? 'unchanged' : body.claudeToken ? 'set' : 'cleared',
           openai:
-            body.openaiToken === undefined ? 'unchanged' : body.openaiToken ? 'set' : 'cleared'
+            body.openaiToken === undefined ? 'unchanged' : body.openaiToken ? 'set' : 'cleared',
+          aiGateway:
+            body.aiGatewayToken === undefined
+              ? 'unchanged'
+              : body.aiGatewayToken
+                ? 'set'
+                : 'cleared'
         }
       })
       .catch(() => {});

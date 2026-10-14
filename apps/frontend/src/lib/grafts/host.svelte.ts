@@ -166,20 +166,25 @@ class GraftHost {
 
 	private async boot() {
 		const entries = graftRegistry();
-		let serverLoaded: Set<string> | null = null;
-		try {
-			const res = await apiFetch('/apiv1/grafts');
-			if (res.ok) serverLoaded = new Set(((await res.json()) as { id: string }[]).map((g) => g.id));
-		} catch {
-			serverLoaded = null;
-		}
+		const serverCheck = apiFetch('/apiv1/grafts')
+			.then(async (res) =>
+				res.ok ? new Set(((await res.json()) as { id: string }[]).map((g) => g.id)) : null
+			)
+			.catch(() => null);
 		const results = await Promise.all(
 			entries.map(async (graft) => {
+				const imported = importEntry(graft.entry).then(
+					(mod) => ({ mod }),
+					(err: Error) => ({ err })
+				);
+				const serverLoaded = await serverCheck;
 				if (serverLoaded && !serverLoaded.has(graft.id)) {
 					return { graft, error: 'the server did not load this graft' };
 				}
 				try {
-					const mod = await importEntry(graft.entry);
+					const settled = await imported;
+					if ('err' in settled) throw settled.err;
+					const mod = settled.mod;
 					const client = (mod.default ?? mod.graft) as GraftClient | undefined;
 					if (!client || typeof client !== 'object') throw new Error('entry has no default export');
 					return { graft, client };

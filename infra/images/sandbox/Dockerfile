@@ -1,10 +1,18 @@
+FROM golang:1.26-bookworm AS cli
+WORKDIR /src
+COPY apps/cli/go.mod apps/cli/go.sum ./
+RUN go mod download
+COPY apps/cli/ ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/orchard .
+
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssh-server git curl ca-certificates build-essential python3 \
-      sudo tini ripgrep jq unzip locales e2fsprogs \
+      openssh-server git curl ca-certificates build-essential python3 sudo \
+      ripgrep jq unzip locales e2fsprogs tmux iproute2 procps util-linux \
+      ncurses-bin tar gzip openssl rsync \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/ssh/ssh_host_*
 
@@ -17,20 +25,20 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-RUN npm install -g @anthropic-ai/claude-code @openai/codex
+RUN npm install -g \
+      @anthropic-ai/claude-code \
+      @openai/codex \
+      opencode-ai \
+      @zed-industries/claude-agent-acp@0.23.1 \
+      @zed-industries/codex-acp@0.16.0 \
+    && npm cache clean --force
 
-RUN userdel -r ubuntu \
-    && useradd -m -u 1000 -s /bin/bash dev \
-    && echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev \
-    && chmod 0440 /etc/sudoers.d/dev
+RUN curl -fsSL https://fx.sh/setup.sh | FX_INSTALL_DIR=/usr/local/bin bash
 
-RUN cp -a /etc/skel /etc/skel-dev \
-    && mkdir -p /run/sshd /etc/ssh/authorized_keys.d
+COPY --from=cli /out/orchard /usr/local/bin/orchard
 
-COPY sshd_config /etc/ssh/sshd_config
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN userdel -r ubuntu 2>/dev/null || true
 
-EXPOSE 22
+EXPOSE 22 4096 4097
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash", "/orchard-init/bootstrap.sh"]

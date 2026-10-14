@@ -11,7 +11,14 @@ import { InstanceSettingsService } from '../../core/instance-settings.service';
 import { ApplyQueueService } from '../../core/apply.service';
 import { ApplyExecutorService, ApplyItemInput } from '../../core/apply.service';
 import { ResizableOutput } from '../../core/exec-sessions';
-import { OPENCODE_PASSWORD_ROTATE_SCRIPT, SANDBOX_BOOTSTRAP_SCRIPT } from '../sandbox-bootstrap';
+import {
+  OPENCODE_PASSWORD_ROTATE_SCRIPT,
+  SANDBOX_AGENTD_PORT,
+  SANDBOX_BOOTSTRAP_SCRIPT,
+  SANDBOX_PHASE_FILE,
+  SHA256_RE
+} from '../sandbox-bootstrap';
+import { SANDBOX_RUNNERS } from '../../core/instance-config.sections';
 import { PREVIEW_PORTS } from '../preview/preview-auth';
 import { configuredPreviewDomain } from '../preview/preview-domain';
 import { InstanceConfigService } from '../../core/instance-config.service';
@@ -69,10 +76,12 @@ import {
   orchardEnvBundle
 } from '../links/sandbox-env-files';
 import { applyObservation } from './sandbox-status';
+import { TtlCache } from './ttl-cache';
 
 const MIRROR_FRESH_MS = 60_000;
 const CONTAINER = 'sandbox';
 const DEFAULT_EXEC_TIMEOUT_MS = 15_000;
+const POD_CACHE_MS = 3_000;
 const STDIN_CHUNK = 32 * 1024;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const USER_RE = /^[a-z_][a-z0-9_-]*$/;
@@ -97,6 +106,7 @@ export const SANDBOX_OPENCODE_PORT = 4096;
 export const SANDBOX_INGRESS_PORTS: readonly number[] = [
   SANDBOX_SSH_PORT,
   SANDBOX_OPENCODE_PORT,
+  SANDBOX_AGENTD_PORT,
   ...PREVIEW_PORTS
 ];
 export const SANDBOX_NETPOL_KEY = 'sandboxes:netpol';
@@ -899,7 +909,9 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     if (input.githubToken) data['github-token'] = input.githubToken;
     if (input.claudeToken) data['claude-token'] = input.claudeToken;
     if (input.openaiToken) data['openai-token'] = input.openaiToken;
+    if (input.aiGatewayToken) data['ai-gateway-token'] = input.aiGatewayToken;
     data['opencode-password'] = input.opencodePassword || '';
+    data['agentd-token'] = input.agentdToken || '';
     data['setup.sh'] = input.setupScript || '';
     data['opencode-auth.json'] = opencodeAuthJson(input.claudeToken);
     data['opencode-config.json'] = opencodeConfigJson(input.mcpToken);
@@ -938,6 +950,17 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     }
   }
 
+  private bridgeEnv(): { name: string; value: string }[] {
+    const read = (name: string) => this.config?.value(SANDBOX_RUNNERS, name)?.trim() || null;
+    const url = read('bridgeBinaryUrl');
+    const sha = read('bridgeBinarySha256')?.toLowerCase() ?? null;
+    if (!url || !sha || !SHA256_RE.test(sha)) return [];
+    return [
+      { name: 'ORCHARD_BRIDGE_URL', value: url },
+      { name: 'ORCHARD_BRIDGE_SHA256', value: sha }
+    ];
+  }
+
   buildCr(spec: SandboxSpec, instanceId: string, existing: any | null = null): Record<string, any> {
     const existingClaims = existing?.spec?.volumeClaimTemplates;
     const claims = Array.isArray(existingClaims) && existingClaims.length ? existingClaims : null;
@@ -968,14 +991,25 @@ export class KubernetesSandboxRunner implements SandboxRunner {
       name: CONTAINER,
       image: spec.image,
       command: ['/bin/bash', '/orchard-init/bootstrap.sh'],
-      ports: [{ containerPort: 22, name: 'ssh' }],
       env: [
         { name: 'SANDBOX_REPO_URL', value: spec.repoUrl || '' },
         { name: 'SANDBOX_HOME_MODE', value: homeMode },
         secretEnv('GIT_TOKEN', 'github-token'),
         secretEnv('CLAUDE_CODE_OAUTH_TOKEN', 'claude-token'),
-        secretEnv('OPENAI_API_KEY', 'openai-token')
+        secretEnv('OPENAI_API_KEY', 'openai-token'),
+        secretEnv('AI_GATEWAY_API_KEY', 'ai-gateway-token'),
+        ...this.bridgeEnv()
       ],
+      ports: [
+        { containerPort: 22, name: 'ssh' },
+        { containerPort: SANDBOX_AGENTD_PORT, name: 'agentd' }
+      ],
+      readinessProbe: {
+        exec: { command: ['/bin/sh', '-c', `grep -qx ready ${SANDBOX_PHASE_FILE}`] },
+        periodSeconds: 2,
+        failureThreshold: 3,
+        timeoutSeconds: 2
+      },
       resources: {
         requests: { cpu: '250m', memory: '512Mi' },
         limits: { cpu: spec.cpuLimit, memory: spec.memoryLimit }
@@ -1027,6 +1061,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
                     { key: 'opencode-auth.json', path: 'opencode-auth.json' },
                     { key: 'opencode-config.json', path: 'opencode-config.json' },
                     { key: 'opencode-password', path: 'opencode-password', mode: 0o600 },
+                    { key: 'agentd-token', path: 'agentd-token', mode: 0o600 },
                     { key: ORCHARD_ENV_INIT_FILE, path: ORCHARD_ENV_INIT_FILE, mode: 0o600 },
                     { key: GIT_IDENTITY_INIT_FILE, path: GIT_IDENTITY_INIT_FILE }
                   ],
@@ -1215,14 +1250,34 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     return Date.now() - row.updatedAt.getTime() < MIRROR_FRESH_MS;
   }
 
-  private async resolvePodIp(ref: SandboxRef): Promise<string | null> {
-    const status = await this.getCrStatus(ref.podName);
-    if (status.podIp) return status.podIp;
-    const pod = await this.runningPod(ref.id);
-    return pod?.ip ?? null;
+  private readonly podIps = new TtlCache<string | null>(POD_CACHE_MS, (ip) => ip !== null);
+
+  private readonly pods = new TtlCache<{ name: string; ip: string | null } | null>(
+    POD_CACHE_MS,
+    (pod) => pod !== null
+  );
+
+  forgetPod(sandboxId: string): void {
+    this.pods.forget(sandboxId);
+    this.podIps.forget(sandboxId);
   }
 
-  private async runningPod(sandboxId: string): Promise<{ name: string; ip: string | null } | null> {
+  private resolvePodIp(ref: SandboxRef): Promise<string | null> {
+    return this.podIps.get(ref.id, async () => {
+      const status = await this.getCrStatus(ref.podName);
+      if (status.podIp) return status.podIp;
+      const pod = await this.runningPod(ref.id);
+      return pod?.ip ?? null;
+    });
+  }
+
+  private runningPod(sandboxId: string): Promise<{ name: string; ip: string | null } | null> {
+    return this.pods.get(sandboxId, () => this.lookupRunningPod(sandboxId));
+  }
+
+  private async lookupRunningPod(
+    sandboxId: string
+  ): Promise<{ name: string; ip: string | null } | null> {
     if (!this.mirrorDisabled) {
       const rows = await this.prisma.k8sObject.findMany({
         where: {
@@ -1348,7 +1403,10 @@ export class KubernetesSandboxRunner implements SandboxRunner {
   }
 
   async exec(ref: SandboxRef, command: string[], opts: ExecOptions = {}): Promise<ExecResult> {
-    const result = await this.run(ref, command, opts);
+    const result = await this.run(ref, command, opts).catch((e) => {
+      this.forgetPod(ref.id);
+      throw e;
+    });
     return {
       stdout: result.stdout.toString('utf8'),
       stderr: result.stderr.toString('utf8'),

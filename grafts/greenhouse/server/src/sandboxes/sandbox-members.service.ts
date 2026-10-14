@@ -89,6 +89,7 @@ export interface RecordedPrompt {
   userId: string;
   chatId: string;
   messageId: string;
+  fresh?: boolean;
 }
 
 export type PromptListener = (prompt: RecordedPrompt) => Promise<unknown>;
@@ -454,6 +455,7 @@ export class SandboxMembersService {
     chatId: string;
     messageId: string;
     directory: string | null;
+    fresh?: boolean;
   }): Promise<boolean> {
     if (!OPENCODE_MESSAGE_ID_RE.test(input.messageId)) return false;
     const existing = await this.prisma.sandboxPromptAuthor.findUnique({
@@ -486,28 +488,31 @@ export class SandboxMembersService {
       if (e?.code === 'P2002') return false;
       throw e;
     }
-    const user = await this.prisma.user.findUnique({
-      where: { id: input.userId },
-      select: PUBLIC_USER_SELECT
-    });
-    if (user) {
-      await this.live.broadcast(input.sandboxId, {
-        t: 'prompt',
-        sid: session?.id ?? null,
-        user: publicUser(user),
-        chatId: input.chatId,
-        messageId: input.messageId
-      });
-    }
-    if (this.promptListener) {
-      await this.promptListener({
-        sandboxId: input.sandboxId,
-        sessionKey: session?.id ?? null,
-        userId: input.userId,
-        chatId: input.chatId,
-        messageId: input.messageId
-      }).catch(() => null);
-    }
+    const announced = this.prisma.user
+      .findUnique({ where: { id: input.userId }, select: PUBLIC_USER_SELECT })
+      .then((user) =>
+        user
+          ? this.live.broadcast(input.sandboxId, {
+              t: 'prompt',
+              sid: session?.id ?? null,
+              user: publicUser(user),
+              chatId: input.chatId,
+              messageId: input.messageId
+            })
+          : undefined
+      )
+      .catch((e) => this.logger.warn(`prompt broadcast failed: ${e?.message}`));
+    const listened = this.promptListener
+      ? this.promptListener({
+          sandboxId: input.sandboxId,
+          sessionKey: session?.id ?? null,
+          userId: input.userId,
+          chatId: input.chatId,
+          messageId: input.messageId,
+          ...(input.fresh ? { fresh: true } : {})
+        }).catch(() => null)
+      : null;
+    if (!input.fresh) await Promise.all([announced, listened]);
     return true;
   }
 

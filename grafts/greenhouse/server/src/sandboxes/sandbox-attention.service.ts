@@ -27,6 +27,17 @@ export class SandboxAttentionService implements OnModuleInit, OnModuleDestroy {
 
   private running = false;
 
+  private acpActivity:
+    | ((
+        sandbox: { id: string; status: string } & Record<string, unknown>,
+        dirs: string[]
+      ) => Promise<Map<string, SessionActivity>>)
+    | null = null;
+
+  setAcpActivity(fn: typeof this.acpActivity): void {
+    this.acpActivity = fn;
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly leader: LeaderElectionService,
@@ -82,6 +93,7 @@ export class SandboxAttentionService implements OnModuleInit, OnModuleDestroy {
         id: true,
         title: true,
         worktreePath: true,
+        agent: true,
         sandbox: {
           select: {
             id: true,
@@ -107,8 +119,27 @@ export class SandboxAttentionService implements OnModuleInit, OnModuleDestroy {
     }
     for (const list of [...bySandbox.values()].slice(0, MAX_SANDBOXES_PER_TICK)) {
       const sandbox = list[0].sandbox;
+      const acpDirs = list
+        .filter((s) => s.agent?.startsWith('acp:'))
+        .map((s) => s.worktreePath as string);
+      const acp =
+        acpDirs.length && this.acpActivity
+          ? await this.acpActivity(sandbox as never, acpDirs).catch(() => null)
+          : null;
       for (const session of list) {
         let next: SessionActivity;
+        if (session.agent?.startsWith('acp:')) {
+          if (!acp) continue;
+          const activity = acp.get(session.worktreePath as string) ?? 'idle';
+          next = activity === 'idle' ? 'idle' : 'working';
+          const previous = this.state.get(session.id);
+          this.state.set(session.id, next);
+          if (!needsAttention(previous, next)) continue;
+          await this.notify(sandbox, session).catch((e: any) =>
+            this.logger.warn(`needs_input notification failed: ${e?.message}`)
+          );
+          continue;
+        }
         try {
           const res = await this.workspace.opencodeRequest(sandbox, 'GET', '/session/status', {
             directory: session.worktreePath,

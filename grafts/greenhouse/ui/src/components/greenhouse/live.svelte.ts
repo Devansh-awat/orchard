@@ -84,6 +84,10 @@ export class LiveClient {
   kicked = $state<string | null>(null);
 
   onSession: ((session: GhSession) => void) | null = null;
+  onSessionDeleted: ((id: string) => void) | null = null;
+  onAgentActivity: ((chatId: string, activity: string) => void) | null = null;
+  onAgentCatalog: (() => void) | null = null;
+  onOpen: (() => void) | null = null;
   onPrompt: ((user: PersonRef, chatId: string, messageId: string) => void) | null = null;
   onFollowView: ((user: RosterUser) => void) | null = null;
 
@@ -137,6 +141,7 @@ export class LiveClient {
         socket.send({ t: 'hello', sid, ...(this.#view ? { view: this.#view } : {}) });
         this.#startPing();
         for (const sink of [...this.#rooms.values()]) sink.connect();
+        this.onOpen?.();
       },
       frame: (frame) => {
         if (this.#socket !== socket) return;
@@ -285,6 +290,21 @@ export class LiveClient {
       case 'session': {
         const session = frame.session as GhSession | undefined;
         if (session?.id) this.onSession?.(session);
+        return;
+      }
+      case 'agent-activity': {
+        const chatId = typeof frame.chatId === 'string' ? frame.chatId : '';
+        const activity = typeof frame.activity === 'string' ? frame.activity : 'idle';
+        if (chatId) this.onAgentActivity?.(chatId, activity);
+        return;
+      }
+      case 'agent-catalog': {
+        this.onAgentCatalog?.();
+        return;
+      }
+      case 'session-deleted': {
+        const id = typeof frame.id === 'string' ? frame.id : '';
+        if (id) this.onSessionDeleted?.(id);
         return;
       }
       case 'kicked': {

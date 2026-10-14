@@ -25,7 +25,8 @@
 		ocShortModelName,
 		type OcModel
 	} from '../opencode';
-	import type { ChatSessionStore } from './session-store.svelte';
+	import type { AcpCatalogEntry, ChatSessionStore } from './session-store.svelte';
+	import { acpOptionValues, type AcpConfigOption } from './acp-reducer';
 	import { modelFavourites } from './model-favourites.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
 
@@ -64,7 +65,66 @@
 	const rows = $derived(searching ? results.flatMap((g) => g.models) : favourites);
 	const active = $derived(rows.length === 0 ? -1 : Math.min(cursor, rows.length - 1));
 	const currentKey = $derived(`${store.providerID}/${store.modelID}`);
-	const modelLabel = $derived(ocShortModelName(store.model?.name ?? store.modelID));
+	type AgentModel = { value: string; name: string; group?: string };
+
+	function modelOption(options: AcpConfigOption[] | null | undefined): AcpConfigOption | null {
+		return (options ?? []).find((o) => o.category === 'model' || o.id === 'model') ?? null;
+	}
+
+	function modeOption(options: AcpConfigOption[] | null | undefined): AcpConfigOption | null {
+		return (options ?? []).find((o) => o.category === 'mode' || o.id === 'mode') ?? null;
+	}
+
+	const agents = $derived(store.acpCatalog.filter((a) => a.installed));
+	const activeAcp = $derived(store.activeAcp);
+	const activeAgent = $derived(activeAcp?.info.agent ?? store.acpChoice?.agent ?? null);
+	const activeOptions = $derived(activeAcp?.configOptions ?? []);
+
+	function agentModels(agent: AcpCatalogEntry): AgentModel[] {
+		const live = activeAcp?.info.agent === agent.id ? modelOption(activeOptions) : null;
+		const option = live ?? modelOption(agent.configOptions);
+		if (!option) return [];
+		const q = query.trim().toLowerCase();
+		return acpOptionValues(option).filter(
+			(v) => !q || v.name.toLowerCase().includes(q) || agent.label.toLowerCase().includes(q)
+		);
+	}
+
+	function currentAgentModel(agentId: string): string | null {
+		if (activeAcp?.info.agent === agentId) {
+			const option = modelOption(activeOptions);
+			return option ? String(option.currentValue) : null;
+		}
+		if (store.acpChoice?.agent === agentId) return store.acpChoice.model;
+		return null;
+	}
+
+	function pickAgent(agent: AcpCatalogEntry, model: string | null) {
+		if (!agent.available) return;
+		store.acpChoice = { agent: agent.id, model };
+		if (activeAcp?.info.agent === agent.id) {
+			if (model) void store.setAcpConfig('model', model);
+		} else {
+			store.onAgentPick?.(agent.id, model);
+		}
+		open = false;
+	}
+
+	const acpModelLabel = $derived.by(() => {
+		if (!activeAgent) return null;
+		const agent = store.acpCatalog.find((a) => a.id === activeAgent);
+		const label = agent?.label ?? activeAgent;
+		const option = activeAcp ? modelOption(activeOptions) : null;
+		const current = option ? String(option.currentValue) : (store.acpChoice?.model ?? null);
+		const name = option
+			? (acpOptionValues(option).find((v) => v.value === current)?.name ?? current)
+			: current;
+		return name ? `${label} · ${name}` : label;
+	});
+
+	const modelLabel = $derived(
+		acpModelLabel ?? ocShortModelName(store.model?.name ?? store.modelID)
+	);
 	const variantLabel = $derived(store.variant ? ocEffortLabel(store.variant) : null);
 	const fast = $derived(store.model ? ocIsFast(store.model) : false);
 	const allGroups = $derived(ocModelGroups(models));
@@ -92,7 +152,10 @@
 	}
 
 	function pick(model: OcModel, close = true) {
+		const wasAcp = !!store.acpChoice || !!activeAcp;
+		store.acpChoice = null;
 		store.pickModel(model);
+		if (wasAcp && activeAcp) store.onNativePick?.();
 		if (close) open = false;
 	}
 
@@ -401,10 +464,80 @@
 						{/each}
 					{/if}
 				</div>
-				{#if store.variants.length > 0 || store.fastSibling}
+				{#if agents.length > 0}
+					<div class="mp-sep"></div>
+					<div class="mp-list" role="listbox" aria-label="Agents">
+						{#each agents as agent (agent.id)}
+							{@const choices = agentModels(agent)}
+							{@const current = currentAgentModel(agent.id)}
+							<div class="mp-group">{agent.label}</div>
+							{#if !agent.available}
+								<div class="mp-empty mp-agent-error" title={agent.error ?? ''}>
+									{agent.error ?? 'Not set up on this machine yet'}
+								</div>
+							{:else if choices.length === 0}
+								<div
+									class="mp-row mp-row--model mp-row--plain"
+									role="option"
+									tabindex="-1"
+									aria-selected={activeAgent === agent.id}
+									onpointerdown={(e) => e.preventDefault()}
+									onclick={() => pickAgent(agent, null)}
+									onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, null)}
+								>
+									<span class="mp-name">{agent.label}</span>
+									<span class="mp-spacer"></span>
+									{#if activeAgent === agent.id}
+										<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current agent" />
+									{/if}
+								</div>
+							{:else}
+								{#each choices as choice (choice.value)}
+									<div
+										class="mp-row mp-row--model mp-row--plain"
+										role="option"
+										tabindex="-1"
+										aria-selected={activeAgent === agent.id && current === choice.value}
+										onpointerdown={(e) => e.preventDefault()}
+										onclick={() => pickAgent(agent, choice.value)}
+										onkeydown={(e) => e.key === 'Enter' && pickAgent(agent, choice.value)}
+									>
+										<span class="mp-name">{choice.name}</span>
+										{#if choice.group}<span class="mp-meta">{choice.group}</span>{/if}
+										<span class="mp-spacer"></span>
+										{#if activeAgent === agent.id && current === choice.value}
+											<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current model" />
+										{/if}
+									</div>
+								{/each}
+							{/if}
+						{/each}
+					</div>
+				{/if}
+				{#if activeAcp && modeOption(activeOptions)}
+					{@const mode = modeOption(activeOptions)!}
+					<div class="mp-sep"></div>
+					<div class="mp-group">{mode.name}</div>
+					{#each acpOptionValues(mode) as choice (choice.value)}
+						<button
+							type="button"
+							class="mp-row"
+							onpointerdown={(e) => e.preventDefault()}
+							onclick={() => void store.setAcpConfig(mode.id, choice.value)}
+							title={choice.description ?? ''}
+						>
+							<span class="mp-name">{choice.name}</span>
+							<span class="mp-spacer"></span>
+							{#if String(mode.currentValue) === choice.value}
+								<Check size={14} strokeWidth={1.75} class="mp-check" aria-label="Current mode" />
+							{/if}
+						</button>
+					{/each}
+				{/if}
+				{#if !activeAcp && (store.variants.length > 0 || store.fastSibling)}
 					<div class="mp-sep"></div>
 				{/if}
-				{#if store.variants.length > 0}
+				{#if !activeAcp && store.variants.length > 0}
 					<button
 						type="button"
 						class="mp-row"
@@ -418,7 +551,7 @@
 						<ChevronRight size={16} strokeWidth={1.75} class="mp-chev" />
 					</button>
 				{/if}
-				{#if store.fastSibling}
+				{#if !activeAcp && store.fastSibling}
 					<button
 						type="button"
 						class="mp-row"
@@ -634,6 +767,12 @@
 		font-size: var(--text-caption);
 		line-height: 1rem;
 		color: var(--text-muted);
+	}
+
+	.mp-agent-error {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.mp-row {

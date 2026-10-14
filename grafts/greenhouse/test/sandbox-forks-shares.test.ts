@@ -245,6 +245,47 @@ test('a prompt from MCP is attributed to the caller with the same message id ope
   await assert.rejects(refused.prompt(sandbox, SID, 'u', 'x'), /already in use/);
 });
 
+test('a prompt to a session still being prepared is refused instead of opening a second chat', async () => {
+  const requests: string[] = [];
+  const base = {
+    id: SID,
+    sandboxId: SBX,
+    title: 'Fix',
+    slug: 'fix-abc',
+    archivedAt: null,
+    worktreePath: '/persist/home/.worktrees/app/fix-abc',
+    opencodeSessionId: null,
+    baseCommit: null,
+    prepareError: null
+  };
+  let session: any = { ...base, createdAt: new Date() };
+  const workspace = {
+    sessionRow: async () => session,
+    opencodeRequest: async (_s: any, method: string, path: string) => {
+      requests.push(`${method} ${path}`);
+      return { status: 200, body: { id: 'ses_new123' } };
+    }
+  };
+  const prisma = {
+    sandboxConversation: { updateMany: async () => ({ count: 1 }) }
+  };
+  const service = new SandboxAgentService(
+    prisma as any,
+    workspace as any,
+    { recordPrompt: async () => true } as any
+  );
+  const sandbox = { id: SBX, status: 'running' } as any;
+  await assert.rejects(service.prompt(sandbox, SID, 'u', 'go'), /still being prepared/);
+  assert.deepEqual(requests, []);
+  session = { ...base, createdAt: new Date(Date.now() - 11 * 60_000) };
+  await service.prompt(sandbox, SID, 'u', 'go');
+  assert.equal(requests[0], 'POST /session');
+  requests.length = 0;
+  session = { ...base, baseCommit: 'abc1234', createdAt: new Date() };
+  await service.prompt(sandbox, SID, 'u', 'go');
+  assert.equal(requests[0], 'POST /session');
+});
+
 test('share tokens are 32 random bytes, stored only as a sha256 and compared in constant time', () => {
   const a = newShareToken();
   const b = newShareToken();

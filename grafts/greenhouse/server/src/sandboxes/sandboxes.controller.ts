@@ -103,7 +103,12 @@ export class SandboxesController {
   @Put('credentials')
   async setCredentials(
     @Req() req: any,
-    @Body() body: { claudeToken?: string | null; openaiToken?: string | null }
+    @Body()
+    body: {
+      claudeToken?: string | null;
+      openaiToken?: string | null;
+      aiGatewayToken?: string | null;
+    }
   ) {
     const user = await this.resolveUser(req);
     return this.sandboxes.setCredentials(user.id, user.email, body || {});

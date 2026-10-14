@@ -57,7 +57,9 @@ export class SandboxCoauthorsService {
     ]);
     if (!session || session.archivedAt || !isWorktreePath(session.worktreePath)) return null;
     if (!sandbox || sandbox.status !== 'running') return null;
-    const mode = await this.turnMode(sandbox, session.worktreePath, prompt.chatId);
+    const mode = prompt.fresh
+      ? 'reset'
+      : await this.turnMode(sandbox, session.worktreePath, prompt.chatId);
     let line = '';
     if (prompt.userId !== sandbox.userId) {
       const identity = await this.gitActors.describe(prompt.userId).catch(() => null);

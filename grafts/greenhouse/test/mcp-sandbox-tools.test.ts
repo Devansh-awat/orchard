@@ -130,14 +130,14 @@ test('each tool calls exactly the REST route the web app uses', async () => {
   );
 });
 
-test('a first prompt on a new session goes through the attributed prompt route, not the session body', async () => {
+test('a first prompt rides in the session body so it cannot race the session being prepared', async () => {
   const calls: Call[] = [];
   const handlers = new Map<string, any>();
   const client = {
     get: async () => ({}),
     post: async (path: string, body?: any) => {
       calls.push({ method: 'POST', path, body });
-      return path.endsWith('/sessions') ? { id: SID, slug: 'fix' } : { messageId: 'msg_1' };
+      return { id: SID, slug: 'fix', activity: 'working' };
     }
   };
   registerSandboxTools(
@@ -150,10 +150,9 @@ test('a first prompt on a new session goes through the attributed prompt route, 
     prompt: 'fix it'
   });
   assert.deepEqual(calls, [
-    { method: 'POST', path: `/sandboxes/${SBX}/sessions`, body: { repo: 'app' } },
-    { method: 'POST', path: `/sandboxes/${SBX}/sessions/${SID}/prompt`, body: { text: 'fix it' } }
+    { method: 'POST', path: `/sandboxes/${SBX}/sessions`, body: { repo: 'app', prompt: 'fix it' } }
   ]);
-  assert.match(out.content[0].text, /msg_1/);
+  assert.match(out.content[0].text, /working/);
 });
 
 test('no tool reaches the raw opencode proxy, a terminal or another tenant surface', async () => {

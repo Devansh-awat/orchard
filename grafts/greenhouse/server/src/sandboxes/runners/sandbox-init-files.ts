@@ -5,6 +5,7 @@ import type { SandboxSecrets } from './sandbox-runner';
 export const SECRET_INIT_FILES: readonly string[] = [
   'opencode-password',
   'bridge-token',
+  'agentd-token',
   ORCHARD_ENV_INIT_FILE
 ];
 
@@ -78,6 +79,7 @@ export function stagedInitFiles(
     'opencode-config.json': opencodeConfigJson(secrets.mcpToken, opts),
     'opencode-password': secrets.opencodePassword || '',
     'bridge-token': secrets.bridgeToken || '',
+    'agentd-token': secrets.agentdToken || '',
     [ORCHARD_ENV_INIT_FILE]: orchardEnvBundle(secrets.attachedEnv),
     [GIT_IDENTITY_INIT_FILE]: gitIdentityFile(secrets.gitIdentity)
   };

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
+import { posix } from 'path';
 import {
   BadRequestException,
   ConflictException,
@@ -58,7 +59,11 @@ import {
 } from './sandbox-session-commands';
 import { declaredPreviewPorts, mergeDeclaredPorts, previewablePorts } from './preview/preview-auth';
 import { newOpencodeMessageId } from './sandbox-opencode-policy';
-import { buildCoauthorHookInstall, COAUTHOR_HOOK_SCRIPT } from './sandbox-coauthors';
+import {
+  buildCoauthorHookInlineInstall,
+  buildCoauthorHookInstall,
+  COAUTHOR_HOOK_SCRIPT
+} from './sandbox-coauthors';
 
 export type SessionActivity = 'idle' | 'working' | 'needs_input' | 'done';
 
@@ -80,7 +85,8 @@ export interface SessionDto {
   baseBranch: string | null;
   baseCommit: string | null;
   worktreePath: string | null;
-  agent: 'opencode';
+  agent: string;
+  agentChatId: string | null;
   opencodeSessionId: string | null;
   status: 'active' | 'archived';
   activity: SessionActivity;
@@ -163,12 +169,88 @@ export function displayName(user: SessionRow['createdBy']): string {
   return full || user.username;
 }
 
+export const NATIVE_AGENT = 'opencode';
+
+export function newAcpChatId(): string {
+  return `acp_${randomBytes(12).toString('hex')}`;
+}
+export const ACP_AGENT_PREFIX = 'acp:';
+const ACP_AGENT_RE = /^acp:[A-Za-z0-9_-]{1,28}$/;
+
+export function acpAgentOf(agent: string | null | undefined): string | null {
+  return agent && ACP_AGENT_RE.test(agent) ? agent.slice(ACP_AGENT_PREFIX.length) : null;
+}
+
+export function sessionAgentFor(requested: unknown): string {
+  const fallback = process.env.SANDBOX_DEFAULT_AGENT?.trim() || NATIVE_AGENT;
+  const value =
+    requested === undefined || requested === null || requested === '' ? fallback : requested;
+  if (value === NATIVE_AGENT) return NATIVE_AGENT;
+  if (typeof value === 'string' && ACP_AGENT_RE.test(value)) return value;
+  if (requested === undefined || requested === null || requested === '') return NATIVE_AGENT;
+  throw new BadRequestException('Unknown agent');
+}
+
+export interface PoolClaim {
+  claimed: boolean;
+  path?: string;
+  base?: string;
+  commit?: string;
+  setup?: string;
+  chat?: { id: string; agent: string; activity: string; agentSessionId?: string } | null;
+  warm?: boolean;
+}
+
+export interface SessionAgentHost {
+  claim(
+    sandbox: WorkspaceSandbox,
+    input: {
+      repo: string;
+      base: string | null;
+      branch: string;
+      agent: string | null;
+      chatId: string | null;
+      title: string;
+      prompt: string;
+      actorUserId: string;
+    }
+  ): Promise<PoolClaim | null>;
+  ensurePool(
+    sandbox: WorkspaceSandbox,
+    input: { repo: string; base: string | null; agent: string | null; setup: string | null }
+  ): Promise<void>;
+  startChat(
+    sandbox: WorkspaceSandbox,
+    session: { id: string },
+    actorUserId: string,
+    input: { id: string; agent: string; title: string; prompt: string }
+  ): Promise<unknown>;
+  adoptChat(
+    sandbox: WorkspaceSandbox,
+    session: { id: string },
+    actorUserId: string,
+    chat: { id: string; agent: string },
+    title: string
+  ): Promise<void>;
+  primaryChats(conversationIds: string[]): Promise<Map<string, string>>;
+}
+
+export function isPreparing(
+  row: Pick<SandboxConversation, 'worktreePath' | 'baseCommit' | 'prepareError' | 'archivedAt'> & {
+    createdAt: Date | string;
+  }
+): boolean {
+  const pending = !!row.worktreePath && !row.baseCommit && !row.prepareError && !row.archivedAt;
+  return pending && Date.now() - new Date(row.createdAt).getTime() <= PREPARE_STALE_MS;
+}
+
 export function toSessionDto(
   row: SessionRow,
   extras: {
     activity?: SessionActivity;
     stats?: SessionGitStats | null;
     preview?: PreviewSnapshot | null;
+    agentChatId?: string | null;
   } = {}
 ): SessionDto {
   const prState =
@@ -176,7 +258,8 @@ export function toSessionDto(
       ? row.prState
       : null;
   const pending = !!row.worktreePath && !row.baseCommit && !row.prepareError && !row.archivedAt;
-  const stale = pending && Date.now() - new Date(row.createdAt).getTime() > PREPARE_STALE_MS;
+  const preparing = isPreparing(row);
+  const stale = pending && !preparing;
   return {
     id: row.id,
     sandboxId: row.sandboxId,
@@ -187,7 +270,8 @@ export function toSessionDto(
     baseBranch: row.baseBranch,
     baseCommit: row.baseCommit,
     worktreePath: row.worktreePath,
-    agent: 'opencode',
+    agent: row.agent || NATIVE_AGENT,
+    agentChatId: extras.agentChatId ?? null,
     opencodeSessionId: row.opencodeSessionId,
     status: row.archivedAt ? 'archived' : 'active',
     activity: extras.activity ?? 'idle',
@@ -211,7 +295,7 @@ export function toSessionDto(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     archivedAt: row.archivedAt,
-    preparing: pending && !stale,
+    preparing,
     prepareError:
       row.prepareError ?? (stale ? 'Setup was interrupted before the session was ready' : null)
   };
@@ -289,6 +373,7 @@ export type PromptRecorder = (input: {
   chatId: string;
   messageId: string;
   directory: string | null;
+  fresh?: boolean;
 }) => Promise<boolean>;
 
 export interface SessionPreviewHooks {
@@ -325,6 +410,12 @@ export class SandboxSessionsService {
   }
 
   private promptRecorder: PromptRecorder | null = null;
+
+  private agentHost: SessionAgentHost | null = null;
+
+  setAgentHost(host: SessionAgentHost | null): void {
+    this.agentHost = host;
+  }
 
   setPromptRecorder(recorder: PromptRecorder | null): void {
     this.promptRecorder = recorder;
@@ -452,10 +543,17 @@ export class SandboxSessionsService {
   }
 
   private async decorate(sandbox: WorkspaceSandbox, rows: SessionRow[]): Promise<SessionDto[]> {
-    const previews = await this.previewSnapshots(rows);
+    const [previews, chats] = await Promise.all([
+      this.previewSnapshots(rows),
+      this.agentHost
+        ? this.agentHost.primaryChats(rows.map((r) => r.id)).catch(() => new Map<string, string>())
+        : Promise.resolve(new Map<string, string>())
+    ]);
     const active = rows.filter((r) => !r.archivedAt && isWorktreePath(r.worktreePath));
     if (sandbox.status !== 'running' || active.length === 0) {
-      return rows.map((r) => toSessionDto(r, { preview: previews.get(r.id) }));
+      return rows.map((r) =>
+        toSessionDto(r, { preview: previews.get(r.id), agentChatId: chats.get(r.id) ?? null })
+      );
     }
     const [stats, activity] = await Promise.all([
       this.batchStats(sandbox, active).catch((e) => {
@@ -468,7 +566,8 @@ export class SandboxSessionsService {
       toSessionDto(r, {
         stats: stats.get(r.id.toLowerCase()) ?? null,
         activity: activity.get(r.worktreePath ?? '') ?? 'idle',
-        preview: previews.get(r.id)
+        preview: previews.get(r.id),
+        agentChatId: chats.get(r.id) ?? null
       })
     );
   }
@@ -496,20 +595,43 @@ export class SandboxSessionsService {
   ): Promise<Map<string, SessionActivity>> {
     const dirs = [...new Set(rows.map((r) => r.worktreePath).filter(isWorktreePath))];
     const out = new Map<string, SessionActivity>();
-    await Promise.all(
-      dirs.map(async (dir) => {
-        try {
-          const res = await this.workspace.opencodeRequest(sandbox, 'GET', '/session/status', {
-            directory: dir,
-            timeoutMs: ACTIVITY_TIMEOUT_MS
-          });
-          if (res.status === 200) out.set(dir, activityFromStatus(res.body));
-        } catch {
-          return;
-        }
-      })
+    const nativeDirs = new Set(
+      rows.filter((r) => !acpAgentOf(r.agent) || r.opencodeSessionId).map((r) => r.worktreePath)
     );
+    const acp = this.acpActivity
+      ? this.acpActivity(sandbox, dirs).catch(() => new Map<string, SessionActivity>())
+      : Promise.resolve(new Map<string, SessionActivity>());
+    await Promise.all(
+      dirs
+        .filter((dir) => nativeDirs.has(dir))
+        .map(async (dir) => {
+          try {
+            const res = await this.workspace.opencodeRequest(sandbox, 'GET', '/session/status', {
+              directory: dir,
+              timeoutMs: ACTIVITY_TIMEOUT_MS
+            });
+            if (res.status === 200) out.set(dir, activityFromStatus(res.body));
+          } catch {
+            return;
+          }
+        })
+    );
+    for (const [dir, activity] of await acp) {
+      if (activity === 'working' || activity === 'needs_input') out.set(dir, 'working');
+    }
     return out;
+  }
+
+  private acpActivity:
+    | ((sandbox: WorkspaceSandbox, dirs: string[]) => Promise<Map<string, SessionActivity>>)
+    | null = null;
+
+  setAcpActivity(
+    fn:
+      | ((sandbox: WorkspaceSandbox, dirs: string[]) => Promise<Map<string, SessionActivity>>)
+      | null
+  ): void {
+    this.acpActivity = fn;
   }
 
   private async ownerGithubToken(userId: string): Promise<string | null> {
@@ -611,16 +733,26 @@ export class SandboxSessionsService {
     sandbox: WorkspaceSandbox,
     actorUserId: string,
     body: {
+      id?: string;
       repo?: string;
       baseBranch?: string | null;
       title?: string;
       prompt?: string;
       issue?: { provider?: string; ref?: string };
       branchPrefix?: string;
+      agent?: string;
     },
     opts: { issue?: SessionIssueContext } = {}
   ): Promise<SessionDto> {
     this.requireRunning(sandbox);
+    if (body.id !== undefined && !isUuid(body.id)) {
+      throw new BadRequestException('id must be a UUID');
+    }
+    const requestedId = body.id?.toLowerCase();
+    const replay = requestedId
+      ? await this.replayedCreate(sandbox, actorUserId, requestedId)
+      : null;
+    if (replay) return replay;
     const repo = body.repo;
     if (!isValidRepoName(repo)) throw new BadRequestException('Invalid repo name');
     const baseBranch = body.baseBranch ? body.baseBranch : null;
@@ -639,6 +771,7 @@ export class SandboxSessionsService {
     if (body.prompt && body.prompt.length > MAX_PROMPT) {
       throw new BadRequestException('prompt is too long');
     }
+    const agent = sessionAgentFor(body.agent);
     const issue = opts.issue ?? (await this.issueContext(sandbox, repo, body.issue, actorUserId));
     const prompt = issue
       ? [issue.text, body.prompt?.trim() || 'Work on this issue.'].join('\n\n')
@@ -650,6 +783,19 @@ export class SandboxSessionsService {
       'New session'
     ).slice(0, MAX_TITLE);
 
+    const id = requestedId ?? randomUUID();
+    const pooled = await this.createFromPool(sandbox, actorUserId, {
+      id,
+      repo,
+      baseBranch,
+      prefix,
+      title,
+      prompt,
+      agent,
+      slugHint: issue?.slugHint ?? null
+    });
+    if (pooled) return pooled;
+
     let row: SandboxConversation | null = null;
     for (let attempt = 0; attempt < 4 && !row; attempt++) {
       const slug = slugify(issue?.slugHint || title, randomBytes(3).toString('hex'));
@@ -658,18 +804,25 @@ export class SandboxSessionsService {
       try {
         row = await this.prisma.sandboxConversation.create({
           data: {
+            id,
             sandboxId: sandbox.id,
             title,
             repo,
             slug,
             branch,
             worktreePath: worktreePathFor(repo, slug),
-            agent: 'opencode',
+            agent,
             createdById: actorUserId
           }
         });
       } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          const raced = requestedId
+            ? await this.replayedCreate(sandbox, actorUserId, requestedId)
+            : null;
+          if (raced) return raced;
+          continue;
+        }
         throw e;
       }
     }
@@ -679,21 +832,239 @@ export class SandboxSessionsService {
       where: { id: row.id },
       include: { createdBy: CREATOR_SELECT }
     });
-    void this.prepare(sandbox, actorUserId, created, { repo, baseBranch, title, prompt });
+    const chatId = acpAgentOf(agent) ? newAcpChatId() : null;
+    void this.prepare(sandbox, actorUserId, created, { repo, baseBranch, title, prompt, chatId });
     const dto = toSessionDto(created, {
-      activity: prompt ? 'working' : 'idle'
+      activity: prompt ? 'working' : 'idle',
+      agentChatId: chatId
     });
     this.emit(dto);
     return dto;
+  }
+
+  private async createFromPool(
+    sandbox: WorkspaceSandbox,
+    actorUserId: string,
+    input: {
+      id: string;
+      repo: string;
+      baseBranch: string | null;
+      prefix: string;
+      title: string;
+      prompt: string;
+      agent: string;
+      slugHint: string | null;
+    }
+  ): Promise<SessionDto | null> {
+    const host = this.agentHost;
+    if (!host) return null;
+    const branchSlug = slugify(input.slugHint || input.title, randomBytes(3).toString('hex'));
+    const branch = sessionBranch(branchSlug, input.prefix);
+    if (!isValidSlug(branchSlug) || !isValidGitRef(branch)) return null;
+    const acp = acpAgentOf(input.agent);
+    const chatId = acp ? newAcpChatId() : null;
+    const claim = await host
+      .claim(sandbox, {
+        repo: input.repo,
+        base: input.baseBranch,
+        branch,
+        agent: acp,
+        chatId,
+        title: input.title,
+        prompt: input.prompt,
+        actorUserId
+      })
+      .catch((e) => {
+        this.logger.warn(`pool claim failed for ${sandbox.id}: ${e?.message}`);
+        return null;
+      });
+    if (!claim?.claimed || !isWorktreePath(claim.path) || !claim.commit) {
+      void host
+        .ensurePool(sandbox, {
+          repo: input.repo,
+          base: input.baseBranch,
+          agent: acp,
+          setup: null
+        })
+        .catch(() => null);
+      return null;
+    }
+    const worktreePath = claim.path;
+    const slug = posix.basename(worktreePath);
+    let row: SandboxConversation;
+    try {
+      row = await this.prisma.sandboxConversation.create({
+        data: {
+          id: input.id,
+          sandboxId: sandbox.id,
+          title: input.title,
+          repo: input.repo,
+          slug,
+          branch,
+          worktreePath,
+          baseBranch: claim.base ?? input.baseBranch,
+          baseCommit: claim.commit,
+          agent: input.agent,
+          createdById: actorUserId
+        }
+      });
+    } catch (e) {
+      void this.devExec(
+        sandbox,
+        buildWorktreeRemoveScript(input.repo, slug, input.id, {
+          deleteBranch: true,
+          purgeState: true,
+          branch
+        }),
+        WORKTREE_TIMEOUT_MS
+      ).catch(() => null);
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const raced = await this.replayedCreate(sandbox, actorUserId, input.id);
+        if (raced) return raced;
+      }
+      throw e;
+    }
+    const created = await this.prisma.sandboxConversation.findUniqueOrThrow({
+      where: { id: row.id },
+      include: { createdBy: CREATOR_SELECT }
+    });
+    if (acp && chatId) {
+      if (claim.chat?.id === chatId) {
+        await host
+          .adoptChat(sandbox, created, actorUserId, { id: chatId, agent: acp }, input.title)
+          .catch((e) => this.logger.warn(`could not record chat ${chatId}: ${e?.message}`));
+      } else {
+        void host
+          .startChat(sandbox, created, actorUserId, {
+            id: chatId,
+            agent: acp,
+            title: input.title,
+            prompt: input.prompt
+          })
+          .catch((e) => this.logger.warn(`chat start failed for ${created.id}: ${e?.message}`));
+      }
+    } else {
+      void this.startNativeChat(sandbox, actorUserId, created, worktreePath, input);
+    }
+    void this.installCoauthorHook(sandbox, created.id, worktreePath);
+    if (claim.setup !== 'done') {
+      void this.startScript(sandbox, created, 'setup', { onlyIfConfigured: true }).catch((e) =>
+        this.logger.warn(`setup script failed to launch for ${created.id}: ${e?.message}`)
+      );
+    }
+    void this.refillPool(sandbox, created, acp);
+    const dto = toSessionDto(created, {
+      stats: {
+        diffstat: { files: 0, additions: 0, deletions: 0 },
+        aheadBehind: { ahead: 0, behind: 0 }
+      },
+      activity: input.prompt ? 'working' : 'idle',
+      agentChatId: chatId
+    });
+    this.emit(dto);
+    return dto;
+  }
+
+  private async startNativeChat(
+    sandbox: WorkspaceSandbox,
+    actorUserId: string,
+    row: SessionRow,
+    worktreePath: string,
+    input: { title: string; prompt: string }
+  ): Promise<void> {
+    try {
+      const opencodeSessionId = await this.createOpencodeSession(
+        sandbox,
+        worktreePath,
+        input.title
+      );
+      if (!opencodeSessionId) {
+        if (input.prompt) {
+          await this.prisma.sandboxConversation
+            .update({
+              where: { id: row.id },
+              data: { prepareError: 'The agent did not answer, so your prompt was not sent' },
+              include: { createdBy: CREATOR_SELECT }
+            })
+            .then((failed) => this.emit(toSessionDto(failed)))
+            .catch(() => null);
+        }
+        return;
+      }
+      const saved = await this.prisma.sandboxConversation.update({
+        where: { id: row.id },
+        data: { opencodeSessionId },
+        include: { createdBy: CREATOR_SELECT }
+      });
+      this.emit(toSessionDto(saved, { activity: input.prompt ? 'working' : 'idle' }));
+      if (input.prompt) {
+        await this.sendInitialPrompt(
+          sandbox,
+          actorUserId,
+          opencodeSessionId,
+          worktreePath,
+          input.prompt
+        );
+      }
+    } catch (e: any) {
+      this.logger.warn(`native chat start failed for ${row.id}: ${e?.message}`);
+    }
+  }
+
+  private async refillPool(
+    sandbox: WorkspaceSandbox,
+    row: SessionRow | SandboxConversation,
+    acp: string | null
+  ): Promise<void> {
+    const host = this.agentHost;
+    if (!host || !row.repo) return;
+    try {
+      const probe = await this.probeScripts(sandbox, row);
+      await host.ensurePool(sandbox, {
+        repo: row.repo,
+        base: row.baseBranch,
+        agent: acp,
+        setup: probe.config.setup
+      });
+    } catch (e: any) {
+      this.logger.debug(`pool refill for ${row.repo} skipped: ${e?.message}`);
+    }
+  }
+
+  private async replayedCreate(
+    sandbox: WorkspaceSandbox,
+    actorUserId: string,
+    id: string
+  ): Promise<SessionDto | null> {
+    const existing = await this.prisma.sandboxConversation.findUnique({
+      where: { id },
+      include: { createdBy: CREATOR_SELECT }
+    });
+    if (!existing) return null;
+    if (
+      existing.sandboxId !== sandbox.id ||
+      existing.createdById !== actorUserId ||
+      !existing.slug
+    ) {
+      throw new ConflictException('That session id is already in use');
+    }
+    return toSessionDto(existing);
   }
 
   private async prepare(
     sandbox: WorkspaceSandbox,
     actorUserId: string,
     row: SandboxConversation,
-    input: { repo: string; baseBranch: string | null; title: string; prompt: string }
+    input: {
+      repo: string;
+      baseBranch: string | null;
+      title: string;
+      prompt: string;
+      chatId?: string | null;
+    }
   ): Promise<void> {
     const slug = row.slug as string;
+    const acp = acpAgentOf(row.agent);
     const fail = async (message: string) => {
       const failed = await this.prisma.sandboxConversation
         .update({
@@ -711,7 +1082,8 @@ export class SandboxSessionsService {
           repo: input.repo,
           slug,
           baseBranch: input.baseBranch,
-          branch: branchOf(row)
+          branch: branchOf(row),
+          extra: buildCoauthorHookInlineInstall(row.id, worktreePathFor(input.repo, slug))
         }),
         WORKTREE_TIMEOUT_MS
       ).catch((e) => ({
@@ -730,12 +1102,10 @@ export class SandboxSessionsService {
         return;
       }
       const worktreePath = worktreePathFor(input.repo, slug);
-      const opencodeSessionId = await this.createOpencodeSession(
-        sandbox,
-        worktreePath,
-        input.title
-      );
-      if (!opencodeSessionId && input.prompt) {
+      const opencodeSessionId = acp
+        ? null
+        : await this.createOpencodeSession(sandbox, worktreePath, input.title);
+      if (!acp && !opencodeSessionId && input.prompt) {
         await fail('The agent did not answer, so your prompt was not sent');
         return;
       }
@@ -782,22 +1152,33 @@ export class SandboxSessionsService {
             diffstat: { files: 0, additions: 0, deletions: 0 },
             aheadBehind: { ahead: 0, behind: 0 }
           },
-          activity: input.prompt && opencodeSessionId ? 'working' : 'idle'
+          activity: input.prompt && (opencodeSessionId || acp) ? 'working' : 'idle',
+          agentChatId: input.chatId ?? null
         })
       );
-      void this.installCoauthorHook(sandbox, saved.id, worktreePath)
-        .then(() =>
-          opencodeSessionId && input.prompt
-            ? this.sendInitialPrompt(
-                sandbox,
-                actorUserId,
-                opencodeSessionId,
-                worktreePath,
-                input.prompt
-              )
-            : undefined
-        )
-        .catch((e) => this.logger.warn(`initial prompt failed for ${saved.id}: ${e?.message}`));
+      if (acp && input.chatId && this.agentHost) {
+        void this.agentHost
+          .startChat(sandbox, saved, actorUserId, {
+            id: input.chatId,
+            agent: acp,
+            title: input.title,
+            prompt: input.prompt
+          })
+          .catch((e) => this.logger.warn(`chat start failed for ${saved.id}: ${e?.message}`));
+      }
+      void this.refillPool(sandbox, saved, acp);
+      if (!added.hookInstalled) {
+        void this.installCoauthorHook(sandbox, saved.id, worktreePath);
+      }
+      if (opencodeSessionId && input.prompt) {
+        void this.sendInitialPrompt(
+          sandbox,
+          actorUserId,
+          opencodeSessionId,
+          worktreePath,
+          input.prompt
+        ).catch((e) => this.logger.warn(`initial prompt failed for ${saved.id}: ${e?.message}`));
+      }
       void this.startScript(sandbox, saved, 'setup', { onlyIfConfigured: true }).catch((e) =>
         this.logger.warn(`setup script failed to launch for ${saved.id}: ${e?.message}`)
       );
@@ -835,26 +1216,32 @@ export class SandboxSessionsService {
     text: string
   ): Promise<string> {
     const messageId = newOpencodeMessageId();
-    if (this.promptRecorder) {
-      const recorded = await this.promptRecorder({
-        sandboxId: sandbox.id,
-        userId: actorUserId,
-        chatId,
-        messageId,
-        directory: worktreePath
-      });
-      if (!recorded) throw new ConflictException('That message id is already in use');
-    }
-    const res = await this.workspace.opencodeRequest(
-      sandbox,
-      'POST',
-      `/session/${encodeURIComponent(chatId)}/prompt_async`,
-      {
-        directory: worktreePath,
-        body: { messageID: messageId, parts: [{ type: 'text', text }] },
-        timeoutMs: OPENCODE_CREATE_TIMEOUT_MS
-      }
-    );
+    const recorded = this.promptRecorder
+      ? this.promptRecorder({
+          sandboxId: sandbox.id,
+          userId: actorUserId,
+          chatId,
+          messageId,
+          directory: worktreePath,
+          fresh: true
+        }).catch((e) => {
+          this.logger.warn(`initial prompt attribution failed for ${chatId}: ${e?.message}`);
+          return false;
+        })
+      : null;
+    const [res] = await Promise.all([
+      this.workspace.opencodeRequest(
+        sandbox,
+        'POST',
+        `/session/${encodeURIComponent(chatId)}/prompt_async`,
+        {
+          directory: worktreePath,
+          body: { messageID: messageId, parts: [{ type: 'text', text }] },
+          timeoutMs: OPENCODE_CREATE_TIMEOUT_MS
+        }
+      ),
+      recorded
+    ]);
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`the agent did not accept the first prompt (${res.status})`);
     }

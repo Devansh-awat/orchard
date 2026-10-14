@@ -17,6 +17,10 @@ export const SANDBOX_PHASES = [
 
 export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';
 
+export const SANDBOX_AGENTD_PORT = 4097;
+
+export const SANDBOX_AGENTD_LOG = '/var/log/orchard-agentd.log';
+
 export const SANDBOX_DRIVE_MARKER = '.orchard-drive';
 
 export const SANDBOX_BRIDGE_CLI_VERSION = '0.23.0';
@@ -106,7 +110,7 @@ if [ -n "\${ORCHARD_INIT_STAGE:-}" ] && [ -d "$ORCHARD_INIT_STAGE" ]; then
     [ -f "$staged" ] || continue
     name=$(basename "$staged")
     case "$name" in
-      opencode-password|bridge-token|${ORCHARD_ENV_INIT_FILE}) mode=600 ;;
+      opencode-password|bridge-token|agentd-token|${ORCHARD_ENV_INIT_FILE}) mode=600 ;;
       *) mode=644 ;;
     esac
     install -m "$mode" "$staged" "/orchard-init/.$name.tmp" && mv -f "/orchard-init/.$name.tmp" "/orchard-init/$name"
@@ -209,6 +213,11 @@ if have npm; then
   have claude || npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
   have codex || npm install -g @openai/codex >/dev/null 2>&1
   have opencode || npm install -g opencode-ai >/dev/null 2>&1
+  have claude-agent-acp || npm install -g @zed-industries/claude-agent-acp >/dev/null 2>&1
+  have codex-acp || npm install -g @zed-industries/codex-acp >/dev/null 2>&1
+fi
+if ! have fx && have curl; then
+  curl -fsSL https://fx.sh/setup.sh | FX_INSTALL_DIR=/usr/local/bin bash >/dev/null 2>&1 || log "could not install fx"
 fi
 if have npm && have claude && ! pgrep -f '[o]rchard-claude-update' >/dev/null 2>&1; then
   nohup sh -c 'while :; do npm install -g @anthropic-ai/claude-code@latest; sleep 21600; done' orchard-claude-update >> /var/log/orchard-claude-update.log 2>&1 &
@@ -360,6 +369,9 @@ fi
 if [ -n "\${OPENAI_API_KEY:-}" ]; then
   printf 'export OPENAI_API_KEY=%q\\n' "$OPENAI_API_KEY" >> /etc/profile.d/sandbox-agents.sh
 fi
+if [ -n "\${AI_GATEWAY_API_KEY:-}" ]; then
+  printf 'export AI_GATEWAY_API_KEY=%q\\n' "$AI_GATEWAY_API_KEY" >> /etc/profile.d/sandbox-agents.sh
+fi
 chmod 644 /etc/profile.d/sandbox-agents.sh
 
 if [ -n "\${SANDBOX_REPO_URL:-}" ]; then
@@ -413,7 +425,7 @@ fi
 
 bridge_bin=/usr/local/bin/orchard
 bridge_marker=/usr/local/share/orchard/bridge-source
-if [ -s /orchard-init/bridge-token ]; then
+if [ -n "\${ORCHARD_BRIDGE_URL:-}\${ORCHARD_BRIDGE_URL_ARM64:-}" ] || [ -x "$bridge_bin" ]; then
   case "$(uname -m)" in
     aarch64|arm64)
       bridge_source="\${ORCHARD_BRIDGE_URL_ARM64:-}"
@@ -437,6 +449,7 @@ if [ -s /orchard-init/bridge-token ]; then
         mkdir -p "$(dirname "$bridge_marker")"
         printf '%s' "$bridge_source $bridge_sha" > "$bridge_marker"
         pkill -f 'orchard sandbox bridge' >/dev/null 2>&1 || true
+        pkill -f 'orchard sandbox agentd' >/dev/null 2>&1 || true
       else
         log "the bridge archive has no orchard binary"
       fi
@@ -445,10 +458,26 @@ if [ -s /orchard-init/bridge-token ]; then
     fi
     rm -rf "$bridge_tmp"
   fi
-  if [ -x "$bridge_bin" ] && ! pgrep -f 'orchard sandbox bridge' >/dev/null 2>&1; then
+  if [ -s /orchard-init/bridge-token ] && [ -x "$bridge_bin" ] && ! pgrep -f 'orchard sandbox bridge' >/dev/null 2>&1; then
     nohup "$bridge_bin" sandbox bridge --listen 0.0.0.0:2222 --target 127.0.0.1:22 --token-file /orchard-init/bridge-token >> /var/log/orchard-bridge.log 2>&1 &
   fi
 fi
+
+agentd_up=
+if [ -s /orchard-init/agentd-token ] && [ -x "$bridge_bin" ] && "$bridge_bin" sandbox agentd --help >/dev/null 2>&1; then
+  if ! pgrep -f 'orchard sandbox agentd' >/dev/null 2>&1; then
+    nohup "$bridge_bin" sandbox agentd --listen 0.0.0.0:${SANDBOX_AGENTD_PORT} --token-file /orchard-init/agentd-token --user dev --phase-file ${SANDBOX_PHASE_FILE} >> ${SANDBOX_AGENTD_LOG} 2>&1 &
+  fi
+  agentd_up=1
+fi
+
+for port_wait in $(seq 1 40); do
+  pending=
+  if have opencode && have ss && ! ss -ltn 2>/dev/null | grep -q ':4096 '; then pending=1; fi
+  if [ -n "$agentd_up" ] && have ss && ! ss -ltn 2>/dev/null | grep -q ':${SANDBOX_AGENTD_PORT} '; then pending=1; fi
+  [ -z "$pending" ] && break
+  sleep 0.5
+done
 
 mkdir -p /run/sshd
 chmod 755 /run/sshd
