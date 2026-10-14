@@ -416,6 +416,27 @@ For a throwaway local cluster:
 It creates a k3d cluster, installs the prerequisites, and deploys the chart with
 dev values.
 
+## Checking what you install
+
+Every Orchard release is built by GitHub Actions in the Orchard repository,
+and each piece carries a signed record of the exact commit and workflow that
+built it. With the [GitHub CLI](https://cli.github.com) you can check that what
+you downloaded is what CI built, not something swapped in later:
+
+```sh
+# the install script
+curl -fsSLO https://assets.orchard.my/install.sh
+curl -fsSLO https://assets.orchard.my/install.sh.sigstore.jsonl
+gh attestation verify install.sh --bundle install.sh.sigstore.jsonl --owner hackclub
+
+# a container image (the signature and an SBOM live next to it in the registry)
+gh attestation verify oci://ghcr.io/hackclub/orchard/server:2.69.0 --owner hackclub --bundle-from-oci
+```
+
+CLI downloads carry `attestation.sigstore.jsonl` next to them on the release
+page, and grafts in the Extension Marketplace are signed separately with
+Orchard's own key, which Orchard checks on every install.
+
 ## Before you put real work on it
 
 A fresh install is not a production instance. Secrets, signup mode, TLS cookies,

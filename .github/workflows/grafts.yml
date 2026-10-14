@@ -58,6 +58,10 @@ jobs:
     if: github.event_name == 'push' && github.repository == 'hackclub/orchard'
     runs-on: ubuntu-latest
     environment: registry
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     env:
       R2_ENDPOINT: ${{ secrets.REGISTRY_R2_ENDPOINT }}
       R2_BUCKET: ${{ secrets.REGISTRY_R2_BUCKET }}
@@ -77,6 +81,7 @@ jobs:
           go-version-file: apps/registry/go.mod
       - run: pnpm install --frozen-lockfile
       - name: Pack, sign and publish new versions
+        id: publish
         run: |
           if [ -z "$GRAFT_SIGNING_KEY" ]; then
             echo "::warning::GRAFT_SIGNING_KEY is not set in the registry environment, so nothing was published. Grafts are never published unsigned."
@@ -88,6 +93,11 @@ jobs:
             -grafts "$RUNNER_TEMP/grafts" \
             -public https://assets.orchard.my/registry \
             -revoked registry/grafts-revoked.txt
+          if ls "$RUNNER_TEMP"/grafts/*.graft >/dev/null 2>&1; then echo "packed=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.publish.outputs.packed == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/grafts/*.graft
 
   community:
     needs: publish
