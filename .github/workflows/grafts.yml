@@ -25,6 +25,9 @@ concurrency:
   group: grafts-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   pack:
     runs-on: ubuntu-latest
