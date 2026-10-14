@@ -3,6 +3,7 @@ name: release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -291,7 +292,7 @@ jobs:
   # is automatic. A version already on npm is left alone, so re-runs are safe.
   npm-publish:
     needs: release-please
-    if: needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' || needs.release-please.outputs.graft_ui == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -301,12 +302,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - name: Publish @orchardlabs/graft-sdk and @orchardlabs/graft-ui
         env:
-          SDK_RELEASED: ${{ needs.release-please.outputs.graft_sdk }}
-          UI_RELEASED: ${{ needs.release-please.outputs.graft_ui }}
+          SDK_RELEASED: ${{ github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_sdk == 'true' }}
+          UI_RELEASED: ${{ github.event_name == 'workflow_dispatch' || needs.release-please.outputs.graft_ui == 'true' }}
         run: |
           set -euo pipefail
           publish() {
