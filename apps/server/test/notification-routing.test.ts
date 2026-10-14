@@ -10,7 +10,7 @@ import {
   EVENT_CATEGORY,
   NOTIFICATION_EVENTS,
   RULE_SCOPE_TYPES,
-  TEAM_ROUTABLE_EVENTS,
+  teamRoutableEvents,
   eventsForScopeType
 } from '../src/notifications/notification-events';
 import { backupKey, deployKey, jobRunKey, podKey } from '../src/notifications/dedupe-keys';
@@ -173,7 +173,7 @@ test('resource scopes only accept events that can happen there', () => {
   ]);
   assert.ok(eventsForScopeType('database').includes('backup.failed'));
   assert.ok(!eventsForScopeType('database').includes('deploy.failed'));
-  assert.deepEqual(eventsForScopeType('org').length, TEAM_ROUTABLE_EVENTS.length);
+  assert.deepEqual(eventsForScopeType('org').length, teamRoutableEvents().length);
 });
 
 // A team channel belongs to an organization; a sign-in belongs to a person.
