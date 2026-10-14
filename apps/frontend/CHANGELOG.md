@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.0](https://github.com/hackclub/orchard/compare/frontend/v1.64.0...frontend/v1.65.0) (2026-10-14)
+
+
+### Features
+
+* community grafts and taps next to official ones, sdk and ui kit publish to npm as [@orchardlabs](https://github.com/orchardlabs) ([fae981d](https://github.com/hackclub/orchard/commit/fae981de67a90b03974129c3408fbaf01e8ff68a))
+
 ## [1.64.0](https://github.com/hackclub/orchard/compare/frontend/v1.63.2...frontend/v1.64.0) (2026-10-14)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.69.0](https://github.com/hackclub/orchard/compare/server/v2.68.0...server/v2.69.0) (2026-10-14)
+
+
+### Features
+
+* community grafts and taps next to official ones, sdk and ui kit publish to npm as [@orchardlabs](https://github.com/orchardlabs) ([fae981d](https://github.com/hackclub/orchard/commit/fae981de67a90b03974129c3408fbaf01e8ff68a))
+
 ## [2.68.0](https://github.com/hackclub/orchard/compare/server/v2.67.3...server/v2.68.0) (2026-10-14)
 
 

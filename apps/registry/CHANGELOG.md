@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/hackclub/orchard/compare/registry/v0.6.0...registry/v0.7.0) (2026-10-14)
+
+
+### Features
+
+* community grafts and taps next to official ones, sdk and ui kit publish to npm as [@orchardlabs](https://github.com/orchardlabs) ([fae981d](https://github.com/hackclub/orchard/commit/fae981de67a90b03974129c3408fbaf01e8ff68a))
+
 ## [0.6.0](https://github.com/hackclub/orchard/compare/registry/v0.5.0...registry/v0.6.0) (2026-10-14)
 
 
