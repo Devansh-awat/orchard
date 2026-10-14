@@ -672,6 +672,13 @@ export class MachineWorkspace {
     const res = await api.agentCatalog(this.sandboxId, refresh);
     if (this.#disposed || !res.ok) return;
     this.store.acpCatalog = res.data.available ? res.data.agents : [];
+    this.store.acpHost = res.data.available ? 'ready' : 'missing';
+    this.store.acpProbing = res.data.available && res.data.probing;
+    if (this.store.acpProbing) {
+      setTimeout(() => {
+        if (!this.#disposed) void this.refreshAgents();
+      }, 3000);
+    }
   }
 
   async createAgentChat(

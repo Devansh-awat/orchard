@@ -16,8 +16,10 @@ import {
   SANDBOX_AGENTD_PORT,
   SANDBOX_BOOTSTRAP_SCRIPT,
   SANDBOX_PHASE_FILE,
-  SHA256_RE
+  SHA256_RE,
+  defaultBridgeBinaryUrl
 } from '../sandbox-bootstrap';
+import { BridgeChecksumResolver } from './bridge-checksum';
 import { SANDBOX_RUNNERS } from '../../core/instance-config.sections';
 import { PREVIEW_PORTS } from '../preview/preview-auth';
 import { configuredPreviewDomain } from '../preview/preview-domain';
@@ -789,8 +791,9 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     const instanceId = await this.instanceId();
     const existing = await this.existingCr(row.podName);
     if (!existing && forkSourceOf(row.runnerState) && !forkSnapshotOf(row.runnerState)) return;
+    const bridge = await this.bridgeEnv();
     const applied = await this.executor.ssaApply(
-      this.buildCr(specOf(row), instanceId, existing) as k8s.KubernetesObject
+      this.buildCr(specOf(row), instanceId, existing, bridge) as k8s.KubernetesObject
     );
     await applyObservation(this.prisma, guard, this.observationOf(readSandboxCr(applied)));
   }
@@ -950,18 +953,37 @@ export class KubernetesSandboxRunner implements SandboxRunner {
     }
   }
 
-  private bridgeEnv(): { name: string; value: string }[] {
+  bridgeChecksums = new BridgeChecksumResolver();
+
+  async bridgeEnv(): Promise<{ name: string; value: string }[]> {
     const read = (name: string) => this.config?.value(SANDBOX_RUNNERS, name)?.trim() || null;
-    const url = read('bridgeBinaryUrl');
-    const sha = read('bridgeBinarySha256')?.toLowerCase() ?? null;
-    if (!url || !sha || !SHA256_RE.test(sha)) return [];
-    return [
+    const url = read('bridgeBinaryUrl') || defaultBridgeBinaryUrl();
+    const pinned = read('bridgeBinarySha256')?.toLowerCase() ?? null;
+    const sha = await this.bridgeChecksums.resolve(url, pinned).catch(() => null);
+    if (!sha || !SHA256_RE.test(sha)) return [];
+    const env = [
       { name: 'ORCHARD_BRIDGE_URL', value: url },
       { name: 'ORCHARD_BRIDGE_SHA256', value: sha }
     ];
+    if (url === defaultBridgeBinaryUrl()) {
+      const armUrl = defaultBridgeBinaryUrl(undefined, 'arm64');
+      const armSha = await this.bridgeChecksums.resolve(armUrl, null, 'arm64').catch(() => null);
+      if (armSha) {
+        env.push(
+          { name: 'ORCHARD_BRIDGE_URL_ARM64', value: armUrl },
+          { name: 'ORCHARD_BRIDGE_SHA256_ARM64', value: armSha }
+        );
+      }
+    }
+    return env;
   }
 
-  buildCr(spec: SandboxSpec, instanceId: string, existing: any | null = null): Record<string, any> {
+  buildCr(
+    spec: SandboxSpec,
+    instanceId: string,
+    existing: any | null = null,
+    bridge: { name: string; value: string }[] = []
+  ): Record<string, any> {
     const existingClaims = existing?.spec?.volumeClaimTemplates;
     const claims = Array.isArray(existingClaims) && existingClaims.length ? existingClaims : null;
     const homeClaim = claims?.find((c: any) => c?.metadata?.name === 'home') ?? claims?.[0];
@@ -998,7 +1020,7 @@ export class KubernetesSandboxRunner implements SandboxRunner {
         secretEnv('CLAUDE_CODE_OAUTH_TOKEN', 'claude-token'),
         secretEnv('OPENAI_API_KEY', 'openai-token'),
         secretEnv('AI_GATEWAY_API_KEY', 'ai-gateway-token'),
-        ...this.bridgeEnv()
+        ...bridge
       ],
       ports: [
         { containerPort: 22, name: 'ssh' },

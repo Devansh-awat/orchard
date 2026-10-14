@@ -9,6 +9,20 @@ export const ANTHROPIC_OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/us
 export const ANTHROPIC_OAUTH_PROFILE_URL = 'https://api.anthropic.com/api/oauth/profile';
 const ANTHROPIC_OAUTH_BETA = 'oauth-2025-04-20';
 const CACHE_LIMIT = 500;
+const RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
+const MAX_RATE_LIMIT_BACKOFF_MS = 30 * 60_000;
+
+type JsonResult =
+  | { ok: true; body: unknown }
+  | { ok: false; status: number; retryAfterMs: number | null };
+
+export function retryAfterMs(header: string | null, now: number): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? null : Math.max(0, at - now);
+}
 
 export interface AgentUsageWindow {
   usedPercent: number;
@@ -16,7 +30,7 @@ export interface AgentUsageWindow {
   resetsAt: string | null;
 }
 
-export type AgentUsageUnavailableReason = 'no_token' | 'api_key' | 'unavailable';
+export type AgentUsageUnavailableReason = 'no_token' | 'api_key' | 'unavailable' | 'rate_limited';
 
 export type AgentUsage =
   | {
@@ -96,6 +110,9 @@ export class SandboxAgentUsageService {
   private readonly logger = new Logger(SandboxAgentUsageService.name);
   private readonly cache = new Map<string, CacheEntry>();
   private readonly inflight = new Map<string, Promise<AgentUsage>>();
+  private readonly lastGood = new Map<string, AgentUsage & { available: true }>();
+  private readonly limitedUntil = new Map<string, number>();
+  private readonly noProfile = new Set<string>();
   fetcher: Fetcher = (url, init) => fetch(url, init);
   now: () => number = () => Date.now();
 
@@ -133,7 +150,7 @@ export class SandboxAgentUsageService {
     if (cached && this.now() - cached.at < AGENT_USAGE_TTL_MS) return cached.value;
     const pending = this.inflight.get(key);
     if (pending) return pending;
-    const work = this.load(token)
+    const work = this.load(key, token)
       .then((value) => {
         this.remember(key, value);
         return value;
@@ -154,7 +171,7 @@ export class SandboxAgentUsageService {
     this.cache.set(key, { at: this.now(), value });
   }
 
-  private async getJson(url: string, token: string): Promise<unknown> {
+  private async getJson(url: string, token: string): Promise<JsonResult> {
     try {
       const res = await this.fetcher(url, {
         method: 'GET',
@@ -168,24 +185,58 @@ export class SandboxAgentUsageService {
       if (!res.ok) {
         res.body?.cancel().catch(() => {});
         this.logger.debug(`Anthropic OAuth ${new URL(url).pathname} answered ${res.status}`);
-        return null;
+        return {
+          ok: false,
+          status: res.status,
+          retryAfterMs: retryAfterMs(res.headers.get('retry-after'), this.now())
+        };
       }
-      return (await res.json()) as unknown;
+      return { ok: true, body: (await res.json()) as unknown };
     } catch (err) {
       const name = err instanceof Error ? err.name : 'error';
       this.logger.debug(`Anthropic OAuth ${new URL(url).pathname} failed: ${name}`);
-      return null;
+      return { ok: false, status: 0, retryAfterMs: null };
     }
   }
 
-  private async load(token: string): Promise<AgentUsage> {
-    const [usage, profile] = await Promise.all([
+  private async load(key: string, token: string): Promise<AgentUsage> {
+    const known = this.lastGood.get(key) ?? null;
+    const limited = this.limitedUntil.get(key) ?? 0;
+    if (limited > this.now()) return known ?? { available: false, reason: 'rate_limited' };
+    const skipProfile = this.noProfile.has(key);
+    const [usageRes, profileRes] = await Promise.all([
       this.getJson(ANTHROPIC_OAUTH_USAGE_URL, token),
-      this.getJson(ANTHROPIC_OAUTH_PROFILE_URL, token)
+      skipProfile
+        ? Promise.resolve<JsonResult>({ ok: false, status: 403, retryAfterMs: null })
+        : this.getJson(ANTHROPIC_OAUTH_PROFILE_URL, token)
     ]);
-    if (!usage && !profile) return { available: false, reason: 'unavailable' };
+    if (!profileRes.ok && profileRes.status === 403) this.noProfile.add(key);
+    const throttled = [usageRes, profileRes].find((r) => !r.ok && r.status === 429);
+    if (throttled && !throttled.ok) {
+      const wait = Math.min(
+        throttled.retryAfterMs ?? RATE_LIMIT_BACKOFF_MS,
+        MAX_RATE_LIMIT_BACKOFF_MS
+      );
+      this.limitedUntil.set(key, this.now() + Math.max(wait, AGENT_USAGE_TTL_MS));
+    }
+    const usage = usageRes.ok ? usageRes.body : null;
+    const profile = profileRes.ok ? profileRes.body : null;
+    if (!usage && !profile) {
+      if (known) return known;
+      return {
+        available: false,
+        reason: !usageRes.ok && usageRes.status === 429 ? 'rate_limited' : 'unavailable'
+      };
+    }
+    if (!usage && known) {
+      return {
+        ...known,
+        plan: profilePlan(profile) ?? known.plan,
+        email: profileEmail(profile) ?? known.email
+      };
+    }
     const windows = (usage ?? {}) as { five_hour?: unknown; seven_day?: unknown };
-    return {
+    const fresh: AgentUsage & { available: true } = {
       available: true,
       provider: 'Anthropic',
       loginMethod: 'Claude account',
@@ -196,5 +247,14 @@ export class SandboxAgentUsageService {
       sevenDay: usageWindow(windows.seven_day),
       fetchedAt: new Date(this.now()).toISOString()
     };
+    if (usage) {
+      if (this.lastGood.size >= CACHE_LIMIT && !this.lastGood.has(key)) {
+        const oldest = this.lastGood.keys().next().value;
+        if (oldest !== undefined) this.lastGood.delete(oldest);
+      }
+      this.lastGood.set(key, fresh);
+      this.limitedUntil.delete(key);
+    }
+    return fresh;
   }
 }

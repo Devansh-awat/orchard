@@ -18,7 +18,10 @@ export type AgentUsage =
       sevenDay: AgentUsageWindow | null;
       fetchedAt: string;
     }
-  | { available: false; reason: 'no_token' | 'api_key' | 'unavailable' | 'forbidden' };
+  | {
+      available: false;
+      reason: 'no_token' | 'api_key' | 'unavailable' | 'rate_limited' | 'forbidden';
+    };
 
 export function agentUsageQueryOptions(sandboxId: string, enabled: boolean) {
   return {
@@ -39,6 +42,8 @@ export function agentUsageQueryOptions(sandboxId: string, enabled: boolean) {
 export function usageUnavailableText(reason: Exclude<AgentUsage, { available: true }>['reason']) {
   if (reason === 'api_key') return 'Usage is only available for Claude subscription logins';
   if (reason === 'no_token') return 'The host has no Claude login';
+  if (reason === 'rate_limited')
+    return 'Anthropic is limiting usage checks, try again in a few minutes';
   return 'Usage is unavailable right now';
 }
 

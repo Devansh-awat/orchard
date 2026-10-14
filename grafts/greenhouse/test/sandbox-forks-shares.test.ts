@@ -752,6 +752,7 @@ function k8sRunner(
   (runner as any).existingCr = async () => null;
   runner.snapshotClassFor = async () =>
     k8s.classes ? pickSnapshotClass(k8s.classes, k8s.provisioner ?? 'rbd.csi.ceph.com') : null;
+  (runner as any).bridgeChecksums = { resolve: async () => null };
   return { runner, enqueued, applied, updates, handlers, current: () => current };
 }
 

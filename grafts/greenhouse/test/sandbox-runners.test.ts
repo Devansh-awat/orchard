@@ -414,6 +414,7 @@ function k8sRunner(row: Record<string, unknown> | null = ROW) {
       })
     }) as never
   );
+  (runner as any).bridgeChecksums = { resolve: async () => null };
   (runner as any).existingCr = async () => null;
   return { runner, enqueued, applied, updates, handlers };
 }
@@ -793,4 +794,47 @@ test('warm ACP adapters and the daemon never count as a busy agent', async () =>
     ].join('\n')
   }).toString();
   assert.deepEqual(out.trim().split('\n'), ['104 claude -p fix the tests', '105 codex exec go']);
+});
+
+test('kubernetes machines get the released orchard binary so older images still run the daemon', async () => {
+  const { BridgeChecksumResolver } =
+    await import('../server/src/sandboxes/runners/bridge-checksum');
+  const { bridgeArchiveName, SANDBOX_BRIDGE_CLI_VERSION } =
+    await import('../server/src/sandboxes/sandbox-bootstrap');
+  const runner = new KubernetesSandboxRunner(
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    { registerHandler() {} } as never,
+    {} as never
+  );
+  const amd = 'a'.repeat(64);
+  const arm = 'b'.repeat(64);
+  runner.bridgeChecksums = new BridgeChecksumResolver(
+    async () =>
+      new Response(
+        `${amd}  ${bridgeArchiveName(SANDBOX_BRIDGE_CLI_VERSION, 'amd64')}\n${arm}  ${bridgeArchiveName(SANDBOX_BRIDGE_CLI_VERSION, 'arm64')}\n`
+      )
+  );
+  const env = Object.fromEntries((await runner.bridgeEnv()).map((e) => [e.name, e.value]));
+  assert.match(env.ORCHARD_BRIDGE_URL, new RegExp(`v${SANDBOX_BRIDGE_CLI_VERSION}/orchard_`));
+  assert.equal(env.ORCHARD_BRIDGE_SHA256, amd);
+  assert.equal(env.ORCHARD_BRIDGE_SHA256_ARM64, arm);
+  const cr = runner.buildCr(
+    { ...ROW, setupScript: null } as never,
+    'inst-1',
+    null,
+    await runner.bridgeEnv()
+  );
+  const names = cr.spec.podTemplate.spec.containers[0].env.map((e: any) => e.name);
+  assert.ok(names.includes('ORCHARD_BRIDGE_SHA256'));
+  runner.bridgeChecksums = new BridgeChecksumResolver(
+    async () => new Response('', { status: 500 })
+  );
+  assert.deepEqual(
+    await runner.bridgeEnv(),
+    [],
+    'without a verified checksum nothing is downloaded'
+  );
 });

@@ -183,3 +183,47 @@ test('parsers clamp and validate what Anthropic sends', () => {
   assert.equal(maskEmail('ab@x.io'), 'a***@x.io');
   assert.equal(maskEmail('nope'), '***');
 });
+
+test('a rate limited usage call says so and backs off instead of hammering Anthropic', async () => {
+  const { svc, calls, advance } = service(TOKEN, {
+    [ANTHROPIC_OAUTH_USAGE_URL]: () =>
+      new Response('{}', { status: 429, headers: { 'retry-after': '120' } }),
+    [ANTHROPIC_OAUTH_PROFILE_URL]: () => json({}, 403)
+  });
+  assert.deepEqual(await svc.forSandbox({ userId: HOST }, HOST), {
+    available: false,
+    reason: 'rate_limited'
+  });
+  const first = calls.length;
+  advance(AGENT_USAGE_TTL_MS + 1);
+  assert.deepEqual(await svc.forSandbox({ userId: HOST }, HOST), {
+    available: false,
+    reason: 'rate_limited'
+  });
+  assert.equal(calls.length, first, 'nothing is sent while Anthropic asked us to wait');
+  advance(120_000);
+  await svc.forSandbox({ userId: HOST }, HOST);
+  assert.equal(
+    calls.filter((c) => c.url === ANTHROPIC_OAUTH_PROFILE_URL).length,
+    1,
+    'a profile the token has no scope for is not asked for again'
+  );
+});
+
+test('the last good usage survives a rate limit', async () => {
+  let limited = false;
+  const { svc, advance } = service(TOKEN, {
+    [ANTHROPIC_OAUTH_USAGE_URL]: () =>
+      limited ? new Response('{}', { status: 429 }) : json(USAGE),
+    [ANTHROPIC_OAUTH_PROFILE_URL]: () => json(PROFILE)
+  });
+  const good = await svc.forSandbox({ userId: HOST }, HOST);
+  assert.equal(good.available, true);
+  limited = true;
+  advance(AGENT_USAGE_TTL_MS + 1);
+  const later = await svc.forSandbox({ userId: HOST }, HOST);
+  assert.equal(later.available, true);
+  if (!later.available) return;
+  assert.equal(later.fiveHour?.usedPercent, 32);
+  assert.equal(later.email, 'sanchez@example.com');
+});

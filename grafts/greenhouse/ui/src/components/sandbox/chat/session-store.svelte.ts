@@ -602,6 +602,8 @@ export class ChatSessionStore {
   readonly deleted = new SvelteSet<string>();
   readonly acpChats = new SvelteMap<string, AcpChat>();
   acpCatalog = $state.raw<AcpCatalogEntry[]>([]);
+  acpHost = $state<'unknown' | 'ready' | 'missing'>('unknown');
+  acpProbing = $state(false);
   acpChoice = $state.raw<AcpChoice | null>(null);
   onAgentPick: ((agent: string, model: string | null) => void) | null = null;
   onNativePick: (() => void) | null = null;
