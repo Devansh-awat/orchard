@@ -113,7 +113,7 @@ func sandboxSessionListCmd() *cobra.Command {
 }
 
 func sandboxSessionCreateCmd() *cobra.Command {
-	var base, title, prompt string
+	var base, title, prompt, agent string
 	c := &cobra.Command{
 		Use:   "create <sandbox> <repo>",
 		Short: "Start a session on a fresh git worktree (branch orchard/<slug>)",
@@ -137,6 +137,9 @@ func sandboxSessionCreateCmd() *cobra.Command {
 			if prompt != "" {
 				body["prompt"] = prompt
 			}
+			if agent != "" {
+				body["agent"] = agent
+			}
 			var raw map[string]any
 			if err := cl.Send(cmd.Context(), http.MethodPost, sandboxPath(str(sb["id"]), "sessions"), body, &raw); err != nil {
 				return sandboxFeatureError(err)
@@ -151,6 +154,7 @@ func sandboxSessionCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&base, "base", "", "Base branch (defaults to the repo's default branch)")
 	c.Flags().StringVar(&title, "title", "", "Session title")
 	c.Flags().StringVar(&prompt, "prompt", "", "First prompt for the agent")
+	c.Flags().StringVar(&agent, "agent", "", "Coding agent: opencode (default), acp:claude, acp:opencode, acp:fx or acp:codex")
 	return c
 }
 

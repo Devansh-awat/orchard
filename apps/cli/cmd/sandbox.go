@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hackclub/orchard/cli/internal/agentd"
 	"github.com/hackclub/orchard/cli/internal/api"
 	"github.com/hackclub/orchard/cli/internal/exitcode"
 	"github.com/hackclub/orchard/cli/internal/output"
@@ -51,6 +52,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
 		skipGreenhouse(sandboxBridgeCmd()),
+		skipGreenhouse(sandboxAgentdCmd()),
 		sandboxForkCmd(),
 		sandboxShareCmd(),
 		sandboxLinkCmd(),
@@ -1083,6 +1085,41 @@ func sandboxBridgeCmd() *cobra.Command {
 	c.Flags().StringVar(&listen, "listen", "0.0.0.0:2222", "address to accept websocket tunnels on")
 	c.Flags().StringVar(&target, "target", "127.0.0.1:22", "tcp address each tunnel connects to")
 	c.Flags().StringVar(&tokenFile, "token-file", "", "file holding the bearer token (re-read on every connection)")
+	return c
+}
+
+func sandboxAgentdCmd() *cobra.Command {
+	var listen, tokenFile, user, stateDir, phaseFile string
+	c := &cobra.Command{
+		Use:    "agentd",
+		Hidden: true,
+		Short:  "Serve the in-machine agent daemon: scripts, agent chats over ACP, and the warm session pool (runs inside a sandbox)",
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if tokenFile == "" {
+				return &exitcode.UsageError{Err: errors.New("--token-file is required")}
+			}
+			d, err := agentd.New(agentd.Options{
+				TokenFile: tokenFile,
+				User:      user,
+				StateDir:  stateDir,
+				PhaseFile: phaseFile,
+				Logf: func(format string, a ...any) {
+					fmt.Fprintf(os.Stderr, format+"\n", a...)
+				},
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "agentd: listening on %s\n", listen)
+			return d.ListenAndServe(cmd.Context(), listen)
+		},
+	}
+	c.Flags().StringVar(&listen, "listen", "0.0.0.0:4097", "address to serve the daemon on")
+	c.Flags().StringVar(&tokenFile, "token-file", "", "file holding the bearer token (re-read on every connection)")
+	c.Flags().StringVar(&user, "user", "", "run scripts and agents as this user (needs root)")
+	c.Flags().StringVar(&stateDir, "state-dir", "", "where chats and the pool live (default ~/.orchard of --user)")
+	c.Flags().StringVar(&phaseFile, "phase-file", "/tmp/orchard-boot-phase", "boot phase file reported by /health")
 	return c
 }
 
