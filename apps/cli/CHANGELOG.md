@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/hackclub/orchard/compare/cli/v0.27.0...cli/v0.28.0) (2026-10-14)
+
+
+### Features
+
+* **cli:** orchard sandbox agentd runs scripts, acp agents and a warm worktree pool inside machines ([1987ed7](https://github.com/hackclub/orchard/commit/1987ed78b3a68ce9f4c0e228989a12163f1f9d6c))
+
 ## [0.27.0](https://github.com/hackclub/orchard/compare/cli/v0.26.0...cli/v0.27.0) (2026-10-14)
 
 

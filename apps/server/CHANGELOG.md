@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.72.0](https://github.com/hackclub/orchard/compare/server/v2.71.0...server/v2.72.0) (2026-10-14)
+
+
+### Features
+
+* greenhouse sessions open instantly from a warm pool and chats run claude code, opencode, fx or codex over acp ([dad8ae6](https://github.com/hackclub/orchard/commit/dad8ae6959e50772c5397c1b4758c23c9a2d6581))
+
 ## [2.71.0](https://github.com/hackclub/orchard/compare/server/v2.70.0...server/v2.71.0) (2026-10-14)
 
 
