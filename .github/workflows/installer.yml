@@ -1,11 +1,7 @@
 name: installer
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'install/install.sh'
-      - '.github/workflows/installer.yml'
+  workflow_call:
   workflow_dispatch:
 
 concurrency:

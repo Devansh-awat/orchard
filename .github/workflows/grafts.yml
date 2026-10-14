@@ -11,17 +11,6 @@ on:
       - 'registry/grafts-revoked.txt'
       - 'registry/community/**'
       - '.github/workflows/grafts.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'grafts/**'
-      - 'packages/graft-sdk/**'
-      - 'packages/graft-ui/**'
-      - 'apps/frontend/src/lib/components/ui/**'
-      - 'apps/registry/**'
-      - 'registry/grafts-revoked.txt'
-      - 'registry/community/**'
-      - '.github/workflows/grafts.yml'
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:

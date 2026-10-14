@@ -218,6 +218,22 @@ jobs:
           gh release upload "v${CLI_VERSION}" apps/cli/dist/attestation.sigstore.jsonl \
             --clobber --repo LeafdTK/orchard-releases
 
+  templates:
+    needs: release-please
+    if: contains(needs.release-please.outputs.paths_released, '"registry"') || needs.release-please.outputs.server == 'true'
+    uses: ./.github/workflows/registry.yml
+    secrets: inherit
+
+  installer:
+    needs: release-please
+    if: needs.release-please.outputs.platform == 'true'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/installer.yml
+    secrets: inherit
+
   grafts:
     needs: release-please
     if: contains(needs.release-please.outputs.paths_released, 'grafts/')

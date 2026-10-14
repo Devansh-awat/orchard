@@ -7,13 +7,8 @@ on:
       - 'apps/server/src/templates/built-in/**'
       - 'apps/registry/**'
       - '.github/workflows/registry.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'registry/**'
-      - 'apps/server/src/templates/built-in/**'
-      - 'apps/registry/**'
-      - '.github/workflows/registry.yml'
+  workflow_call:
+  workflow_dispatch:
 
 concurrency:
   group: registry-${{ github.ref }}
@@ -36,7 +31,7 @@ jobs:
 
   publish:
     needs: validate
-    if: github.event_name == 'push' && github.repository == 'hackclub/orchard'
+    if: github.event_name != 'pull_request' && github.repository == 'hackclub/orchard'
     runs-on: ubuntu-latest
     environment: registry
     env:
