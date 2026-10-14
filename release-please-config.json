@@ -74,6 +74,10 @@
     "packages/graft-ui": {
       "release-type": "node",
       "component": "graft-ui"
+    },
+    "infra/images/sandbox": {
+      "release-type": "simple",
+      "component": "sandbox"
     }
   }
 }

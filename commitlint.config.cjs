@@ -25,6 +25,7 @@ module.exports = {
         'r2proxy',
         'registry',
         'templates',
+        'sandbox',
         'chart',
         'release',
         'ci',

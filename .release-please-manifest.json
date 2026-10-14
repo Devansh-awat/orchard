@@ -10,5 +10,6 @@
   "grafts/announcements": "0.4.0",
   "grafts/forum": "1.1.0",
   "packages/graft-sdk": "1.3.0",
-  "packages/graft-ui": "1.1.0"
+  "packages/graft-ui": "1.1.0",
+  "infra/images/sandbox": "1.0.0"
 }

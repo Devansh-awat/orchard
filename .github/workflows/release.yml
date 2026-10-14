@@ -33,6 +33,8 @@ jobs:
       gateway_v: ${{ steps.rp1.outputs['apps/gateway--version'] || steps.rp2.outputs['apps/gateway--version'] || steps.rp3.outputs['apps/gateway--version'] }}
       cli: ${{ steps.rp1.outputs['apps/cli--release_created'] || steps.rp2.outputs['apps/cli--release_created'] || steps.rp3.outputs['apps/cli--release_created'] }}
       cli_v: ${{ steps.rp1.outputs['apps/cli--version'] || steps.rp2.outputs['apps/cli--version'] || steps.rp3.outputs['apps/cli--version'] }}
+      sandbox: ${{ steps.rp1.outputs['infra/images/sandbox--release_created'] || steps.rp2.outputs['infra/images/sandbox--release_created'] || steps.rp3.outputs['infra/images/sandbox--release_created'] }}
+      sandbox_v: ${{ steps.rp1.outputs['infra/images/sandbox--version'] || steps.rp2.outputs['infra/images/sandbox--version'] || steps.rp3.outputs['infra/images/sandbox--version'] }}
       paths_released: ${{ steps.rp1.outputs.paths_released || steps.rp2.outputs.paths_released || steps.rp3.outputs.paths_released }}
       graft_sdk: ${{ steps.rp1.outputs['packages/graft-sdk--release_created'] || steps.rp2.outputs['packages/graft-sdk--release_created'] || steps.rp3.outputs['packages/graft-sdk--release_created'] }}
       graft_ui: ${{ steps.rp1.outputs['packages/graft-ui--release_created'] || steps.rp2.outputs['packages/graft-ui--release_created'] || steps.rp3.outputs['packages/graft-ui--release_created'] }}
@@ -147,6 +149,43 @@ jobs:
       dockerfile: apps/registry/Dockerfile
       context: apps/registry
       version: ${{ needs.release-please.outputs.registry_v }}
+
+  # The machine image bakes in the orchard CLI (it runs the in-machine daemon),
+  # so it rebuilds when either the sandbox package or the cli releases. A cli-only
+  # rebuild is tagged <sandbox version>-cli.<cli version> so tags never collide.
+  sandbox-version:
+    needs: release-please
+    if: needs.release-please.outputs.sandbox == 'true' || needs.release-please.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - id: version
+        env:
+          SANDBOX_RELEASED: ${{ needs.release-please.outputs.sandbox }}
+          SANDBOX_V: ${{ needs.release-please.outputs.sandbox_v }}
+          CLI_V: ${{ needs.release-please.outputs.cli_v }}
+        run: |
+          if [ "$SANDBOX_RELEASED" = "true" ]; then
+            echo "version=$SANDBOX_V" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(jq -r '."infra/images/sandbox"' .release-please-manifest.json)-cli.$CLI_V" >> "$GITHUB_OUTPUT"
+          fi
+
+  image-sandbox:
+    needs: sandbox-version
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: sandbox
+      dockerfile: infra/images/sandbox/Dockerfile
+      version: ${{ needs.sandbox-version.outputs.version }}
 
   # Builds cli binaries with goreleaser and attaches them to the release that
   # release-please just cut for tag cli/vX.Y.Z. OSS goreleaser cannot parse
