@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  VERCEL_AGENTD_PORT,
   VERCEL_BRIDGE_PORT,
   VERCEL_DRIVE_FORK_UNAVAILABLE,
   VERCEL_DRIVE_ROOT,
@@ -557,7 +558,11 @@ test('a secret sync on a running box restages the files and reruns the bootstrap
   const box = new FakeSandbox(REF.podName, 'running');
   const { handlers } = vercelRunner({ ...ROW, status: 'running' }, { existing: box });
   await handlers.get(VERCEL_OP_SECRET)!({ manifest: { sandboxId: REF.id } });
-  assert.equal(box.updates.length, 1);
+  assert.equal(box.updates.filter((u: any) => u.networkPolicy).length, 1);
+  assert.ok(
+    box.updates.some((u: any) => u.ports?.includes(VERCEL_AGENTD_PORT)),
+    'a box made before the daemon existed gets its port opened'
+  );
   assert.ok(box.session.writes.some((w) => w.path.endsWith('/authorized_keys')));
   assert.equal(box.session.commands.length, 1);
 });
@@ -603,7 +608,7 @@ test('a secret sync on a stopped box only updates the policy', async () => {
     { existing: box }
   );
   await handlers.get(VERCEL_OP_SECRET)!({ manifest: { sandboxId: REF.id } });
-  assert.equal(box.updates.length, 1);
+  assert.equal(box.updates.filter((u: any) => u.networkPolicy).length, 1);
   assert.equal(box.session.writes.length, 0);
 });
 
@@ -914,7 +919,7 @@ test('a machine with its drive mounted keeps it, even after the configured size 
   await handlers.get(VERCEL_OP_START)!({ manifest: { sandboxId: REF.id } });
   assert.deepEqual(
     box.updates.map((u) => Object.keys(u)),
-    [['networkPolicy']]
+    [['networkPolicy'], ['ports']]
   );
   assert.equal(sdk.drives.get('orchard-existing')?.maxSize, 50 * GIB);
   assert.ok(

@@ -174,6 +174,7 @@ export interface VercelKeepLastSnapshots {
 
 export interface VercelSandboxUpdate {
   networkPolicy?: unknown;
+  ports?: number[];
   mounts?: Record<string, VercelMount>;
   snapshotExpiration?: number;
   keepLastSnapshots?: VercelKeepLastSnapshots;
@@ -1225,6 +1226,7 @@ export class VercelSandboxRunner implements SandboxRunner {
           { networkPolicy: policy },
           { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
         );
+        await this.syncPorts(sandbox);
       } catch (e) {
         if (!isNotFound(e)) throw e;
         this.markApiOk();
@@ -1245,6 +1247,17 @@ export class VercelSandboxRunner implements SandboxRunner {
       where: { id: row.id, desiredState: 'running', status: { in: ['creating', 'starting'] } },
       data: { status: 'running', statusMessage: null, externalId: row.podName }
     });
+  }
+
+  private async syncPorts(sandbox: VercelSandboxLike): Promise<void> {
+    try {
+      await sandbox.update(
+        { ports: vercelPorts() },
+        { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
+      );
+    } catch (e: any) {
+      this.logger.warn(`could not open the machine ports on ${sandbox.name}: ${e?.message}`);
+    }
   }
 
   private async waitBooted(session: VercelSessionLike): Promise<void> {
@@ -1471,6 +1484,7 @@ export class VercelSandboxRunner implements SandboxRunner {
       { networkPolicy: githubNetworkPolicy(secrets.githubToken) },
       { signal: AbortSignal.timeout(API_TIMEOUT_MS) }
     );
+    await this.syncPorts(sandbox);
     if (row.desiredState !== 'running' || statusOf(sandbox) !== 'running') return;
     try {
       await this.pushInit(sandbox.currentSession(), row, secrets);
