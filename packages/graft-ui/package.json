@@ -1,6 +1,7 @@
 {
   "name": "@orchardlabs/graft-ui",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "description": "Orchard's UI components and design tokens for graft screens",
   "repository": {
     "type": "git",

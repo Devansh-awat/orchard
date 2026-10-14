@@ -11,6 +11,10 @@ agents. The `graft` command in `@orchardlabs/graft-sdk` builds, packs and signs 
 The [announcements graft](https://github.com/hackclub/orchard/tree/main/grafts/announcements)
 in the Orchard repository uses every part and is the best example to copy.
 
+`@orchardlabs/graft-sdk` is MIT licensed, so your graft can use any license you
+like. The UI kit, `@orchardlabs/graft-ui`, is a copy of Orchard's own components
+and stays AGPL like Orchard: a graft that bundles it shares that license.
+
 ## Scaffold
 
 ```sh
