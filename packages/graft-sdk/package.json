@@ -32,9 +32,9 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
     "@nestjs/common": "^11.2.3",
     "@nestjs/core": "^11.2.3",
+    "@types/node": "^20.11.0",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "svelte": "^5.57.0"
@@ -54,9 +54,9 @@
     "graft": "./bin/graft.mjs"
   },
   "dependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@swc/core": "^1.16.1",
     "esbuild": "^0.25.12",
-    "vite": "^7.3.6",
-    "@sveltejs/vite-plugin-svelte": "^6.2.1"
+    "vite": "^8.3.4"
   }
 }
