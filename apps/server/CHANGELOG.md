@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.71.0](https://github.com/hackclub/orchard/compare/server/v2.70.0...server/v2.71.0) (2026-10-14)
+
+
+### Features
+
+* graft bump follows a $graftpolicy range in gitops values, releases dispatch graft-published to kubeops ([a6339f1](https://github.com/hackclub/orchard/commit/a6339f1199783ec3864b1fd0a7fec1c0db885244))
+
 ## [2.70.0](https://github.com/hackclub/orchard/compare/server/v2.69.0...server/v2.70.0) (2026-10-14)
 
 
